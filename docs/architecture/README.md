@@ -1,0 +1,42 @@
+# Intakt technical pages
+
+How Intakt works, for developers and agents. Each user-visible feature has a page here (how it works, the data it keeps, its limits, a Mermaid diagram where the flow is not obvious), written in the same change as the code.
+
+## Module layout
+
+```
+src/
+  Kernel.php
+  Core/<Module>/        core areas (review, ledger, ...), added by the tasks that need them
+  Plugin/<Kind>/        plugin kinds: Forge, Vendor, Notifier, WorkSource, Gate
+    Contract/           the module's only public surface
+    Domain/             entities and value objects
+    UseCase/<Name>/     one use case and its doors (command, controller, handler, MCP tool)
+    Infrastructure/     adapters
+config/modules.php      the module list; a test keeps it equal to the directories
+```
+
+The plugin kinds have empty contracts for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)).
+
+## Quality gates
+
+`bin/check` runs every gate and prints one JSON line per gate, then a result line. CI runs the same command.
+
+| Gate | What it checks |
+|---|---|
+| `cs` | PHP-CS-Fixer, PER-CS and Symfony rules, strict types, imported names |
+| `phpstan` | PHPStan at max with strict and deprecation rules, no baseline, cognitive complexity, at most three parameters |
+| `rector` | Rector dry run: dead code, code quality, class constants over class-name strings |
+| `architecture` | PHPArkitect: module layout, other modules only through `Contract`, inner layers independent |
+| `audit` | `composer audit` on the lock file |
+| `tests` | PHPUnit on SQLite (`phpunit.dist.xml`) and the gate tests (`phpunit.gates.xml`), failing on warnings, notices, deprecations, risky and skipped tests |
+| `secrets` | gitleaks on the working tree, refusing inline allow directives |
+| `secrets-history` | gitleaks on every commit of the change |
+| `commits` | Conventional Commit subjects, at most 100 characters |
+| `dashes` | no em-dashes or other long dashes in files or commit messages |
+
+Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
+
+## Persistence
+
+SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets; their CI jobs start with the first entity (see [the plan](../plan.md)).
