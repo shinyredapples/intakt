@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Platform\Infrastructure\Clock;
+
+use DateTimeImmutable;
+
+final readonly class SystemClock
+{
+    public function now(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('@'.time());
+    }
+}

@@ -88,6 +88,31 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'arrow-function-with-four-parameters', 'intakt.parameterLimit Closure takes 4 parameters, at most 3 allowed');
     }
 
+    public function testATryInsideACatchFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'nested-try', 'intakt.nestedTry');
+    }
+
+    public function testTriesInSeparateMethodsPassStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'sibling-tries');
+    }
+
+    public function testReadingTheSystemTimeFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'system-time', 'intakt.clockOnly');
+    }
+
+    public function testTimeThroughTheClockPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'clock-time');
+    }
+
+    public function testTheClockAdapterMayReadTheSystemTime(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'clock-adapter');
+    }
+
     public function testAConstructorWithManyParametersPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'constructor-with-many-parameters');

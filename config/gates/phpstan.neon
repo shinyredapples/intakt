@@ -18,3 +18,5 @@ parameters:
 
 rules:
     - Intakt\Gates\PhpStan\ParameterLimitRule
+    - Intakt\Gates\PhpStan\NoNestedTryRule
+    - Intakt\Gates\PhpStan\ClockOnlyRule
