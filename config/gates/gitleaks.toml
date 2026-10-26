@@ -3,7 +3,7 @@ minVersion = "v8.25.0"
 
 # The rules below are copied from the scanner's default rules at the pinned version, so that the
 # scanner's built-in path allowlist (vendor folders, images, lock files, gitleaks.toml) cannot hide a file.
-# Only content patterns are allowed, never paths.
+# Only content patterns are allowed, never paths and never whole lines: this file is scanned like any other.
 
 [[allowlists]]
 description = "Shell placeholders"
@@ -11,13 +11,6 @@ regexes = [
     '''^\$(?:\d+|{\d+})$''',
     '''^\$(?:[A-Z_]+|[a-z_]+)$''',
     '''^\${(?:[A-Z_]+|[a-z_]+)}$''',
-]
-
-[[allowlists]]
-description = "The regex line of a rule definition in this file, so its own patterns do not match themselves; matched as a whole line, never by path"
-regexTarget = "line"
-regexes = [
-    "^\\s*regex = '{3}.*'{3}\\s*$",
 ]
 
 [[rules]]
@@ -181,7 +174,8 @@ keywords = ["absk"]
 [[rules]]
 id = "aws-amazon-bedrock-api-key-short-lived"
 description = "Identified a pattern that may indicate short-lived Amazon Bedrock API keys, risking unauthorized Amazon Bedrock usage"
-regex = '''bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t'''
+# The group (?:Y) matches the same text but keeps this line from matching its own pattern, so no allowlist is needed.
+regex = '''bedrock-api-key-(?:Y)mVkcm9jay5hbWF6b25hd3MuY29t'''
 entropy = 3
 keywords = ["bedrock-api-key-"]
 

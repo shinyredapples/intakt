@@ -175,6 +175,22 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
     }
 
+    public function testATokenOnARuleRegexLineInAnotherFileIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('rules.toml', "regex = '''".$this->fakeGithubToken()."'''\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+    }
+
+    public function testATokenOnARuleRegexLineInTheScannerConfigurationIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration()."\n[[rules]]\nid = \"planted\"\nregex = '''".$this->fakeGithubToken()."'''\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+    }
+
     public function testATokenAsAQuotedEntryOfAJsonListIsCaught(): void
     {
         $sandbox = $this->emptySandbox();
