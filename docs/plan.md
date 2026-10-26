@@ -72,8 +72,8 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T7 One reviewer agent with read-only repository tools
-- **Description:** A reviewer is a Symfony AI Agent with tools to read a file, list a directory and search at the exact head (tool effect hints: read-only), a prompt per role and the task text. It returns the T1 verdict through the T5 vendor; the conversation is kept in a message store per round.
-- **Acceptance:** with the in-memory platform scripted to call tools, the agent reads files at the head and returns a verdict; a tool call outside the repository is refused; a malformed tool call ends as `changes`, not a crash.
+- **Description:** A reviewer is a Symfony AI Agent with tools to read a file, list a directory and search at the exact head (tool effect hints: read-only), a prompt per role and the task text. It returns the T1 verdict through the T5 vendor; the conversation is kept in a message store per round. The reviewer prompt includes the rubric of [How code reads](design/02-principles.md#how-code-reads): story readability, needless abstraction, duplication of knowledge and what-comments, each finding citing the rule it breaks.
+- **Acceptance:** with the in-memory platform scripted to call tools, the agent reads files at the head and returns a verdict; a tool call outside the repository is refused; a malformed tool call ends as `changes`, not a crash. A sample change with a what-comment and a single-implementation interface gets findings that cite those rules.
 - **Evidence:** a real review of a sample branch by one provider: the verdict JSON and the tool calls it made.
 - **Waits for:** T5, T6. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
