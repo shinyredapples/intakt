@@ -1,0 +1,90 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Intakt\Gates\PhpStan\ClockOnlyRule;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+#[CoversClass(ClockOnlyRule::class)]
+final class ClockOnlyRuleTest extends SandboxTestCase
+{
+    private const int FIRST_CASE_LINE = 11;
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function rejectedGroups(): iterable
+    {
+        yield 'time functions' => [['time()', "date('Y')", 'microtime(true)', 'date_create()', 'date_create_immutable()', "strtotime('2026-01-01')", 'mktime(0)']];
+        yield 'more time functions' => [["gmdate('Y')", 'getdate()', 'localtime()', 'gettimeofday()', 'new \DateTime()', "\\DateTime::createFromFormat('Y', '2026')"]];
+        yield 'moments that read the clock' => [['new \DateTimeImmutable()', "new \\DateTimeImmutable('now')", "new \\DateTimeImmutable('today')", "new \\DateTimeImmutable('+1 day')", "new \\DateTimeImmutable('yesterday')", 'new \DateTimeImmutable($moment)', "\\DateTimeImmutable::createFromFormat('Y-m-d', \$moment)"]];
+    }
+
+    /**
+     * @param list<string> $expressions
+     */
+    #[DataProvider('rejectedGroups')]
+    public function testEachWayOfReadingTheSystemTimeIsRejected(array $expressions): void
+    {
+        $run = $this->sandboxReturning($expressions)->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        foreach (array_keys($expressions) as $index) {
+            self::assertStringContainsString('src/Report.php:'.(self::FIRST_CASE_LINE + $index * 5).' intakt.clockOnly', $run->findingsOf('phpstan'), $expressions[$index]);
+        }
+    }
+
+    public function testAbsoluteMomentsAndExplicitTimeZonesPass(): void
+    {
+        $run = $this->sandboxReturning([
+            "new \\DateTimeImmutable('2026-10-27T10:00:00Z')",
+            "new \\DateTimeImmutable('@1793000000')",
+            "\\DateTimeImmutable::createFromFormat('Y-m-d', \$moment, new \\DateTimeZone('UTC'))",
+            '$clock->now()',
+        ])->check('--only=phpstan');
+
+        self::assertTrue($run->passed('phpstan'), $run->output());
+    }
+
+    public function testTheClockAdapterMayReadTheSystemTime(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'clock-adapter');
+    }
+
+    public function testAClassBesideTheClockAdapterMayNot(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Core/Platform/Infrastructure/Clock/OtherClock.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Core\\Platform\\Infrastructure\\Clock;\n\nfinal readonly class OtherClock\n{\n    public function now(): int\n    {\n        return time();\n    }\n}\n");
+
+        self::assertTrue($sandbox->check('--only=phpstan')->failed('phpstan'));
+    }
+
+    /**
+     * @param list<string> $expressions
+     */
+    private function sandboxReturning(array $expressions): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Clock.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\ninterface Clock\n{\n    public function now(): \\DateTimeImmutable;\n}\n");
+        $sandbox->write('src/Report.php', $this->classReturning($expressions));
+
+        return $sandbox;
+    }
+
+    /**
+     * @param list<string> $expressions
+     */
+    private function classReturning(array $expressions): string
+    {
+        $methods = array_map(
+            static fn (int $index, string $expression): string => "    public function case{$index}(string \$moment, Clock \$clock): mixed\n    {\n        return {$expression};\n    }\n",
+            array_keys($expressions),
+            $expressions,
+        );
+
+        return "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal readonly class Report\n{\n".implode("\n", $methods)."}\n";
+    }
+}
