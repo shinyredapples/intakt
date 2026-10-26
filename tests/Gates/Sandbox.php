@@ -48,7 +48,7 @@ final readonly class Sandbox
     {
         $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
 
-        return (new ProcessRunner())->run(['git', ...$identity, ...array_values($arguments)], $this->root);
+        return new ProcessRunner()->run(['git', ...$identity, ...array_values($arguments)], $this->root);
     }
 
     public function symlink(string $path, string $target): void
@@ -63,12 +63,12 @@ final readonly class Sandbox
     {
         $assignments = array_map(static fn (string $name, string $value): string => $name.'='.$value, array_keys($environment), $environment);
 
-        return (new ProcessRunner())->run(['env', ...$assignments, 'bash', '-c', $script], $this->root);
+        return new ProcessRunner()->run(['env', ...$assignments, 'bash', '-c', $script], $this->root);
     }
 
     public function run(string ...$command): ProcessResult
     {
-        return (new ProcessRunner())->run(array_values($command), $this->root);
+        return new ProcessRunner()->run(array_values($command), $this->root);
     }
 
     public function commitAll(string $subject): void
@@ -93,7 +93,7 @@ final readonly class Sandbox
     public function checkWith(array $environment, string ...$arguments): CheckRun
     {
         $home = dirname(__DIR__, 2);
-        $result = (new ProcessRunner())->run(['php', $home.'/bin/check', '--root='.$this->root, ...array_values($arguments)], $home, $environment);
+        $result = new ProcessRunner()->run(['php', $home.'/bin/check', '--root='.$this->root, ...array_values($arguments)], $home, $environment);
 
         return new CheckRun($result);
     }

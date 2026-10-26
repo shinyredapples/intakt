@@ -33,13 +33,7 @@ final class ArchitectureGate implements Gate
 
     private function hasCode(Workspace $workspace): bool
     {
-        foreach (self::CODE_DIRECTORIES as $directory) {
-            if (is_dir($workspace->root.'/'.$directory)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(self::CODE_DIRECTORIES, fn ($directory) => is_dir($workspace->root.'/'.$directory));
     }
 
     private function resultOf(ProcessResult $result): GateResult

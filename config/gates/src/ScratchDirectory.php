@@ -21,6 +21,6 @@ final readonly class ScratchDirectory
 
     public function remove(): void
     {
-        (new Filesystem())->remove($this->path);
+        new Filesystem()->remove($this->path);
     }
 }

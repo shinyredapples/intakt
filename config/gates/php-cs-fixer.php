@@ -7,7 +7,7 @@ use PhpCsFixer\Config;
 $cacheBase = getenv('INTAKT_GATES_CACHE');
 $cacheDirectory = (is_string($cacheBase) && '' !== $cacheBase ? $cacheBase : sys_get_temp_dir().'/intakt-gates').'/php-cs-fixer';
 
-return (new Config())
+return new Config()
     ->setRiskyAllowed(true)
     ->setCacheFile($cacheDirectory.'.cache')
     ->setRules([

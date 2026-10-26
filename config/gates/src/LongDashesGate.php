@@ -36,7 +36,7 @@ final readonly class LongDashesGate implements Gate
         $findings = [];
 
         foreach ($workspace->repositoryFiles() as $path) {
-            foreach ((new LongDashLines($this->textOf($workspace->root.'/'.$path)))->codePointsByLineNumber() as $line => $codePoints) {
+            foreach (new LongDashLines($this->textOf($workspace->root.'/'.$path))->codePointsByLineNumber() as $line => $codePoints) {
                 $findings[] = $path.':'.$line.': '.$codePoints;
             }
         }
@@ -71,7 +71,7 @@ final readonly class LongDashesGate implements Gate
         $findings = [];
 
         foreach ($this->commitsOfTheChange($workspace) as $commit) {
-            foreach ((new LongDashLines($this->messageOf($workspace, $commit)))->codePointsByLineNumber() as $line => $codePoints) {
+            foreach (new LongDashLines($this->messageOf($workspace, $commit))->codePointsByLineNumber() as $line => $codePoints) {
                 $findings[] = 'commit '.substr($commit, 0, 8).' '.(1 === $line ? 'subject' : 'message line '.$line).': '.$codePoints;
             }
         }

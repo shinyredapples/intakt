@@ -74,7 +74,7 @@ final class CheckCommandTest extends SandboxTestCase
         $withoutTools = $this->emptySandbox();
         $workspace = new Workspace($sandbox->root, $withoutTools->root, Mode::Full, null);
 
-        $result = (new CodingStandardsGate())->run($workspace);
+        $result = new CodingStandardsGate()->run($workspace);
 
         self::assertFalse($result->isPassing());
         self::assertStringContainsString('missing tool', $result->findings[0]);
