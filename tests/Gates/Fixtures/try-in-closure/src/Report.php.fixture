@@ -12,6 +12,8 @@ final class Report
     public function render(string $title): Closure
     {
         try {
+            $this->checked($title);
+
             return function () use ($title): string {
                 try {
                     return $this->checked($title);
