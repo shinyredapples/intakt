@@ -1,0 +1,7 @@
+# The owner reviews every change to the rules the project is checked by.
+/config/gates/  @haraldpdl
+/.github/       @haraldpdl
+/bin/check      @haraldpdl
+/AGENTS.md      @haraldpdl
+/composer.json  @haraldpdl
+/composer.lock  @haraldpdl

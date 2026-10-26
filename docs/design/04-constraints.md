@@ -34,6 +34,7 @@ Some vendors' consumer subscriptions restrict automated or unattended use. Intak
 - **A lean start.** The first set is style, static analysis, Rector, module boundaries, tests, audit, secrets and commit subjects. The documentation, index and diagram gates come once there are docs to protect. Any later gate needs an escaped defect it would have caught (see Lessons).
 - **Modules with contracts.** Each plugin kind (forge, vendor, notifier, work source, gate) and each core area is a module whose `Contract` namespace is its only public surface, listed in one module list.
 - **Tasks follow the loop's own conventions from the first task:** acceptance criteria and an Evidence section, `Waits for #n` dependencies, `Source:` lines for split parts, maintainer decisions in the description, the size contract.
+- **Protected paths have a code owner.** `.github/CODEOWNERS` names the owner as reviewer of the gates, CI, `bin/check`, `AGENTS.md` and the Composer manifest and lock. A branch ruleset requiring code-owner review is turned on when the repository goes public; a private repository on the free plan cannot enforce it.
 - **Portable storage:** SQLite by default, with the persistence tests also run on MySQL, MariaDB and PostgreSQL.
 - **Done means exercised on a running install**, with the evidence in the pull request.
 - **Releases:** Conventional Commits, release notes generated from commit types, semantic versions, signed tags. Actions pinned to commit SHAs; a fail-closed secret scan before every push.

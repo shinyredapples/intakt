@@ -62,4 +62,4 @@ Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Sy
 
 ## Protected paths
 
-`config/gates/`, `bin/check`, `.github/`, `AGENTS.md`, `composer.json`, `composer.lock`, `phpunit.dist.xml` and `phpunit.gates.xml` define the rules. Changes to them need the owner's approval; never weaken a gate to make a change pass.
+`config/gates/`, `bin/check`, `.github/`, `AGENTS.md`, `composer.json`, `composer.lock`, `phpunit.dist.xml` and `phpunit.gates.xml` define the rules. Changes to them need the owner's approval; never weaken a gate to make a change pass. `.github/CODEOWNERS` names the owner as their reviewer; a branch ruleset requiring code-owner review is turned on when the repository goes public (a private repository on the free plan cannot enforce it).
