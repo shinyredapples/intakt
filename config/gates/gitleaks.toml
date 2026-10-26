@@ -14,12 +14,10 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "This file's own rule definitions: a rule's regex line and the quoted entries of its lists, matched as whole lines"
+description = "The regex line of a rule definition in this file, so its own patterns do not match themselves; matched as a whole line, never by path"
 regexTarget = "line"
 regexes = [
     "^\\s*regex = '{3}.*'{3}\\s*$",
-    "^\\s*'{3}[^']*'{3},\\s*$",
-    '^\s*"[^"]*",\s*$',
 ]
 
 [[rules]]

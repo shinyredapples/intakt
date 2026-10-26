@@ -167,6 +167,30 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertStringContainsString('config/gates/gitleaks.toml', $run->findingsOf('secrets'));
     }
 
+    public function testATokenAsAListEntryInTheScannerConfigurationIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration().'stopwords = [\n    "'.$this->fakeGithubToken()."\",\n]\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+    }
+
+    public function testATokenAsAQuotedEntryOfAJsonListIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('settings.json', "{\"tokens\": [\n    \"".$this->fakeGithubToken()."\",\n    \"other\"\n]}\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+    }
+
+    public function testATokenAsAQuotedEntryOfAPhpArrayIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('settings.php', "<?php\n\nreturn [\n    \"".$this->fakeGithubToken()."\",\n];\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+    }
+
     public function testTheChangeThatIntroducesTheGatesIsScannedWithItsOwnRules(): void
     {
         $sandbox = $this->emptySandbox();
