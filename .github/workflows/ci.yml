@@ -41,6 +41,9 @@ jobs:
           echo "$checksum  $directory/gitleaks.tar.gz" | sha256sum --check --strict
           tar -xzf "$directory/gitleaks.tar.gz" -C "$directory" gitleaks
           echo "$directory" >> "$GITHUB_PATH"
+      # The gate tests contain processes in a user namespace, which Ubuntu 24.04 restricts for unprivileged users by default.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       # bin/check runs every gate, the tests on SQLite included; the history gates read the change from origin/main.
       - name: Run the gates
         run: bin/check --base=origin/main
