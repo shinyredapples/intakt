@@ -35,7 +35,7 @@ Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Sy
 - A closed set of values is a backed enum, never a group of string or int constants; a single named value (a format, a pattern, a lock name) stays a constant. PHPStan at max enforces the enum types at call sites.
 - No `else` after a `return`, `throw`, `continue` or `break` (enforced).
 - No nested `try`: a `try` inside a `try`, `catch` or `finally` of the same function fails; extract a method (enforced).
-- Time only through Symfony's `ClockInterface`: no `DateTime`, `time()`, `date()`, `microtime()` or `new DateTimeImmutable()` without an argument outside the clock adapter; `DateTimeImmutable` only, UTC (enforced).
+- Time only through Symfony's `ClockInterface`: no `DateTime`, `time()`, `date()`, `microtime()` or `new DateTimeImmutable()` without an argument outside the clock adapter; `DateTimeImmutable` only, UTC (enforced). Elapsed time and timeouts use `hrtime()`, which is monotonic.
 - Exceptions are named after the rule that was broken (`VerdictIsNotValid`, not `ValidationException`).
 - No static state, no service locator, no magic methods; constructor injection only. A module's service config lives with the module.
 - No arrays as data structures across module boundaries: a `Contract` takes and returns typed objects. An array shape is fine inside a module.

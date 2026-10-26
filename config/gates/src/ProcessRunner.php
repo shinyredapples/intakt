@@ -66,7 +66,7 @@ final class ProcessRunner
 
         $release = new InputStream();
         $process = new Process($this->contained($command), $directory, getenv(), $release, $seconds);
-        $deadline = microtime(true) + $seconds;
+        $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
         if (null === $group) {
@@ -165,7 +165,7 @@ final class ProcessRunner
 
     private function groupOutlives(int $group, float $deadline): bool
     {
-        while ($this->groupIsAlive($group) && microtime(true) < $deadline) {
+        while ($this->groupIsAlive($group) && (hrtime(true) / 1_000_000_000) < $deadline) {
             usleep(self::POLL_MICROSECONDS);
         }
 

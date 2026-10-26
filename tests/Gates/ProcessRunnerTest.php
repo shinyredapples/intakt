@@ -39,12 +39,12 @@ final class ProcessRunnerTest extends TestCase
 
     public function testACommandThatRunsPastItsTimeIsStoppedAndReported(): void
     {
-        $started = microtime(true);
+        $started = (hrtime(true) / 1_000_000_000);
 
         $result = new ProcessRunner()->runWithin(['php', '-r', 'sleep(30);'], sys_get_temp_dir(), 1);
 
         self::assertSame(ProcessRunner::TIMED_OUT, $result->exitCode);
-        self::assertLessThan(10, microtime(true) - $started);
+        self::assertLessThan(10, (hrtime(true) / 1_000_000_000) - $started);
     }
 
     public function testACommandWithinItsTimeKeepsItsOutputAndExitCode(): void
