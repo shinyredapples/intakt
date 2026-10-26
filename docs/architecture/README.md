@@ -41,7 +41,7 @@ Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,.
 
 Two entry points let reviewers and the boot gate exercise a running Intakt without network access, after `composer install` (plan task T31):
 
-- `bin/instance` boots the app from a clean checkout (FrankenPHP worker mode, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly.
+- `bin/instance` boots the app from a clean checkout with the plain Symfony runtime (PHP's built-in web server, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly. FrankenPHP is a binary, not a Composer package: worker mode comes with the container image (plan task T22), where `bin/instance` boots in worker mode.
 - `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with no network, and prints its output and exit code.
 
 ## Persistence

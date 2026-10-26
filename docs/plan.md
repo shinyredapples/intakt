@@ -19,8 +19,8 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 | M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub, branch cleanup | T15 to T19, T30 | 2026-11-14 |
-| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live, with no state leaks in worker mode | T20, T21, T29 | 2026-11-17 |
-| M5 Demo | image, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T28 | 2026-11-21 |
+| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
+| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 
 ## M1 Review core
 
@@ -32,7 +32,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T31 `bin/instance` and `bin/probe` for reviewers and the boot gate
-- **Description:** `bin/instance` boots Intakt from a clean checkout after `composer install` (FrankenPHP worker mode, SQLite in a scratch directory), prints one JSON status line (`ready` or `failed` with the reason), and stops cleanly. `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code. Both work offline, so the build loop can run reviewer probes and a boot gate on Intakt itself.
+- **Description:** `bin/instance` boots Intakt from a clean checkout after `composer install` with the plain Symfony runtime (PHP's built-in web server on a free local port, SQLite in a scratch directory), checks that it answers, prints one JSON status line (`ready` or `failed` with the reason), and stops cleanly. `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code. Both work offline, so the build loop can run reviewer probes and a boot gate on Intakt itself. FrankenPHP is a binary, not a Composer package, so worker mode arrives with the image in T22, which switches `bin/instance` to it inside the image.
 - **Acceptance:** both commands work with the network disabled; a broken kernel config makes `bin/instance` report `failed` with the error and a non-zero exit; a probe that reaches for the network fails; the instance leaves no process or file behind; both are documented in `docs/architecture/`.
 - **Evidence:** the JSON status of a clean and of a broken boot, and a probe run with its output, all without network.
 - **PHP 8.5:** `#[\NoDiscard]` on the instance status.
@@ -152,8 +152,8 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T30 Branch cleanup with archive refs
-- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges: delete a merged branch at once, a closed unmerged one after 30 days unless labeled `keep`, a branch without a pull request after 60 days (stale at 30); a weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
-- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
+- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges, limited to branches with Intakt's prefix (other people's branches only when the project opts in), never the default, protected or release branches: delete a merged branch at once; a closed unmerged one after 30 days unless its pull request is labeled `keep`; a branch without a pull request after 60 days (stale at 30) unless claimed by a person's commit or the project file's `keep-branches` list. A weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
+- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; the default, protected and release branches and branches without Intakt's prefix are never deleted unless the project opts in; both kinds of claim keep a branch; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
 - **Evidence:** the warning list and the archive refs after a cleanup run on the GitHub test repository.
 - **PHP 8.5:** the pipe operator for the rule chain that picks the branches.
 - **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
@@ -179,20 +179,20 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Evidence:** a short screen recording or a sequence of screenshots of a live round.
 - **Waits for:** T20. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
+## M5 Demo
+
+### T22 Container image
+- **Description:** A FrankenPHP-based image with Intakt: a Caddyfile that runs the app in FrankenPHP worker mode (Symfony Runtime's `FrankenPhpWorkerRunner`) with the Mercure hub, a worker restart after a set number of requests and on a memory ceiling, and the Messenger consumers and the Scheduler as separate long-running processes from the same image. Built in CI and run locally; SQLite in a volume.
+- **Acceptance:** the image starts, migrates and serves the dashboard in worker mode, and `bin/instance` in the image boots in worker mode; the consumers and the Scheduler run beside it and restart on failure; it runs as a non-root user; no secret is baked in.
+- **Evidence:** `docker run` output and the dashboard served from the container.
+- **Waits for:** T21. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
 ### T29 No state leaks in worker mode
 - **Description:** A test boots one kernel and sends many requests through it, as FrankenPHP worker mode does: different users, flash messages, Doctrine reads and writes, and agent runs with their message store. Any service that keeps state between requests is made to implement `ResetInterface`, and the entity manager is reset.
 - **Acceptance:** no request sees the previous request's user, flash messages, entity manager identity map entries or agent messages; the test fails when a reset is removed.
 - **Evidence:** the test run, and the same check by hand against the image from T22 (two browsers, alternating requests).
 - **PHP 8.5:** `#[\NoDiscard]` on the reset results the test asserts.
-- **Waits for:** T20. **Size:** M. **Labels:** `class:core`, `priority:high`.
-
-## M5 Demo
-
-### T22 Container image
-- **Description:** A FrankenPHP-based image with Intakt: a Caddyfile that runs the app in FrankenPHP worker mode (Symfony Runtime's `FrankenPhpWorkerRunner`) with the Mercure hub, a worker restart after a set number of requests and on a memory ceiling, and the Messenger consumers and the Scheduler as separate long-running processes from the same image. Built in CI and run locally; SQLite in a volume.
-- **Acceptance:** the image starts, migrates and serves the dashboard in worker mode; the consumers and the Scheduler run beside it and restart on failure; it runs as a non-root user; no secret is baked in.
-- **Evidence:** `docker run` output and the dashboard served from the container.
-- **Waits for:** T21. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+- **Waits for:** T20, T22. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T23 `docker compose up` with a sample repository
 - **Description:** `compose.yaml` starts Intakt with a sample repository holding a base and a pull request branch with deliberate, findable issues. `.env.dist` lists the provider keys; the first start seeds the sample project and its panel.
@@ -235,5 +235,5 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
-- T15 to T19 and T20, T21, T29 in parallel after T13; T30 after T18.
+- T15 to T19 and T20 to T21 in parallel after T13; T30 after T18; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
