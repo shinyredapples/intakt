@@ -146,6 +146,26 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertStringContainsString('settings.php', $run->findingsOf('secrets'));
     }
 
+    public function testTheScannerConfigurationPassesItsOwnScan(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration());
+
+        $run = $sandbox->check('--only=secrets');
+
+        self::assertTrue($run->passed('secrets'), $run->output());
+    }
+
+    public function testATokenAddedToTheScannerConfigurationIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration().'token = "'.$this->fakeGithubToken()."\"\n");
+
+        $run = $sandbox->check('--only=secrets');
+
+        self::assertTrue($run->failed('secrets'), $run->output());
+        self::assertStringContainsString('config/gates/gitleaks.toml', $run->findingsOf('secrets'));
+    }
 
     public function testTheChangeThatIntroducesTheGatesIsScannedWithItsOwnRules(): void
     {
@@ -457,5 +477,10 @@ final class SecretsGatesTest extends SandboxTestCase
     private function fakeGithubToken(): string
     {
         return 'ghp_'.strrev('u4Ge2As0Py5hJ1Fc6Dw3Zb8Nt4Km9Vx2Lq7R');
+    }
+
+    private function scannerConfiguration(): string
+    {
+        return (string) file_get_contents(__DIR__.'/../../config/gates/gitleaks.toml');
     }
 }

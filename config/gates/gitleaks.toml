@@ -6,19 +6,25 @@ minVersion = "v8.25.0"
 # Only content patterns are allowed, never paths.
 
 [[allowlists]]
-description = "This file's own rule patterns and shell placeholders"
-paths = [
-    '''^config/gates/gitleaks\.toml$''',
-]
+description = "Shell placeholders"
 regexes = [
     '''^\$(?:\d+|{\d+})$''',
     '''^\$(?:[A-Z_]+|[a-z_]+)$''',
     '''^\${(?:[A-Z_]+|[a-z_]+)}$''',
 ]
 
+[[allowlists]]
+description = "This file's own rule definitions: a rule's regex line and the quoted entries of its lists, matched as whole lines"
+regexTarget = "line"
+regexes = [
+    "^\\s*regex = '{3}.*'{3}\\s*$",
+    "^\\s*'{3}[^']*'{3},\\s*$",
+    '^\s*"[^"]*",\s*$',
+]
+
 [[rules]]
 id = "1password-secret-key"
-description = "Uncovered a possible 1Password secret key, potentially compromising access to secrets in vaults."
+description = "Uncovered a possible 1Password account key, which could expose the vaults it opens."
 regex = '''\bA3-[A-Z0-9]{6}-(?:(?:[A-Z0-9]{11})|(?:[A-Z0-9]{6}-[A-Z0-9]{5}))-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}\b'''
 entropy = 3.8
 keywords = ["a3-"]
