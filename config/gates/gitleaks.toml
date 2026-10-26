@@ -13,16 +13,6 @@ regexes = [
     '''^\${(?:[A-Z_]+|[a-z_]+)}$''',
 ]
 
-[[allowlists]]
-description = "The commit that added this file, before the bedrock rule was rewritten not to match its own definition; only that one match in that one commit"
-condition = "AND"
-# One character of the commit id is a \u escape, and (?:Y) splits the pattern, so neither line matches a rule itself.
-commits = ["17b47886694\u0039d77efabd7655bc21cdd663dbd28c"]
-regexTarget = "match"
-regexes = [
-    '''^bedrock-api-key-(?:Y)mVkcm9jay5hbWF6b25hd3MuY29t$''',
-]
-
 [[rules]]
 id = "1password-secret-key"
 description = "Uncovered a possible 1Password account key, which could expose the vaults it opens."
@@ -184,8 +174,9 @@ keywords = ["absk"]
 [[rules]]
 id = "aws-amazon-bedrock-api-key-short-lived"
 description = "Identified a pattern that may indicate short-lived Amazon Bedrock API keys, risking unauthorized Amazon Bedrock usage"
-# The group (?:Y) matches the same text but keeps this line from matching its own pattern, so no allowlist is needed.
-regex = '''bedrock-api-key-(?:Y)mVkcm9jay5hbWF6b25hd3MuY29t'''
+# Changed from the default rule: a real key continues after the fixed prefix, so at least 16 more characters are required;
+# the bare prefix (as in earlier versions of this file) is not a key. (?:Y) keeps this line from matching its own pattern.
+regex = '''bedrock-api-key-(?:Y)mVkcm9jay5hbWF6b25hd3MuY29t[A-Za-z0-9+/=%&_-]{16,}'''
 entropy = 3
 keywords = ["bedrock-api-key-"]
 

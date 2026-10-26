@@ -191,6 +191,22 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
     }
 
+    public function testAShortLivedBedrockKeyIsCaught(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('key.txt', 'key = '.$this->bedrockPrefix().strrev('3D%Q9xVb2Kq7Ld4Mf8Nh1Rj5Tz0Wy6Pc')."\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+    }
+
+    public function testTheBarePrefixOfABedrockKeyIsNotAKey(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('prefix.txt', "regex = '''".$this->bedrockPrefix()."'''\n");
+
+        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+    }
+
     public function testATokenAsAQuotedEntryOfAJsonListIsCaught(): void
     {
         $sandbox = $this->emptySandbox();
@@ -543,5 +559,10 @@ final class SecretsGatesTest extends SandboxTestCase
     private function scannerConfiguration(): string
     {
         return (string) file_get_contents(__DIR__.'/../../config/gates/gitleaks.toml');
+    }
+
+    private function bedrockPrefix(): string
+    {
+        return 'bedrock-api-key-'.'YmVkcm9jay5h'.'bWF6b25hd3MuY29t';
     }
 }
