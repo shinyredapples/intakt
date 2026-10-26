@@ -6,7 +6,7 @@
   "minimum-stability": "beta",
   "prefer-stable": true,
   "require": {
-    "php": ">=8.4.1",
+    "php": ">=8.5.12",
     "ext-ctype": "*",
     "ext-iconv": "*",
     "ext-pdo_sqlite": "*",
@@ -46,7 +46,7 @@
     },
     "optimize-autoloader": true,
     "platform": {
-      "php": "8.4.1"
+      "php": "8.5.12"
     }
   },
   "autoload": {

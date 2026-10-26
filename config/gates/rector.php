@@ -11,6 +11,7 @@ $cacheDirectory = (is_string($cacheBase) && '' !== $cacheBase ? $cacheBase : sys
 return RectorConfig::configure()
     ->withCache($cacheDirectory)
     ->withImportNames(removeUnusedImports: true)
+    ->withPhpSets(php85: true)
     ->withPreparedSets(deadCode: true, codeQuality: true)
     ->withRules([StringClassNameToClassConstantRector::class])
     ->withSkip([
