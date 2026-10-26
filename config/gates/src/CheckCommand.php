@@ -84,6 +84,7 @@ final readonly class CheckCommand
             new StaticAnalysisGate(),
             new RectorGate(),
             new ArchitectureGate(),
+            new CommentsGate(),
             new ComposerAuditGate(),
             new TestsGate(),
             new WorkingTreeSecretsGate(),

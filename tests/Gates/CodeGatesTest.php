@@ -8,7 +8,7 @@ final class CodeGatesTest extends SandboxTestCase
 {
     public function testACompliantClassPassesEveryCodeGate(): void
     {
-        foreach (['cs', 'phpstan', 'rector', 'architecture'] as $gate) {
+        foreach (['cs', 'phpstan', 'rector', 'comments', 'architecture'] as $gate) {
             $this->assertAcceptedBy($gate, 'clean');
         }
     }
