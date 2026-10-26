@@ -9,6 +9,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Size:** S up to about 150 changed lines, M up to about 400, L above that (an L gets a plan first; split it if the plan shows two outcomes).
 - **Evidence** is what the pull request must show from a running install, besides green tests.
 - **Labels** on each issue, from the design's [label families](design/05-architecture/04-labels.md): `intakt` on all; `class:` and `priority:` as listed; `plan:required` on L tasks; `model:strong` only where noted.
+- **PHP 8.5** lines name the 8.5 feature that fits a task (see `AGENTS.md`); use it where it makes the code clearer.
 - Contracts and config shapes are not designed ahead: each task adds the contract methods and config keys it uses, and nothing more ([Left to the builder](design/08-left-to-the-builder.md)). Every user-visible task updates `docs/user/` and `docs/architecture/`.
 
 ## Milestones
@@ -19,20 +20,22 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub | T15 to T19 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20 to T21 | 2026-11-17 |
-| M5 Demo | image, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T27 | 2026-11-21 |
+| M5 Demo | image, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T28 | 2026-11-21 |
 
 ## M1 Review core
 
 ### T1 Verdict schema and its validation
 - **Description:** The `Review` core module's Contract gets the verdict as value objects (verdict, finding, severity, `fixable_by`, `evidence`) and a JSON schema matching the design. A parser turns raw model output into a verdict; anything invalid becomes a `changes` verdict with a finding that says why.
-- **Acceptance:** the design's example verdict parses; each field rule (enum, required, types) has a failing case; invalid JSON, prose and a fenced block all yield `changes`; the schema file is used by both validation and the structured-output call in T5.
+- **Acceptance:** the design's example verdict parses; each field rule (enum, required, types) has a failing case; invalid JSON, prose and a fenced block all yield `changes`.
 - **Evidence:** a test run listing the cases; the schema file path.
+- **PHP 8.5:** `clone()` with property overrides for the readonly value objects; `#[\NoDiscard]` on the parse result.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T2 Ledger: append-only events on SQLite
 - **Description:** The `Ledger` core module stores events (review started, reviewer started, verdict received, judge done, usage recorded) in one append-only table through Doctrine, with a migration. No updates or deletes.
 - **Acceptance:** appending and reading events in order works; an update or delete is refused; tests are in the `persistence` group.
 - **Evidence:** `bin/console doctrine:migrations:migrate` output on SQLite and the events of a test run read back with a console query.
+- **PHP 8.5:** `#[\NoDiscard]` on the append result, so a write that failed cannot be ignored.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T3 Persistence tests on MySQL, MariaDB and PostgreSQL in CI
@@ -49,14 +52,16 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 ### T5 Vendor contract and the Symfony AI Platform vendor
 - **Description:** The `Vendor` plugin contract gets the one method the review needs (run a structured call for a tier). The first implementation, `Plugin/SymfonyAiVendor`, uses the Platform's structured output with the T1 schema and records token usage per call in the ledger (started, settled, unsettled).
-- **Acceptance:** a structured call against the in-memory platform returns a verdict; usage is recorded once per call; a 429 or quota error is a typed error with the reset time when the provider sends one, never parsed from model text.
+- **Acceptance:** a structured call against the in-memory platform returns a verdict; usage is recorded once per call; a 429 or quota error is a typed error with the reset time when the provider sends one, never parsed from model text; the structured-output call uses the T1 schema file, the same one validation uses.
 - **Evidence:** one real call per configured provider from a console command, with its usage line (keys from the owner's environment, never committed).
+- **PHP 8.5:** `#[\NoDiscard]` on usage reservations; the pipe operator for building the request from task, tier and schema.
 - **Waits for:** T1, T2, T4. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T6 Forge contract and the local git forge
 - **Description:** The `Forge` contract gets what reading a change needs (head, base, diff, files at head). `Plugin/LocalGitForge` treats a branch of a local repository against its base as a pull request, through the Process component.
 - **Acceptance:** the diff and file contents at the exact head are returned; a moved head is detected; tests use a temporary repository.
 - **Evidence:** a console command printing the change summary of a sample branch.
+- **PHP 8.5:** the pipe operator for turning `git diff` output into changed files.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T7 One reviewer agent with read-only repository tools
@@ -71,6 +76,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** A panel is configured per project: reviewers (role, tier, provider, prompt, budget), a quorum policy (all, majority, one strong plus one) and rules choosing a panel by change (size, paths, `review:full`).
 - **Acceptance:** each policy has passing and failing cases; a panel of one, two and three reviewers works; the panel is chosen from config alone.
 - **Evidence:** two configs producing two different panels for the same change, shown by a dry-run command.
+- **PHP 8.5:** closures in constant expressions for the built-in quorum policies.
 - **Waits for:** T4, T7. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T9 Parallel reviewers through Messenger
@@ -83,6 +89,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** Round two and later pass the open findings to each reviewer; verdicts list `resolved` ids and mark `repeat`. A new P1 or P2 from round two on that is neither a regression nor cites a requirement is lowered to P3.
 - **Acceptance:** ids stay stable over three rounds; resolved findings close; the goalpost rule is enforced in code, not only in the prompt.
 - **Evidence:** two real rounds on a sample branch, the second after a fixing commit, with the finding table of both.
+- **PHP 8.5:** `array_first()` and `array_last()` for the first and latest round of a finding.
 - **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T11 Verdict identity
@@ -115,6 +122,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** The MCP Bundle exposes tools to start a review, read its status, read verdicts and the act list, and list projects, plus resources for a round's findings. Read tools are marked read-only.
 - **Acceptance:** an MCP client test (PHP MCP SDK client) calls every tool; starting a review needs the configured token; errors are MCP errors, not stack traces.
 - **Evidence:** an agent CLI connected over MCP starting a review of the sample branch and reading the act list (transcript excerpt).
+- **PHP 8.5:** closures in attributes where an MCP tool's input needs a check.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
 ### T16 Reviewer tools over MCP
@@ -133,12 +141,14 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** `Plugin/GitHubForge` reads a pull request (head, base, diff, files at head) with a token from the environment and posts the outcome as one review comment carrying the round's one-time token.
 - **Acceptance:** recorded HTTP responses drive the tests; a head that moved during review is detected; nothing is posted when the round is stale.
 - **Evidence:** a review of a real pull request in a test repository, with the posted comment.
+- **PHP 8.5:** `Uri\Rfc3986\Uri` instead of `parse_url` for pull-request and API URLs.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T19 Labels on reviewed changes
 - **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
 - **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
 - **Evidence:** the GitHub test pull request with its labels before and after a round.
+- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[\NoDiscard]` on minted round tokens.
 - **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
 
 ## M4 Live dashboard
@@ -175,9 +185,9 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Evidence:** a fresh-machine run following only the README.
 - **Waits for:** T23, T15. **Size:** S. **Labels:** `class:feature`, `priority:urgent`.
 
-### T25 Edge cases of Symfony AI on purpose
-- **Description:** Tests and scripted runs push the Platform and Agent: parallel calls, an oversized context, a provider outage mid-stream, malformed tool calls, long runs. Each likely library bug gets a reproduction in `upstream/`.
-- **Acceptance:** Intakt degrades to `changes` or `blocked` with a recorded reason in every case; each reproduction runs alone against the pinned versions.
+### T25 Provider outages and quotas on purpose
+- **Description:** Scripted runs push the Platform and the Agent where providers fail: an outage mid-stream, parallel calls that hit a rate limit together, a quota exhausted during a round, a long run. Each likely library bug gets a reproduction in `upstream/`.
+- **Acceptance:** Intakt degrades to `changes` or `blocked` with a recorded reason in every case; usage of an interrupted call is settled once; each reproduction runs alone against the pinned versions.
 - **Evidence:** the list of cases with their outcomes, and any `upstream/` folders.
 - **Waits for:** T14, T16. **Size:** M. **Labels:** `class:core`, `priority:normal`, `model:strong`.
 
@@ -193,9 +203,16 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Evidence:** the tool list and one tool call against the running dev app.
 - **Waits for:** none. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
+### T28 Tool calls and context size on purpose
+- **Description:** Tests and scripted runs push the Agent on its inputs: malformed and unknown tool calls, tool results too large for the context, an oversized diff, a task text that tries to steer the reviewer. Each likely library bug gets a reproduction in `upstream/`.
+- **Acceptance:** every case ends as `changes` or `blocked` with a recorded reason, never a crash; oversized input is cut with a note the reviewer sees; each reproduction runs alone.
+- **Evidence:** the list of cases with their outcomes, and any `upstream/` folders.
+- **PHP 8.5:** the pipe operator for the trimming steps.
+- **Waits for:** T7, T16. **Size:** M. **Labels:** `class:core`, `priority:normal`, `model:strong`.
+
 ## Parallel paths
 
 - From the start: T1, T2, T4, T6, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T19 and T20 to T21 in parallel after T13.
-- The demo tasks (T22 to T24) are the critical path to the deadline; T25 runs alongside them.
+- The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
