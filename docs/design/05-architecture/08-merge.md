@@ -16,9 +16,10 @@ Protected paths (gates, CI config, agent instructions, dependency policy) need t
 
 ## Branch cleanup
 
-Branch cleanup is Intakt's job, so a busy loop does not leave hundreds of branches behind:
+Branch cleanup is Intakt's job, so a busy loop does not leave hundreds of branches behind. It is limited on purpose:
+- **Only Intakt's own branches by default.** Cleanup touches only branches Intakt created (its branch prefix). It never touches the default branch, protected branches or release branches. Cleaning up other people's branches is opt-in per project.
 - **Merged pull request:** its branch is deleted at once, and setup turns on the forge's own auto-delete where it exists.
 - **Closed, unmerged pull request:** the branch is kept for 30 days, then deleted. A `keep` label on the pull request exempts it.
-- **Branch with no pull request:** after 30 days without commits it is listed as stale; after 60 days it is deleted unless claimed.
+- **Branch with no pull request:** after 30 days without commits it is listed as stale; after 60 days it is deleted unless claimed. A branch is claimed when a person (not Intakt's identity) has committed to it, or when it is named in the `keep-branches` list of the project file. The `keep` label does not apply here, since there is no pull request to carry it.
 - **Warning first:** a weekly job lists what it will delete a week before it does (a dashboard chore and one notice), then deletes.
 - **Nothing is lost:** the orchestrator keeps every deleted branch's head in its own mirror as an archive ref, so a deleted branch can be restored. Archive refs are never pushed to the forge.
