@@ -19,7 +19,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 | M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger | T1 to T7 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub | T15 to T19 | 2026-11-14 |
-| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20 to T21 | 2026-11-17 |
+| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live, with no state leaks in worker mode | T20, T21, T29 | 2026-11-17 |
 | M5 Demo | image, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T28 | 2026-11-21 |
 
 ## M1 Review core
@@ -165,11 +165,18 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Evidence:** a short screen recording or a sequence of screenshots of a live round.
 - **Waits for:** T20. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
+### T29 No state leaks in worker mode
+- **Description:** A test boots one kernel and sends many requests through it, as FrankenPHP worker mode does: different users, flash messages, Doctrine reads and writes, and agent runs with their message store. Any service that keeps state between requests is made to implement `ResetInterface`, and the entity manager is reset.
+- **Acceptance:** no request sees the previous request's user, flash messages, entity manager identity map entries or agent messages; the test fails when a reset is removed.
+- **Evidence:** the test run, and the same check by hand against the image from T22 (two browsers, alternating requests).
+- **PHP 8.5:** `#[\NoDiscard]` on the reset results the test asserts.
+- **Waits for:** T20. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
 ## M5 Demo
 
 ### T22 Container image
-- **Description:** A FrankenPHP-based image with Intakt, its Messenger worker and the Mercure hub, built in CI and run locally; SQLite in a volume.
-- **Acceptance:** the image starts, migrates and serves the dashboard; it runs as a non-root user; no secret is baked in.
+- **Description:** A FrankenPHP-based image with Intakt: a Caddyfile that runs the app in FrankenPHP worker mode (Symfony Runtime's `FrankenPhpWorkerRunner`) with the Mercure hub, a worker restart after a set number of requests and on a memory ceiling, and the Messenger consumers and the Scheduler as separate long-running processes from the same image. Built in CI and run locally; SQLite in a volume.
+- **Acceptance:** the image starts, migrates and serves the dashboard in worker mode; the consumers and the Scheduler run beside it and restart on failure; it runs as a non-root user; no secret is baked in.
 - **Evidence:** `docker run` output and the dashboard served from the container.
 - **Waits for:** T21. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
@@ -214,5 +221,5 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 - From the start: T1, T2, T4, T6, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
-- T15 to T19 and T20 to T21 in parallel after T13.
+- T15 to T19 and T20, T21, T29 in parallel after T13.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
