@@ -563,6 +563,6 @@ final class SecretsGatesTest extends SandboxTestCase
 
     private function bedrockPrefix(): string
     {
-        return 'bedrock-api-key-'.'YmVkcm9jay5h'.'bWF6b25hd3MuY29t';
+        return 'bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t';
     }
 }
