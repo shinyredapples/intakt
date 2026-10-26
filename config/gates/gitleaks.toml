@@ -16,10 +16,11 @@ regexes = [
 [[allowlists]]
 description = "The commit that added this file, before the bedrock rule was rewritten not to match its own definition; only that one match in that one commit"
 condition = "AND"
-commits = ["17b478866949d77efabd7655bc21cdd663dbd28c"]
+# One character of the commit id is a \u escape, and (?:Y) splits the pattern, so neither line matches a rule itself.
+commits = ["17b47886694\u0039d77efabd7655bc21cdd663dbd28c"]
 regexTarget = "match"
 regexes = [
-    '''^bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t$''',
+    '''^bedrock-api-key-(?:Y)mVkcm9jay5hbWF6b25hd3MuY29t$''',
 ]
 
 [[rules]]
