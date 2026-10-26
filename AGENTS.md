@@ -22,6 +22,7 @@ Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Sy
   - closures in constant expressions and attributes.
 - Small methods that read as a sequence of named steps; early returns; no boolean flag parameters; at most three parameters per method or closure (enforced).
 - No comments except type docblocks (`@param`, `@return`, `@var`, templates) and one-line comments that say why, never what. No commented-out code, no TODOs.
+- The HTTP side runs in FrankenPHP worker mode: one kernel serves many requests. Services keep no per-request state; anything that must be cleared between requests implements `ResetInterface`.
 - Domain names in code; commands imperative, events past tense.
 
 ## Tests

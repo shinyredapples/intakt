@@ -16,3 +16,4 @@
 14. Distribution: a Docker image (Intakt is an application, not a library).
 15. The name stays Intakt.
 16. PHP 8.5 and its features (decided 2026-10-26, replacing 8.4): minimum 8.5.12, the release that fixes PHP2Shell (CVE-2026-109618 and CVE-2026-109619, unauthenticated remote code execution). CI refuses an older runtime.
+17. FrankenPHP worker mode (decided 2026-10-26): the dashboard, the local API and the MCP server run in FrankenPHP worker mode with its built-in Mercure hub for live updates; the Messenger consumers and the Scheduler run as separate long-running processes from the same image. Symfony Runtime's own `FrankenPhpWorkerRunner` (symfony/runtime 7.4 and later, detected automatically; Intakt runs 8.1) serves worker mode, so no extra runtime package is needed. This deliberately runs Symfony AI in a long-lived process, to find leaks and state bugs in the beta while they can still be fixed.
