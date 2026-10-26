@@ -14,5 +14,7 @@ if (!is_file($autoload)) {
 
 require $autoload;
 
-/** @var list<string> $argv */
-exit(new CheckCommand(dirname(__DIR__))->run(array_slice($argv, 1)));
+$arguments = $_SERVER['argv'] ?? [];
+$arguments = is_array($arguments) ? array_values(array_filter($arguments, is_string(...))) : [];
+
+exit(new CheckCommand(dirname(__DIR__))->run(array_slice($arguments, 1)));
