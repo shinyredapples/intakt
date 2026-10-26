@@ -19,7 +19,11 @@ final class ComposerAuditGate implements Gate
             return GateResult::withFindings($this->name(), $ignores);
         }
 
-        $result = $workspace->command(['composer', 'audit', '--locked', '--format=json', '--no-interaction']);
+        $result = $this->audit($workspace);
+
+        if (!$result instanceof ProcessResult) {
+            return GateResult::failedBecause($this->name(), 'cannot create a scratch COMPOSER_HOME for the audit');
+        }
 
         if ($result->succeeded()) {
             return GateResult::passed($this->name());
@@ -28,6 +32,24 @@ final class ComposerAuditGate implements Gate
         $findings = $this->findings($result->output);
 
         return GateResult::withFindings($this->name(), [] === $findings ? ['composer audit failed: '.$result->firstErrorLine()] : $findings);
+    }
+
+    private function audit(Workspace $workspace): ?ProcessResult
+    {
+        $home = ScratchDirectory::create('intakt-composer-home');
+
+        if (!$home instanceof ScratchDirectory) {
+            return null;
+        }
+
+        try {
+            return $workspace->command(
+                ['composer', 'audit', '--locked', '--abandoned=fail', '--format=json', '--no-interaction'],
+                ['COMPOSER_HOME' => $home->path, 'COMPOSER_AUDIT_ABANDONED' => 'fail'],
+            );
+        } finally {
+            $home->remove();
+        }
     }
 
     /**
