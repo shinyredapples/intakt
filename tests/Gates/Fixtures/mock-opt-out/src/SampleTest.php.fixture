@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use PHPUnit\Framework\TestCase;
+
+#[AllowMockObjectsWithoutExpectations]
+final class SampleTest extends TestCase
+{
+    public function testNothing(): void
+    {
+        self::assertTrue(true);
+    }
+}

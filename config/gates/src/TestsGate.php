@@ -128,7 +128,7 @@ final class TestsGate implements Gate
             $workspace->tool('phpunit'),
             '--configuration='.$workspace->root.'/'.$configuration,
             ...self::FAIL_CLOSED,
-            '--do-not-cache-result', '--colors=never', '--no-progress',
+            '--display-phpunit-notices', '--do-not-cache-result', '--colors=never', '--no-progress',
         ];
     }
 }
