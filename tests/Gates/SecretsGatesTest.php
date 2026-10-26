@@ -205,7 +205,28 @@ final class SecretsGatesTest extends SandboxTestCase
         $run = $sandbox->check('--only=secrets-history', '--base=main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
-        self::assertStringNotContainsString('base commit has no', $run->findingsOf('secrets-history'));
+        self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
+    }
+
+    public function testABranchForkedBeforeTheGatesIsScannedWithTheRulesOfTheBaseTip(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "start\n");
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->git('switch', '--quiet', 'main');
+        $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration());
+        $sandbox->commitAll('build: add the gates');
+        $sandbox->git('switch', '--quiet', 'change');
+        $sandbox->write('config/gates/gitleaks.toml', "title = \"lax\"\n\n[[rules]]\nid = \"nothing\"\nregex = '''never-matches-anything'''\n");
+        $sandbox->write('settings.txt', 'token '.$this->fakeGithubToken()."\n");
+        $sandbox->commitAll('feat: add lax rules and a token');
+
+        $run = $sandbox->check('--only=secrets-history', '--base=main');
+
+        self::assertTrue($run->failed('secrets-history'), $run->output());
+        self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
     }
 
     public function testTheHistoryScanFailsWhenTheBaseHasGatesButNoScannerConfiguration(): void
@@ -221,7 +242,7 @@ final class SecretsGatesTest extends SandboxTestCase
         $run = $sandbox->check('--only=secrets-history', '--base=main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
-        self::assertStringContainsString('base commit has no config/gates/gitleaks.toml', $run->findingsOf('secrets-history'));
+        self::assertStringContainsString('base has no config/gates/gitleaks.toml', $run->findingsOf('secrets-history'));
     }
 
     public function testAScannerNamedByTheOverrideIsVersionCheckedToo(): void

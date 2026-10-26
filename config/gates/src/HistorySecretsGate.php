@@ -38,7 +38,7 @@ final class HistorySecretsGate extends GitleaksGate
         $configPath = $this->baseConfiguration($workspace, $mergeBase);
 
         if (null === $configPath) {
-            return GateResult::failedBecause($this->name(), 'the base commit has no config/gates/'.self::CONFIGURATION.', the scan cannot run');
+            return GateResult::failedBecause($this->name(), 'the base has no config/gates/'.self::CONFIGURATION.', the scan cannot run');
         }
 
         $result = $this->scan($workspace, new ScanTarget($workspace->root, ['--log-opts='.implode(' ', [...self::FULL_DIFF_OPTIONS, $mergeBase.'..HEAD'])]), $configPath);
@@ -50,14 +50,15 @@ final class HistorySecretsGate extends GitleaksGate
 
     private function configurationSource(Workspace $workspace, string $mergeBase): string
     {
-        $baseHasGates = $workspace->command(['git', 'cat-file', '-e', $mergeBase.':config/gates'])->succeeded();
+        $tip = $workspace->baseTip() ?? $mergeBase;
+        $tipHasGates = $workspace->command(['git', 'cat-file', '-e', $tip.':config/gates'])->succeeded();
 
-        return ($baseHasGates ? $mergeBase : 'HEAD').':config/gates/'.self::CONFIGURATION;
+        return $tipHasGates ? $tip : 'HEAD';
     }
 
     private function baseConfiguration(Workspace $workspace, string $mergeBase): ?string
     {
-        $base = $workspace->command(['git', 'show', $this->configurationSource($workspace, $mergeBase)]);
+        $base = $workspace->command(['git', 'show', $this->configurationSource($workspace, $mergeBase).':config/gates/'.self::CONFIGURATION]);
         $created = tempnam(sys_get_temp_dir(), 'gitleaks-config');
 
         if (!$base->succeeded() || false === $created) {

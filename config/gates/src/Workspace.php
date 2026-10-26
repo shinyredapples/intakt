@@ -71,6 +71,19 @@ final readonly class Workspace
         return Mode::ChangedFilesOnly === $this->mode;
     }
 
+    public function baseTip(): ?string
+    {
+        foreach ($this->candidateBases() as $base) {
+            $result = $this->command(['git', 'rev-parse', '--verify', '--quiet', $base.'^{commit}']);
+
+            if ($result->succeeded()) {
+                return trim($result->output);
+            }
+        }
+
+        return null;
+    }
+
     public function mergeBase(): ?string
     {
         foreach ($this->candidateBases() as $base) {
