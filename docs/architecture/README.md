@@ -28,6 +28,7 @@ The plugin kinds have empty contracts for now. The first implementation of each 
 | `phpstan` | PHPStan at max with strict and deprecation rules, no baseline, cognitive complexity, at most three parameters |
 | `rector` | Rector dry run: dead code, code quality, class constants over class-name strings |
 | `architecture` | PHPArkitect: module layout, other modules only through `Contract`, inner layers independent |
+| `comments` | line comments give a reason (a why word or a link) on one line; docblocks hold types only; no TODOs, commented-out code or suppressions |
 | `audit` | `composer audit` on the lock file |
 | `tests` | PHPUnit on SQLite (`phpunit.dist.xml`) and the gate tests (`phpunit.gates.xml`), failing on warnings, notices, deprecations, risky and skipped tests |
 | `secrets` | gitleaks on the working tree, refusing inline allow directives |

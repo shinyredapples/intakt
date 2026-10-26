@@ -2,6 +2,14 @@
 
 Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Symfony AI. The design in `docs/design/` is the authority (start at `docs/design/README.md`); the spec and plan for the current release are `docs/spec.md` and `docs/plan.md`. This file is the short version of the rules.
 
+## How code reads
+
+- **Storytelling.** A use case's entry method reads as a short story of named steps in domain words, top-down. The public method comes first, then its helpers in the order they are called. A newcomer can follow a flow from its door (command, controller, handler, MCP tool) to the result without jumping through layers of indirection.
+- **SOLID, pragmatically.** One reason to change per class. Depend on a module's `Contract`, not its insides. An interface exists only at a module boundary or when a second implementation exists today, never for a single implementation inside a module. No factories, strategies, abstract base classes or generic frameworks until a second real case needs them.
+- **DRY without speculation.** Duplicated knowledge (a rule, a format, a decision) has one home. Similar-looking code is extracted on the third occurrence, not the second, and never into a shared "utils".
+- **No overengineering.** A module gets its `Domain/`, `UseCase/` and `Infrastructure/` folders only when they hold code. No config option, column, parameter or extension point without a caller today. Plain PHP and Symfony features before custom abstractions.
+- **Comments say why, never what.** Names and small methods carry the meaning. A comment may only give a reason (a constraint, a trade-off, a link to an upstream bug) on one line; no commented-out code, no TODOs. Docblocks hold types only (`@param`, `@return`, `@var`, `@template`, `@throws`). The `comments` gate enforces this: a line comment must give a reason (words such as *because*, *so*, *otherwise*, *must*, or a link), and a docblock with prose fails.
+
 ## Modules and contracts
 
 - Code lives in modules: `src/Core/<Module>/` for core areas, `src/Plugin/<Kind>/` for plugin kinds (Forge, Vendor, Notifier, WorkSource, Gate). Every module is listed in `config/modules.php`.
@@ -21,7 +29,6 @@ Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Sy
   - the URI extension (`Uri\Rfc3986\Uri`) instead of `parse_url` for forge and webhook URLs;
   - closures in constant expressions and attributes.
 - Small methods that read as a sequence of named steps; early returns; no boolean flag parameters; at most three parameters per method or closure (enforced).
-- No comments except type docblocks (`@param`, `@return`, `@var`, templates) and one-line comments that say why, never what. No commented-out code, no TODOs.
 - The HTTP side runs in FrankenPHP worker mode: one kernel serves many requests. Services keep no per-request state; anything that must be cleared between requests implements `ResetInterface`.
 - Domain names in code; commands imperative, events past tense.
 
