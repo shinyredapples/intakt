@@ -14,6 +14,7 @@ Default families (names are configurable per project; one value per family):
 | `model:` | a capability tier, for example `strong`, `standard`, `light` | the start tier for every build of the task; escalations can still raise it |
 | `plan:` | `required`, `skip` | overrides the per-size plan approval default (step 4) |
 | `review:` | `full` | the full review panel on every round, even for small diffs |
+| keep | `keep` | on a closed pull request: its branch is not deleted (see [Branch cleanup](08-merge.md#branch-cleanup)) |
 | `status:` (Intakt only) | `queued`, `building`, `in-review`, `waiting-on-you`, `parked`, `blocked`, `merged` | mirror of the row; exactly one at a time |
 
 Rules:
