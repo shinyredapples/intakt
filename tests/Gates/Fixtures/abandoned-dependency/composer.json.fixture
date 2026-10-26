@@ -1,0 +1,6 @@
+{
+    "name": "intakt/fixture",
+    "require": {
+        "intakt/retired-package": "1.0.0"
+    }
+}

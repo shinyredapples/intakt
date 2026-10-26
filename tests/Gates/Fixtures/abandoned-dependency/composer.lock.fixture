@@ -1,0 +1,21 @@
+{
+    "_readme": ["fixture"],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "intakt/retired-package",
+            "version": "1.0.0",
+            "type": "library",
+            "abandoned": "intakt/successor-package"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": [],
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

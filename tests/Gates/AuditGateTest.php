@@ -6,6 +6,8 @@ namespace Intakt\Tests\Gates;
 
 final class AuditGateTest extends SandboxTestCase
 {
+    private const string IGNORED_ADVISORY = 'PKSA-hr4y-jwk2-1yb9';
+
     public function testALockedDependencyWithAKnownAdvisoryFailsTheAudit(): void
     {
         $this->assertRejectedBy('audit', 'vulnerable-dependency', 'symfony/http-kernel PKSA-');
@@ -14,6 +16,23 @@ final class AuditGateTest extends SandboxTestCase
     public function testAnAuditIgnoreInComposerJsonFailsTheAudit(): void
     {
         $this->assertRejectedBy('audit', 'audit-ignore', 'config.audit.ignore');
+    }
+
+    public function testAnAbandonedPackageInTheLockFailsTheAudit(): void
+    {
+        $this->assertRejectedBy('audit', 'abandoned-dependency', 'intakt/retired-package is abandoned');
+    }
+
+    public function testAGlobalComposerConfigCannotIgnoreAnAdvisory(): void
+    {
+        $sandbox = $this->sandboxWith('vulnerable-dependency');
+        $home = $this->emptySandbox();
+        $home->write('config.json', '{"config": {"audit": {"ignore": ["'.self::IGNORED_ADVISORY.'"], "abandoned": "ignore"}}}'."\n");
+
+        $run = $sandbox->checkWith(['COMPOSER_HOME' => $home->root], '--only=audit');
+
+        self::assertTrue($run->failed('audit'), $run->output());
+        self::assertStringContainsString(self::IGNORED_ADVISORY, $run->findingsOf('audit'));
     }
 
     public function testTheFastRunStillAuditsWhenNoDependencyFileChanged(): void
