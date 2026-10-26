@@ -48,10 +48,16 @@ final class HistorySecretsGate extends GitleaksGate
         return $result;
     }
 
+    private function configurationSource(Workspace $workspace, string $mergeBase): string
+    {
+        $baseHasGates = $workspace->command(['git', 'cat-file', '-e', $mergeBase.':config/gates'])->succeeded();
+
+        return ($baseHasGates ? $mergeBase : 'HEAD').':config/gates/'.self::CONFIGURATION;
+    }
+
     private function baseConfiguration(Workspace $workspace, string $mergeBase): ?string
     {
-        $reference = $mergeBase.':config/gates/'.self::CONFIGURATION;
-        $base = $workspace->command(['git', 'show', $reference]);
+        $base = $workspace->command(['git', 'show', $this->configurationSource($workspace, $mergeBase)]);
         $created = tempnam(sys_get_temp_dir(), 'gitleaks-config');
 
         if (!$base->succeeded() || false === $created) {

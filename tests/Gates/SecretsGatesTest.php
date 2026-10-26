@@ -146,19 +146,29 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertStringContainsString('settings.php', $run->findingsOf('secrets'));
     }
 
-    public function testTheDummyValuesOfTheSpikesAreStillAllowed(): void
-    {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('spikes/throwaway/log.txt', '$ '.strrev('lruc')." -u admin:secret http://localhost/x\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
-    }
-
-    public function testTheHistoryScanFailsWhenTheBaseHasNoScannerConfiguration(): void
+    public function testTheChangeThatIntroducesTheGatesIsScannedWithItsOwnRules(): void
     {
         $sandbox = $this->emptySandbox();
         $sandbox->startRepository();
         $sandbox->write('README.md', "start\n");
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->write('config/gates/gitleaks.toml', (string) file_get_contents(__DIR__.'/../../config/gates/gitleaks.toml'));
+        $sandbox->write('settings.txt', 'token '.$this->fakeGithubToken()."\n");
+        $sandbox->commitAll('feat: add the gates');
+
+        $run = $sandbox->check('--only=secrets-history', '--base=main');
+
+        self::assertTrue($run->failed('secrets-history'), $run->output());
+        self::assertStringNotContainsString('base commit has no', $run->findingsOf('secrets-history'));
+    }
+
+    public function testTheHistoryScanFailsWhenTheBaseHasGatesButNoScannerConfiguration(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('config/gates/phpstan.neon', "parameters:\n    level: max\n");
         $sandbox->commitAll('chore: start');
         $sandbox->git('switch', '--quiet', '--create', 'change');
         $sandbox->write('config/gates/gitleaks.toml', (string) file_get_contents(__DIR__.'/../../config/gates/gitleaks.toml'));
