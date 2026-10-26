@@ -16,7 +16,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31, T32 | 2026-11-02 |
+| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub, branch cleanup | T15 to T19, T30 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
@@ -28,27 +28,21 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** The `Review` core module's Contract gets the verdict as value objects (verdict, finding, severity, `fixable_by`, `evidence`) and a JSON schema matching the design. A parser turns raw model output into a verdict; anything invalid becomes a `changes` verdict with a finding that says why.
 - **Acceptance:** the design's example verdict parses; each field rule (enum, required, types) has a failing case; invalid JSON, prose and a fenced block all yield `changes`.
 - **Evidence:** a test run listing the cases; the schema file path.
-- **PHP 8.5:** `clone()` with property overrides for the readonly value objects; `#[\NoDiscard]` on the parse result.
+- **PHP 8.5:** `clone()` with property overrides for the readonly value objects; `#[NoDiscard]` on the parse result.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T31 `bin/instance` and `bin/probe` for reviewers and the boot gate
 - **Description:** `bin/instance` boots Intakt from a clean checkout after `composer install` with the plain Symfony runtime (PHP's built-in web server on a free local port, SQLite in a scratch directory), checks that it answers, prints one JSON status line (`ready` or `failed` with the reason), and stops cleanly. `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code. Both work offline, so the build loop can run reviewer probes and a boot gate on Intakt itself. FrankenPHP is a binary, not a Composer package, so worker mode arrives with the image in T22, which switches `bin/instance` to it inside the image.
 - **Acceptance:** both commands work with the network disabled; a broken kernel config makes `bin/instance` report `failed` with the error and a non-zero exit; a probe that reaches for the network fails; the instance leaves no process or file behind; both are documented in `docs/architecture/`.
 - **Evidence:** the JSON status of a clean and of a broken boot, and a probe run with its output, all without network.
-- **PHP 8.5:** `#[\NoDiscard]` on the instance status.
+- **PHP 8.5:** `#[NoDiscard]` on the instance status.
 - **Waits for:** none. **Size:** M. **Labels:** `class:tooling`, `priority:high`.
-
-### T32 Buses and typed handler attributes
-- **Description:** Install Symfony Messenger with a command bus and a query bus (an async bus only when a task needs one). A small `Core/Platform` module's `Contract` gets a backed enum `Bus` and the attributes `AsCommandHandler` and `AsQueryHandler`; each extends Symfony's `AsMessageHandler`, fixes `bus: Bus::X->value` and passes `handles`, `method` and `priority` through. A PHPArkitect rule lets nothing in `src/` but that `Contract` depend on `AsMessageHandler`. First prove with a fixture that PHPArkitect counts attribute uses; if it does not, a guard test parses `src/` for a direct `#[AsMessageHandler]` (aliases included) and names the attribute to use.
-- **Acceptance:** a command handler is not callable on the query bus, and the reverse; the boundary rule (or guard test) fails on a fixture that uses `AsMessageHandler` directly, including through an alias; a handler that does not read its message declares it with `handles:`, as `AGENTS.md` says.
-- **Evidence:** `bin/console debug:messenger` listing each handler on its bus.
-- **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T2 Ledger: append-only events on SQLite
 - **Description:** The `Ledger` core module stores events (review started, reviewer started, verdict received, judge done, usage recorded) in one append-only table through Doctrine, with a migration. No updates or deletes.
 - **Acceptance:** appending and reading events in order works; an update or delete is refused; tests are in the `persistence` group.
 - **Evidence:** `bin/console doctrine:migrations:migrate` output on SQLite and the events of a test run read back with a console query.
-- **PHP 8.5:** `#[\NoDiscard]` on the append result, so a write that failed cannot be ignored.
+- **PHP 8.5:** `#[NoDiscard]` on the append result, so a write that failed cannot be ignored.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T3 Persistence tests on MySQL, MariaDB and PostgreSQL in CI
@@ -67,7 +61,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** The `Vendor` plugin contract gets the one method the review needs (run a structured call for a tier). The first implementation, `Plugin/SymfonyAiVendor`, uses the Platform's structured output with the T1 schema and records token usage per call in the ledger (started, settled, unsettled).
 - **Acceptance:** a structured call against the in-memory platform returns a verdict; usage is recorded once per call; a 429 or quota error is a typed error with the reset time when the provider sends one, never parsed from model text; the structured-output call uses the T1 schema file, the same one validation uses.
 - **Evidence:** one real call per configured provider from a console command, with its usage line (keys from the owner's environment, never committed).
-- **PHP 8.5:** `#[\NoDiscard]` on usage reservations; the pipe operator for building the request from task, tier and schema.
+- **PHP 8.5:** `#[NoDiscard]` on usage reservations; the pipe operator for building the request from task, tier and schema.
 - **Waits for:** T1, T2, T4. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T6 Forge contract and the local git forge
@@ -93,10 +87,10 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Waits for:** T4, T7. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T9 Parallel reviewers through Messenger
-- **Description:** A review round dispatches one message per reviewer; workers run them in parallel and the round completes when all verdicts or failures are in. State lives in the database, so a restarted worker resumes.
-- **Acceptance:** a forced-order test proves the round completes correctly whichever reviewer finishes first; a killed worker's reviewer is retried once and then counts as `blocked`.
+- **Description:** A review round dispatches one message per reviewer; workers run them in parallel and the round completes when all verdicts or failures are in. State lives in the database, so a restarted worker resumes. This is the first task with message handlers, so it also installs Messenger with a command bus and a query bus, and adds the typed handler attributes with their first use: a small `Core/Platform` module's `Contract` gets a backed enum `Bus` and `AsCommandHandler` and `AsQueryHandler`, each extending Symfony's `AsMessageHandler`, fixing `bus: Bus::X->value` and passing `handles`, `method` and `priority` through. A PHPArkitect rule lets nothing in `src/` but that `Contract` depend on `AsMessageHandler`; first prove with a fixture that PHPArkitect counts attribute uses, and if it does not, a guard test parses `src/` for a direct `#[AsMessageHandler]` (aliases included) and names the attribute to use.
+- **Acceptance:** a forced-order test proves the round completes correctly whichever reviewer finishes first; a killed worker's reviewer is retried once and then counts as `blocked`. A command handler is not callable on the query bus, and the reverse; the boundary rule (or guard test) fails on a fixture that uses `AsMessageHandler` directly, including through an alias; a handler that does not read its message declares it with `handles:`.
 - **Evidence:** a round of three reviewers with their start and end times overlapping in the ledger.
-- **Waits for:** T8. **Size:** M. **Labels:** `class:core`, `priority:high`.
+- **Waits for:** T8. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
 
 ### T10 Persistent finding ids across rounds
 - **Description:** Round two and later pass the open findings to each reviewer; verdicts list `resolved` ids and mark `repeat`. A new P1 or P2 from round two on that is neither a regression nor cites a requirement is lowered to P3.
@@ -168,7 +162,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
 - **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
 - **Evidence:** the GitHub test pull request with its labels before and after a round.
-- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[\NoDiscard]` on minted round tokens.
+- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[NoDiscard]` on minted round tokens.
 - **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
 
 ## M4 Live dashboard
@@ -197,7 +191,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Description:** A test boots one kernel and sends many requests through it, as FrankenPHP worker mode does: different users, flash messages, Doctrine reads and writes, and agent runs with their message store. Any service that keeps state between requests is made to implement `ResetInterface`, and the entity manager is reset.
 - **Acceptance:** no request sees the previous request's user, flash messages, entity manager identity map entries or agent messages; the test fails when a reset is removed.
 - **Evidence:** the test run, and the same check by hand against the image from T22 (two browsers, alternating requests).
-- **PHP 8.5:** `#[\NoDiscard]` on the reset results the test asserts.
+- **PHP 8.5:** `#[NoDiscard]` on the reset results the test asserts.
 - **Waits for:** T20, T22. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T23 `docker compose up` with a sample repository
@@ -239,7 +233,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 ## Parallel paths
 
-- From the start: T1, T2, T4, T6, T31, T32, T26, T27.
+- From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T19 and T20 to T21 in parallel after T13; T30 after T18; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
