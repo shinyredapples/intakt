@@ -18,7 +18,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 |---|---|---|---|
 | M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger | T1 to T7 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
-| M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub | T15 to T19 | 2026-11-14 |
+| M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub, branch cleanup | T15 to T19, T30 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live, with no state leaks in worker mode | T20, T21, T29 | 2026-11-17 |
 | M5 Demo | image, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T28 | 2026-11-21 |
 
@@ -144,6 +144,13 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **PHP 8.5:** `Uri\Rfc3986\Uri` instead of `parse_url` for pull-request and API URLs.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
+### T30 Branch cleanup with archive refs
+- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges: delete a merged branch at once, a closed unmerged one after 30 days unless labeled `keep`, a branch without a pull request after 60 days (stale at 30); a weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
+- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
+- **Evidence:** the warning list and the archive refs after a cleanup run on the GitHub test repository.
+- **PHP 8.5:** the pipe operator for the rule chain that picks the branches.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
 ### T19 Labels on reviewed changes
 - **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
 - **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
@@ -221,5 +228,5 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 - From the start: T1, T2, T4, T6, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
-- T15 to T19 and T20, T21, T29 in parallel after T13.
+- T15 to T19 and T20, T21, T29 in parallel after T13; T30 after T18.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
