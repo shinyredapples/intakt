@@ -261,6 +261,24 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
     }
 
+    public function testTheHistoryScanFailsClosedWhenTheBaseTipCannotBeRead(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "start\n");
+        $sandbox->commitAll('chore: start');
+        $tree = trim($sandbox->git('rev-parse', 'main^{tree}')->output);
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration());
+        $sandbox->commitAll('feat: add the gates');
+        unlink($sandbox->root.'/.git/objects/'.substr($tree, 0, 2).'/'.substr($tree, 2));
+
+        $run = $sandbox->check('--only=secrets-history', '--base=main');
+
+        self::assertTrue($run->failed('secrets-history'), $run->output());
+        self::assertStringContainsString('cannot read config/gates at the tip of the base', $run->findingsOf('secrets-history'));
+    }
+
     public function testTheHistoryScanFailsWhenTheBaseHasGatesButNoScannerConfiguration(): void
     {
         $sandbox = $this->emptySandbox();

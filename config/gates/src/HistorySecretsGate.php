@@ -35,7 +35,13 @@ final class HistorySecretsGate extends GitleaksGate
 
     private function scanWithConfigurationFrom(Workspace $workspace, string $mergeBase): GateResult
     {
-        $configPath = $this->baseConfiguration($workspace, $mergeBase);
+        $source = $this->configurationSource($workspace);
+
+        if (null === $source) {
+            return GateResult::failedBecause($this->name(), 'cannot read config/gates at the tip of the base, the scan cannot run');
+        }
+
+        $configPath = $this->baseConfiguration($workspace, $source);
 
         if (null === $configPath) {
             return GateResult::failedBecause($this->name(), 'the base has no config/gates/'.self::CONFIGURATION.', the scan cannot run');
@@ -48,17 +54,26 @@ final class HistorySecretsGate extends GitleaksGate
         return $result;
     }
 
-    private function configurationSource(Workspace $workspace, string $mergeBase): string
+    private function configurationSource(Workspace $workspace): ?string
     {
-        $tip = $workspace->baseTip() ?? $mergeBase;
-        $tipHasGates = $workspace->command(['git', 'cat-file', '-e', $tip.':config/gates'])->succeeded();
+        $tip = $workspace->baseTip();
 
-        return $tipHasGates ? $tip : 'HEAD';
+        if (null === $tip) {
+            return null;
+        }
+
+        $listing = $workspace->command(['git', 'ls-tree', '-d', '--name-only', $tip, '--', 'config/gates']);
+
+        if (!$listing->succeeded()) {
+            return null;
+        }
+
+        return '' === trim($listing->output) ? 'HEAD' : $tip;
     }
 
-    private function baseConfiguration(Workspace $workspace, string $mergeBase): ?string
+    private function baseConfiguration(Workspace $workspace, string $source): ?string
     {
-        $base = $workspace->command(['git', 'show', $this->configurationSource($workspace, $mergeBase).':config/gates/'.self::CONFIGURATION]);
+        $base = $workspace->command(['git', 'show', $source.':config/gates/'.self::CONFIGURATION]);
         $created = tempnam(sys_get_temp_dir(), 'gitleaks-config');
 
         if (!$base->succeeded() || false === $created) {
