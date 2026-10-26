@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\CheckCommand;
 use Intakt\Gates\CodingStandardsGate;
 use Intakt\Gates\GateResult;
 use Intakt\Gates\JsonNode;
 use Intakt\Gates\Mode;
 use Intakt\Gates\Workspace;
+use PHPUnit\Framework\Attributes\CoversClass;
 
+#[CoversClass(CheckCommand::class)]
 final class CheckCommandTest extends SandboxTestCase
 {
     public function testEveryOutputLineIsAJsonObject(): void

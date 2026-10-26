@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\LongDashesGate;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+#[CoversClass(LongDashesGate::class)]
 final class LongDashesGateTest extends SandboxTestCase
 {
     private const string EM_DASH = "\u{2014}";

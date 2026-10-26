@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\HistorySecretsGate;
+use Intakt\Gates\WorkingTreeSecretsGate;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
+#[CoversClass(WorkingTreeSecretsGate::class)]
+#[CoversClass(HistorySecretsGate::class)]
 final class SecretsGatesTest extends SandboxTestCase
 {
     /**

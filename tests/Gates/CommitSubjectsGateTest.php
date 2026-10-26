@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\CommitSubjectsGate;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+#[CoversClass(CommitSubjectsGate::class)]
 final class CommitSubjectsGateTest extends SandboxTestCase
 {
     public function testConventionalSubjectsPass(): void

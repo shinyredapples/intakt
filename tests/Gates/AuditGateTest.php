@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\ComposerAuditGate;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+#[CoversClass(ComposerAuditGate::class)]
 final class AuditGateTest extends SandboxTestCase
 {
     private const string IGNORED_ADVISORY = 'PKSA-hr4y-jwk2-1yb9';

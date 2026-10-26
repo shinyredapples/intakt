@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\CommentsGate;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+#[CoversClass(CommentsGate::class)]
 final class CommentsGateTest extends SandboxTestCase
 {
     public function testAWhatCommentInAProjectFileFailsTheGate(): void

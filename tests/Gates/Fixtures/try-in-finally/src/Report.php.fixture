@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use RuntimeException;
+
+final class Report
+{
+    public function render(string $title): string
+    {
+        try {
+            return $this->checked($title);
+        } finally {
+            try {
+                $this->checked('cleanup');
+            } catch (RuntimeException) {
+                $title = '';
+            }
+        }
+    }
+
+    private function checked(string $title): string
+    {
+        if ('' === $title) {
+            throw new RuntimeException('empty title');
+        }
+
+        return $title;
+    }
+}

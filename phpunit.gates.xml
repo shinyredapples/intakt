@@ -4,6 +4,7 @@
          colors="true"
          failOnDeprecation="true"
          failOnRisky="true"
+         requireCoverageMetadata="true"
          failOnNotice="true"
          failOnPhpunitNotice="true"
          failOnWarning="true"

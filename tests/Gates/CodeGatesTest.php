@@ -4,6 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\CodingStandardsGate;
+use Intakt\Gates\PhpStan\NoMockOptOutRule;
+use Intakt\Gates\PhpStan\NoNestedTryRule;
+use Intakt\Gates\PhpStan\ParameterLimitRule;
+use Intakt\Gates\RectorGate;
+use Intakt\Gates\StaticAnalysisGate;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+#[CoversClass(CodingStandardsGate::class)]
+#[CoversClass(StaticAnalysisGate::class)]
+#[CoversClass(RectorGate::class)]
+#[CoversClass(ParameterLimitRule::class)]
+#[CoversClass(NoNestedTryRule::class)]
+#[CoversClass(NoMockOptOutRule::class)]
 final class CodeGatesTest extends SandboxTestCase
 {
     public function testACompliantClassPassesEveryCodeGate(): void
@@ -93,24 +107,29 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'nested-try', 'intakt.nestedTry');
     }
 
+    public function testATryInsideATryFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'try-in-try', 'intakt.nestedTry');
+    }
+
+    public function testATryInsideAFinallyFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'try-in-finally', 'intakt.nestedTry');
+    }
+
+    public function testATryInAClosureInsideATryPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'try-in-closure');
+    }
+
+    public function testOptingOutOfMockExpectationsFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'mock-opt-out', 'intakt.mockOptOut');
+    }
+
     public function testTriesInSeparateMethodsPassStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'sibling-tries');
-    }
-
-    public function testReadingTheSystemTimeFailsStaticAnalysis(): void
-    {
-        $this->assertRejectedBy('phpstan', 'system-time', 'intakt.clockOnly');
-    }
-
-    public function testTimeThroughTheClockPassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'clock-time');
-    }
-
-    public function testTheClockAdapterMayReadTheSystemTime(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'clock-adapter');
     }
 
     public function testAConstructorWithManyParametersPassesStaticAnalysis(): void

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\ProcessRunner;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(ProcessRunner::class)]
 final class ProcessRunnerTest extends TestCase
 {
     /** @var list<string> */
