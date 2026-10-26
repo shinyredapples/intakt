@@ -6,9 +6,33 @@ namespace Intakt\Gates;
 
 final readonly class DocblockRule
 {
-    private const string TYPE_TAGS = '/^((phpstan|psalm)-)?(var|param|return|throws|extends|implements|use|type|import-type|template(-covariant|-contravariant)?|assert(-if-true|-if-false)?)$/';
-    private const string TEMPLATE_BODY = '/^\w+(\s+(of|as)\s+\S.*|\s*=.+)?$/';
-    private const string TOOL_TAGS = '/^(phpstan|psalm)-/';
+    private const string TOOL_PREFIX = '/^(phpstan|psalm)-/';
+    private const array SHAPES = [
+        'var' => 'variable', 'param' => 'parameter', 'param-out' => 'parameter',
+        'return' => 'type', 'throws' => 'type', 'mixin' => 'type', 'extends' => 'type', 'implements' => 'type', 'use' => 'type',
+        'require-extends' => 'type', 'require-implements' => 'type', 'self-out' => 'type', 'this-out' => 'type',
+        'template' => 'template', 'template-covariant' => 'template', 'template-contravariant' => 'template',
+        'type' => 'alias', 'import-type' => 'import',
+        'assert' => 'assertion', 'assert-if-true' => 'assertion', 'assert-if-false' => 'assertion',
+        'pure' => 'empty', 'impure' => 'empty',
+        'method' => 'method', 'property' => 'property', 'property-read' => 'property', 'property-write' => 'property',
+        'deprecated' => 'reason',
+    ];
+    private const array REMAINDERS = [
+        'type' => '/^$/',
+        'variable' => '/^(\$\w+)?$/',
+        'parameter' => '/^(&\s*)?(\.\.\.)?\$\w+$/',
+        'property' => '/^\$\w+$/',
+        'assertion' => '/^\$[\w>-]+$/',
+    ];
+    private const array WHOLE_BODIES = [
+        'empty' => '/^$/',
+        'reason' => '/\S/',
+        'import' => '/^\w+\s+from\s+[\w\\\\]+(\s+as\s+\w+)?$/',
+        'method' => '/^(static\s+)?(\S+\s+)?\w+\([^)]*\)$/',
+    ];
+    private const string TEMPLATE = '/^\w+(?:\s+(?:of|as)\s+(.+?))?(?:\s*=\s*(.+))?$/';
+    private const string ALIAS = '/^\w+\s*=?\s*(.+)$/';
 
     public function __construct(private TypeText $types = new TypeText())
     {
@@ -43,39 +67,35 @@ final readonly class DocblockRule
 
     private function tagProblem(string $tag, string $body): ?string
     {
-        if (1 !== preg_match(self::TYPE_TAGS, $tag)) {
+        $shape = self::SHAPES[preg_replace(self::TOOL_PREFIX, '', $tag) ?? $tag] ?? null;
+
+        if (null === $shape) {
             return '@'.$tag.' is not a type tag';
         }
 
-        if (1 === preg_match(self::TOOL_TAGS, $tag)) {
-            return null;
-        }
-
-        return $this->bodyProblem($tag, $body);
+        return $this->fits($shape, trim($body)) ? null : '@'.$tag.' carries prose or lacks its type';
     }
 
-    private function bodyProblem(string $tag, string $body): ?string
-    {
-        if (str_starts_with($tag, 'template')) {
-            return 1 === preg_match(self::TEMPLATE_BODY, $body) ? null : '@'.$tag.' carries prose';
-        }
-
-        $rest = $this->types->remainderAfterType($body);
-
-        if (null === $rest) {
-            return '@'.$tag.' without a type';
-        }
-
-        return 1 === preg_match($this->allowedRemainder($tag), $rest) ? null : '@'.$tag.' carries prose after its type';
-    }
-
-    private function allowedRemainder(string $tag): string
+    private function fits(string $shape, string $body): bool
     {
         return match (true) {
-            'var' === $tag => '/^(\$\w+)?$/',
-            'param' === $tag => '/^(&\s*)?(\.\.\.)?\$\w+$/',
-            default => '/^$/',
+            isset(self::WHOLE_BODIES[$shape]) => 1 === preg_match(self::WHOLE_BODIES[$shape], $body),
+            'template' === $shape => 1 === preg_match(self::TEMPLATE, $body, $match) && $this->isTypeOrNothing($match[1] ?? '') && $this->isTypeOrNothing($match[2] ?? ''),
+            'alias' === $shape => 1 === preg_match(self::ALIAS, $body, $match) && $this->typeThen($match[1], '/^$/'),
+            default => $this->typeThen($body, self::REMAINDERS[$shape] ?? '/^$/'),
         };
+    }
+
+    private function isTypeOrNothing(string $text): bool
+    {
+        return '' === trim($text) || $this->typeThen($text, '/^$/');
+    }
+
+    private function typeThen(string $body, string $remainder): bool
+    {
+        $rest = $this->types->remainderAfterType($body);
+
+        return null !== $rest && 1 === preg_match($remainder, $rest);
     }
 
     /**

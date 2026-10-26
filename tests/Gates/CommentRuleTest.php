@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CommentRule;
+use Intakt\Gates\DocblockRule;
+use Intakt\Gates\TypeText;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
+#[CoversClass(CommentRule::class)]
+#[CoversClass(DocblockRule::class)]
+#[CoversClass(TypeText::class)]
 final class CommentRuleTest extends TestCase
 {
     /**
@@ -24,6 +30,17 @@ final class CommentRuleTest extends TestCase
         yield 'a one-line why with a link' => ['// The provider rounds half down: https://example.test/docs/rounding'];
         yield 'a one-line why with a reason' => ['// Sorted first because the forge returns pages in any order'];
         yield 'a throws tag' => ["/**\n * @throws RuntimeException\n */"];
+        yield 'a callable type with a return type' => ["/**\n * @param Closure(int): bool \$fn\n */"];
+        yield 'a callable return type without a space' => ["/**\n * @return callable(string):int\n */"];
+        yield 'a by-reference output type' => ["/**\n * @param-out list<int> \$ids\n */"];
+        yield 'a pure marker' => ["/**\n * @phpstan-pure\n */"];
+        yield 'an impure marker' => ["/**\n * @phpstan-impure\n */"];
+        yield 'a self-out type' => ["/**\n * @phpstan-self-out self<int>\n */"];
+        yield 'a required parent' => ["/**\n * @phpstan-require-extends Base\n */"];
+        yield 'a magic method' => ["/**\n * @method static self named(string \$name)\n */"];
+        yield 'a magic property' => ["/**\n * @property-read int \$count\n */"];
+        yield 'a mixin' => ["/**\n * @mixin Builder\n */"];
+        yield 'a deprecation with its reason' => ["/**\n * @deprecated use Total instead\n */"];
     }
 
     /**
@@ -54,6 +71,9 @@ final class CommentRuleTest extends TestCase
         yield 'a no-inspection tag in a docblock' => ["/**\n * @noinspection PhpUnused\n */", 'suppression'];
         yield 'a tool tag that is not a type tag' => ["/**\n * @phpstan-ignore-line\n */", 'suppression'];
         yield 'an unknown tool tag' => ["/**\n * @phpstan-whatever\n */", 'not a type tag'];
+        yield 'prose after a tool-prefixed type' => ["/**\n * @phpstan-var Foo any prose\n */", 'prose'];
+        yield 'prose after a template bound' => ["/**\n * @template T of Foo any prose\n */", 'prose'];
+        yield 'a deprecation without a reason' => ["/**\n * @deprecated\n */", 'prose or lacks'];
     }
 
     #[DataProvider('allowedComments')]
