@@ -17,7 +17,7 @@ Architecture:
 
 1. [Overview](05-architecture/01-overview.md)
 2. [Plugins](05-architecture/02-plugins.md)
-3. [Work intake](05-architecture/03-work-intake.md)
+3. [Choosing work](05-architecture/03-choosing-work.md)
 4. [Labels](05-architecture/04-labels.md)
 5. [Questions and steering](05-architecture/05-questions-and-steering.md)
 6. [Budget and model planner](05-architecture/06-budget-and-model-planner.md)

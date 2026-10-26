@@ -1,4 +1,4 @@
-# Work intake
+# Choosing work
 
 How a task (its issue on the forge) becomes a build. Every step is cheap and runs before any build tokens are spent.
 

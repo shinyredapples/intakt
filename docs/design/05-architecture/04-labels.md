@@ -8,7 +8,7 @@ Default families (names are configurable per project; one value per family):
 
 | Family | Values | Effect |
 |---|---|---|
-| eligibility | `intakt` | Intakt may build the task (step 1 of work intake) |
+| eligibility | `intakt` | Intakt may build the task (step 1 of choosing work) |
 | `priority:` | `urgent`, `high`, `normal`, `low` | queue order; no label means `normal`; split parts and follow-ups inherit it |
 | `class:` | `core`, `feature`, `tooling`, `process` | slot allocation by class (step 5); the triage call proposes one when missing |
 | `model:` | a capability tier, for example `strong`, `standard`, `light` | the start tier for every build of the task; escalations can still raise it |

@@ -11,7 +11,7 @@ These are decided, but a measured result from a running install may overturn the
 
 - The default review panel of two reviewers from different vendors ([Reviews](05-architecture/07-reviews.md)).
 - The start rule of the model planner: the cheaper model first, escalation on a blocking finding or a stall, a small random holdout ([Budget and model planner](05-architecture/06-budget-and-model-planner.md)).
-- The size tiers and the plan-approval thresholds ([Work intake](05-architecture/03-work-intake.md), decision 7).
+- The size tiers and the plan-approval thresholds ([Choosing work](05-architecture/03-choosing-work.md), decision 7).
 - Serializing tasks only at high overlap-forecast confidence (decision 8).
 - No API Platform in v1 ([Goals and non-goals](03-goals-and-non-goals.md#non-goals-v1)).
 - FrankenPHP worker mode for every HTTP-facing part (decision 17).

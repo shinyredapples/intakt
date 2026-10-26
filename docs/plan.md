@@ -4,7 +4,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 ## Conventions
 
-- Every task is one pull request, mergeable on main with its own tests, built and reviewed as the design describes ([Work intake](design/05-architecture/03-work-intake.md)).
+- Every task is one pull request, mergeable on main with its own tests, built and reviewed as the design describes ([Choosing work](design/05-architecture/03-choosing-work.md)).
 - **Waits for** names the tasks that must be merged first (they become `Waits for #n` lines when the issues exist). Tasks without a dependency between them may run in parallel.
 - **Size:** S up to about 150 changed lines, M up to about 400, L above that (an L gets a plan first; split it if the plan shows two outcomes).
 - **Evidence** is what the pull request must show from a running install, besides green tests.
