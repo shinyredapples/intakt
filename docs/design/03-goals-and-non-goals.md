@@ -14,6 +14,7 @@
 - Multi-tenant hosting. One install serves one owner, possibly several projects later.
 - Its own model hosting. Vendors are reached through their own CLIs or APIs.
 - Replacing CI. The forge's CI stays the authority on whether a change is green.
+- No API Platform in v1 (open to correction). Intakt's interfaces are a server-rendered dashboard (Twig, Mercure, Live Components where needed), a few internal endpoints for the CLI, forge webhooks, and the MCP server (MCP Bundle). None of them is a public resource API for third-party clients. Revisit when one is needed, for example a documented read API over tasks, runs and reviews.
 
 ## v1 scope
 

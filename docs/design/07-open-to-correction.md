@@ -13,4 +13,6 @@ These are decided, but a measured result from a running install may overturn the
 - The start rule of the model planner: the cheaper model first, escalation on a blocking finding or a stall, a small random holdout ([Budget and model planner](05-architecture/06-budget-and-model-planner.md)).
 - The size tiers and the plan-approval thresholds ([Work intake](05-architecture/03-work-intake.md), decision 7).
 - Serializing tasks only at high overlap-forecast confidence (decision 8).
+- No API Platform in v1 ([Goals and non-goals](03-goals-and-non-goals.md#non-goals-v1)).
+- FrankenPHP worker mode for every HTTP-facing part (decision 17).
 - The default label families and their names ([Labels](05-architecture/04-labels.md)).
