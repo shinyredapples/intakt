@@ -25,10 +25,10 @@ The plugin kinds have empty contracts for now. The first implementation of each 
 | Gate | What it checks |
 |---|---|
 | `cs` | PHP-CS-Fixer, PER-CS and Symfony rules, strict types, imported names |
-| `phpstan` | PHPStan at max with strict and deprecation rules, no baseline, cognitive complexity, at most three parameters, no nested `try`, time only through the clock |
+| `phpstan` | PHPStan at max with strict and deprecation rules, no baseline, cognitive complexity, at most three parameters, no nested `try`, time only through the clock (one adapter class exempt), no opt-out of mock expectations |
 | `rector` | Rector dry run: dead code, code quality, class constants over class-name strings |
 | `architecture` | PHPArkitect: module layout, other modules only through `Contract`, inner layers independent |
-| `comments` | line comments give a reason (a why word or a link) on one line; docblocks hold types only; no TODOs, commented-out code or suppression directives (`@phpstan-ignore*`, `@psalm-suppress`, `@noRector` and the like), so no gate can be weakened inline |
+| `comments` | line comments give a reason on one line (a reason-word heuristic; reviewers are the backstop); docblocks hold types only; no TODOs, commented-out code or suppression directives (`@phpstan-ignore*`, `@psalm-suppress`, `@noRector` and the like), so no gate can be weakened inline |
 | `audit` | `composer audit` on the lock file |
 | `tests` | PHPUnit on SQLite (`phpunit.dist.xml`) and the gate tests (`phpunit.gates.xml`), failing on warnings, notices, PHPUnit notices, deprecations, risky and skipped tests; every test class declares its coverage |
 | `secrets` | gitleaks on the working tree, refusing inline allow directives |
@@ -44,6 +44,13 @@ Two entry points let reviewers and the boot gate exercise a running Intakt witho
 
 - `bin/instance` boots the app from a clean checkout with the plain Symfony runtime (PHP's built-in web server, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly. FrankenPHP is a binary, not a Composer package: worker mode comes with the container image (plan task T22), where `bin/instance` boots in worker mode.
 - `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with no network, and prints its output and exit code.
+
+## Conventions
+
+- **Logging** is structured (context arrays, no interpolated secrets) and passes through a redaction processor that strips tokens and API keys; the processor has its own tests.
+- **Doctrine mapping** uses attributes with the `ORM` alias, and each module's entities and mapping live in that module.
+- **Dependencies:** official Symfony and Doctrine packages first. Any other package needs a release within the last 12 months and a clean `composer audit`, and the owner approves it, since `composer.json` is a protected path.
+- **Message handlers** use Intakt's `AsCommandHandler` and `AsQueryHandler` (in the platform module's `Contract`, with a `Bus` enum), which extend Symfony's `AsMessageHandler` and fix the bus; a PHPArkitect rule or guard test refuses `AsMessageHandler` anywhere else. They arrive with the first message handler (plan task T9).
 
 ## Persistence
 
