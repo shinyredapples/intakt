@@ -1,8 +1,10 @@
 name: ci
-# One run per pushed commit with every gate; a newer push to the same branch cancels the run it replaces.
+# Every gate on each pull request (on GitHub's test merge of it) and on main; a newer run of the same ref cancels the one it replaces.
+# Never pull_request_target: pull-request code must not run with the base repository's secrets or write token.
 on:
+  pull_request:
   push:
-    branches-ignore: [main]
+    branches: [main]
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -19,10 +21,12 @@ jobs:
           persist-credentials: false
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           extensions: ctype, iconv, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
+      - name: Require PHP 8.5.12 or later (fixes PHP2Shell, CVE-2026-109618 and CVE-2026-109619)
+        run: php -r 'echo PHP_VERSION, PHP_EOL; exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/composer/files
@@ -42,8 +46,19 @@ jobs:
           tar -xzf "$directory/gitleaks.tar.gz" -C "$directory" gitleaks
           echo "$directory" >> "$GITHUB_PATH"
       # The gate tests contain processes in a user namespace, which Ubuntu 24.04 restricts for unprivileged users by default.
+      # Only for GitHub-hosted runners, which are discarded after the job: never copy this step to a self-hosted runner.
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # bin/check runs every gate, the tests on SQLite included; the history gates read the change from origin/main.
-      - name: Run the gates
+      # bin/check runs every gate, the tests on SQLite included. On a pull request the change is read against the
+      # target branch, and GitHub's synthetic test merge commit is exempt from the commit-subject gate.
+      - name: Run the gates on a pull request
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          MERGE_SHA: ${{ github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bin/check --base="origin/$BASE_REF" --test-merge="$MERGE_SHA:$BASE_SHA:$HEAD_SHA"
+      - name: Run the gates on main
+        if: github.event_name == 'push'
         run: bin/check --base=origin/main
