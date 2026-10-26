@@ -1,0 +1,5 @@
+# Upstream reproductions
+
+One folder per likely bug in Symfony AI or the PHP MCP SDK: a minimal reproduction (a failing test or a short script) and `REPORT.md` with the exact versions, what happens and what was expected.
+
+Nothing here is posted upstream without the owner's approval. Each new pre-release is run against these reproductions to see what was fixed. The gates skip this folder.
