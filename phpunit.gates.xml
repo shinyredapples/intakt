@@ -5,6 +5,7 @@
          failOnDeprecation="true"
          failOnRisky="true"
          failOnNotice="true"
+         failOnPhpunitNotice="true"
          failOnWarning="true"
          bootstrap="vendor/autoload.php"
          cacheDirectory=".phpunit.cache"

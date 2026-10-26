@@ -16,7 +16,7 @@ final class TestsGate implements Gate
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
     private const array FAIL_CLOSED = [
         '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky',
-        '--fail-on-warning', '--fail-on-notice', '--fail-on-deprecation',
+        '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation',
     ];
 
     public function name(): string

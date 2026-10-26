@@ -19,5 +19,8 @@ return new Config()
         'fully_qualified_strict_types' => ['import_symbols' => true, 'leading_backslash_in_global_namespace' => false],
         'no_leading_import_slash' => true,
         'no_unused_imports' => true,
+        'no_useless_else' => true,
+        'php_unit_test_annotation' => ['style' => 'prefix'],
+        'php_unit_data_provider_static' => true,
         'ordered_imports' => ['imports_order' => ['class', 'function', 'const'], 'sort_algorithm' => 'alpha'],
     ]);

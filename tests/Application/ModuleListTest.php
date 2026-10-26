@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
+#[CoversNothing]
 final class ModuleListTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
