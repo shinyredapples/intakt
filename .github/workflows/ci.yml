@@ -1,0 +1,46 @@
+name: ci
+# One run per pushed commit with every gate; a newer push to the same branch cancels the run it replaces.
+on:
+  push:
+    branches-ignore: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: ctype, iconv, pdo_sqlite, sqlite3
+          coverage: none
+          tools: composer:v2
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+      - name: Install the locked dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Install the pinned gitleaks
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          checksum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          directory="$RUNNER_TEMP/gitleaks-$version"
+          mkdir -p "$directory"
+          curl -fsSL -o "$directory/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v$version/gitleaks_${version}_linux_x64.tar.gz"
+          echo "$checksum  $directory/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$directory/gitleaks.tar.gz" -C "$directory" gitleaks
+          echo "$directory" >> "$GITHUB_PATH"
+      # bin/check runs every gate, the tests on SQLite included; the history gates read the change from origin/main.
+      - name: Run the gates
+        run: bin/check --base=origin/main
