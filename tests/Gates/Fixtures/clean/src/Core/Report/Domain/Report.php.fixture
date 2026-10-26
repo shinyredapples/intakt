@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Report\Domain;
+
+use DateTimeImmutable;
+
+final readonly class Report
+{
+    /**
+     * @param list<string> $lines
+     */
+    public function __construct(private array $lines, private DateTimeImmutable $createdAt)
+    {
+    }
+
+    public function createdAt(): DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function firstLine(): string
+    {
+        // The provider sends the header first: https://example.test/docs/header-order
+        return $this->lines[0] ?? '';
+    }
+}

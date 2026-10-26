@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Report
+{
+    public function line(string $prefix, string $title): string
+    {
+        $join = static fn (string $first, string $second, string $third, string $fourth): string => $first.$second.$third.$fourth;
+
+        return $join($prefix, $title, ' ', '.');
+    }
+}

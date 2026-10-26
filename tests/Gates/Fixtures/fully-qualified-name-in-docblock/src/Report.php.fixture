@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use DateTimeImmutable;
+
+final class Report
+{
+    /**
+     * @return array<string, \DateTimeImmutable>
+     */
+    public function createdAtByName(): array
+    {
+        return ['first' => new DateTimeImmutable('2026-01-01')];
+    }
+}

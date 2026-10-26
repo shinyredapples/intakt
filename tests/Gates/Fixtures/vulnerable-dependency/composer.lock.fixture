@@ -1,0 +1,20 @@
+{
+    "_readme": ["fixture"],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "symfony/http-kernel",
+            "version": "v5.4.0",
+            "type": "library"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": [],
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

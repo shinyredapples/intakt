@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Order\UseCase\PlaceOrder;
+
+use Intakt\Core\Cart\Domain\Cart;
+
+final class ReadCart
+{
+    public function read(Cart $cart): Cart
+    {
+        return $cart;
+    }
+}

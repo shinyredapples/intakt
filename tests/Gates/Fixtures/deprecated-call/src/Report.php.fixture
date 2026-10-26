@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Report
+{
+    public function encode(string $text): string
+    {
+        return utf8_encode($text);
+    }
+}

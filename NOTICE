@@ -1,0 +1,10 @@
+Intakt
+Copyright (c) 2026 Harald Ponce de Leon
+
+The quality gates in config/gates/, bin/check and tests/Gates/ are adapted
+from earlier gate code by the same author, released under the MIT License.
+Copyright (c) 2026 Harald Ponce de Leon.
+
+The secret-scanning rules in config/gates/gitleaks.toml are derived from the
+default configuration of gitleaks (https://github.com/gitleaks/gitleaks),
+MIT License, Copyright (c) 2019 Zachary Rice.

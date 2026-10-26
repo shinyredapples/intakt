@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+function joined(string $first, string $second, string $third): string
+{
+    return $first.$second.$third;
+}

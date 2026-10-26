@@ -1,0 +1,182 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Report
+{
+    public function band1(int $value): int
+    {
+        $score = 0;
+
+        if ($value > 0) {
+            ++$score;
+        }
+        if ($value > 1) {
+            ++$score;
+        }
+        if ($value > 2) {
+            ++$score;
+        }
+        if ($value > 3) {
+            ++$score;
+        }
+        if ($value > 4) {
+            ++$score;
+        }
+        if ($value > 5) {
+            ++$score;
+        }
+        if ($value > 6) {
+            ++$score;
+        }
+
+        return $score;
+    }
+
+    public function band2(int $value): int
+    {
+        $score = 0;
+
+        if ($value > 0) {
+            ++$score;
+        }
+        if ($value > 1) {
+            ++$score;
+        }
+        if ($value > 2) {
+            ++$score;
+        }
+        if ($value > 3) {
+            ++$score;
+        }
+        if ($value > 4) {
+            ++$score;
+        }
+        if ($value > 5) {
+            ++$score;
+        }
+        if ($value > 6) {
+            ++$score;
+        }
+
+        return $score;
+    }
+
+    public function band3(int $value): int
+    {
+        $score = 0;
+
+        if ($value > 0) {
+            ++$score;
+        }
+        if ($value > 1) {
+            ++$score;
+        }
+        if ($value > 2) {
+            ++$score;
+        }
+        if ($value > 3) {
+            ++$score;
+        }
+        if ($value > 4) {
+            ++$score;
+        }
+        if ($value > 5) {
+            ++$score;
+        }
+        if ($value > 6) {
+            ++$score;
+        }
+
+        return $score;
+    }
+
+    public function band4(int $value): int
+    {
+        $score = 0;
+
+        if ($value > 0) {
+            ++$score;
+        }
+        if ($value > 1) {
+            ++$score;
+        }
+        if ($value > 2) {
+            ++$score;
+        }
+        if ($value > 3) {
+            ++$score;
+        }
+        if ($value > 4) {
+            ++$score;
+        }
+        if ($value > 5) {
+            ++$score;
+        }
+        if ($value > 6) {
+            ++$score;
+        }
+
+        return $score;
+    }
+
+    public function band5(int $value): int
+    {
+        $score = 0;
+
+        if ($value > 0) {
+            ++$score;
+        }
+        if ($value > 1) {
+            ++$score;
+        }
+        if ($value > 2) {
+            ++$score;
+        }
+        if ($value > 3) {
+            ++$score;
+        }
+        if ($value > 4) {
+            ++$score;
+        }
+        if ($value > 5) {
+            ++$score;
+        }
+        if ($value > 6) {
+            ++$score;
+        }
+
+        return $score;
+    }
+
+    public function band6(int $value): int
+    {
+        $score = 0;
+
+        if ($value > 0) {
+            ++$score;
+        }
+        if ($value > 1) {
+            ++$score;
+        }
+        if ($value > 2) {
+            ++$score;
+        }
+        if ($value > 3) {
+            ++$score;
+        }
+        if ($value > 4) {
+            ++$score;
+        }
+        if ($value > 5) {
+            ++$score;
+        }
+        if ($value > 6) {
+            ++$score;
+        }
+
+        return $score;
+    }
+}

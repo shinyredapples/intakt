@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Report
+{
+    /**
+     * @param list<list<int>> $rows
+     */
+    public function total(array $rows, int $limit): int
+    {
+        $total = 0;
+
+        foreach ($rows as $row) {
+            foreach ($row as $value) {
+                if ($value > $limit) {
+                    if (0 === $value % 2) {
+                        $total += $value;
+                    } elseif (0 === $value % 3) {
+                        $total -= $value;
+                    }
+                }
+            }
+        }
+
+        return $total;
+    }
+}

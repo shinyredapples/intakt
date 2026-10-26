@@ -1,0 +1,27 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Report
+{
+    public function __construct(
+        public string $title,
+        public string $author,
+        public int $year,
+        private int $pages,
+        private string $language,
+    ) {
+    }
+
+    public function line(string $prefix, string $separator, string $suffix): string
+    {
+        $join = static fn (string $first, string $second, string $third): string => $first.$second.$third;
+        $pad = static function (string $text, int $width, string $fill): string {
+            return str_pad($text, $width, $fill);
+        };
+
+        return $pad($join($prefix, $this->title, $separator), $this->pages, $this->language).$suffix;
+    }
+}

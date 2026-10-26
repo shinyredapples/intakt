@@ -1,0 +1,19 @@
+includes:
+    - ../../vendor/phpstan/phpstan-strict-rules/rules.neon
+    - ../../vendor/phpstan/phpstan-deprecation-rules/rules.neon
+    - ../../vendor/tomasvotruba/cognitive-complexity/config/extension.neon
+    - phpstan-cache.php
+
+parameters:
+    level: max
+    excludePaths:
+        - %currentWorkingDirectory%/upstream (?)
+        - %currentWorkingDirectory%/var (?)
+        - %currentWorkingDirectory%/vendor (?)
+        - %currentWorkingDirectory%/tests/Gates/Fixtures (?)
+    cognitive_complexity:
+        class: 40
+        function: 8
+
+rules:
+    - Intakt\Gates\PhpStan\ParameterLimitRule

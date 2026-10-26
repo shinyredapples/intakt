@@ -1,0 +1,17 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Intakt\Gates\CheckCommand;
+
+$autoload = __DIR__.'/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDOUT, '{"error":"run composer install first"}'."\n");
+    exit(2);
+}
+
+require $autoload;
+
+exit((new CheckCommand(dirname(__DIR__)))->run(array_slice($argv, 1)));

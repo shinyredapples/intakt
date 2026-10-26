@@ -1,0 +1,6 @@
+{
+    "name": "intakt/fixture",
+    "require": {
+        "symfony/http-kernel": "5.4.0"
+    }
+}

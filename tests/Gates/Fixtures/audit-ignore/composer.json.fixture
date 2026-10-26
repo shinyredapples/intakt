@@ -1,0 +1,9 @@
+{
+    "name": "intakt/fixture",
+    "require": {},
+    "config": {
+        "audit": {
+            "ignore": ["PKSA-0000-0000-0000"]
+        }
+    }
+}

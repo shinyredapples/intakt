@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Report
+{
+    public function createdAt(): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable('2026-01-01');
+    }
+}

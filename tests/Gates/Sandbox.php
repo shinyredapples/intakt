@@ -1,0 +1,129 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use FilesystemIterator;
+use Intakt\Gates\ProcessResult;
+use Intakt\Gates\ProcessRunner;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
+
+final readonly class Sandbox
+{
+    private const string FIXTURES = __DIR__.'/Fixtures';
+
+    private function __construct(public string $root)
+    {
+    }
+
+    public static function empty(): self
+    {
+        $root = sys_get_temp_dir().'/intakt-gates-'.bin2hex(random_bytes(6));
+        mkdir($root, 0o777, true);
+
+        return new self($root);
+    }
+
+    public static function withFixture(string $name): self
+    {
+        $sandbox = self::empty();
+        $sandbox->copyFixture(self::FIXTURES.'/'.$name);
+
+        return $sandbox;
+    }
+
+    public function write(string $path, string $contents): void
+    {
+        $target = $this->root.'/'.$path;
+        if (!is_dir(dirname($target))) {
+            mkdir(dirname($target), 0o777, true);
+        }
+        file_put_contents($target, $contents);
+    }
+
+    public function git(string ...$arguments): ProcessResult
+    {
+        $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
+
+        return (new ProcessRunner())->run(['git', ...$identity, ...array_values($arguments)], $this->root);
+    }
+
+    public function symlink(string $path, string $target): void
+    {
+        symlink($target, $this->root.'/'.$path);
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    public function runScript(string $script, array $environment = []): ProcessResult
+    {
+        $assignments = array_map(static fn (string $name, string $value): string => $name.'='.$value, array_keys($environment), $environment);
+
+        return (new ProcessRunner())->run(['env', ...$assignments, 'bash', '-c', $script], $this->root);
+    }
+
+    public function run(string ...$command): ProcessResult
+    {
+        return (new ProcessRunner())->run(array_values($command), $this->root);
+    }
+
+    public function commitAll(string $subject): void
+    {
+        $this->git('add', '--all');
+        $this->git('commit', '--quiet', '--allow-empty', '--message', $subject);
+    }
+
+    public function startRepository(): void
+    {
+        $this->git('init', '--quiet', '--initial-branch=main');
+    }
+
+    public function check(string ...$arguments): CheckRun
+    {
+        return $this->checkWith([], ...$arguments);
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    public function checkWith(array $environment, string ...$arguments): CheckRun
+    {
+        $home = dirname(__DIR__, 2);
+        $result = (new ProcessRunner())->run(['php', $home.'/bin/check', '--root='.$this->root, ...array_values($arguments)], $home, $environment);
+
+        return new CheckRun($result);
+    }
+
+    public function remove(): void
+    {
+        if (!is_dir($this->root)) {
+            return;
+        }
+
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+
+        foreach ($files as $file) {
+            if ($file instanceof SplFileInfo) {
+                $file->isDir() && !$file->isLink() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+            }
+        }
+
+        rmdir($this->root);
+    }
+
+    private function copyFixture(string $source): void
+    {
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS));
+
+        foreach ($files as $file) {
+            if ($file instanceof SplFileInfo) {
+                $relative = substr($file->getPathname(), strlen($source) + 1);
+                $this->write(preg_replace('/\.fixture$/', '', $relative) ?? $relative, (string) file_get_contents($file->getPathname()));
+            }
+        }
+    }
+}
