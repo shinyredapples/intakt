@@ -24,17 +24,36 @@ Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Sy
 - Use PHP 8.5 features where they make the code clearer, never for show:
   - the pipe operator `|>` for step-by-step transformations;
   - `clone()` with property overrides for readonly value objects;
-  - `#[\NoDiscard]` on results that must not be ignored, such as gate outcomes and token mints;
+  - `#[NoDiscard]` (imported) on results that must not be ignored, such as gate outcomes and token mints;
   - `array_first()` and `array_last()`;
   - the URI extension (`Uri\Rfc3986\Uri`) instead of `parse_url` for forge and webhook URLs;
   - closures in constant expressions and attributes.
 - Small methods that read as a sequence of named steps; early returns; no boolean flag parameters; at most three parameters per method or closure (enforced).
 - The HTTP side runs in FrankenPHP worker mode: one kernel serves many requests. Services keep no per-request state; anything that must be cleared between requests implements `ResetInterface`.
-- Domain names in code; commands imperative, events past tense.
+- Names: commands imperative, events past tense, queries as nouns or questions; domain words throughout.
+- Imports only, never fully qualified names in code or attributes; the Doctrine `ORM` alias is the one allowed alias.
+- A closed set of values is a backed enum, never a group of string or int constants; a single named value (a format, a pattern, a lock name) stays a constant. PHPStan at max enforces the enum types at call sites.
+- No `else` after a `return`, `throw`, `continue` or `break` (enforced).
+- No nested `try`: a `try` inside a `try`, `catch` or `finally` of the same function fails; extract a method (enforced).
+- Time only through Symfony's `ClockInterface`: no `DateTime`, `time()`, `date()`, `microtime()` or `new DateTimeImmutable()` without an argument outside the clock adapter; `DateTimeImmutable` only, UTC (enforced).
+- Exceptions are named after the rule that was broken (`VerdictIsNotValid`, not `ValidationException`).
+- No static state, no service locator, no magic methods; constructor injection only. A module's service config lives with the module.
+- No arrays as data structures across module boundaries: a `Contract` takes and returns typed objects. An array shape is fine inside a module.
+- Logging is structured, through a redaction processor that strips tokens and API keys; the processor has tests.
+- Doctrine mapping by attributes with the `ORM` alias; the mapping lives in its module.
+- Dependencies: official Symfony and Doctrine packages first. Any other package needs a release in the last 12 months and a clean `composer audit`, and the owner approves it (`composer.json` is protected).
+
+## Handlers, routes and commands
+
+- Message handlers use Intakt's typed attributes (`AsCommandHandler`, `AsQueryHandler`, from the platform module's `Contract`), never Symfony's `AsMessageHandler` directly; each fixes its bus. They arrive with the buses (plan task T32).
+- Rector's dead-code set removes an unused `__invoke` parameter. A handler that does not read its message names it with `handles:` and takes no parameter.
+- Routes, console commands, event listeners and MCP tools use Symfony's own attributes, no wrappers. Route names are `<module>_<use_case>`, in snake case.
 
 ## Tests
 
-- Every change brings its tests; test names are sentences; one behavior per test.
+- Every change brings its tests; test names are sentences starting with `test`; one behavior per test, written as given, when, then. Builders or factories over long inline setup.
+- Every test class declares what it covers: `#[CoversClass]`, plus `#[UsesClass]` for other production classes it exercises (`requireCoverageMetadata`). Strict coverage metadata (`beStrictAboutCoverageMetadata`) is turned on once CI collects coverage.
+- Test doubles: `createStub` by default; `createMock` only to assert a call on an outside boundary (the forge, a vendor API, the Docker API, the clock, a lock). PHPUnit 13 reports a mock without expectations as a PHPUnit notice, and the `tests` gate fails on PHPUnit notices.
 - Tests run on SQLite by default. Tests that touch persistence go in the `persistence` group, so CI can run them on MySQL, MariaDB and PostgreSQL too.
 - Races and ordering are proven with a forced-order test, never with repeated runs.
 - Tests never read the shipped config or real credentials; fixtures start from built-in defaults. Model calls in tests go through Symfony AI's in-memory platform or recorded responses, never a live provider.

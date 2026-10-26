@@ -25,12 +25,12 @@ The plugin kinds have empty contracts for now. The first implementation of each 
 | Gate | What it checks |
 |---|---|
 | `cs` | PHP-CS-Fixer, PER-CS and Symfony rules, strict types, imported names |
-| `phpstan` | PHPStan at max with strict and deprecation rules, no baseline, cognitive complexity, at most three parameters |
+| `phpstan` | PHPStan at max with strict and deprecation rules, no baseline, cognitive complexity, at most three parameters, no nested `try`, time only through the clock |
 | `rector` | Rector dry run: dead code, code quality, class constants over class-name strings |
 | `architecture` | PHPArkitect: module layout, other modules only through `Contract`, inner layers independent |
-| `comments` | line comments give a reason (a why word or a link) on one line; docblocks hold types only; no TODOs, commented-out code or suppressions |
+| `comments` | line comments give a reason (a why word or a link) on one line; docblocks hold types only; no TODOs, commented-out code or suppression directives (`@phpstan-ignore*`, `@psalm-suppress`, `@noRector` and the like), so no gate can be weakened inline |
 | `audit` | `composer audit` on the lock file |
-| `tests` | PHPUnit on SQLite (`phpunit.dist.xml`) and the gate tests (`phpunit.gates.xml`), failing on warnings, notices, deprecations, risky and skipped tests |
+| `tests` | PHPUnit on SQLite (`phpunit.dist.xml`) and the gate tests (`phpunit.gates.xml`), failing on warnings, notices, PHPUnit notices, deprecations, risky and skipped tests; every test class declares its coverage |
 | `secrets` | gitleaks on the working tree, refusing inline allow directives |
 | `secrets-history` | gitleaks on every commit of the change |
 | `commits` | Conventional Commit subjects, at most 100 characters |
