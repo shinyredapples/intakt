@@ -37,6 +37,13 @@ The plugin kinds have empty contracts for now. The first implementation of each 
 
 Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
 
+## Instance and probes (planned)
+
+Two entry points let reviewers and the boot gate exercise a running Intakt without network access, after `composer install` (plan task T31):
+
+- `bin/instance` boots the app from a clean checkout (FrankenPHP worker mode, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly.
+- `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with no network, and prints its output and exit code.
+
 ## Persistence
 
 SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets; their CI jobs start with the first entity (see [the plan](../plan.md)).

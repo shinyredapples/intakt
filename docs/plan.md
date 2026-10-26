@@ -16,7 +16,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger | T1 to T7 | 2026-11-02 |
+| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub, branch cleanup | T15 to T19, T30 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live, with no state leaks in worker mode | T20, T21, T29 | 2026-11-17 |
@@ -30,6 +30,13 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 - **Evidence:** a test run listing the cases; the schema file path.
 - **PHP 8.5:** `clone()` with property overrides for the readonly value objects; `#[\NoDiscard]` on the parse result.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T31 `bin/instance` and `bin/probe` for reviewers and the boot gate
+- **Description:** `bin/instance` boots Intakt from a clean checkout after `composer install` (FrankenPHP worker mode, SQLite in a scratch directory), prints one JSON status line (`ready` or `failed` with the reason), and stops cleanly. `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code. Both work offline, so the build loop can run reviewer probes and a boot gate on Intakt itself.
+- **Acceptance:** both commands work with the network disabled; a broken kernel config makes `bin/instance` report `failed` with the error and a non-zero exit; a probe that reaches for the network fails; the instance leaves no process or file behind; both are documented in `docs/architecture/`.
+- **Evidence:** the JSON status of a clean and of a broken boot, and a probe run with its output, all without network.
+- **PHP 8.5:** `#[\NoDiscard]` on the instance status.
+- **Waits for:** none. **Size:** M. **Labels:** `class:tooling`, `priority:high`.
 
 ### T2 Ledger: append-only events on SQLite
 - **Description:** The `Ledger` core module stores events (review started, reviewer started, verdict received, judge done, usage recorded) in one append-only table through Doctrine, with a migration. No updates or deletes.
@@ -226,7 +233,7 @@ Status: draft for the owner's approval. The tasks become issues only after he ap
 
 ## Parallel paths
 
-- From the start: T1, T2, T4, T6, T26, T27.
+- From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T19 and T20, T21, T29 in parallel after T13; T30 after T18.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
