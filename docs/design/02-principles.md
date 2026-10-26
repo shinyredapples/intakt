@@ -1,0 +1,26 @@
+# Principles
+
+Kept:
+- **Lanes.** A review lane and N build slots run independently and chain into each other, instead of one round at a time.
+- **Ledger.** An append-only event log (starts, reserves, ends, merges) from which budget, history and recovery are derived.
+- **Reviewers from different vendors**, with a substitute when one is out of budget and a later catch-up review.
+- **Kept commits.** A build that fails the pre-push check keeps its commits for the next cycle instead of starting over.
+- **Pre-push check in a clean place.** The builder's own run of the checks is never trusted.
+- **Drain.** Stop admitting work, let in-flight steps finish, then deploy or update.
+- **Evidence by construction.** Races are proven with forced-order tests, not repeated runs.
+
+Changed:
+- **No prose parsing for decisions.** A loop that parses reviewer prose for findings has to harden that parser again and again (fences, quotes, case, list items, Unicode line breaks). Intakt requires a structured verdict (JSON schema, validated) and treats anything else as "changes requested".
+- **Isolation by container, not by home-directory hygiene.** Builders that share a Unix user and a long-lived worktree need every piece of state reset by hand, and every reset (dotfiles, CLAUDE.md, git config, commondir, index, symrefs, Composer cache) was a new denylist item found by review. Intakt gives every job a fresh container from a read-only image, with the repo cloned fresh from the orchestrator's bare mirror. Nothing a job writes survives it except the bundle it hands back.
+- **Measured budgets, not estimated ones.** A ledger estimate refused a second builder for hours while the vendor measured 4% use. Intakt asks the vendor (usage probe or API billing) first and uses its own estimates only as a fallback.
+- **One process owns state.** Host scripts, container scripts and timers that all touch pause, drain and locks race each other. In Intakt, only the orchestrator writes state; the CLI and dashboard talk to it.
+- **A hand-over never stops the loop.** A loop that halted every lane, reviews included, when a hand-over left nothing else to build, left the pull request that resolved it unreviewed for hours. In Intakt a hand-over parks one task; only real faults (a watchdog finding, repeated failures, a crash) stop the loop.
+- **Queue state lives in the database, not in labels.** With the queue kept in forge labels, a split that labeled parts `blocked` without `ready` left 18 issues that nothing would ever build. Intakt's queue is a table; forge labels only steer it (as input from people with write access) or mirror it for people (see "Labels").
+- **No flat budget per round.** One fixed token figure stopped productive large builds and let stuck small ones burn their allowance. Intakt sizes the allowance from the task and stops on lack of progress (see the planner).
+- **Updates fail loud and safe.** An update failed four times on a step that behaved differently in its drained form, left the loop stopped for hours and alerted only after the third failure. Intakt updates roll back on any failure, alert on the first, and run the same way they were tested.
+- **One loop change at a time.** Five fixes to the loop itself shipped in one day, two went live together, and a deploy mode that had never run end to end stopped the loop. Intakt rolls out its own changes one at a time and checks each in production (a scripted post-update check, then the next jobs' outcomes) before the next.
+- **Quality gates generate their own work.** Most of a busy day's rejected pull requests and follow-up issues came from the project's own gates and gate edge cases, and every new gate made every later build heavier. Intakt treats gate and tooling work as lower priority than the project's own core, and a new gate needs an escaped defect it would have caught.
+- **The bot is not the owner.** A loop that posts as the owner's own account cannot tell "approved by the owner" from its own comments. Intakt acts as its own forge identity.
+- **Changing identity is one step.** Moving a running loop from the owner's token to its own App took a drain, a recorded switch moment, a config change, a deploy and two host-side patches in one window, and the update resumed the loop on its own before the host side was patched, so the dependent host jobs had to be paused by hand. Intakt has its own identity from setup, and a later change of identity (another App, a rotated key) is one orchestrator command: it drains, records the moment (what the old identity did before it stays the loop's own), switches every component together and resumes only after all of them check out.
+- **Setup is tested by running it.** An App creation script failed on its first real use: the program read its input from a stream that was already its own source, and the only test checked the script's text for that very line. Intakt's setup steps have end-to-end tests against a fake forge, and text checks never stand in for running the step.
+- **Tests do not read the deployed config.** When a shipped config switched to the App, eight tests broke because they built on it and assumed the old identity. Intakt's test fixtures start from the built-in defaults; one test pins the shipped values.

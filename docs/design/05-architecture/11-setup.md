@@ -1,0 +1,14 @@
+# Setup
+
+```
+docker run -d --name intakt -v intakt:/data -v /var/run/docker.sock:/var/run/docker.sock -p 7780:7780 ghcr.io/shinyredapples/intakt
+```
+
+Then open the dashboard. The first-run wizard:
+1. asks for the repository URL and detects the forge;
+2. creates Intakt's own forge identity: on GitHub a GitHub App through the manifest flow (one confirmation by the owner; Intakt stores the App's private key, never a personal token), owned by the account that owns the repositories (a private App installs only there), installed only on the chosen repositories with the narrowest permissions (including the workflows permission, without which the forge refuses any push that touches CI files, even a merge of main into a branch); on Gitea a bot user with a scoped token. Before anything uses it, the wizard mints a token, reads the installation back and compares its repositories and permissions with the manifest, and offers to copy the private key to the owner's secret store. It then offers the forge's protection for the main branch (required status checks from that identity, signed commits, no force push, no deletion) and says what the owner may still bypass;
+3. logs in each vendor (device flow for subscriptions, or an API key);
+4. reads the project (see "New and existing projects") to propose the toolchain, job image and check command, and runs the check once; an empty repository goes to the foundation flow instead;
+5. proposes defaults (one build slot, at most two built heads waiting for review, so builds cannot outrun reviews, label `intakt`), and writes one config file that the owner can edit later.
+
+Podman works through its Docker-compatible socket. Rootless mode is the default where available.
