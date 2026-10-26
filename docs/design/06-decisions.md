@@ -15,3 +15,4 @@
 13. One owner per install in v1; collaborators work through the forge's own permissions.
 14. Distribution: a Docker image (Intakt is an application, not a library).
 15. The name stays Intakt.
+16. PHP 8.5 and its features (decided 2026-10-26, replacing 8.4): minimum 8.5.12, the release that fixes PHP2Shell (CVE-2026-109618 and CVE-2026-109619, unauthenticated remote code execution). CI refuses an older runtime.

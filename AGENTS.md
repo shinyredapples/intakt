@@ -1,6 +1,6 @@
 # Working on Intakt
 
-Intakt is a loop runner for AI coding agents, built on PHP 8.4, Symfony 8 and Symfony AI. The design in `docs/design/` is the authority (start at `docs/design/README.md`); the spec and plan for the current release are `docs/spec.md` and `docs/plan.md`. This file is the short version of the rules.
+Intakt is a loop runner for AI coding agents, built on PHP 8.5, Symfony 8 and Symfony AI. The design in `docs/design/` is the authority (start at `docs/design/README.md`); the spec and plan for the current release are `docs/spec.md` and `docs/plan.md`. This file is the short version of the rules.
 
 ## Modules and contracts
 
@@ -12,7 +12,14 @@ Intakt is a loop runner for AI coding agents, built on PHP 8.4, Symfony 8 and Sy
 
 ## Code
 
-- PHP 8.4, `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters.
+- PHP 8.5 (8.5.12 or later), `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters.
+- Use PHP 8.5 features where they make the code clearer, never for show:
+  - the pipe operator `|>` for step-by-step transformations;
+  - `clone()` with property overrides for readonly value objects;
+  - `#[\NoDiscard]` on results that must not be ignored, such as gate outcomes and token mints;
+  - `array_first()` and `array_last()`;
+  - the URI extension (`Uri\Rfc3986\Uri`) instead of `parse_url` for forge and webhook URLs;
+  - closures in constant expressions and attributes.
 - Small methods that read as a sequence of named steps; early returns; no boolean flag parameters; at most three parameters per method or closure (enforced).
 - No comments except type docblocks (`@param`, `@return`, `@var`, templates) and one-line comments that say why, never what. No commented-out code, no TODOs.
 - Domain names in code; commands imperative, events past tense.
