@@ -130,18 +130,21 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35. Spe
 - **Acceptance:** an MCP client test (PHP MCP SDK client) calls every tool; starting a review needs the configured token; errors are MCP errors, not stack traces.
 - **Evidence:** an agent CLI connected over MCP starting a review of the sample branch and reading the act list (transcript excerpt).
 - **PHP 8.5:** closures in attributes where an MCP tool's input needs a check.
+- **Tool safety:** every tool carries the MCP SDK's annotations (`readOnlyHint`, `destructiveHint`); whether a tool may write is decided by a Symfony Security voter on Intakt's own config, never by the model's arguments. A contract test checks that a tool without parameters encodes them as `"properties": {}` and that the protocol version is negotiated correctly with Claude Code; a failure is an upstream report under `upstream/`.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
 ### T16 Reviewer tools over MCP
 - **Description:** The read-only repository tools of T7 are served by an Intakt MCP server per review, and reviewers reach them through the PHP MCP SDK client, so any MCP-capable reviewer can use the same tools.
 - **Acceptance:** a review with tools over MCP gives the same verdict path as the in-process tools in tests; the server serves only the head under review.
 - **Evidence:** a real review whose tool calls appear in the MCP server's log.
+- **Tool safety:** every tool carries the MCP SDK's annotations (`readOnlyHint`, `destructiveHint`); whether a tool may write is decided by a Symfony Security voter on Intakt's own config, never by the model's arguments. A contract test checks that a tool without parameters encodes them as `"properties": {}` and that the protocol version is negotiated correctly with Claude Code; a failure is an upstream report under `upstream/`.
 - **Waits for:** T7, T15. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ### T17 Project memory with the Store
 - **Description:** After each completed review, resolved findings and their causes are indexed with the Symfony AI Store (an embedded store that works on SQLite); each reviewer's briefing retrieves the entries relevant to the files under review, with a size cap.
 - **Acceptance:** indexing and retrieval are tested with an in-memory store; the briefing respects its cap; memory is read-only to reviewers.
 - **Evidence:** a second review on the sample repository whose briefing cites an earlier finding.
+- **Store backend:** `symfony/ai-sqlite-store` (SQLite FTS5 plus vector similarity computed in PHP, needs only `pdo_sqlite`) behind Intakt's own small retrieval contract; the in-memory store in tests.
 - **Waits for:** T12. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T18 GitHub forge plugin
