@@ -14,8 +14,6 @@ use Doctrine\DBAL\Types\Exception\InvalidType;
 // Parses in UTC because the column has no offset and PHP's default zone would move a moment inside a daylight-saving gap.
 final class UtcDateTimeImmutableType extends DateTimeImmutableType
 {
-    public const string NAME = 'utc_datetime_immutable';
-
     public function convertToDatabaseValue(mixed $value, AbstractPlatform $platform): ?string
     {
         if ($value instanceof DateTimeImmutable) {
