@@ -67,7 +67,7 @@ How `bin/probe` works:
 
 - **Logging** is structured (context arrays, no interpolated secrets) and passes through a redaction processor that strips tokens and API keys; the processor has its own tests.
 - **Doctrine mapping** uses attributes with the `ORM` alias, and each module's entities and mapping live in that module.
-- **Dependencies:** official Symfony and Doctrine packages first. Any other package needs a release within the last 12 months and a clean `composer audit`, and the owner approves it, since `composer.json` is a protected path.
+- **Dependencies:** official Symfony and Doctrine packages first. Any other package needs a release within the last 12 months and a clean `composer audit`, and the owner approves it, since `composer.json` is a protected path. The release rule applies to the packages Intakt requires directly. A package those pull in is judged together with its parent: it needs a clean `composer audit`, and an older release is accepted when the parent requires it and is itself current (for example `marc-mabe/php-enum` under `justinrainbow/json-schema`); list such packages under `## New dependencies` too.
 - **Message handlers** use Intakt's `AsCommandHandler` and `AsQueryHandler` (in the platform module's `Contract`, with a `Bus` enum), which extend Symfony's `AsMessageHandler` and fix the bus; a PHPArkitect rule or guard test refuses `AsMessageHandler` anywhere else. They arrive with the first message handler (plan task T9).
 
 ## Persistence
