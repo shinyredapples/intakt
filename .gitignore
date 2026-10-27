@@ -23,3 +23,8 @@
 /PR.md
 /.evidence/
 ###< build loop ###
+
+###> symfony/framework-bundle (generated config reference) ###
+# A debug kernel, as in tests/Application/KernelTest.php, writes it on every boot.
+/config/reference.php
+###< symfony/framework-bundle ###
