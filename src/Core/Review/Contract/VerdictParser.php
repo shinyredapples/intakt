@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Opis\JsonSchema\Errors\ValidationError;
 use JsonException;
 use NoDiscard;
 use Opis\JsonSchema\Errors\ErrorFormatter;
@@ -44,7 +45,7 @@ final readonly class VerdictParser
     private function schemaViolation(mixed $document): ?string
     {
         $error = new Validator()->validate($document, (string) file_get_contents(self::SCHEMA))->error();
-        if (null === $error) {
+        if (!$error instanceof ValidationError) {
             return null;
         }
 

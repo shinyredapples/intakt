@@ -30,22 +30,22 @@ final readonly class VerdictDocument
 
     public function with(string $key, mixed $value): self
     {
-        return clone($this, ['verdict' => [...$this->verdict, $key => $value]]);
+        return clone ($this, ['verdict' => [...$this->verdict, $key => $value]]);
     }
 
     public function without(string $key): self
     {
-        return clone($this, ['verdict' => array_diff_key($this->verdict, [$key => true])]);
+        return clone ($this, ['verdict' => array_diff_key($this->verdict, [$key => true])]);
     }
 
     public function withFinding(string $key, mixed $value): self
     {
-        return clone($this, ['finding' => [...$this->finding, $key => $value]]);
+        return clone ($this, ['finding' => [...$this->finding, $key => $value]]);
     }
 
     public function withoutFinding(string $key): self
     {
-        return clone($this, ['finding' => array_diff_key($this->finding, [$key => true])]);
+        return clone ($this, ['finding' => array_diff_key($this->finding, [$key => true])]);
     }
 
     public function json(): string
