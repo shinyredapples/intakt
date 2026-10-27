@@ -165,14 +165,13 @@ final class ProbeTest extends TestCase
         }
     }
 
-    // The marker is both the child's argument, which names it in the process list, and the file it creates once it runs.
+    // One path is both the child's argument and the file it creates, so the process list and the file system name the same child.
     private function childMarker(): string
     {
         return $this->scratch.'/child-'.bin2hex(random_bytes(6));
     }
 
-    // The child starts its own session and keeps the caller's stderr open, so neither a process group kill nor a closed pipe would end it.
-    // The probe goes on only once the child has created the marker file, so a child that never started cannot pass as a killed one.
+    // The child (own session, stderr kept open) survives a group kill and a closed pipe, and the probe waits for its marker file, so a child that never started cannot pass as a killed one.
     private function spawningEscapedChild(string $marker): string
     {
         $start = 'setsid '.PHP_BINARY.' -r \'touch($argv[1]); sleep(300);\' '.$marker.' 1>&2 &';
