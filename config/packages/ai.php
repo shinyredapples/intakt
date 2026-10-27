@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
-// Presence is decided at build time because an unset env reference fails when the service is built.
+use function is_string;
+use function sprintf;
+
+// Same lookup order as Symfony's env processor. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
     $isSet = static function (string $name): bool {
-        $value = $_SERVER[$name] ?? $_ENV[$name] ?? getenv($name);
+        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
 
-        return \is_string($value) && '' !== $value;
+        return is_string($value) && '' !== $value;
     };
 
     $providers = [
@@ -37,7 +40,7 @@ return static function (ContainerConfigurator $container): void {
         $missing = array_values(array_filter($provider['needs'], static fn (string $variable): bool => !$isSet($variable)));
 
         if ([] !== $missing) {
-            $disabled[$name] = \sprintf('Provider "%s" is disabled: set %s to enable it.', $name, implode(' and ', $missing));
+            $disabled[$name] = sprintf('Provider "%s" is disabled: set %s to enable it.', $name, implode(' and ', $missing));
 
             continue;
         }

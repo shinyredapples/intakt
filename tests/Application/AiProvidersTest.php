@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Intakt\Kernel;
-use PHPUnit\Framework\Attributes\CoversClass;
-use Symfony\AI\Platform\Message\Message;
-use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Test\MockPlatformFactory;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
-#[CoversClass(Kernel::class)]
+use function array_key_exists;
+use function in_array;
+
+// The behavior lives in config/packages/ai.php, which no class covers.
+#[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
 {
     private const array VARIABLES = [
@@ -23,28 +23,36 @@ final class AiProvidersTest extends KernelTestCase
         'OPENAI_COMPATIBLE_API_KEY',
     ];
 
-    /** @var array<string, mixed> */
+    /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
 
     protected function setUp(): void
     {
         foreach (self::VARIABLES as $name) {
-            $this->saved[$name] = $_SERVER[$name] ?? null;
+            $this->saved[$name] = [
+                'server' => $_SERVER[$name] ?? null,
+                'env' => $_ENV[$name] ?? null,
+                'process' => getenv($name),
+            ];
         }
     }
 
     protected function tearDown(): void
     {
-        foreach ($this->saved as $name => $value) {
-            null === $value ? $this->unsetVariable($name) : $_SERVER[$name] = $value;
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            null === $before['server'] || $_SERVER[$name] = $before['server'];
+            null === $before['env'] || $_ENV[$name] = $before['env'];
+            false === $before['process'] || putenv($name.'='.$before['process']);
         }
 
         parent::tearDown();
+        new Filesystem()->remove(self::createKernel()->getCacheDir());
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
     {
-        $container = $this->bootWith(self::VARIABLES);
+        $container = $this->bootWith($this->allSet());
 
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertTrue($container->has('ai.platform.openai'));
@@ -54,7 +62,10 @@ final class AiProvidersTest extends KernelTestCase
 
     public function testAProviderWithoutItsKeyIsDisabledWithAMessageAndTheKernelBoots(): void
     {
-        $container = $this->bootWith(['ANTHROPIC_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY']);
+        $values = $this->allSet();
+        unset($values['OPENAI_API_KEY']);
+
+        $container = $this->bootWith($values);
 
         self::assertFalse($container->has('ai.platform.openai'));
         self::assertTrue($container->has('ai.platform.anthropic'));
@@ -66,16 +77,18 @@ final class AiProvidersTest extends KernelTestCase
 
     public function testAnEmptyKeyCountsAsMissing(): void
     {
-        $_SERVER['OPENAI_API_KEY'] = '';
-
-        $container = $this->bootWith(['ANTHROPIC_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY']);
+        $container = $this->bootWith([...$this->allSet(), 'OPENAI_API_KEY' => '']);
 
         self::assertFalse($container->has('ai.platform.openai'));
+        self::assertArrayHasKey('openai', $container->getParameter('intakt.ai.disabled_providers'));
     }
 
     public function testTheCompatibleEndpointNeedsBothItsAddressAndItsKey(): void
     {
-        $container = $this->bootWith(['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL']);
+        $values = $this->allSet();
+        unset($values['OPENAI_COMPATIBLE_API_KEY']);
+
+        $container = $this->bootWith($values);
 
         self::assertFalse($container->has('ai.platform.generic.openai_compatible'));
         self::assertSame(
@@ -94,32 +107,48 @@ final class AiProvidersTest extends KernelTestCase
         self::assertSame(['anthropic', 'openai', 'openai_compatible'], array_keys($disabled));
     }
 
-    public function testTheInMemoryPlatformAnswersWithoutAnyProvider(): void
+    public function testAKeyInTheEnvironmentArrayWinsOverAnEmptyServerValue(): void
     {
-        $platform = MockPlatformFactory::createPlatform('a verdict');
+        $_SERVER['OPENAI_API_KEY'] = '';
+        $_ENV['OPENAI_API_KEY'] = 'test-value';
 
-        $result = $platform->invoke('any-model', new MessageBag(Message::ofUser('review this')))->asText();
+        $container = $this->bootWith(array_diff_key($this->allSet(), ['OPENAI_API_KEY' => true]), keep: ['OPENAI_API_KEY']);
 
-        self::assertSame('a verdict', $result);
+        self::assertTrue($container->has('ai.platform.openai'));
     }
 
     /**
-     * @param list<string> $set
+     * @return array<string, string>
      */
-    private function bootWith(array $set): ContainerInterface
+    private function allSet(): array
+    {
+        $values = [];
+        foreach (self::VARIABLES as $name) {
+            $values[$name] = str_ends_with($name, 'BASE_URL') ? 'http://localhost:11434/v1' : 'test-value';
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<string, string> $values variables to set; every other one is unset
+     * @param list<string>          $keep   variables the test already set itself
+     */
+    private function bootWith(array $values, array $keep = []): ContainerInterface
     {
         foreach (self::VARIABLES as $name) {
-            if (!\in_array($name, $set, true)) {
-                $this->unsetVariable($name);
+            if (in_array($name, $keep, true)) {
                 continue;
             }
 
-            $_SERVER[$name] = str_ends_with($name, 'BASE_URL') ? 'http://localhost:11434/v1' : 'test-value';
+            $this->unsetVariable($name);
+            if (array_key_exists($name, $values)) {
+                $_SERVER[$name] = $values[$name];
+            }
         }
 
-        // The build decides on the variables, so every case needs a fresh container.
-        $kernel = self::createKernel();
-        new Filesystem()->remove($kernel->getCacheDir());
+        // The build decides on the variables, so every case needs a fresh container; teardown removes it so later tests rebuild.
+        new Filesystem()->remove(self::createKernel()->getCacheDir());
         self::ensureKernelShutdown();
         self::bootKernel();
 

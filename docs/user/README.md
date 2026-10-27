@@ -2,7 +2,7 @@
 
 For owners who run Intakt. Each feature gets a page here, written in the same change as the feature: what it does, how to set it up, and what to do when it goes wrong.
 
-Nothing user-visible is built yet. The first pages arrive with the review loop (see [the plan](../plan.md)):
+Only the install check and the provider configuration below exist so far. The other pages arrive with the review loop (see [the plan](../plan.md)):
 
 - Running the demo with `docker compose up` (planned)
 - Configuring the review panel (planned; providers and keys are below)
@@ -33,10 +33,4 @@ Intakt knows three providers: `anthropic`, `openai` and `openai_compatible` (any
 | `openai` | `OPENAI_API_KEY` |
 | `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY` |
 
-A provider whose variables are not all set (or are empty) is switched off, and Intakt still starts. The reason is in the container parameter `intakt.ai.disabled_providers`:
-
-```
-php bin/console debug:container --parameter=intakt.ai.disabled_providers
-```
-
-For example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` `php bin/console debug:config ai` lists the providers that are on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`. Which model serves which capability tier comes with the per-project configuration (planned).
+A provider whose variables are not all set (or are empty) is switched off, and Intakt still starts. Intakt logs a warning for each switched-off provider whenever a console command starts and whenever the cache is built, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`. Which model serves which capability tier comes with the per-project configuration (planned).

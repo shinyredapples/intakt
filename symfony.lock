@@ -84,10 +84,7 @@
             "branch": "main",
             "version": "0.1",
             "ref": "169d966953a6b9aeca111cb7f0ac2da72e050159"
-        },
-        "files": [
-            "config/packages/ai_anthropic_platform.yaml"
-        ]
+        }
     },
     "symfony/ai-bundle": {
         "version": "1.0",
@@ -96,10 +93,7 @@
             "branch": "main",
             "version": "0.1",
             "ref": "2be6ccd77335c2631fdf12d1680649b072efb8ad"
-        },
-        "files": [
-            "config/packages/ai.yaml"
-        ]
+        }
     },
     "symfony/ai-generic-platform": {
         "version": "1.0",
@@ -108,10 +102,7 @@
             "branch": "main",
             "version": "0.1",
             "ref": "f38913b87380322d4c40c302b41626e811516bc4"
-        },
-        "files": [
-            "config/packages/ai_generic_platform.yaml"
-        ]
+        }
     },
     "symfony/ai-open-ai-platform": {
         "version": "1.0",
@@ -120,10 +111,7 @@
             "branch": "main",
             "version": "0.1",
             "ref": "4f925d48b69c145cde2286e2cabfc7bd5eb4aca9"
-        },
-        "files": [
-            "config/packages/ai_open_ai_platform.yaml"
-        ]
+        }
     },
     "symfony/console": {
         "version": "8.1",
