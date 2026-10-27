@@ -15,6 +15,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,6 +30,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(RecordedEvent::class)]
+#[UsesClass(UtcDateTimeImmutableType::class)]
 final class DoctrineLedgerTest extends KernelTestCase
 {
     private ManagerRegistry $registry;
@@ -67,9 +69,10 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame('2026-10-27T12:00:00+00:00', $recordedAt?->format('c'));
     }
 
-    public function testTheMomentOfAStoredEventIsReadBackInUtcWhateverTheDefaultTimeZone(): void
+    // 02:30 on that day does not exist in Berlin, so reading the stored wall clock in the default zone would move it.
+    public function testAMomentInADaylightSavingGapOfTheDefaultTimeZoneIsReadBackUnchanged(): void
     {
-        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $ledger = $this->ledger('2026-03-29 02:30:00', 'UTC');
         self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'))->succeeded());
         $this->registry->getManager()->clear();
         $defaultTimeZone = date_default_timezone_get();
@@ -81,7 +84,7 @@ final class DoctrineLedgerTest extends KernelTestCase
             date_default_timezone_set($defaultTimeZone);
         }
 
-        self::assertSame('2026-10-27T12:00:00+00:00', $recordedAt?->format('c'));
+        self::assertSame('2026-03-29T02:30:00+00:00', $recordedAt?->format('c'));
     }
 
     public function testTheResultOfAnAppendCarriesTheSequence(): void
