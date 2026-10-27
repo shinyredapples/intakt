@@ -8,9 +8,9 @@ use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-final class TemporaryRepository
+final readonly class TemporaryRepository
 {
-    public readonly string $path;
+    public string $path;
 
     public function __construct()
     {
@@ -22,7 +22,9 @@ final class TemporaryRepository
     public function commitFile(string $path, string $content): string
     {
         $directory = dirname($this->path.'/'.$path);
-        is_dir($directory) || mkdir($directory, recursive: true);
+        if (!is_dir($directory)) {
+            mkdir($directory, recursive: true);
+        }
         file_put_contents($this->path.'/'.$path, $content);
         $this->git('add', '--all');
         $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Change '.$path);
