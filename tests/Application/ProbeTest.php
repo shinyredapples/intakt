@@ -71,7 +71,8 @@ final class ProbeTest extends TestCase
 
         $run = $this->runProbe('tests/Probe/Reach.php');
 
-        self::assertStringContainsString('unreachable', $run->getOutput());
+        // With a route out the documentation address would only time out; no route at all is what the namespace gives.
+        self::assertStringContainsString('unreachable: Network is unreachable', $run->getOutput());
         self::assertSame(3, $run->getExitCode());
     }
 
@@ -87,10 +88,42 @@ final class ProbeTest extends TestCase
     {
         $this->probe('Quiet.php', '<?php echo "ok\n";');
 
-        $this->runProbe('tests/Probe/Quiet.php');
+        $run = $this->runProbe('tests/Probe/Quiet.php');
 
+        self::assertSame(0, $run->getExitCode());
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
-        self::assertSame([], $this->serversOf($this->project));
+        self::assertSame([], $this->processesNaming($this->project.'/public'));
+    }
+
+    public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
+    {
+        $marker = 'intakt-probe-child-'.bin2hex(random_bytes(6));
+        $this->probe('Leave.php', $this->spawningEscapedChild($marker).'echo "left a child\n";');
+
+        $run = $this->runProbe('tests/Probe/Leave.php');
+
+        self::assertStringContainsString('left a child', $run->getOutput());
+        self::assertSame(0, $run->getExitCode());
+        self::assertSame([], $this->processesNaming($marker));
+    }
+
+    public function testAProbeThatOverrunsItsTimeIsKilledWithItsChildrenAndExitCode124(): void
+    {
+        $marker = 'intakt-probe-child-'.bin2hex(random_bytes(6));
+        $this->probe('Hang.php', $this->spawningEscapedChild($marker).'sleep(30);');
+
+        $run = $this->runProbe('tests/Probe/Hang.php', ['INTAKT_INSTANCE_COMMAND_SECONDS' => '2']);
+
+        self::assertStringContainsString('exit code: 124', $run->getOutput());
+        self::assertSame(124, $run->getExitCode());
+        self::assertSame([], $this->processesNaming($marker));
+        self::assertSame([], $this->processesNaming($this->project.'/public'));
+    }
+
+    // The child starts its own session and keeps the caller's stderr open, so neither a process group kill nor a closed pipe would end it.
+    private function spawningEscapedChild(string $marker): string
+    {
+        return '<?php system("setsid ".PHP_BINARY." -r \'sleep(300);\' '.$marker.' 1>&2 &");';
     }
 
     /**
@@ -108,9 +141,12 @@ final class ProbeTest extends TestCase
         new Filesystem()->dumpFile($this->project.'/tests/Probe/'.$name, $code);
     }
 
-    private function runProbe(string $file): Process
+    /**
+     * @param array<string, string> $environment
+     */
+    private function runProbe(string $file, array $environment = []): Process
     {
-        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->project, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test']);
+        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->project, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', ...$environment]);
         $process->run();
 
         return $process;
@@ -119,7 +155,7 @@ final class ProbeTest extends TestCase
     /**
      * @return list<string>
      */
-    private function serversOf(string $project): array
+    private function processesNaming(string $argument): array
     {
         $found = [];
 
@@ -128,7 +164,7 @@ final class ProbeTest extends TestCase
         foreach (false === $files ? [] : $files as $file) {
             $arguments = explode("\0", (string) @file_get_contents($file));
 
-            if (in_array($project.'/public', $arguments, true)) {
+            if (in_array($argument, $arguments, true)) {
                 $found[] = $file;
             }
         }

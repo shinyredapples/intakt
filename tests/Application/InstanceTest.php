@@ -105,17 +105,71 @@ final class InstanceTest extends TestCase
         self::assertStringNotContainsString('"status"', $process->getOutput());
     }
 
+    public function testACommandRunsOnceTheInstanceIsReadyAndItsExitCodePassesThrough(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo getenv("INTAKT_INSTANCE_URL"), "\n"; exit(5);']);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertMatchesRegularExpression('#^http://127\.0\.0\.1:\d+$#m', $run['output']);
+        self::assertSame(5, $run['exit']);
+    }
+
+    public function testTheServerLogIsLeftOutOfACommandsOutputOnAReadyBoot(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo "probe output\n";']);
+
+        self::assertSame("probe output\n", $run['output']);
+    }
+
+    public function testTheServerLogIsPrintedAndTheCommandNotRunWhenTheBootFails(): void
+    {
+        $project = $this->copyOfTheProject();
+        file_put_contents($project.'/config/packages/broken.yaml', "framework:\n    no_such_option: true\n");
+
+        $run = $this->runInstance($project, [PHP_BINARY, '-r', 'echo "command ran\n";']);
+
+        self::assertStringContainsString('no_such_option', $run['output']);
+        self::assertStringNotContainsString('command ran', $run['output']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testTheCommandDoesNotInheritTheStatusDescriptor(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'exit(false === @fopen("php://fd/3", "w") ? 0 : 9);']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertSame('{"status":"ready"}', $run['status']);
+    }
+
+    public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
+    {
+        $run = $this->runInstance(self::ROOT, ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
+
+        self::assertSame(124, $run['exit']);
+        self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);
+        self::assertSame('{"status":"ready"}', $run['status']);
+    }
+
     /**
-     * @return array{status: string, exit: int}
+     * @param list<string>          $command
+     * @param array<string, string> $environment
+     *
+     * @return array{status: string, exit: int, output: string, errors: string}
      */
-    private function runInstance(string $project): array
+    private function runInstance(string $project, array $command = [], array $environment = []): array
     {
         $statusFile = $this->scratch.'/status';
-        $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg($project.'/bin/instance').' 3>'.escapeshellarg($statusFile);
-        $process = Process::fromShellCommandline($command, null, $this->environment());
+        $arguments = [] === $command ? [] : ['--', ...$command];
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($statusFile);
+        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
         $process->run();
 
-        return ['status' => trim((string) file_get_contents($statusFile)), 'exit' => (int) $process->getExitCode()];
+        return [
+            'status' => trim((string) file_get_contents($statusFile)),
+            'exit' => (int) $process->getExitCode(),
+            'output' => $process->getOutput(),
+            'errors' => $process->getErrorOutput(),
+        ];
     }
 
     /**

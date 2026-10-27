@@ -35,7 +35,8 @@ final class Instance
 {
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
-    private const int COMMAND_SECONDS = 80;
+    // Boot, command and stop together stay well inside the build loop's 120 seconds per call.
+    public const int COMMAND_SECONDS = 60;
     private const int COMMAND_TIMED_OUT = 124;
 
     /** @var resource|null */
@@ -48,11 +49,12 @@ final class Instance
     private int $commandExit = 0;
 
     /**
-     * @param list<string> $command run while the instance answers, empty to only check the boot
+     * @param list<string> $command
      */
     public function __construct(
         private readonly string $root,
-        private readonly array $command = [],
+        private readonly array $command,
+        private readonly int $commandSeconds,
     ) {
     }
 
@@ -119,7 +121,7 @@ final class Instance
      */
     private function awaitExit($process): int
     {
-        $deadline = hrtime(true) + self::COMMAND_SECONDS * 1_000_000_000;
+        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
 
         while (hrtime(true) < $deadline) {
             $state = proc_get_status($process);
@@ -135,7 +137,7 @@ final class Instance
 
         proc_terminate($process, 9);
         proc_close($process);
-        fwrite(STDERR, 'the command ran longer than '.self::COMMAND_SECONDS." seconds and was killed\n");
+        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
 
         return self::COMMAND_TIMED_OUT;
     }
@@ -313,11 +315,12 @@ final class Instance
     }
 }
 
-// Everything after "--" runs while the instance answers (bin/probe does this); without it only the boot is checked.
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
+// Lets a test prove the cap without waiting for the full minute.
+$commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
-$instance = new Instance(dirname(__DIR__), $command);
+$instance = new Instance(dirname(__DIR__), $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS);
 $status = $instance->run();
 
 // A command's own output is what the caller wants, so the server log is noise unless the boot failed.

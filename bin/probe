@@ -5,11 +5,11 @@ declare(strict_types=1);
 
 // Needs no Composer autoloader itself, like bin/instance, which it reuses to boot the instance.
 
-final class Probe
+final readonly class Probe
 {
     private const string PATTERN = '#^tests/Probe/[A-Za-z0-9_][A-Za-z0-9_.-]*\.php$#';
 
-    public function __construct(private readonly string $root)
+    public function __construct(private string $root)
     {
     }
 
@@ -30,8 +30,9 @@ final class Probe
     private function runOffline(string $file): int
     {
         // A new network namespace has no route out; its loopback starts down, and the instance needs it.
+        // In a new PID namespace bin/instance is process 1, so whatever the probe leaves running dies with it, even after setsid.
         $command = [
-            'unshare', '--net', '--map-root-user',
+            'unshare', '--net', '--map-root-user', '--pid', '--fork', '--kill-child',
             'sh', '-c', 'ip link set lo up && exec "$@"', 'sh',
             PHP_BINARY, $this->root.'/bin/instance', '--', ...$this->probeCommand($file),
         ];
