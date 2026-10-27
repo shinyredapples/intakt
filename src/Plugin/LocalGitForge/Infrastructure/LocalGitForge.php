@@ -19,6 +19,7 @@ use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
+use ValueError;
 
 final readonly class LocalGitForge implements Forge
 {
@@ -123,12 +124,13 @@ final readonly class LocalGitForge implements Forge
      */
     private function git(array $arguments): Process
     {
-        // A refs/replace/ ref would swap in another commit or blob while the change still names the real head.
-        $process = new Process(['git', '--no-replace-objects', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
+        // A refs/replace/ ref would swap in another commit or blob while the change still names the real head,
+        // and pathspec magic would read a path such as ":odd.txt" as "odd.txt".
+        $process = new Process(['git', '--no-replace-objects', '--literal-pathspecs', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
 
         try {
             $process->run();
-        } catch (ExceptionInterface $failure) {
+        } catch (ExceptionInterface|ValueError $failure) {
             throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 

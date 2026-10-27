@@ -166,6 +166,44 @@ final class LocalGitForgeTest extends TestCase
         self::assertSame("odd\n", $content->content);
     }
 
+    public function testItReturnsAFileWhoseNameStartsWithAColon(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile(':odd.txt', "colon\n");
+        $this->repository->commitFile('odd.txt', "plain\n");
+
+        $content = $this->forge()->fileAtHead($this->forge()->change(new ChangeId('feature')), ':odd.txt');
+
+        self::assertSame("colon\n", $content->content);
+    }
+
+    public function testItReturnsAFileWhoseNameLooksLikePathspecMagic(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile(':(exclude)x', "magic\n");
+
+        $content = $this->forge()->fileAtHead($this->forge()->change(new ChangeId('feature')), ':(exclude)x');
+
+        self::assertSame("magic\n", $content->content);
+    }
+
+    public function testItFailsToReadAPathWithANulByte(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->fileAtHead($change, "README.md\0x");
+    }
+
+    public function testItFailsToReadAChangeIdWithANulByte(): void
+    {
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->change(new ChangeId("feature\0x"));
+    }
+
     public function testItKeepsReadingTheOldHeadAfterTheBranchMovedOn(): void
     {
         $this->repository->checkoutNewBranch('feature');

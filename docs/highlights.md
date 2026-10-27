@@ -129,5 +129,6 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 
 ## PHP 8.5 in use
 
-- `#[NoDiscard]` on the instance status: `bin/instance` (done).
-- Planned: the pipe operator (T5, T6, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
+- `#[NoDiscard]` on the instance status: `bin/instance` (done); on `Forge::hasHeadMoved()`: `src/Plugin/Forge/Contract/Forge.php` (done, T6).
+- The pipe operator for turning `git diff` output into changed files: `src/Plugin/LocalGitForge/Infrastructure/NameStatusParser.php` (done, T6).
+- Planned: the pipe operator (T5, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
