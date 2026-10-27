@@ -103,7 +103,7 @@ final class DoctrineLedgerTest extends KernelTestCase
 
     public function testDiscardingTheResultOfAnAppendIsReported(): void
     {
-        // Called through an imported call_user_func because static analysis refuses a direct discarded call, and the engine still checks it.
+        // Called through call_user_func because static analysis refuses a direct discarded call, and the engine still checks it.
         $append = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(...);
         $warnings = [];
         set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
@@ -113,7 +113,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         }, E_USER_WARNING);
 
         try {
-            call_user_func($append, new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+            \call_user_func($append, new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
         } finally {
             restore_error_handler();
         }
