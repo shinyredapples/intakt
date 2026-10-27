@@ -1,6 +1,6 @@
 # Plan: the review loop (first release)
 
-Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60, #61, #63 and #64. Spec: [spec.md](spec.md). Deadline: 2026-11-22 18:00 CET.
+Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60, #61, #63, #64 and #67. Spec: [spec.md](spec.md). Deadline: 2026-11-22 18:00 CET.
 
 ## Conventions
 
@@ -17,7 +17,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31 | 2026-11-02 |
+| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31, T36 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub with webhooks, branch cleanup, a subscription reviewer | T15 to T19, T30, T32, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live; server metrics | T20, T21, T34 | 2026-11-17 |
@@ -31,6 +31,12 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Evidence:** a test run listing the cases; the verdict class and schema file paths.
 - **PHP 8.5:** `clone()` with property overrides for the readonly value objects; `#[NoDiscard]` on the parse result.
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T36 A PHPStan rule: stateful services implement ResetInterface
+- **Description:** A PHPStan rule next to `ParameterLimitRule`: a service class with a property that is not `readonly` must implement `ResetInterface`, so Symfony resets it between requests in worker mode and between messages in consumers. Value objects, entities, DTOs, exceptions and tests are exempt.
+- **Acceptance:** a mutable service fails; with `ResetInterface` it passes; a `final readonly` service, an entity and a value object pass; the rule runs in `bin/check` and main passes.
+- **Evidence:** the rule's test run and `bin/check` on main.
+- **Waits for:** none. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
 
 ### T31 `bin/instance` and `bin/probe` for reviewers and the boot gate
 - **Description:** `bin/instance` boots Intakt from a clean checkout after `composer install` with the plain Symfony runtime (PHP's built-in web server on a free local port, SQLite in a scratch directory), checks that it answers, prints one JSON status line (`ready` or `failed` with the reason), and stops cleanly. `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code. Both work offline, so the build loop can run reviewer probes and a boot gate on Intakt itself. FrankenPHP is a binary, not a Composer package, so worker mode arrives with the image in T22, which switches `bin/instance` to it inside the image.
@@ -227,6 +233,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Evidence:** the test run, and the same check by hand against the image from T22 (two browsers, alternating requests).
 - **PHP 8.5:** `#[NoDiscard]` on the reset results the test asserts.
 - **Upstream probe:** T28's worker-mode probe (one kernel, two models, two MCP sessions, 1,000 calls) covers the Symfony AI side of this task.
+- **Reset probe:** boot the kernel once and run the same request twice with different models, tools and conversations; nothing from the first may show in the second. The test also lists every Symfony AI service in the container that has mutable state but does not implement `ResetInterface` (the Platform `Provider` keeps its last resolved model in `$resolvedModel`); each confirmed leak becomes a reproduction under `upstream/` for the owner's approval.
 - **Waits for:** T20, T22. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T23 `docker compose up` with a sample repository
