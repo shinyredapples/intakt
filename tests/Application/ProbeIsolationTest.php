@@ -8,15 +8,18 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 
-require_once __DIR__.'/../../bin/probe';
-
-// Loads bin/probe for its classes: the decision needs no namespace privileges.
+// The decision runs in a child that loads bin/probe for its classes (a direct run starts a probe, a load does not), so it needs no namespace privileges.
 #[CoversNothing]
 #[Group('instance')]
 final class ProbeIsolationTest extends TestCase
 {
-    private const string HEADER = "Inter-|   Receive\n face |bytes\n";
+    private const string DECIDE = <<<'PHP'
+        require $argv[1].'/bin/probe';
+        $probe = new Probe('/project', '1' === $argv[2], new Network($argv[3], $argv[4]));
+        echo json_encode(['command' => $probe->command('tests/Probe/ATest.php'), 'refusal' => $probe->refusal()]);
+        PHP;
 
     private string $scratch;
 
@@ -33,55 +36,50 @@ final class ProbeIsolationTest extends TestCase
 
     public function testWithoutTheVariableTheInstanceStartsInsideUnshare(): void
     {
-        $command = new \Probe('/project', false, $this->network(['lo'], true))->command('tests/Probe/A.php');
+        $decision = $this->decide(false, ['lo'], true);
 
-        self::assertSame('unshare', $command[0]);
-        self::assertContains('--net', $command);
-        self::assertContains('/project/bin/instance', $command);
+        self::assertSame('unshare', $decision['command'][0]);
+        self::assertContains('--net', $decision['command']);
+        self::assertContains('/project/bin/instance', $decision['command']);
+        self::assertNull($decision['refusal']);
+    }
+
+    public function testWithoutTheVariableAnOnlineHostIsNotRefused(): void
+    {
+        self::assertNull($this->decide(false, ['lo', 'eth0'], true)['refusal']);
     }
 
     public function testWithTheVariableTheInstanceStartsDirectlyWithoutUnshare(): void
     {
-        $command = new \Probe('/project', true, $this->network(['lo'], true))->command('tests/Probe/ATest.php');
+        $decision = $this->decide(true, ['lo'], true);
 
-        self::assertSame([PHP_BINARY, '/project/bin/instance', '--'], array_slice($command, 0, 3));
-        self::assertNotContains('unshare', $command);
-        self::assertContains('tests/Probe/ATest.php', $command);
+        self::assertSame([PHP_BINARY, '/project/bin/instance', '--'], array_slice($decision['command'], 0, 3));
+        self::assertNotContains('unshare', $decision['command']);
+        self::assertContains('tests/Probe/ATest.php', $decision['command']);
+        self::assertNull($decision['refusal']);
     }
 
-    public function testOnlyLoopbackThatIsUpCountsAsOffline(): void
+    public function testWithTheVariableAnotherInterfaceIsRefused(): void
     {
-        self::assertNull($this->network(['lo'], true)->offlineProblem());
-    }
-
-    public function testAnotherInterfaceCountsAsOnline(): void
-    {
-        self::assertStringContainsString('eth0', (string) $this->network(['lo', 'eth0'], true)->offlineProblem());
-    }
-
-    public function testALoopbackThatIsDownCountsAsOnline(): void
-    {
-        self::assertStringContainsString('down', (string) $this->network(['lo'], false)->offlineProblem());
-    }
-
-    public function testTheProbeRefusesWhenIsolatedButOnline(): void
-    {
-        $refusal = new \Probe('/project', true, $this->network(['lo', 'eth0'], true))->refusal();
+        $refusal = $this->decide(true, ['lo', 'eth0'], true)['refusal'];
 
         self::assertStringContainsString('PROBE_ISOLATED is set but the run is not offline', (string) $refusal);
+        self::assertStringContainsString('eth0', (string) $refusal);
     }
 
-    public function testTheProbeNeverRefusesWithoutTheVariable(): void
+    public function testWithTheVariableALoopbackThatIsDownIsRefused(): void
     {
-        self::assertNull(new \Probe('/project', false, $this->network(['lo', 'eth0'], true))->refusal());
+        self::assertStringContainsString('lo is down', (string) $this->decide(true, ['lo'], false)['refusal']);
     }
 
     /**
      * @param list<string> $names
+     *
+     * @return array{command: list<string>, refusal: ?string}
      */
-    private function network(array $names, bool $loopbackUp): \Network
+    private function decide(bool $isolated, array $names, bool $loopbackUp): array
     {
-        $devices = self::HEADER;
+        $devices = "Inter-|   Receive\n face |bytes\n";
 
         foreach ($names as $name) {
             $devices .= '  '.$name.": 0 0\n";
@@ -90,6 +88,11 @@ final class ProbeIsolationTest extends TestCase
         new Filesystem()->dumpFile($this->scratch.'/dev', $devices);
 
         // A documentation address is on no local interface, so binding to it fails as it does on a down loopback.
-        return new \Network($this->scratch.'/dev', $loopbackUp ? '127.0.0.1:0' : '192.0.2.1:0');
+        $loopback = $loopbackUp ? '127.0.0.1:0' : '192.0.2.1:0';
+        $process = new Process([PHP_BINARY, '-r', self::DECIDE, dirname(__DIR__, 2), $isolated ? '1' : '0', $this->scratch.'/dev', $loopback]);
+        $process->mustRun();
+
+        /** @var array{command: list<string>, refusal: ?string} */
+        return json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
     }
 }
