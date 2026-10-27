@@ -70,6 +70,14 @@ How `bin/probe` works:
 - **Dependencies:** official Symfony and Doctrine packages first. Any other package needs a release within the last 12 months and a clean `composer audit`, and the owner approves it, since `composer.json` is a protected path.
 - **Message handlers** use Intakt's `AsCommandHandler` and `AsQueryHandler` (in the platform module's `Contract`, with a `Bus` enum), which extend Symfony's `AsMessageHandler` and fix the bus; a PHPArkitect rule or guard test refuses `AsMessageHandler` anywhere else. They arrive with the first message handler (plan task T9).
 
+## AI providers
+
+`config/packages/ai.php` configures the AI Bundle platforms `anthropic`, `openai` and a generic endpoint named `openai_compatible` (packages `symfony/ai-anthropic-platform`, `symfony/ai-open-ai-platform` and `symfony/ai-generic-platform`, pinned like the other Symfony AI packages). Each provider lists the environment variables it needs (`ANTHROPIC_API_KEY`; `OPENAI_API_KEY`; `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY`).
+
+When the container is built, a provider is included only if all its variables are non-empty in `$_SERVER`, `$_ENV` or the process environment. Otherwise it is left out and the parameter `intakt.ai.disabled_providers` (provider name to message) records `Provider "<name>" is disabled: set <VARIABLE> to enable it.` The check is at build time because an unset `%env()%` makes the service fail when it is first built; the key itself stays a `%env()%` reference, so no secret is written into the compiled container. The consequence is that a changed key needs a cache clear. `tests/Application/AiProvidersTest.php` boots the kernel with all keys, with one missing, with an empty key and with none, and answers a call from Symfony AI's mock platform (`MockPlatformFactory`), which is what tests use instead of a provider.
+
+Mapping capability tiers to provider models per project is not built yet (plan task T4, part 2).
+
 ## Persistence
 
 SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets; their CI jobs start with the first entity (see [the plan](../plan.md)).
