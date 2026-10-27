@@ -198,8 +198,7 @@ final class InstanceTest extends TestCase
         $project = $this->scratch.'/project';
         new Filesystem()->mkdir($project);
 
-        // Hard links keep the vendor copy cheap, and a real copy keeps its autoloader pointing at the copy of src.
-        // Across file systems the hard links fail partway, so the partial folder goes first, or cp -a would nest into it.
+        // Hard links keep the vendor copy cheap; across file systems they fail partway, and cp -a would nest into the partial folder.
         $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; }', self::ROOT, $project]);
         $copy->mustRun();
 
