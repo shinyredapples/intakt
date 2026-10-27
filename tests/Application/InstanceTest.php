@@ -161,7 +161,7 @@ final class InstanceTest extends TestCase
         return $project;
     }
 
-    // A caller holding descriptors 3 to 14 pushes any duplicate of descriptor 3 above 9.
+    // Holds descriptors 3 to 14 so that a duplicate of descriptor 3 lands above 9, because a shell redirection cannot name those.
     private function callerHoldingManyDescriptors(string $statusFile): Process
     {
         $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
@@ -171,7 +171,7 @@ final class InstanceTest extends TestCase
     }
 
     /**
-     * @return list<string>|null the targets of every descriptor the server held, null when it was never seen
+     * @return list<string>|null
      */
     private function descriptorsOfTheServerWhile(Process $caller): ?array
     {
@@ -196,7 +196,7 @@ final class InstanceTest extends TestCase
         $public = realpath(self::ROOT).'/public';
 
         return array_values(array_filter(
-            glob('/proc/[0-9]*', GLOB_ONLYDIR) ?: [],
+            $this->matching('/proc/[0-9]*'),
             static function (string $directory) use ($public): bool {
                 $arguments = explode("\0", (string) @file_get_contents($directory.'/cmdline'));
 
@@ -212,12 +212,22 @@ final class InstanceTest extends TestCase
     {
         $targets = [];
 
-        foreach (glob($process.'/fd/*') ?: [] as $descriptor) {
+        foreach ($this->matching($process.'/fd/*') as $descriptor) {
             $target = @readlink($descriptor);
             $targets[] = false === $target ? '' : $target;
         }
 
         return $targets;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function matching(string $pattern): array
+    {
+        $paths = glob($pattern);
+
+        return false === $paths ? [] : $paths;
     }
 
     /**
