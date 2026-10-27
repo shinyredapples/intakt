@@ -66,6 +66,16 @@ final readonly class TemporaryRepository
         $this->git('tag', $name);
     }
 
+    public function objectAt(string $revision): string
+    {
+        return $this->git('rev-parse', $revision);
+    }
+
+    public function replace(string $object, string $replacement): void
+    {
+        $this->git('replace', $object, $replacement);
+    }
+
     public function remove(): void
     {
         new Filesystem()->remove($this->path);

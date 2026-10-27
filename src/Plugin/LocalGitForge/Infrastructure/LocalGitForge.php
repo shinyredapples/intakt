@@ -123,7 +123,8 @@ final readonly class LocalGitForge implements Forge
      */
     private function git(array $arguments): Process
     {
-        $process = new Process(['git', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
+        // A refs/replace/ ref would swap in another commit or blob while the change still names the real head.
+        $process = new Process(['git', '--no-replace-objects', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
 
         try {
             $process->run();

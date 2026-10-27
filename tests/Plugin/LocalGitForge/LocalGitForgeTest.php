@@ -123,6 +123,39 @@ final class LocalGitForgeTest extends TestCase
         self::assertSame($headHash, $content->commit->hash);
     }
 
+    public function testItIgnoresAReplacementOfTheHeadCommit(): void
+    {
+        $this->repository->checkoutNewBranch('decoy');
+        $decoy = $this->repository->commitFile('src/New.php', "decoy\n");
+        $this->repository->checkout('main');
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('src/New.php', "head\n");
+        $this->repository->replace($head, $decoy);
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+        $content = $this->forge()->fileAtHead($change, 'src/New.php');
+
+        self::assertSame("head\n", $content->content);
+        self::assertStringContainsString('+head', $change->diff->patch);
+        self::assertStringNotContainsString('decoy', $change->diff->patch);
+    }
+
+    public function testItIgnoresAReplacementOfAFileAtTheHead(): void
+    {
+        $this->repository->checkoutNewBranch('decoy');
+        $this->repository->commitFile('src/New.php', "decoy\n");
+        $this->repository->checkout('main');
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('src/New.php', "head\n");
+        $this->repository->replace($this->repository->objectAt('feature:src/New.php'), $this->repository->objectAt('decoy:src/New.php'));
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+        $content = $this->forge()->fileAtHead($change, 'src/New.php');
+
+        self::assertSame("head\n", $content->content);
+        self::assertStringNotContainsString('decoy', $change->diff->patch);
+    }
+
     public function testItReturnsAFileWhoseNameHasSpacesTabsAndColons(): void
     {
         $this->repository->checkoutNewBranch('feature');
