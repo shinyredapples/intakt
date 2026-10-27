@@ -55,6 +55,15 @@ How `bin/instance` works:
 
 Contract with the build loop: the status line is `{"status":"ready"}` or `{"status":"failed","reason":"..."}` on descriptor 3 only; stdout and stderr are the log. The exit code is 0 exactly when `ready` was reported. When descriptor 3 is not open, no status is written and the exit code is 1. The status is an `InstanceStatus` marked `#[NoDiscard]`, so the script cannot drop it. `tests/Application/InstanceTest.php` covers a clean boot, a broken kernel configuration, an unparsable status line, the server's descriptors (read from `/proc` while it runs, with a caller holding descriptors 3 to 14), leftovers in `$TMPDIR` and in the project tree, and the missing descriptor.
 
+## Review verdicts
+
+The `Core/Review` module's `Contract` holds the verdict a reviewer returns (plan task T1, design: [Reviews](../design/05-architecture/07-reviews.md)).
+
+- **Schema:** `src/Core/Review/Contract/verdict.schema.json` (JSON Schema draft 2020-12). It is the one schema for validation and, later, for structured output. Every field is required and no other field is allowed, so it also fits providers whose structured output needs that; a field that may be absent is nullable instead: a finding's `file`, `line`, `symbol`, `requirement` and `evidence`. The schema uses only `type`, `enum`, `required`, `additionalProperties`, `items`, `anyOf` and `$ref`.
+- **Value objects:** `Verdict` (a `Decision`: `approve`, `changes` or `blocked`; findings; `resolved` ids; `followUps`), `Finding` (`Severity` P1 to P3, `FixableBy` builder or owner, `Evidence` with probe and output). The classes are final and readonly; the closed sets are backed enums.
+- **Parsing:** `VerdictParser::parse()` takes the raw model output and returns a `Verdict`, marked `#[NoDiscard]`. The output must be exactly one JSON document: prose, a fenced code block or prose around JSON are not unwrapped. It validates with `opis/json-schema` against the schema file, then maps the document to the value objects. A `line` that JSON Schema accepts as an integer but PHP decodes as a float (`12.0`, `1e30`) is refused too.
+- **Invalid output** becomes a `changes` verdict with one finding: id `invalid-output` (`Verdict::INVALID_OUTPUT`), severity P1, fixable by the builder, no place, the design's rule as `requirement`, and a text that says why, for example `The reviewer output is not a valid verdict, so it counts as changes: /findings/0/severity: The data should match one item from enum` or `... it is not JSON (Syntax error)`.
+
 ## Conventions
 
 - **Logging** is structured (context arrays, no interpolated secrets) and passes through a redaction processor that strips tokens and API keys; the processor has its own tests.
