@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\Forge;
 
-use InvalidArgumentException;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

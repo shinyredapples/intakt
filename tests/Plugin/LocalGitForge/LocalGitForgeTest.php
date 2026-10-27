@@ -6,8 +6,8 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangeId;
-use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
+use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\FileStatus;
