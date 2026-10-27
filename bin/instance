@@ -3,9 +3,7 @@
 
 declare(strict_types=1);
 
-// Boots Intakt with the plain Symfony runtime on PHP's built-in web server, checks that it answers,
-// writes one JSON status line to file descriptor 3 once the server has stopped, and exits 0 only when ready.
-// It needs no Composer autoloader itself, so a broken install still reports "failed".
+// Needs no Composer autoloader itself, so a broken install still reports "failed".
 
 final readonly class InstanceStatus
 {
@@ -29,7 +27,7 @@ final readonly class InstanceStatus
     {
         $line = $this->ready ? ['status' => 'ready'] : ['status' => 'failed', 'reason' => $this->reason];
 
-        return json_encode($line, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE).\PHP_EOL;
+        return json_encode($line, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE).PHP_EOL;
     }
 }
 
@@ -37,8 +35,6 @@ final class Instance
 {
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
-    // dash can only name descriptors 0 to 9 in a redirection; a longer number would end the shell instead of closing it.
-    private const string CLOSE_INHERITED = 'for f in /proc/self/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] && [ "$n" -le 9 ] && eval "exec $n>&-"; done;';
 
     /** @var resource|null */
     private $server;
@@ -65,6 +61,11 @@ final class Instance
         }
     }
 
+    public function log(): string
+    {
+        return $this->output;
+    }
+
     private function boot(): InstanceStatus
     {
         if (!is_file($this->root.'/vendor/autoload_runtime.php')) {
@@ -72,10 +73,9 @@ final class Instance
         }
 
         $this->scratch = $this->createScratch();
-        $port = $this->freePort();
-        $this->start($port);
+        $this->start();
 
-        return $this->awaitAnswer($port);
+        return $this->awaitAnswer();
     }
 
     private function createScratch(): string
@@ -91,38 +91,30 @@ final class Instance
         return $path;
     }
 
-    private function freePort(): int
+    private function start(): void
     {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
-
-        if (false === $socket) {
-            throw new RuntimeException('no free local port: '.$message);
-        }
-
-        $port = (int) parse_url('tcp://'.stream_socket_get_name($socket, false), \PHP_URL_PORT);
-        fclose($socket);
-
-        return $port;
-    }
-
-    private function start(int $port): void
-    {
-        // PHP hands the child every descriptor it holds (fopen of php://fd/3 duplicates it), so the shell closes all above 2.
-        $command = ['sh', '-c', self::CLOSE_INHERITED.' exec "$@"', 'sh', \PHP_BINARY, '-S', '127.0.0.1:'.$port, '-t', $this->root.'/public', $this->root.'/public/index.php'];
-        // No index 3 in the spec either: the status descriptor is not handed to the server.
+        // Without E in variables_order the runtime never sees the environment below and falls back to .env (dev, debug, var/).
+        // Port 0 lets the server bind a free port itself, so no other process can take it between a probe and the bind.
+        $server = ['sh', '-c', 'exec "$@" 3>&-', 'sh', PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', '127.0.0.1:0', '-t', $this->root.'/public', $this->root.'/public/index.php'];
+        // The caller's descriptor 3 has no close-on-exec flag, so the shell above closes it; the spec has no index 3 either.
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
             1 => ['file', $this->logPath(), 'a'],
             2 => ['file', $this->logPath(), 'a'],
         ];
 
-        $server = proc_open($command, $descriptors, $pipes, $this->root, $this->environment());
+        $process = proc_open($server, $descriptors, $pipes, $this->root, $this->environment());
 
-        if (false === $server) {
+        if (false === $process) {
             throw new RuntimeException('cannot start the PHP built-in web server');
         }
 
-        $this->server = $server;
+        $this->server = $process;
+    }
+
+    private function logPath(): string
+    {
+        return $this->scratch.'/server.log';
     }
 
     /**
@@ -139,6 +131,8 @@ final class Instance
         return [
             ...$environment,
             'APP_ENV' => getenv('APP_ENV') ?: 'test',
+            // In debug mode the framework writes config/reference.php into the checkout.
+            'APP_DEBUG' => '0',
             'APP_SECRET' => getenv('APP_SECRET') ?: bin2hex(random_bytes(16)),
             'APP_CACHE_DIR' => $this->scratch.'/cache',
             'APP_LOG_DIR' => $this->scratch.'/log',
@@ -147,7 +141,7 @@ final class Instance
         ];
     }
 
-    private function awaitAnswer(int $port): InstanceStatus
+    private function awaitAnswer(): InstanceStatus
     {
         $deadline = hrtime(true) + self::BOOT_SECONDS * 1_000_000_000;
 
@@ -156,28 +150,16 @@ final class Instance
                 return InstanceStatus::failed('the server exited: '.$this->logSummary());
             }
 
-            $code = $this->statusCodeOf($port);
+            $statusLine = $this->statusLineOf($this->listeningPort());
 
-            if (null !== $code) {
-                return $code < 500 ? InstanceStatus::ready() : InstanceStatus::failed('HTTP '.$code.': '.$this->logSummary());
+            if (null !== $statusLine) {
+                return $this->statusFrom($statusLine);
             }
 
             usleep(100_000);
         }
 
         return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
-    }
-
-    private function statusCodeOf(int $port): ?int
-    {
-        $context = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true, 'follow_location' => 0]]);
-        $body = @file_get_contents('http://127.0.0.1:'.$port.'/', false, $context);
-
-        if (false === $body && [] === ($http_response_header ?? [])) {
-            return null;
-        }
-
-        return (int) preg_replace('/^HTTP\/\S+ (\d{3}).*$/', '$1', $http_response_header[0] ?? '');
     }
 
     private function serverRuns(): bool
@@ -196,19 +178,37 @@ final class Instance
         return 'no error in the server log';
     }
 
-    public function log(): string
-    {
-        return $this->output;
-    }
-
     private function readLog(): string
     {
         return is_file($this->logPath()) ? (string) file_get_contents($this->logPath()) : '';
     }
 
-    private function logPath(): string
+    private function listeningPort(): ?int
     {
-        return $this->scratch.'/server.log';
+        return 1 === preg_match('/Development Server \(http:\/\/127\.0\.0\.1:(\d+)\) started/', $this->readLog(), $match) ? (int) $match[1] : null;
+    }
+
+    private function statusLineOf(?int $port): ?string
+    {
+        if (null === $port) {
+            return null;
+        }
+
+        $context = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true, 'follow_location' => 0]]);
+        @file_get_contents('http://127.0.0.1:'.$port.'/', false, $context);
+
+        return array_first(http_get_last_response_headers() ?? []);
+    }
+
+    private function statusFrom(string $statusLine): InstanceStatus
+    {
+        if (1 !== preg_match('/^HTTP\/\d(?:\.\d)? (\d{3})(?: |$)/', $statusLine, $match)) {
+            return InstanceStatus::failed('unparsable status line: '.mb_substr($statusLine, 0, 200));
+        }
+
+        $code = (int) $match[1];
+
+        return $code < 500 ? InstanceStatus::ready() : InstanceStatus::failed('HTTP '.$code.': '.$this->logSummary());
     }
 
     private function stop(): void
@@ -251,14 +251,13 @@ final class Instance
     }
 }
 
-// Opened once, first; no status on it counts as a failed boot for the caller.
-$statusChannel = @fopen('php://fd/3', 'w');
-
 $instance = new Instance(dirname(__DIR__));
 $status = $instance->run();
 
-fwrite(\STDOUT, $instance->log());
+fwrite(STDOUT, $instance->log());
 
+// Opened only after the server has stopped, so nothing the script started can inherit a duplicate of it.
+$statusChannel = @fopen('php://fd/3', 'w');
 $reported = false !== $statusChannel && false !== fwrite($statusChannel, $status->toJson());
 
 exit($status->ready && $reported ? 0 : 1);

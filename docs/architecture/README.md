@@ -47,13 +47,13 @@ Two entry points let reviewers and the boot gate exercise a running Intakt witho
 
 How `bin/instance` works:
 
-1. It takes no argument and needs no Composer autoloader itself, so a broken install still reports `failed`. It opens file descriptor 3 once, first.
-2. It creates a scratch directory under `$TMPDIR` (under `var/` when unset) and points the cache, log and share directories and `DATABASE_URL` into it. `APP_ENV` is taken from the environment (default `test`).
-3. It starts `php -S` on a free port. The server child gets only descriptors 0 to 2 (stdout and stderr go to a log in the scratch directory), so it never holds the status descriptor.
-4. It requests `/` until the server answers, for at most 30 seconds. Any answer below 500 is `ready` (a 404 shows the kernel booted); a 500, an early exit or no answer is `failed`, with the first error line of the server log as the reason.
-5. It stops the server (SIGTERM, then SIGKILL after 5 seconds), removes the scratch directory, prints the server log to stdout, and then writes the status line to descriptor 3.
+1. It takes no argument and needs no Composer autoloader itself, so a broken install still reports `failed`.
+2. It creates a scratch directory under `$TMPDIR` (under `var/` when unset) and points the cache, log and share directories and `DATABASE_URL` into it. `APP_ENV` is taken from the environment (default `test`); `APP_DEBUG` is always `0`, because a debug kernel writes `config/reference.php` into the checkout.
+3. It starts `php -d variables_order=EGPCS -S 127.0.0.1:0`, so the runtime sees that environment instead of falling back to `.env`, and the server binds a free port itself (no other process can take it between a probe and the bind). A `sh -c 'exec "$@" 3>&-'` wrapper closes the caller's descriptor 3, and the descriptor spec holds only 0 to 2 (stdout and stderr go to a log in the scratch directory), so the server never holds the status descriptor.
+4. Once the server log reports the port it listens on, it requests `/` on that port until the server answers, for at most 30 seconds. A status code below 500 is `ready` (a 404 shows the kernel booted). A status code of 500 or more, a status line it cannot parse, an early exit or no answer is `failed`. The reason is the first log line that mentions an error or exception, `no error in the server log` when there is none, or the unparsable status line.
+5. It stops the server (SIGTERM, then SIGKILL after 5 seconds), removes the scratch directory and prints the server log to stdout. Only then does it open descriptor 3, once, and write the status line, so nothing it started can inherit a duplicate of it.
 
-Contract with the build loop: the status line is `{"status":"ready"}` or `{"status":"failed","reason":"..."}` on descriptor 3 only; stdout and stderr are the log. The exit code is 0 exactly when `ready` was reported. When descriptor 3 is not open, no status is written and the exit code is 1. The status is an `InstanceStatus` marked `#[NoDiscard]`, so the script cannot drop it. `tests/Application/InstanceTest.php` covers a clean boot, a broken kernel configuration, leftovers and the missing descriptor.
+Contract with the build loop: the status line is `{"status":"ready"}` or `{"status":"failed","reason":"..."}` on descriptor 3 only; stdout and stderr are the log. The exit code is 0 exactly when `ready` was reported. When descriptor 3 is not open, no status is written and the exit code is 1. The status is an `InstanceStatus` marked `#[NoDiscard]`, so the script cannot drop it. `tests/Application/InstanceTest.php` covers a clean boot, a broken kernel configuration, an unparsable status line, the server's descriptors (read from `/proc` while it runs, with a caller holding descriptors 3 to 14), leftovers in `$TMPDIR` and in the project tree, and the missing descriptor.
 
 ## Conventions
 
