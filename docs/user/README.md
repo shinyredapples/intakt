@@ -18,3 +18,13 @@ php bin/instance 3>&1 >/dev/null
 ```
 
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
+
+## The ledger
+
+Intakt records what happens in a review (review started, reviewer started, verdict received, judge done, usage recorded) as events in one SQLite table, `ledger_event`, in the order they happened. Create the table with:
+
+```
+php bin/console doctrine:migrations:migrate
+```
+
+There is no command to read the events back yet.

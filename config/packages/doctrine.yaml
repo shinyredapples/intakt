@@ -9,6 +9,13 @@ doctrine:
         identity_generation_preferences:
             Doctrine\DBAL\Platforms\PostgreSQLPlatform: identity
         auto_mapping: false
+        mappings:
+            Ledger:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Ledger/Domain'
+                prefix: 'Intakt\Core\Ledger\Domain'
+                alias: Ledger
 
 when@test:
     doctrine:

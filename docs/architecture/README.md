@@ -62,6 +62,17 @@ Contract with the build loop: the status line is `{"status":"ready"}` or `{"stat
 - **Dependencies:** official Symfony and Doctrine packages first. Any other package needs a release within the last 12 months and a clean `composer audit`, and the owner approves it, since `composer.json` is a protected path.
 - **Message handlers** use Intakt's `AsCommandHandler` and `AsQueryHandler` (in the platform module's `Contract`, with a `Bus` enum), which extend Symfony's `AsMessageHandler` and fix the bus; a PHPArkitect rule or guard test refuses `AsMessageHandler` anywhere else. They arrive with the first message handler (plan task T9).
 
+## Ledger
+
+`src/Core/Ledger/` keeps the append-only event log in one table, `ledger_event` (`sequence` auto-increment primary key, `kind`, `payload` text, `recorded_at` in UTC). The migration `Version20261027120000` creates it through the schema API, so it is not tied to SQLite.
+
+- `Contract/` holds the typed surface: `Ledger` (`append(LedgerEvent): AppendResult`, `readInOrder(): list<RecordedEvent>`), `LedgerEventKind` (backed enum: `review_started`, `reviewer_started`, `verdict_received`, `judge_done`, `usage_recorded`), `LedgerEvent` (kind and payload text), `RecordedEvent` (adds sequence and moment) and `AppendResult`.
+- `append` is marked `#[NoDiscard]`. A database failure is returned as `AppendResult::failed($reason)` (`succeeded()` is false, `sequence` is null), not thrown; success carries the `sequence`.
+- `Domain/EventRecord` is the Doctrine entity; `Infrastructure/DoctrineLedger` implements the contract. The moment comes from the clock, converted to UTC. Events are read ordered by `sequence`.
+- `tests/Core/Ledger/DoctrineLedgerTest.php` is in the `persistence` group.
+
+Not built yet: refusing updates and deletes, and a console query for reading events back.
+
 ## Persistence
 
 SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets; their CI jobs start with the first entity (see [the plan](../plan.md)).
