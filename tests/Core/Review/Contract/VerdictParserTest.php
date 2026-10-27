@@ -8,7 +8,9 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Place;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\Triage;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,8 +20,10 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(VerdictParser::class)]
 #[CoversClass(Verdict::class)]
-#[UsesClass(Finding::class)]
+#[CoversClass(Finding::class)]
 #[UsesClass(Evidence::class)]
+#[UsesClass(Place::class)]
+#[UsesClass(Triage::class)]
 final class VerdictParserTest extends TestCase
 {
     public function testTheDesignsExampleVerdictParses(): void
@@ -28,8 +32,18 @@ final class VerdictParserTest extends TestCase
 
         $verdict = new VerdictParser()->parse($output);
 
-        $finding = new Finding('F3', Severity::P1, '...', 12, '...', '...', FixableBy::Builder, false, '...', new Evidence('...', '...'));
-        self::assertEquals(new Verdict(Decision::Changes, [$finding], ['F1', 'F2'], ['...']), $verdict);
+        $finding = new Finding('F3', '...', new Triage(Severity::P1, FixableBy::Builder, repeat: false))
+            ->at(new Place('...', 12, '...'))
+            ->citing('...')
+            ->provenBy(new Evidence('...', '...'));
+        self::assertEquals(new Verdict(Decision::Changes, [$finding])->resolving(['F1', 'F2'])->followingUp(['...']), $verdict);
+    }
+
+    public function testARepeatedFindingParses(): void
+    {
+        $output = VerdictDocument::fromTheDesign()->withFinding('repeat', true)->json();
+
+        self::assertTrue(new VerdictParser()->parse($output)->findings[0]->triage->repeat);
     }
 
     public function testEveryDecisionParses(): void
@@ -46,7 +60,7 @@ final class VerdictParserTest extends TestCase
         foreach (Severity::cases() as $severity) {
             $output = VerdictDocument::fromTheDesign()->withFinding('severity', $severity->value)->json();
 
-            self::assertSame($severity, new VerdictParser()->parse($output)->findings[0]->severity);
+            self::assertSame($severity, new VerdictParser()->parse($output)->findings[0]->triage->severity);
         }
     }
 
@@ -55,7 +69,7 @@ final class VerdictParserTest extends TestCase
         foreach (FixableBy::cases() as $fixableBy) {
             $output = VerdictDocument::fromTheDesign()->withFinding('fixable_by', $fixableBy->value)->json();
 
-            self::assertSame($fixableBy, new VerdictParser()->parse($output)->findings[0]->fixableBy);
+            self::assertSame($fixableBy, new VerdictParser()->parse($output)->findings[0]->triage->fixableBy);
         }
     }
 
@@ -71,7 +85,7 @@ final class VerdictParserTest extends TestCase
 
         $finding = new VerdictParser()->parse($output)->findings[0];
 
-        self::assertEquals(new Finding('F3', Severity::P1, null, null, null, '...', FixableBy::Builder, false, null, null), $finding);
+        self::assertEquals(new Finding('F3', '...', new Triage(Severity::P1, FixableBy::Builder, repeat: false)), $finding);
     }
 
     public function testAnApprovalWithoutFindingsParses(): void
@@ -80,7 +94,7 @@ final class VerdictParserTest extends TestCase
 
         $verdict = new VerdictParser()->parse($output);
 
-        self::assertEquals(new Verdict(Decision::Approve, [], [], []), $verdict);
+        self::assertEquals(new Verdict(Decision::Approve, []), $verdict);
     }
 
     #[DataProvider('brokenFieldRules')]
@@ -118,6 +132,7 @@ final class VerdictParserTest extends TestCase
         yield 'type: a finding is a string' => [$design->with('findings', ['F3'])->json(), '/findings/0'];
         yield 'type: resolved is a string' => [$design->with('resolved', 'F1')->json(), '/resolved'];
         yield 'type: a resolved id is a number' => [$design->with('resolved', [1])->json(), '/resolved/0'];
+        yield 'type: follow_ups is a string' => [$design->with('follow_ups', '...')->json(), '/follow_ups'];
         yield 'type: a follow-up is a boolean' => [$design->with('follow_ups', [true])->json(), '/follow_ups/0'];
         yield 'type: id is a number' => [$design->withFinding('id', 3)->json(), '/findings/0/id'];
         yield 'type: file is a number' => [$design->withFinding('file', 1)->json(), '/findings/0/file'];
@@ -128,6 +143,7 @@ final class VerdictParserTest extends TestCase
         yield 'type: repeat is a string' => [$design->withFinding('repeat', 'false')->json(), '/findings/0/repeat'];
         yield 'type: requirement is a number' => [$design->withFinding('requirement', 1)->json(), '/findings/0/requirement'];
         yield 'type: evidence is a string' => [$design->withFinding('evidence', 'probe.php')->json(), '/findings/0/evidence'];
+        yield 'type: evidence probe is a number' => [$design->withFinding('evidence', ['probe' => 1, 'output' => '...'])->json(), '/findings/0/evidence/probe'];
         yield 'type: evidence output is a number' => [$design->withFinding('evidence', ['probe' => '...', 'output' => 1])->json(), '/findings/0/evidence/output'];
         yield 'type: the verdict is a list' => ['[]', '/'];
 
@@ -182,8 +198,9 @@ final class VerdictParserTest extends TestCase
         $finding = new VerdictParser()->parse('approve')->findings[0];
 
         self::assertSame(Verdict::INVALID_OUTPUT, $finding->id);
-        self::assertSame(Severity::P1, $finding->severity);
-        self::assertSame(FixableBy::Builder, $finding->fixableBy);
+        self::assertSame(Severity::P1, $finding->triage->severity);
+        self::assertSame(FixableBy::Builder, $finding->triage->fixableBy);
+        self::assertEquals(new Place(), $finding->place);
         self::assertSame('The verdict is JSON and is validated against a schema; anything else counts as changes.', $finding->requirement);
     }
 }

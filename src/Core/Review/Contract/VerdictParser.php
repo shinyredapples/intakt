@@ -70,12 +70,9 @@ final readonly class VerdictParser
      */
     private function verdictFrom(array $verdict): Verdict
     {
-        return new Verdict(
-            Decision::from($verdict['verdict']),
-            array_map($this->findingFrom(...), $verdict['findings']),
-            $verdict['resolved'],
-            $verdict['follow_ups'],
-        );
+        return new Verdict(Decision::from($verdict['verdict']), array_map($this->findingFrom(...), $verdict['findings']))
+            ->resolving($verdict['resolved'])
+            ->followingUp($verdict['follow_ups']);
     }
 
     /**
@@ -83,17 +80,20 @@ final readonly class VerdictParser
      */
     private function findingFrom(array $finding): Finding
     {
-        return new Finding(
-            id: $finding['id'],
-            severity: Severity::from($finding['severity']),
-            file: $finding['file'],
-            line: null === $finding['line'] ? null : (int) $finding['line'],
-            symbol: $finding['symbol'],
-            text: $finding['text'],
-            fixableBy: FixableBy::from($finding['fixable_by']),
-            repeat: $finding['repeat'],
-            requirement: $finding['requirement'],
-            evidence: null === $finding['evidence'] ? null : new Evidence($finding['evidence']['probe'], $finding['evidence']['output']),
-        );
+        $parsed = new Finding(
+            $finding['id'],
+            $finding['text'],
+            new Triage(Severity::from($finding['severity']), FixableBy::from($finding['fixable_by']), $finding['repeat']),
+        )->at(new Place($finding['file'], null === $finding['line'] ? null : (int) $finding['line'], $finding['symbol']));
+
+        if (null !== $finding['requirement']) {
+            $parsed = $parsed->citing($finding['requirement']);
+        }
+
+        if (null === $finding['evidence']) {
+            return $parsed;
+        }
+
+        return $parsed->provenBy(new Evidence($finding['evidence']['probe'], $finding['evidence']['output']));
     }
 }
