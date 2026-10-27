@@ -21,7 +21,7 @@ The exit code is 0 only when the status is `ready`. The server log goes to stand
 
 ## The ledger
 
-Intakt records what happens in a review (review started, reviewer started, verdict received, judge done, usage recorded) as events in one SQLite table, `ledger_event`, in the order they happened. Create the table with:
+Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored. Nothing writes to it yet. Create the table with:
 
 ```
 php bin/console doctrine:migrations:migrate

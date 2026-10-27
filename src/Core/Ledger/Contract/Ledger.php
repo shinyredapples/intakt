@@ -11,8 +11,5 @@ interface Ledger
     #[NoDiscard('a failed append is only reported through the result')]
     public function append(LedgerEvent $event): AppendResult;
 
-    /**
-     * @return list<RecordedEvent>
-     */
-    public function readInOrder(): array;
+    public function readInOrder(): RecordedEvents;
 }

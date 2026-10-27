@@ -10,8 +10,7 @@ final readonly class RecordedEvent
 {
     public function __construct(
         public int $sequence,
-        public LedgerEventKind $kind,
-        public string $payload,
+        public LedgerEvent $event,
         public DateTimeImmutable $recordedAt,
     ) {
     }
