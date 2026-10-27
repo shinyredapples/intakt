@@ -47,7 +47,8 @@ final class InstanceTest extends TestCase
         $status = json_decode($run['status'], true, flags: \JSON_THROW_ON_ERROR);
         self::assertIsArray($status);
         self::assertSame('failed', $status['status']);
-        self::assertStringContainsString('no_such_option', (string) $status['reason']);
+        self::assertIsString($status['reason'] ?? null);
+        self::assertStringContainsString('no_such_option', $status['reason']);
         self::assertSame(1, $run['exit']);
     }
 
@@ -105,6 +106,8 @@ final class InstanceTest extends TestCase
      */
     private function entriesOf(string $directory): array
     {
-        return array_values(array_diff(scandir($directory) ?: [], ['.', '..']));
+        $found = scandir($directory);
+
+        return array_values(array_diff(false === $found ? [] : $found, ['.', '..']));
     }
 }
