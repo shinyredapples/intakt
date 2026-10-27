@@ -8,6 +8,7 @@ use Intakt\Gates\CodingStandardsGate;
 use Intakt\Gates\PhpStan\NoMockOptOutRule;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
 use Intakt\Gates\PhpStan\ParameterLimitRule;
+use Intakt\Gates\PhpStan\StatefulServiceResetRule;
 use Intakt\Gates\RectorGate;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(ParameterLimitRule::class)]
 #[CoversClass(NoNestedTryRule::class)]
 #[CoversClass(NoMockOptOutRule::class)]
+#[CoversClass(StatefulServiceResetRule::class)]
 final class CodeGatesTest extends SandboxTestCase
 {
     public function testACompliantClassPassesEveryCodeGate(): void
@@ -135,6 +137,30 @@ final class CodeGatesTest extends SandboxTestCase
     public function testAConstructorWithManyParametersPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'constructor-with-many-parameters');
+    }
+
+    public function testAServiceWithAMutablePropertyFailsStaticAnalysis(): void
+    {
+        $run = $this->sandboxWith('mutable-service')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Mailer.php:9 intakt.statefulService Service property $sent', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Mailer.php:11 intakt.statefulService Service property $sender', $run->findingsOf('phpstan'));
+    }
+
+    public function testAServiceWithAMutablePropertyAndResetInterfacePassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'resettable-service');
+    }
+
+    public function testAReadonlyServicePassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'readonly-service');
+    }
+
+    public function testEntitiesValueObjectsAndExceptionsWithMutablePropertiesPassStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'mutable-data');
     }
 
     public function testStaticAnalysisRunsAtMaxLevelWithoutABaseline(): void

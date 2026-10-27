@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Cart\Domain;
+
+final class Total
+{
+    public function __construct(public int $cents)
+    {
+    }
+}

@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Cart\Domain;
+
+use Doctrine\ORM\Mapping as ORM;
+
+#[ORM\Entity]
+final class Cart
+{
+    private int $items = 0;
+
+    public function add(): void
+    {
+        ++$this->items;
+    }
+}
