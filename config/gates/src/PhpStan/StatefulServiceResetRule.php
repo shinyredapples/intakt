@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use Doctrine\ORM\Mapping\Embeddable;
+use Doctrine\ORM\Mapping\Entity;
+use Doctrine\ORM\Mapping\MappedSuperclass;
 use PhpParser\Modifiers;
 use PhpParser\Node;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\Param;
+use PhpParser\Node\PropertyItem;
+use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Property;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\InClassNode;
+use PHPStan\Reflection\AttributeReflection;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
@@ -26,12 +32,12 @@ use Throwable;
  */
 final readonly class StatefulServiceResetRule implements Rule
 {
-    // Value objects, entities and DTOs live in these layers; only services live elsewhere.
+    // Value objects, entities and DTOs live in these layers, so only classes elsewhere are services.
     private const array DATA_LAYERS = ['Domain', 'Contract'];
     private const array MAPPED_ATTRIBUTES = [
-        'Doctrine\ORM\Mapping\Entity',
-        'Doctrine\ORM\Mapping\Embeddable',
-        'Doctrine\ORM\Mapping\MappedSuperclass',
+        Entity::class,
+        Embeddable::class,
+        MappedSuperclass::class,
     ];
 
     public function getNodeType(): string
@@ -65,35 +71,32 @@ final readonly class StatefulServiceResetRule implements Rule
 
     private function isMapped(ClassReflection $reflection): bool
     {
-        foreach ($reflection->getAttributes() as $attribute) {
-            if (in_array($attribute->getName(), self::MAPPED_ATTRIBUTES, true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($reflection->getAttributes(), static fn (AttributeReflection $attribute): bool => in_array($attribute->getName(), self::MAPPED_ATTRIBUTES, true));
     }
 
     /**
-     * @return list<array{string, int}> name and line of each property that can change
+     * @return list<array{string, int}>
      */
     private function mutableProperties(Class_ $class): array
     {
-        $found = [];
+        $declared = array_map($this->declaredProperties(...), $class->stmts);
 
-        foreach ($class->stmts as $statement) {
-            if ($statement instanceof Property && !$statement->isStatic() && !$statement->isReadonly()) {
-                foreach ($statement->props as $property) {
-                    $found[] = [$property->name->toString(), $property->getStartLine()];
-                }
-            }
+        return array_merge(...$declared);
+    }
 
-            if ($statement instanceof ClassMethod && '__construct' === $statement->name->toLowerString()) {
-                array_push($found, ...$this->mutablePromotedProperties($statement));
-            }
-        }
-
-        return $found;
+    /**
+     * @return list<array{string, int}>
+     */
+    private function declaredProperties(Stmt $statement): array
+    {
+        return match (true) {
+            $statement instanceof Property && !$statement->isStatic() && !$statement->isReadonly() => array_values(array_map(
+                static fn (PropertyItem $property): array => [$property->name->toString(), $property->getStartLine()],
+                $statement->props,
+            )),
+            $statement instanceof ClassMethod && '__construct' === $statement->name->toLowerString() => $this->mutablePromotedProperties($statement),
+            default => [],
+        };
     }
 
     /**
@@ -101,15 +104,12 @@ final readonly class StatefulServiceResetRule implements Rule
      */
     private function mutablePromotedProperties(ClassMethod $constructor): array
     {
-        $found = [];
+        $promoted = array_filter($constructor->params, $this->isMutablePromotion(...));
 
-        foreach ($constructor->params as $parameter) {
-            if ($this->isMutablePromotion($parameter) && $parameter->var instanceof Variable && is_string($parameter->var->name)) {
-                $found[] = [$parameter->var->name, $parameter->getStartLine()];
-            }
-        }
-
-        return $found;
+        return array_values(array_map(
+            static fn (Param $parameter): array => [$parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : '', $parameter->getStartLine()],
+            $promoted,
+        ));
     }
 
     private function isMutablePromotion(Param $parameter): bool

@@ -8,8 +8,9 @@ use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\InputStream;
 use Symfony\Component\Process\Process;
+use Symfony\Contracts\Service\ResetInterface;
 
-final class ProcessRunner
+final class ProcessRunner implements ResetInterface
 {
     public const int TIMED_OUT = 124;
 
@@ -42,6 +43,11 @@ final class ProcessRunner
     public function containment(): string
     {
         return $this->containment ??= $this->namespacesAreAvailable() ? self::PID_NAMESPACE : self::PROCESS_GROUP;
+    }
+
+    public function reset(): void
+    {
+        $this->containment = null;
     }
 
     /**
