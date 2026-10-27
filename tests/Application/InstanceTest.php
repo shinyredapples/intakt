@@ -135,7 +135,8 @@ final class InstanceTest extends TestCase
 
     public function testTheCommandDoesNotInheritTheStatusDescriptor(): void
     {
-        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'exit(false === @fopen("php://fd/3", "w") ? 0 : 9);']);
+        // PHP itself may take the free descriptor 3 (OPcache does for its lock), so the target tells, not whether it is open.
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'exit(@readlink("/proc/self/fd/3") === realpath($argv[1]) ? 9 : 0);', $this->scratch.'/status']);
 
         self::assertSame(0, $run['exit']);
         self::assertSame('{"status":"ready"}', $run['status']);
