@@ -16,7 +16,24 @@ src/
 config/modules.php      the module list; a test keeps it equal to the directories
 ```
 
-The plugin kinds have empty contracts for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)).
+The Vendor, Notifier, WorkSource and Gate contracts are empty for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)). The Forge contract has the methods for reading a change; see below.
+
+## Forge contract and the local git forge
+
+`Plugin/Forge/Contract` holds what reading a change needs, as typed objects only:
+
+- `Forge::change(ChangeId)` returns a `Change`: the id, the `base` and `head` as `CommitId` (full hashes), the unified `diff` text and the `files` (`ChangedFile`: path and `FileStatus` added, modified or deleted; a rename shows as a delete and an add).
+- `Forge::hasHeadMoved(Change)` is true when the change's branch now points at another commit than the `Change` was read at (`#[NoDiscard]`).
+- `Forge::fileAtHead(Change, path)` returns a `FileContent` as it is at the `Change`'s head hash, not at the branch tip, so a branch that moved on does not change what is read.
+- Failures are typed: `ChangeNotFound`, `FileNotFoundAtHead` and `ForgeReadFailed` (git failed or printed something unexpected).
+
+`Plugin/LocalGitForge` implements it for a local repository (`LocalRepository`: path and base branch). A local branch (`refs/heads/<id>`, never a tag) against the base branch is the pull request. Every call runs `git` through the Process component with an argument list (no shell) in the repository, with a 60-second timeout.
+
+1. The head is the branch's commit; the base is the merge base of the base branch and the head, so what the base branch gained after the branch was cut is not in the diff.
+2. The diff is `git diff` between those two hashes, without colors, renames, external diff drivers or text conversion. The changed files come from `git diff --name-status -z` for the same hashes; `NameStatusParser` turns that output into `ChangedFile` objects with the pipe operator (split on NUL, pair status with path, map to objects). An unknown status or a status without a path is a `ForgeReadFailed`.
+3. File contents are read with `git show <head hash>:<path>`.
+
+The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$TMPDIR` and remove it afterwards.
 
 ## Quality gates
 
