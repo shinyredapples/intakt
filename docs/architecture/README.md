@@ -38,12 +38,22 @@ The plugin kinds have empty contracts for now. The first implementation of each 
 
 Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
 
-## Instance and probes (planned)
+## Instance and probes
 
-Two entry points let reviewers and the boot gate exercise a running Intakt without network access, after `composer install` (plan task T31):
+Two entry points let reviewers and the boot gate exercise a running Intakt without network access, after `composer install` (plan task T31). `bin/instance` exists; `bin/probe` is planned.
 
-- `bin/instance` boots the app from a clean checkout with the plain Symfony runtime (PHP's built-in web server, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly. FrankenPHP is a binary, not a Composer package: worker mode comes with the container image (plan task T22), where `bin/instance` boots in worker mode.
-- `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with no network, and prints its output and exit code.
+- `bin/instance` boots the app from a clean checkout with the plain Symfony runtime (PHP's built-in web server on a free port of `127.0.0.1`, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly. FrankenPHP is a binary, not a Composer package: worker mode comes with the container image (plan task T22), where `bin/instance` boots in worker mode.
+- `bin/probe <file>` (planned) boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with no network, and prints its output and exit code.
+
+How `bin/instance` works:
+
+1. It takes no argument and needs no Composer autoloader itself, so a broken install still reports `failed`. It opens file descriptor 3 once, first.
+2. It creates a scratch directory under `$TMPDIR` (under `var/` when unset) and points the cache, log and share directories and `DATABASE_URL` into it. `APP_ENV` is taken from the environment (default `test`).
+3. It starts `php -S` on a free port. The server child gets only descriptors 0 to 2 (stdout and stderr go to a log in the scratch directory), so it never holds the status descriptor.
+4. It requests `/` until the server answers, for at most 30 seconds. Any answer below 500 is `ready` (a 404 shows the kernel booted); a 500, an early exit or no answer is `failed`, with the first error line of the server log as the reason.
+5. It stops the server (SIGTERM, then SIGKILL after 5 seconds), removes the scratch directory, prints the server log to stdout, and then writes the status line to descriptor 3.
+
+Contract with the build loop: the status line is `{"status":"ready"}` or `{"status":"failed","reason":"..."}` on descriptor 3 only; stdout and stderr are the log. The exit code is 0 exactly when `ready` was reported. When descriptor 3 is not open, no status is written and the exit code is 1. The status is an `InstanceStatus` marked `#[NoDiscard]`, so the script cannot drop it. `tests/Application/InstanceTest.php` covers a clean boot, a broken kernel configuration, leftovers and the missing descriptor.
 
 ## Conventions
 

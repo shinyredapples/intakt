@@ -8,3 +8,13 @@ Nothing user-visible is built yet. The first pages arrive with the review loop (
 - Configuring providers, API keys and the review panel (planned)
 - Reviewing a pull request and reading the verdicts (planned)
 - Connecting an agent through MCP (planned)
+
+## Checking that an install boots
+
+After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
+
+```
+php bin/instance 3>&1 >/dev/null
+```
+
+The exit code is 0 only when the status is `ready`. The server log goes to standard output.

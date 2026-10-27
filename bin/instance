@@ -1,0 +1,263 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Boots Intakt with the plain Symfony runtime on PHP's built-in web server, checks that it answers,
+// writes one JSON status line to file descriptor 3 once the server has stopped, and exits 0 only when ready.
+// It needs no Composer autoloader itself, so a broken install still reports "failed".
+
+final readonly class InstanceStatus
+{
+    private function __construct(
+        public bool $ready,
+        public string $reason,
+    ) {
+    }
+
+    public static function ready(): self
+    {
+        return new self(true, '');
+    }
+
+    public static function failed(string $reason): self
+    {
+        return new self(false, '' === trim($reason) ? 'unknown reason' : $reason);
+    }
+
+    public function toJson(): string
+    {
+        $line = $this->ready ? ['status' => 'ready'] : ['status' => 'failed', 'reason' => $this->reason];
+
+        return json_encode($line, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE).\PHP_EOL;
+    }
+}
+
+final class Instance
+{
+    private const int BOOT_SECONDS = 30;
+    private const int STOP_SECONDS = 5;
+    private const string CLOSE_INHERITED = 'for f in /proc/self/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] && eval "exec $n>&-"; done;';
+
+    /** @var resource|null */
+    private $server;
+
+    private string $scratch = '';
+
+    private string $output = '';
+
+    public function __construct(private readonly string $root)
+    {
+    }
+
+    #[NoDiscard]
+    public function run(): InstanceStatus
+    {
+        try {
+            return $this->boot();
+        } catch (Throwable $failure) {
+            return InstanceStatus::failed($failure->getMessage());
+        } finally {
+            $this->stop();
+            $this->output = $this->readLog();
+            $this->removeScratch();
+        }
+    }
+
+    private function boot(): InstanceStatus
+    {
+        if (!is_file($this->root.'/vendor/autoload_runtime.php')) {
+            return InstanceStatus::failed('vendor/autoload_runtime.php is missing, run composer install');
+        }
+
+        $this->scratch = $this->createScratch();
+        $port = $this->freePort();
+        $this->start($port);
+
+        return $this->awaitAnswer($port);
+    }
+
+    private function createScratch(): string
+    {
+        $base = getenv('TMPDIR');
+        $base = false === $base || '' === $base ? $this->root.'/var' : $base;
+        $path = $base.'/intakt-instance-'.bin2hex(random_bytes(6));
+
+        if (!mkdir($path, 0o700, true) && !is_dir($path)) {
+            throw new RuntimeException('cannot create the scratch directory');
+        }
+
+        return $path;
+    }
+
+    private function freePort(): int
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
+
+        if (false === $socket) {
+            throw new RuntimeException('no free local port: '.$message);
+        }
+
+        $port = (int) parse_url('tcp://'.stream_socket_get_name($socket, false), \PHP_URL_PORT);
+        fclose($socket);
+
+        return $port;
+    }
+
+    private function start(int $port): void
+    {
+        // PHP hands the child every descriptor it holds (fopen of php://fd/3 duplicates it), so the shell closes all above 2.
+        $command = ['sh', '-c', self::CLOSE_INHERITED.' exec "$@"', 'sh', \PHP_BINARY, '-S', '127.0.0.1:'.$port, '-t', $this->root.'/public', $this->root.'/public/index.php'];
+        // No index 3 in the spec either: the status descriptor is not handed to the server.
+        $descriptors = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', $this->logPath(), 'a'],
+            2 => ['file', $this->logPath(), 'a'],
+        ];
+
+        $server = proc_open($command, $descriptors, $pipes, $this->root, $this->environment());
+
+        if (false === $server) {
+            throw new RuntimeException('cannot start the PHP built-in web server');
+        }
+
+        $this->server = $server;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function environment(): array
+    {
+        $environment = [];
+
+        foreach (getenv() as $name => $value) {
+            $environment[$name] = $value;
+        }
+
+        return [
+            ...$environment,
+            'APP_ENV' => getenv('APP_ENV') ?: 'test',
+            'APP_SECRET' => getenv('APP_SECRET') ?: bin2hex(random_bytes(16)),
+            'APP_CACHE_DIR' => $this->scratch.'/cache',
+            'APP_LOG_DIR' => $this->scratch.'/log',
+            'APP_SHARE_DIR' => $this->scratch.'/share',
+            'DATABASE_URL' => 'sqlite:///'.$this->scratch.'/data.db',
+        ];
+    }
+
+    private function awaitAnswer(int $port): InstanceStatus
+    {
+        $deadline = hrtime(true) + self::BOOT_SECONDS * 1_000_000_000;
+
+        while (hrtime(true) < $deadline) {
+            if (!$this->serverRuns()) {
+                return InstanceStatus::failed('the server exited: '.$this->logSummary());
+            }
+
+            $code = $this->statusCodeOf($port);
+
+            if (null !== $code) {
+                return $code < 500 ? InstanceStatus::ready() : InstanceStatus::failed('HTTP '.$code.': '.$this->logSummary());
+            }
+
+            usleep(100_000);
+        }
+
+        return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
+    }
+
+    private function statusCodeOf(int $port): ?int
+    {
+        $context = stream_context_create(['http' => ['timeout' => 5, 'ignore_errors' => true, 'follow_location' => 0]]);
+        $body = @file_get_contents('http://127.0.0.1:'.$port.'/', false, $context);
+
+        if (false === $body && [] === ($http_response_header ?? [])) {
+            return null;
+        }
+
+        return (int) preg_replace('/^HTTP\/\S+ (\d{3}).*$/', '$1', $http_response_header[0] ?? '');
+    }
+
+    private function serverRuns(): bool
+    {
+        return null !== $this->server && (proc_get_status($this->server)['running'] ?? false);
+    }
+
+    private function logSummary(): string
+    {
+        foreach (preg_split('/\R/', $this->readLog()) ?: [] as $line) {
+            if (1 === preg_match('/error|exception/i', $line)) {
+                return mb_substr(trim($line), 0, 500);
+            }
+        }
+
+        return 'no error in the server log';
+    }
+
+    public function log(): string
+    {
+        return $this->output;
+    }
+
+    private function readLog(): string
+    {
+        return is_file($this->logPath()) ? (string) file_get_contents($this->logPath()) : '';
+    }
+
+    private function logPath(): string
+    {
+        return $this->scratch.'/server.log';
+    }
+
+    private function stop(): void
+    {
+        if (null === $this->server) {
+            return;
+        }
+
+        proc_terminate($this->server);
+        $deadline = hrtime(true) + self::STOP_SECONDS * 1_000_000_000;
+
+        while ($this->serverRuns() && hrtime(true) < $deadline) {
+            usleep(50_000);
+        }
+
+        if ($this->serverRuns()) {
+            proc_terminate($this->server, 9);
+        }
+
+        proc_close($this->server);
+        $this->server = null;
+    }
+
+    private function removeScratch(): void
+    {
+        if ('' === $this->scratch || !is_dir($this->scratch)) {
+            return;
+        }
+
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($this->scratch, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($files as $file) {
+            $file->isDir() && !$file->isLink() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+
+        rmdir($this->scratch);
+    }
+}
+
+// Opened once, first; no status on it counts as a failed boot for the caller.
+$statusChannel = @fopen('php://fd/3', 'w');
+
+$instance = new Instance(dirname(__DIR__));
+$status = $instance->run();
+
+fwrite(\STDOUT, $instance->log());
+
+$reported = false !== $statusChannel && false !== fwrite($statusChannel, $status->toJson());
+
+exit($status->ready && $reported ? 0 : 1);
