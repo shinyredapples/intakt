@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Infrastructure;
 
+use DateTimeZone;
 use Doctrine\DBAL\Exception as DbalException;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -23,7 +24,7 @@ final readonly class DoctrineLedger implements Ledger
 
     public function append(LedgerEvent $event): AppendResult
     {
-        $record = new EventRecord($event->kind, $event->payload, $this->clock->now()->setTimezone(new \DateTimeZone('UTC')));
+        $record = new EventRecord($event->kind, $event->payload, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
 
         try {
             $this->entityManager->persist($record);

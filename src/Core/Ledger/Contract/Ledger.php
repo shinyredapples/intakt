@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Contract;
 
+use NoDiscard;
+
 interface Ledger
 {
-    #[\NoDiscard('a failed append is only reported through the result')]
+    #[NoDiscard('a failed append is only reported through the result')]
     public function append(LedgerEvent $event): AppendResult;
 
     /**
-     * @return list<RecordedEvent> in the order they were appended
+     * @return list<RecordedEvent>
      */
     public function readInOrder(): array;
 }
