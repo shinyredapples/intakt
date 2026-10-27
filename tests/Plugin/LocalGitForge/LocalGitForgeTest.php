@@ -26,6 +26,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
+#[UsesClass(FileStatus::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(NameStatusParser::class)]
@@ -146,6 +147,26 @@ final class LocalGitForgeTest extends TestCase
         $this->expectException(ChangeNotFound::class);
 
         $this->forge()->change(new ChangeId('v1'));
+    }
+
+    public function testItDoesNotTreatARevisionExpressionAsAChange(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('src/New.php', "<?php\n");
+
+        $this->expectException(ChangeNotFound::class);
+
+        $this->forge()->change(new ChangeId('feature~1'));
+    }
+
+    public function testItReportsADirectoryAsNotAFileAtTheHead(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        $this->expectException(FileNotFoundAtHead::class);
+
+        $this->forge()->fileAtHead($change, 'src');
     }
 
     public function testItFailsWhenTheBaseBranchDoesNotExist(): void

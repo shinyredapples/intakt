@@ -47,7 +47,7 @@ final readonly class LocalGitForge implements Forge
     public function fileAtHead(Change $change, string $path): FileContent
     {
         // The head hash, not the branch name, so a branch that moved on cannot change what is read.
-        $process = $this->git(['show', $change->head->hash.':'.$path]);
+        $process = $this->git(['cat-file', 'blob', $change->head->hash.':'.$path]);
 
         if (!$process->isSuccessful()) {
             throw FileNotFoundAtHead::at($path, $change->head);
@@ -58,7 +58,8 @@ final readonly class LocalGitForge implements Forge
 
     private function headOf(ChangeId $id): CommitId
     {
-        $process = $this->git(['rev-parse', '--verify', '--quiet', 'refs/heads/'.$id->value.'^{commit}']);
+        // show-ref takes only an exact ref, so revision expressions such as "feature~1" are not branches.
+        $process = $this->git(['show-ref', '--verify', '--hash', 'refs/heads/'.$id->value]);
 
         if (!$process->isSuccessful()) {
             throw ChangeNotFound::named($id);

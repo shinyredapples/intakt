@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(NameStatusParser::class)]
 #[UsesClass(ChangedFile::class)]
+#[UsesClass(FileStatus::class)]
 #[UsesClass(ForgeReadFailed::class)]
 final class NameStatusParserTest extends TestCase
 {

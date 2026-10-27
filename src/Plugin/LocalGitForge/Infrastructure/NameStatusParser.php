@@ -8,7 +8,7 @@ use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
-final class NameStatusParser
+final readonly class NameStatusParser
 {
     /**
      * @return list<ChangedFile>

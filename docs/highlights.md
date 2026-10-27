@@ -83,7 +83,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | planned | T1 (#5), T5 (#10) |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
-| Process | the local git forge | planned | T6 (#11, part #58) |
+| Process | the local git forge | done | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
 
