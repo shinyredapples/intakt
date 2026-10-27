@@ -118,11 +118,15 @@ final class InstanceTest extends TestCase
 
     public function testAMemfdAsDescriptorThreeReceivesTheStatusLineAndTheExitIsZero(): void
     {
-        $helper = 'import os, subprocess, sys; fd = os.memfd_create("status"); os.dup2(fd, 3); '
-            .'code = subprocess.run(sys.argv[1:], pass_fds=(3,)).returncode; os.lseek(3, 0, 0); '
-            .'sys.stderr.write(os.read(3, 4096).decode()); sys.exit(code)';
-        $process = new Process(['python3', '-I', '-c', $helper, PHP_BINARY, self::ROOT.'/bin/instance'], null, $this->environment());
-        $process->run();
+        $process = $this->runInstanceWithAMemfdNamed('status');
+
+        self::assertSame('{"status":"ready"}', trim($process->getErrorOutput()));
+        self::assertSame(0, $process->getExitCode());
+    }
+
+    public function testAMemfdWhoseNameOnlyStartsLikeOpcachesLockReceivesTheStatusLine(): void
+    {
+        $process = $this->runInstanceWithAMemfdNamed('opcache_lock_status');
 
         self::assertSame('{"status":"ready"}', trim($process->getErrorOutput()));
         self::assertSame(0, $process->getExitCode());
@@ -214,6 +218,17 @@ final class InstanceTest extends TestCase
         // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
         $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
         $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp']);
+        $process->run();
+
+        return $process;
+    }
+
+    private function runInstanceWithAMemfdNamed(string $name): Process
+    {
+        $helper = 'import os, subprocess, sys; fd = os.memfd_create(sys.argv[1]); os.dup2(fd, 3); '
+            .'code = subprocess.run(sys.argv[2:], pass_fds=(3,)).returncode; os.lseek(3, 0, 0); '
+            .'sys.stderr.write(os.read(3, 4096).decode()); sys.exit(code)';
+        $process = new Process(['python3', '-I', '-c', $helper, $name, PHP_BINARY, self::ROOT.'/bin/instance'], null, $this->environment());
         $process->run();
 
         return $process;

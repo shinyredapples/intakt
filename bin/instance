@@ -327,10 +327,10 @@ function statusChannel()
         return null;
     }
 
-    // With CLI OPcache on, its lock (an unlinked file) takes a descriptor 3 the caller left closed; a caller's file, pipe or device has a link, and a caller's memfd (the build loop's channel) has none, but OPcache's lock is a memfd too, named opcache_lock.
+    // With CLI OPcache on, its lock (an unlinked file) takes a descriptor 3 the caller left closed; a caller's file, pipe or device has a link, and a caller's memfd (the build loop's channel) has none, but OPcache's lock is a memfd too, named exactly opcache_lock.
     $unlinked = 0 === (fstat($channel)['nlink'] ?? 0);
     $target = (string) @readlink('/proc/self/fd/3');
-    $callersMemfd = str_starts_with($target, '/memfd:') && !str_starts_with($target, '/memfd:opcache_lock');
+    $callersMemfd = str_starts_with($target, '/memfd:') && '/memfd:opcache_lock (deleted)' !== $target;
 
     return $unlinked && !$callersMemfd ? null : $channel;
 }
