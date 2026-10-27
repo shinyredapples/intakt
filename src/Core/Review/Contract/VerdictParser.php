@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-use Opis\JsonSchema\Errors\ValidationError;
 use JsonException;
 use NoDiscard;
 use Opis\JsonSchema\Errors\ErrorFormatter;
+use Opis\JsonSchema\Errors\ValidationError;
 use Opis\JsonSchema\Validator;
 
 /**
@@ -49,6 +49,7 @@ final readonly class VerdictParser
             return null;
         }
 
+        /** @var array<string, list<string>> $messages */
         $messages = new ErrorFormatter()->formatKeyed($error);
         $path = (string) array_key_first($messages);
 
