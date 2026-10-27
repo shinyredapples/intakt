@@ -19,7 +19,6 @@ use InvalidArgumentException;
 use NoDiscard;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
-use ValueError;
 
 final readonly class LocalGitForge implements Forge
 {
@@ -124,13 +123,17 @@ final readonly class LocalGitForge implements Forge
      */
     private function git(array $arguments): Process
     {
-        // A refs/replace/ ref would swap in another commit or blob while the change still names the real head,
-        // and pathspec magic would read a path such as ":odd.txt" as "odd.txt".
+        // An argument with a NUL byte cannot reach git, because PHP refuses to start the process with it.
+        if ([] !== array_filter($arguments, static fn (string $argument): bool => str_contains($argument, "\0"))) {
+            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
+        }
+
+        // A refs/replace/ ref would swap in another object, and pathspec magic would read ":odd.txt" as "odd.txt".
         $process = new Process(['git', '--no-replace-objects', '--literal-pathspecs', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
 
         try {
             $process->run();
-        } catch (ExceptionInterface|ValueError $failure) {
+        } catch (ExceptionInterface $failure) {
             throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 
