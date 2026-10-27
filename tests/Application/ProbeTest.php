@@ -178,7 +178,8 @@ final class ProbeTest extends TestCase
         new Filesystem()->mkdir($project.'/tests');
 
         // Hard links keep the vendor copy cheap, and a real copy keeps its autoloader pointing at the copy of src.
-        $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || cp -a "$0"/vendor "$1"/vendor', self::ROOT, $project]);
+        // Across file systems the hard links fail partway, so the partial folder goes first, or cp -a would nest into it.
+        $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; }', self::ROOT, $project]);
         $copy->mustRun();
 
         foreach (['bin', 'src', 'config', 'public'] as $directory) {
