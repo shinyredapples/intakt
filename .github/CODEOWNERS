@@ -5,3 +5,5 @@
 /AGENTS.md      @haraldpdl
 /composer.json  @haraldpdl
 /composer.lock  @haraldpdl
+/bin/instance @haraldpdl
+/bin/probe @haraldpdl
