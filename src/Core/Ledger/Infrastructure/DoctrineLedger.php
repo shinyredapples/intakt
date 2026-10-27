@@ -24,7 +24,7 @@ final readonly class DoctrineLedger implements Ledger
     ) {
     }
 
-    // PHP checks the attribute on the method that runs, not on the interface.
+    // Repeated here because PHP checks the attribute on the method that runs, not on the interface.
     #[NoDiscard('a failed append is only reported through the result')]
     public function append(LedgerEvent $event): AppendResult
     {
@@ -50,7 +50,7 @@ final readonly class DoctrineLedger implements Ledger
 
         return new RecordedEvents(array_map(
             static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->sequence, new LedgerEvent($record->kind(), $record->payload()), $record->recordedAt()),
-            array_values($records),
+            $records,
         ));
     }
 }
