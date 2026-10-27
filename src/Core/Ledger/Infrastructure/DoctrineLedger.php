@@ -36,7 +36,7 @@ final readonly class DoctrineLedger implements Ledger
             return AppendResult::failed($failure->getMessage());
         }
 
-        return AppendResult::appended($record->sequence());
+        return AppendResult::appended($record->sequence);
     }
 
     public function readInOrder(): array
@@ -44,7 +44,7 @@ final readonly class DoctrineLedger implements Ledger
         $records = $this->entityManager->getRepository(EventRecord::class)->findBy([], ['sequence' => 'ASC']);
 
         return array_map(
-            static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->sequence(), $record->kind(), $record->payload(), $record->recordedAt()),
+            static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->sequence, $record->kind(), $record->payload(), $record->recordedAt()),
             $records,
         );
     }
