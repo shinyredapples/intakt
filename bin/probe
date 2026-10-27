@@ -1,0 +1,81 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Needs no Composer autoloader itself, like bin/instance, which it reuses to boot the instance.
+
+final class Probe
+{
+    private const string PATTERN = '#^tests/Probe/[A-Za-z0-9_][A-Za-z0-9_.-]*\.php$#';
+
+    public function __construct(private readonly string $root)
+    {
+    }
+
+    public function run(string $file): int
+    {
+        if (1 !== preg_match(self::PATTERN, $file) || !is_file($this->root.'/'.$file)) {
+            fwrite(STDERR, "usage: php bin/probe tests/Probe/NAME.php (an existing file; NAME ending in Test is a PHPUnit test, anything else a PHP script)\n");
+
+            return 2;
+        }
+
+        $exit = $this->runOffline($file);
+        fwrite(STDOUT, 'exit code: '.$exit.PHP_EOL);
+
+        return $exit;
+    }
+
+    private function runOffline(string $file): int
+    {
+        // A new network namespace has no route out; its loopback starts down, and the instance needs it.
+        $command = [
+            'unshare', '--net', '--map-root-user',
+            'sh', '-c', 'ip link set lo up && exec "$@"', 'sh',
+            PHP_BINARY, $this->root.'/bin/instance', '--', ...$this->probeCommand($file),
+        ];
+        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR, 3 => ['pipe', 'w']];
+
+        $process = proc_open($command, $descriptors, $pipes, $this->root);
+
+        if (false === $process) {
+            fwrite(STDERR, "cannot start the offline instance\n");
+
+            return 1;
+        }
+
+        $status = trim((string) stream_get_contents($pipes[3]));
+        fclose($pipes[3]);
+        $exit = proc_close($process);
+
+        return $this->exitOf($exit, $status);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function probeCommand(string $file): array
+    {
+        if (str_ends_with($file, 'Test.php')) {
+            return [PHP_BINARY, 'vendor/bin/phpunit', '--no-configuration', '--bootstrap', 'tests/bootstrap.php', '--do-not-cache-result', $file];
+        }
+
+        return [PHP_BINARY, $file];
+    }
+
+    private function exitOf(int $exit, string $status): int
+    {
+        if ('{"status":"ready"}' === $status) {
+            return $exit;
+        }
+
+        fwrite(STDERR, 'the instance did not become ready: '.('' === $status ? 'no status reported (is unshare with network namespaces available?)' : $status).PHP_EOL);
+
+        return 0 === $exit ? 1 : $exit;
+    }
+}
+
+$file = $argv[1] ?? '';
+
+exit(new Probe(dirname(__DIR__))->run($file));

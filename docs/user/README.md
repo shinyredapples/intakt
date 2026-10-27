@@ -18,3 +18,7 @@ php bin/instance 3>&1 >/dev/null
 ```
 
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
+
+## Running a probe against an install
+
+`php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. The instance and its files are removed afterwards. It needs Linux with `unshare` and `ip`.
