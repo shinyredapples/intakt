@@ -1,6 +1,6 @@
 # Plan: the review loop (first release)
 
-Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60 and #61. Spec: [spec.md](spec.md). Deadline: 2026-11-22 18:00 CET.
+Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60, #61, #63 and #64. Spec: [spec.md](spec.md). Deadline: 2026-11-22 18:00 CET.
 
 ## Conventions
 
@@ -20,8 +20,8 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub with webhooks, branch cleanup, a subscription reviewer | T15 to T19, T30, T32, T33 | 2026-11-14 |
-| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
-| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
+| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live; server metrics | T20, T21, T34 | 2026-11-17 |
+| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening, a development setup with file watching | T22 to T29, T35 | 2026-11-21 |
 
 ## M1 Review core
 
@@ -137,6 +137,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **PHP 8.5:** closures in attributes where an MCP tool's input needs a check.
 - **Tool safety:** every tool carries the MCP SDK's annotations (`readOnlyHint`, `destructiveHint`); whether a tool may write is decided by a Symfony Security voter on Intakt's own config, never by the model's arguments. A contract test checks that a tool without parameters encodes them as `"properties": {}` and that the protocol version is negotiated correctly with Claude Code; a failure is an upstream report under `upstream/`.
 - **MCP:** this is the owner's MCP Bundle server (T16 adds the per-review one), with `session.lock` on. Tool authorization goes through `#[IsGrantedTool]` backed by Intakt's voter; long tools send progress notifications.
+- **Worker:** the MCP server runs in its own named FrankenPHP worker (see T22), so streamed MCP responses can't starve the dashboard's worker threads.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
 ### T16 Reviewer tools over MCP
@@ -197,22 +198,32 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
 ### T21 Live updates with streaming and Mercure
-- **Description:** Reviewer progress and round state are published through Mercure as Turbo Streams as they happen, served by FrankenPHP's built-in hub; the review page updates without reloads. Progress comes from the agent's streaming `Progress` updates (tool calls, streamed text). A stop button on a running reviewer calls `Execution::cancel()`.
-- **Acceptance:** events published by a round reach a subscribed test client in order; the stop button cancels the reviewer's execution and the ledger records the stop; the page works, without live updates, when the hub is down.
+- **Description:** Reviewer progress and round state are published through Mercure as Turbo Streams as they happen, served by FrankenPHP's built-in Mercure hub; the review page updates without reloads. Progress comes from the agent's streaming `Progress` updates (tool calls, streamed text). A stop button on a running reviewer calls `Execution::cancel()`.
+- **Mercure:** the built-in hub (FrankenPHP 1.13 and later) is configured with `publisher` and `issuer` keys, and symfony/mercure mints the tokens. Messenger consumers publish through the hub endpoint; the web side may use `mercure_publish()`, checked with `function_exists()` at runtime (it is absent in the CLI, so its existence is never cached at container build). The `bolt` transport keeps history, so a client that reconnects catches up with `Last-Event-ID`. The hub's route is excluded from `encode` in the Caddyfile.
+- **Acceptance:** events published by a round reach a subscribed test client in order; a client that reconnects with `Last-Event-ID` receives the events it missed; the stop button cancels the reviewer's execution and the ledger records the stop; the page works, without live updates, when the hub is down.
 - **Evidence:** a short screen recording or a sequence of screenshots of a live round.
 - **Waits for:** T20. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
+### T34 Server metrics on the dashboard
+- **Description:** FrankenPHP's Prometheus metrics, the admin API's `/frankenphp/threads` and Mercure's `mercure_health` feed an infrastructure row on the dashboard (worker threads busy and idle, queue depth, worker restarts, hub health) and the container's health check. The admin API stays bound to localhost; the app reads it from inside the container.
+- **Acceptance:** recorded metrics and threads responses drive the tests; the row renders from them and shows a clear state when an endpoint is down; the health check fails when the hub reports unhealthy or no worker thread is ready; no admin endpoint is reachable from outside the container.
+- **Evidence:** a screenshot of the infrastructure row during a live round, and the health check output from the container.
+- **Waits for:** T20. **Size:** S. **Labels:** `class:feature`, `priority:normal`.
 
 ## M5 Demo
 
 ### T22 Container image
-- **Description:** A FrankenPHP-based image with Intakt: a Caddyfile that runs the app in FrankenPHP worker mode (Symfony Runtime's `FrankenPhpWorkerRunner`) with the Mercure hub, a worker restart after a set number of requests and on a memory ceiling, and the Messenger consumers and the Scheduler as separate long-running processes from the same image. Built in CI and run locally; SQLite in a volume.
-- **Acceptance:** the image starts, migrates and serves the dashboard in worker mode, and `bin/instance` in the image boots in worker mode; the consumers and the Scheduler run beside it and restart on failure; it runs as a non-root user; no secret is baked in.
-- **Evidence:** `docker run` output and the dashboard served from the container.
+- **Description:** A FrankenPHP-based image with Intakt, built on `dunglas/frankenphp` 1.13.4 or later (the PHP 8.5 ZTS variant), pinned by digest. 1.13.2 and 1.13.4 fix worker-mode state leaks between requests (`error_get_last`, per-request env in `$_SERVER`, a `putenv` use-after-free, `SplTempFileObject`, `http_get_last_response_headers`); 1.13.1 adds graceful shutdown without 500s and restart on crash with backoff. Built in CI and run locally; SQLite in a volume.
+- **Caddyfile:** a named `app` worker runs the app in worker mode (Symfony Runtime's `FrankenPhpWorkerRunner`); a separate named `mcp` worker matches the MCP route with its own `num`, `max_threads` and `max_wait_time`, so streamed MCP responses can't starve the dashboard. The built-in Mercure hub as T21 configures it. The admin API is bound to localhost.
+- **Worker restarts:** `FRANKENPHP_LOOP_MAX` is set (Symfony 8.1's worker loop, default 500), and a check at kernel terminate ends the loop cleanly when memory passes a ceiling. FrankenPHP's restart-on-crash defaults stay (`max_consecutive_failures`, default 6); the container has a Docker restart policy and a `HEALTHCHECK` on the metrics endpoint.
+- **Consumers and the Scheduler:** separate long-running processes from the same image, run with plain `php`, not `frankenphp php-cli`, until the SIGTERM probe in T28 passes on 1.13.4.
+- **Acceptance:** the image starts, migrates and serves the dashboard in worker mode, and `bin/instance` in the image boots in worker mode; a request to the MCP route is served by the `mcp` worker; a worker passing the memory ceiling ends its loop and is replaced without a failed request; the consumers and the Scheduler run beside it and restart on failure; the health check turns unhealthy when the metrics endpoint stops answering; the admin API is not reachable from outside the container; it runs as a non-root user; no secret is baked in.
+- **Evidence:** `docker run` output, the image digest, and the dashboard served from the container.
 - **Waits for:** T21. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
 ### T29 No state leaks in worker mode
-- **Description:** A test boots one kernel and sends many requests through it, as FrankenPHP worker mode does: different users, flash messages, Doctrine reads and writes, and agent runs with their message store. Any service that keeps state between requests is made to implement `ResetInterface`, and the entity manager is reset.
-- **Acceptance:** no request sees the previous request's user, flash messages, entity manager identity map entries or agent messages; the test fails when a reset is removed.
+- **Description:** A test boots one kernel and sends many requests through it, as FrankenPHP worker mode does: different users, flash messages, Doctrine reads and writes, and agent runs with their message store. Any service that keeps state between requests is made to implement `ResetInterface`, and the entity manager is reset. In worker mode `umask()` and `setlocale()` are process-wide and `$_ENV` is not reset between requests, so the test checks them too. It runs both with and without `FRANKENPHP_RESET_KERNEL=1` (a kernel cloned per request); the image ships without it, because it would hide the leaks this task looks for.
+- **Acceptance:** no request sees the previous request's user, flash messages, entity manager identity map entries, agent messages, `umask()`, locale or `$_ENV` changes; the test passes with and without `FRANKENPHP_RESET_KERNEL=1`; the test fails when a reset is removed.
 - **Evidence:** the test run, and the same check by hand against the image from T22 (two browsers, alternating requests).
 - **PHP 8.5:** `#[NoDiscard]` on the reset results the test asserts.
 - **Upstream probe:** T28's worker-mode probe (one kernel, two models, two MCP sessions, 1,000 calls) covers the Symfony AI side of this task.
@@ -259,12 +270,19 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
   1. Worker-mode state: one kernel, alternating requests with two models and two MCP sessions; no model or tool list crosses over, and memory stays flat over 1,000 calls (see T29).
   2. Structured output with enums and nested lists per provider, and a stream truncated mid-array: a typed exception, never a half-filled object.
   3. MCP: three parallel `tools/call` on one session over Streamable HTTP, with and without `session.lock`; each response and progress token arrives once. Repeat with the client pinned to protocol 2025-11-25. Empty parameters encode as `{}`.
+  4. FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 receives SIGTERM and stops cleanly, with the message in flight finished or requeued. If it still crashes, a Symfony reproduction under `upstream/` for the existing upstream issue (php/frankenphp#2479); the owner approves before it is posted.
 - **PHP 8.5:** the pipe operator for the trimming steps.
 - **Waits for:** T7, T16. **Size:** M. **Labels:** `class:core`, `priority:normal`, `model:strong`.
+
+### T35 Development setup with file watching
+- **Description:** A development compose override that runs the image with FrankenPHP's `watch` on the worker, so a changed PHP, Twig or config file restarts the workers, with hot reload in the browser. Nothing of it ships in the production image or the default `compose.yaml`.
+- **Acceptance:** with the override, a changed controller or template is served on the next request without a manual restart; without it, the image runs as T22 builds it; `docs/architecture/` says how to start it.
+- **Evidence:** the override's start output and one edit served without a restart.
+- **Waits for:** T22. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
 ## Parallel paths
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
-- T15 to T19 and T20 to T21 in parallel after T13; T30 and T32 after T18; T33 after T7; T29 after T20 and T22.
+- T15 to T19 and T20 to T21 in parallel after T13; T30 and T32 after T18; T33 after T7; T29 after T20 and T22; T34 after T20; T35 after T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.

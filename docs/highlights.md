@@ -1,6 +1,6 @@
 # Highlights: Symfony and Symfony AI in Intakt
 
-Intakt runs on PHP 8.5, Symfony 8.1, Symfony AI 1.0.0-BETA1 and the PHP MCP SDK. This page lists every Symfony and Symfony AI feature Intakt uses or plans to use, and what it found in the beta. A change that starts or stops using a feature updates its row in the same change (see `AGENTS.md`).
+Intakt runs on PHP 8.5, Symfony 8.1, Symfony AI 1.0.0-BETA1 and the PHP MCP SDK. This page lists every Symfony, Symfony AI and FrankenPHP feature Intakt uses or plans to use, and what it found in the beta. A change that starts or stops using a feature updates its row in the same change (see `AGENTS.md`).
 
 Status is `planned`, `in progress` (an open pull request) or `done` (on main). **Where** names the plan task and issue, and once built the pull request and the main file.
 
@@ -87,6 +87,23 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
 
+## FrankenPHP
+
+| Feature | How Intakt uses it | Status | Where |
+|---|---|---|---|
+| Worker mode | one booted kernel for the HTTP side through Symfony Runtime's `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
+| `dunglas/frankenphp` 1.13.4 or later, PHP 8.5 ZTS, pinned by digest | the base image, with the 1.13.2 and 1.13.4 worker-mode leak fixes | planned | T22 (#28) |
+| Named workers with `match`, `num`, `max_threads` and `max_wait_time` | an `app` worker and a separate `mcp` worker, so streamed MCP responses can't starve the dashboard | planned | T22 (#28), T15 (#20) |
+| Worker loop limit (`FRANKENPHP_LOOP_MAX`) | workers restart after a set number of requests; a terminate-time memory check ends the loop cleanly | planned | T22 (#28) |
+| Restart on crash with backoff (`max_consecutive_failures`), graceful shutdown | defaults kept, beside a Docker restart policy | planned | T22 (#28) |
+| Built-in Mercure hub with `publisher` and `issuer` keys | live updates; symfony/mercure mints the tokens; the hub is excluded from `encode` | planned | T21 (#27) |
+| `mercure_publish()` | web-side publishing, checked at runtime; consumers publish through the hub endpoint | planned | T21 (#27) |
+| Mercure `bolt` transport | event history, so a reconnecting client catches up with `Last-Event-ID` | planned | T21 (#27) |
+| Prometheus metrics, `/frankenphp/threads`, `mercure_health` | the container health check and an infrastructure row on the dashboard | planned | T22 (#28), T34 (#63) |
+| Admin API on localhost | never reachable from outside the container | planned | T22 (#28) |
+| `FRANKENPHP_RESET_KERNEL=1` | the leak test runs with and without it; the image ships without it | planned | T29 (#29) |
+| `watch` and hot reload | a development compose override | planned | T35 (#64) |
+
 ## Tooling
 
 | Feature | How Intakt uses it | Status | Where |
@@ -106,6 +123,7 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 | Worker-mode state: two models and two MCP sessions in one kernel, flat memory over 1,000 calls | planned | T28 (#35), T29 (#29) | |
 | Structured output with enums and nested lists per provider, a stream truncated mid-array | planned | T28 (#35) | |
 | MCP: three parallel `tools/call` on one session, with and without `session.lock`, protocol 2025-11-25, empty parameters as `{}` | planned | T28 (#35) | |
+| FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 stops cleanly on SIGTERM; a Symfony reproduction if it still crashes | planned | T28 (#35) | php/frankenphp#2479 (existing) |
 
 ## PHP 8.5 in use
 
