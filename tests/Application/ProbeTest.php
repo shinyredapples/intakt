@@ -34,22 +34,24 @@ final class ProbeTest extends TestCase
 
     public function testAScriptRunsAgainstTheInstanceAndItsOutputAndExitCodeAreReported(): void
     {
+        $this->skipWhenNetworkNamespacesAreRefused();
         $this->probe('Answer.php', '<?php echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL"))[0])[1], "\n"; exit(7);');
 
         $run = $this->runProbe('tests/Probe/Answer.php');
 
-        self::assertStringContainsString('code=404', $run->getOutput());
+        self::assertStringContainsString('code=404', $run->getOutput(), $this->transcriptOf($run));
         self::assertStringContainsString('exit code: 7', $run->getOutput());
         self::assertSame(7, $run->getExitCode());
     }
 
     public function testAPhpunitTestRunsAgainstTheInstance(): void
     {
+        $this->skipWhenNetworkNamespacesAreRefused();
         $this->probe('AnswerTest.php', <<<'PHP_WRAP'
         <?php
-        
+
         use PHPUnit\Framework\TestCase;
-        
+
         final class AnswerTest extends TestCase
         {
             public function testTheInstanceAnswers(): void
@@ -61,19 +63,33 @@ final class ProbeTest extends TestCase
 
         $run = $this->runProbe('tests/Probe/AnswerTest.php');
 
-        self::assertStringContainsString('Tests: 1, Assertions: 1', $run->getOutput());
+        self::assertStringContainsString('OK (1 test, 1 assertion)', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(0, $run->getExitCode());
     }
 
     public function testAProbeThatReachesForTheNetworkFails(): void
     {
+        $this->skipWhenNetworkNamespacesAreRefused();
         $this->probe('Reach.php', '<?php $socket = @fsockopen("192.0.2.1", 80, $code, $message, 3); echo $socket ? "reached" : "unreachable: ".$message, "\n"; exit($socket ? 0 : 3);');
 
         $run = $this->runProbe('tests/Probe/Reach.php');
 
         // With a route out the documentation address would only time out; no route at all is what the namespace gives.
-        self::assertStringContainsString('unreachable: Network is unreachable', $run->getOutput());
+        self::assertStringContainsString('unreachable: Network is unreachable', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(3, $run->getExitCode());
+    }
+
+    public function testAProbeNeverRunsWhenTheNamespacesCannotBeCreated(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+        new Filesystem()->dumpFile($this->scratch.'/bin/unshare', "#!/bin/sh\nexit 1\n");
+        new Filesystem()->chmod($this->scratch.'/bin/unshare', 0o755);
+
+        $run = $this->runProbe('tests/Probe/Ran.php', ['PATH' => $this->scratch.'/bin:'.getenv('PATH')]);
+
+        self::assertStringNotContainsString('probe ran', $run->getOutput());
+        self::assertStringContainsString('the instance did not become ready', $run->getErrorOutput(), $this->transcriptOf($run));
+        self::assertSame(1, $run->getExitCode());
     }
 
     public function testAPathOutsideTheProbeFolderIsRefused(): void
@@ -86,44 +102,62 @@ final class ProbeTest extends TestCase
 
     public function testNothingIsLeftBehindAfterAProbe(): void
     {
+        $this->skipWhenNetworkNamespacesAreRefused();
         $this->probe('Quiet.php', '<?php echo "ok\n";');
 
         $run = $this->runProbe('tests/Probe/Quiet.php');
 
-        self::assertSame(0, $run->getExitCode());
+        self::assertSame(0, $run->getExitCode(), $this->transcriptOf($run));
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->project.'/public'));
     }
 
     public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
     {
+        $this->skipWhenNetworkNamespacesAreRefused();
         $marker = 'intakt-probe-child-'.bin2hex(random_bytes(6));
         $this->probe('Leave.php', $this->spawningEscapedChild($marker).'echo "left a child\n";');
 
         $run = $this->runProbe('tests/Probe/Leave.php');
 
-        self::assertStringContainsString('left a child', $run->getOutput());
+        self::assertStringContainsString('left a child', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(0, $run->getExitCode());
         self::assertSame([], $this->processesNaming($marker));
     }
 
     public function testAProbeThatOverrunsItsTimeIsKilledWithItsChildrenAndExitCode124(): void
     {
+        $this->skipWhenNetworkNamespacesAreRefused();
         $marker = 'intakt-probe-child-'.bin2hex(random_bytes(6));
         $this->probe('Hang.php', $this->spawningEscapedChild($marker).'sleep(30);');
 
         $run = $this->runProbe('tests/Probe/Hang.php', ['INTAKT_INSTANCE_COMMAND_SECONDS' => '2']);
 
-        self::assertStringContainsString('exit code: 124', $run->getOutput());
+        self::assertStringContainsString('exit code: 124', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(124, $run->getExitCode());
         self::assertSame([], $this->processesNaming($marker));
         self::assertSame([], $this->processesNaming($this->project.'/public'));
+    }
+
+    // Same rule as the gate tests: a host without unprivileged namespaces cannot run a probe, which the refusal test covers.
+    private function skipWhenNetworkNamespacesAreRefused(): void
+    {
+        $namespaces = new Process(['unshare', '--net', '--map-root-user', '--pid', '--fork', '--kill-child', 'ip', 'link', 'set', 'lo', 'up']);
+
+        if (0 !== $namespaces->run()) {
+            self::markTestSkipped('This host refuses unprivileged network namespaces: '.trim($namespaces->getErrorOutput()));
+        }
     }
 
     // The child starts its own session and keeps the caller's stderr open, so neither a process group kill nor a closed pipe would end it.
     private function spawningEscapedChild(string $marker): string
     {
         return '<?php system("setsid ".PHP_BINARY." -r \'sleep(300);\' '.$marker.' 1>&2 &");';
+    }
+
+    private function transcriptOf(Process $run): string
+    {
+        return 'exit '.$run->getExitCode()."\nstdout:\n".$run->getOutput()."\nstderr:\n".$run->getErrorOutput();
     }
 
     /**

@@ -59,7 +59,7 @@ final readonly class Probe
     private function probeCommand(string $file): array
     {
         if (str_ends_with($file, 'Test.php')) {
-            return [PHP_BINARY, 'vendor/bin/phpunit', '--no-configuration', '--bootstrap', 'tests/bootstrap.php', '--do-not-cache-result', $file];
+            return [PHP_BINARY, 'vendor/bin/phpunit', '--no-configuration', '--bootstrap', 'tests/bootstrap.php', '--do-not-record-test-run-history', $file];
         }
 
         return [PHP_BINARY, $file];
