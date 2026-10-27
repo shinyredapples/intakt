@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ledger;
 
+use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -19,8 +20,6 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
-
-use function call_user_func;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineLedger::class)]
@@ -120,7 +119,6 @@ final class DoctrineLedgerTest extends KernelTestCase
 
     public function testDiscardingTheResultOfAnAppendIsReported(): void
     {
-        // Called through call_user_func because static analysis refuses a direct discarded call, and the engine still checks it.
         $append = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(...);
         $warnings = [];
         set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
@@ -130,13 +128,19 @@ final class DoctrineLedgerTest extends KernelTestCase
         }, E_USER_WARNING);
 
         try {
-            call_user_func($append, new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+            $this->discardTheResult($append, new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
         } finally {
             restore_error_handler();
         }
 
         self::assertCount(1, $warnings);
         self::assertStringContainsString('a failed append is only reported through the result', $warnings[0]);
+    }
+
+    // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.
+    private function discardTheResult(Closure $append, LedgerEvent $event): void
+    {
+        $append($event);
     }
 
     private function ledger(string $now, string $timezone): DoctrineLedger

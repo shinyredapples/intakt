@@ -46,7 +46,12 @@ final class EventRecord
         // The column keeps the UTC wall clock without its offset, and Doctrine reads it back in PHP's default time zone.
         $wallClock = $this->recordedAt->format(self::WALL_CLOCK);
 
-        return DateTimeImmutable::createFromFormat(self::WALL_CLOCK, $wallClock, new DateTimeZone('UTC'))
-            ?: throw new UnexpectedValueException('the stored moment is not a wall clock: '.$wallClock);
+        $recordedAt = DateTimeImmutable::createFromFormat(self::WALL_CLOCK, $wallClock, new DateTimeZone('UTC'));
+
+        if (false === $recordedAt) {
+            throw new UnexpectedValueException('the stored moment is not a wall clock: '.$wallClock);
+        }
+
+        return $recordedAt;
     }
 }
