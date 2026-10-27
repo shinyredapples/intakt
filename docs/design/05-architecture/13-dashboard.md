@@ -10,6 +10,9 @@ The main view is a board, not a set of lists. Each task in flight is a card, and
 - **Opening a card** shows its timeline (plan, builds, checks, verdicts with their findings and ids), the live log of the job running now (tool calls as they happen), and buttons to stop it, continue it, or send it back with a note.
 - **Lanes and slots** stay visible as a strip above the board: each slot, its card, and how busy each job runner is.
 - **Budgets:** each vendor window, used, reserved, and the forecast at reset.
+- **Several projects:** every card, lane and "Waiting on you" item carries its project, and a filter shows one project or all. Each project has a summary card: its weekly share against its actual spend, its harness and boot gate state, whether it is halted and why, and what it is working on now.
+- **Shared accounts once:** vendor accounts and the reviewers and builders running on them are one pool for the whole install, so they are shown once, each with the project and task it is working on now, never repeated per project (a per-project copy reads as more reviewers than exist).
+- **Infrastructure health:** a failing piece of the loop's own machinery (the sandbox, package installs, the boot gate, a forge token) is a red "Waiting on you" item with the step, the cause and since when, raised on its first failure and cleared by the first real success, not by a cached one.
 - **Trends:** tasks created vs completed per day (is the queue growing?), merges per day, review findings per merge, the share of changes made by agents vs people, cycle time per task (from ready to merged, with the time spent waiting, building, in review and waiting on the owner), and the share of builds and reviews spent on tooling vs the project's own work. Cycle time per split part shows whether sizing splits too finely.
 - **Map freshness:** how many memory entries are stale.
 
