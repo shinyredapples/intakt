@@ -9,9 +9,6 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
-use function array_key_exists;
-use function in_array;
-
 // The behavior lives in config/packages/ai.php, which no class covers.
 #[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
@@ -41,9 +38,15 @@ final class AiProvidersTest extends KernelTestCase
     {
         foreach ($this->saved as $name => $before) {
             $this->unsetVariable($name);
-            null === $before['server'] || $_SERVER[$name] = $before['server'];
-            null === $before['env'] || $_ENV[$name] = $before['env'];
-            false === $before['process'] || putenv($name.'='.$before['process']);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
         }
 
         parent::tearDown();
@@ -137,12 +140,12 @@ final class AiProvidersTest extends KernelTestCase
     private function bootWith(array $values, array $keep = []): ContainerInterface
     {
         foreach (self::VARIABLES as $name) {
-            if (in_array($name, $keep, true)) {
+            if (\in_array($name, $keep, true)) {
                 continue;
             }
 
             $this->unsetVariable($name);
-            if (array_key_exists($name, $values)) {
+            if (\array_key_exists($name, $values)) {
                 $_SERVER[$name] = $values[$name];
             }
         }
