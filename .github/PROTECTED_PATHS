@@ -1,0 +1,8 @@
+.github/**
+AGENTS.md
+bin/check
+composer.json
+composer.lock
+config/gates/**
+phpunit.dist.xml
+phpunit.gates.xml

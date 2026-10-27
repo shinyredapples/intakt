@@ -1,6 +1,6 @@
 # Plan: the review loop (first release)
 
-Status: draft for the owner's approval. The tasks become issues only after he approves this plan. Spec: [spec.md](spec.md). Deadline: 2026-11-22 18:00 CET.
+Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35. Spec: [spec.md](spec.md). Deadline: 2026-11-22 18:00 CET.
 
 ## Conventions
 
