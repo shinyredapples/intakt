@@ -11,18 +11,18 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'ledger_event')]
-final class EventRecord
+final readonly class EventRecord
 {
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
-        private readonly Uuid $id,
+        private Uuid $id,
         #[ORM\Column(length: 32, enumType: LedgerEventKind::class)]
-        private readonly LedgerEventKind $kind,
+        private LedgerEventKind $kind,
         #[ORM\Column(type: 'text')]
-        private readonly string $payload,
+        private string $payload,
         #[ORM\Column(type: 'utc_datetime_immutable')]
-        private readonly DateTimeImmutable $recordedAt,
+        private DateTimeImmutable $recordedAt,
     ) {
     }
 
