@@ -71,6 +71,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
 | Messenger | command and query buses; a rate-limited reviewer retries after `getRetryAfter()` through `RecoverableExceptionInterface::getRetryDelay()`; the failure transport means `blocked` | planned | T9 (#14) |
+| `ResetInterface` and `kernel.reset` | every stateful service resets between requests in worker mode and between messages in consumers; a PHPStan rule enforces it | planned | T36 (#67), T29 (#29) |
 | Scheduler | usage probes, deadlines and the weekly branch cleanup | planned | T14 (#19), T30 (#24) |
 | Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | planned | T9 (#14) |
 | Lock (Semaphore) | caps parallel calls per vendor account | planned | T9 (#14) |
@@ -124,6 +125,7 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 | Structured output with enums and nested lists per provider, a stream truncated mid-array | planned | T28 (#35) | |
 | MCP: three parallel `tools/call` on one session, with and without `session.lock`, protocol 2025-11-25, empty parameters as `{}` | planned | T28 (#35) | |
 | FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 stops cleanly on SIGTERM; a Symfony reproduction if it still crashes | planned | T28 (#35) | php/frankenphp#2479 (existing) |
+| Reset in worker mode: Symfony AI services with mutable state but no `ResetInterface` (first candidate: the Platform `Provider` keeps `$resolvedModel`), found by running one kernel for two different requests | planned | T29 (#29) | |
 
 ## PHP 8.5 in use
 
