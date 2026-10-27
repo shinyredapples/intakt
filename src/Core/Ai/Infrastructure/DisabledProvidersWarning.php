@@ -14,7 +14,7 @@ use Symfony\Component\HttpKernel\CacheWarmer\CacheWarmerInterface;
 final readonly class DisabledProvidersWarning implements CacheWarmerInterface
 {
     /**
-     * @param array<string, string> $disabledProviders provider name to message
+     * @param array<string, string> $disabledProviders
      */
     public function __construct(
         #[Autowire('%intakt.ai.disabled_providers%')]

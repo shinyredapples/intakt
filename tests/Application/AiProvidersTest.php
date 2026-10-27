@@ -9,7 +9,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
-// The behavior lives in config/packages/ai.php, which no class covers.
+// Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
 {
@@ -83,7 +83,10 @@ final class AiProvidersTest extends KernelTestCase
         $container = $this->bootWith([...$this->allSet(), 'OPENAI_API_KEY' => '']);
 
         self::assertFalse($container->has('ai.platform.openai'));
-        self::assertArrayHasKey('openai', $container->getParameter('intakt.ai.disabled_providers'));
+        $disabled = $container->getParameter('intakt.ai.disabled_providers');
+
+        self::assertIsArray($disabled);
+        self::assertArrayHasKey('openai', $disabled);
     }
 
     public function testTheCompatibleEndpointNeedsBothItsAddressAndItsKey(): void
@@ -134,8 +137,8 @@ final class AiProvidersTest extends KernelTestCase
     }
 
     /**
-     * @param array<string, string> $values variables to set; every other one is unset
-     * @param list<string>          $keep   variables the test already set itself
+     * @param array<string, string> $values
+     * @param list<string>          $keep
      */
     private function bootWith(array $values, array $keep = []): ContainerInterface
     {

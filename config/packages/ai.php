@@ -2,50 +2,39 @@
 
 declare(strict_types=1);
 
+use Intakt\Core\Ai\Contract\Provider;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
-
-use function is_string;
-use function sprintf;
 
 // Same lookup order as Symfony's env processor. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
     $isSet = static function (string $name): bool {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
 
-        return is_string($value) && '' !== $value;
+        return \is_string($value) && '' !== $value;
     };
 
-    $providers = [
-        'anthropic' => [
-            'needs' => ['ANTHROPIC_API_KEY'],
-            'config' => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%']],
-        ],
-        'openai' => [
-            'needs' => ['OPENAI_API_KEY'],
-            'config' => ['openai' => ['api_key' => '%env(OPENAI_API_KEY)%']],
-        ],
-        'openai_compatible' => [
-            'needs' => ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'],
-            'config' => ['generic' => ['openai_compatible' => [
-                'base_url' => '%env(OPENAI_COMPATIBLE_BASE_URL)%',
-                'api_key' => '%env(OPENAI_COMPATIBLE_API_KEY)%',
-            ]]],
-        ],
+    $configs = [
+        Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%']],
+        Provider::OpenAi->value => ['openai' => ['api_key' => '%env(OPENAI_API_KEY)%']],
+        Provider::OpenAiCompatible->value => ['generic' => ['openai_compatible' => [
+            'base_url' => '%env(OPENAI_COMPATIBLE_BASE_URL)%',
+            'api_key' => '%env(OPENAI_COMPATIBLE_API_KEY)%',
+        ]]],
     ];
 
     $platform = [];
     $disabled = [];
 
-    foreach ($providers as $name => $provider) {
-        $missing = array_values(array_filter($provider['needs'], static fn (string $variable): bool => !$isSet($variable)));
+    foreach (Provider::cases() as $provider) {
+        $missing = array_values(array_filter($provider->variables(), static fn (string $variable): bool => !$isSet($variable)));
 
         if ([] !== $missing) {
-            $disabled[$name] = sprintf('Provider "%s" is disabled: set %s to enable it.', $name, implode(' and ', $missing));
+            $disabled[$provider->value] = $provider->disabledMessage($missing);
 
             continue;
         }
 
-        $platform = array_replace_recursive($platform, $provider['config']);
+        $platform = array_replace_recursive($platform, $configs[$provider->value]);
     }
 
     $container->extension('ai', ['platform' => $platform]);
