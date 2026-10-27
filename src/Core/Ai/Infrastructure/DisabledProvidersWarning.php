@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
-use Symfony\Component\HttpKernel\CacheWarmer\CacheWarmerInterface;
 
-// Presence of a key is baked into the container, so the warning is given when it is baked (cache warm-up) and when a command starts.
-final readonly class DisabledProvidersWarning implements CacheWarmerInterface
+// Standard error because the log in the application has no handler yet that prints warnings.
+final readonly class DisabledProvidersWarning
 {
     /**
      * @param array<string, string> $disabledProviders
@@ -19,32 +18,17 @@ final readonly class DisabledProvidersWarning implements CacheWarmerInterface
     public function __construct(
         #[Autowire('%intakt.ai.disabled_providers%')]
         private array $disabledProviders,
-        private LoggerInterface $logger,
     ) {
     }
 
-    public function isOptional(): bool
-    {
-        return false;
-    }
-
-    public function warmUp(string $cacheDir, ?string $buildDir = null): array
-    {
-        $this->warn();
-
-        return [];
-    }
-
     #[AsEventListener(event: ConsoleCommandEvent::class)]
-    public function onConsoleCommand(): void
+    public function onConsoleCommand(ConsoleCommandEvent $event): void
     {
-        $this->warn();
-    }
+        $output = $event->getOutput();
+        $errors = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
 
-    private function warn(): void
-    {
         foreach ($this->disabledProviders as $message) {
-            $this->logger->warning($message);
+            $errors->writeln('<comment>'.$message.'</comment>');
         }
     }
 }

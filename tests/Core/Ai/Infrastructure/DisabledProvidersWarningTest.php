@@ -7,34 +7,34 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Infrastructure\DisabledProvidersWarning;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Event\ConsoleCommandEvent;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 
 #[CoversClass(DisabledProvidersWarning::class)]
 final class DisabledProvidersWarningTest extends TestCase
 {
-    public function testEachDisabledProviderIsLoggedAsAWarningWhenTheCacheIsWarmed(): void
+    public function testEachDisabledProviderIsWrittenWhenACommandStarts(): void
     {
-        $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects(self::exactly(2))->method('warning')->with(self::logicalOr('first message', 'second message'));
+        $output = new BufferedOutput();
 
-        $warning = new DisabledProvidersWarning(['a' => 'first message', 'b' => 'second message'], $logger);
+        new DisabledProvidersWarning(['a' => 'first message', 'b' => 'second message'])->onConsoleCommand($this->eventWith($output));
 
-        self::assertSame([], $warning->warmUp('cache'));
+        self::assertSame("first message\nsecond message\n", $output->fetch());
     }
 
-    public function testEachDisabledProviderIsLoggedWhenACommandStarts(): void
+    public function testNothingIsWrittenWhenEveryProviderIsEnabled(): void
     {
-        $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects(self::once())->method('warning')->with('only message');
+        $output = new BufferedOutput();
 
-        new DisabledProvidersWarning(['a' => 'only message'], $logger)->onConsoleCommand();
+        new DisabledProvidersWarning([])->onConsoleCommand($this->eventWith($output));
+
+        self::assertSame('', $output->fetch());
     }
 
-    public function testNothingIsLoggedWhenEveryProviderIsEnabled(): void
+    private function eventWith(BufferedOutput $output): ConsoleCommandEvent
     {
-        $logger = $this->createMock(LoggerInterface::class);
-        $logger->expects(self::never())->method('warning');
-
-        new DisabledProvidersWarning([], $logger)->onConsoleCommand();
+        return new ConsoleCommandEvent(new Command('probe'), new ArrayInput([]), $output);
     }
 }
