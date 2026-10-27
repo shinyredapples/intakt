@@ -35,6 +35,9 @@ final class Instance
 {
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
+    // Boot, command and stop together stay well inside the build loop's 120 seconds per call.
+    public const int COMMAND_SECONDS = 60;
+    private const int COMMAND_TIMED_OUT = 124;
 
     /** @var resource|null */
     private $server;
@@ -43,8 +46,16 @@ final class Instance
 
     private string $output = '';
 
-    public function __construct(private readonly string $root)
-    {
+    private int $commandExit = 0;
+
+    /**
+     * @param list<string> $command
+     */
+    public function __construct(
+        private readonly string $root,
+        private readonly array $command,
+        private readonly int $commandSeconds,
+    ) {
     }
 
     #[NoDiscard]
@@ -66,6 +77,11 @@ final class Instance
         return $this->output;
     }
 
+    public function commandExit(): int
+    {
+        return $this->commandExit;
+    }
+
     private function boot(): InstanceStatus
     {
         if (!is_file($this->root.'/vendor/autoload_runtime.php')) {
@@ -75,7 +91,55 @@ final class Instance
         $this->scratch = $this->createScratch();
         $this->start();
 
-        return $this->awaitAnswer();
+        $status = $this->awaitAnswer();
+
+        if ($status->ready && [] !== $this->command) {
+            $this->commandExit = $this->runCommand();
+        }
+
+        return $status;
+    }
+
+    private function runCommand(): int
+    {
+        // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
+        $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
+        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR];
+        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort()];
+
+        $process = proc_open($command, $descriptors, $pipes, $this->root, $environment);
+
+        if (false === $process) {
+            throw new RuntimeException('cannot start the command');
+        }
+
+        return $this->awaitExit($process);
+    }
+
+    /**
+     * @param resource $process
+     */
+    private function awaitExit($process): int
+    {
+        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
+
+        while (hrtime(true) < $deadline) {
+            $state = proc_get_status($process);
+
+            if (!$state['running']) {
+                proc_close($process);
+
+                return $state['exitcode'];
+            }
+
+            usleep(50_000);
+        }
+
+        proc_terminate($process, 9);
+        proc_close($process);
+        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
+
+        return self::COMMAND_TIMED_OUT;
     }
 
     private function createScratch(): string
@@ -251,13 +315,36 @@ final class Instance
     }
 }
 
-$instance = new Instance(dirname(__DIR__));
+/**
+ * @return resource|null
+ */
+function statusChannel()
+{
+    // Opened only after the server has stopped, so nothing the script started can inherit a duplicate of it.
+    $channel = @fopen('php://fd/3', 'w');
+
+    if (false === $channel) {
+        return null;
+    }
+
+    // With CLI OPcache on, its lock (an unlinked file) takes a descriptor 3 the caller left closed; a caller's file, pipe or device has a link.
+    return 0 === (fstat($channel)['nlink'] ?? 0) ? null : $channel;
+}
+
+$command = array_slice($argv, 1);
+$command = '--' === array_first($command) ? array_slice($command, 1) : [];
+// Lets a test prove the cap without waiting for the full minute.
+$commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
+
+$instance = new Instance(dirname(__DIR__), $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS);
 $status = $instance->run();
 
-fwrite(STDOUT, $instance->log());
+// A command's own output is what the caller wants, so the server log is noise unless the boot failed.
+if ([] === $command || !$status->ready) {
+    fwrite(STDOUT, $instance->log());
+}
 
-// Opened only after the server has stopped, so nothing the script started can inherit a duplicate of it.
-$statusChannel = @fopen('php://fd/3', 'w');
-$reported = false !== $statusChannel && false !== fwrite($statusChannel, $status->toJson());
+$statusChannel = statusChannel();
+$reported = null !== $statusChannel && false !== fwrite($statusChannel, $status->toJson());
 
-exit($status->ready && $reported ? 0 : 1);
+exit($status->ready && $reported ? $instance->commandExit() : 1);

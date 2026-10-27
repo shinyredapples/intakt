@@ -98,24 +98,103 @@ final class InstanceTest extends TestCase
 
     public function testWithoutDescriptorThreeNoStatusIsWrittenAndTheExitIsNonZero(): void
     {
-        $process = new Process([PHP_BINARY, self::ROOT.'/bin/instance'], null, ['TMPDIR' => $this->scratch.'/tmp']);
-        $process->run();
+        $process = $this->runInstanceWithoutDescriptorThree([]);
 
         self::assertSame(1, $process->getExitCode());
         self::assertStringNotContainsString('"status"', $process->getOutput());
     }
 
+    public function testADescriptorThreeThatOpcacheOpenedForItsLockCountsAsMissing(): void
+    {
+        if (!extension_loaded('Zend OPcache')) {
+            self::markTestSkipped('The Zend OPcache extension is not loaded, so nothing of PHP takes descriptor 3.');
+        }
+
+        $process = $this->runInstanceWithoutDescriptorThree(['-d', 'opcache.enable=1', '-d', 'opcache.enable_cli=1']);
+
+        self::assertSame(1, $process->getExitCode());
+        self::assertStringNotContainsString('"status"', $process->getOutput());
+    }
+
+    public function testACommandRunsOnceTheInstanceIsReadyAndItsExitCodePassesThrough(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo getenv("INTAKT_INSTANCE_URL"), "\n"; exit(5);']);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertMatchesRegularExpression('#^http://127\.0\.0\.1:\d+$#m', $run['output']);
+        self::assertSame(5, $run['exit']);
+    }
+
+    public function testTheServerLogIsLeftOutOfACommandsOutputOnAReadyBoot(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo "probe output\n";']);
+
+        self::assertSame("probe output\n", $run['output']);
+    }
+
+    public function testTheServerLogIsPrintedAndTheCommandNotRunWhenTheBootFails(): void
+    {
+        $project = $this->copyOfTheProject();
+        file_put_contents($project.'/config/packages/broken.yaml', "framework:\n    no_such_option: true\n");
+
+        $run = $this->runInstance($project, [PHP_BINARY, '-r', 'echo "command ran\n";']);
+
+        self::assertStringContainsString('no_such_option', $run['output']);
+        self::assertStringNotContainsString('command ran', $run['output']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testTheCommandDoesNotInheritTheStatusDescriptor(): void
+    {
+        // PHP itself may take the free descriptor 3 (OPcache does for its lock), so the target tells, not whether it is open.
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'exit(@readlink("/proc/self/fd/3") === realpath($argv[1]) ? 9 : 0);', $this->scratch.'/status']);
+
+        self::assertSame(0, $run['exit']);
+        self::assertSame('{"status":"ready"}', $run['status']);
+    }
+
+    public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
+    {
+        $run = $this->runInstance(self::ROOT, ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
+
+        self::assertSame(124, $run['exit']);
+        self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);
+        self::assertSame('{"status":"ready"}', $run['status']);
+    }
+
     /**
-     * @return array{status: string, exit: int}
+     * @param list<string>          $command
+     * @param array<string, string> $environment
+     *
+     * @return array{status: string, exit: int, output: string, errors: string}
      */
-    private function runInstance(string $project): array
+    private function runInstance(string $project, array $command = [], array $environment = []): array
     {
         $statusFile = $this->scratch.'/status';
-        $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg($project.'/bin/instance').' 3>'.escapeshellarg($statusFile);
-        $process = Process::fromShellCommandline($command, null, $this->environment());
+        $arguments = [] === $command ? [] : ['--', ...$command];
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($statusFile);
+        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
         $process->run();
 
-        return ['status' => trim((string) file_get_contents($statusFile)), 'exit' => (int) $process->getExitCode()];
+        return [
+            'status' => trim((string) file_get_contents($statusFile)),
+            'exit' => (int) $process->getExitCode(),
+            'output' => $process->getOutput(),
+            'errors' => $process->getErrorOutput(),
+        ];
+    }
+
+    /**
+     * @param list<string> $phpOptions
+     */
+    private function runInstanceWithoutDescriptorThree(array $phpOptions): Process
+    {
+        // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
+        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp']);
+        $process->run();
+
+        return $process;
     }
 
     /**
@@ -144,8 +223,8 @@ final class InstanceTest extends TestCase
         $project = $this->scratch.'/project';
         new Filesystem()->mkdir($project);
 
-        // Hard links keep the vendor copy cheap, and a real copy keeps its autoloader pointing at the copy of src.
-        $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || cp -a "$0"/vendor "$1"/vendor', self::ROOT, $project]);
+        // Hard links keep the vendor copy cheap; across file systems they fail partway, and cp -a would nest into the partial folder.
+        $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; }', self::ROOT, $project]);
         $copy->mustRun();
 
         foreach (['bin', 'src', 'config', 'public'] as $directory) {
