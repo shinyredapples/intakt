@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
-// The key itself stays a %env()% reference, so no secret enters the compiled container;
-// only whether it is set is decided at build time, because an unset %env()% fails when the service is built.
+// Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
     $isSet = static function (string $name): bool {
         $value = $_SERVER[$name] ?? $_ENV[$name] ?? getenv($name);

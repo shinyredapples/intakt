@@ -88,10 +88,10 @@ final class AiProvidersTest extends KernelTestCase
     {
         $container = $this->bootWith([]);
 
-        self::assertSame(
-            ['anthropic', 'openai', 'openai_compatible'],
-            array_keys($container->getParameter('intakt.ai.disabled_providers')),
-        );
+        $disabled = $container->getParameter('intakt.ai.disabled_providers');
+
+        self::assertIsArray($disabled);
+        self::assertSame(['anthropic', 'openai', 'openai_compatible'], array_keys($disabled));
     }
 
     public function testTheInMemoryPlatformAnswersWithoutAnyProvider(): void
@@ -119,7 +119,7 @@ final class AiProvidersTest extends KernelTestCase
 
         // The build decides on the variables, so every case needs a fresh container.
         $kernel = self::createKernel();
-        (new Filesystem())->remove($kernel->getCacheDir());
+        new Filesystem()->remove($kernel->getCacheDir());
         self::ensureKernelShutdown();
         self::bootKernel();
 
