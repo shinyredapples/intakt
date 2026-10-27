@@ -119,14 +119,14 @@ final class VerdictParserTest extends TestCase
         yield 'enum: fixable_by is neither builder nor owner' => [$design->withFinding('fixable_by', 'reviewer')->json(), '/findings/0/fixable_by'];
 
         foreach (['verdict', 'resolved', 'follow_ups'] as $key) {
-            yield 'required: '.$key => [$design->without($key)->json(), '/'];
+            yield 'required: '.$key => [$design->without($key)->json(), '/'.$key];
         }
-        yield 'required: findings' => ['{"verdict": "approve", "resolved": [], "follow_ups": []}', '/'];
+        yield 'required: findings' => ['{"verdict": "approve", "resolved": [], "follow_ups": []}', '/findings'];
         foreach (['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence'] as $key) {
-            yield 'required: finding '.$key => [$design->withoutFinding($key)->json(), '/findings/0'];
+            yield 'required: finding '.$key => [$design->withoutFinding($key)->json(), '/findings/0/'.$key];
         }
-        yield 'required: evidence probe' => [$design->withFinding('evidence', ['output' => '...'])->json(), '/findings/0/evidence'];
-        yield 'required: evidence output' => [$design->withFinding('evidence', ['probe' => '...'])->json(), '/findings/0/evidence'];
+        yield 'required: evidence probe' => [$design->withFinding('evidence', ['output' => '...'])->json(), '/findings/0/evidence/probe'];
+        yield 'required: evidence output' => [$design->withFinding('evidence', ['probe' => '...'])->json(), '/findings/0/evidence/output'];
 
         yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '/findings'];
         yield 'type: a finding is a string' => [$design->with('findings', ['F3'])->json(), '/findings/0'];
@@ -147,9 +147,9 @@ final class VerdictParserTest extends TestCase
         yield 'type: evidence output is a number' => [$design->withFinding('evidence', ['probe' => '...', 'output' => 1])->json(), '/findings/0/evidence/output'];
         yield 'type: the verdict is a list' => ['[]', '/'];
 
-        yield 'additional: an unknown verdict field' => [$design->with('summary', 'fine')->json(), '/'];
-        yield 'additional: an unknown finding field' => [$design->withFinding('title', 'x')->json(), '/findings/0'];
-        yield 'additional: an unknown evidence field' => [$design->withFinding('evidence', ['probe' => '...', 'output' => '...', 'exit' => 0])->json(), '/findings/0/evidence'];
+        yield 'additional: an unknown verdict field' => [$design->with('summary', 'fine')->json(), '/summary'];
+        yield 'additional: an unknown finding field' => [$design->withFinding('title', 'x')->json(), '/findings/0/title'];
+        yield 'additional: an unknown evidence field' => [$design->withFinding('evidence', ['probe' => '...', 'output' => '...', 'exit' => 0])->json(), '/findings/0/evidence/exit'];
     }
 
     #[DataProvider('outputsThatAreNotJson')]

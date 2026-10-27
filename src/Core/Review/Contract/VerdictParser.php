@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Contract;
 
 use JsonException;
+use JsonSchema\Constraints\Constraint;
+use JsonSchema\Validator;
 use NoDiscard;
-use Opis\JsonSchema\Errors\ErrorFormatter;
-use Opis\JsonSchema\Errors\ValidationError;
-use Opis\JsonSchema\Validator;
 
 /**
  * @phpstan-type EvidenceShape array{probe: string, output: string}
@@ -44,16 +43,17 @@ final readonly class VerdictParser
 
     private function schemaViolation(mixed $document): ?string
     {
-        $error = new Validator()->validate($document, (string) file_get_contents(self::SCHEMA))->error();
-        if (!$error instanceof ValidationError) {
+        $validator = new Validator();
+        $validator->validate($document, json_decode((string) file_get_contents(self::SCHEMA)), Constraint::CHECK_MODE_STRICT);
+
+        /** @var list<array{pointer: string, message: string}> $errors */
+        $errors = $validator->getErrors();
+        $error = array_first($errors);
+        if (null === $error) {
             return null;
         }
 
-        /** @var array<string, list<string>> $messages */
-        $messages = new ErrorFormatter()->formatKeyed($error);
-        $path = (string) array_key_first($messages);
-
-        return $path.': '.$messages[$path][0];
+        return ('' === $error['pointer'] ? '/' : $error['pointer']).': '.$error['message'];
     }
 
     /**

@@ -1,16 +1,16 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Intakt review verdict",
   "type": "object",
   "additionalProperties": false,
   "required": ["verdict", "findings", "resolved", "follow_ups"],
   "properties": {
     "verdict": {"enum": ["approve", "changes", "blocked"]},
-    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "findings": {"type": "array", "items": {"$ref": "#/definitions/finding"}},
     "resolved": {"type": "array", "items": {"type": "string"}},
     "follow_ups": {"type": "array", "items": {"type": "string"}}
   },
-  "$defs": {
+  "definitions": {
     "finding": {
       "type": "object",
       "additionalProperties": false,
@@ -25,7 +25,7 @@
         "fixable_by": {"enum": ["builder", "owner"]},
         "repeat": {"type": "boolean"},
         "requirement": {"type": ["string", "null"]},
-        "evidence": {"anyOf": [{"$ref": "#/$defs/evidence"}, {"type": "null"}]}
+        "evidence": {"anyOf": [{"$ref": "#/definitions/evidence"}, {"type": "null"}]}
       }
     },
     "evidence": {
