@@ -92,7 +92,9 @@ final class ProbeIsolationTest extends TestCase
         $process = new Process([PHP_BINARY, '-r', self::DECIDE, dirname(__DIR__, 2), $isolated ? '1' : '0', $this->scratch.'/dev', $loopback]);
         $process->mustRun();
 
-        /** @var array{command: list<string>, refusal: ?string} */
-        return json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+        /** @var array{command: list<string>, refusal: ?string} $decision */
+        $decision = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+
+        return $decision;
     }
 }
