@@ -98,8 +98,19 @@ final class InstanceTest extends TestCase
 
     public function testWithoutDescriptorThreeNoStatusIsWrittenAndTheExitIsNonZero(): void
     {
-        $process = new Process([PHP_BINARY, self::ROOT.'/bin/instance'], null, ['TMPDIR' => $this->scratch.'/tmp']);
-        $process->run();
+        $process = $this->runInstanceWithoutDescriptorThree([]);
+
+        self::assertSame(1, $process->getExitCode());
+        self::assertStringNotContainsString('"status"', $process->getOutput());
+    }
+
+    public function testADescriptorThreeThatOpcacheOpenedForItsLockCountsAsMissing(): void
+    {
+        if (!extension_loaded('Zend OPcache')) {
+            self::markTestSkipped('The Zend OPcache extension is not loaded, so nothing of PHP takes descriptor 3.');
+        }
+
+        $process = $this->runInstanceWithoutDescriptorThree(['-d', 'opcache.enable=1', '-d', 'opcache.enable_cli=1']);
 
         self::assertSame(1, $process->getExitCode());
         self::assertStringNotContainsString('"status"', $process->getOutput());
@@ -171,6 +182,19 @@ final class InstanceTest extends TestCase
             'output' => $process->getOutput(),
             'errors' => $process->getErrorOutput(),
         ];
+    }
+
+    /**
+     * @param list<string> $phpOptions
+     */
+    private function runInstanceWithoutDescriptorThree(array $phpOptions): Process
+    {
+        // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
+        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp']);
+        $process->run();
+
+        return $process;
     }
 
     /**

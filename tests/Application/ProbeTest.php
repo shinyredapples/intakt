@@ -115,27 +115,43 @@ final class ProbeTest extends TestCase
     public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $marker = 'intakt-probe-child-'.bin2hex(random_bytes(6));
-        $this->probe('Leave.php', $this->spawningEscapedChild($marker).'echo "left a child\n";');
+        $child = $this->childMarker();
+        $this->probe('Leave.php', $this->spawningEscapedChild($child).'echo "left a child\n";');
 
         $run = $this->runProbe('tests/Probe/Leave.php');
 
         self::assertStringContainsString('left a child', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(0, $run->getExitCode());
-        self::assertSame([], $this->processesNaming($marker));
+        self::assertFileExists($child, 'the child never confirmed that it was running');
+        self::assertSame([], $this->processesNaming($child));
+    }
+
+    public function testAChildThatAFailingProbeLeavesRunningIsKilledWithTheInstance(): void
+    {
+        $this->skipWhenNetworkNamespacesAreRefused();
+        $child = $this->childMarker();
+        $this->probe('Fail.php', $this->spawningEscapedChild($child).'exit(4);');
+
+        $run = $this->runProbe('tests/Probe/Fail.php');
+
+        self::assertStringContainsString('exit code: 4', $run->getOutput(), $this->transcriptOf($run));
+        self::assertSame(4, $run->getExitCode());
+        self::assertFileExists($child, 'the child never confirmed that it was running');
+        self::assertSame([], $this->processesNaming($child));
     }
 
     public function testAProbeThatOverrunsItsTimeIsKilledWithItsChildrenAndExitCode124(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $marker = 'intakt-probe-child-'.bin2hex(random_bytes(6));
-        $this->probe('Hang.php', $this->spawningEscapedChild($marker).'sleep(30);');
+        $child = $this->childMarker();
+        $this->probe('Hang.php', $this->spawningEscapedChild($child).'sleep(30);');
 
         $run = $this->runProbe('tests/Probe/Hang.php', ['INTAKT_INSTANCE_COMMAND_SECONDS' => '2']);
 
         self::assertStringContainsString('exit code: 124', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(124, $run->getExitCode());
-        self::assertSame([], $this->processesNaming($marker));
+        self::assertFileExists($child, 'the child never confirmed that it was running');
+        self::assertSame([], $this->processesNaming($child));
         self::assertSame([], $this->processesNaming($this->project.'/public'));
     }
 
@@ -149,10 +165,19 @@ final class ProbeTest extends TestCase
         }
     }
 
+    // The marker is both the child's argument, which names it in the process list, and the file it creates once it runs.
+    private function childMarker(): string
+    {
+        return $this->scratch.'/child-'.bin2hex(random_bytes(6));
+    }
+
     // The child starts its own session and keeps the caller's stderr open, so neither a process group kill nor a closed pipe would end it.
+    // The probe goes on only once the child has created the marker file, so a child that never started cannot pass as a killed one.
     private function spawningEscapedChild(string $marker): string
     {
-        return '<?php system("setsid ".PHP_BINARY." -r \'sleep(300);\' '.$marker.' 1>&2 &");';
+        $start = 'setsid '.PHP_BINARY.' -r \'touch($argv[1]); sleep(300);\' '.$marker.' 1>&2 &';
+
+        return '<?php system('.var_export($start, true).'); while (!is_file('.var_export($marker, true).')) { usleep(10_000); }';
     }
 
     private function transcriptOf(Process $run): string

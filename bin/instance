@@ -315,6 +315,22 @@ final class Instance
     }
 }
 
+/**
+ * @return resource|null
+ */
+function statusChannel()
+{
+    // Opened only after the server has stopped, so nothing the script started can inherit a duplicate of it.
+    $channel = @fopen('php://fd/3', 'w');
+
+    if (false === $channel) {
+        return null;
+    }
+
+    // With CLI OPcache on, its lock (an unlinked file) takes a descriptor 3 the caller left closed; a caller's file, pipe or device has a link.
+    return 0 === (fstat($channel)['nlink'] ?? 0) ? null : $channel;
+}
+
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Lets a test prove the cap without waiting for the full minute.
@@ -328,8 +344,7 @@ if ([] === $command || !$status->ready) {
     fwrite(STDOUT, $instance->log());
 }
 
-// Opened only after the server has stopped, so nothing the script started can inherit a duplicate of it.
-$statusChannel = @fopen('php://fd/3', 'w');
-$reported = false !== $statusChannel && false !== fwrite($statusChannel, $status->toJson());
+$statusChannel = statusChannel();
+$reported = null !== $statusChannel && false !== fwrite($statusChannel, $status->toJson());
 
 exit($status->ready && $reported ? $instance->commandExit() : 1);
