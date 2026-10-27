@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger;
 
 use Closure;
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -59,17 +60,32 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame('{"kind":"review_started"}', $events[0]->event->payload);
     }
 
-    public function testEventsAppendedAtAnEarlierMomentAreReadFirst(): void
+    public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void
     {
         $clock = new MockClock('2026-10-27 12:00:00', 'UTC');
         $ledger = new DoctrineLedger($this->registry, $clock);
-        $later = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+        $first = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
         $clock->modify('-1 second');
-        $earlier = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+        $second = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
 
         $ids = array_map(static fn (RecordedEvent $event): string => $event->id->toRfc4122(), iterator_to_array($ledger->readInOrder()));
 
-        self::assertSame([$earlier->id?->toRfc4122(), $later->id?->toRfc4122()], $ids);
+        self::assertSame([$first->id?->toRfc4122(), $second->id?->toRfc4122()], $ids);
+    }
+
+    // Two processes in one millisecond get ids in either order; the forced order here is an id that sorts lower stored later.
+    public function testAnEventStoredLaterIsReadLaterEvenWhenItsIdSortsLower(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $manager = $this->registry->getManager();
+        $manager->persist(new EventRecord(UuidV7::fromString('019a2600-0000-7fff-bfff-ffffffffffff'), LedgerEventKind::ReviewStarted, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
+        $manager->persist(new EventRecord(UuidV7::fromString('019a2600-0000-7000-8000-000000000000'), LedgerEventKind::JudgeDone, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
+        $manager->flush();
+        $manager->clear();
+
+        $kinds = array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($ledger->readInOrder()));
+
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::JudgeDone], $kinds);
     }
 
     public function testTheIdOfAnEventIsAUuidV7CarryingTheMomentOfTheClock(): void

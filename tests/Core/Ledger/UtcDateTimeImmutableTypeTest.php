@@ -41,4 +41,12 @@ final class UtcDateTimeImmutableTypeTest extends TestCase
 
         new UtcDateTimeImmutableType()->convertToPHPValue('yesterday', new SQLitePlatform());
     }
+
+    // PHP would otherwise roll this over to 2026-03-03 01:00:00 and change the stored moment.
+    public function testAStoredWallClockThatDoesNotExistIsRefused(): void
+    {
+        $this->expectException(ConversionException::class);
+
+        new UtcDateTimeImmutableType()->convertToPHPValue('2026-02-30 25:00:00', new SQLitePlatform());
+    }
 }

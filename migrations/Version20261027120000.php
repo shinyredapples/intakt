@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace DoctrineMigrations;
 
 use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\Index;
+use Doctrine\DBAL\Schema\Index\IndexType;
 use Doctrine\DBAL\Schema\Name\UnqualifiedName;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
 use Doctrine\DBAL\Schema\Schema;
@@ -37,13 +39,17 @@ final class Version20261027120000 extends AbstractMigration
         return Table::editor()
             ->setUnquotedName('ledger_event')
             ->setColumns(
+                Column::editor()->setUnquotedName('position')->setTypeName(Types::INTEGER)->setAutoincrement(true)->create(),
                 Column::editor()->setUnquotedName('id')->setTypeName(UuidType::NAME)->create(),
                 Column::editor()->setUnquotedName('kind')->setTypeName(Types::STRING)->setLength(32)->create(),
                 Column::editor()->setUnquotedName('payload')->setTypeName(Types::TEXT)->create(),
                 Column::editor()->setUnquotedName('recorded_at')->setTypeName(Types::DATETIME_IMMUTABLE)->create(),
             )
             ->setPrimaryKeyConstraint(
-                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('id'))->create(),
+                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('position'))->create(),
+            )
+            ->setIndexes(
+                Index::editor()->setUnquotedName('ledger_event_id')->setType(IndexType::UNIQUE)->setUnquotedColumnNames('id')->create(),
             )
             ->create();
     }

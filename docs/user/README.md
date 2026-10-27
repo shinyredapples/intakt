@@ -27,7 +27,7 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 ## The ledger
 
-Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored. Each event gets an id that sorts by time (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Nothing writes to it yet. Create the table with:
+Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Nothing writes to it yet. Create the table with:
 
 ```
 php bin/console doctrine:migrations:migrate

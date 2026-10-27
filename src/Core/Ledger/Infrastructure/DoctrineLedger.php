@@ -47,7 +47,7 @@ final readonly class DoctrineLedger implements Ledger
 
     public function readInOrder(): RecordedEvents
     {
-        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy([], ['id' => 'ASC']);
+        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy([], ['position' => 'ASC']);
 
         return new RecordedEvents(array_map(
             static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->id(), new LedgerEvent($record->kind(), $record->payload()), $record->recordedAt()),
@@ -55,7 +55,7 @@ final readonly class DoctrineLedger implements Ledger
         ));
     }
 
-    // The id takes its time from the same moment, so ids sort like the clock; within one millisecond UuidV7 counts up.
+    // The id takes its time from the same moment, so the id of an event carries when it was stored.
     private function recordOf(LedgerEvent $event): EventRecord
     {
         $now = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
