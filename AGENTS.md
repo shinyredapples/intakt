@@ -41,11 +41,13 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 ## Symfony AI
 
 - Use every component fully, behind Intakt's small vendor contract, at exactly pinned versions.
+- Test doubles: `MockPlatformFactory` with `ScriptedResponse`, or `RecordingProvider` with a redacted `HttpCassette`; the in-memory Store for retrieval. Message stores come from the Agent component (there is no Chat component).
 - A likely library bug becomes a minimal reproduction and draft report in `upstream/<name>/`; never posted without the owner.
 
 ## Docs, pull requests, commits
 
 - User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
+- A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row in `docs/highlights.md` (status, task, PR, path) in the same change.
 - One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
