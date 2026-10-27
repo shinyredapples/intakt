@@ -1,5 +1,12 @@
 # Intakt
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/intakt-lockup-dark.svg">
+    <img src="docs/assets/intakt-lockup.svg" alt="intakt" width="420">
+  </picture>
+</p>
+
 Give it a spec: AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI.
 
 Intakt turns a spec into a plan of small tasks, has AI agents build each one, has a panel of other agents from different providers review it, and merges what passes. It spends the AI budget you give it, asks you only when a person is needed, and acts as its own forge identity, never as you.
