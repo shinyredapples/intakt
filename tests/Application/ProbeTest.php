@@ -45,19 +45,19 @@ final class ProbeTest extends TestCase
 
     public function testAPhpunitTestRunsAgainstTheInstance(): void
     {
-        $this->probe('AnswerTest.php', <<<'PHP'
-            <?php
-
-            use PHPUnit\Framework\TestCase;
-
-            final class AnswerTest extends TestCase
+        $this->probe('AnswerTest.php', <<<'PHP_WRAP'
+        <?php
+        
+        use PHPUnit\Framework\TestCase;
+        
+        final class AnswerTest extends TestCase
+        {
+            public function testTheInstanceAnswers(): void
             {
-                public function testTheInstanceAnswers(): void
-                {
-                    self::assertStringContainsString('404', get_headers(getenv('INTAKT_INSTANCE_URL'))[0]);
-                }
+                self::assertStringContainsString('404', get_headers(getenv('INTAKT_INSTANCE_URL'))[0]);
             }
-            PHP);
+        }
+        PHP_WRAP);
 
         $run = $this->runProbe('tests/Probe/AnswerTest.php');
 
@@ -89,8 +89,18 @@ final class ProbeTest extends TestCase
 
         $this->runProbe('tests/Probe/Quiet.php');
 
-        self::assertSame([], array_values(array_diff(scandir($this->scratch.'/tmp') ?: [], ['.', '..'])));
+        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->serversOf($this->project));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function entriesOf(string $directory): array
+    {
+        $found = scandir($directory);
+
+        return array_values(array_diff(false === $found ? [] : $found, ['.', '..']));
     }
 
     private function probe(string $name, string $code): void
@@ -113,7 +123,9 @@ final class ProbeTest extends TestCase
     {
         $found = [];
 
-        foreach (glob('/proc/[0-9]*/cmdline') ?: [] as $file) {
+        $files = glob('/proc/[0-9]*/cmdline');
+
+        foreach (false === $files ? [] : $files as $file) {
             $arguments = explode("\0", (string) @file_get_contents($file));
 
             if (in_array($project.'/public', $arguments, true)) {
