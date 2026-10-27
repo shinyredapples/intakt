@@ -35,7 +35,7 @@ final class UtcDateTimeImmutableType extends DateTimeImmutableType
 
         $moment = DateTimeImmutable::createFromFormat('!'.$platform->getDateTimeFormatString(), $value, new DateTimeZone('UTC'));
 
-        // PHP rolls a date that does not exist over into another one and reports it only as a warning.
+        // Checks the warnings too, because PHP rolls a date that does not exist over into another moment and only warns.
         if (false === $moment || false !== DateTimeImmutable::getLastErrors()) {
             throw InvalidFormat::new($value, self::class, $platform->getDateTimeFormatString());
         }

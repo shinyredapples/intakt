@@ -73,7 +73,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame([$first->id?->toRfc4122(), $second->id?->toRfc4122()], $ids);
     }
 
-    // Two processes in one millisecond get ids in either order; the forced order here is an id that sorts lower stored later.
+    // Stores the records directly to force the order two processes in one millisecond can produce, because their ids sort either way.
     public function testAnEventStoredLaterIsReadLaterEvenWhenItsIdSortsLower(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
