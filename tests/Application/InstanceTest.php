@@ -52,6 +52,21 @@ final class InstanceTest extends TestCase
         self::assertSame(1, $run['exit']);
     }
 
+    public function testACallerHoldingManyDescriptorsStillGetsAReadyBoot(): void
+    {
+        $statusFile = $this->scratch.'/status';
+        $caller = \sprintf(
+            'for ($i = 0; $i < 12; ++$i) { $held[] = fopen("/dev/null", "r"); } passthru("exec %s %s 3>%s");',
+            escapeshellarg(\PHP_BINARY),
+            escapeshellarg(self::ROOT.'/bin/instance'),
+            escapeshellarg($statusFile),
+        );
+        $process = new Process([\PHP_BINARY, '-r', $caller], null, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test']);
+        $process->run();
+
+        self::assertSame('{"status":"ready"}', trim((string) file_get_contents($statusFile)));
+    }
+
     public function testNothingIsLeftBehindAfterABoot(): void
     {
         $this->runInstance(self::ROOT);

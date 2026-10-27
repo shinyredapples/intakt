@@ -37,7 +37,8 @@ final class Instance
 {
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
-    private const string CLOSE_INHERITED = 'for f in /proc/self/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] && eval "exec $n>&-"; done;';
+    // dash can only name descriptors 0 to 9 in a redirection; a longer number would end the shell instead of closing it.
+    private const string CLOSE_INHERITED = 'for f in /proc/self/fd/*; do n=${f##*/}; [ "$n" -gt 2 ] && [ "$n" -le 9 ] && eval "exec $n>&-"; done;';
 
     /** @var resource|null */
     private $server;
