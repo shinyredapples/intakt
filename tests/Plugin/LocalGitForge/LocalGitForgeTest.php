@@ -6,9 +6,13 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
+use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\Diff;
+use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -24,7 +28,11 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeNotFound::class)]
 #[UsesClass(ChangedFile::class)]
+#[UsesClass(ChangedFiles::class)]
 #[UsesClass(CommitId::class)]
+#[UsesClass(CommitRange::class)]
+#[UsesClass(Diff::class)]
+#[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(FileStatus::class)]
 #[UsesClass(ForgeReadFailed::class)]
@@ -43,6 +51,7 @@ final class LocalGitForgeTest extends TestCase
 
     protected function tearDown(): void
     {
+        unset($_ENV['GIT_DIR']);
         $this->repository->remove();
     }
 
@@ -54,8 +63,8 @@ final class LocalGitForgeTest extends TestCase
 
         $change = $this->forge()->change(new ChangeId('feature'));
 
-        self::assertSame($headHash, $change->head->hash);
-        self::assertSame($baseHash, $change->base->hash);
+        self::assertSame($headHash, $change->commits->head->hash);
+        self::assertSame($baseHash, $change->commits->base->hash);
     }
 
     public function testItReturnsTheDiffAndTheChangedFilesOfTheBranch(): void
@@ -71,10 +80,10 @@ final class LocalGitForgeTest extends TestCase
             ['README.md', FileStatus::Modified],
             ['src/Gone.php', FileStatus::Deleted],
             ['src/New.php', FileStatus::Added],
-        ], array_map(static fn (ChangedFile $file): array => [$file->path, $file->status], $change->files));
-        self::assertStringContainsString('+echo 1;', $change->diff);
-        self::assertStringContainsString('+changed', $change->diff);
-        self::assertStringContainsString('-<?php', $change->diff);
+        ], $this->pathsAndStatuses($change));
+        self::assertStringContainsString('+echo 1;', $change->diff->patch);
+        self::assertStringContainsString('+changed', $change->diff->patch);
+        self::assertStringContainsString('-<?php', $change->diff->patch);
     }
 
     public function testItLeavesOutWhatTheBaseBranchChangedAfterTheBranchWasCut(): void
@@ -86,8 +95,21 @@ final class LocalGitForgeTest extends TestCase
 
         $change = $this->forge()->change(new ChangeId('feature'));
 
-        self::assertCount(1, $change->files);
-        self::assertStringNotContainsString('ONLY_ON_MAIN', $change->diff);
+        self::assertCount(1, $change->diff->files);
+        self::assertStringNotContainsString('ONLY_ON_MAIN', $change->diff->patch);
+    }
+
+    public function testItListsAChangedSubmoduleEvenWhenTheRepositoryIgnoresSubmodules(): void
+    {
+        $this->repository->commitSubmodule('lib', str_repeat('a', 40));
+        $this->repository->configure('diff.ignoreSubmodules', 'all');
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitSubmodule('lib', str_repeat('b', 40));
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame([['lib', FileStatus::Modified]], $this->pathsAndStatuses($change));
+        self::assertStringContainsString('+Subproject commit '.str_repeat('b', 40), $change->diff->patch);
     }
 
     public function testItReturnsAFileAsItIsAtTheExactHead(): void
@@ -99,6 +121,16 @@ final class LocalGitForgeTest extends TestCase
 
         self::assertSame("<?php\necho 'head';\n", $content->content);
         self::assertSame($headHash, $content->commit->hash);
+    }
+
+    public function testItReturnsAFileWhoseNameHasSpacesTabsAndColons(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("src/a b\tc:d.txt", "odd\n");
+
+        $content = $this->forge()->fileAtHead($this->forge()->change(new ChangeId('feature')), "src/a b\tc:d.txt");
+
+        self::assertSame("odd\n", $content->content);
     }
 
     public function testItKeepsReadingTheOldHeadAfterTheBranchMovedOn(): void
@@ -169,15 +201,6 @@ final class LocalGitForgeTest extends TestCase
         $this->forge()->fileAtHead($change, 'src');
     }
 
-    public function testItFailsWhenTheBaseBranchDoesNotExist(): void
-    {
-        $this->repository->checkoutNewBranch('feature');
-
-        $this->expectException(ForgeReadFailed::class);
-
-        $this->forge('nowhere')->change(new ChangeId('feature'));
-    }
-
     public function testItReportsAFileThatIsNotAtTheHead(): void
     {
         $this->repository->checkoutNewBranch('feature');
@@ -189,8 +212,67 @@ final class LocalGitForgeTest extends TestCase
         $this->forge()->fileAtHead($change, 'src/Gone.php');
     }
 
+    public function testItFailsToReadAFileWhenTheHeadIsNotInTheRepository(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $read = $this->forge()->change(new ChangeId('feature'));
+        $unknownHead = new Change($read->id, new CommitRange($read->commits->base, new CommitId(str_repeat('c', 40))), $read->diff);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->fileAtHead($unknownHead, 'README.md');
+    }
+
+    public function testItFailsWhenTheBaseBranchDoesNotExist(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge('nowhere')->change(new ChangeId('feature'));
+    }
+
+    public function testItFailsWhenTheRepositoryDirectoryDoesNotExist(): void
+    {
+        $forge = new LocalGitForge(new LocalRepository($this->repository->path.'/missing', 'main'), new NameStatusParser());
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $forge->change(new ChangeId('feature'));
+    }
+
+    public function testItFailsWhenTheDirectoryIsNotARepository(): void
+    {
+        $plain = $this->repository->path.'/plain';
+        mkdir($plain);
+        file_put_contents($plain.'/.git', "gitdir: nowhere\n");
+        $forge = new LocalGitForge(new LocalRepository($plain, 'main'), new NameStatusParser());
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $forge->change(new ChangeId('feature'));
+    }
+
+    public function testItIgnoresAGitDirectoryItInherits(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $_ENV['GIT_DIR'] = $this->repository->path.'/missing';
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame('feature', $change->id->value);
+    }
+
     private function forge(string $baseBranch = 'main'): LocalGitForge
     {
         return new LocalGitForge(new LocalRepository($this->repository->path, $baseBranch), new NameStatusParser());
+    }
+
+    /**
+     * @return list<array{string, FileStatus}>
+     */
+    private function pathsAndStatuses(Change $change): array
+    {
+        return array_map(static fn (ChangedFile $file): array => [$file->path, $file->status], [...$change->diff->files]);
     }
 }

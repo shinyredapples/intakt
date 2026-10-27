@@ -27,18 +27,28 @@ final readonly class TemporaryRepository
         }
         file_put_contents($this->path.'/'.$path, $content);
         $this->git('add', '--all');
-        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Change '.$path);
 
-        return $this->git('rev-parse', 'HEAD');
+        return $this->commit('Change '.$path);
     }
 
     public function removeFile(string $path): string
     {
         unlink($this->path.'/'.$path);
         $this->git('add', '--all');
-        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Remove '.$path);
 
-        return $this->git('rev-parse', 'HEAD');
+        return $this->commit('Remove '.$path);
+    }
+
+    public function commitSubmodule(string $path, string $commit): string
+    {
+        $this->git('update-index', '--add', '--cacheinfo', '160000,'.$commit.','.$path);
+
+        return $this->commit('Point '.$path.' at '.$commit);
+    }
+
+    public function configure(string $key, string $value): void
+    {
+        $this->git('config', $key, $value);
     }
 
     public function checkoutNewBranch(string $name): void
@@ -61,9 +71,18 @@ final readonly class TemporaryRepository
         new Filesystem()->remove($this->path);
     }
 
+    private function commit(string $message): string
+    {
+        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', $message);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
     private function git(string ...$arguments): string
     {
-        $process = new Process(['git', ...$arguments], $this->path);
+        // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
+        $gitVariables = array_filter(array_keys([...getenv(), ...$_ENV]), static fn (int|string $name): bool => str_starts_with((string) $name, 'GIT_'));
+        $process = new Process(['git', ...$arguments], $this->path, array_fill_keys($gitVariables, false));
         $process->run();
 
         if (!$process->isSuccessful()) {

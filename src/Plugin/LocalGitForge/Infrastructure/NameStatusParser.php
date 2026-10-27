@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ChangedFile;
+use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
 final readonly class NameStatusParser
 {
-    /**
-     * @return list<ChangedFile>
-     */
-    public function parse(string $nameStatus): array
+    public function parse(string $nameStatus): ChangedFiles
     {
         return $nameStatus
             |> $this->fields(...)
@@ -45,12 +43,10 @@ final readonly class NameStatusParser
 
     /**
      * @param list<list<string>> $pairs
-     *
-     * @return list<ChangedFile>
      */
-    private function toChangedFiles(array $pairs): array
+    private function toChangedFiles(array $pairs): ChangedFiles
     {
-        return array_map($this->toChangedFile(...), $pairs);
+        return new ChangedFiles(...array_map($this->toChangedFile(...), $pairs));
     }
 
     /**

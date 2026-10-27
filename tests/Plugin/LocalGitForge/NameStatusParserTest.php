@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Plugin\Forge\Contract\ChangedFile;
+use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(NameStatusParser::class)]
 #[UsesClass(ChangedFile::class)]
+#[UsesClass(ChangedFiles::class)]
 #[UsesClass(FileStatus::class)]
 #[UsesClass(ForgeReadFailed::class)]
 final class NameStatusParserTest extends TestCase
@@ -22,17 +24,17 @@ final class NameStatusParserTest extends TestCase
     {
         $files = new NameStatusParser()->parse("A\0src/a b.php\0M\0README.md\0D\0old\nname.php\0T\0link\0");
 
-        self::assertEquals([
+        self::assertEquals(new ChangedFiles(
             new ChangedFile('src/a b.php', FileStatus::Added),
             new ChangedFile('README.md', FileStatus::Modified),
             new ChangedFile("old\nname.php", FileStatus::Deleted),
             new ChangedFile('link', FileStatus::Modified),
-        ], $files);
+        ), $files);
     }
 
     public function testItReturnsNoFilesForNoOutput(): void
     {
-        self::assertSame([], new NameStatusParser()->parse(''));
+        self::assertCount(0, new NameStatusParser()->parse(''));
     }
 
     public function testItRefusesAStatusItDoesNotKnow(): void

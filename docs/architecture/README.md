@@ -22,16 +22,16 @@ The Vendor, Notifier, WorkSource and Gate contracts are empty for now. The first
 
 `Plugin/Forge/Contract` holds what reading a change needs, as typed objects only:
 
-- `Forge::change(ChangeId)` returns a `Change`: the id, the `base` and `head` as `CommitId` (full hashes), the unified `diff` text and the `files` (`ChangedFile`: path and `FileStatus` added, modified or deleted; a rename shows as a delete and an add).
+- `Forge::change(ChangeId)` returns a `Change`: the id, the `commits` (`CommitRange`: `base` and `head` as `CommitId`, full hashes) and the `diff` (`Diff`: the unified `patch` text and the `files`, a `ChangedFiles` collection of `ChangedFile`: path and `FileStatus` added, modified or deleted; a rename shows as a delete and an add).
 - `Forge::hasHeadMoved(Change)` is true when the change's branch now points at another commit than the `Change` was read at (`#[NoDiscard]`).
 - `Forge::fileAtHead(Change, path)` returns a `FileContent` as it is at the `Change`'s head hash, not at the branch tip, so a branch that moved on does not change what is read.
-- Failures are typed: `ChangeNotFound`, `FileNotFoundAtHead` and `ForgeReadFailed` (git failed or printed something unexpected).
+- Failures are typed: `ChangeNotFound`, `FileNotFoundAtHead` and `ForgeReadFailed` (git could not run, timed out, failed or printed something unexpected).
 
-`Plugin/LocalGitForge` implements it for a local repository (`LocalRepository`: path and base branch). A local branch (`refs/heads/<id>`, never a tag) against the base branch is the pull request. Every call runs `git` through the Process component with an argument list (no shell) in the repository, with a 60-second timeout.
+`Plugin/LocalGitForge` implements it for a local repository (`LocalRepository`: path and base branch). A local branch (`refs/heads/<id>`, never a tag) against the base branch is the pull request. Every call runs `git` through the Process component with an argument list (no shell) in the repository, with a 60-second timeout and without the `GIT_*` environment variables Intakt inherited (such as `GIT_DIR` inside a git hook). A Process failure (a missing directory, a timeout) becomes a `ForgeReadFailed`.
 
-1. The head is the branch's commit; the base is the merge base of the base branch and the head, so what the base branch gained after the branch was cut is not in the diff.
-2. The diff is `git diff` between those two hashes, without colors, renames, external diff drivers or text conversion. The changed files come from `git diff --name-status -z` for the same hashes; `NameStatusParser` turns that output into `ChangedFile` objects with the pipe operator (split on NUL, pair status with path, map to objects). An unknown status or a status without a path is a `ForgeReadFailed`.
-3. File contents are read with `git show <head hash>:<path>`.
+1. The head is the branch's commit (`git show-ref`; a missing branch is `ChangeNotFound`, any other git failure `ForgeReadFailed`); the base is the merge base of the base branch and the head, so what the base branch gained after the branch was cut is not in the diff.
+2. The diff is `git diff` between those two hashes, without colors, renames, external diff drivers or text conversion, and with `--ignore-submodules=none`, so a changed submodule commit shows even when the repository sets `diff.ignoreSubmodules`. The changed files come from `git diff --name-status -z` with the same options and hashes; `NameStatusParser` turns that output into `ChangedFiles` with the pipe operator (split on NUL, pair status with path, map to objects). An unknown status or a status without a path is a `ForgeReadFailed`.
+3. A file is looked up with `git ls-tree -z <head hash> -- <path>` and read with `git cat-file blob <blob hash>`. A path that is not a file (missing, a directory or a submodule) at the head is `FileNotFoundAtHead`; a head that cannot be read is `ForgeReadFailed`.
 
 The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$TMPDIR` and remove it afterwards.
 
