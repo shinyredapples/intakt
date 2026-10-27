@@ -32,7 +32,9 @@ Acceptance:
 - Clean boot: `testACleanCheckoutReportsReadyAndExitsZero`. No fd 3: `testWithoutDescriptorThreeNoStatusIsWrittenAndTheExitIsNonZero`. Run time of a boot is about 0.6 s.
 - Docs: `docs/architecture/README.md` (section "Instance and probes", now describing `bin/instance` and keeping `bin/probe` planned) and `docs/user/README.md` (new section "Checking that an install boots"). `git grep bin/instance` over `docs/`, `AGENTS.md` and `README.md` found only these statements and the protected-paths list in `AGENTS.md`, which stay true; `docs/plan.md` T31 text stays as the plan.
 
-`vendor/bin/phpunit tests/Application/InstanceTest.php`: `OK (4 tests, 9 assertions)`.
+Rework after the failed CI run: dash cannot name descriptors above 9 in a redirection, so `exec 12>&-` ended the closing shell and the server never started when the caller (the CI runner) held many descriptors. The closer now handles descriptors 3 to 9 only; `testACallerHoldingManyDescriptorsStillGetsAReadyBoot` holds 12 descriptors and failed on the old script (`failed: the server exited`).
+
+`vendor/bin/phpunit tests/Application/InstanceTest.php`: `OK (5 tests, 11 assertions)`.
 
 `bin/check --fast`:
 
