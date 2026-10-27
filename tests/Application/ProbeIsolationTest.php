@@ -72,6 +72,31 @@ final class ProbeIsolationTest extends TestCase
         self::assertStringContainsString('lo is down', (string) $this->decide(true, ['lo'], false)['refusal']);
     }
 
+    public function testWithTheVariableAnUnreadableInterfaceListIsRefused(): void
+    {
+        $refusal = $this->decideOn(true, $this->scratch.'/missing', '127.0.0.1:0')['refusal'];
+
+        self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
+    }
+
+    public function testWithTheVariableAMalformedInterfaceListIsRefused(): void
+    {
+        new Filesystem()->dumpFile($this->scratch.'/dev', "Inter-|   Receive\n face |bytes\n  not an interface line\n");
+
+        $refusal = $this->decideOn(true, $this->scratch.'/dev', '127.0.0.1:0')['refusal'];
+
+        self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
+    }
+
+    public function testWithTheVariableAnEmptyInterfaceListIsRefused(): void
+    {
+        new Filesystem()->dumpFile($this->scratch.'/dev', "Inter-|   Receive\n face |bytes\n");
+
+        $refusal = $this->decideOn(true, $this->scratch.'/dev', '127.0.0.1:0')['refusal'];
+
+        self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
+    }
+
     /**
      * @param list<string> $names
      *
@@ -88,8 +113,15 @@ final class ProbeIsolationTest extends TestCase
         new Filesystem()->dumpFile($this->scratch.'/dev', $devices);
 
         // A documentation address is on no local interface, so binding to it fails as it does on a down loopback.
-        $loopback = $loopbackUp ? '127.0.0.1:0' : '192.0.2.1:0';
-        $process = new Process([PHP_BINARY, '-r', self::DECIDE, dirname(__DIR__, 2), $isolated ? '1' : '0', $this->scratch.'/dev', $loopback]);
+        return $this->decideOn($isolated, $this->scratch.'/dev', $loopbackUp ? '127.0.0.1:0' : '192.0.2.1:0');
+    }
+
+    /**
+     * @return array{command: list<string>, refusal: ?string}
+     */
+    private function decideOn(bool $isolated, string $devices, string $loopback): array
+    {
+        $process = new Process([PHP_BINARY, '-r', self::DECIDE, dirname(__DIR__, 2), $isolated ? '1' : '0', $devices, $loopback]);
         $process->mustRun();
 
         /** @var array{command: list<string>, refusal: ?string} $decision */

@@ -16,7 +16,14 @@ final readonly class Network
 
     public function offlineProblem(): ?string
     {
-        $others = array_values(array_diff($this->deviceNames(), ['lo']));
+        $names = $this->deviceNames();
+
+        // Without a trustworthy list no other interface can be ruled out, so the run is refused rather than assumed offline.
+        if (null === $names) {
+            return 'the network interfaces cannot be read from '.$this->devices;
+        }
+
+        $others = array_values(array_diff($names, ['lo']));
 
         if ([] !== $others) {
             return 'a network interface other than lo is visible ('.implode(', ', $others).')';
@@ -40,14 +47,24 @@ final readonly class Network
     }
 
     /**
-     * @return list<string>
+     * @return ?list<string>
      */
-    private function deviceNames(): array
+    private function deviceNames(): ?array
     {
+        $lines = @file($this->devices, FILE_IGNORE_NEW_LINES);
+
+        if (false === $lines || count($lines) < 3) {
+            return null;
+        }
+
         $names = [];
 
-        foreach (array_slice(file($this->devices, FILE_IGNORE_NEW_LINES) ?: [], 2) as $line) {
-            $names[] = trim(explode(':', $line, 2)[0]);
+        foreach (array_slice($lines, 2) as $line) {
+            if (1 !== preg_match('#^\s*([^\s:]+):#', $line, $match)) {
+                return null;
+            }
+
+            $names[] = $match[1];
         }
 
         return $names;
