@@ -81,8 +81,13 @@ final readonly class TemporaryRepository
     private function git(string ...$arguments): string
     {
         // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
-        $gitVariables = array_filter(array_keys([...getenv(), ...$_ENV]), static fn (int|string $name): bool => str_starts_with((string) $name, 'GIT_'));
-        $process = new Process(['git', ...$arguments], $this->path, array_fill_keys($gitVariables, false));
+        $unset = [];
+        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
+            if (is_string($name) && str_starts_with($name, 'GIT_')) {
+                $unset[$name] = false;
+            }
+        }
+        $process = new Process(['git', ...$arguments], $this->path, $unset);
         $process->run();
 
         if (!$process->isSuccessful()) {

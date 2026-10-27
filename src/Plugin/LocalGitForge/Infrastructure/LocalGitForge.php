@@ -71,7 +71,7 @@ final readonly class LocalGitForge implements Forge
 
     private function diff(CommitRange $commits): Diff
     {
-        // Submodule changes count even when the repository's configuration asks diff to ignore them.
+        // Submodules are never ignored, because a repository's diff.ignoreSubmodules would hide a changed submodule commit.
         $options = ['--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--ignore-submodules=none'];
         $range = [$commits->base->hash, $commits->head->hash];
 
@@ -100,7 +100,7 @@ final readonly class LocalGitForge implements Forge
         try {
             return new CommitId(trim($output));
         } catch (InvalidArgumentException $invalid) {
-            throw new ForgeReadFailed('git printed something other than a commit hash.', previous: $invalid);
+            throw new ForgeReadFailed('git printed something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
     }
 
@@ -128,7 +128,7 @@ final readonly class LocalGitForge implements Forge
         try {
             $process->run();
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), previous: $failure);
+            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 
         return $process;
@@ -140,8 +140,13 @@ final readonly class LocalGitForge implements Forge
     private function withoutGitVariables(): array
     {
         // Inherited GIT_DIR, GIT_INDEX_FILE and the like (as inside a git hook) would point git at another repository.
-        $names = array_filter(array_keys([...getenv(), ...$_ENV]), static fn (int|string $name): bool => str_starts_with((string) $name, 'GIT_'));
+        $unset = [];
+        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
+            if (is_string($name) && str_starts_with($name, 'GIT_')) {
+                $unset[$name] = false;
+            }
+        }
 
-        return array_fill_keys($names, false);
+        return $unset;
     }
 }
