@@ -5,11 +5,61 @@ declare(strict_types=1);
 
 // Needs no Composer autoloader itself, like bin/instance, which it reuses to boot the instance.
 
+final readonly class Network
+{
+    // sysfs shows the namespace it was mounted in, so loopback is tested by connecting through it instead.
+    public function __construct(
+        private string $devices = '/proc/net/dev',
+        private string $loopbackAddress = '127.0.0.1:0',
+    ) {
+    }
+
+    public function offlineProblem(): ?string
+    {
+        $others = array_values(array_diff($this->deviceNames(), ['lo']));
+
+        if ([] !== $others) {
+            return 'a network interface other than lo is visible ('.implode(', ', $others).')';
+        }
+
+        return $this->loopbackWorks() ? null : 'the loopback interface lo is down';
+    }
+
+    // A down lo still owns 127.0.0.1, so binding alone passes; only a connection through it shows the state.
+    private function loopbackWorks(): bool
+    {
+        $server = @stream_socket_server('tcp://'.$this->loopbackAddress);
+
+        if (false === $server) {
+            return false;
+        }
+
+        $client = @stream_socket_client('tcp://'.stream_socket_get_name($server, false), $code, $message, 1);
+
+        return false !== $client;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function deviceNames(): array
+    {
+        $names = [];
+
+        foreach (array_slice(file($this->devices, FILE_IGNORE_NEW_LINES) ?: [], 2) as $line) {
+            $names[] = trim(explode(':', $line, 2)[0]);
+        }
+
+        return $names;
+    }
+}
+
 final readonly class Probe
 {
     private const string PATTERN = '#^tests/Probe/[A-Za-z0-9_][A-Za-z0-9_.-]*\.php$#';
 
-    public function __construct(private string $root)
+    // The caller (the build loop's sandbox) sets PROBE_ISOLATED=1 when it already gives the run its own network and PID namespaces.
+    public function __construct(private string $root, private bool $isolated, private Network $network)
     {
     }
 
@@ -21,21 +71,54 @@ final readonly class Probe
             return 2;
         }
 
+        $refusal = $this->refusal();
+
+        if (null !== $refusal) {
+            fwrite(STDERR, $refusal.PHP_EOL);
+
+            return 2;
+        }
+
         $exit = $this->runOffline($file);
         fwrite(STDOUT, 'exit code: '.$exit.PHP_EOL);
 
         return $exit;
     }
 
-    private function runOffline(string $file): int
+    public function refusal(): ?string
     {
+        if (!$this->isolated) {
+            return null;
+        }
+
+        $problem = $this->network->offlineProblem();
+
+        return null === $problem ? null : 'PROBE_ISOLATED is set but the run is not offline: '.$problem;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function command(string $file): array
+    {
+        $instance = [PHP_BINARY, $this->root.'/bin/instance', '--', ...$this->probeCommand($file)];
+
+        if ($this->isolated) {
+            return $instance;
+        }
+
         // A new network namespace has no route out; its loopback starts down, and the instance needs it.
         // In a new PID namespace bin/instance is process 1, so whatever the probe leaves running dies with it, even after setsid.
-        $command = [
+        return [
             'unshare', '--net', '--map-root-user', '--pid', '--fork', '--kill-child',
             'sh', '-c', 'ip link set lo up && exec "$@"', 'sh',
-            PHP_BINARY, $this->root.'/bin/instance', '--', ...$this->probeCommand($file),
+            ...$instance,
         ];
+    }
+
+    private function runOffline(string $file): int
+    {
+        $command = $this->command($file);
         $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR, 3 => ['pipe', 'w']];
 
         $process = proc_open($command, $descriptors, $pipes, $this->root);
@@ -71,12 +154,13 @@ final readonly class Probe
             return $exit;
         }
 
-        fwrite(STDERR, 'the instance did not become ready: '.('' === $status ? 'no status reported (is unshare with network namespaces available?)' : $status).PHP_EOL);
+        fwrite(STDERR, 'the instance did not become ready: '.('' === $status ? 'no status reported (is unshare with network namespaces available, or PROBE_ISOLATED set by a caller that isolates the run?)' : $status).PHP_EOL);
 
         return 0 === $exit ? 1 : $exit;
     }
 }
 
-$file = $argv[1] ?? '';
-
-exit(new Probe(dirname(__DIR__))->run($file));
+// Tests load this file for the classes above; only a direct run starts a probe.
+if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
+    exit(new Probe(dirname(__DIR__), '1' === getenv('PROBE_ISOLATED'), new Network())->run($argv[1] ?? ''));
+}
