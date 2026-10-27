@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace Intakt\Core\Ledger\Domain;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use UnexpectedValueException;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'ledger_event')]
 final class EventRecord
 {
+    private const string WALL_CLOCK = 'Y-m-d H:i:s.u';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -39,6 +43,10 @@ final class EventRecord
 
     public function recordedAt(): DateTimeImmutable
     {
-        return $this->recordedAt;
+        // The column keeps the UTC wall clock without its offset, and Doctrine reads it back in PHP's default time zone.
+        $wallClock = $this->recordedAt->format(self::WALL_CLOCK);
+
+        return DateTimeImmutable::createFromFormat(self::WALL_CLOCK, $wallClock, new DateTimeZone('UTC'))
+            ?: throw new UnexpectedValueException('the stored moment is not a wall clock: '.$wallClock);
     }
 }

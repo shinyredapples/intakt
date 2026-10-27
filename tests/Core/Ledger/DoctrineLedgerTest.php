@@ -68,6 +68,23 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame('2026-10-27T12:00:00+00:00', $recordedAt?->format('c'));
     }
 
+    public function testTheMomentOfAStoredEventIsReadBackInUtcWhateverTheDefaultTimeZone(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'))->succeeded());
+        $this->registry->getManager()->clear();
+        $defaultTimeZone = date_default_timezone_get();
+        date_default_timezone_set('Europe/Berlin');
+
+        try {
+            $recordedAt = array_first(iterator_to_array($ledger->readInOrder()))?->recordedAt;
+        } finally {
+            date_default_timezone_set($defaultTimeZone);
+        }
+
+        self::assertSame('2026-10-27T12:00:00+00:00', $recordedAt?->format('c'));
+    }
+
     public function testTheResultOfAnAppendCarriesTheSequence(): void
     {
         $result = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{}'));
@@ -113,7 +130,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         }, E_USER_WARNING);
 
         try {
-            \call_user_func($append, new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+            call_user_func($append, new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
         } finally {
             restore_error_handler();
         }

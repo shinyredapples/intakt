@@ -76,7 +76,7 @@ How `bin/probe` works:
 
 - `Contract/` holds the typed surface: `Ledger` (`append(LedgerEvent): AppendResult`, `readInOrder(): RecordedEvents`), `LedgerEventKind` (backed enum: `review_started`, `reviewer_started`, `verdict_received`, `judge_done`, `usage_recorded`), `LedgerEvent` (kind and payload text), `RecordedEvent` (sequence, the `LedgerEvent` and the moment), `RecordedEvents` (the events in order, iterable) and `AppendResult`.
 - `append` is marked `#[NoDiscard]` on the interface and on `DoctrineLedger`, because PHP checks the method that runs. A database failure is returned as `AppendResult::failed($reason)` (`succeeded()` is false, `sequence` is null, the reason names the exception class but not its message), not thrown; success carries the `sequence`. After a failure the ledger resets the entity manager through the `ManagerRegistry`, so the next append works.
-- `Domain/EventRecord` is the Doctrine entity; `Infrastructure/DoctrineLedger` implements the contract. The moment comes from the clock, converted to UTC. Events are read ordered by `sequence`.
+- `Domain/EventRecord` is the Doctrine entity; `Infrastructure/DoctrineLedger` implements the contract. The moment comes from the clock, converted to UTC; the column keeps it without an offset, so `EventRecord` rebuilds it in UTC on read whatever PHP's default time zone is. Events are read ordered by `sequence`.
 - `tests/Core/Ledger/DoctrineLedgerTest.php` is in the `persistence` group.
 
 Not built yet: refusing updates and deletes, and a console query for reading events back.
