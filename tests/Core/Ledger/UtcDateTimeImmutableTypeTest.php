@@ -32,7 +32,7 @@ final class UtcDateTimeImmutableTypeTest extends TestCase
             date_default_timezone_set($defaultTimeZone);
         }
 
-        self::assertSame('2026-03-29T02:30:00+00:00', $moment?->format('c'));
+        self::assertSame('2026-03-29T02:30:00+00:00', $moment->format('c'));
     }
 
     public function testAStoredValueThatIsNotAWallClockIsRefused(): void

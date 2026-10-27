@@ -9,8 +9,9 @@ use DateTimeZone;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
 use Doctrine\DBAL\Types\DateTimeImmutableType;
 use Doctrine\DBAL\Types\Exception\InvalidFormat;
+use Doctrine\DBAL\Types\Exception\InvalidType;
 
-// The column holds a wall clock without an offset; parsing it in PHP's default zone moves a moment inside a daylight-saving gap.
+// Parses in UTC because the column has no offset and PHP's default zone would move a moment inside a daylight-saving gap.
 final class UtcDateTimeImmutableType extends DateTimeImmutableType
 {
     public const string NAME = 'utc_datetime_immutable';
@@ -28,6 +29,10 @@ final class UtcDateTimeImmutableType extends DateTimeImmutableType
     {
         if (null === $value || $value instanceof DateTimeImmutable) {
             return $value;
+        }
+
+        if (!is_string($value)) {
+            throw InvalidType::new($value, self::class, ['null', 'string', DateTimeImmutable::class]);
         }
 
         $moment = DateTimeImmutable::createFromFormat('!'.$platform->getDateTimeFormatString(), $value, new DateTimeZone('UTC'));
