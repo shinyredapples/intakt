@@ -7,17 +7,16 @@ namespace Intakt\Core\Ledger\Domain;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'ledger_event')]
 final class EventRecord
 {
-    #[ORM\Id]
-    #[ORM\GeneratedValue]
-    #[ORM\Column]
-    public private(set) int $sequence;
-
     public function __construct(
+        #[ORM\Id]
+        #[ORM\Column(type: 'uuid')]
+        private readonly Uuid $id,
         #[ORM\Column(length: 32, enumType: LedgerEventKind::class)]
         private readonly LedgerEventKind $kind,
         #[ORM\Column(type: 'text')]
@@ -25,6 +24,11 @@ final class EventRecord
         #[ORM\Column(type: 'utc_datetime_immutable')]
         private readonly DateTimeImmutable $recordedAt,
     ) {
+    }
+
+    public function id(): Uuid
+    {
+        return $this->id;
     }
 
     public function kind(): LedgerEventKind

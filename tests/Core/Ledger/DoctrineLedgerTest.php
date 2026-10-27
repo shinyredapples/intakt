@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineLedger::class)]
@@ -56,7 +57,27 @@ final class DoctrineLedgerTest extends KernelTestCase
 
         self::assertSame(LedgerEventKind::cases(), array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, $events));
         self::assertSame('{"kind":"review_started"}', $events[0]->event->payload);
-        self::assertSame([1, 2, 3, 4, 5], array_map(static fn (RecordedEvent $event): int => $event->sequence, $events));
+    }
+
+    public function testEventsAppendedAtAnEarlierMomentAreReadFirst(): void
+    {
+        $clock = new MockClock('2026-10-27 12:00:00', 'UTC');
+        $ledger = new DoctrineLedger($this->registry, $clock);
+        $later = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+        $clock->modify('-1 second');
+        $earlier = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+
+        $ids = array_map(static fn (RecordedEvent $event): string => $event->id->toRfc4122(), iterator_to_array($ledger->readInOrder()));
+
+        self::assertSame([$earlier->id?->toRfc4122(), $later->id?->toRfc4122()], $ids);
+    }
+
+    public function testTheIdOfAnEventIsAUuidV7CarryingTheMomentOfTheClock(): void
+    {
+        $result = $this->ledger('2026-10-27 14:00:00', '+02:00')->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+
+        self::assertInstanceOf(UuidV7::class, $result->id);
+        self::assertSame('2026-10-27T12:00:00+00:00', $result->id->getDateTime()->format('c'));
     }
 
     public function testTheMomentOfAnEventComesFromTheClockInUtc(): void
@@ -87,13 +108,15 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame('2026-03-29T02:30:00+00:00', $recordedAt?->format('c'));
     }
 
-    public function testTheResultOfAnAppendCarriesTheSequence(): void
+    public function testTheResultOfAnAppendCarriesTheIdOfTheStoredEvent(): void
     {
-        $result = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{}'));
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{}'));
 
         self::assertTrue($result->succeeded());
-        self::assertSame(1, $result->sequence);
         self::assertNull($result->failure);
+        self::assertSame(array_first(iterator_to_array($ledger->readInOrder()))?->id->toRfc4122(), $result->id?->toRfc4122());
     }
 
     public function testTheResultOfAFailedAppendCarriesTheFailure(): void
@@ -103,7 +126,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         $result = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
 
         self::assertFalse($result->succeeded());
-        self::assertNull($result->sequence);
+        self::assertNull($result->id);
         self::assertSame('the event was not stored: Doctrine\DBAL\Exception\TableNotFoundException', $result->failure);
     }
 
@@ -117,7 +140,7 @@ final class DoctrineLedgerTest extends KernelTestCase
         $result = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{}'));
 
         self::assertTrue($result->succeeded());
-        self::assertSame(1, $result->sequence);
+        self::assertCount(1, iterator_to_array($ledger->readInOrder()));
     }
 
     public function testDiscardingTheResultOfAnAppendIsReported(): void

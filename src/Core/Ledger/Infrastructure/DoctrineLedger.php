@@ -15,6 +15,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use NoDiscard;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Uid\UuidV7;
 
 final readonly class DoctrineLedger implements Ledger
 {
@@ -28,7 +29,7 @@ final readonly class DoctrineLedger implements Ledger
     #[NoDiscard('a failed append is only reported through the result')]
     public function append(LedgerEvent $event): AppendResult
     {
-        $record = new EventRecord($event->kind, $event->payload, $this->clock->now()->setTimezone(new DateTimeZone('UTC')));
+        $record = $this->recordOf($event);
         $manager = $this->registry->getManager();
 
         try {
@@ -41,16 +42,24 @@ final readonly class DoctrineLedger implements Ledger
             return AppendResult::failed('the event was not stored: '.$failure::class);
         }
 
-        return AppendResult::appended($record->sequence);
+        return AppendResult::appended($record->id());
     }
 
     public function readInOrder(): RecordedEvents
     {
-        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy([], ['sequence' => 'ASC']);
+        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy([], ['id' => 'ASC']);
 
         return new RecordedEvents(array_map(
-            static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->sequence, new LedgerEvent($record->kind(), $record->payload()), $record->recordedAt()),
+            static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->id(), new LedgerEvent($record->kind(), $record->payload()), $record->recordedAt()),
             $records,
         ));
+    }
+
+    // The id takes its time from the same moment, so ids sort like the clock; within one millisecond UuidV7 counts up.
+    private function recordOf(LedgerEvent $event): EventRecord
+    {
+        $now = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
+
+        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind, $event->payload, $now);
     }
 }

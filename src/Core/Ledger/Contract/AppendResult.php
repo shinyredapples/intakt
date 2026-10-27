@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Contract;
 
+use Symfony\Component\Uid\Uuid;
+
 final readonly class AppendResult
 {
     private function __construct(
-        public ?int $sequence,
+        public ?Uuid $id,
         public ?string $failure,
     ) {
     }
 
-    public static function appended(int $sequence): self
+    public static function appended(Uuid $id): self
     {
-        return new self($sequence, null);
+        return new self($id, null);
     }
 
     public static function failed(string $reason): self
