@@ -6,6 +6,7 @@ namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Finder\Finder;
 
 #[CoversNothing]
 final class MateDevOnlyTest extends TestCase
@@ -24,21 +25,24 @@ final class MateDevOnlyTest extends TestCase
     public function testNoApplicationCodeReferencesMate(): void
     {
         $matches = [];
-        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(self::ROOT.'/src', \FilesystemIterator::SKIP_DOTS)) as $file) {
-            if (str_contains((string) file_get_contents($file->getPathname()), 'Symfony\\AI\\Mate')) {
-                $matches[] = $file->getPathname();
-            }
+        $files = new Finder()->files()->in(self::ROOT.'/src')->contains('Symfony\AI\Mate');
+        foreach ($files as $file) {
+            $matches[] = $file->getRelativePathname();
         }
 
         self::assertSame([], $matches);
     }
 
     /**
-     * @return array{require: array<string, string>, require-dev: array<string, string>}
+     * @return array{require: array<mixed>, require-dev: array<mixed>}
      */
     private function manifest(): array
     {
-        /** @var array{require: array<string, string>, require-dev: array<string, string>} */
-        return json_decode((string) file_get_contents(self::ROOT.'/composer.json'), true, flags: \JSON_THROW_ON_ERROR);
+        $manifest = json_decode((string) file_get_contents(self::ROOT.'/composer.json'), true, flags: \JSON_THROW_ON_ERROR);
+        self::assertIsArray($manifest);
+        self::assertIsArray($manifest['require']);
+        self::assertIsArray($manifest['require-dev']);
+
+        return ['require' => $manifest['require'], 'require-dev' => $manifest['require-dev']];
     }
 }
