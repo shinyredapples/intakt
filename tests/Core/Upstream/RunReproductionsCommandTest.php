@@ -34,6 +34,8 @@ final class RunReproductionsCommandTest extends TestCase
 
     protected function tearDown(): void
     {
+        // The unreadable-folder test takes the mode away, and remove() cannot list a folder without it.
+        new Filesystem()->chmod($this->folder, 0o755);
         new Filesystem()->remove($this->folder);
     }
 
@@ -96,7 +98,21 @@ final class RunReproductionsCommandTest extends TestCase
     {
         $tester = $this->whenTheCommandRuns(directory: $this->folder.'/missing');
 
-        self::assertStringContainsString('No reproduction folder', $tester->getDisplay());
+        self::assertStringContainsString('No readable reproduction folder', $tester->getDisplay());
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
+    public function testAnUnreadableFolderFailsTheRun(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('This user ignores file permissions (superuser).');
+        }
+        $this->givenReproduction('open-bug', '$this->assertSame(1, 2);');
+        new Filesystem()->chmod($this->folder, 0o000);
+
+        $tester = $this->whenTheCommandRuns();
+
+        self::assertStringContainsString('No readable reproduction folder', $tester->getDisplay());
         self::assertSame(Command::INVALID, $tester->getStatusCode());
     }
 

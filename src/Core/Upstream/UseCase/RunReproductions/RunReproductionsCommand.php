@@ -31,15 +31,23 @@ final readonly class RunReproductionsCommand
     ): int {
         $folder = Path::makeAbsolute($directory, $this->projectDir);
 
-        // A mistyped folder would otherwise read as a clean run where every bug is fixed.
-        if (!is_dir($folder)) {
-            $io->error(sprintf('No reproduction folder at %s.', $directory));
+        // A mistyped or unreadable folder would otherwise read as a clean run where every bug is fixed.
+        if (!is_dir($folder) || !is_readable($folder)) {
+            $io->error(sprintf('No readable reproduction folder at %s.', $directory));
 
             return Command::INVALID;
         }
 
         $this->reportVersions($io);
-        $outcomes = $this->runAll($folder);
+        $folders = $this->discover($folder);
+
+        if (null === $folders) {
+            $io->error(sprintf('Could not list the reproductions in %s.', $directory));
+
+            return Command::INVALID;
+        }
+
+        $outcomes = array_map($this->runner->run(...), $folders);
         $this->report($io, $outcomes);
 
         return array_any($outcomes, static fn (ReproductionOutcome $outcome): bool => $outcome->stillFails()) ? Command::FAILURE : Command::SUCCESS;
@@ -55,13 +63,14 @@ final readonly class RunReproductionsCommand
     }
 
     /**
-     * @return list<ReproductionOutcome>
+     * @return list<string>|null
      */
-    private function runAll(string $folder): array
+    private function discover(string $folder): ?array
     {
-        $folders = glob($folder.'/*', GLOB_ONLYDIR);
+        // Without GLOB_ERR a folder that cannot be listed looks like an empty one, so the error would pass as a clean run.
+        $folders = glob($folder.'/*', GLOB_ONLYDIR | GLOB_ERR);
 
-        return array_map($this->runner->run(...), false === $folders ? [] : $folders);
+        return false === $folders ? null : $folders;
     }
 
     /**
