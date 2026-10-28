@@ -21,7 +21,7 @@ final readonly class ScriptedReviewer
     }
 
     // The application's dispatcher, because then the subscribers and their order are the ones a real reviewer call gets.
-    private static function theApplicationsDispatcher(): EventDispatcherInterface
+    public static function theApplicationsDispatcher(): EventDispatcherInterface
     {
         $kernel = new Kernel('test', true);
         $kernel->boot();
