@@ -102,7 +102,8 @@ jobs:
             open_switch: POSTGRES_HOST_AUTH_METHOD
             open_value: trust
     env:
-      DATABASE_NAME: intakt_test
+      # The test environment appends _test to the database name of the URL, so the service creates intakt_test and the URL names intakt.
+      DATABASE_NAME: intakt
     services:
       database:
         image: ${{ matrix.image }}
