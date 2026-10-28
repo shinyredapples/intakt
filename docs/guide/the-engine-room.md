@@ -1,6 +1,6 @@
 # The engine room: the words behind the loop
 
-The dashboard and the logs use a handful of words for the loop's machinery: lanes, slots, ticks, queues, locks, cycles, generations, budgets, draining. This page explains each one in plain words, with a picture where it helps. For the step-by-step story see [the journey of a task](the-journey-of-a-task.md); for the full rules, the [design](design/README.md). Intakt is still being built, so this describes the decided design.
+The dashboard and the logs use a handful of words for the loop's machinery: lanes, slots, ticks, queues, locks, cycles, generations, budgets, draining. This page explains each one in plain words, with a picture where it helps. For the step-by-step story see [the journey of a task](the-journey-of-a-task.md); for the full rules, the [design](../design/README.md). Intakt is still being built, so this describes the decided design.
 
 ## Lanes and slots: the workbenches
 

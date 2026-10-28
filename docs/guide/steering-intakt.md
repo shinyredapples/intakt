@@ -1,6 +1,6 @@
 # Steering Intakt
 
-You steer Intakt from GitHub (labels and comments on issues and pull requests, from any device) or from the dashboard. This page lists every way to tell it what you want. Intakt is still being built, so this describes the decided design ([labels](design/05-architecture/04-labels.md), [questions and steering](design/05-architecture/05-questions-and-steering.md)).
+You steer Intakt from GitHub (labels and comments on issues and pull requests, from any device) or from the dashboard. This page lists every way to tell it what you want. Intakt is still being built, so this describes the decided design ([labels](../design/05-architecture/04-labels.md), [questions and steering](../design/05-architecture/05-questions-and-steering.md)).
 
 **Who can steer:** only people with write access to the repository. A label or comment from anyone else is ignored, whatever it says.
 

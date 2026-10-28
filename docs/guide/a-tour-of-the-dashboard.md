@@ -1,6 +1,6 @@
 # A tour of the dashboard
 
-The dashboard is a board in your browser that shows everything Intakt is doing, updated live. This page walks through it. Intakt is still being built, so this describes the decided design ([details](design/05-architecture/13-dashboard.md)).
+The dashboard is a board in your browser that shows everything Intakt is doing, updated live. This page walks through it. Intakt is still being built, so this describes the decided design ([details](../design/05-architecture/13-dashboard.md)).
 
 ## The board
 

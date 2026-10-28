@@ -1,6 +1,6 @@
 # How Intakt uses Symfony, in plain words
 
-This page explains which parts of Symfony and Symfony AI Intakt is built from, and what each part does for it, without assuming you know Symfony. The exact list, with the status of every feature and where it lives in the code, is in [highlights](highlights.md). Intakt is still being built: each section says what is **in use** already and what is **planned**.
+This page explains which parts of Symfony and Symfony AI Intakt is built from, and what each part does for it, without assuming you know Symfony. The exact list, with the status of every feature and where it lives in the code, is in [highlights](../highlights.md). Intakt is still being built: each section says what is **in use** already and what is **planned**.
 
 ## First, what are these?
 
@@ -107,4 +107,4 @@ Keeping the application loaded has one catch: anything a part remembers would le
 
 ## Finding bugs in the beta
 
-Symfony AI is new, and Intakt uses it hard on purpose. When something looks like a bug in Symfony AI itself, Intakt writes the smallest possible test that shows it, keeps it under `upstream/`, and, with the owner's OK, reports it to the Symfony AI project. `intakt:upstream:run` re-runs all of them against the pinned versions, so it is obvious when a bug has been fixed upstream. The current list is in the "Found in the beta" section of [highlights](highlights.md).
+Symfony AI is new, and Intakt uses it hard on purpose. When something looks like a bug in Symfony AI itself, Intakt writes the smallest possible test that shows it, keeps it under `upstream/`, and, with the owner's OK, reports it to the Symfony AI project. `intakt:upstream:run` re-runs all of them against the pinned versions, so it is obvious when a bug has been fixed upstream. The current list is in the "Found in the beta" section of [highlights](../highlights.md).

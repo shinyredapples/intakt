@@ -1,6 +1,6 @@
 # How Intakt works, in plain words
 
-This page explains Intakt without assuming you know how it is built. If you want the full detail, the [design](design/README.md) is the authority; this page is the friendly tour. Intakt is still being built, so this describes how it is designed to work.
+This page explains Intakt without assuming you know how it is built. If you want the full detail, the [design](../design/README.md) is the authority; this page is the friendly tour. Intakt is still being built, so this describes how it is designed to work.
 
 ## The idea in one sentence
 

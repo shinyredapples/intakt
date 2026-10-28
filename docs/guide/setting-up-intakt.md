@@ -1,6 +1,6 @@
 # Setting up Intakt
 
-This page explains what happens when you install Intakt, and what changes when you add it to a project you already have or start a new one. Intakt is still being built, so this describes the decided design ([setup](design/05-architecture/11-setup.md), [new and existing projects](design/05-architecture/12-new-and-existing-projects.md)).
+This page explains what happens when you install Intakt, and what changes when you add it to a project you already have or start a new one. Intakt is still being built, so this describes the decided design ([setup](../design/05-architecture/11-setup.md), [new and existing projects](../design/05-architecture/12-new-and-existing-projects.md)).
 
 ## Installing
 
