@@ -4,7 +4,7 @@ This page explains what happens when you install Intakt, and what changes when y
 
 ## Installing
 
-Intakt is one container. You start it, open the dashboard, and a wizard does the rest:
+Intakt is one container, and Docker or Podman is all you need: the image ships everything else ([requirements](../architecture/requirements.md)). You start it, open the dashboard, and a wizard does the rest:
 
 ```mermaid
 flowchart TD

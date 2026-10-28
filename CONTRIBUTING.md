@@ -23,7 +23,7 @@ flowchart LR
   pr --> review[Reviewed, then merged]
 ```
 
-1. **Set up:** PHP 8.5.12 or later and Composer; then `composer install`. `php bin/instance 3>&1 >/dev/null` checks that Intakt boots.
+1. **Set up:** PHP 8.5.12 or later, Composer, git, and for the full `bin/check` gitleaks 8.30.1 and the Linux tools `unshare`, `setsid` and `ip`: the full list with versions is in [requirements](docs/architecture/requirements.md). On a system other than Linux, use the development container. Then `composer install`; `php bin/instance 3>&1 >/dev/null` checks that Intakt boots.
 2. **One change per branch and pull request**, small enough to review in one go.
 3. **Tests with every change:** a test that would fail without it, named as a sentence (`testAnEmptyFindingsListIsRefused`), with the coverage attributes `AGENTS.md` asks for.
 4. **Docs in the same change:** a user-visible change updates `docs/user/` and `docs/architecture/`; a change to something a guide describes updates the guide in `docs/guide/`; a change that starts using a Symfony or Symfony AI feature updates [`docs/highlights.md`](docs/highlights.md).

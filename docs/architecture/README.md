@@ -139,3 +139,7 @@ SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are 
 ## Vendor
 
 `Plugin/Vendor/Contract/Vendor` has one method, `review(project, tier, task)`, which returns a `Verdict` (`#[NoDiscard]`). `Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor` implements it: it builds the request from the task in a pipe (`$task |> asMessages |> askingForAVerdict`), a user message plus the option `response_format` set to `Verdict::class`, sends it through `TierInvoker` for the project and tier, and hands the result to `VerdictParser`. The schema sent to the model is derived from the `Verdict` class, and `StrictVerdictSubscriber` and the Validator check the answer; the T1 schema file (`tests/Core/Review/Contract/verdict.schema.json`) is the test oracle, not the call's source. An answer that is not a valid verdict comes back as the `Verdict::invalidOutput()` verdict (changes); a failed call stays an exception. Token usage per call, rate-limit and quota errors are not handled yet (plan task T5, later parts). Tests: `tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php` (`MockPlatformFactory` with the application's event dispatcher).
+
+## Requirements
+
+Every external command Intakt and its checks call, and whether you need it: [requirements](requirements.md).
