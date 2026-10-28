@@ -61,6 +61,11 @@ Then open the dashboard, pick the sample pull request and start a review.
 - [The engine room](docs/the-engine-room.md): lanes, queues, ticks, locks, cycles, generations, budgets and draining, in plain words.
 - [Writing a good task](docs/writing-a-good-task.md): what Intakt looks for, with a template.
 - [Why the AI can't wreck your project](docs/why-the-ai-cant-wreck-your-project.md): the safety layers, in plain words.
+- [Steering Intakt](docs/steering-intakt.md): labels, questions, sending work back, approving.
+- [A tour of the dashboard](docs/a-tour-of-the-dashboard.md): the board, the cards, Waiting on you.
+- [Accounts and costs](docs/accounts-and-costs.md): subscriptions, API keys, pace and shares.
+- [Setting up Intakt](docs/setting-up-intakt.md): installing, existing and new projects.
+- [Why isn't anything happening?](docs/why-isnt-anything-happening.md): the common reasons Intakt waits.
 - [How Intakt uses Symfony, in plain words](docs/symfony-in-intakt.md): which Symfony and Symfony AI parts do what.
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
