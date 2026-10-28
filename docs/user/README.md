@@ -27,7 +27,7 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 ## Configuring providers and API keys
 
-Intakt knows three providers: `anthropic`, `openai` and `openai_compatible` (any endpoint that speaks the OpenAI API). Each reads its key from the environment, in `.env.local` or the real environment, never from a committed file:
+Intakt knows three providers: `anthropic`, `openai` and `openai_compatible` (any endpoint that speaks the OpenAI API). Each reads its key from Symfony secrets (`php bin/console secrets:set ANTHROPIC_API_KEY`) or from the environment (`.env.local` or the real environment), never from a plain committed file; a non-empty environment value wins over the secret:
 
 | Provider | Variables it needs |
 |---|---|
@@ -35,4 +35,4 @@ Intakt knows three providers: `anthropic`, `openai` and `openai_compatible` (any
 | `openai` | `OPENAI_API_KEY` |
 | `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY` |
 
-A provider whose variables are not all set (or are empty) is switched off, and Intakt still starts. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`. Which model serves which capability tier comes with the per-project configuration (planned).
+A provider whose variables are not all set (empty counts as not set), neither in the environment nor in the secrets, is switched off, and Intakt still starts. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`. Which model serves which capability tier comes with the per-project configuration (planned).

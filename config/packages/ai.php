@@ -3,15 +3,22 @@
 declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Provider;
+use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
-// Same lookup order as Symfony's env processor. Presence is decided at build time because an unset env reference fails when the service is built.
+// Same sources as Symfony's env processor: the environment, then the secrets vault. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
-    $isSet = static function (string $name): bool {
+    $environmentValue = static function (string $name): ?string {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
 
-        return \is_string($value) && '' !== $value;
+        return is_string($value) && '' !== $value ? $value : null;
     };
+
+    // The framework's default vault directory, which config/packages/framework.yaml keeps; names only, so no decryption key is needed.
+    $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
+    $secrets = new SodiumVault($vaultDirectory)->list();
+
+    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || array_key_exists($name, $secrets);
 
     $configs = [
         Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%']],
