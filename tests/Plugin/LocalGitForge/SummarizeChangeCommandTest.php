@@ -155,6 +155,20 @@ final class SummarizeChangeCommandTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/[\x00-\x09\x0B-\x1F\x7F]/', $display);
     }
 
+    #[TestWith(["c1\u{009B}.txt", 'c1\xc2\x9b.txt'])]
+    #[TestWith(["del\x7F.txt", 'del\x7f.txt'])]
+    public function testC1CharactersAndDeleteInAPathArePrintedAsEscapes(string $path, string $escaped): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile($path, "r\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
+
+        $display = $tester->getDisplay();
+        self::assertMatchesRegularExpression('/^added\s+'.preg_quote($escaped, '/').'$/m', $display);
+        self::assertDoesNotMatchRegularExpression('/[\x00-\x09\x0B-\x1F\x7F]|\xC2[\x80-\x9F]/', $display);
+    }
+
     public function testAMissingBranchFailsWithAMessage(): void
     {
         $tester = $this->whenTheCommandRuns(['branch' => 'nope', '--repository' => $this->repository->path]);
