@@ -21,3 +21,11 @@ rules:
     - Intakt\Gates\PhpStan\NoNestedTryRule
     - Intakt\Gates\PhpStan\ClockOnlyRule
     - Intakt\Gates\PhpStan\NoMockOptOutRule
+
+services:
+    -
+        class: Intakt\Gates\PhpStan\StatefulServiceResetRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule

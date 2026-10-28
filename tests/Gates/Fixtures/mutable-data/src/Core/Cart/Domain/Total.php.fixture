@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Cart\Domain;
+
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
+final class Total
+{
+    public function __construct(public int $cents)
+    {
+    }
+}

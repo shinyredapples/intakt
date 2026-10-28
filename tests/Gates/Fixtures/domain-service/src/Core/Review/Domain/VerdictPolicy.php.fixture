@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Review\Domain;
+
+final class VerdictPolicy
+{
+    /** @var array<string, bool> */
+    private array $cache = [];
+
+    public function accepts(string $verdict): bool
+    {
+        return $this->cache[$verdict] ??= 'approve' === $verdict;
+    }
+}
