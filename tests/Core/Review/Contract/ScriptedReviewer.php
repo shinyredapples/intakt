@@ -26,7 +26,7 @@ final readonly class ScriptedReviewer
         $kernel = new Kernel('test', true);
         $kernel->boot();
 
-        /** @var EventDispatcherInterface */
+        /* @var EventDispatcherInterface */
         return $kernel->getContainer()->get('event_dispatcher');
     }
 }
