@@ -42,8 +42,12 @@ final class LocalGitForgeTest extends TestCase
 {
     private TemporaryRepository $repository;
 
+    /** @var array<array-key, mixed> */
+    private array $environment;
+
     protected function setUp(): void
     {
+        $this->environment = $_ENV;
         $this->repository = new TemporaryRepository();
         $this->repository->commitFile('README.md', "base\n");
         $this->repository->commitFile('src/Gone.php', "<?php\n");
@@ -51,7 +55,7 @@ final class LocalGitForgeTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($_ENV['GIT_DIR']);
+        $_ENV = $this->environment;
         $this->repository->remove();
     }
 
@@ -332,6 +336,19 @@ final class LocalGitForgeTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $forge->change(new ChangeId('feature'));
+    }
+
+    public function testItFailsToReadABranchWhenGitCannotRun(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $home = $this->repository->path.'/home';
+        mkdir($home);
+        file_put_contents($home.'/.gitconfig', "[broken\n");
+        $_ENV['HOME'] = $home;
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->change(new ChangeId('feature'));
     }
 
     public function testItIgnoresAGitDirectoryItInherits(): void

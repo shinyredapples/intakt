@@ -24,6 +24,7 @@ final readonly class LocalGitForge implements Forge
 {
     private const int TIMEOUT_SECONDS = 60;
     private const int REFERENCE_MISSING = 2;
+    private const int REFERENCE_INVALID = 1;
 
     public function __construct(
         private LocalRepository $repository,
@@ -58,8 +59,13 @@ final readonly class LocalGitForge implements Forge
         $reference = 'refs/heads/'.$id->value;
 
         // No branch can carry an invalid name; --branch is not used because it expands shorthands such as "@{-1}".
-        if (!$this->git(['check-ref-format', $reference])->isSuccessful()) {
+        $format = $this->git(['check-ref-format', $reference]);
+        if (self::REFERENCE_INVALID === $format->getExitCode()) {
             throw ChangeNotFound::named($id);
+        }
+
+        if (!$format->isSuccessful()) {
+            throw new ForgeReadFailed(sprintf('git check-ref-format failed: %s', trim($format->getErrorOutput())));
         }
 
         if (self::REFERENCE_MISSING === $this->git(['show-ref', '--exists', $reference])->getExitCode()) {
