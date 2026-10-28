@@ -13,7 +13,10 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
+use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 
+// Public because no service injects it before the review agent (plan T7), and an unused private service is removed.
+#[Autoconfigure(public: true)]
 final readonly class SymfonyAiVendor implements Vendor
 {
     public function __construct(
@@ -36,7 +39,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return new MessageBag(Message::ofUser($task));
     }
 
-    // The class, not the schema file: structured output derives the schema from it and the Validator checks the constraints (plan T5).
+    // The class, not the schema file, because structured output derives the schema from it and the Validator checks its constraints (plan T5).
     private function askingForAVerdict(MessageBag $messages): TierRequest
     {
         return new TierRequest($messages, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
