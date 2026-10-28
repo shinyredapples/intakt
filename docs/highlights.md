@@ -111,6 +111,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 |---|---|---|---|
 | Quality gates | `bin/check` runs every gate locally and in CI | done | `bin/check`, `config/gates/` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
+| `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | done | T26 (#33), `src/Core/Upstream/` |
 | `bin/instance` and `bin/probe` | offline boot gate and reviewer probes | done | T31 (#6), `bin/instance`, `bin/probe` |
 
 ## Found in the beta
