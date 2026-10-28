@@ -28,7 +28,7 @@ Intakt reviews a pull request with a panel of AI reviewers and tells the builder
 | Platform | every model call; several providers at once; structured output for verdicts and judge calls; streaming for live progress; token usage for cost; rate-limit and error handling |
 | Agent | one agent per reviewer role and for the judge, with read-only repository tools, tool effect hints and a message store per round |
 | Store | project memory: earlier findings and project docs retrieved into each reviewer's briefing |
-| AI Bundle | providers, agents, tiers and the panel configured in YAML |
+| AI Bundle | providers configured in PHP (`config/packages/ai.php`); agents, tiers and the panel configured in YAML |
 | MCP Bundle and PHP MCP SDK | the MCP server for agents, and the client through which reviewers use their repository tools |
 | Mate | development diagnostics on the running app |
 
