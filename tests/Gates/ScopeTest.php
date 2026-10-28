@@ -8,9 +8,11 @@ use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\Scope;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Scope::class)]
+#[UsesClass(ProcessRunner::class)]
 final class ScopeTest extends TestCase
 {
     /**
