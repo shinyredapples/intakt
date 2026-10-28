@@ -49,7 +49,7 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 
 ## Summarizing a branch
 
-`php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A branch the repository does not have, or a repository git cannot read, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
+`php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A control character in a file name is shown in a visible form such as `\x1b`, and a backslash as `\\`. A branch the repository does not have, or a repository git cannot read, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
 
 ## Checking a new Symfony AI release against the known bugs
 
