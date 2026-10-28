@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Symfony\AI\Platform\Bridge\Anthropic;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
-use Symfony\AI\Platform\Bridge\Anthropic\ModelCatalog as AnthropicModelCatalog;
 use Symfony\AI\Platform\Bridge\Generic\CompletionsModel;
 use Symfony\AI\Platform\Bridge\Generic\FallbackModelCatalog;
+use Symfony\AI\Platform\Bridge\OpenAi;
 use Symfony\AI\Platform\Bridge\OpenAi\Gpt;
-use Symfony\AI\Platform\Bridge\OpenAi\ModelCatalog as OpenAiModelCatalog;
 use Symfony\AI\Platform\Capability;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
@@ -67,8 +67,8 @@ final readonly class ProjectModelCatalog
     private function bridgeCatalog(Provider $provider): ModelCatalogInterface
     {
         return match ($provider) {
-            Provider::Anthropic => new AnthropicModelCatalog(),
-            Provider::OpenAi => new OpenAiModelCatalog(),
+            Provider::Anthropic => new Anthropic\ModelCatalog(),
+            Provider::OpenAi => new OpenAi\ModelCatalog(),
             Provider::OpenAiCompatible => new FallbackModelCatalog(),
         };
     }
