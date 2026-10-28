@@ -31,6 +31,16 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 A caller that already runs `bin/probe` without network access and in its own process namespace (as the build loop's sandbox does) sets the environment variable `PROBE_ISOLATED=1`. `bin/probe` then starts the instance directly and needs neither `unshare` nor `ip`, but first checks that the run really is offline: when `/proc/net/dev` cannot be read or lists something unexpected, when it shows a network interface other than `lo`, or when `lo` is down, it prints the reason and exits with code 2 before anything starts. The caller is responsible for ending whatever the probe leaves running. Any other value, or no value, keeps the `unshare` way.
 
+## The ledger
+
+Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Nothing writes to it yet. Create the table with:
+
+```
+php bin/console doctrine:migrations:migrate
+```
+
+There is no command to read the events back yet.
+
 ## Checking a new Symfony AI release against the known bugs
 
 `php bin/console intakt:upstream:run` runs every reproduction in `upstream/` and prints the installed Symfony AI versions, then `passes` (the bug seems fixed) or `still fails` for each reproduction, and a count. Add `-v` to see why a reproduction fails. The exit code is 1 while any reproduction still fails. A reproduction counts as `passes` only when its PHPUnit tests ran and asserted something, or when its `reproduce.php` script exits with 0 and prints `REPRODUCTION PASSES` as its last line. One without tests or script, with a skipped or incomplete test, or that runs longer than 5 minutes is reported as `still fails`, and the other reproductions still run. A folder that does not exist or cannot be read is an error (exit code 2).
