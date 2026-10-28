@@ -30,7 +30,7 @@ final readonly class TierPlatform
     ) {
     }
 
-    // The provider's own bundle platform finds the model through Symfony AI's catalog-based model router and the bundle's model_catalog.
+    // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.
     /**
      * @param array<mixed>|string|object $input
      */
