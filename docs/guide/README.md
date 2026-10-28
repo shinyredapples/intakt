@@ -13,5 +13,6 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Accounts and costs](accounts-and-costs.md) | which AI accounts it uses and how it spends |
 | [Setting up Intakt](setting-up-intakt.md) | installing it, and adding it to a project |
 | [Why isn't anything happening?](why-isnt-anything-happening.md) | why it waits, and what to do |
+| [Containers and services](containers-and-services.md) | where the work runs, and how reviewers test against real databases and services |
 | [Why the AI can't wreck your project](why-the-ai-cant-wreck-your-project.md) | the safety layers |
 | [How Intakt uses Symfony](symfony-in-intakt.md) | which Symfony and Symfony AI parts do what |
