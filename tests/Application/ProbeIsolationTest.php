@@ -17,9 +17,14 @@ final class ProbeIsolationTest extends TestCase
 {
     private const string DECIDE = <<<'PHP'
         require $argv[1].'/bin/probe';
-        $probe = new Probe('/project', '1' === $argv[2], new Network($argv[3], $argv[4]));
+        $probe = new Probe('/project', Isolation::fromVariable(getenv('PROBE_ISOLATED')), new Network($argv[2], $argv[3]));
         echo json_encode(['command' => $probe->command('tests/Probe/ATest.php'), 'refusal' => $probe->refusal()]);
         PHP;
+
+    private const string LOOPBACK_UP = '127.0.0.1:0';
+
+    // A down lo needs namespace privileges, so a documentation address (on no local interface) fails the check at the bind instead of the connection.
+    private const string LOOPBACK_DOWN = '192.0.2.1:0';
 
     private string $scratch;
 
@@ -36,7 +41,7 @@ final class ProbeIsolationTest extends TestCase
 
     public function testWithoutTheVariableTheInstanceStartsInsideUnshare(): void
     {
-        $decision = $this->decide(false, ['lo'], true);
+        $decision = $this->decide(false, ['lo'], self::LOOPBACK_UP);
 
         self::assertSame('unshare', $decision['command'][0]);
         self::assertContains('--net', $decision['command']);
@@ -46,12 +51,20 @@ final class ProbeIsolationTest extends TestCase
 
     public function testWithoutTheVariableAnOnlineHostIsNotRefused(): void
     {
-        self::assertNull($this->decide(false, ['lo', 'eth0'], true)['refusal']);
+        self::assertNull($this->decide(false, ['lo', 'eth0'], self::LOOPBACK_UP)['refusal']);
+    }
+
+    public function testAnotherValueOfTheVariableKeepsUnshare(): void
+    {
+        $decision = $this->decide('yes', ['lo', 'eth0'], self::LOOPBACK_UP);
+
+        self::assertSame('unshare', $decision['command'][0]);
+        self::assertNull($decision['refusal']);
     }
 
     public function testWithTheVariableTheInstanceStartsDirectlyWithoutUnshare(): void
     {
-        $decision = $this->decide(true, ['lo'], true);
+        $decision = $this->decide('1', ['lo'], self::LOOPBACK_UP);
 
         self::assertSame([PHP_BINARY, '/project/bin/instance', '--'], array_slice($decision['command'], 0, 3));
         self::assertNotContains('unshare', $decision['command']);
@@ -61,7 +74,7 @@ final class ProbeIsolationTest extends TestCase
 
     public function testWithTheVariableAnotherInterfaceIsRefused(): void
     {
-        $refusal = $this->decide(true, ['lo', 'eth0'], true)['refusal'];
+        $refusal = $this->decide('1', ['lo', 'eth0'], self::LOOPBACK_UP)['refusal'];
 
         self::assertStringContainsString('PROBE_ISOLATED is set but the run is not offline', (string) $refusal);
         self::assertStringContainsString('eth0', (string) $refusal);
@@ -69,12 +82,12 @@ final class ProbeIsolationTest extends TestCase
 
     public function testWithTheVariableALoopbackThatIsDownIsRefused(): void
     {
-        self::assertStringContainsString('lo is down', (string) $this->decide(true, ['lo'], false)['refusal']);
+        self::assertStringContainsString('lo is down', (string) $this->decide('1', ['lo'], self::LOOPBACK_DOWN)['refusal']);
     }
 
     public function testWithTheVariableAnUnreadableInterfaceListIsRefused(): void
     {
-        $refusal = $this->decideOn(true, $this->scratch.'/missing', '127.0.0.1:0')['refusal'];
+        $refusal = $this->decideOn('1', $this->scratch.'/missing', self::LOOPBACK_UP)['refusal'];
 
         self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
     }
@@ -83,7 +96,7 @@ final class ProbeIsolationTest extends TestCase
     {
         new Filesystem()->dumpFile($this->scratch.'/dev', "Inter-|   Receive\n face |bytes\n  not an interface line\n");
 
-        $refusal = $this->decideOn(true, $this->scratch.'/dev', '127.0.0.1:0')['refusal'];
+        $refusal = $this->decideOn('1', $this->scratch.'/dev', self::LOOPBACK_UP)['refusal'];
 
         self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
     }
@@ -92,7 +105,7 @@ final class ProbeIsolationTest extends TestCase
     {
         new Filesystem()->dumpFile($this->scratch.'/dev', "Inter-|   Receive\n face |bytes\n");
 
-        $refusal = $this->decideOn(true, $this->scratch.'/dev', '127.0.0.1:0')['refusal'];
+        $refusal = $this->decideOn('1', $this->scratch.'/dev', self::LOOPBACK_UP)['refusal'];
 
         self::assertStringContainsString('the network interfaces cannot be read', (string) $refusal);
     }
@@ -102,7 +115,7 @@ final class ProbeIsolationTest extends TestCase
      *
      * @return array{command: list<string>, refusal: ?string}
      */
-    private function decide(bool $isolated, array $names, bool $loopbackUp): array
+    private function decide(string|false $variable, array $names, string $loopback): array
     {
         $devices = "Inter-|   Receive\n face |bytes\n";
 
@@ -112,16 +125,16 @@ final class ProbeIsolationTest extends TestCase
 
         new Filesystem()->dumpFile($this->scratch.'/dev', $devices);
 
-        // A down lo needs namespace privileges, so a documentation address (on no local interface) fails the check at the bind instead of the connection.
-        return $this->decideOn($isolated, $this->scratch.'/dev', $loopbackUp ? '127.0.0.1:0' : '192.0.2.1:0');
+        return $this->decideOn($variable, $this->scratch.'/dev', $loopback);
     }
 
     /**
      * @return array{command: list<string>, refusal: ?string}
      */
-    private function decideOn(bool $isolated, string $devices, string $loopback): array
+    private function decideOn(string|false $variable, string $devices, string $loopback): array
     {
-        $process = new Process([PHP_BINARY, '-r', self::DECIDE, dirname(__DIR__, 2), $isolated ? '1' : '0', $devices, $loopback]);
+        // Process removes a variable whose value is false, so false runs the child as if PROBE_ISOLATED were never set.
+        $process = new Process([PHP_BINARY, '-r', self::DECIDE, dirname(__DIR__, 2), $devices, $loopback], env: ['PROBE_ISOLATED' => $variable]);
         $process->mustRun();
 
         /** @var array{command: list<string>, refusal: ?string} $decision */
