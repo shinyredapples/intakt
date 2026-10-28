@@ -42,6 +42,8 @@
     "phpstan/phpstan-strict-rules": "^2.1",
     "phpunit/phpunit": "^13.4",
     "rector/rector": "^2.8",
+    "symfony/ai-mate": "1.0.0-BETA1",
+    "symfony/ai-symfony-mate-extension": "1.0.0-BETA1",
     "tomasvotruba/cognitive-complexity": "^1.3"
   },
   "config": {
@@ -71,6 +73,11 @@
     "symfony": {
       "allow-contrib": false,
       "require": "^8.1"
+    },
+    "ai-mate": {
+      "includes": [
+        "mate/config.php"
+      ]
     }
   },
   "scripts": {

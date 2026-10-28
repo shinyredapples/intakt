@@ -43,6 +43,18 @@ Intakt knows three providers: `anthropic`, `openai` and `openai_compatible` (any
 
 A provider whose variables are not all set (empty counts as not set, and so does a secret Intakt cannot decrypt when the container is built), neither in the environment nor in the secrets, is switched off, and Intakt still starts. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`. Which model serves which capability tier comes with the per-project configuration (planned).
 
+## Looking inside the development install with Mate
+
+On a development install (`composer install` with the dev packages), `vendor/bin/mate` answers questions about the running app from its own container and environment files instead of from reading the code. It is not part of a production install: `composer install --no-dev` leaves it out.
+
+- `vendor/bin/mate tools:list` lists the tools.
+- `vendor/bin/mate tools:inspect TOOL` shows a tool's parameters.
+- `vendor/bin/mate tools:call TOOL --PARAM=VALUE` runs one; add `--format=json` for machine-readable output.
+
+The useful tools today are `symfony-services` and `symfony-service-detail` (which services the container holds and how one is wired), `symfony-dotenv-check` (which `.env*` file declares a variable and whether it resolves, with the value masked) and `server-info` (PHP version, system and extensions). The profiler tools are listed too, but Intakt does not turn on Symfony's profiler, so they find no profiles.
+
+If Mate stops with a PHP version mismatch, it was started with a PHP other than 8.5 (the version `mate/config.php` pins); run it with the PHP 8.5 the app uses. If a container tool reports "No compiled container found", run `bin/console cache:warmup` first so the dev container exists. If `tools:list` says "No tools found", check whether `vendor/` is a symlink: Mate then looks for its settings next to the folder the symlink points to and finds none, so it needs a real `vendor/` folder in the project.
+
 ## The ledger
 
 Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Nothing writes to it yet. Create the table with:
