@@ -44,6 +44,16 @@ final class ReadEventsCommandTest extends TestCase
         self::assertSame(0, $tester->getStatusCode());
     }
 
+    public function testFormatterTagsInAPayloadArePrintedAsStored(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn(new RecordedEvents([
+            $this->recorded('019a2600-0000-7000-8000-000000000001', LedgerEventKind::ReviewStarted, '{"note":"<info>text</info>"}'),
+        ]));
+
+        self::assertStringContainsString('review_started {"note":"<info>text</info>"}', $this->whenTheCommandRuns($ledger)->getDisplay());
+    }
+
     public function testAnEmptyLedgerPrintsOnlyTheCount(): void
     {
         $ledger = self::createStub(Ledger::class);

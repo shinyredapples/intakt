@@ -87,6 +87,34 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         $this->manager->getConnection()->executeStatement('DELETE FROM ledger_event');
     }
 
+    public function testReplacingAStoredEventAtItsPositionInTheDatabaseIsRefused(): void
+    {
+        $record = $this->storedEvent();
+        $this->migrate();
+
+        $this->expectException(DriverException::class);
+
+        $this->manager->getConnection()->executeStatement(
+            "INSERT OR REPLACE INTO ledger_event (position, id, kind, payload, recorded_at) VALUES (?, ?, 'judge_done', 'changed', '2026-10-28 12:00:00')",
+            [$record->position, new UuidV7()->toRfc4122()],
+        );
+    }
+
+    public function testReplacingAStoredEventByItsIdInTheDatabaseIsRefused(): void
+    {
+        $this->storedEvent();
+        $this->migrate();
+        $connection = $this->manager->getConnection();
+        $storedId = $connection->fetchOne('SELECT id FROM ledger_event');
+
+        $this->expectException(DriverException::class);
+
+        $connection->executeStatement(
+            "INSERT OR REPLACE INTO ledger_event (id, kind, payload, recorded_at) VALUES (?, 'judge_done', 'changed', '2026-10-28 12:00:00')",
+            [$storedId],
+        );
+    }
+
     public function testAppendingStillWorksAfterTheDatabaseRefusesChanges(): void
     {
         $this->migrate();

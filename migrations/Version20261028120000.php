@@ -30,6 +30,9 @@ final class Version20261028120000 extends AbstractMigration
                 $past,
             ));
         }
+
+        // INSERT OR REPLACE deletes the conflicting row without firing delete triggers unless recursive_triggers is on, so a conflicting insert is refused before it reaches the unique keys.
+        $this->addSql("CREATE TRIGGER ledger_event_no_replace BEFORE INSERT ON ledger_event WHEN EXISTS (SELECT 1 FROM ledger_event WHERE position = NEW.position OR id = NEW.id) BEGIN SELECT RAISE(ABORT, 'ledger_event is append-only: a stored event cannot be replaced'); END");
     }
 
     public function down(Schema $schema): void
@@ -40,5 +43,6 @@ final class Version20261028120000 extends AbstractMigration
 
         $this->addSql('DROP TRIGGER ledger_event_no_update');
         $this->addSql('DROP TRIGGER ledger_event_no_delete');
+        $this->addSql('DROP TRIGGER ledger_event_no_replace');
     }
 }

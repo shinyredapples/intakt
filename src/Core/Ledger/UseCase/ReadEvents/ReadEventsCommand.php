@@ -8,6 +8,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'intakt:ledger:events', description: 'Read the ledger events back in the order they were stored')]
@@ -22,7 +23,8 @@ final readonly class ReadEventsCommand
         $count = 0;
 
         foreach ($this->ledger->readInOrder() as $event) {
-            $io->writeln($this->lineOf($event));
+            // A payload is stored text, so formatter tags in it must print as written.
+            $io->writeln(OutputFormatter::escape($this->lineOf($event)));
             ++$count;
         }
 
