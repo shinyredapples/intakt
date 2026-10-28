@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Sample;
 
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
 
 final class SendInput
 {
-    #[Argument('The recipient')]
-    public string $recipient;
+    private int $uses = 0;
 
     #[Option('The subject')]
     public string $subject = 'hello';
+
+    public function count(): int
+    {
+        return ++$this->uses;
+    }
 }

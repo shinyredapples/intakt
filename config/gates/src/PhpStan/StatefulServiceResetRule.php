@@ -17,8 +17,6 @@ use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
-use Symfony\Component\Console\Attribute\Argument;
-use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -38,12 +36,6 @@ final readonly class StatefulServiceResetRule implements Rule
         Entity::class,
         Embeddable::class,
         MappedSuperclass::class,
-    ];
-
-    // the console builds a #[MapInput] object from these attributes per run, so the container never holds it
-    private const array CONSOLE_INPUT = [
-        Argument::class,
-        Option::class,
     ];
 
     public function __construct(private string $root)
@@ -87,21 +79,12 @@ final readonly class StatefulServiceResetRule implements Rule
             && !$class->is(KernelInterface::class)
             // Doctrine creates column types itself, so the container never holds one
             && !$class->is(Type::class)
-            && !$this->isExcludedFromTheContainer($class)
-            && !$this->isConsoleInput($class);
+            && !$this->isExcludedFromTheContainer($class);
     }
 
     private function isExcludedFromTheContainer(ClassReflection $class): bool
     {
         return array_any($class->getAttributes(), static fn (AttributeReflection $attribute): bool => in_array($attribute->getName(), self::NOT_REGISTERED, true));
-    }
-
-    private function isConsoleInput(ClassReflection $class): bool
-    {
-        return array_any($class->getNativeReflection()->getProperties(), static fn (ReflectionProperty $property): bool => array_any(
-            self::CONSOLE_INPUT,
-            static fn (string $attribute): bool => [] !== $property->getAttributes($attribute),
-        ));
     }
 
     /**
@@ -111,7 +94,15 @@ final readonly class StatefulServiceResetRule implements Rule
     {
         $declared = array_map($this->declaredProperties(...), [$class, ...$class->getParents()]);
 
-        return array_values(array_filter(array_merge(...$declared), static fn (ReflectionProperty $property): bool => !$property->isReadOnly()));
+        return array_values(array_filter(array_merge(...$declared), fn (ReflectionProperty $property): bool => !$property->isReadOnly() && $this->isDeclaredInTheRegisteredResource($property)));
+    }
+
+    private function isDeclaredInTheRegisteredResource(ReflectionProperty $property): bool
+    {
+        // a vendor base class (Command::$definition, AbstractController::$container) holds framework wiring, not request state, so only a property declared under src/ counts
+        $file = $property->getBetterReflection()->getDeclaringClass()->getFileName();
+
+        return null !== $file && str_starts_with($file, $this->root.self::REGISTERED_RESOURCE);
     }
 
     /**

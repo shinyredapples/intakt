@@ -163,9 +163,29 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'mutable-data');
     }
 
-    public function testDoctrineColumnTypesAndConsoleInputObjectsWithMutablePropertiesPassStaticAnalysis(): void
+    public function testDoctrineColumnTypesWithMutablePropertiesPassStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'framework-built');
+    }
+
+    public function testAnOptionPropertyAloneDoesNotExemptAServiceFromStaticAnalysis(): void
+    {
+        $run = $this->sandboxWith('option-property-service')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/SendInput.php:11 intakt.statefulService Service property $uses', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/SendInput.php:13 intakt.statefulService Service property $subject', $run->findingsOf('phpstan'));
+    }
+
+    public function testOnlyPropertiesDeclaredUnderSrcAreReportedOnAServiceExtendingAFrameworkBaseClass(): void
+    {
+        $run = $this->sandboxWith('framework-base')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Count.php:15 intakt.statefulService Service property $runs', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('Command::$', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('src/Greet.php', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('src/Home.php', $run->findingsOf('phpstan'));
     }
 
     public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void
