@@ -79,6 +79,63 @@ final class RunReproductionsCommandTest extends TestCase
         self::assertMatchesRegularExpression('/^symfony\/ai-platform \S+$/m', $display);
     }
 
+    public function testAHangingReproductionStillFailsAndTheRunGoesOn(): void
+    {
+        $this->givenReproduction('a-hanging-bug', 'sleep(30);');
+        $this->givenReproduction('b-fixed-bug', '$this->assertTrue(true);');
+
+        $tester = $this->whenTheCommandRuns(timeout: 1.0);
+
+        $display = $tester->getDisplay();
+        self::assertMatchesRegularExpression('/^still fails\s+a-hanging-bug$/m', $display);
+        self::assertMatchesRegularExpression('/^passes\s+b-fixed-bug$/m', $display);
+        self::assertStringContainsString('2 reproductions, 1 still fail', $display);
+    }
+
+    public function testAMissingFolderFailsTheRun(): void
+    {
+        $tester = $this->whenTheCommandRuns(directory: $this->folder.'/missing');
+
+        self::assertStringContainsString('No reproduction folder', $tester->getDisplay());
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
+    public function testAReproductionWithoutATestStillFails(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/script-only/reproduce.php', "<?php\n\necho 'ok';\n");
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+script-only$/m', $display);
+    }
+
+    public function testASkippedReproductionStillFails(): void
+    {
+        $this->givenReproduction('skipped-bug', '$this->markTestSkipped();');
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+skipped-bug$/m', $display);
+    }
+
+    public function testAnIncompleteReproductionStillFails(): void
+    {
+        $this->givenReproduction('incomplete-bug', '$this->markTestIncomplete();');
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+incomplete-bug$/m', $display);
+    }
+
+    public function testAReproductionWithoutAnAssertionStillFails(): void
+    {
+        $this->givenReproduction('empty-bug', '');
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+empty-bug$/m', $display);
+    }
+
     private function givenReproduction(string $slug, string $body): void
     {
         $class = 'Repro'.bin2hex(random_bytes(4)).'Test';
@@ -90,12 +147,12 @@ final class RunReproductionsCommandTest extends TestCase
     /**
      * @param array<string, mixed> $options
      */
-    private function whenTheCommandRuns(array $options = []): CommandTester
+    private function whenTheCommandRuns(array $options = [], ?string $directory = null, float $timeout = 300.0): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new RunReproductionsCommand(new PhpunitReproductionRunner(self::ROOT), self::ROOT));
+        $application->addCommand(new RunReproductionsCommand(new PhpunitReproductionRunner(self::ROOT, $timeout), self::ROOT));
         $tester = new CommandTester($application->find('intakt:upstream:run'));
-        $tester->execute(['directory' => $this->folder], $options);
+        $tester->execute(['directory' => $directory ?? $this->folder], $options);
 
         return $tester;
     }

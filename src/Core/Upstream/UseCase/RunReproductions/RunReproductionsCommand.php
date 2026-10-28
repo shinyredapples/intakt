@@ -29,8 +29,17 @@ final readonly class RunReproductionsCommand
         #[Argument('Folder with one subfolder per reproduction, relative to the project or absolute')]
         string $directory = 'upstream',
     ): int {
+        $folder = Path::makeAbsolute($directory, $this->projectDir);
+
+        // A mistyped folder would otherwise read as a clean run where every bug is fixed.
+        if (!is_dir($folder)) {
+            $io->error(sprintf('No reproduction folder at %s.', $directory));
+
+            return Command::INVALID;
+        }
+
         $this->reportVersions($io);
-        $outcomes = $this->runAll($directory);
+        $outcomes = $this->runAll($folder);
         $this->report($io, $outcomes);
 
         return array_any($outcomes, static fn (ReproductionOutcome $outcome): bool => $outcome->stillFails()) ? Command::FAILURE : Command::SUCCESS;
@@ -48,9 +57,9 @@ final readonly class RunReproductionsCommand
     /**
      * @return list<ReproductionOutcome>
      */
-    private function runAll(string $directory): array
+    private function runAll(string $folder): array
     {
-        $folders = glob(Path::makeAbsolute($directory, $this->projectDir).'/*', GLOB_ONLYDIR);
+        $folders = glob($folder.'/*', GLOB_ONLYDIR);
 
         return array_map($this->runner->run(...), false === $folders ? [] : $folders);
     }
