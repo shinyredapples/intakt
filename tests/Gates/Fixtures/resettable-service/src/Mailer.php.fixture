@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Contracts\Service\ResetInterface;
+
+final class Mailer implements ResetInterface
+{
+    private int $sent = 0;
+
+    public function send(): int
+    {
+        return ++$this->sent;
+    }
+
+    public function reset(): void
+    {
+        $this->sent = 0;
+    }
+}

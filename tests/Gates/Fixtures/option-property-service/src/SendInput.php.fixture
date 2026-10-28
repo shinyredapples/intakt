@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\Console\Attribute\Option;
+
+final class SendInput
+{
+    private int $uses = 0;
+
+    #[Option('The subject')]
+    public string $subject = 'hello';
+
+    public function count(): int
+    {
+        return ++$this->uses;
+    }
+}

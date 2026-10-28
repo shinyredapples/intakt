@@ -33,3 +33,7 @@
 # A debug kernel, as in tests/Application/KernelTest.php, writes it on every boot.
 /config/reference.php
 ###< symfony/framework-bundle ###
+
+###> intakt ###
+/config/intakt.yaml
+###< intakt ###

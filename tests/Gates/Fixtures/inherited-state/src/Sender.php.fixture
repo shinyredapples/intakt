@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+abstract class Sender
+{
+    private ?string $last = null;
+
+    public function remember(string $message): ?string
+    {
+        [$previous, $this->last] = [$this->last, $message];
+
+        return $previous;
+    }
+}
