@@ -27,7 +27,7 @@ final class ReadEventsCommandTest extends TestCase
 {
     public function testTheEventsArePrintedInTheOrderTheLedgerReturnsThem(): void
     {
-        $ledger = $this->createStub(Ledger::class);
+        $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturn(new RecordedEvents([
             $this->recorded('019a2600-0000-7000-8000-000000000001', LedgerEventKind::ReviewStarted, '{"pr":1}'),
             $this->recorded('019a2600-0000-7000-8000-000000000002', LedgerEventKind::JudgeDone, '{}'),
@@ -46,7 +46,7 @@ final class ReadEventsCommandTest extends TestCase
 
     public function testAnEmptyLedgerPrintsOnlyTheCount(): void
     {
-        $ledger = $this->createStub(Ledger::class);
+        $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturn(new RecordedEvents([]));
 
         self::assertSame("0 events\n", $this->whenTheCommandRuns($ledger)->getDisplay());
@@ -54,7 +54,7 @@ final class ReadEventsCommandTest extends TestCase
 
     private function recorded(string $id, LedgerEventKind $kind, string $payload): RecordedEvent
     {
-        return new RecordedEvent(Uuid::fromString($id), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28 12:00:00 UTC'));
+        return new RecordedEvent(Uuid::fromString($id), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 
     private function whenTheCommandRuns(Ledger $ledger): CommandTester
