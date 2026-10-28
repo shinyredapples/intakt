@@ -1,0 +1,126 @@
+# The engine room: the words behind the loop
+
+The dashboard and the logs use a handful of words for the loop's machinery: lanes, slots, ticks, queues, locks, cycles, generations, budgets, draining. This page explains each one in plain words, with a picture where it helps. For the step-by-step story see [the journey of a task](the-journey-of-a-task.md); for the full rules, the [design](design/README.md). Intakt is still being built, so this describes the decided design.
+
+## Lanes and slots: the workbenches
+
+Think of a workshop with workbenches. Each bench does one job at a time.
+
+- A **build slot** is a bench where a builder works on one task. A project can have one or more.
+- The **review lane** is the bench where finished work is reviewed and merged.
+
+The benches work **independently**: while one task is being reviewed, the next one is already being built. They hand work to each other, like an assembly line.
+
+```mermaid
+flowchart LR
+  q[(Queue)] --> s1[Build slot 1]
+  q --> s2[Build slot 2]
+  s1 -- finished work --> rq[(Waiting for review)]
+  s2 -- finished work --> rq
+  rq --> rl[Review lane]
+  rl -- approved --> main[(Main)]
+  rl -- changes needed --> q
+```
+
+How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
+
+## Queues: who is next
+
+There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. Both are sorted the same way: priority first (`urgent`, `high`, `normal`, `low`), then milestone, then age.
+
+**The review cap** stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Work that is waiting for *you*, or on hold, doesn't count towards the cap, because no reviewer can move it.
+
+## Ticks, events and deadlines: what makes things move
+
+Some loops run on a **tick**: a clock that wakes every lane every few minutes ("anything to do?"). Intakt mostly doesn't need one. It reacts to **events** the moment they happen:
+
+| Event | What follows |
+|---|---|
+| a builder finishes | its work is checked and pushed |
+| GitHub reports CI is green | the review starts |
+| a reviewer finishes | the verdicts are judged; merge or back to the builder |
+| you approve something | it moves on |
+
+Everything that waits has a **deadline** that wakes it, for example "check again in 2 minutes whether CI started". A slow **heartbeat** runs as a safety net, in case GitHub forgets to send an event. When nothing needs doing, nothing runs.
+
+## CI: the second opinion
+
+**CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+
+If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
+
+## Locks: one at a time
+
+A **lock** is a "one at a time" sign on something that must not be used by two jobs at once:
+- the review lane, so two reviews don't merge into main at the same moment;
+- an AI account, so too many calls don't hit the same company at once (a *semaphore*: a lock that lets a set number through);
+- the moment of an update, so no job starts while Intakt is being replaced.
+
+Locks are short-lived: a job that waits for something outside (CI, you) gives its lock back and comes back later.
+
+## Reviewers, stand-ins and catch-ups
+
+- The **review panel** is the set of reviewers for a change: a fixed core panel plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
+- A **stand-in** steps in when a reviewer's AI company is over its limit: another company's reviewer reviews in its place, so work doesn't stall.
+- A **catch-up review** is the missing reviewer's review, done later once its company is available again. It never blocks a merge; if it finds a real problem, that becomes a new task.
+
+## Cycles and generations: second chances
+
+A **cycle** is one round of *build, check, review*. When reviewers ask for changes, the task goes around again.
+
+```mermaid
+flowchart LR
+  c1[Cycle 1] -- changes --> c2[Cycle 2] -- changes --> c3[Cycle 3]
+  c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
+  g2 -- still not approved --> m[The maintainer agent decides]
+```
+
+- A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
+- A **generation** is a set of cycles with one kind of builder. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
+- If that doesn't work either, the **maintainer agent** decides: split the task, rewrite it, or ask you.
+
+A cycle that changes nothing (the builder couldn't fix the problem because it needs something outside the task) doesn't loop: the task goes **on hold** instead ([holds](how-intakt-works.md#when-something-gets-stuck)).
+
+## Budgets, windows and pace
+
+AI subscriptions come with allowances that refill over time, usually a **five-hour window** and a **weekly window**. Intakt reads how much of each is used, as the AI company measures it, and compares that with how much of the week has passed:
+
+```mermaid
+flowchart LR
+  read[Measured use<br/>vs. time passed] --> pace{Pace}
+  pace -- "behind: room to spare" --> up[More slots,<br/>stronger models]
+  pace -- "on track" --> keep[As planned]
+  pace -- "ahead: spending fast" --> down[One slot,<br/>a cheaper model]
+  read --> ceiling{Window nearly full?}
+  ceiling -- yes --> wait[No new jobs until it refills]
+```
+
+- **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 means "start no new builds for this project".
+- **Ceilings:** near the top of a window, new jobs wait for it to refill. A job already running is never cut off halfway.
+- **Back-off:** after a failure (an AI company error, a broken environment), a bench waits a little before trying again (a minute for a quick internal hiccup, longer for real failures) instead of hammering. Four failures in a row stop it and call the maintainer agent.
+
+## Draining and updates
+
+**Draining** is how Intakt updates itself without breaking work in progress:
+
+```mermaid
+flowchart LR
+  a[New version ready] --> b[Drain:<br/>start no new jobs]
+  b --> c[Running jobs finish<br/>work waiting on CI or you is parked]
+  c --> d[Swap in the new version]
+  d --> e{Starts and works?}
+  e -- yes --> f[Resume]
+  e -- no --> g[Roll back to the old version,<br/>resume, alert]
+```
+
+While a drain is on, the dashboard says "draining" and nothing new starts; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold the drain up.
+
+## Holds, hand-overs and caps
+
+| Word | Meaning |
+|---|---|
+| **Hold** | a pause with a reason, which lifts by itself when the reason is gone |
+| **Hand-over** | the task goes to the maintainer agent, which decides what happens next |
+| **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
+| **Review cap** | at most a few pieces of finished work wait for a reviewer before the builders pause |
+| **Parked** | a job that is waiting for something outside (CI, you) and has given its bench back |

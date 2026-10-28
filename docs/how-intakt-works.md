@@ -152,3 +152,4 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label on the task |
 
 For every step in detail, see [the journey of a task](the-journey-of-a-task.md).
+For the words behind the machinery (lanes, queues, locks, cycles, budgets, draining), see [the engine room](the-engine-room.md).
