@@ -150,3 +150,5 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 | **Protected files** | the project's rules: the checks that judge the code, the CI setup, the agents' instructions |
 | **Hold** | a pause that lifts by itself when its reason is gone |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label on the task |
+
+For every step in detail, see [the journey of a task](the-journey-of-a-task.md).
