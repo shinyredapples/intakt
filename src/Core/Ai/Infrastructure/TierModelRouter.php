@@ -25,8 +25,10 @@ final readonly class TierModelRouter implements ModelRouterInterface
     ) {
     }
 
-    public function resolve(string|Model $model, iterable $providers, array|string|object $input, array $options = []): RoutingDecision
+    // The interface's input and options arrive as one list because Symfony AI fixes four parameters and Intakt's parameter-limit gate allows three; the input is not read here.
+    public function resolve(string|Model $model, iterable $providers, mixed ...$request): RoutingDecision
     {
+        $options = $this->options($request);
         $project = $this->project($options);
         $tier = $this->tier($model);
         $resolved = $this->resolver->resolve($project, $tier);
@@ -38,6 +40,25 @@ final readonly class TierModelRouter implements ModelRouterInterface
             $options,
             sprintf('Project "%s" maps the "%s" tier to %s.', $project, $tier->value, $this->describe($resolved)),
         );
+    }
+
+    /**
+     * @param array<int|string, mixed> $request
+     *
+     * @return array<string, mixed>
+     */
+    private function options(array $request): array
+    {
+        $options = $request[1] ?? $request['options'] ?? [];
+
+        if (!is_array($options)) {
+            throw new InvalidArgumentException('The options of a tier call must be an array.');
+        }
+
+        /** @var array<string, mixed> $named */
+        $named = $options;
+
+        return $named;
     }
 
     /**

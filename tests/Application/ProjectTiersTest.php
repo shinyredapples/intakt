@@ -34,7 +34,7 @@ final class ProjectTiersTest extends KernelTestCase
             $this->unsetVariable($name);
         }
 
-        $this->file = (getenv('TMPDIR') ?: sys_get_temp_dir()).'/intakt-projects-'.bin2hex(random_bytes(4)).'.yaml';
+        $this->file = sys_get_temp_dir().'/intakt-projects-'.bin2hex(random_bytes(4)).'.yaml';
         file_put_contents($this->file, <<<'YAML'
             projects:
                 alpha-one:

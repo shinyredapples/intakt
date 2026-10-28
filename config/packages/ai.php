@@ -45,6 +45,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
+    /** @var array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects */
     $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : []])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];

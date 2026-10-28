@@ -27,7 +27,7 @@ final class TierPlatformPass implements CompilerPassInterface
             }
         }
 
-        // A platform refuses an empty provider list, and with every provider disabled there is nothing to route to.
+        // Skipped with every provider disabled because a platform refuses an empty provider list.
         if ([] === $providers) {
             return;
         }
@@ -47,7 +47,7 @@ final class TierPlatformPass implements CompilerPassInterface
         };
     }
 
-    // Each bridge factory's createProvider() takes the leading arguments of its createPlatform(), which the bundle fills.
+    // Works because each bridge factory's createProvider() takes the leading arguments of its createPlatform(), which the bundle fills.
     private function providerOf(Definition $platform, Provider $provider): Definition
     {
         /** @var array{0: class-string, 1: string} $factory */
