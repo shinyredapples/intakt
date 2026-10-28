@@ -1,6 +1,6 @@
 # Intakt in plain words
 
-Guides that explain Intakt without assuming you know how it is built. Each one describes the decided design until that part is built, and is kept current as development goes on; the [design](../design/README.md) is the authority when they differ.
+Guides that explain Intakt without assuming you know how it is built. Each one describes the decided design until that part is built, and is kept current as development goes on (new words go into the [glossary](glossary.md)); the [design](../design/README.md) is the authority when they differ.
 
 | Guide | For when you want to know |
 |---|---|
@@ -19,4 +19,8 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Using Intakt from your assistant](using-intakt-from-your-assistant.md) | MCP, the console command and the local API |
 | [Several projects](several-projects.md) | shares, the shared view, and projects that depend on each other |
 | [Why the AI can't wreck your project](why-the-ai-cant-wreck-your-project.md) | the safety layers |
+| [Your data](your-data.md) | what it stores, backups, moving, uninstalling |
+| [Writing a plugin](writing-a-plugin.md) | adding a forge, an AI company or a notifier |
+| [A demo walkthrough](demo-walkthrough.md) | a guided first run with the sample project |
+| [Glossary](glossary.md) | every word in the guides, with a link to where it is explained |
 | [How Intakt uses Symfony](symfony-in-intakt.md) | which Symfony and Symfony AI parts do what |
