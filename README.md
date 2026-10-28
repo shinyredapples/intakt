@@ -57,6 +57,7 @@ Then open the dashboard, pick the sample pull request and start a review.
 ## Documentation
 
 - [How Intakt works, in plain words](docs/how-intakt-works.md): the friendly tour, with diagrams.
+- [How Intakt uses Symfony, in plain words](docs/symfony-in-intakt.md): which Symfony and Symfony AI parts do what.
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
