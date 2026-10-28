@@ -39,7 +39,7 @@ final readonly class PhpunitReproductionRunner
         );
     }
 
-    // Only a test that ran and asserted can show a fix; an empty, skipped or assertion-free run proves nothing.
+    // Empty, skipped and assertion-free runs fail, because only a test that ran and asserted can show a fix.
     private function phpunit(string $directory): Process
     {
         return new Process([
