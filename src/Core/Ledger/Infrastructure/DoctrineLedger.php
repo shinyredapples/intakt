@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -37,8 +38,8 @@ final readonly class DoctrineLedger implements Ledger
         try {
             $manager->persist($record);
             $manager->flush();
-        } catch (Exception|EntityManagerClosed $failure) {
-            // A failed flush closes the entity manager for every holder, because Doctrine refuses to reopen it.
+        } catch (Exception|EntityManagerClosed|LedgerEventsAreAppendOnly $failure) {
+            // A failed flush closes the entity manager for every holder, because Doctrine refuses to reopen it; a refusal here belongs to another holder's pending change, not to this append.
             $this->registry->resetManager();
 
             return AppendResult::failed('the event was not stored: '.$failure::class);

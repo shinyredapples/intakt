@@ -211,6 +211,41 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertCount(2, iterator_to_array($ledger->readInOrder()));
     }
 
+    public function testAnAppendWhileARefusedDeleteIsPendingReportsTheRefusal(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->remove($this->storedEvent());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertFalse($result->succeeded());
+        self::assertSame('the event was not stored: Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly', $result->failure);
+        self::assertCount(1, iterator_to_array($ledger->readInOrder()));
+    }
+
+    public function testAnAppendWhileARefusedUpdateIsPendingReportsTheRefusal(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->getUnitOfWork()->scheduleForUpdate($this->storedEvent());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertFalse($result->succeeded());
+        self::assertSame('the event was not stored: Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly', $result->failure);
+    }
+
+    public function testAnAppendAfterOneThatMetARefusedChangeIsStored(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->remove($this->storedEvent());
+        self::assertFalse($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'))->succeeded());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertCount(2, iterator_to_array($ledger->readInOrder()));
+    }
+
     public function testDiscardingTheResultOfAnAppendIsReported(): void
     {
         $append = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(...);
