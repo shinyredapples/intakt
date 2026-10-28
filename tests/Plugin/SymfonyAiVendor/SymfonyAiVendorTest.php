@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -80,7 +81,7 @@ final class SymfonyAiVendorTest extends TestCase
         return $this->vendor(static fn (): string => $output);
     }
 
-    private function vendor(\Closure $answer): SymfonyAiVendor
+    private function vendor(Closure $answer): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
