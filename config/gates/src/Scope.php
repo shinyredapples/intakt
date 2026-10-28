@@ -18,7 +18,7 @@ final readonly class Scope
         'tests/Gates/Fixtures/',
     ];
 
-    private const array EXTENSIONLESS_PHP_FILES = ['bin/check'];
+    private const array EXTENSIONLESS_PHP_FILES = ['bin/check', 'bin/instance', 'bin/probe'];
 
     public function __construct(
         private string $root,
