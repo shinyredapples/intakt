@@ -56,8 +56,30 @@ In words:
 3. **It waits its turn.** Urgent tasks go first, then the rest by milestone and age.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
-6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies, so one company's blind spot doesn't decide. Bigger or riskier changes can get a bigger panel, a docs change a smaller one. Reviewers can also run small experiments to test the change.
+6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies, so one company's blind spot doesn't decide. A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
 7. **It is merged** into your project, or sent back with the reviewers' notes, and the builder tries again.
+
+## Which reviewers look at a change
+
+Every change gets the same **core panel**. On top of that, **specialist reviewers** join when the change calls for them, each with its own checklist:
+
+```mermaid
+flowchart LR
+  pr[A change] --> core[Core panel<br/>reviews every change]
+  pr --> rules{What is it about?}
+  rules -- "touches security code" --> sec[Security reviewer]
+  rules -- "label review:performance" --> perf[Performance reviewer]
+  rules -- "changes the project's checks" --> gates[Checks reviewer]
+  rules -- "changes the user guide" --> docs[Docs reviewer]
+```
+
+What brings in a specialist:
+- **the files the change touches**, for example security code;
+- **a label on the task**, such as `review:security`, set by you or the maintainer agent;
+- **the kind or size of the task**, for example changes to the project's checks, or a very large change;
+- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the security reviewer).
+
+A specialist can be **blocking** (it must approve, like the core panel) or **advisory** (its notes become small follow-up tasks), and it judges only its own area, so a docs reviewer never blocks a change over performance. These rules only ever add reviewers: nothing can make the core panel smaller, and the rules themselves are protected, so a change can't switch off the reviewer that would catch it.
 
 ## What needs you, and what doesn't
 
