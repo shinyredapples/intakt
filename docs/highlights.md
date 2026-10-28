@@ -8,7 +8,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.yaml` |
+| Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.php` |
 | Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Core/Review/Infrastructure/StrictVerdictSubscriber.php`; T5 (#10), T12 (#17) |
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | planned | T5 (#10) |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | planned | T5 (#10), T9 (#14), T14 (#19) |
@@ -44,7 +44,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51), `config/packages/ai.yaml` |
+| Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51), `config/packages/ai.php` |
 | `model_catalog` and a model router | capability tiers mapped to provider models per project | planned | T4 (#52) |
 | `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | planned | T7 (#12), T13 (#18) |
 

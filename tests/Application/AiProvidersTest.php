@@ -1,0 +1,248 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Application;
+
+use PHPUnit\Framework\Attributes\CoversNothing;
+use Symfony\AI\Platform\PlatformInterface;
+use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Filesystem\Filesystem;
+
+// Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
+#[CoversNothing]
+final class AiProvidersTest extends KernelTestCase
+{
+    private const array VARIABLES = [
+        'ANTHROPIC_API_KEY',
+        'OPENAI_API_KEY',
+        'OPENAI_COMPATIBLE_BASE_URL',
+        'OPENAI_COMPATIBLE_API_KEY',
+    ];
+
+    // A runtime environment of its own, so the test vault never mixes with a real one under config/secrets/.
+    private const string VAULT_ENVIRONMENT = 'ai_providers_test';
+
+    /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
+    private array $saved = [];
+
+    protected function setUp(): void
+    {
+        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET'] as $name) {
+            $this->saved[$name] = [
+                'server' => $_SERVER[$name] ?? null,
+                'env' => $_ENV[$name] ?? null,
+                'process' => getenv($name),
+            ];
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        new Filesystem()->remove([self::createKernel()->getCacheDir(), $this->vaultDirectory()]);
+    }
+
+    public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
+    {
+        $container = $this->bootWith($this->allSet());
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertTrue($container->has('ai.platform.openai'));
+        self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
+        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+    }
+
+    public function testAProviderWithoutItsKeyIsDisabledWithAMessageAndTheKernelBoots(): void
+    {
+        $values = $this->allSet();
+        unset($values['OPENAI_API_KEY']);
+
+        $container = $this->bootWith($values);
+
+        self::assertFalse($container->has('ai.platform.openai'));
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['openai' => 'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
+    public function testAnEmptyKeyCountsAsMissing(): void
+    {
+        $container = $this->bootWith([...$this->allSet(), 'OPENAI_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.openai'));
+        $disabled = $container->getParameter('intakt.ai.disabled_providers');
+
+        self::assertIsArray($disabled);
+        self::assertArrayHasKey('openai', $disabled);
+    }
+
+    public function testTheCompatibleEndpointNeedsBothItsAddressAndItsKey(): void
+    {
+        $values = $this->allSet();
+        unset($values['OPENAI_COMPATIBLE_API_KEY']);
+
+        $container = $this->bootWith($values);
+
+        self::assertFalse($container->has('ai.platform.generic.openai_compatible'));
+        self::assertSame(
+            ['openai_compatible' => 'Provider "openai_compatible" is disabled: set OPENAI_COMPATIBLE_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
+    public function testWithoutAnyKeyEveryProviderIsDisabledAndTheKernelStillBoots(): void
+    {
+        $container = $this->bootWith([]);
+
+        $disabled = $container->getParameter('intakt.ai.disabled_providers');
+
+        self::assertIsArray($disabled);
+        self::assertSame(['anthropic', 'openai', 'openai_compatible'], array_keys($disabled));
+    }
+
+    public function testAKeyInTheEnvironmentArrayWinsOverAnEmptyServerValue(): void
+    {
+        $_SERVER['OPENAI_API_KEY'] = '';
+        $_ENV['OPENAI_API_KEY'] = 'test-value';
+
+        $container = $this->bootWith(array_diff_key($this->allSet(), ['OPENAI_API_KEY' => true]), keep: ['OPENAI_API_KEY']);
+
+        self::assertTrue($container->has('ai.platform.openai'));
+    }
+
+    public function testAKeyStoredOnlyInTheSecretsVaultEnablesItsProvider(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+        self::assertInstanceOf(PlatformInterface::class, $container->get('ai.platform.anthropic'));
+    }
+
+    public function testAnEmptyKeyInTheSecretsVaultCountsAsMissing(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', '');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
+    public function testAMalformedDecryptionSecretLeavesAProviderWithItsKeyInTheEnvironmentEnabled(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('UNRELATED_VAULT_ENTRY', 'test-value');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $this->useMalformedDecryptionSecret();
+
+        $container = $this->bootWith($this->allSet());
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertTrue($container->has('ai.platform.openai'));
+        self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
+        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+    }
+
+    public function testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $this->useMalformedDecryptionSecret();
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
+    // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
+    private function useMalformedDecryptionSecret(): void
+    {
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode('too short for a key pair');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function allSet(): array
+    {
+        $values = [];
+        foreach (self::VARIABLES as $name) {
+            $values[$name] = str_ends_with($name, 'BASE_URL') ? 'http://localhost:11434/v1' : 'test-value';
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param array<string, string> $values
+     * @param list<string>          $keep
+     */
+    private function bootWith(array $values, array $keep = []): ContainerInterface
+    {
+        foreach (self::VARIABLES as $name) {
+            if (in_array($name, $keep, true)) {
+                continue;
+            }
+
+            $this->unsetVariable($name);
+            if (array_key_exists($name, $values)) {
+                $_SERVER[$name] = $values[$name];
+            }
+        }
+
+        // The build decides on the variables, so every case needs a fresh container; teardown removes it so later tests rebuild.
+        new Filesystem()->remove(self::createKernel()->getCacheDir());
+        self::ensureKernelShutdown();
+        self::bootKernel();
+
+        return self::getContainer();
+    }
+
+    private function vaultDirectory(): string
+    {
+        return self::createKernel()->getProjectDir().'/config/secrets/'.self::VAULT_ENVIRONMENT;
+    }
+
+    private function unsetVariable(string $name): void
+    {
+        unset($_SERVER[$name], $_ENV[$name]);
+        putenv($name);
+    }
+}
