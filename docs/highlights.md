@@ -9,7 +9,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
 | Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.yaml` |
-| Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | planned | T1 (#5), T5 (#10), T12 (#17) |
+| Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`; T5 (#10), T12 (#17) |
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | planned | T5 (#10) |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | planned | T5 (#10), T9 (#14), T14 (#19) |
 | Anthropic prompt caching | later rounds of a review read cached tokens | planned | T7 (#12) |
@@ -82,7 +82,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T26 (#33), `src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php` |
 | Uid | UUIDv7 ids for ledger events and findings | planned | T2 (#7, part #46) |
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
-| Validator | checks typed verdicts from structured output | planned | T1 (#5), T5 (#10) |
+| Validator | checks typed verdicts from structured output | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`; T5 (#10) |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
 | Process | the local git forge; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
