@@ -12,10 +12,12 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Ledger\Infrastructure\RefuseChangesToStoredEvents;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -28,9 +30,11 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(DoctrineLedger::class)]
 #[CoversClass(AppendResult::class)]
 #[CoversClass(RecordedEvents::class)]
+#[CoversClass(RefuseChangesToStoredEvents::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
+#[UsesClass(LedgerEventsAreAppendOnly::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
 final class DoctrineLedgerTest extends KernelTestCase
@@ -159,6 +163,89 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertCount(1, iterator_to_array($ledger->readInOrder()));
     }
 
+    public function testAnAppendToAManagerThatAnotherFailureClosedReportsTheFailure(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->closeTheManager();
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'));
+
+        self::assertFalse($result->succeeded());
+        self::assertSame('the event was not stored: Doctrine\ORM\Exception\EntityManagerClosed', $result->failure);
+    }
+
+    public function testAnAppendAfterOneToAClosedManagerIsStored(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->closeTheManager();
+        self::assertFalse($ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{}'))->succeeded());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertCount(1, iterator_to_array($ledger->readInOrder()));
+    }
+
+    public function testAnAppendAfterARefusedUpdateIsStored(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $manager = $this->entityManager();
+        $manager->getUnitOfWork()->scheduleForUpdate($this->storedEvent());
+        $this->assertTheFlushIsRefused();
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertCount(2, iterator_to_array($ledger->readInOrder()));
+    }
+
+    public function testAnAppendAfterARefusedDeleteIsStored(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->remove($this->storedEvent());
+        $this->assertTheFlushIsRefused();
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertCount(2, iterator_to_array($ledger->readInOrder()));
+    }
+
+    public function testAnAppendWhileARefusedDeleteIsPendingReportsTheRefusal(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->remove($this->storedEvent());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertFalse($result->succeeded());
+        self::assertSame('the event was not stored: Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly', $result->failure);
+        self::assertCount(1, iterator_to_array($ledger->readInOrder()));
+    }
+
+    public function testAnAppendWhileARefusedUpdateIsPendingReportsTheRefusal(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->getUnitOfWork()->scheduleForUpdate($this->storedEvent());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertFalse($result->succeeded());
+        self::assertSame('the event was not stored: Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly', $result->failure);
+    }
+
+    public function testAnAppendAfterOneThatMetARefusedChangeIsStored(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $this->entityManager()->remove($this->storedEvent());
+        self::assertFalse($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'))->succeeded());
+
+        $result = $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertCount(2, iterator_to_array($ledger->readInOrder()));
+    }
+
     public function testDiscardingTheResultOfAnAppendIsReported(): void
     {
         $append = $this->ledger('2026-10-27 12:00:00', 'UTC')->append(...);
@@ -199,6 +286,39 @@ final class DoctrineLedgerTest extends KernelTestCase
         $tool = new SchemaTool($manager);
         $tool->dropSchema($metadata);
         $tool->createSchema($metadata);
+    }
+
+    private function closeTheManager(): void
+    {
+        $this->entityManager()->close();
+    }
+
+    private function storedEvent(): EventRecord
+    {
+        $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted, '{}', new DateTimeImmutable('2026-10-27 12:00:00'));
+        $this->entityManager()->persist($record);
+        $this->entityManager()->flush();
+
+        return $record;
+    }
+
+    private function assertTheFlushIsRefused(): void
+    {
+        try {
+            $this->entityManager()->flush();
+        } catch (LedgerEventsAreAppendOnly) {
+            return;
+        }
+
+        self::fail('the flush was not refused');
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        $manager = $this->registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
     }
 
     private function dropTable(): void
