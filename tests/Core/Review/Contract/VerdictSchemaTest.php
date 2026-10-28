@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 
-// The schema file is the test oracle the plan asks for: the classes are the source of truth, the file mirrors them.
+// Covers nothing because the schema file is only an oracle: the classes are the source of truth (docs/plan.md, T1).
 #[CoversNothing]
 final class VerdictSchemaTest extends TestCase
 {
