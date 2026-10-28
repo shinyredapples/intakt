@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\AbstractMigration;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
-use Doctrine\Migrations\AbstractMigration;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -155,14 +156,19 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         // The migrations bundle loads migrations by path, so Composer's autoloader does not know this class.
         require_once dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
 
-        $class = 'DoctrineMigrations\\Version20261028120000';
         $connection = $this->manager->getConnection();
-        $migration = new $class($connection, new NullLogger());
-        self::assertInstanceOf(AbstractMigration::class, $migration);
+        $migration = $this->instantiate('DoctrineMigrations\\Version20261028120000', $connection);
         $migration->up(new Schema());
 
         foreach ($migration->getSql() as $query) {
             $connection->executeStatement($query->getStatement());
         }
+    }
+
+    private function instantiate(string $class, Connection $connection): AbstractMigration
+    {
+        self::assertTrue(is_subclass_of($class, AbstractMigration::class));
+
+        return new $class($connection, new NullLogger());
     }
 }
