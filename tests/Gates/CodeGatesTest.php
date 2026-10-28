@@ -163,6 +163,11 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'mutable-data');
     }
 
+    public function testDoctrineColumnTypesAndConsoleInputObjectsWithMutablePropertiesPassStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'framework-built');
+    }
+
     public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'domain-service', 'src/Core/Review/Domain/VerdictPolicy.php:10 intakt.statefulService Service property $cache');
