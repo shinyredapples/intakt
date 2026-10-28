@@ -6,6 +6,9 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
+use PhpParser\Node\Expr;
+use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
@@ -13,7 +16,9 @@ use PhpParser\Node\IntersectionType;
 use PhpParser\Node\Name;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
+use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\UnionType;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ClassReflection;
@@ -45,17 +50,17 @@ final readonly class FlagParameterRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (str_starts_with($scope->getFile(), $this->root.self::TEST_FOLDER) || $this->isValueObjectConstructor($node, $scope)) {
+        if (str_starts_with($scope->getFile(), $this->root.self::TEST_FOLDER)) {
             return [];
         }
 
-        $flags = array_filter($node->getParams(), fn (Param $parameter): bool => $this->isBoolean($parameter->type));
+        $flags = array_filter($node->getParams(), fn (Param $parameter): bool => $this->isBoolean($parameter->type) && !$this->isValueObjectData($parameter, $node, $scope));
 
         return array_values(array_map($this->finding(...), $flags));
     }
 
-    // a readonly service is still a service, so a boolean is data only for a readonly class the container does not hold
-    private function isValueObjectConstructor(FunctionLike $node, Scope $scope): bool
+    // a readonly service is still a service, so a boolean is data only when a readonly class the container skips keeps it as it is
+    private function isValueObjectData(Param $parameter, FunctionLike $node, Scope $scope): bool
     {
         $class = $scope->getClassReflection();
 
@@ -63,7 +68,27 @@ final readonly class FlagParameterRule implements Rule
             && '__construct' === $node->name->toLowerString()
             && $class instanceof ClassReflection
             && $class->isReadOnly()
-            && (!$this->registration->covers($scope->getFile()) || $this->registration->excludes($class));
+            && $this->registration->excludes($class)
+            && ($parameter->isPromoted() || $this->isStoredUnchanged($parameter, $node));
+    }
+
+    private function isStoredUnchanged(Param $parameter, ClassMethod $constructor): bool
+    {
+        $name = $this->nameOf($parameter);
+
+        return array_any($constructor->stmts ?? [], fn (Stmt $statement): bool => $statement instanceof Expression && $this->storesUnchanged($statement->expr, $name));
+    }
+
+    // a boolean the constructor reads to decide something is a flag like any other, so only a plain $this->x = $x counts
+    private function storesUnchanged(Expr $expression, ?string $name): bool
+    {
+        return null !== $name
+            && $expression instanceof Assign
+            && $expression->var instanceof PropertyFetch
+            && $expression->var->var instanceof Variable
+            && 'this' === $expression->var->var->name
+            && $expression->expr instanceof Variable
+            && $expression->expr->name === $name;
     }
 
     private function isBoolean(Identifier|Name|ComplexType|null $type): bool
@@ -76,10 +101,14 @@ final readonly class FlagParameterRule implements Rule
         };
     }
 
+    private function nameOf(Param $parameter): ?string
+    {
+        return $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : null;
+    }
+
     private function finding(Param $parameter): IdentifierRuleError
     {
-        $name = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : 'parameter';
-        $message = sprintf('Parameter $%s is a flag: model the modes with a backed enum, or split the method in two. A boolean that is data belongs in a readonly value object.', $name);
+        $message = sprintf('Parameter $%s is a flag: model the modes with a backed enum, or split the method in two. A boolean that is data is a property a readonly value object marked #[Exclude] stores as it is.', $this->nameOf($parameter) ?? 'parameter');
 
         return RuleErrorBuilder::message($message)->identifier('intakt.flagParameter')->line($parameter->getStartLine())->build();
     }

@@ -41,9 +41,9 @@ A boolean parameter that switches what a function does hides two behaviors behin
 
 - replace the boolean with a backed enum whose cases name the modes;
 - split the method in two, one per behavior;
-- if the boolean is data of a value object, make the class `readonly` and mark it with Symfony's `#[Exclude]` attribute (Doctrine entities, embeddables and mapped superclasses count as excluded too): the constructor of such a class may take booleans. A `readonly` class outside `src/`, which the container never registers, counts as a value object too.
+- if the boolean is data of a value object, make the class `readonly`, mark it with Symfony's `#[Exclude]` attribute (Doctrine entities, embeddables and mapped superclasses count as excluded too) and keep the boolean as it is, as a promoted constructor property or assigned unchanged to a property in the constructor body. Only such a constructor parameter passes: a boolean the constructor reads to decide something is reported even in a value object, and the exemption follows the attribute, not the folder, so an unmarked `readonly` class under `bin/` or `config/gates/src/` is reported too.
 
-
+## Running a probe against an install
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`, which cut the network for the run.
 

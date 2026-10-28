@@ -158,6 +158,16 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'readonly-value-object-boolean');
     }
 
+    public function testABooleanAReadonlyValueObjectConsumesInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-consuming-boolean', 'src/Label.php:14 intakt.flagParameter Parameter $uppercase is a flag');
+    }
+
+    public function testAPromotedBooleanOfAReadonlyClassOutsideTheSourceFolderFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-gate-class-with-flag', 'config/gates/src/Strictness.php:9 intakt.flagParameter Parameter $strict is a flag');
+    }
+
     public function testAnEnumParameterPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'enum-parameter');
