@@ -16,9 +16,9 @@ return static function (ContainerConfigurator $container): void {
 
     // The framework's default vault directory and decryption key (the vault's own private key file, else SYMFONY_DECRYPTION_SECRET), which config/packages/framework.yaml keeps.
     $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
-    $decryptionKey = base64_decode($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', true) ?: null;
+    $decryptionKey = base64_decode($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', true);
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
-    $secrets = new SodiumVault($vaultDirectory, $decryptionKey)->list(reveal: true);
+    $secrets = new SodiumVault($vaultDirectory, false === $decryptionKey ? null : $decryptionKey)->list(reveal: true);
 
     $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($secrets[$name] ?? '');
 
