@@ -6,9 +6,11 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
+use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +18,12 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ConfiguredTierResolver::class)]
 #[UsesClass(Provider::class)]
+#[UsesClass(Tier::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(ProjectNotConfigured::class)]
+#[UsesClass(TierNotMapped::class)]
+#[UsesClass(TierProviderDisabled::class)]
+#[UsesClass(TierResolutionFailure::class)]
 final class ConfiguredTierResolverTest extends TestCase
 {
     public function testTwoProjectsResolveTheSameTierToDifferentModels(): void

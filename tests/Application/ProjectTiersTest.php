@@ -8,13 +8,14 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Ai\Infrastructure\TierPlatformPass;
+use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Contracts\Service\ServiceProviderInterface;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
@@ -81,12 +82,16 @@ final class ProjectTiersTest extends KernelTestCase
         $resolver->resolve('beta', Tier::Strong);
     }
 
-    public function testTheTierPlatformKnowsTheProjectModelsThroughTheBundleModelCatalog(): void
+    public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void
     {
-        $platform = $this->bootedContainer()->get(TierPlatformPass::PLATFORM);
-        self::assertInstanceOf(PlatformInterface::class, $platform);
+        $platforms = $this->bootedContainer()->get(TierPlatform::PLATFORMS);
+        self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
+        $anthropic = $platforms->get(Provider::Anthropic->value);
+        self::assertInstanceOf(PlatformInterface::class, $anthropic);
 
-        self::assertInstanceOf(Claude::class, $platform->getModelCatalog()->getModel('big'));
+        self::assertSame([Provider::Anthropic->value], array_keys($platforms->getProvidedServices()));
+        self::assertInstanceOf(Claude::class, $anthropic->getModelCatalog()->getModel('big'));
+        self::assertInstanceOf(TierPlatform::class, self::getContainer()->get(TierPlatform::class));
     }
 
     private function bootedContainer(): ContainerInterface

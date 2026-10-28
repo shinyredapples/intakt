@@ -5,15 +5,17 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
-use Intakt\Core\Ai\Infrastructure\TierPlatformPass;
+use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Config\Definition\Processor;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
 
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
+
 // Same sources as Symfony's env processor: the environment, then the secrets vault. Presence is decided at build time because an unset env reference fails when the service is built.
-return static function (ContainerConfigurator $container, ContainerBuilder $builder): void {
+return static function (ContainerConfigurator $container): void {
     $environmentValue = static function (string $name): ?string {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
 
@@ -60,8 +62,16 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ]]],
     ];
 
+    // Ids as the AI Bundle registers them, because a tier call reaches its provider through the bundle's own platform.
+    $bundlePlatforms = [
+        Provider::Anthropic->value => 'ai.platform.anthropic',
+        Provider::OpenAi->value => 'ai.platform.openai',
+        Provider::OpenAiCompatible->value => 'ai.platform.generic.openai_compatible',
+    ];
+
     $platform = [];
     $disabled = [];
+    $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
         $missing = array_values(array_filter($provider->variables(), static fn (string $variable): bool => !$isSet($variable)));
@@ -73,10 +83,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         }
 
         $platform = array_replace_recursive($platform, $configs[$provider->value]);
+        $tierPlatforms[$provider->value] = service($bundlePlatforms[$provider->value]);
     }
 
     $container->extension('ai', ['platform' => $platform]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
     $container->parameters()->set('intakt.projects', $projects);
-    $builder->addCompilerPass(new TierPlatformPass());
+    $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
+        ->args([$tierPlatforms])
+        ->tag('container.service_locator');
 };
