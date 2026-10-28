@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -138,7 +139,7 @@ final class AiProvidersTest extends KernelTestCase
 
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
-        self::assertIsObject($container->get('ai.platform.anthropic'));
+        self::assertInstanceOf(PlatformInterface::class, $container->get('ai.platform.anthropic'));
     }
 
     /**
