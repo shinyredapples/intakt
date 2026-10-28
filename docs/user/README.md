@@ -35,6 +35,10 @@ Intakt keeps one process alive across many requests and messages, so a service t
 
 Doctrine entities, embeddables, mapped superclasses and column types, and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
 
+## GitHub's test merge and the `commits` gate
+
+On a pull request, GitHub checks out a merge of the branch into the base branch, with a subject such as `Merge <sha> into <sha>`, which is not a Conventional Commit. CI names that merge with `--test-merge`, and the `commits` gate skips it when its second parent is the pull request's head and its first parent is on the base branch, also when the base branch moved after the pull request's last update. Every other commit, merges included, still needs a conforming subject.
+
 ## Running a probe against an install
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`, which cut the network for the run.

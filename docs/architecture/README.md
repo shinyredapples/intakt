@@ -52,7 +52,7 @@ The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$T
 | `tests` | PHPUnit on SQLite (`phpunit.dist.xml`) and the gate tests (`phpunit.gates.xml`), failing on warnings, notices, PHPUnit notices, deprecations, risky and skipped tests; every test class declares its coverage |
 | `secrets` | gitleaks on the working tree, refusing inline allow directives |
 | `secrets-history` | gitleaks on every commit of the change |
-| `commits` | Conventional Commit subjects, at most 100 characters |
+| `commits` | Conventional Commit subjects, at most 100 characters; with `--test-merge=<merge>:<base>:<head>` (CI passes GitHub's test merge), the commit whose hash is `<merge>` is exempt when it has exactly two parents, the second is `<head>` and the first is the tip of `--base` or an ancestor of it, since GitHub merges into the current base tip, which can be newer than `<base>` (not compared); any other merge commit is checked like every commit |
 | `dashes` | no em-dashes or other long dashes in files or commit messages |
 
 Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
