@@ -27,7 +27,9 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 ## Running a probe against an install
 
-`php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`.
+`php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`, which cut the network for the run.
+
+A caller that already runs `bin/probe` without network access and in its own process namespace (as the build loop's sandbox does) sets the environment variable `PROBE_ISOLATED=1`. `bin/probe` then starts the instance directly and needs neither `unshare` nor `ip`, but first checks that the run really is offline: when `/proc/net/dev` cannot be read or lists something unexpected, when it shows a network interface other than `lo`, or when `lo` is down, it prints the reason and exits with code 2 before anything starts. The caller is responsible for ending whatever the probe leaves running. Any other value, or no value, keeps the `unshare` way.
 
 ## The ledger
 
@@ -46,6 +48,10 @@ php bin/console intakt:ledger:events
 ```
 
 It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
+
+## Summarizing a branch
+
+`php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A control character in a file name is shown in a visible form such as `\x1b`, and a backslash as `\\`. A branch the repository does not have, or a repository git cannot read, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
 
 ## Checking a new Symfony AI release against the known bugs
 
