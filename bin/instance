@@ -35,7 +35,7 @@ final class Instance
 {
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
-    // Boot, command and stop together stay well inside the build loop's 120 seconds per call.
+    // Keeps boot, command and stop together well inside the build loop's 120 seconds per call.
     public const int COMMAND_SECONDS = 60;
     private const int COMMAND_TIMED_OUT = 124;
 
@@ -157,9 +157,10 @@ final class Instance
 
     private function start(): void
     {
-        // Without E in variables_order the runtime never sees the environment below and falls back to .env (dev, debug, var/).
         // Port 0 lets the server bind a free port itself, so no other process can take it between a probe and the bind.
-        $server = ['sh', '-c', 'exec "$@" 3>&-', 'sh', PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', '127.0.0.1:0', '-t', $this->root.'/public', $this->root.'/public/index.php'];
+        $address = '127.0.0.1:0';
+        // Without E in variables_order the runtime never sees the environment below, so it falls back to .env (dev, debug, var/).
+        $server = ['sh', '-c', 'exec "$@" 3>&-', 'sh', PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', $address, '-t', $this->root.'/public', $this->root.'/public/index.php'];
         // The caller's descriptor 3 has no close-on-exec flag, so the shell above closes it; the spec has no index 3 either.
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
@@ -194,15 +195,22 @@ final class Instance
 
         return [
             ...$environment,
-            'APP_ENV' => getenv('APP_ENV') ?: 'test',
-            // In debug mode the framework writes config/reference.php into the checkout.
+            'APP_ENV' => $this->variable('APP_ENV') ?? 'test',
+            // Keeps the framework from writing config/reference.php into the checkout, as debug mode does.
             'APP_DEBUG' => '0',
-            'APP_SECRET' => getenv('APP_SECRET') ?: bin2hex(random_bytes(16)),
+            'APP_SECRET' => $this->variable('APP_SECRET') ?? bin2hex(random_bytes(16)),
             'APP_CACHE_DIR' => $this->scratch.'/cache',
             'APP_LOG_DIR' => $this->scratch.'/log',
             'APP_SHARE_DIR' => $this->scratch.'/share',
             'DATABASE_URL' => 'sqlite:///'.$this->scratch.'/data.db',
         ];
+    }
+
+    private function variable(string $name): ?string
+    {
+        $value = getenv($name);
+
+        return false === $value || '' === $value || '0' === $value ? null : $value;
     }
 
     private function awaitAnswer(): InstanceStatus
@@ -228,12 +236,14 @@ final class Instance
 
     private function serverRuns(): bool
     {
-        return null !== $this->server && (proc_get_status($this->server)['running'] ?? false);
+        return null !== $this->server && proc_get_status($this->server)['running'];
     }
 
     private function logSummary(): string
     {
-        foreach (preg_split('/\R/', $this->readLog()) ?: [] as $line) {
+        $lines = preg_split('/\R/', $this->readLog());
+
+        foreach (false === $lines ? [] : $lines as $line) {
             if (1 === preg_match('/error|exception/i', $line)) {
                 return mb_substr(trim($line), 0, 500);
             }
@@ -298,20 +308,36 @@ final class Instance
 
     private function removeScratch(): void
     {
-        if ('' === $this->scratch || !is_dir($this->scratch)) {
+        if ('' === $this->scratch) {
+            return;
+        }
+
+        new DirectoryRemoval()->remove($this->scratch);
+    }
+}
+
+final readonly class DirectoryRemoval
+{
+    public function remove(string $directory): void
+    {
+        if (!is_dir($directory)) {
             return;
         }
 
         $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($this->scratch, FilesystemIterator::SKIP_DOTS),
+            new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::CHILD_FIRST,
         );
 
         foreach ($files as $file) {
+            if (!$file instanceof SplFileInfo) {
+                continue;
+            }
+
             $file->isDir() && !$file->isLink() ? rmdir($file->getPathname()) : unlink($file->getPathname());
         }
 
-        rmdir($this->scratch);
+        rmdir($directory);
     }
 }
 
@@ -327,7 +353,7 @@ function statusChannel()
         return null;
     }
 
-    // With CLI OPcache on, its lock (an unlinked file) takes a descriptor 3 the caller left closed; a caller's file, pipe or device has a link, and a caller's memfd (the build loop's channel) has none, but OPcache's lock is a memfd too, named exactly opcache_lock.
+    // OPcache's lock is an unlinked memfd named opcache_lock that can take a closed descriptor 3, so only another unlinked memfd is the caller's channel.
     $unlinked = 0 === (fstat($channel)['nlink'] ?? 0);
     $target = (string) @readlink('/proc/self/fd/3');
     $callersMemfd = str_starts_with($target, '/memfd:') && '/memfd:opcache_lock (deleted)' !== $target;
@@ -335,9 +361,10 @@ function statusChannel()
     return $unlinked && !$callersMemfd ? null : $channel;
 }
 
+$argv ??= [];
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
-// Lets a test prove the cap without waiting for the full minute.
+// Needed so a test can prove the cap without waiting for the full minute.
 $commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
 $instance = new Instance(dirname(__DIR__), $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS);

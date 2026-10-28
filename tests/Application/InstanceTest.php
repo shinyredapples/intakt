@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversNothing]
@@ -225,10 +226,15 @@ final class InstanceTest extends TestCase
 
     private function runInstanceWithAMemfdNamed(string $name): Process
     {
+        $python = new ExecutableFinder()->find('python3');
+        if (null === $python) {
+            self::markTestSkipped('python3 is not on the PATH, and the memfd helper needs it.');
+        }
+
         $helper = 'import os, subprocess, sys; fd = os.memfd_create(sys.argv[1]); os.dup2(fd, 3); '
             .'code = subprocess.run(sys.argv[2:], pass_fds=(3,)).returncode; os.lseek(3, 0, 0); '
             .'sys.stderr.write(os.read(3, 4096).decode()); sys.exit(code)';
-        $process = new Process(['python3', '-I', '-c', $helper, $name, PHP_BINARY, self::ROOT.'/bin/instance'], null, $this->environment());
+        $process = new Process([$python, '-I', '-c', $helper, $name, PHP_BINARY, self::ROOT.'/bin/instance'], null, $this->environment());
         $process->run();
 
         return $process;

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Event\ResultEvent;
 use Symfony\AI\Platform\Model;
@@ -18,6 +19,7 @@ use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(StrictVerdictSubscriber::class)]
+#[UsesClass(Evidence::class)]
 final class StrictVerdictSubscriberTest extends TestCase
 {
     public function testAnotherResponseFormatIsLeftToSymfonyAi(): void

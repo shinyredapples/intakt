@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[AsCommand(name: 'count')]
+final class Count extends Command
+{
+    private int $runs = 0;
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $output->writeln((string) ++$this->runs);
+
+        return self::SUCCESS;
+    }
+}
