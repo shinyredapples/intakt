@@ -19,7 +19,7 @@ final readonly class RefuseChangesToStoredEvents
         $manager = $args->getObjectManager();
         $refusal = $this->refusalOf($manager->getUnitOfWork());
 
-        if ($refusal === null) {
+        if (!$refusal instanceof LedgerEventsAreAppendOnly) {
             return;
         }
 
