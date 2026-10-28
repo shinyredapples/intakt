@@ -110,6 +110,26 @@ final class SummarizeChangeCommandTest extends TestCase
         self::assertStringContainsString('1 files changed, +0 -1 lines', $tester->getDisplay());
     }
 
+    public function testAPathThatLooksLikeAFormatterTagIsPrintedLiterally(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('<info>note.txt', "n\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
+
+        self::assertMatchesRegularExpression('/^added\s+<info>note\.txt$/m', $tester->getDisplay());
+    }
+
+    public function testABranchNameThatLooksLikeAFormatterTagIsPrintedLiterally(): void
+    {
+        $this->repository->checkoutNewBranch('<error>feature');
+        $this->repository->commitFile('feature.txt', "f\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => '<error>feature', '--repository' => $this->repository->path]);
+
+        self::assertStringContainsString('<error>feature against main', $tester->getDisplay());
+    }
+
     public function testAMissingBranchFailsWithAMessage(): void
     {
         $tester = $this->whenTheCommandRuns(['branch' => 'nope', '--repository' => $this->repository->path]);

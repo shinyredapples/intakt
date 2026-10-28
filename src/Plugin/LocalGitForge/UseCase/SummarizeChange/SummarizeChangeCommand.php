@@ -16,6 +16,7 @@ use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'intakt:change:summarize', description: 'Print the change summary of a branch of a local repository against its base branch')]
@@ -42,12 +43,13 @@ final readonly class SummarizeChangeCommand
 
     private function print(SymfonyStyle $io, Change $change, string $base): void
     {
-        $io->writeln(sprintf('%s against %s', $change->id->value, $base));
+        // Branch names and paths come from the repository and may contain "<info>", which the formatter would swallow.
+        $io->writeln(OutputFormatter::escape(sprintf('%s against %s', $change->id->value, $base)));
         $io->writeln(sprintf('base %s, head %s', substr($change->commits->base->hash, 0, 12), substr($change->commits->head->hash, 0, 12)));
         $io->writeln(sprintf('%d files changed, +%d -%d lines', count($change->diff->files), $this->countLines($change, '+'), $this->countLines($change, '-')));
 
         foreach ($change->diff->files as $file) {
-            $io->writeln($this->describe($file));
+            $io->writeln(OutputFormatter::escape($this->describe($file)));
         }
     }
 
