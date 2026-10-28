@@ -1,0 +1,99 @@
+# bin/console debug:config ai, after cache:clear. Lines naming a key variable are removed (they held only %env() references, no values).
+
+## Case 1: all four variables set. Exit status: 0. Standard error: empty.
+
+Current configuration for extension with alias "ai"
+===================================================
+
+ai:
+    platform:
+        anthropic:
+            version: null
+            http_client: http_client
+            cache_retention: short
+            model_catalog:
+                models: {}
+                cache:
+                    enabled: false
+                    service: cache.app
+                    ttl: 3600
+        openai:
+            region: null
+            http_client: http_client
+            model_catalog:
+                models: {}
+                cache:
+                    enabled: false
+                    service: cache.app
+                    ttl: 3600
+        generic:
+            openai_compatible:
+                base_url: '%env(OPENAI_COMPATIBLE_BASE_URL)%'
+                http_client: http_client
+                model_catalog:
+                    models: {}
+                    cache:
+                        enabled: false
+                        service: cache.app
+                        ttl: 3600
+                supports_completions: true
+                supports_embeddings: true
+                completions_path: /v1/chat/completions
+                embeddings_path: /v1/embeddings
+        azure: {}
+        bedrock: {}
+        cache: {}
+        failover: {}
+        openresponses: {}
+    agent: {}
+    multi_agent: {}
+    vectorizer: {}
+    indexer: {}
+    retriever: {}
+
+
+## Case 2: OPENAI_API_KEY unset, the other three set. Exit status: 0.
+## Standard error:
+Provider "openai" is disabled: set OPENAI_API_KEY to enable it.
+## Standard output:
+
+Current configuration for extension with alias "ai"
+===================================================
+
+ai:
+    platform:
+        anthropic:
+            version: null
+            http_client: http_client
+            cache_retention: short
+            model_catalog:
+                models: {}
+                cache:
+                    enabled: false
+                    service: cache.app
+                    ttl: 3600
+        generic:
+            openai_compatible:
+                base_url: '%env(OPENAI_COMPATIBLE_BASE_URL)%'
+                http_client: http_client
+                model_catalog:
+                    models: {}
+                    cache:
+                        enabled: false
+                        service: cache.app
+                        ttl: 3600
+                supports_completions: true
+                supports_embeddings: true
+                completions_path: /v1/chat/completions
+                embeddings_path: /v1/embeddings
+        azure: {}
+        bedrock: {}
+        cache: {}
+        failover: {}
+        openresponses: {}
+    agent: {}
+    multi_agent: {}
+    vectorizer: {}
+    indexer: {}
+    retriever: {}
+
