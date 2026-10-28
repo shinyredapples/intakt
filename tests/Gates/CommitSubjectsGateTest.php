@@ -89,45 +89,92 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testTheTestMergeGithubDescribesIsNotChecked(): void
     {
-        $sandbox = $this->branchWithAMergeCommit('Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40));
+        $sandbox = $this->testMergeSandbox(false, false);
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox, 'HEAD'));
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
+
+        self::assertTrue($run->passed('commits'), $run->output());
+    }
+
+    public function testATestMergeOnANewerBaseTipThanTheEventReportsIsNotChecked(): void
+    {
+        $sandbox = $this->testMergeSandbox(true, false);
+
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
 
         self::assertTrue($run->passed('commits'), $run->output());
     }
 
     public function testAMergeCommitWithTheSyntheticSubjectButAnotherShaFails(): void
     {
-        $sandbox = $this->branchWithAMergeCommit('Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40));
-        $described = explode(':', $this->describe($sandbox, 'HEAD'));
+        $sandbox = $this->testMergeSandbox(true, false);
+        $described = explode(':', $this->describe($sandbox));
 
         $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.str_repeat('c', 40).':'.$described[1].':'.$described[2]);
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
 
-    public function testAMergeCommitWithOtherParentsThanGithubDescribesFails(): void
+    public function testAMergeCommitWithAnotherSecondParentThanTheHeadFails(): void
     {
-        $sandbox = $this->branchWithAMergeCommit('Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40));
-        $described = explode(':', $this->describe($sandbox, 'HEAD'));
+        $sandbox = $this->testMergeSandbox(true, false);
+        $described = explode(':', $this->describe($sandbox));
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.$described[2].':'.$described[1]);
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.$described[1].':'.str_repeat('c', 40));
+
+        self::assertTrue($run->failed('commits'), $run->output());
+    }
+
+    public function testAMergeCommitWhoseFirstParentIsNotOnTheBaseBranchFails(): void
+    {
+        $sandbox = $this->testMergeSandbox(true, true);
+
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
 
     public function testASyntheticLookingMergeWithoutAnyDescriptionFails(): void
     {
-        $sandbox = $this->branchWithAMergeCommit('Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40));
+        $sandbox = $this->testMergeSandbox(false, false);
 
         self::assertTrue($sandbox->check('--only=commits', '--base=main')->failed('commits'));
     }
 
-    private function describe(Sandbox $sandbox, string $merge): string
+    private function describe(Sandbox $sandbox): string
     {
-        $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', $merge)->output));
+        $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', 'HEAD')->output));
 
-        return trim($sandbox->git('rev-parse', $merge)->output).':'.$parents[0].':'.$parents[1];
+        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.trim($sandbox->git('rev-parse', 'main~1')->output).':'.$parents[1];
+    }
+
+    /**
+     * Leaves HEAD on a test merge of "change" into main's tip; main~1 plays the base the event reports.
+     */
+    private function testMergeSandbox(bool $baseMoved, bool $offBase): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->write('change.txt', "change\n");
+        $sandbox->commitAll('feat: change');
+        $sandbox->git('switch', '--quiet', 'main');
+        $sandbox->write('main.txt', "main\n");
+        $sandbox->commitAll('chore: advance main');
+        $sandbox->write('main.txt', "main again\n");
+        $sandbox->commitAll('chore: advance main again');
+
+        $sandbox->git('switch', '--quiet', '--create', 'test-merge', $baseMoved ? 'main' : 'main~1');
+
+        if ($offBase) {
+            $sandbox->write('side.txt', "side\n");
+            $sandbox->commitAll('chore: side work');
+        }
+
+        $sandbox->git('merge', '--quiet', '--no-ff', '--message', 'Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40), 'change');
+
+        return $sandbox;
     }
 
     private function branchWithAMergeCommit(string $message): Sandbox
