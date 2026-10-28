@@ -16,7 +16,7 @@ final readonly class Finding
         public string $id,
         public Severity $severity,
         public ?string $file,
-        // Not Positive, because Symfony AI describes that with a boolean exclusiveMinimum that newer JSON Schema drafts refuse.
+        // Not Positive, because Symfony AI describes that with a boolean exclusiveMinimum: upstream/ai-platform-positive-boolean-exclusive-minimum
         #[GreaterThanOrEqual(1)]
         public ?int $line,
         public ?string $symbol,

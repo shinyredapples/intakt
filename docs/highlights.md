@@ -83,7 +83,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Uid | UUIDv7 ids for ledger events and findings | in progress | T2 (#7, part #46), `src/Core/Ledger/Infrastructure/DoctrineLedger.php` |
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`; T5 (#10) |
-| Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`) | maps a verdict strictly: no unknown and no left-out fields | in progress | T1 (#5), `src/Core/Review/Infrastructure/StrictVerdictConverter.php` |
+| Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`, `JsonDecode::ASSOCIATIVE`) | maps a verdict strictly: no unknown and no left-out fields, no object as a list | in progress | T1 (#5), `src/Core/Review/Infrastructure/StrictVerdictConverter.php` |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
 | Process | the local git forge; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
