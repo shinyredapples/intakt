@@ -13,7 +13,7 @@ Think of it as a small software team that works around the clock:
 | **You (the owner)** | a person | decide what gets built and settle the few questions only a person can |
 | **The orchestrator** | Intakt itself | runs everything: picks the next task, starts the workers, keeps score, merges |
 | **Builder** | an AI agent | writes the code for one task |
-| **Reviewers** | two AI agents from different companies | check the builder's work, independently of each other |
+| **Reviewers** | a panel of AI agents you configure (by default two, from different companies) | check the builder's work, independently of each other, each with its own focus |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
 | **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
 
@@ -23,7 +23,7 @@ flowchart LR
   list --> intakt[Intakt<br/>the orchestrator]
   intakt -- "build this" --> builder[Builder]
   builder -- finished work --> intakt
-  intakt -- "check this" --> reviewers[Two reviewers]
+  intakt -- "check this" --> reviewers[Review panel]
   reviewers -- verdicts --> intakt
   intakt -- passes --> project[(Your project<br/>main branch)]
   intakt -. only when needed .-> you
@@ -42,9 +42,9 @@ flowchart TD
   c --> d[The builder writes the change]
   d --> e[Your project's checks run]
   e -- fail --> d
-  e -- pass --> f[Two reviewers read it]
+  e -- pass --> f[The review panel reads it]
   f -- "changes, please" --> d
-  f -- both approve --> g{Does it touch the<br/>project's rules?}
+  f -- the panel approves --> g{Does it touch the<br/>project's rules?}
   g -- no --> h[Merged]
   g -- yes --> i[Approval needed<br/>see below]
   i --> h
@@ -56,7 +56,7 @@ In words:
 3. **It waits its turn.** Urgent tasks go first, then the rest by milestone and age.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
-6. **Two reviewers read it**, each on its own, from two different AI companies, so one company's blind spot doesn't decide. They can also run small experiments to test the change.
+6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies, so one company's blind spot doesn't decide. Bigger or riskier changes can get a bigger panel, a docs change a smaller one. Reviewers can also run small experiments to test the change.
 7. **It is merged** into your project, or sent back with the reviewers' notes, and the builder tries again.
 
 ## What needs you, and what doesn't
@@ -76,11 +76,11 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules or keeps them as they are, and both reviewers agree | Intakt approves it itself, and lists it in a daily summary for you |
+| only adds to the rules or keeps them as they are, and every reviewer agrees (at least two, from different companies) | Intakt approves it itself, and lists it in a daily summary for you |
 | removes, relaxes or skips a check | you |
 | touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
 
-You never approve something whose checks are failing: Intakt asks you only once the checks are green and both reviewers have approved.
+You never approve something whose checks are failing: Intakt asks you only once the checks are green and the review panel has approved.
 
 ## When something gets stuck
 
