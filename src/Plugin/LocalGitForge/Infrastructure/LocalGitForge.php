@@ -57,6 +57,11 @@ final readonly class LocalGitForge implements Forge
         // An exact ref only, so tags and revision expressions such as "feature~1" are not branches.
         $reference = 'refs/heads/'.$id->value;
 
+        // No branch can carry an invalid name; --branch is not used because it expands shorthands such as "@{-1}".
+        if (!$this->git(['check-ref-format', $reference])->isSuccessful()) {
+            throw ChangeNotFound::named($id);
+        }
+
         if (self::REFERENCE_MISSING === $this->git(['show-ref', '--exists', $reference])->getExitCode()) {
             throw ChangeNotFound::named($id);
         }

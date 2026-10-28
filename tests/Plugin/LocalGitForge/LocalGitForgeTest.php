@@ -252,6 +252,16 @@ final class LocalGitForgeTest extends TestCase
         $this->forge()->change(new ChangeId('v1'));
     }
 
+    public function testItDoesNotTreatATraversingNameAsAChange(): void
+    {
+        $this->repository->commitFile('src/Tagged.php', "<?php\n");
+        $this->repository->tag('v1');
+
+        $this->expectException(ChangeNotFound::class);
+
+        $this->forge()->change(new ChangeId('../tags/v1'));
+    }
+
     public function testItDoesNotTreatARevisionExpressionAsAChange(): void
     {
         $this->repository->checkoutNewBranch('feature');
