@@ -13,7 +13,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use SplFileInfo;
 use Symfony\Component\Filesystem\Path;
 use UnexpectedValueException;
 
@@ -77,10 +76,10 @@ final readonly class RunReproductionsCommand
             return null;
         }
 
-        $folders = array_keys(array_filter(
-            iterator_to_array($entries),
-            static fn (SplFileInfo $entry): bool => $entry->isDir() && !str_starts_with($entry->getFilename(), '.'),
-        ));
+        $folders = array_filter(
+            array_keys(iterator_to_array($entries)),
+            static fn (string $path): bool => is_dir($path) && !str_starts_with(basename($path), '.'),
+        );
         sort($folders);
 
         return $folders;
