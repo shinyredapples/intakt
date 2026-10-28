@@ -89,7 +89,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testTheTestMergeGithubDescribesIsNotChecked(): void
     {
-        $sandbox = $this->testMergeSandbox(false, false);
+        $sandbox = $this->testMergeOnReportedBase();
 
         $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
 
@@ -98,7 +98,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testATestMergeOnANewerBaseTipThanTheEventReportsIsNotChecked(): void
     {
-        $sandbox = $this->testMergeSandbox(true, false);
+        $sandbox = $this->testMergeOnMovedBase();
 
         $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
 
@@ -107,7 +107,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testAMergeCommitWithTheSyntheticSubjectButAnotherShaFails(): void
     {
-        $sandbox = $this->testMergeSandbox(true, false);
+        $sandbox = $this->testMergeOnMovedBase();
         $described = explode(':', $this->describe($sandbox));
 
         $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.str_repeat('c', 40).':'.$described[1].':'.$described[2]);
@@ -117,7 +117,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testAMergeCommitWithAnotherSecondParentThanTheHeadFails(): void
     {
-        $sandbox = $this->testMergeSandbox(true, false);
+        $sandbox = $this->testMergeOnMovedBase();
         $described = explode(':', $this->describe($sandbox));
 
         $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.$described[1].':'.str_repeat('c', 40));
@@ -127,7 +127,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testAMergeCommitWhoseFirstParentIsNotOnTheBaseBranchFails(): void
     {
-        $sandbox = $this->testMergeSandbox(true, true);
+        $sandbox = $this->testMergeOffTheBase();
 
         $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
 
@@ -136,7 +136,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
 
     public function testASyntheticLookingMergeWithoutAnyDescriptionFails(): void
     {
-        $sandbox = $this->testMergeSandbox(false, false);
+        $sandbox = $this->testMergeOnReportedBase();
 
         self::assertTrue($sandbox->check('--only=commits', '--base=main')->failed('commits'));
     }
@@ -148,8 +148,34 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.trim($sandbox->git('rev-parse', 'main~1')->output).':'.$parents[1];
     }
 
-    // Leaves HEAD on a test merge of "change"; main~1 plays the base the event reports, because it is older than main.
-    private function testMergeSandbox(bool $baseMoved, bool $offBase): Sandbox
+    // Because main~1 plays the base the event reports, a merge on it is GitHub's test merge before main moved.
+    private function testMergeOnReportedBase(): Sandbox
+    {
+        $sandbox = $this->changeBesideAMovedMain();
+        $sandbox->git('switch', '--quiet', '--create', 'test-merge', 'main~1');
+
+        return $this->mergeChange($sandbox);
+    }
+
+    private function testMergeOnMovedBase(): Sandbox
+    {
+        $sandbox = $this->changeBesideAMovedMain();
+        $sandbox->git('switch', '--quiet', '--create', 'test-merge', 'main');
+
+        return $this->mergeChange($sandbox);
+    }
+
+    private function testMergeOffTheBase(): Sandbox
+    {
+        $sandbox = $this->changeBesideAMovedMain();
+        $sandbox->git('switch', '--quiet', '--create', 'test-merge', 'main');
+        $sandbox->write('side.txt', "side\n");
+        $sandbox->commitAll('chore: side work');
+
+        return $this->mergeChange($sandbox);
+    }
+
+    private function changeBesideAMovedMain(): Sandbox
     {
         $sandbox = $this->emptySandbox();
         $sandbox->startRepository();
@@ -163,13 +189,11 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox->write('main.txt', "main again\n");
         $sandbox->commitAll('chore: advance main again');
 
-        $sandbox->git('switch', '--quiet', '--create', 'test-merge', $baseMoved ? 'main' : 'main~1');
+        return $sandbox;
+    }
 
-        if ($offBase) {
-            $sandbox->write('side.txt', "side\n");
-            $sandbox->commitAll('chore: side work');
-        }
-
+    private function mergeChange(Sandbox $sandbox): Sandbox
+    {
         $sandbox->git('merge', '--quiet', '--no-ff', '--message', 'Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40), 'change');
 
         return $sandbox;
