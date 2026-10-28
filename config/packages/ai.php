@@ -14,7 +14,7 @@ return static function (ContainerConfigurator $container): void {
         return is_string($value) && '' !== $value ? $value : null;
     };
 
-    // The framework's default vault directory and decryption key (the vault's own private key file, else SYMFONY_DECRYPTION_SECRET), which config/packages/framework.yaml keeps.
+    // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps.
     $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
     $decryptionKey = base64_decode($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', true);
     $vault = new SodiumVault($vaultDirectory, false === $decryptionKey ? null : $decryptionKey);
