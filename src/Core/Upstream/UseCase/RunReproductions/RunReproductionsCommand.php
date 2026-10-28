@@ -6,7 +6,7 @@ namespace Intakt\Core\Upstream\UseCase\RunReproductions;
 
 use Composer\InstalledVersions;
 use Intakt\Core\Upstream\Contract\ReproductionOutcome;
-use Intakt\Core\Upstream\Infrastructure\PhpunitReproductionRunner;
+use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -18,7 +18,7 @@ use Symfony\Component\Filesystem\Path;
 final readonly class RunReproductionsCommand
 {
     public function __construct(
-        private PhpunitReproductionRunner $runner,
+        private ReproductionRunner $runner,
         #[Autowire('%kernel.project_dir%')]
         private string $projectDir,
     ) {

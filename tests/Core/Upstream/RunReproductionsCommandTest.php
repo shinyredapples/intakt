@@ -6,7 +6,7 @@ namespace Intakt\Tests\Core\Upstream;
 
 use Intakt\Core\Upstream\Contract\ReproductionOutcome;
 use Intakt\Core\Upstream\Contract\ReproductionStatus;
-use Intakt\Core\Upstream\Infrastructure\PhpunitReproductionRunner;
+use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
 use Intakt\Core\Upstream\UseCase\RunReproductions\RunReproductionsCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -17,7 +17,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunReproductionsCommand::class)]
-#[CoversClass(PhpunitReproductionRunner::class)]
+#[CoversClass(ReproductionRunner::class)]
 #[CoversClass(ReproductionOutcome::class)]
 #[CoversClass(ReproductionStatus::class)]
 final class RunReproductionsCommandTest extends TestCase
@@ -116,13 +116,60 @@ final class RunReproductionsCommandTest extends TestCase
         self::assertSame(Command::INVALID, $tester->getStatusCode());
     }
 
-    public function testAReproductionWithoutATestStillFails(): void
+    public function testAFolderWithoutATestOrScriptStillFails(): void
     {
-        new Filesystem()->dumpFile($this->folder.'/script-only/reproduce.php', "<?php\n\necho 'ok';\n");
+        new Filesystem()->dumpFile($this->folder.'/notes-only/REPORT.md', "# Report\n");
 
         $display = $this->whenTheCommandRuns()->getDisplay();
 
-        self::assertMatchesRegularExpression('/^still fails\s+script-only$/m', $display);
+        self::assertMatchesRegularExpression('/^still fails\s+notes-only$/m', $display);
+    }
+
+    public function testAScriptThatPrintsTheMarkerAndExitsWithZeroPasses(): void
+    {
+        $this->givenScript('fixed-script', "echo 'checked'.PHP_EOL.'REPRODUCTION PASSES'.PHP_EOL;");
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^passes\s+fixed-script$/m', $display);
+    }
+
+    public function testAScriptThatExitsWithAnErrorStillFails(): void
+    {
+        $this->givenScript('open-script', "echo 'REPRODUCTION PASSES'.PHP_EOL;\nexit(1);");
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+open-script$/m', $display);
+    }
+
+    public function testAScriptWithoutTheMarkerStillFails(): void
+    {
+        $this->givenScript('unchecked-script', "echo 'ok';");
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+unchecked-script$/m', $display);
+    }
+
+    public function testAScriptCanUseTheProjectAutoloader(): void
+    {
+        $this->givenScript('autoloaded-script', "if (class_exists(\\Symfony\\Component\\Process\\Process::class)) {\n    echo 'REPRODUCTION PASSES';\n}");
+
+        $display = $this->whenTheCommandRuns()->getDisplay();
+
+        self::assertMatchesRegularExpression('/^passes\s+autoloaded-script$/m', $display);
+    }
+
+    public function testAHangingScriptStillFailsAndTheRunGoesOn(): void
+    {
+        $this->givenScript('a-hanging-script', 'sleep(30);');
+        $this->givenScript('b-fixed-script', "echo 'REPRODUCTION PASSES';");
+
+        $display = $this->whenTheCommandRuns(timeout: 1.0)->getDisplay();
+
+        self::assertMatchesRegularExpression('/^still fails\s+a-hanging-script$/m', $display);
+        self::assertMatchesRegularExpression('/^passes\s+b-fixed-script$/m', $display);
     }
 
     public function testASkippedReproductionStillFails(): void
@@ -160,13 +207,18 @@ final class RunReproductionsCommandTest extends TestCase
         new Filesystem()->dumpFile($this->folder.'/'.$slug.'/'.$class.'.php', $source);
     }
 
+    private function givenScript(string $slug, string $body): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/'.$slug.'/reproduce.php', "<?php\n\n{$body}\n");
+    }
+
     /**
      * @param array<string, mixed> $options
      */
     private function whenTheCommandRuns(array $options = [], ?string $directory = null, float $timeout = 300.0): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new RunReproductionsCommand(new PhpunitReproductionRunner(self::ROOT, $timeout), self::ROOT));
+        $application->addCommand(new RunReproductionsCommand(new ReproductionRunner(self::ROOT, $timeout), self::ROOT));
         $tester = new CommandTester($application->find('intakt:upstream:run'));
         $tester->execute(['directory' => $directory ?? $this->folder], $options);
 
