@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Mailer
+{
+    public string $greeting {
+        get => 'Hello '.$this->sender;
+    }
+
+    public string $subject = '' {
+        set => trim($value);
+    }
+
+    public function __construct(private readonly string $sender)
+    {
+    }
+}
