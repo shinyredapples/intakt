@@ -35,7 +35,15 @@ Intakt keeps one process alive across many requests and messages, so a service t
 
 Doctrine entities, embeddables, mapped superclasses and column types, and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
 
-## Running a probe against an install
+## When `bin/check` reports a flag parameter
+
+A boolean parameter that switches what a function does hides two behaviors behind one name, so the `phpstan` gate of `bin/check` reports a finding `intakt.flagParameter` for every parameter typed `bool`, `true` or `false` (also nullable or in a union) of a function, method, closure or constructor, except in `tests/`. The finding names the parameter. A `readonly` service is reported like any other. To resolve it, do one of:
+
+- replace the boolean with a backed enum whose cases name the modes;
+- split the method in two, one per behavior;
+- if the boolean is data of a value object, make the class `readonly` and mark it with Symfony's `#[Exclude]` attribute (Doctrine entities, embeddables and mapped superclasses count as excluded too): the constructor of such a class may take booleans. A `readonly` class outside `src/`, which the container never registers, counts as a value object too.
+
+
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`, which cut the network for the run.
 

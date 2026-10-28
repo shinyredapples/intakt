@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Valid;
 
 // Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
+// Excluded because the structured output builds it, so the container has no reason to hold it.
+#[Exclude]
 final readonly class Finding
 {
     public function __construct(

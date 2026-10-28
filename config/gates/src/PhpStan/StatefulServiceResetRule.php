@@ -5,19 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use Doctrine\DBAL\Types\Type;
-use Doctrine\ORM\Mapping\Embeddable;
-use Doctrine\ORM\Mapping\Entity;
-use Doctrine\ORM\Mapping\MappedSuperclass;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionProperty;
 use PHPStan\Node\InClassNode;
-use PHPStan\Reflection\AttributeReflection;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
-use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
 use Throwable;
@@ -27,18 +22,7 @@ use Throwable;
  */
 final readonly class StatefulServiceResetRule implements Rule
 {
-    // services.yaml registers src/ and nothing else, so a class elsewhere is never a service: https://symfony.com/doc/current/service_container.html#importing-many-services-at-once-with-resource
-    private const string REGISTERED_RESOURCE = '/src/';
-
-    // inside src/ only what the container skips is not a service, so these attributes exempt a class
-    private const array NOT_REGISTERED = [
-        Exclude::class,
-        Entity::class,
-        Embeddable::class,
-        MappedSuperclass::class,
-    ];
-
-    public function __construct(private string $root)
+    public function __construct(private ContainerRegistration $registration)
     {
     }
 
@@ -66,7 +50,7 @@ final readonly class StatefulServiceResetRule implements Rule
 
     private function isRegistered(Scope $scope): bool
     {
-        return str_starts_with($scope->getFile(), $this->root.self::REGISTERED_RESOURCE);
+        return $this->registration->covers($scope->getFile());
     }
 
     private function isService(ClassReflection $class): bool
@@ -79,12 +63,7 @@ final readonly class StatefulServiceResetRule implements Rule
             && !$class->is(KernelInterface::class)
             // Doctrine creates column types itself, so the container never holds one
             && !$class->is(Type::class)
-            && !$this->isExcludedFromTheContainer($class);
-    }
-
-    private function isExcludedFromTheContainer(ClassReflection $class): bool
-    {
-        return array_any($class->getAttributes(), static fn (AttributeReflection $attribute): bool => in_array($attribute->getName(), self::NOT_REGISTERED, true));
+            && !$this->registration->excludes($class);
     }
 
     /**
@@ -102,7 +81,7 @@ final readonly class StatefulServiceResetRule implements Rule
         // a vendor base class (Command::$definition, AbstractController::$container) holds framework wiring, not request state, so only a property declared under src/ counts
         $file = $property->getBetterReflection()->getDeclaringClass()->getFileName();
 
-        return null !== $file && str_starts_with($file, $this->root.self::REGISTERED_RESOURCE);
+        return null !== $file && $this->registration->covers($file);
     }
 
     /**

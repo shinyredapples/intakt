@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Sample;
 
-final class Mailer
+final readonly class Mailer
 {
-    public function __construct(private readonly ?bool $urgent)
+    public function __construct(private ?bool $urgent)
     {
     }
 
-    public function isUrgent(): bool
+    public function send(string $body): string
     {
-        return true === $this->urgent;
+        return true === $this->urgent ? strtoupper($body) : $body;
     }
 }

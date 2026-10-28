@@ -24,6 +24,10 @@ rules:
 
 services:
     -
+        class: Intakt\Gates\PhpStan\ContainerRegistration
+        arguments:
+            root: %currentWorkingDirectory%
+    -
         class: Intakt\Gates\PhpStan\FlagParameterRule
         arguments:
             root: %currentWorkingDirectory%
@@ -31,7 +35,5 @@ services:
             - phpstan.rules.rule
     -
         class: Intakt\Gates\PhpStan\StatefulServiceResetRule
-        arguments:
-            root: %currentWorkingDirectory%
         tags:
             - phpstan.rules.rule

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CodingStandardsGate;
+use Intakt\Gates\PhpStan\ContainerRegistration;
 use Intakt\Gates\PhpStan\FlagParameterRule;
 use Intakt\Gates\PhpStan\NoMockOptOutRule;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(NoNestedTryRule::class)]
 #[CoversClass(NoMockOptOutRule::class)]
 #[CoversClass(StatefulServiceResetRule::class)]
+#[CoversClass(ContainerRegistration::class)]
 final class CodeGatesTest extends SandboxTestCase
 {
     public function testACompliantClassPassesEveryCodeGate(): void
@@ -146,12 +148,12 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'flag-parameter-in-service', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
     }
 
-    public function testANullableBooleanParameterOfAConstructorFailsStaticAnalysis(): void
+    public function testANullableBooleanParameterOfAReadonlyServiceConstructorFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'flag-parameter-in-constructor', 'intakt.flagParameter Parameter $urgent is a flag');
+        $this->assertRejectedBy('phpstan', 'flag-parameter-in-constructor', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
     }
 
-    public function testABooleanPropertyOfAReadonlyValueObjectPassesStaticAnalysis(): void
+    public function testABooleanPropertyOfAReadonlyValueObjectExcludedFromTheContainerPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'readonly-value-object-boolean');
     }

@@ -6,6 +6,7 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
@@ -29,7 +30,7 @@ final readonly class FlagParameterRule implements Rule
     // a test double or builder may take a flag to stay short, so only code outside tests/ is held to the rule
     private const string TEST_FOLDER = '/tests/';
 
-    public function __construct(private string $root)
+    public function __construct(private string $root, private ContainerRegistration $registration)
     {
     }
 
@@ -43,13 +44,25 @@ final readonly class FlagParameterRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (str_starts_with($scope->getFile(), $this->root.self::TEST_FOLDER)) {
+        if (str_starts_with($scope->getFile(), $this->root.self::TEST_FOLDER) || $this->isValueObjectConstructor($node, $scope)) {
             return [];
         }
 
-        $flags = array_filter($node->getParams(), fn (Param $parameter): bool => $this->isBoolean($parameter->type) && !$this->isValueObjectProperty($parameter, $scope));
+        $flags = array_filter($node->getParams(), fn (Param $parameter): bool => $this->isBoolean($parameter->type));
 
         return array_values(array_map($this->finding(...), $flags));
+    }
+
+    // a readonly service is still a service, so a boolean is data only for a readonly class the container does not hold
+    private function isValueObjectConstructor(FunctionLike $node, Scope $scope): bool
+    {
+        $class = $scope->getClassReflection();
+
+        return $node instanceof ClassMethod
+            && '__construct' === $node->name->toLowerString()
+            && null !== $class
+            && $class->isReadOnly()
+            && (!$this->registration->covers($scope->getFile()) || $this->registration->excludes($class));
     }
 
     private function isBoolean(Identifier|Name|ComplexType|null $type): bool
@@ -60,12 +73,6 @@ final readonly class FlagParameterRule implements Rule
             $type instanceof UnionType => array_any($type->types, fn (Identifier|Name|IntersectionType $member): bool => $this->isBoolean($member)),
             default => false,
         };
-    }
-
-    // a promoted boolean of a readonly class is data of a value object because it cannot change, unlike a mode of a call
-    private function isValueObjectProperty(Param $parameter, Scope $scope): bool
-    {
-        return 0 !== $parameter->flags && true === $scope->getClassReflection()?->isReadOnly();
     }
 
     private function finding(Param $parameter): IdentifierRuleError
