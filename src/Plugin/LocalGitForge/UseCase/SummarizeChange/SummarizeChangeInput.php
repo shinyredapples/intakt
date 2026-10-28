@@ -6,7 +6,10 @@ namespace Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange;
 
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
+// the console builds this object per run for #[MapInput], so the container has no reason to hold it
+#[Exclude]
 final class SummarizeChangeInput
 {
     #[Argument('The branch to summarize')]
