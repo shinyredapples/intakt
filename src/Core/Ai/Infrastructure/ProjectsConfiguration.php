@@ -1,0 +1,29 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Ai\Infrastructure;
+
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
+use Symfony\Component\Config\Definition\Builder\TreeBuilder;
+use Symfony\Component\Config\Definition\ConfigurationInterface;
+
+// The shape of Intakt's own projects file; an invalid file fails the container build with the path of the bad key.
+final class ProjectsConfiguration implements ConfigurationInterface
+{
+    public function getConfigTreeBuilder(): TreeBuilder
+    {
+        $tree = new TreeBuilder('intakt');
+        $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->arrayPrototype()->children();
+        $tiers = $projects->arrayNode('tiers')->addDefaultsIfNotSet()->children();
+
+        foreach (Tier::cases() as $tier) {
+            $mapping = $tiers->arrayNode($tier->value)->children();
+            $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
+            $mapping->scalarNode('model')->isRequired()->cannotBeEmpty();
+        }
+
+        return $tree;
+    }
+}
