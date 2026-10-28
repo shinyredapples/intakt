@@ -41,16 +41,18 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 ## Symfony AI
 
 - Use every component fully, behind Intakt's small vendor contract, at exactly pinned versions.
+- Test doubles: `MockPlatformFactory` with `ScriptedResponse`, or `RecordingProvider` with a redacted `HttpCassette`; the in-memory Store for retrieval. Message stores come from the Agent component (there is no Chat component).
 - A likely library bug becomes a minimal reproduction and draft report in `upstream/<name>/`; never posted without the owner.
 
 ## Docs, pull requests, commits
 
 - User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
+- A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row in `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change.
 - One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
 ## Secrets and protected paths
 
 - Nothing secret in the repository; gitleaks scans files and history, and inline allow directives are refused.
-- `config/gates/`, `bin/check`, `bin/instance`, `bin/probe`, `.github/`, `AGENTS.md`, `composer.json`, `composer.lock` and the PHPUnit configs need the owner's approval (`.github/CODEOWNERS`; a code-owner ruleset is turned on when the repository goes public, since a private free-plan repository cannot enforce it). Never weaken a gate, inline or otherwise.
+- `config/gates/`, `bin/check`, `bin/instance`, `bin/probe`, `.github/`, `AGENTS.md` and the PHPUnit configs need the owner's approval (`.github/CODEOWNERS`; a code-owner ruleset is turned on when the repository goes public, since a private free-plan repository cannot enforce it). A dependency change is decided by the build loop's composer policy: a new `symfony/` or `doctrine/` package from its own repository, with no binaries, Composer plugin or autoload files, is routine; any other vendor, and any change to Composer's own settings (scripts, plugins, repositories, config), waits for the owner. Never weaken a gate, inline or otherwise.
 - The `comments` gate checks why-comments with a reason-word heuristic; reviewers are the backstop.

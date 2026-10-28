@@ -3,7 +3,5 @@
 /.github/       @haraldpdl
 /bin/check      @haraldpdl
 /AGENTS.md      @haraldpdl
-/composer.json  @haraldpdl
-/composer.lock  @haraldpdl
 /bin/instance @haraldpdl
 /bin/probe @haraldpdl

@@ -10,7 +10,7 @@ Kept:
 - **Evidence by construction.** Races are proven with forced-order tests, not repeated runs.
 
 Changed:
-- **No prose parsing for decisions.** A loop that parses reviewer prose for findings has to harden that parser again and again (fences, quotes, case, list items, Unicode line breaks). Intakt requires a structured verdict (JSON schema, validated) and treats anything else as "changes requested".
+- **No prose parsing for decisions.** A loop that parses reviewer prose for findings has to harden that parser again and again (fences, quotes, case, list items, Unicode line breaks). Intakt requires a structured verdict (typed objects filled through structured output and validated) and treats anything else as "changes requested".
 - **Isolation by container, not by home-directory hygiene.** Builders that share a Unix user and a long-lived worktree need every piece of state reset by hand, and every reset (dotfiles, CLAUDE.md, git config, commondir, index, symrefs, Composer cache) was a new denylist item found by review. Intakt gives every job a fresh container from a read-only image, with the repo cloned fresh from the orchestrator's bare mirror. Nothing a job writes survives it except the bundle it hands back.
 - **Measured budgets, not estimated ones.** A ledger estimate refused a second builder for hours while the vendor measured 4% use. Intakt asks the vendor (usage probe or API billing) first and uses its own estimates only as a fallback.
 - **One process owns state.** Host scripts, container scripts and timers that all touch pause, drain and locks race each other. In Intakt, only the orchestrator writes state; the CLI and dashboard talk to it.
