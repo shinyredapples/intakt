@@ -37,7 +37,15 @@ Intakt has a ledger that can store review events (review started, reviewer start
 php bin/console doctrine:migrations:migrate
 ```
 
-There is no command to read the events back yet.
+Stored events cannot be changed or removed. Intakt refuses to update or delete one with a `LedgerEventsAreAppendOnly` error, and on SQLite the same migration adds database triggers that abort any `UPDATE` or `DELETE` on the table, and any insert that would replace a stored event (for example `INSERT OR REPLACE` with the position or id of an existing event), even from another tool. On other database engines only the refusal inside Intakt applies.
+
+Read the events back, oldest first, with:
+
+```
+php bin/console intakt:ledger:events
+```
+
+It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
 
 ## Summarizing a branch
 
