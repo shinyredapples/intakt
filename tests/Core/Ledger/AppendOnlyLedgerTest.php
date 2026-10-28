@@ -11,9 +11,12 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use DoctrineMigrations\Version20261028120000;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
+use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\RefuseChangesToStoredEvents;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -21,13 +24,17 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(RefuseChangesToStoredEvents::class)]
 #[CoversClass(LedgerEventsAreAppendOnly::class)]
 #[CoversClass(Version20261028120000::class)]
+#[UsesClass(AppendResult::class)]
+#[UsesClass(DoctrineLedger::class)]
 #[UsesClass(EventRecord::class)]
+#[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
 final class AppendOnlyLedgerTest extends KernelTestCase
@@ -65,6 +72,28 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         $this->expectException(LedgerEventsAreAppendOnly::class);
 
         $this->manager->flush();
+    }
+
+    public function testAnAppendAfterARefusedUpdateIsStored(): void
+    {
+        $this->manager->getUnitOfWork()->scheduleForUpdate($this->storedEvent());
+        $this->assertTheFlushIsRefused();
+
+        $result = $this->ledger()->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertSame(2, $this->manager->getConnection()->fetchOne('SELECT COUNT(*) FROM ledger_event'));
+    }
+
+    public function testAnAppendAfterARefusedDeleteIsStored(): void
+    {
+        $this->manager->remove($this->storedEvent());
+        $this->assertTheFlushIsRefused();
+
+        $result = $this->ledger()->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{}'));
+
+        self::assertTrue($result->succeeded());
+        self::assertSame(2, $this->manager->getConnection()->fetchOne('SELECT COUNT(*) FROM ledger_event'));
     }
 
     public function testUpdatingAStoredEventInTheDatabaseIsRefused(): void
@@ -131,6 +160,25 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         $this->manager->flush();
 
         return $record;
+    }
+
+    private function assertTheFlushIsRefused(): void
+    {
+        try {
+            $this->manager->flush();
+        } catch (LedgerEventsAreAppendOnly) {
+            return;
+        }
+
+        self::fail('the flush was not refused');
+    }
+
+    private function ledger(): DoctrineLedger
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+
+        return new DoctrineLedger($registry, new MockClock('2026-10-28 12:00:00', 'UTC'));
     }
 
     // The test schema comes from the mapping, which has no triggers, so the migration adds them.
