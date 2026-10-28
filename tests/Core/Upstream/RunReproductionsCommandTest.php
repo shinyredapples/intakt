@@ -116,6 +116,16 @@ final class RunReproductionsCommandTest extends TestCase
         self::assertSame(Command::INVALID, $tester->getStatusCode());
     }
 
+    public function testAFolderWithGlobCharactersInItsPathIsSearchedLiterally(): void
+    {
+        $this->givenScript('samples[1]/open-script', "echo 'ok';");
+
+        $tester = $this->whenTheCommandRuns(directory: $this->folder.'/samples[1]');
+
+        self::assertMatchesRegularExpression('/^still fails\s+open-script$/m', $tester->getDisplay());
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+    }
+
     public function testAFolderWithoutATestOrScriptStillFails(): void
     {
         new Filesystem()->dumpFile($this->folder.'/notes-only/REPORT.md', "# Report\n");

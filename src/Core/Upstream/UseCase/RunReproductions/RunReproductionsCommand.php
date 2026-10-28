@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Upstream\UseCase\RunReproductions;
 
 use Composer\InstalledVersions;
+use FilesystemIterator;
 use Intakt\Core\Upstream\Contract\ReproductionOutcome;
 use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
 use Symfony\Component\Console\Attribute\Argument;
@@ -12,7 +13,9 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use SplFileInfo;
 use Symfony\Component\Filesystem\Path;
+use UnexpectedValueException;
 
 #[AsCommand(name: 'intakt:upstream:run', description: 'Run every upstream reproduction and report which still fail')]
 final readonly class RunReproductionsCommand
@@ -67,10 +70,20 @@ final readonly class RunReproductionsCommand
      */
     private function discover(string $folder): ?array
     {
-        // Without GLOB_ERR a folder that cannot be listed looks like an empty one, so the error would pass as a clean run.
-        $folders = glob($folder.'/*', GLOB_ONLYDIR | GLOB_ERR);
+        // A glob pattern would read brackets or stars in the folder's own path as wildcards, and a listing error must not pass as an empty folder.
+        try {
+            $entries = new FilesystemIterator($folder, FilesystemIterator::KEY_AS_PATHNAME | FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::SKIP_DOTS);
+        } catch (UnexpectedValueException) {
+            return null;
+        }
 
-        return false === $folders ? null : $folders;
+        $folders = array_keys(array_filter(
+            iterator_to_array($entries),
+            static fn (SplFileInfo $entry): bool => $entry->isDir() && !str_starts_with($entry->getFilename(), '.'),
+        ));
+        sort($folders);
+
+        return $folders;
     }
 
     /**
