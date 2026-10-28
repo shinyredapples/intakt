@@ -33,6 +33,7 @@ final readonly class InstanceStatus
 
 final class Instance
 {
+    private const array INHERITED_VARIABLES = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR'];
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
     // Keeps boot, command and stop together well inside the build loop's 120 seconds per call.
@@ -189,8 +190,13 @@ final class Instance
     {
         $environment = [];
 
-        foreach (getenv() as $name => $value) {
-            $environment[$name] = $value;
+        // An allowlist, so code under test cannot print a token the caller happens to have set.
+        foreach (self::INHERITED_VARIABLES as $name) {
+            $value = getenv($name);
+
+            if (false !== $value) {
+                $environment[$name] = $value;
+            }
         }
 
         return [
