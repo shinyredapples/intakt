@@ -26,7 +26,7 @@ flowchart LR
 
 How it stays safe:
 - **Every tool is labeled** with what it does ("only reads", "changes something"), so your assistant knows before it calls.
-- **Starting a review needs a token** you set in Intakt's config. Reading is open to whoever can reach the server.
+- **Starting a review needs a token** you set in Intakt's config.
 - **Intakt decides, not the model:** whether a tool may write is decided by Intakt's own rules, never by what the assistant asks for.
 - **Approvals are not tools:** no MCP tool can approve a merge or a protected change. That stays your click or comment on the forge.
 
