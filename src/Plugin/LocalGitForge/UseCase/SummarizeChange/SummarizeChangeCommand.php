@@ -43,8 +43,7 @@ final readonly class SummarizeChangeCommand
 
     private function print(SymfonyStyle $io, Change $change, string $base): void
     {
-        // Branch names and paths come from the repository and may contain "<info>", which the formatter would swallow.
-        // Branch names need no control-character handling, because git refuses control characters in ref names.
+        // Names may contain "<info>", which the formatter would swallow; branch names skip visible() because git refuses control characters in ref names.
         $io->writeln(OutputFormatter::escape(sprintf('%s against %s', $change->id->value, $base)));
         $io->writeln(sprintf('base %s, head %s', substr($change->commits->base->hash, 0, 12), substr($change->commits->head->hash, 0, 12)));
         $io->writeln(sprintf('%s, +%d -%d lines', $this->countFiles($change), $this->countLines($change, '+'), $this->countLines($change, '-')));
