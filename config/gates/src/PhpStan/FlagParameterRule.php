@@ -6,9 +6,11 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
+use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\IntersectionType;
+use PhpParser\Node\Name;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\UnionType;
@@ -50,17 +52,17 @@ final readonly class FlagParameterRule implements Rule
         return array_values(array_map($this->finding(...), $flags));
     }
 
-    private function isBoolean(Identifier|Node\Name|ComplexType|null $type): bool
+    private function isBoolean(Identifier|Name|ComplexType|null $type): bool
     {
         return match (true) {
             $type instanceof Identifier => in_array($type->toLowerString(), self::BOOLEAN_TYPES, true),
             $type instanceof NullableType => $this->isBoolean($type->type),
-            $type instanceof UnionType => array_any($type->types, fn (Identifier|Node\Name|IntersectionType $member): bool => $this->isBoolean($member)),
+            $type instanceof UnionType => array_any($type->types, fn (Identifier|Name|IntersectionType $member): bool => $this->isBoolean($member)),
             default => false,
         };
     }
 
-    // a promoted boolean of a readonly class is data of a value object, not a mode of a call
+    // a promoted boolean of a readonly class is data of a value object because it cannot change, unlike a mode of a call
     private function isValueObjectProperty(Param $parameter, Scope $scope): bool
     {
         return 0 !== $parameter->flags && true === $scope->getClassReflection()?->isReadOnly();
@@ -68,7 +70,7 @@ final readonly class FlagParameterRule implements Rule
 
     private function finding(Param $parameter): IdentifierRuleError
     {
-        $name = $parameter->var instanceof Node\Expr\Variable && is_string($parameter->var->name) ? $parameter->var->name : 'parameter';
+        $name = $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : 'parameter';
         $message = sprintf('Parameter $%s is a flag: model the modes with a backed enum, or split the method in two. A boolean that is data belongs in a readonly value object.', $name);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.flagParameter')->line($parameter->getStartLine())->build();
