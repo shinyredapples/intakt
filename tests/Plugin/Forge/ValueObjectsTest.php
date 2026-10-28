@@ -36,6 +36,13 @@ final class ValueObjectsTest extends TestCase
         new CommitId('abcdef1');
     }
 
+    public function testAHashWithATrailingNewlineIsNotACommitId(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        new CommitId(str_repeat('ab', 20)."\n");
+    }
+
     public function testAnOptionLikeHashIsNotACommitId(): void
     {
         $this->expectException(InvalidArgumentException::class);
