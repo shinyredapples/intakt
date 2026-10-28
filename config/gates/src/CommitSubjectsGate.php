@@ -76,7 +76,7 @@ final readonly class CommitSubjectsGate implements Gate
         return $this->isOnBaseBranch($workspace, $parentHashes[0]);
     }
 
-    // GitHub builds the test merge on the current base tip, which can be newer than the base the event reports.
+    // Because GitHub builds the test merge on the current base tip, which can be newer than the base the event reports.
     private function isOnBaseBranch(Workspace $workspace, string $commit): bool
     {
         $baseTip = $workspace->baseTip();

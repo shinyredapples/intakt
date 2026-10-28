@@ -148,9 +148,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.trim($sandbox->git('rev-parse', 'main~1')->output).':'.$parents[1];
     }
 
-    /**
-     * Leaves HEAD on a test merge of "change" into main's tip; main~1 plays the base the event reports.
-     */
+    // Leaves HEAD on a test merge of "change"; main~1 plays the base the event reports, because it is older than main.
     private function testMergeSandbox(bool $baseMoved, bool $offBase): Sandbox
     {
         $sandbox = $this->emptySandbox();
