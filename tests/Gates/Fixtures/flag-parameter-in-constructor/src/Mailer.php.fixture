@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Mailer
+{
+    public function __construct(private readonly ?bool $urgent)
+    {
+    }
+
+    public function isUrgent(): bool
+    {
+        return true === $this->urgent;
+    }
+}

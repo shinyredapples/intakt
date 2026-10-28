@@ -84,7 +84,7 @@ enum Isolation: string
     case ByCaller = 'caller';
 
     // The caller (the build loop's sandbox) must set PROBE_ISOLATED=1 when it already gives the run its own network and PID namespaces.
-    public static function fromVariable(string|false $value): self
+    public static function fromVariable(string $value): self
     {
         return '1' === $value ? self::ByCaller : self::ByUnshare;
     }
@@ -198,5 +198,5 @@ final readonly class Probe
 $script = $_SERVER['SCRIPT_FILENAME'] ?? '';
 
 if (is_string($script) && __FILE__ === realpath($script)) {
-    exit(new Probe(dirname(__DIR__), Isolation::fromVariable(getenv('PROBE_ISOLATED')), new Network())->run($argv[1] ?? ''));
+    exit(new Probe(dirname(__DIR__), Isolation::fromVariable((string) getenv('PROBE_ISOLATED')), new Network())->run($argv[1] ?? ''));
 }

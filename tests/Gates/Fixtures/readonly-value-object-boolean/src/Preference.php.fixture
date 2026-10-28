@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Preference
+{
+    public function __construct(public string $name, public bool $enabled)
+    {
+    }
+}
