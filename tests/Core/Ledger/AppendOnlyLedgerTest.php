@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Ledger;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception\DriverException;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -69,6 +70,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testUpdatingAStoredEventInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $this->storedEvent();
         $this->migrate();
 
@@ -79,6 +82,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testDeletingAStoredEventInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $this->storedEvent();
         $this->migrate();
 
@@ -89,6 +94,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testReplacingAStoredEventAtItsPositionInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $record = $this->storedEvent();
         $this->migrate();
 
@@ -102,6 +109,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testReplacingAStoredEventByItsIdInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $this->storedEvent();
         $this->migrate();
         $connection = $this->manager->getConnection();
@@ -122,6 +131,14 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         $this->storedEvent();
 
         self::assertSame(1, $this->manager->getConnection()->fetchOne('SELECT COUNT(*) FROM ledger_event'));
+    }
+
+    // The triggers and INSERT OR REPLACE exist on SQLite only; other engines rely on the Doctrine listener (see the migration).
+    private function requireSqlite(): void
+    {
+        if (!$this->manager->getConnection()->getDatabasePlatform() instanceof SQLitePlatform) {
+            self::markTestSkipped('The database refuses changes through SQLite triggers only.');
+        }
     }
 
     private function storedEvent(): EventRecord
