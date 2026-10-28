@@ -191,7 +191,7 @@ final class AiProvidersTest extends KernelTestCase
         );
     }
 
-    // Base64 of the wrong length: libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
+    // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
     private function useMalformedDecryptionSecret(): void
     {
         $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode('too short for a key pair');

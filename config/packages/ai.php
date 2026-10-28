@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Provider;
-use SodiumException;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
@@ -19,7 +18,7 @@ return static function (ContainerConfigurator $container): void {
     $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
     $decryptionKey = base64_decode($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', true);
     $vault = new SodiumVault($vaultDirectory, false === $decryptionKey ? null : $decryptionKey);
-    // Names only, without decrypting: like the framework's env loader, a secret is revealed only when it is needed.
+    // Names only, since decrypting every entry up front would let an unrelated secret abort the boot; the framework's env loader reveals one name at a time too.
     $vaultNames = $vault->list();
 
     $vaultValue = static function (string $name) use ($vault, $vaultNames): ?string {
