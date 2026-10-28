@@ -24,10 +24,10 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 
 #[CoversClass(SymfonyAiVendor::class)]
@@ -44,7 +44,7 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(StrictVerdictConverter::class)]
 #[UsesClass(Kernel::class)]
-final class SymfonyAiVendorTest extends TestCase
+final class SymfonyAiVendorTest extends KernelTestCase
 {
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
     {
@@ -86,7 +86,7 @@ final class SymfonyAiVendorTest extends TestCase
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
         ], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::theApplicationsDispatcher());
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), new VerdictParser());
