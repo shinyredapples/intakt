@@ -58,12 +58,24 @@ final readonly class SummarizeChangeCommand
 
     private function countLines(Change $change, string $marker): int
     {
-        // The "+++" and "---" file headers also start with the marker, so they are left out because they are not changed lines.
-        $lines = explode("\n", $change->diff->patch);
+        // Only lines inside a hunk are counted, because the "+++" and "---" file headers look like a changed line "++x" or "--x".
+        $count = 0;
+        $inHunk = false;
 
-        return count(array_filter(
-            $lines,
-            static fn (string $line): bool => str_starts_with($line, $marker) && !str_starts_with($line, str_repeat($marker, 3)),
-        ));
+        foreach (explode("\n", $change->diff->patch) as $line) {
+            $inHunk = $this->isInHunk($line, $inHunk);
+            $count += $inHunk && str_starts_with($line, $marker) ? 1 : 0;
+        }
+
+        return $count;
+    }
+
+    private function isInHunk(string $line, bool $wasInHunk): bool
+    {
+        return match (true) {
+            str_starts_with($line, 'diff ') => false,
+            str_starts_with($line, '@@') => true,
+            default => $wasInHunk,
+        };
     }
 }

@@ -89,6 +89,27 @@ final class SummarizeChangeCommandTest extends TestCase
         self::assertStringContainsString('1 files changed, +1 -0 lines', $tester->getDisplay());
     }
 
+    public function testAnAddedLineStartingWithTwoPlusSignsIsCounted(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('keep.txt', "one\ntwo\n++counter;\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
+
+        self::assertStringContainsString('1 files changed, +1 -0 lines', $tester->getDisplay());
+    }
+
+    public function testARemovedLineStartingWithTwoMinusSignsIsCounted(): void
+    {
+        $this->repository->commitFile('query.sql', "-- comment\nselect 1;\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('query.sql', "select 1;\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
+
+        self::assertStringContainsString('1 files changed, +0 -1 lines', $tester->getDisplay());
+    }
+
     public function testAMissingBranchFailsWithAMessage(): void
     {
         $tester = $this->whenTheCommandRuns(['branch' => 'nope', '--repository' => $this->repository->path]);
@@ -102,6 +123,7 @@ final class SummarizeChangeCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path.'/missing']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('[ERROR] git', $tester->getDisplay());
     }
 
     /**
