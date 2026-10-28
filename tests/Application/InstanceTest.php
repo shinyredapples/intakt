@@ -200,7 +200,7 @@ final class InstanceTest extends TestCase
     }
 
     /**
-     * @param list<string>          $command
+     * @param list<string>                $command
      * @param array<string, string|false> $environment
      *
      * @return array{status: string, exit: int, output: string, errors: string}
