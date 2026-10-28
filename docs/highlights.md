@@ -84,7 +84,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | planned | T1 (#5), T5 (#10) |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
-| Process | the local git forge; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
+| Process | the local git forge; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
 
@@ -130,5 +130,6 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 
 ## PHP 8.5 in use
 
-- `#[NoDiscard]` on the instance status: `bin/instance` (done).
-- Planned: the pipe operator (T5, T6, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
+- `#[NoDiscard]` on the instance status: `bin/instance` (done); on `Forge::hasHeadMoved()`: `src/Plugin/Forge/Contract/Forge.php` (done, T6).
+- The pipe operator for turning `git diff` output into changed files: `src/Plugin/LocalGitForge/Infrastructure/NameStatusParser.php` (done, T6).
+- Planned: the pipe operator (T5, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
