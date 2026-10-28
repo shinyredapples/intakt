@@ -79,7 +79,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned | T32 (#60) |
 | HttpClient | `RetryableHttpClient` and scoped clients for GitHub | planned | T18 (#23) |
 | Mercure and Turbo (Symfony UX) | Turbo Streams over FrankenPHP's built-in hub | planned | T21 (#27) |
-| Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T26 (#33), `src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php` |
+| Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T26 (#33), `src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php`; T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php` |
 | Uid | UUIDv7 ids for ledger events and findings | in progress | T2 (#7, part #46), `src/Core/Ledger/Infrastructure/DoctrineLedger.php` |
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | planned | T1 (#5), T5 (#10) |
@@ -112,6 +112,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Quality gates | `bin/check` runs every gate locally and in CI | done | `bin/check`, `config/gates/` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
 | `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | in progress | T26 (#33), `src/Core/Upstream/` |
+| `intakt:change:summarize` | prints the change summary of a branch of a local repository | done | T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/` |
 | `bin/instance` and `bin/probe` | offline boot gate and reviewer probes | done | T31 (#6), `bin/instance`, `bin/probe` |
 
 ## Found in the beta
