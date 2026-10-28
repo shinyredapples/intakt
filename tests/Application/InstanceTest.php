@@ -152,6 +152,16 @@ final class InstanceTest extends TestCase
         self::assertSame(5, $run['exit']);
     }
 
+    public function testACommandDoesNotInheritAVariableThatIsNotOnTheAllowlist(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'foreach (getenv() as $name => $value) { echo $name, "=", $value, "\n"; }'], ['INTAKT_TEST_CANARY' => 'visible']);
+
+        self::assertStringNotContainsString('INTAKT_TEST_CANARY', $run['output']);
+        self::assertStringNotContainsString('visible', $run['output']);
+        self::assertMatchesRegularExpression('/^PATH=./m', $run['output']);
+        self::assertMatchesRegularExpression('#^INTAKT_INSTANCE_URL=http://127\.0\.0\.1:\d+$#m', $run['output']);
+    }
+
     public function testTheServerLogIsLeftOutOfACommandsOutputOnAReadyBoot(): void
     {
         $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo "probe output\n";']);
