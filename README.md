@@ -59,6 +59,8 @@ Then open the dashboard, pick the sample pull request and start a review.
 - [How Intakt works, in plain words](docs/how-intakt-works.md): the friendly tour, with diagrams.
 - [The journey of a task, step by step](docs/the-journey-of-a-task.md): from picking to merging, in plain words.
 - [The engine room](docs/the-engine-room.md): lanes, queues, ticks, locks, cycles, generations, budgets and draining, in plain words.
+- [Writing a good task](docs/writing-a-good-task.md): what Intakt looks for, with a template.
+- [Why the AI can't wreck your project](docs/why-the-ai-cant-wreck-your-project.md): the safety layers, in plain words.
 - [How Intakt uses Symfony, in plain words](docs/symfony-in-intakt.md): which Symfony and Symfony AI parts do what.
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
