@@ -71,7 +71,7 @@ final readonly class SummarizeChangeCommand
         // A path may hold ESC or other control bytes that would rewrite the terminal; the backslash is escaped so the visible form stays unambiguous.
         return (string) preg_replace_callback(
             '/[\x00-\x1F\x7F\\\\]|\xC2[\x80-\x9F]/',
-            static fn (array $match): string => '\\' === $match[0] ? '\\\\' : implode('', array_map(static fn (string $byte): string => sprintf('\x%02x', ord($byte)), str_split($match[0]))),
+            static fn (array $match): string => '\\' === $match[0] ? '\\\\' : implode('', array_map(static fn (string $byte): string => sprintf('\x%02x', ord($byte[0])), str_split($match[0]))),
             $path,
         );
     }
