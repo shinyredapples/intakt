@@ -30,7 +30,7 @@ final class AiProvidersTest extends KernelTestCase
 
     protected function setUp(): void
     {
-        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV'] as $name) {
+        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET'] as $name) {
             $this->saved[$name] = [
                 'server' => $_SERVER[$name] ?? null,
                 'env' => $_ENV[$name] ?? null,
@@ -156,6 +156,45 @@ final class AiProvidersTest extends KernelTestCase
             ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
             $container->getParameter('intakt.ai.disabled_providers'),
         );
+    }
+
+    public function testAMalformedDecryptionSecretLeavesAProviderWithItsKeyInTheEnvironmentEnabled(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('UNRELATED_VAULT_ENTRY', 'test-value');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $this->useMalformedDecryptionSecret();
+
+        $container = $this->bootWith($this->allSet());
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertTrue($container->has('ai.platform.openai'));
+        self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
+        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+    }
+
+    public function testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $this->useMalformedDecryptionSecret();
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
+    // Base64 of the wrong length: libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
+    private function useMalformedDecryptionSecret(): void
+    {
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode('too short for a key pair');
     }
 
     /**

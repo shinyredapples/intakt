@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Provider;
+use SodiumException;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
@@ -17,10 +18,25 @@ return static function (ContainerConfigurator $container): void {
     // The framework's default vault directory and decryption key (the vault's own private key file, else SYMFONY_DECRYPTION_SECRET), which config/packages/framework.yaml keeps.
     $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
     $decryptionKey = base64_decode($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', true);
-    // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
-    $secrets = new SodiumVault($vaultDirectory, false === $decryptionKey ? null : $decryptionKey)->list(reveal: true);
+    $vault = new SodiumVault($vaultDirectory, false === $decryptionKey ? null : $decryptionKey);
+    // Names only, without decrypting: like the framework's env loader, a secret is revealed only when it is needed.
+    $vaultNames = $vault->list();
 
-    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($secrets[$name] ?? '');
+    $vaultValue = static function (string $name) use ($vault, $vaultNames): ?string {
+        if (!array_key_exists($name, $vaultNames)) {
+            return null;
+        }
+
+        try {
+            return $vault->reveal($name);
+        } catch (SodiumException) {
+            // A decryption key of the wrong length throws where a wrong key only returns null; either way the secret is unusable, so it counts as missing.
+            return null;
+        }
+    };
+
+    // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
+    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($vaultValue($name) ?? '');
 
     $configs = [
         Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%']],
