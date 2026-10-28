@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
+use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
@@ -25,6 +26,7 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(TierProviderDisabled::class)]
+#[UsesClass(TierRequest::class)]
 #[UsesClass(TierResolutionFailure::class)]
 final class TierPlatformTest extends TestCase
 {
@@ -32,8 +34,8 @@ final class TierPlatformTest extends TestCase
     {
         $platform = $this->tierPlatform();
 
-        $alpha = $platform->invoke('alpha', Tier::Strong, 'review')->asText();
-        $beta = $platform->invoke('beta', Tier::Strong, 'review')->asText();
+        $alpha = $platform->invoke('alpha', Tier::Strong, new TierRequest('review'))->asText();
+        $beta = $platform->invoke('beta', Tier::Strong, new TierRequest('review'))->asText();
 
         self::assertSame('anthropic answered as big', $alpha);
         self::assertSame('openai answered as other', $beta);
@@ -43,7 +45,7 @@ final class TierPlatformTest extends TestCase
     {
         $this->expectException(TierProviderDisabled::class);
 
-        (void) $this->tierPlatform(['openai' => 'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.'])->invoke('beta', Tier::Strong, 'review');
+        (void) $this->tierPlatform(['openai' => 'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.'])->invoke('beta', Tier::Strong, new TierRequest('review'));
     }
 
     /**

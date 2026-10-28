@@ -11,6 +11,7 @@ return [
     'Plugin/Gate',
     'Plugin/LocalGitForge',
     'Plugin/Notifier',
+    'Plugin/SymfonyAiVendor',
     'Plugin/Vendor',
     'Plugin/WorkSource',
 ];

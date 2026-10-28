@@ -94,3 +94,7 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 ## Checking a new Symfony AI release against the known bugs
 
 `php bin/console intakt:upstream:run` runs every reproduction in `upstream/` and prints the installed Symfony AI versions, then `passes` (the bug seems fixed) or `still fails` for each reproduction, and a count. Add `-v` to see why a reproduction fails. The exit code is 1 while any reproduction still fails. A reproduction counts as `passes` only when its PHPUnit tests ran and asserted something, or when its `reproduce.php` script exits with 0 and prints `REPRODUCTION PASSES` as its last line. One without tests or script, with a skipped or incomplete test, or that runs longer than 5 minutes is reported as `still fails`, and the other reproductions still run. A folder that does not exist or cannot be read is an error (exit code 2).
+
+## Asking a model for a verdict
+
+Inside Intakt, the vendor asks the model of a project's capability tier to review a change and gets back a verdict: an approve or changes decision with findings. An answer that is not a valid verdict counts as changes. There is no command for it yet; the review loop will use it.
