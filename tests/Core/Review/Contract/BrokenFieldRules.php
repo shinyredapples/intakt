@@ -75,7 +75,7 @@ final readonly class BrokenFieldRules
         yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '($findings) must be of type array, stdClass given'];
         yield 'type: resolved is an empty object' => [$design->with('resolved', new stdClass())->json(), '"resolved" attribute'];
         yield 'type: follow_ups is an empty object' => [$design->with('follow_ups', new stdClass())->json(), '"follow_ups" attribute'];
-        yield 'type: a finding is a string' =>[$design->with('findings', ['F3'])->json(), '"$id"'];
+        yield 'type: a finding is a string' => [$design->with('findings', ['F3'])->json(), '"$id"'];
         yield 'type: resolved is a string' => [$design->with('resolved', 'F1')->json(), '"resolved" attribute'];
         yield 'type: a resolved id is a number' => [$design->with('resolved', [1])->json(), '"resolved" attribute'];
         yield 'type: follow_ups is a string' => [$design->with('follow_ups', '...')->json(), '"follow_ups" attribute'];
