@@ -8,6 +8,8 @@ use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\DependencyInjection\Container;
+use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
@@ -24,9 +26,10 @@ return static function (ContainerConfigurator $container): void {
 
     // The framework's default vault directory and decryption key (SYMFONY_DECRYPTION_SECRET when set, else the vault's own private key file), which config/packages/framework.yaml keeps.
     $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
-    // Decoded leniently and in either alphabet, as the framework's base64: env processor does, so a key the framework accepts is not missing here.
-    $decryptionKey = base64_decode(strtr($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', '-_', '+/'), false);
-    $vault = new SodiumVault($vaultDirectory, $decryptionKey);
+    // Decoded by the framework's own base64: env processor (lenient, either alphabet), so a key the framework accepts is not missing here.
+    $decryptionSecret = $environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '';
+    $decryptionKey = new EnvVarProcessor(new Container())->getEnv('base64', 'SYMFONY_DECRYPTION_SECRET', static fn (): string => $decryptionSecret);
+    $vault = new SodiumVault($vaultDirectory, is_string($decryptionKey) ? $decryptionKey : null);
     // Names only, since decrypting every entry up front would let an unrelated secret abort the boot; the framework's env loader reveals one name at a time too.
     $vaultNames = $vault->list();
 
