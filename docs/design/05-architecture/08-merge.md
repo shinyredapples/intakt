@@ -8,7 +8,7 @@ Only the orchestrator merges. Right before merging it:
 
 Protected paths (gates, CI config, agent instructions, dependency policy) need an approval. The orchestrator gives it itself for a change that only tightens or keeps the rules, and asks the owner for the rest:
 - **Approved by the orchestrator by class.** Each reviewer classifies the protected part of the change as tightening, neutral or loosening, with a reason. The orchestrator approves the head only when CI passes, both reviewers approve and both independently classify it as tightening or neutral; for existing gate code the change must in addition be purely additive by a deterministic check (below). A missing classification, a disagreement, a stand-in for one of the two reviewers, or anything that removes, relaxes, skips or conditions away a check goes to the owner, with the reviewers' reasons.
-- **Always the owner's:** the protected-path list, code ownership, CI permissions and credentials, and the rules for what the orchestrator may approve, so it can never widen its own approvals.
+- **Always the owner's:** the protected-path list, code ownership, the CI definition (workflows, their permissions and credentials), and the rules for what the orchestrator may approve, so it can never widen its own approvals.
 - **Visible afterwards.** Every protected change the orchestrator approved is listed in a daily digest to the owner, one line each with the reasons, so a wrong call is seen without anything waiting on a person.
 
 What goes to the owner follows these rules:
