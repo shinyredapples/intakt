@@ -44,18 +44,36 @@ final readonly class SummarizeChangeCommand
     private function print(SymfonyStyle $io, Change $change, string $base): void
     {
         // Branch names and paths come from the repository and may contain "<info>", which the formatter would swallow.
+        // Branch names need no control-character handling, because git refuses control characters in ref names.
         $io->writeln(OutputFormatter::escape(sprintf('%s against %s', $change->id->value, $base)));
         $io->writeln(sprintf('base %s, head %s', substr($change->commits->base->hash, 0, 12), substr($change->commits->head->hash, 0, 12)));
-        $io->writeln(sprintf('%d files changed, +%d -%d lines', count($change->diff->files), $this->countLines($change, '+'), $this->countLines($change, '-')));
+        $io->writeln(sprintf('%s, +%d -%d lines', $this->countFiles($change), $this->countLines($change, '+'), $this->countLines($change, '-')));
 
         foreach ($change->diff->files as $file) {
-            $io->writeln(OutputFormatter::escape($this->describe($file)));
+            $io->writeln($this->describe($file) |> OutputFormatter::escape(...));
         }
+    }
+
+    private function countFiles(Change $change): string
+    {
+        $count = count($change->diff->files);
+
+        return 1 === $count ? '1 file changed' : sprintf('%d files changed', $count);
     }
 
     private function describe(ChangedFile $file): string
     {
-        return sprintf('%-9s %s', $file->status->value, $file->path);
+        return sprintf('%-9s %s', $file->status->value, $this->visible($file->path));
+    }
+
+    private function visible(string $path): string
+    {
+        // A path may hold ESC or other control bytes that would rewrite the terminal; the backslash is escaped so the visible form stays unambiguous.
+        return (string) preg_replace_callback(
+            '/[\x00-\x1F\x7F\\\\]|\xC2[\x80-\x9F]/',
+            static fn (array $match): string => '\\' === $match[0] ? '\\\\' : implode('', array_map(static fn (string $byte): string => sprintf('\x%02x', ord($byte)), str_split($match[0]))),
+            $path,
+        );
     }
 
     private function countLines(Change $change, string $marker): int

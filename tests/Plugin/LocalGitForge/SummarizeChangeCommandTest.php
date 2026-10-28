@@ -20,6 +20,7 @@ use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeInput;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -86,7 +87,7 @@ final class SummarizeChangeCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path, '--base' => 'develop']);
 
         self::assertStringContainsString('feature against develop', $tester->getDisplay());
-        self::assertStringContainsString('1 files changed, +1 -0 lines', $tester->getDisplay());
+        self::assertStringContainsString('1 file changed, +1 -0 lines', $tester->getDisplay());
     }
 
     public function testAnAddedLineStartingWithTwoPlusSignsIsCounted(): void
@@ -96,7 +97,7 @@ final class SummarizeChangeCommandTest extends TestCase
 
         $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
 
-        self::assertStringContainsString('1 files changed, +1 -0 lines', $tester->getDisplay());
+        self::assertStringContainsString('1 file changed, +1 -0 lines', $tester->getDisplay());
     }
 
     public function testARemovedLineStartingWithTwoMinusSignsIsCounted(): void
@@ -107,7 +108,7 @@ final class SummarizeChangeCommandTest extends TestCase
 
         $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
 
-        self::assertStringContainsString('1 files changed, +0 -1 lines', $tester->getDisplay());
+        self::assertStringContainsString('1 file changed, +0 -1 lines', $tester->getDisplay());
     }
 
     public function testAPathThatLooksLikeAFormatterTagIsPrintedLiterally(): void
@@ -130,6 +131,30 @@ final class SummarizeChangeCommandTest extends TestCase
         self::assertStringContainsString('<error>feature against main', $tester->getDisplay());
     }
 
+    public function testASingleChangedFileIsCountedInTheSingular(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('feature.txt', "f\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path]);
+
+        self::assertStringContainsString('1 file changed, +1 -0 lines', $tester->getDisplay());
+    }
+
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function testControlCharactersInAPathArePrintedVisibly(bool $decorated): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("\e[2Kred\\.txt", "r\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path], $decorated);
+
+        $display = $tester->getDisplay();
+        self::assertMatchesRegularExpression('/^added\s+\\\\x1b\[2Kred\\\\\\\\\.txt$/m', $display);
+        self::assertDoesNotMatchRegularExpression('/[\x00-\x09\x0B-\x1F\x7F]/', $display);
+    }
+
     public function testAMissingBranchFailsWithAMessage(): void
     {
         $tester = $this->whenTheCommandRuns(['branch' => 'nope', '--repository' => $this->repository->path]);
@@ -149,12 +174,12 @@ final class SummarizeChangeCommandTest extends TestCase
     /**
      * @param array<string, string> $input
      */
-    private function whenTheCommandRuns(array $input): CommandTester
+    private function whenTheCommandRuns(array $input, bool $decorated = false): CommandTester
     {
         $application = new Application();
         $application->addCommand(new SummarizeChangeCommand(new NameStatusParser()));
         $tester = new CommandTester($application->find('intakt:change:summarize'));
-        $tester->execute($input);
+        $tester->execute($input, ['decorated' => $decorated]);
 
         return $tester;
     }
