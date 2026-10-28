@@ -23,13 +23,13 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 ## When `bin/check` reports a stateful service
 
-Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class with a property which is not `readonly`, including properties from a parent class or a trait, and static ones, because the container registers every class under `src/` as a service. The finding names the property. To resolve it, do one of:
+Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class under `src/` with a property which is not `readonly`, including properties from a parent class or a trait, and static ones, because the container registers every class under `src/` as a service. The finding names the property. To resolve it, do one of:
 
 - make the property, or the whole class, `readonly`;
 - implement `Symfony\Contracts\Service\ResetInterface` and clear the property in `reset()`, which Symfony calls between requests and messages;
 - if the class is a value object or a data transfer object rather than a service, mark it with Symfony's `#[Exclude]` attribute so the container does not register it.
 
-Doctrine entities, embeddables and mapped superclasses, exceptions and tests are not services and are never reported. Neither is the kernel, which performs the reset.
+Doctrine entities, embeddables and mapped superclasses and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
 
 ## Running a probe against an install
 

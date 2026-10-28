@@ -16,7 +16,6 @@ use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
-use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -27,13 +26,20 @@ use Throwable;
  */
 final readonly class StatefulServiceResetRule implements Rule
 {
-    // services.yaml registers all of src/, so only what the container skips is not a service: https://symfony.com/doc/current/service_container.html#importing-many-services-at-once-with-resource
+    // services.yaml registers src/ and nothing else, so a class elsewhere is never a service: https://symfony.com/doc/current/service_container.html#importing-many-services-at-once-with-resource
+    private const string REGISTERED_RESOURCE = '/src/';
+
+    // inside src/ only what the container skips is not a service, so these attributes exempt a class
     private const array NOT_REGISTERED = [
         Exclude::class,
         Entity::class,
         Embeddable::class,
         MappedSuperclass::class,
     ];
+
+    public function __construct(private string $root)
+    {
+    }
 
     public function getNodeType(): string
     {
@@ -47,7 +53,7 @@ final readonly class StatefulServiceResetRule implements Rule
     {
         $class = $node->getClassReflection();
 
-        if (!$this->isService($class)) {
+        if (!$this->isRegistered($scope) || !$this->isService($class)) {
             return [];
         }
 
@@ -57,6 +63,11 @@ final readonly class StatefulServiceResetRule implements Rule
         );
     }
 
+    private function isRegistered(Scope $scope): bool
+    {
+        return str_starts_with($scope->getFile(), $this->root.self::REGISTERED_RESOURCE);
+    }
+
     private function isService(ClassReflection $class): bool
     {
         return $class->isClass()
@@ -64,7 +75,6 @@ final readonly class StatefulServiceResetRule implements Rule
             && !$class->isAbstract()
             && !$class->implementsInterface(ResetInterface::class)
             && !$class->is(Throwable::class)
-            && !$class->is(TestCase::class)
             && !$class->is(KernelInterface::class)
             && !$this->isExcludedFromTheContainer($class);
     }

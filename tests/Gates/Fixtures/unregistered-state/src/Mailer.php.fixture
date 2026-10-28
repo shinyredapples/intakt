@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Mailer
+{
+    private int $sent = 0;
+
+    public function send(): int
+    {
+        return ++$this->sent;
+    }
+}

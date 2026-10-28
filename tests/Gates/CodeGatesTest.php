@@ -182,6 +182,16 @@ final class CodeGatesTest extends SandboxTestCase
         self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Sender::$last', $run->findingsOf('phpstan'));
     }
 
+    public function testOnlyClassesUnderSrcCountAsServicesInStaticAnalysis(): void
+    {
+        $run = $this->sandboxWith('unregistered-state')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Mailer.php:9 intakt.statefulService Service property $sent', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('tests/Support/RecordingMailer.php', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('config/gates/src/Timing.php', $run->findingsOf('phpstan'));
+    }
+
     public function testStaticAnalysisRunsAtMaxLevelWithoutABaseline(): void
     {
         $configuration = (string) file_get_contents(dirname(__DIR__, 2).'/config/gates/phpstan.neon');
