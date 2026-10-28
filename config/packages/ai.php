@@ -14,11 +14,13 @@ return static function (ContainerConfigurator $container): void {
         return is_string($value) && '' !== $value ? $value : null;
     };
 
-    // The framework's default vault directory, which config/packages/framework.yaml keeps; names only, so no decryption key is needed.
+    // The framework's default vault directory and decryption key (the vault's own private key file, else SYMFONY_DECRYPTION_SECRET), which config/packages/framework.yaml keeps.
     $vaultDirectory = __DIR__.'/../secrets/'.($environmentValue('APP_RUNTIME_ENV') ?? $container->env());
-    $secrets = new SodiumVault($vaultDirectory)->list();
+    $decryptionKey = base64_decode($environmentValue('SYMFONY_DECRYPTION_SECRET') ?? '', true) ?: null;
+    // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
+    $secrets = new SodiumVault($vaultDirectory, $decryptionKey)->list(reveal: true);
 
-    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || array_key_exists($name, $secrets);
+    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($secrets[$name] ?? '');
 
     $configs = [
         Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%']],

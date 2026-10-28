@@ -142,6 +142,22 @@ final class AiProvidersTest extends KernelTestCase
         self::assertInstanceOf(PlatformInterface::class, $container->get('ai.platform.anthropic'));
     }
 
+    public function testAnEmptyKeyInTheSecretsVaultCountsAsMissing(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', '');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
     /**
      * @return array<string, string>
      */
