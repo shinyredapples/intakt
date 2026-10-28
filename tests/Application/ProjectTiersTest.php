@@ -8,9 +8,9 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Filesystem\Filesystem;
-use PHPUnit\Framework\Attributes\CoversNothing;
 
 // Covers nothing because the behavior is in config/packages/intakt.php, which is not a class.
 #[CoversNothing]
@@ -65,6 +65,7 @@ final class ProjectTiersTest extends KernelTestCase
         self::ensureKernelShutdown();
         self::bootKernel();
         $resolver = self::getContainer()->get(TierResolver::class);
+        self::assertInstanceOf(TierResolver::class, $resolver);
 
         self::assertSame(['alpha', 'beta'], $resolver->projects());
         self::assertSame('small', $resolver->resolve('alpha', Tier::Light)->model);

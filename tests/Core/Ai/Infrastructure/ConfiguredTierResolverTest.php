@@ -38,10 +38,12 @@ final class ConfiguredTierResolverTest extends TestCase
     {
         $resolver = $this->resolver(['openai' => 'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.']);
 
-        $this->expectException(TierProviderDisabled::class);
-        $this->expectExceptionMessage('Project "beta" maps the "strong" tier to a disabled provider. Provider "openai" is disabled: set OPENAI_API_KEY');
-
-        $resolver->resolve('beta', Tier::Strong);
+        try {
+            $resolver->resolve('beta', Tier::Strong);
+            self::fail('A disabled provider must not resolve.');
+        } catch (TierProviderDisabled $failure) {
+            self::assertSame('Project "beta" maps the "strong" tier to a disabled provider. Provider "openai" is disabled: set OPENAI_API_KEY to enable it.', $failure->getMessage());
+        }
     }
 
     public function testATierOfAnEnabledProviderStillResolvesWhenAnotherProviderIsDisabled(): void

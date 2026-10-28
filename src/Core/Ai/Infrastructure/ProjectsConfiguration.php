@@ -9,7 +9,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
-// The shape of Intakt's own projects file; an invalid file fails the container build with the path of the bad key.
+// Validated when the container is built, so a bad key fails there with its path instead of surfacing mid-run.
 final class ProjectsConfiguration implements ConfigurationInterface
 {
     public function getConfigTreeBuilder(): TreeBuilder

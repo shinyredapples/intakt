@@ -22,12 +22,12 @@ final class ProjectsConfigurationTest extends TestCase
     {
         $config = $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini']]]]]);
 
-        self::assertSame(['provider' => 'openai', 'model' => 'mini'], $config['projects']['alpha']['tiers']['light']);
+        self::assertSame(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini']]]]], $config);
     }
 
     public function testNoProjectsIsValid(): void
     {
-        self::assertSame([], $this->process([])['projects'] ?? []);
+        self::assertSame(['projects' => []], $this->process([]));
     }
 
     public function testAnUnknownProviderIsRefused(): void
@@ -58,6 +58,9 @@ final class ProjectsConfigurationTest extends TestCase
      */
     private function process(array $contents): array
     {
-        return new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
+        /** @var array<string, mixed> $processed */
+        $processed = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
+
+        return $processed;
     }
 }

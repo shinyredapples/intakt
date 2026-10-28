@@ -25,7 +25,7 @@ final class ListProjectTiersCommandTest extends TestCase
 {
     public function testEveryTierOfEveryProjectIsListedWithItsModelOrItsProblem(): void
     {
-        $resolver = $this->createStub(TierResolver::class);
+        $resolver = self::createStub(TierResolver::class);
         $resolver->method('projects')->willReturn(['alpha']);
         $resolver->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => match ($tier) {
             Tier::Strong => new ResolvedModel(Provider::Anthropic, 'big'),
@@ -42,7 +42,7 @@ final class ListProjectTiersCommandTest extends TestCase
 
     public function testWithoutProjectsItSaysSo(): void
     {
-        $resolver = $this->createStub(TierResolver::class);
+        $resolver = self::createStub(TierResolver::class);
         $resolver->method('projects')->willReturn([]);
 
         self::assertStringContainsString('No projects are configured.', $this->execute($resolver)->getDisplay());
