@@ -41,7 +41,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = VerdictDocument::fromTheDesign()->json();
 
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
 
         $finding = new Finding(
             id: 'F3',
@@ -63,7 +63,7 @@ final class VerdictParserTest extends KernelTestCase
         foreach (Decision::cases() as $decision) {
             $output = VerdictDocument::fromTheDesign()->with('verdict', $decision->value)->json();
 
-            self::assertSame($decision, new VerdictParser()->parse(self::reviewer()->answering($output))->verdict);
+            self::assertSame($decision, new VerdictParser()->parse($this->reviewer()->answering($output))->verdict);
         }
     }
 
@@ -72,7 +72,7 @@ final class VerdictParserTest extends KernelTestCase
         foreach (Severity::cases() as $severity) {
             $output = VerdictDocument::fromTheDesign()->withFinding('severity', $severity->value)->json();
 
-            self::assertSame($severity, new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0]->severity);
+            self::assertSame($severity, new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->severity);
         }
     }
 
@@ -81,7 +81,7 @@ final class VerdictParserTest extends KernelTestCase
         foreach (FixableBy::cases() as $fixableBy) {
             $output = VerdictDocument::fromTheDesign()->withFinding('fixable_by', $fixableBy->value)->json();
 
-            self::assertSame($fixableBy, new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0]->fixable_by);
+            self::assertSame($fixableBy, new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->fixable_by);
         }
     }
 
@@ -89,7 +89,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = VerdictDocument::fromTheDesign()->withFinding('repeat', true)->json();
 
-        self::assertTrue(new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0]->repeat);
+        self::assertTrue(new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0]->repeat);
     }
 
     public function testAFindingWithoutPlaceOrRequirementOrEvidenceMaps(): void
@@ -102,7 +102,7 @@ final class VerdictParserTest extends KernelTestCase
             ->withFinding('evidence', null)
             ->json();
 
-        $finding = new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0];
+        $finding = new VerdictParser()->parse($this->reviewer()->answering($output))->findings[0];
 
         self::assertEquals([null, null, null, null, null], [$finding->file, $finding->line, $finding->symbol, $finding->requirement, $finding->evidence]);
     }
@@ -111,7 +111,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = '{"verdict": "approve", "findings": [], "resolved": [], "follow_ups": []}';
 
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
 
         self::assertEquals(new Verdict(Decision::Approve, [], [], []), $verdict);
     }
@@ -119,7 +119,7 @@ final class VerdictParserTest extends KernelTestCase
     #[DataProviderExternal(BrokenFieldRules::class, 'cases')]
     public function testABrokenFieldRuleYieldsChangesSayingWhy(string $output, string $why): void
     {
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         self::assertSame(Decision::Changes, $verdict->verdict);
@@ -130,7 +130,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $output = str_replace('"line":12', '"line":12.0', VerdictDocument::fromTheDesign()->json());
 
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
 
         self::assertStringContainsString('"line" attribute', $verdict->findings[0]->text);
     }
@@ -138,7 +138,7 @@ final class VerdictParserTest extends KernelTestCase
     #[DataProvider('outputsThatDoNotMap')]
     public function testOutputThatDoesNotMapYieldsChanges(string $output): void
     {
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertStringEndsWith('Syntax error', $verdict->findings[0]->text);
@@ -163,14 +163,14 @@ final class VerdictParserTest extends KernelTestCase
     #[DataProviderExternal(AcceptedVerdicts::class, 'cases')]
     public function testAnAcceptedVerdictMapsWithoutAnInvalidOutputFinding(string $output): void
     {
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
 
         self::assertNotContains(Verdict::INVALID_OUTPUT, array_map(static fn (Finding $finding): string => $finding->id, $verdict->findings));
     }
 
     public function testAToolCallInsteadOfAVerdictYieldsChanges(): void
     {
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
@@ -179,7 +179,7 @@ final class VerdictParserTest extends KernelTestCase
     {
         $parts = new MultiPartResult([new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json())]);
 
-        $verdict = new VerdictParser()->parse(self::reviewer()->answering($parts));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering($parts));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
@@ -196,7 +196,7 @@ final class VerdictParserTest extends KernelTestCase
 
     public function testTheInvalidOutputFindingBlocksTheBuilderAndCitesTheRule(): void
     {
-        $finding = new VerdictParser()->parse(self::reviewer()->answering('approve'))->findings[0];
+        $finding = new VerdictParser()->parse($this->reviewer()->answering('approve'))->findings[0];
 
         self::assertSame(Severity::P1, $finding->severity);
         self::assertSame(FixableBy::Builder, $finding->fixable_by);
@@ -204,7 +204,7 @@ final class VerdictParserTest extends KernelTestCase
         self::assertSame('The verdict is a typed object that structured output fills and the Validator checks; anything else counts as changes.', $finding->requirement);
     }
 
-    private static function reviewer(): ScriptedReviewer
+    private function reviewer(): ScriptedReviewer
     {
         return ScriptedReviewer::in(self::getContainer());
     }
