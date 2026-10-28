@@ -9,7 +9,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
 | Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.yaml` |
-| Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | planned | T1 (#5), T5 (#10), T12 (#17) |
+| Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Core/Review/Infrastructure/StrictVerdictSubscriber.php`; T5 (#10), T12 (#17) |
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | planned | T5 (#10) |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | planned | T5 (#10), T9 (#14), T14 (#19) |
 | Anthropic prompt caching | later rounds of a review read cached tokens | planned | T7 (#12) |
@@ -79,10 +79,11 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned | T32 (#60) |
 | HttpClient | `RetryableHttpClient` and scoped clients for GitHub | planned | T18 (#23) |
 | Mercure and Turbo (Symfony UX) | Turbo Streams over FrankenPHP's built-in hub | planned | T21 (#27) |
-| Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T26 (#33), `src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php` |
+| Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T26 (#33), T2 (#7, part #47), `src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php`, `src/Core/Ledger/UseCase/ReadEvents/ReadEventsCommand.php`; T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php` |
 | Uid | UUIDv7 ids for ledger events and findings | in progress | T2 (#7, part #46), `src/Core/Ledger/Infrastructure/DoctrineLedger.php` |
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
-| Validator | checks typed verdicts from structured output | planned | T1 (#5), T5 (#10) |
+| Validator | checks typed verdicts from structured output | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`; T5 (#10) |
+| Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`, `JsonDecode::ASSOCIATIVE`) | maps a verdict strictly: no unknown and no left-out fields, no object as a list | in progress | T1 (#5), `src/Core/Review/Infrastructure/StrictVerdictConverter.php` |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
 | Process | the local git forge; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
@@ -112,6 +113,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Quality gates | `bin/check` runs every gate locally and in CI | done | `bin/check`, `config/gates/` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
 | `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | in progress | T26 (#33), `src/Core/Upstream/` |
+| `intakt:change:summarize` | prints the change summary of a branch of a local repository | in progress | T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/` |
 | `bin/instance` and `bin/probe` | offline boot gate and reviewer probes | done | T31 (#6), `bin/instance`, `bin/probe` |
 
 ## Found in the beta
@@ -132,4 +134,6 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 
 - `#[NoDiscard]` on the instance status: `bin/instance` (done); on `Forge::hasHeadMoved()`: `src/Plugin/Forge/Contract/Forge.php` (done, T6).
 - The pipe operator for turning `git diff` output into changed files: `src/Plugin/LocalGitForge/Infrastructure/NameStatusParser.php` (done, T6).
-- Planned: the pipe operator (T5, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
+- `#[NoDiscard]` on the parse result: `src/Core/Review/Contract/VerdictParser.php` (in progress, T1).
+- `clone()` with overrides in the verdict test builder: `tests/Core/Review/Contract/VerdictDocument.php` (in progress, T1).
+- Planned: the pipe operator (T5, T28, T30), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
