@@ -21,6 +21,16 @@ The exit code is 0 only when the status is `ready`. The server log goes to stand
 
 Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
 
+## When `bin/check` reports a stateful service
+
+Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class with a property which is not `readonly`, including properties from a parent class or a trait, and static ones, because the container registers every class under `src/` as a service. The finding names the property. To resolve it, do one of:
+
+- make the property, or the whole class, `readonly`;
+- implement `Symfony\Contracts\Service\ResetInterface` and clear the property in `reset()`, which Symfony calls between requests and messages;
+- if the class is a value object or a data transfer object rather than a service, mark it with Symfony's `#[Exclude]` attribute so the container does not register it.
+
+Doctrine entities, embeddables and mapped superclasses, exceptions and tests are not services and are never reported.
+
 ## Running a probe against an install
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`.

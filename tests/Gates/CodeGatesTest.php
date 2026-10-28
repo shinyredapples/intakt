@@ -158,9 +158,28 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'readonly-service');
     }
 
-    public function testEntitiesValueObjectsAndExceptionsWithMutablePropertiesPassStaticAnalysis(): void
+    public function testEntitiesExceptionsAndClassesExcludedFromTheContainerWithMutablePropertiesPassStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'mutable-data');
+    }
+
+    public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'domain-service', 'src/Core/Review/Domain/VerdictPolicy.php:10 intakt.statefulService Service property $cache');
+    }
+
+    public function testAStaticMutablePropertyOfAServiceFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'static-service', 'src/Mailer.php:9 intakt.statefulService Service property $sent');
+    }
+
+    public function testMutablePropertiesFromATraitAndAParentFailStaticAnalysisOnTheService(): void
+    {
+        $run = $this->sandboxWith('inherited-state')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Counting::$count', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Sender::$last', $run->findingsOf('phpstan'));
     }
 
     public function testStaticAnalysisRunsAtMaxLevelWithoutABaseline(): void
