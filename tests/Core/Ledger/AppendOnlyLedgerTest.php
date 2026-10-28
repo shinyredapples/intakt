@@ -133,7 +133,7 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         self::assertSame(1, $this->manager->getConnection()->fetchOne('SELECT COUNT(*) FROM ledger_event'));
     }
 
-    // The triggers and INSERT OR REPLACE exist on SQLite only; other engines rely on the Doctrine listener (see the migration).
+    // Only SQLite has the triggers and INSERT OR REPLACE, because the migration adds them nowhere else; other engines rely on the Doctrine listener.
     private function requireSqlite(): void
     {
         if (!$this->manager->getConnection()->getDatabasePlatform() instanceof SQLitePlatform) {
