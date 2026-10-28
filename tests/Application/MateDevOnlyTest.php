@@ -8,8 +8,6 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Finder\Finder;
 
-use const JSON_THROW_ON_ERROR;
-
 #[CoversNothing]
 final class MateDevOnlyTest extends TestCase
 {
