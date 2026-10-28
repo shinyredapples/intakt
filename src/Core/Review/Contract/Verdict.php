@@ -4,51 +4,42 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\Validator\Constraints\Valid;
+
+// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
 final readonly class Verdict
 {
     public const string INVALID_OUTPUT = 'invalid-output';
 
-    /** @var list<string> */
-    public array $resolved;
-
-    /** @var list<string> */
-    public array $followUps;
-
     /**
      * @param list<Finding> $findings
+     * @param list<string>  $resolved
+     * @param list<string>  $follow_ups
      */
     public function __construct(
-        public Decision $decision,
+        public Decision $verdict,
+        #[Valid]
         public array $findings,
+        public array $resolved,
+        public array $follow_ups,
     ) {
-        $this->resolved = [];
-        $this->followUps = [];
     }
 
     public static function invalidOutput(string $reason): self
     {
         $finding = new Finding(
-            self::INVALID_OUTPUT,
-            'The reviewer output is not a valid verdict, so it counts as changes: '.$reason,
-            new Triage(Severity::P1, FixableBy::Builder, repeat: false),
-        )->citing('The verdict is JSON and is validated against a schema; anything else counts as changes.');
+            id: self::INVALID_OUTPUT,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'The reviewer output is not a valid verdict, so it counts as changes: '.$reason,
+            fixable_by: FixableBy::Builder,
+            repeat: false,
+            requirement: 'The verdict is a typed object that structured output fills and the Validator checks; anything else counts as changes.',
+            evidence: null,
+        );
 
-        return new self(Decision::Changes, [$finding]);
-    }
-
-    /**
-     * @param list<string> $ids
-     */
-    public function resolving(array $ids): self
-    {
-        return clone ($this, ['resolved' => $ids]);
-    }
-
-    /**
-     * @param list<string> $followUps
-     */
-    public function followingUp(array $followUps): self
-    {
-        return clone ($this, ['followUps' => $followUps]);
+        return new self(Decision::Changes, [$finding], [], []);
     }
 }

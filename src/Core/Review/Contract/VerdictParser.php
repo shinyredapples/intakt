@@ -5,95 +5,50 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Contract;
 
 use JsonException;
-use JsonSchema\Constraints\Constraint;
-use JsonSchema\Validator;
 use NoDiscard;
+use Symfony\AI\Platform\Exception\RuntimeException;
+use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
+use Symfony\AI\Platform\Exception\ValidationException;
+use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\Component\Serializer\Exception\ExceptionInterface as SerializerException;
+use Symfony\Component\Validator\ConstraintViolationInterface;
+use Symfony\Component\Validator\ConstraintViolationListInterface;
 
-/**
- * @phpstan-type EvidenceShape array{probe: string, output: string}
- * @phpstan-type FindingShape array{id: string, severity: string, file: ?string, line: int|float|null, symbol: ?string, text: string, fixable_by: string, repeat: bool, requirement: ?string, evidence: ?EvidenceShape}
- * @phpstan-type VerdictShape array{verdict: string, findings: list<FindingShape>, resolved: list<string>, follow_ups: list<string>}
- */
 final readonly class VerdictParser
 {
-    private const string SCHEMA = __DIR__.'/verdict.schema.json';
-
     #[NoDiscard('a verdict that is not read approves nothing')]
-    public function parse(string $output): Verdict
+    public function parse(DeferredResult $result): Verdict
     {
         try {
-            $document = json_decode($output, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $exception) {
-            return Verdict::invalidOutput('it is not JSON ('.$exception->getMessage().')');
+            return $result->asObject(Verdict::class);
+        } catch (ValidationException $exception) {
+            return Verdict::invalidOutput($this->firstViolation($exception));
+        } catch (RuntimeException $exception) {
+            return Verdict::invalidOutput($this->mappingFailure($exception));
         }
-
-        $violation = $this->schemaViolation($document);
-        if (null !== $violation) {
-            return Verdict::invalidOutput($violation);
-        }
-
-        /** @var VerdictShape $verdict */
-        $verdict = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
-        if ($this->hasLineBeyondAnInteger($verdict)) {
-            return Verdict::invalidOutput('a finding line is not a whole number in range');
-        }
-
-        return $this->verdictFrom($verdict);
     }
 
-    private function schemaViolation(mixed $document): ?string
+    private function firstViolation(ValidationException $exception): string
     {
-        $validator = new Validator();
-        $validator->validate($document, json_decode((string) file_get_contents(self::SCHEMA)), Constraint::CHECK_MODE_STRICT);
+        /** @var ConstraintViolationListInterface $violations */
+        $violations = $exception->getViolations();
+        /** @var ConstraintViolationInterface $violation */
+        $violation = $violations->get(0);
 
-        /** @var list<array{pointer: string, message: string}> $errors */
-        $errors = $validator->getErrors();
-        $error = array_first($errors);
-        if (null === $error) {
-            return null;
-        }
-
-        return ('' === $error['pointer'] ? '/' : $error['pointer']).': '.$error['message'];
+        return $violation->getPropertyPath().': '.$violation->getMessage();
     }
 
     /**
-     * @param VerdictShape $verdict
+     * @throws RuntimeException
      */
-    private function hasLineBeyondAnInteger(array $verdict): bool
+    private function mappingFailure(RuntimeException $exception): string
     {
-        // Checked here because JSON Schema counts 12.0 and 1e30 as integers while PHP decodes them as floats.
-        return array_any($verdict['findings'], static fn (array $finding): bool => is_float($finding['line']));
-    }
-
-    /**
-     * @param VerdictShape $verdict
-     */
-    private function verdictFrom(array $verdict): Verdict
-    {
-        return new Verdict(Decision::from($verdict['verdict']), array_map($this->findingFrom(...), $verdict['findings']))
-            ->resolving($verdict['resolved'])
-            ->followingUp($verdict['follow_ups']);
-    }
-
-    /**
-     * @param FindingShape $finding
-     */
-    private function findingFrom(array $finding): Finding
-    {
-        $parsed = new Finding(
-            $finding['id'],
-            $finding['text'],
-            new Triage(Severity::from($finding['severity']), FixableBy::from($finding['fixable_by']), $finding['repeat']),
-        )->at(new Place($finding['file'], null === $finding['line'] ? null : (int) $finding['line'], $finding['symbol']));
-
-        if (null !== $finding['requirement']) {
-            $parsed = $parsed->citing($finding['requirement']);
+        $cause = $exception->getPrevious();
+        if ($exception instanceof UnexpectedResultTypeException || $cause instanceof JsonException || $cause instanceof SerializerException) {
+            return trim($exception->getMessage().' '.$cause?->getMessage());
         }
 
-        if (null === $finding['evidence']) {
-            return $parsed;
-        }
-
-        return $parsed->provenBy(new Evidence($finding['evidence']['probe'], $finding['evidence']['output']));
+        // A failed call is not the reviewer's answer, so it stays an error instead of becoming changes.
+        throw $exception;
     }
 }

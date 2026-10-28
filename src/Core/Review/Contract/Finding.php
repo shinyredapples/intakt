@@ -4,36 +4,29 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
+use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Constraints\Valid;
+
+// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
 final readonly class Finding
 {
-    public Place $place;
-
-    public ?string $requirement;
-
-    public ?Evidence $evidence;
-
     public function __construct(
+        #[NotBlank]
         public string $id,
+        public Severity $severity,
+        public ?string $file,
+        // Not Positive, because Symfony AI describes that with a boolean exclusiveMinimum that newer JSON Schema drafts refuse.
+        #[GreaterThanOrEqual(1)]
+        public ?int $line,
+        public ?string $symbol,
+        #[NotBlank]
         public string $text,
-        public Triage $triage,
+        public FixableBy $fixable_by,
+        public bool $repeat,
+        public ?string $requirement,
+        #[Valid]
+        public ?Evidence $evidence,
     ) {
-        $this->place = new Place();
-        $this->requirement = null;
-        $this->evidence = null;
-    }
-
-    public function at(Place $place): self
-    {
-        return clone ($this, ['place' => $place]);
-    }
-
-    public function citing(string $requirement): self
-    {
-        return clone ($this, ['requirement' => $requirement]);
-    }
-
-    public function provenBy(Evidence $evidence): self
-    {
-        return clone ($this, ['evidence' => $evidence]);
     }
 }
