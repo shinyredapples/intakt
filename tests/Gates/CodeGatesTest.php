@@ -188,6 +188,15 @@ final class CodeGatesTest extends SandboxTestCase
         self::assertStringNotContainsString('src/Home.php', $run->findingsOf('phpstan'));
     }
 
+    public function testOnlyABackedHookedPropertyOfAServiceFailsStaticAnalysis(): void
+    {
+        $run = $this->sandboxWith('hooked-properties')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Mailer.php:13 intakt.statefulService Service property $subject', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('$greeting', $run->findingsOf('phpstan'));
+    }
+
     public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'domain-service', 'src/Core/Review/Domain/VerdictPolicy.php:10 intakt.statefulService Service property $cache');
