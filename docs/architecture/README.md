@@ -116,4 +116,4 @@ The `Core/Review` module's `Contract` holds the verdict a reviewer returns (plan
 
 ## Persistence
 
-SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets; their CI jobs start with the first entity (see [the plan](../plan.md)).
+SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets: the `persistence` job in `.github/workflows/ci.yml` runs `vendor/bin/phpunit --group persistence` on MySQL 8.4, MariaDB 11.4 and PostgreSQL 17 (one matrix entry each, a service container reached by its service name, no password). `bin/check` still runs the whole suite on SQLite.
