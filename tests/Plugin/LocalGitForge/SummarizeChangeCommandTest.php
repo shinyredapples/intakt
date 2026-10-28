@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Plugin\Forge\Contract\Change;
-use Intakt\Plugin\Forge\Contract\ChangeId;
-use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
@@ -18,6 +18,7 @@ use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeCommand;
+use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeInput;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -26,6 +27,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(SummarizeChangeCommand::class)]
+#[UsesClass(SummarizeChangeInput::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(NameStatusParser::class)]
 #[UsesClass(LocalRepository::class)]
