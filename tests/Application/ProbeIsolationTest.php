@@ -112,7 +112,7 @@ final class ProbeIsolationTest extends TestCase
 
         new Filesystem()->dumpFile($this->scratch.'/dev', $devices);
 
-        // A documentation address is on no local interface, so binding to it fails as it does on a down loopback.
+        // A down lo needs namespace privileges, so a documentation address (on no local interface) fails the check at the bind instead of the connection.
         return $this->decideOn($isolated, $this->scratch.'/dev', $loopbackUp ? '127.0.0.1:0' : '192.0.2.1:0');
     }
 

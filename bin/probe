@@ -42,8 +42,15 @@ final readonly class Network
         }
 
         $client = @stream_socket_client('tcp://'.stream_socket_get_name($server, false), $code, $message, 1);
+        fclose($server);
 
-        return false !== $client;
+        if (false === $client) {
+            return false;
+        }
+
+        fclose($client);
+
+        return true;
     }
 
     /**
