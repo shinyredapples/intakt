@@ -1,0 +1,75 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Ledger;
+
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Platforms\PostgreSQL120Platform;
+use Doctrine\DBAL\Tools\DsnParser;
+use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Ledger\Infrastructure\PostgreSqlServerVersion;
+use PHPUnit\Framework\Attributes\CoversClass;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+
+#[CoversClass(PostgreSqlServerVersion::class)]
+final class PostgreSqlServerVersionTest extends KernelTestCase
+{
+    public function testAPostgreSqlUrlNamesTheVersionOfTheNewestPostgreSqlPlatform(): void
+    {
+        $version = $this->serverVersionOf('postgresql://postgres@localhost:5432/intakt');
+
+        self::assertSame('12', $version);
+    }
+
+    public function testAMySqlUrlLeavesTheVersionToTheServer(): void
+    {
+        $version = $this->serverVersionOf('mysql://root@localhost:3306/intakt');
+
+        self::assertNull($version);
+    }
+
+    public function testASqliteUrlLeavesTheVersionToTheServer(): void
+    {
+        $version = $this->serverVersionOf('sqlite:///var/data_test.db');
+
+        self::assertNull($version);
+    }
+
+    public function testThePostgreSqlTestConnectionIsBuiltWithoutAConfiguredVersion(): void
+    {
+        $connection = $this->connectionFor('postgresql://postgres@localhost:5432/intakt');
+
+        self::assertSame('intakt_test', $connection->getParams()['dbname'] ?? null);
+        self::assertInstanceOf(PostgreSQL120Platform::class, $connection->getDatabasePlatform());
+    }
+
+    public function testTheMySqlTestConnectionKeepsDetectingTheServer(): void
+    {
+        $connection = $this->connectionFor('mysql://root@localhost:3306/intakt');
+
+        self::assertArrayNotHasKey('serverVersion', array_filter($connection->getParams(), static fn (mixed $value): bool => $value !== null));
+    }
+
+    private function serverVersionOf(string $url): ?string
+    {
+        return new PostgreSqlServerVersion(new DsnParser(['postgresql' => 'pdo_pgsql', 'mysql' => 'pdo_mysql', 'sqlite' => 'pdo_sqlite']))
+            ->getEnv('postgresql_server_version', 'DATABASE_URL', static fn (): string => $url);
+    }
+
+    private function connectionFor(string $url): Connection
+    {
+        $previous = [$_SERVER['DATABASE_URL'] ?? null, $_ENV['DATABASE_URL'] ?? null];
+        $_SERVER['DATABASE_URL'] = $_ENV['DATABASE_URL'] = $url;
+
+        try {
+            $connection = self::getContainer()->get(ManagerRegistry::class)->getConnection();
+        } finally {
+            [$_SERVER['DATABASE_URL'], $_ENV['DATABASE_URL']] = $previous;
+        }
+
+        self::assertInstanceOf(Connection::class, $connection);
+
+        return $connection;
+    }
+}
