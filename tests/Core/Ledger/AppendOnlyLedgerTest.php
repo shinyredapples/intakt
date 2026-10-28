@@ -11,7 +11,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
-use DoctrineMigrations\Version20261028120000;
+use Doctrine\Migrations\AbstractMigration;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -27,7 +27,6 @@ use Symfony\Component\Uid\UuidV7;
 #[Group('persistence')]
 #[CoversClass(RefuseChangesToStoredEvents::class)]
 #[CoversClass(LedgerEventsAreAppendOnly::class)]
-#[CoversClass(Version20261028120000::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
@@ -156,8 +155,10 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         // The migrations bundle loads migrations by path, so Composer's autoloader does not know this class.
         require_once dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
 
+        $class = 'DoctrineMigrations\\Version20261028120000';
         $connection = $this->manager->getConnection();
-        $migration = new Version20261028120000($connection, new NullLogger());
+        $migration = new $class($connection, new NullLogger());
+        self::assertInstanceOf(AbstractMigration::class, $migration);
         $migration->up(new Schema());
 
         foreach ($migration->getSql() as $query) {
