@@ -18,7 +18,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
 use PHPUnit\Framework\Attributes\UsesClass;
-use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
@@ -27,6 +26,7 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(VerdictParser::class)]
 #[CoversClass(Verdict::class)]
@@ -35,13 +35,13 @@ use Symfony\AI\Platform\ResultConverterInterface;
 #[UsesClass(Kernel::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
-final class VerdictParserTest extends TestCase
+final class VerdictParserTest extends KernelTestCase
 {
     public function testTheDesignsExampleVerdictMapsToTheObjects(): void
     {
         $output = VerdictDocument::fromTheDesign()->json();
 
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
 
         $finding = new Finding(
             id: 'F3',
@@ -63,7 +63,7 @@ final class VerdictParserTest extends TestCase
         foreach (Decision::cases() as $decision) {
             $output = VerdictDocument::fromTheDesign()->with('verdict', $decision->value)->json();
 
-            self::assertSame($decision, new VerdictParser()->parse(ScriptedReviewer::answering($output))->verdict);
+            self::assertSame($decision, new VerdictParser()->parse(self::reviewer()->answering($output))->verdict);
         }
     }
 
@@ -72,7 +72,7 @@ final class VerdictParserTest extends TestCase
         foreach (Severity::cases() as $severity) {
             $output = VerdictDocument::fromTheDesign()->withFinding('severity', $severity->value)->json();
 
-            self::assertSame($severity, new VerdictParser()->parse(ScriptedReviewer::answering($output))->findings[0]->severity);
+            self::assertSame($severity, new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0]->severity);
         }
     }
 
@@ -81,7 +81,7 @@ final class VerdictParserTest extends TestCase
         foreach (FixableBy::cases() as $fixableBy) {
             $output = VerdictDocument::fromTheDesign()->withFinding('fixable_by', $fixableBy->value)->json();
 
-            self::assertSame($fixableBy, new VerdictParser()->parse(ScriptedReviewer::answering($output))->findings[0]->fixable_by);
+            self::assertSame($fixableBy, new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0]->fixable_by);
         }
     }
 
@@ -89,7 +89,7 @@ final class VerdictParserTest extends TestCase
     {
         $output = VerdictDocument::fromTheDesign()->withFinding('repeat', true)->json();
 
-        self::assertTrue(new VerdictParser()->parse(ScriptedReviewer::answering($output))->findings[0]->repeat);
+        self::assertTrue(new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0]->repeat);
     }
 
     public function testAFindingWithoutPlaceOrRequirementOrEvidenceMaps(): void
@@ -102,7 +102,7 @@ final class VerdictParserTest extends TestCase
             ->withFinding('evidence', null)
             ->json();
 
-        $finding = new VerdictParser()->parse(ScriptedReviewer::answering($output))->findings[0];
+        $finding = new VerdictParser()->parse(self::reviewer()->answering($output))->findings[0];
 
         self::assertEquals([null, null, null, null, null], [$finding->file, $finding->line, $finding->symbol, $finding->requirement, $finding->evidence]);
     }
@@ -111,7 +111,7 @@ final class VerdictParserTest extends TestCase
     {
         $output = '{"verdict": "approve", "findings": [], "resolved": [], "follow_ups": []}';
 
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
 
         self::assertEquals(new Verdict(Decision::Approve, [], [], []), $verdict);
     }
@@ -119,7 +119,7 @@ final class VerdictParserTest extends TestCase
     #[DataProviderExternal(BrokenFieldRules::class, 'cases')]
     public function testABrokenFieldRuleYieldsChangesSayingWhy(string $output, string $why): void
     {
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         self::assertSame(Decision::Changes, $verdict->verdict);
@@ -130,7 +130,7 @@ final class VerdictParserTest extends TestCase
     {
         $output = str_replace('"line":12', '"line":12.0', VerdictDocument::fromTheDesign()->json());
 
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
 
         self::assertStringContainsString('"line" attribute', $verdict->findings[0]->text);
     }
@@ -138,7 +138,7 @@ final class VerdictParserTest extends TestCase
     #[DataProvider('outputsThatDoNotMap')]
     public function testOutputThatDoesNotMapYieldsChanges(string $output): void
     {
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertStringEndsWith('Syntax error', $verdict->findings[0]->text);
@@ -163,14 +163,14 @@ final class VerdictParserTest extends TestCase
     #[DataProviderExternal(AcceptedVerdicts::class, 'cases')]
     public function testAnAcceptedVerdictMapsWithoutAnInvalidOutputFinding(string $output): void
     {
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($output));
 
         self::assertNotContains(Verdict::INVALID_OUTPUT, array_map(static fn (Finding $finding): string => $finding->id, $verdict->findings));
     }
 
     public function testAToolCallInsteadOfAVerdictYieldsChanges(): void
     {
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
@@ -179,7 +179,7 @@ final class VerdictParserTest extends TestCase
     {
         $parts = new MultiPartResult([new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json())]);
 
-        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($parts));
+        $verdict = new VerdictParser()->parse(self::reviewer()->answering($parts));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
@@ -196,11 +196,16 @@ final class VerdictParserTest extends TestCase
 
     public function testTheInvalidOutputFindingBlocksTheBuilderAndCitesTheRule(): void
     {
-        $finding = new VerdictParser()->parse(ScriptedReviewer::answering('approve'))->findings[0];
+        $finding = new VerdictParser()->parse(self::reviewer()->answering('approve'))->findings[0];
 
         self::assertSame(Severity::P1, $finding->severity);
         self::assertSame(FixableBy::Builder, $finding->fixable_by);
         self::assertSame([null, null, null, null], [$finding->file, $finding->line, $finding->symbol, $finding->evidence]);
         self::assertSame('The verdict is a typed object that structured output fills and the Validator checks; anything else counts as changes.', $finding->requirement);
+    }
+
+    private static function reviewer(): ScriptedReviewer
+    {
+        return ScriptedReviewer::in(self::getContainer());
     }
 }
