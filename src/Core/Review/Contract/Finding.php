@@ -9,8 +9,7 @@ use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Valid;
 
-// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
-// Excluded because the structured output builds it, so the container has no reason to hold it.
+// Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping; excluded because that output builds it, not the container.
 #[Exclude]
 final readonly class Finding
 {

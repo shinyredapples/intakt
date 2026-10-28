@@ -6,7 +6,6 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
-use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
@@ -14,8 +13,10 @@ use PhpParser\Node\IntersectionType;
 use PhpParser\Node\Name;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
+use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\UnionType;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -60,7 +61,7 @@ final readonly class FlagParameterRule implements Rule
 
         return $node instanceof ClassMethod
             && '__construct' === $node->name->toLowerString()
-            && null !== $class
+            && $class instanceof ClassReflection
             && $class->isReadOnly()
             && (!$this->registration->covers($scope->getFile()) || $this->registration->excludes($class));
     }
