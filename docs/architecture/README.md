@@ -16,7 +16,24 @@ src/
 config/modules.php      the module list; a test keeps it equal to the directories
 ```
 
-The plugin kinds have empty contracts for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)).
+The Vendor, Notifier, WorkSource and Gate contracts are empty for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)). The Forge contract has the methods for reading a change; see below.
+
+## Forge contract and the local git forge
+
+`Plugin/Forge/Contract` holds what reading a change needs, as typed objects only:
+
+- `Forge::change(ChangeId)` returns a `Change`: the id, the `commits` (`CommitRange`: `base` and `head` as `CommitId`, full hashes) and the `diff` (`Diff`: the unified `patch` text and the `files`, a `ChangedFiles` collection of `ChangedFile`: path and `FileStatus` added, modified or deleted; a rename shows as a delete and an add).
+- `Forge::hasHeadMoved(Change)` is true when the change's branch now points at another commit than the `Change` was read at (`#[NoDiscard]`).
+- `Forge::fileAtHead(Change, path)` returns a `FileContent` as it is at the `Change`'s head hash, not at the branch tip, so a branch that moved on does not change what is read.
+- Failures are typed: `ChangeNotFound`, `FileNotFoundAtHead` and `ForgeReadFailed` (git could not run, timed out, failed or printed something unexpected).
+
+`Plugin/LocalGitForge` implements it for a local repository (`LocalRepository`: path and base branch). A local branch (`refs/heads/<id>`, never a tag) against the base branch is the pull request. Every call runs `git --no-replace-objects --literal-pathspecs` through the Process component with an argument list (no shell) in the repository, so a `refs/replace/` ref cannot swap in another commit or blob for the head and a path is read as its exact name (a leading `:` is not pathspec magic), with a 60-second timeout and without the `GIT_*` environment variables Intakt inherited (such as `GIT_DIR` inside a git hook). A Process failure (a missing directory, a timeout) becomes a `ForgeReadFailed`, and so does a NUL byte in a path or change id, which is refused before git starts.
+
+1. The head is the branch's commit (`git show-ref`; a missing branch is `ChangeNotFound`, any other git failure `ForgeReadFailed`); the base is the merge base of the base branch and the head, so what the base branch gained after the branch was cut is not in the diff.
+2. The diff is `git diff` between those two hashes, without colors, renames, external diff drivers or text conversion, and with `--ignore-submodules=none`, so a changed submodule commit shows even when the repository sets `diff.ignoreSubmodules`. The changed files come from `git diff --name-status -z` with the same options and hashes; `NameStatusParser` turns that output into `ChangedFiles` with the pipe operator (split on NUL, pair status with path, map to objects). An unknown status or a status without a path is a `ForgeReadFailed`.
+3. A file is looked up with `git ls-tree -z <head hash> -- <path>` and read with `git cat-file blob <blob hash>`. A path that is not a file (missing, a directory or a submodule) at the head is `FileNotFoundAtHead`; a head that cannot be read is `ForgeReadFailed`.
+
+The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$TMPDIR` and remove it afterwards.
 
 ## Quality gates
 
