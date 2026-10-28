@@ -9,6 +9,10 @@ Nothing user-visible is built yet. The first pages arrive with the review loop (
 - Reviewing a pull request and reading the verdicts (planned)
 - Connecting an agent through MCP (planned)
 
+## Reading a change from a local repository
+
+Intakt can treat a branch of a local git repository as a pull request: the branch is the change and the repository's base branch is what it is compared with. It reads the branch's latest commit, the diff against the point where the branch left the base, the list of changed files and any file as it was at that commit (by its exact name, even one starting with `:`), ignoring git's replacement refs (`git replace`), which could otherwise show other content under the same commit. It notices when the branch has moved to a newer commit since it was read. It only reads; it never changes the repository. There is no command for it yet.
+
 ## Checking that an install boots
 
 After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
