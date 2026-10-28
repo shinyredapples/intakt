@@ -24,9 +24,10 @@ final class VerdictSchemaTest extends TestCase
         self::assertSame(json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR), $sent);
     }
 
-    public function testTheSchemaFileAcceptsTheDesignsExampleVerdict(): void
+    #[DataProviderExternal(AcceptedVerdicts::class, 'cases')]
+    public function testTheSchemaFileAcceptsWhatTheClassesAccept(string $output): void
     {
-        self::assertSame([], $this->schemaErrors(VerdictDocument::fromTheDesign()->json()));
+        self::assertSame([], $this->schemaErrors($output));
     }
 
     #[DataProviderExternal(BrokenFieldRules::class, 'cases')]

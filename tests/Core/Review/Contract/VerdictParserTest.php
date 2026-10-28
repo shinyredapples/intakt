@@ -11,6 +11,9 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
+use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
@@ -19,12 +22,17 @@ use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Result\MultiPartResult;
+use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 
 #[CoversClass(VerdictParser::class)]
 #[CoversClass(Verdict::class)]
+#[CoversClass(StrictVerdictSubscriber::class)]
+#[CoversClass(StrictVerdictConverter::class)]
+#[UsesClass(Kernel::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 final class VerdictParserTest extends TestCase
@@ -148,19 +156,30 @@ final class VerdictParserTest extends TestCase
         yield 'a fenced block with prose around it' => ["Here is my verdict:\n```json\n".$json."\n```\nThanks."];
         yield 'a fenced block that is not JSON' => ["```json\nverdict: approve\n```"];
         yield 'prose around JSON' => ['Here is my verdict: '.$json];
+        yield 'a lone fenced block around a valid verdict' => ["```json\n".$json."\n```"];
         yield 'empty output' => [''];
     }
 
-    public function testALoneFencedBlockAroundAValidVerdictMapsBecauseSymfonyAiUnwrapsIt(): void
+    #[DataProviderExternal(AcceptedVerdicts::class, 'cases')]
+    public function testAnAcceptedVerdictMapsWithoutAnInvalidOutputFinding(string $output): void
     {
-        $output = "```json\n".VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json()."\n```";
+        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($output));
 
-        self::assertSame(Decision::Approve, new VerdictParser()->parse(ScriptedReviewer::answering($output))->verdict);
+        self::assertNotContains(Verdict::INVALID_OUTPUT, array_map(static fn (Finding $finding): string => $finding->id, $verdict->findings));
     }
 
     public function testAToolCallInsteadOfAVerdictYieldsChanges(): void
     {
         $verdict = new VerdictParser()->parse(ScriptedReviewer::answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
+
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAReplyInSeveralPartsYieldsChanges(): void
+    {
+        $parts = new MultiPartResult([new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json())]);
+
+        $verdict = new VerdictParser()->parse(ScriptedReviewer::answering($parts));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }

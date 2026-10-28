@@ -13,6 +13,7 @@ final readonly class BrokenFieldRules
     {
         yield from self::enums();
         yield from self::required();
+        yield from self::unknown();
         yield from self::types();
         yield from self::constraints();
     }
@@ -41,11 +42,23 @@ final readonly class BrokenFieldRules
             yield 'required: '.$key => [$design->without($key)->json(), '"$'.$key.'"'];
         }
         yield 'required: findings' => ['{"verdict": "approve", "resolved": [], "follow_ups": []}', '"$findings"'];
-        foreach (['id', 'severity', 'text', 'fixable_by', 'repeat'] as $key) {
+        foreach (['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence'] as $key) {
             yield 'required: finding '.$key => [$design->withoutFinding($key)->json(), '"$'.$key.'"'];
         }
         yield 'required: evidence probe' => [$design->withFinding('evidence', ['output' => '...'])->json(), '"$probe"'];
         yield 'required: evidence output' => [$design->withFinding('evidence', ['probe' => '...'])->json(), '"$output"'];
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    private static function unknown(): iterable
+    {
+        $design = VerdictDocument::fromTheDesign();
+
+        yield 'unknown: a verdict field' => [$design->with('summary', '...')->json(), '"summary" is unknown'];
+        yield 'unknown: a finding field' => [$design->withFinding('note', '...')->json(), '"findings[0].note" is unknown'];
+        yield 'unknown: an evidence field' => [$design->withFinding('evidence', ['probe' => '...', 'output' => '...', 'note' => '...'])->json(), '"findings[0].evidence.note" is unknown'];
     }
 
     /**
