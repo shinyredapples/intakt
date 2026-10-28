@@ -23,6 +23,7 @@
     "symfony/flex": "^2.11",
     "symfony/framework-bundle": "^8.1",
     "symfony/mcp-bundle": "1.0.0-BETA1",
+    "symfony/process": "^8.1",
     "symfony/runtime": "^8.1",
     "symfony/uid": "^8.1",
     "symfony/yaml": "^8.1"
