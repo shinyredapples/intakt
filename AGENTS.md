@@ -67,4 +67,4 @@ AI Mate: project diagnostic tools, exposed through the `vendor/bin/mate` CLI.
 - Installed extensions: symfony/ai-mate, symfony/ai-symfony-mate-extension.
 <!-- END AI_MATE_INSTRUCTIONS -->
 
-Use Mate before guessing how the container wires a service, where an env variable is set, or what a dev request did: `tools:call symfony-services`, `symfony-dotenv-check`, `symfony-profiler-list`. It is a dev tool: nothing of it is in the image, and application code never uses it.
+Use Mate before guessing how the container wires a service or where an env variable is set: `tools:call symfony-services`, `symfony-service-detail`, `symfony-dotenv-check`. The profiler tools find nothing, since the app does not enable the profiler. It is a dev tool: nothing of it is in the image, and application code never uses it.

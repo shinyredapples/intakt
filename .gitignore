@@ -19,6 +19,11 @@
 /.phpunit.cache/
 ###< phpunit/phpunit ###
 
+###> symfony/ai-mate ###
+# Local copies that vendor/bin/mate discover writes for the agent.
+/.claude/skills/
+###< symfony/ai-mate ###
+
 ###> build loop ###
 /PR.md
 /.evidence/

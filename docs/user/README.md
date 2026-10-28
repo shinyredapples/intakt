@@ -28,3 +28,15 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 ## Running a probe against an install
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`.
+
+## Looking inside the development install with Mate
+
+On a development install (`composer install` with the dev packages), `vendor/bin/mate` answers questions about the running app from its own container and environment files instead of from reading the code. It is not part of a production install: `composer install --no-dev` leaves it out.
+
+- `vendor/bin/mate tools:list` lists the tools.
+- `vendor/bin/mate tools:inspect TOOL` shows a tool's parameters.
+- `vendor/bin/mate tools:call TOOL --PARAM=VALUE` runs one; add `--format=json` for machine-readable output.
+
+The useful tools today are `symfony-services` and `symfony-service-detail` (which services the container holds and how one is wired), `symfony-dotenv-check` (which `.env*` file declares a variable and whether it resolves, with the value masked) and `server-info` (PHP version, system and extensions). The profiler tools are listed too, but Intakt does not turn on Symfony's profiler, so they find no profiles.
+
+If Mate stops with a PHP version mismatch, it was started with a PHP other than 8.5 (the version `mate/config.php` pins); run it with the PHP 8.5 the app uses. If a container tool reports "No compiled container found", run `bin/console cache:warmup` first so the dev container exists.
