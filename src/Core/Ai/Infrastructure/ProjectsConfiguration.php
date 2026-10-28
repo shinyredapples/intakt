@@ -15,13 +15,13 @@ final class ProjectsConfiguration implements ConfigurationInterface
     public function getConfigTreeBuilder(): TreeBuilder
     {
         $tree = new TreeBuilder('intakt');
-        $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->arrayPrototype()->children();
+        $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false)->arrayPrototype()->children();
         $tiers = $projects->arrayNode('tiers')->addDefaultsIfNotSet()->children();
 
         foreach (Tier::cases() as $tier) {
             $mapping = $tiers->arrayNode($tier->value)->children();
             $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-            $mapping->scalarNode('model')->isRequired()->cannotBeEmpty();
+            $mapping->stringNode('model')->isRequired()->cannotBeEmpty();
         }
 
         return $tree;

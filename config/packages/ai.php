@@ -3,11 +3,17 @@
 declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
+use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
+use Intakt\Core\Ai\Infrastructure\TierPlatformPass;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
+use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\Yaml\Yaml;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault. Presence is decided at build time because an unset env reference fails when the service is built.
-return static function (ContainerConfigurator $container): void {
+return static function (ContainerConfigurator $container, ContainerBuilder $builder): void {
     $environmentValue = static function (string $name): ?string {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
 
@@ -37,12 +43,19 @@ return static function (ContainerConfigurator $container): void {
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($vaultValue($name) ?? '');
 
+    // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
+    $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
+    $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : []])['projects'];
+    $catalog = new ProjectModelCatalog($projects);
+    $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
+
     $configs = [
-        Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%']],
-        Provider::OpenAi->value => ['openai' => ['api_key' => '%env(OPENAI_API_KEY)%']],
+        Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%', 'model_catalog' => $modelCatalog(Provider::Anthropic)]],
+        Provider::OpenAi->value => ['openai' => ['api_key' => '%env(OPENAI_API_KEY)%', 'model_catalog' => $modelCatalog(Provider::OpenAi)]],
         Provider::OpenAiCompatible->value => ['generic' => ['openai_compatible' => [
             'base_url' => '%env(OPENAI_COMPATIBLE_BASE_URL)%',
             'api_key' => '%env(OPENAI_COMPATIBLE_API_KEY)%',
+            'model_catalog' => $modelCatalog(Provider::OpenAiCompatible),
         ]]],
     ];
 
@@ -63,4 +76,6 @@ return static function (ContainerConfigurator $container): void {
 
     $container->extension('ai', ['platform' => $platform]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
+    $container->parameters()->set('intakt.projects', $projects);
+    $builder->addCompilerPass(new TierPlatformPass());
 };

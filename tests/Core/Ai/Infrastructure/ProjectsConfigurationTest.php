@@ -51,6 +51,20 @@ final class ProjectsConfigurationTest extends TestCase
         $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai']]]]]);
     }
 
+    public function testAProjectNameKeepsItsDashes(): void
+    {
+        $config = $this->process(['projects' => ['my-project' => ['tiers' => []]]]);
+
+        self::assertSame(['my-project'], array_keys((array) $config['projects']));
+    }
+
+    public function testAModelThatIsNoStringIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 5]]]]]);
+    }
+
     /**
      * @param array<string, mixed> $contents
      *
