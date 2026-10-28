@@ -23,9 +23,13 @@ final readonly class PostgreSqlServerVersion implements EnvVarProcessorInterface
 
     public function getEnv(string $prefix, string $name, Closure $getEnv): ?string
     {
-        $driver = $this->dsnParser->parse((string) $getEnv($name))['driver'] ?? null;
+        $url = $getEnv($name);
 
-        return $driver === 'pdo_pgsql' ? self::NEWEST_PLATFORM : null;
+        if (!is_string($url)) {
+            return null;
+        }
+
+        return 'pdo_pgsql' === ($this->dsnParser->parse($url)['driver'] ?? null) ? self::NEWEST_PLATFORM : null;
     }
 
     public static function getProvidedTypes(): array

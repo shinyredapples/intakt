@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Platforms\PostgreSQL120Platform;
+use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Tools\DsnParser;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Infrastructure\PostgreSqlServerVersion;
@@ -41,14 +41,14 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         $connection = $this->connectionFor('postgresql://postgres@localhost:5432/intakt');
 
         self::assertSame('intakt_test', $connection->getParams()['dbname'] ?? null);
-        self::assertInstanceOf(PostgreSQL120Platform::class, $connection->getDatabasePlatform());
+        self::assertInstanceOf(PostgreSQLPlatform::class, $connection->getDatabasePlatform());
     }
 
     public function testTheMySqlTestConnectionKeepsDetectingTheServer(): void
     {
         $connection = $this->connectionFor('mysql://root@localhost:3306/intakt');
 
-        self::assertArrayNotHasKey('serverVersion', array_filter($connection->getParams(), static fn (mixed $value): bool => $value !== null));
+        self::assertNull($connection->getParams()['serverVersion'] ?? null);
     }
 
     private function serverVersionOf(string $url): ?string
@@ -63,7 +63,9 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         $_SERVER['DATABASE_URL'] = $_ENV['DATABASE_URL'] = $url;
 
         try {
-            $connection = self::getContainer()->get(ManagerRegistry::class)->getConnection();
+            $registry = self::getContainer()->get(ManagerRegistry::class);
+            self::assertInstanceOf(ManagerRegistry::class, $registry);
+            $connection = $registry->getConnection();
         } finally {
             [$_SERVER['DATABASE_URL'], $_ENV['DATABASE_URL']] = $previous;
         }
