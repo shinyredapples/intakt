@@ -20,13 +20,15 @@ final readonly class ScriptedReviewer
             ->invoke('reviewer', 'Review the change.', [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
     }
 
-    // The application's dispatcher, so the subscribers and their order are the ones a real reviewer call gets.
+    // The application's dispatcher, because then the subscribers and their order are the ones a real reviewer call gets.
     private static function theApplicationsDispatcher(): EventDispatcherInterface
     {
         $kernel = new Kernel('test', true);
         $kernel->boot();
 
-        /* @var EventDispatcherInterface */
-        return $kernel->getContainer()->get('event_dispatcher');
+        /** @var EventDispatcherInterface $dispatcher */
+        $dispatcher = $kernel->getContainer()->get('event_dispatcher');
+
+        return $dispatcher;
     }
 }

@@ -59,8 +59,10 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     private function verdictFrom(string $content): Verdict
     {
         try {
-            /* @var Verdict */
-            return $this->serializer->deserialize($content, Verdict::class, 'json', self::STRICT);
+            /** @var Verdict $verdict */
+            $verdict = $this->serializer->deserialize($content, Verdict::class, 'json', self::STRICT);
+
+            return $verdict;
         } catch (SerializerException $exception) {
             throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
         }

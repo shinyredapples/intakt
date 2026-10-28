@@ -22,7 +22,7 @@ final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
 
     public static function getSubscribedEvents(): array
     {
-        // Ahead of Symfony AI's structured output, which unwraps a fenced block and lets fields go missing or unknown.
+        // Ahead of Symfony AI's structured output, because it unwraps a fenced block and lets fields go missing or unknown.
         return [ResultEvent::class => ['processResult', 10]];
     }
 
