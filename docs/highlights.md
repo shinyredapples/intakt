@@ -64,7 +64,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Mate as a dev dependency | development diagnostics against the running app | planned | T27 (#34) |
+| Mate as a dev dependency | development diagnostics against the running app (`vendor/bin/mate`, `mate/`) | in use | T27 (#34), `mate/` |
 
 ## Symfony components
 
