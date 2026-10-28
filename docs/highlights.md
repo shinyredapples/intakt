@@ -2,13 +2,13 @@
 
 Intakt runs on PHP 8.5, Symfony 8.1, Symfony AI 1.0.0-BETA1 and the PHP MCP SDK. This page lists every Symfony, Symfony AI and FrankenPHP feature Intakt uses or plans to use, and what it found in the beta. A change that starts or stops using a feature updates its row in the same change (see `AGENTS.md`).
 
-Status is `planned`, `in progress` (an open pull request) or `done` (on main). **Where** names the plan task and issue, and once built the pull request and the main file.
+Status is `planned`, `in progress` (an open pull request) or `done` (on main). **Where** names the plan task and its issue, and once built the main file. A row cites the issue, not the pull request: the issue links its pull requests, and a build cannot know its pull request number before the pull request exists.
 
 ## Symfony AI Platform
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51, PR #53), `config/packages/ai.yaml` |
+| Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.yaml` |
 | Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | planned | T1 (#5), T5 (#10), T12 (#17) |
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | planned | T5 (#10) |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | planned | T5 (#10), T9 (#14), T14 (#19) |
@@ -44,7 +44,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51, PR #53), `config/packages/ai.yaml` |
+| Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51), `config/packages/ai.yaml` |
 | `model_catalog` and a model router | capability tiers mapped to provider models per project | planned | T4 (#52) |
 | `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | planned | T7 (#12), T13 (#18) |
 
@@ -84,7 +84,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | planned | T1 (#5), T5 (#10) |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
-| Process | the local git forge | planned | T6 (#11, part #58) |
+| Process | the local git forge | done | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
 
@@ -129,5 +129,6 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 
 ## PHP 8.5 in use
 
-- `#[NoDiscard]` on the instance status: `bin/instance` (done).
-- Planned: the pipe operator (T5, T6, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
+- `#[NoDiscard]` on the instance status: `bin/instance` (done); on `Forge::hasHeadMoved()`: `src/Plugin/Forge/Contract/Forge.php` (done, T6).
+- The pipe operator for turning `git diff` output into changed files: `src/Plugin/LocalGitForge/Infrastructure/NameStatusParser.php` (done, T6).
+- Planned: the pipe operator (T5, T28, T30), `clone()` with overrides (T1), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
