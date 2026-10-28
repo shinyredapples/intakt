@@ -18,6 +18,7 @@ use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Contracts\Service\ResetInterface;
 use Throwable;
 
@@ -26,7 +27,7 @@ use Throwable;
  */
 final readonly class StatefulServiceResetRule implements Rule
 {
-    // The container registers every class under src/ except these, as FrameworkExtension and FileLoader decide.
+    // services.yaml registers all of src/, so only what the container skips is not a service: https://symfony.com/doc/current/service_container.html#importing-many-services-at-once-with-resource
     private const array NOT_REGISTERED = [
         Exclude::class,
         Entity::class,
@@ -64,6 +65,7 @@ final readonly class StatefulServiceResetRule implements Rule
             && !$class->implementsInterface(ResetInterface::class)
             && !$class->is(Throwable::class)
             && !$class->is(TestCase::class)
+            && !$class->is(KernelInterface::class)
             && !$this->isExcludedFromTheContainer($class);
     }
 

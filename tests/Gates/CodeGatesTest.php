@@ -158,7 +158,7 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'readonly-service');
     }
 
-    public function testEntitiesExceptionsAndClassesExcludedFromTheContainerWithMutablePropertiesPassStaticAnalysis(): void
+    public function testEntitiesExceptionsTheKernelAndClassesExcludedFromTheContainerWithMutablePropertiesPassStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'mutable-data');
     }

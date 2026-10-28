@@ -29,7 +29,7 @@ Intakt keeps one process alive across many requests and messages, so a service t
 - implement `Symfony\Contracts\Service\ResetInterface` and clear the property in `reset()`, which Symfony calls between requests and messages;
 - if the class is a value object or a data transfer object rather than a service, mark it with Symfony's `#[Exclude]` attribute so the container does not register it.
 
-Doctrine entities, embeddables and mapped superclasses, exceptions and tests are not services and are never reported.
+Doctrine entities, embeddables and mapped superclasses, exceptions and tests are not services and are never reported. Neither is the kernel, which performs the reset.
 
 ## Running a probe against an install
 
