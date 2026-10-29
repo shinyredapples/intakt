@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
-use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -41,9 +40,9 @@ use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
-use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TokenUsage\TokenUsageAggregation;
+use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
@@ -229,7 +228,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
             self::assertStringContainsString('"prompt":100', $refused->getMessage());
         }
 
-        [[$level, , $context]] = $logger->cleanLogs();
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        [[$level, , $context]] = $logs;
         self::assertSame('error', $level);
         self::assertIsString($context['usage']);
         self::assertStringContainsString('"phase":"settled"', $context['usage']);
@@ -256,7 +257,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         /** @var string $call */
         $call = $ledger->payloads()[0]['call'];
-        self::assertEquals(new DateTimeImmutable(self::NOW), UuidV7::fromString($call)->getDateTime());
+        self::assertEquals(new MockClock(self::NOW)->now(), UuidV7::fromString($call)->getDateTime());
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

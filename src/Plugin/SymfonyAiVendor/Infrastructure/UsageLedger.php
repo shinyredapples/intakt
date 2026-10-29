@@ -65,7 +65,7 @@ final readonly class UsageLedger
     private function usagesOf(DeferredResult $result): array
     {
         $usage = $this->tokenUsageOf($result);
-        if (null === $usage) {
+        if (!$usage instanceof TokenUsageInterface) {
             return [];
         }
 
@@ -84,7 +84,7 @@ final readonly class UsageLedger
         return $usage instanceof TokenUsageInterface ? $usage : null;
     }
 
-    // An in-memory platform hands over an already converted result, which carries its usage itself.
+    // Needed because an in-memory platform (MockPlatformFactory) has no extractor and hands over a converted result that carries the usage.
     private function convertedUsageOf(RawResultInterface $raw): mixed
     {
         $converted = $raw->getObject();
