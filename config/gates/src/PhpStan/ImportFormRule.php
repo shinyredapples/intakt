@@ -8,6 +8,7 @@ use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\GroupUse;
 use PhpParser\Node\Stmt\Use_;
+use PhpParser\Node\UseItem;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\FileNode;
@@ -48,22 +49,34 @@ final readonly class ImportFormRule implements Rule
      */
     private function importsIn(array $nodes): array
     {
-        $imports = [];
         $finder = new NodeFinder();
 
-        foreach ($finder->findInstanceOf($nodes, Use_::class) as $use) {
-            foreach ($use->uses as $item) {
-                $imports[] = ['name' => $item->name->toString(), 'alias' => $item->alias?->toString(), 'type' => $use->type, 'line' => $item->getStartLine()];
-            }
-        }
+        return [
+            ...array_merge(...array_map($this->useImports(...), $finder->findInstanceOf($nodes, Use_::class))),
+            ...array_merge(...array_map($this->groupImports(...), $finder->findInstanceOf($nodes, GroupUse::class))),
+        ];
+    }
 
-        foreach ($finder->findInstanceOf($nodes, GroupUse::class) as $group) {
-            foreach ($group->uses as $item) {
-                $imports[] = ['name' => $group->prefix->toString().'\\'.$item->name->toString(), 'alias' => $item->alias?->toString(), 'type' => Use_::TYPE_UNKNOWN === $group->type ? $item->type : $group->type, 'line' => $item->getStartLine()];
-            }
-        }
+    /**
+     * @return list<Import>
+     */
+    private function useImports(Use_ $use): array
+    {
+        return array_map(
+            static fn (UseItem $item): array => ['name' => $item->name->toString(), 'alias' => $item->alias?->toString(), 'type' => $use->type, 'line' => $item->getStartLine()],
+            array_values($use->uses),
+        );
+    }
 
-        return $imports;
+    /**
+     * @return list<Import>
+     */
+    private function groupImports(GroupUse $group): array
+    {
+        return array_map(
+            static fn (UseItem $item): array => ['name' => $group->prefix->toString().'\\'.$item->name->toString(), 'alias' => $item->alias?->toString(), 'type' => Use_::TYPE_UNKNOWN === $group->type ? $item->type : $group->type, 'line' => $item->getStartLine()],
+            array_values($group->uses),
+        );
     }
 
     /**
