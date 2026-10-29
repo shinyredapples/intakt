@@ -10,9 +10,10 @@ use Symfony\AI\Agent\Toolbox\Exception\ToolNotFoundException;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Agent\Toolbox\ToolResult;
 use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\Contracts\Service\ResetInterface;
 
 // The fault-tolerant toolbox answers a malformed call to the model and hides it from the reviewer, which must still end such a review as changes.
-final class MalformedToolCalls implements ToolboxInterface
+final class MalformedToolCalls implements ToolboxInterface, ResetInterface
 {
     private bool $seen = false;
 
@@ -41,5 +42,11 @@ final class MalformedToolCalls implements ToolboxInterface
     public function seen(): bool
     {
         return $this->seen;
+    }
+
+    #[Override]
+    public function reset(): void
+    {
+        $this->seen = false;
     }
 }
