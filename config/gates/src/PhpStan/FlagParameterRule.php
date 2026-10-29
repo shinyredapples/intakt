@@ -135,7 +135,7 @@ final readonly class FlagParameterRule implements Rule
             || ($node instanceof FuncCall && (!$node->name instanceof Name || in_array($node->name->toLowerString(), self::SCOPE_READERS, true)));
     }
 
-    // parent::, self:: and static:: calls carry $this without naming it, and a computed class could be any of them
+    // counts as a use of $this because a parent::, self:: or static:: call hands it on unnamed, and a computed class could be any of them
     private function passesThisImplicitly(Node $node): bool
     {
         return $node instanceof StaticCall
