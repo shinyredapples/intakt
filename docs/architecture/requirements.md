@@ -16,6 +16,8 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 | `sh` | `bin/instance`, `bin/probe`, the gate runner | closing an inherited file descriptor before handing over; bringing up loopback | yes (POSIX) | any | yes |
 | `gitleaks` | the secrets gates (files and history) | secret scanning | for `bin/check` | exactly 8.30.1, or point `INTAKT_GITLEAKS` at that version | development only |
 | `unshare` (util-linux) | the gate runner (contained test runs), `bin/probe` | running tests and probes in their own namespaces | for `bin/check` and probes | with user namespaces enabled | development only |
+| `env` (coreutils) | the gitleaks gate | running gitleaks in the scanned directory (`env --chdir`) | for `bin/check` | coreutils 8.28 or later | development only |
+| `true` | the gate runner | probing once whether `unshare` may create namespaces | for `bin/check` | any | development only |
 | `setsid` (util-linux) | the gate runner | putting a contained run in its own session, so it can be stopped as a whole | for `bin/check` | any | development only |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
 | `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe` | tests, static analysis, code style | yes | as locked in `composer.lock` | development only |
@@ -32,6 +34,6 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 
 ## How Intakt calls them
 
-- **Through Symfony Process, with an argument list and no shell**, so a branch or file name can never become a command; where `sh` is used, the command after it is passed as separate arguments.
-- **With a time limit** on every call.
-- **`git` with `--no-replace-objects` and literal pathspecs**, and without the `GIT_*` variables of the calling environment, so a planted replacement ref or an inherited variable can't change what Intakt reads.
+- **Through Symfony Process with an argument list, never a shell string:** the local git forge, the gates (through their runner) and the upstream reproduction runner. `bin/instance` and `bin/probe` start their processes with PHP's `proc_open` and an argument list; where they use `sh`, the command after it is passed as separate arguments.
+- **With a time limit** on every call made through Process.
+- **The local git forge** (`src/Plugin/LocalGitForge/`) runs `git` with `--no-replace-objects` and literal pathspecs, and without the `GIT_*` variables of the calling environment. The gates call plain `git` with the caller's environment for now; hardening every `git` call the same way is a planned task.

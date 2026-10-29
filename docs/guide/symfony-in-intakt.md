@@ -33,7 +33,7 @@ flowchart TD
 What Intakt gets from it:
 - **Several companies at once.** The two default reviewers come from different companies; one install talks to all of them. *(in progress)*
 - **Answers as forms, not essays.** Instead of reading a model's free text and guessing, Intakt asks for a fixed shape ("verdict: approve or changes; a list of findings, each with a file and a line") and gets it back as a typed object, checked before it is used. *(in progress)*
-- **A meter on every call.** Each answer reports the tokens it used, so Intakt knows what each review cost and how much of the week's allowance is left. *(planned)*
+- **A meter on every call.** Each answer reports the tokens it used, so Intakt knows what each review cost and how much of the week's allowance is left. *(in progress: every call's tokens are recorded already; using them for the week's budget is planned)*
 - **Polite waiting.** When a company says "too many requests, try again in 40 seconds", Intakt gets that as a number, not a sentence to parse, and waits exactly that long. *(planned)*
 - **A spare tire.** If one company's service is down, a call can fail over to another. *(planned)*
 - **Tests without paying for AI.** Intakt's own tests use scripted answers (and real answers recorded once and replayed), so testing never calls a real model. *(in progress)*
@@ -71,7 +71,7 @@ These Symfony components keep many jobs running in the right order, without anyo
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
 | **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | planned |
 | **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | planned |
-| **Console** | a remote control | commands such as running the bug reproductions or summarizing a change | in use |
+| **Console** | a remote control | commands such as running the bug reproductions or summarizing a change | in progress |
 | **Uid** | a ticket number | every event gets a unique id that also says when it happened | in progress |
 | **Process** | a helper that runs errands | runs git and test commands safely, with a time limit | in use |
 
@@ -97,7 +97,7 @@ stateDiagram-v2
 - **FrankenPHP worker mode** keeps Intakt loaded in memory between requests, so pages answer fast. *(decided; planned in the image)*
 - **Mercure**, built into FrankenPHP, pushes updates to your browser as they happen, and **Turbo** (part of Symfony UX) updates just the part of the page that changed: a review finishing shows up without a reload. *(planned)*
 
-Keeping the application loaded has one catch: anything a part remembers would leak into the next request. Symfony's **reset** mechanism clears that memory between requests, and Intakt has a check that refuses any part that remembers things without a way to be cleared. *(in use)*
+Keeping the application loaded has one catch: anything a part remembers would leak into the next request. Symfony's **reset** mechanism clears that memory between requests, and Intakt has a check that refuses any part that remembers things without a way to be cleared. *(in progress)*
 
 ## Keeping it honest
 

@@ -55,7 +55,7 @@ When something needs you, the dashboard's "Waiting on you" column says exactly w
 | a plan, when plan approval is on | approve the plan comment on the issue |
 | a CI change that could reach more than a throwaway machine | the approval named in the request, before it is pushed |
 
-An approval always names one exact version. If anything is pushed afterwards, Intakt asks again.
+An approval always names one exact version. If the change itself is pushed again, Intakt asks again; a clean update from main that leaves the change identical keeps your approval.
 
 ## Pausing and priorities across projects
 

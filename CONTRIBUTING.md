@@ -36,7 +36,7 @@ Some files are the project's rules: the gates in `config/gates/`, `bin/check`, `
 
 ## Dependencies
 
-A new package from `symfony/` or `doctrine/` is routine. Any other new package needs a short justification in the pull request: a recent release, real use on Packagist, and no open security advisory.
+A new package from `symfony/` or `doctrine/` is routine when it comes from that vendor's own repository and ships no binaries, Composer plugin or autoloaded files. Any other new package needs a short justification in the pull request: a recent release, real use on Packagist, and no open security advisory.
 
 ## A bug in Symfony AI or another dependency
 

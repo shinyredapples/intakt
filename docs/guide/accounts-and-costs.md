@@ -30,7 +30,7 @@ flowchart TD
 
 - **The right model for the job:** a small docs fix doesn't need the strongest model. Intakt names models by tier (`strong`, `standard`, `light`) and your config maps each tier to a company's model. A task can ask for a tier with a `model:` label.
 - **Moving up when it struggles:** if the same check keeps failing or a reviewer keeps finding the same problem, the next attempt gets a stronger model.
-- **Measured, not guessed:** whether a job may start depends on the account's measured use, not on Intakt's estimate. A running job is never cut off halfway.
+- **Measured, not guessed:** whether a job may start depends on the account's measured use, not on Intakt's estimate. A running job is normally not cut off halfway; it is stopped only by a hard limit: a job that runs away past its ceiling, or an account billing overage that reaches your spending cap.
 - **Spending headroom:** if a window will refill with room to spare, Intakt uses it: stronger models, more builders in parallel.
 - **Falling back:** when one account is out, work moves to another; a reviewer from another company stands in and the usual one catches up later.
 
