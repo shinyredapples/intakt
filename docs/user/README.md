@@ -15,7 +15,7 @@ Intakt can treat a branch of a local git repository as a pull request: the branc
 
 ## Checking that an install boots
 
-After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. Without `TMPDIR` it keeps its scratch files in `var/`; a `var/` folder that the run created is removed again when it is empty, and one that existed before is left in place. If it cannot create its scratch folder, the reason names the cause, for example `cannot create the scratch directory: mkdir(): Permission denied`. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
+After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. Without `TMPDIR` it keeps its scratch files in `var/`; a `var/` folder that the run created is removed again when it is empty, and one that existed before is left in place. If it cannot create its scratch folder, the reason names the cause, for example `cannot create the scratch directory: mkdir(): Permission denied`, or `unknown reason` when the system gave none. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
 
 ```
 php bin/instance 3>&1 >/dev/null
