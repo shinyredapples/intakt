@@ -13,7 +13,6 @@ use Doctrine\Migrations\AbstractMigration;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
-use DoctrineMigrations\Version20261028120000;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -154,11 +153,13 @@ final class AppendOnlyLedgerTest extends KernelTestCase
     // The test schema comes from the mapping, which has no triggers, so the migration adds them.
     private function migrate(): void
     {
-        // The migrations bundle loads migrations by path, so Composer's autoloader does not know this class.
-        require_once dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
+        // The migrations bundle loads migrations by path, so neither Composer nor static analysis knows the class;
+        // its name follows from the file, as in the bundle's migrations_paths.
+        $file = dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
+        require_once $file;
 
         $connection = $this->manager->getConnection();
-        $migration = $this->instantiate(Version20261028120000::class, $connection);
+        $migration = $this->instantiate('DoctrineMigrations\\'.basename($file, '.php'), $connection);
         $migration->up(new Schema());
 
         foreach ($migration->getSql() as $query) {
