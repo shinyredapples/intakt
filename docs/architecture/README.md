@@ -148,7 +148,9 @@ Both exceptions are caught.
 - all keys;
 - one key missing;
 - an empty key;
+- the OpenAI-compatible endpoint with its address set but its key missing (disabled with its message);
 - no keys;
+- a key in the environment array that wins over an empty server value;
 - a key stored only in a vault;
 - an empty key stored in a vault;
 - a malformed `SYMFONY_DECRYPTION_SECRET`:
