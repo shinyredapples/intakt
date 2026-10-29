@@ -8,9 +8,12 @@ use PhpParser\Node;
 use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\Eval_;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\Expr\Include_;
 use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\PropertyFetch;
+use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
@@ -41,6 +44,8 @@ final readonly class FlagParameterRule implements Rule
     private const string TEST_FOLDER = '/tests/';
 
     private const array SCOPE_READERS = ['compact', 'func_get_arg', 'func_get_args', 'get_defined_vars'];
+
+    private const array THIS_CLASSES = ['parent', 'self', 'static'];
 
     public function __construct(private string $root, private ContainerRegistration $registration)
     {
@@ -108,7 +113,7 @@ final readonly class FlagParameterRule implements Rule
             : null;
     }
 
-    // $this handed on (an alias, a method call) or the local scope read wholesale reaches the boolean out of sight, so either counts as a read
+    // $this handed on (an alias, a method call, a parent:: call) or the local scope read wholesale reaches the boolean out of sight, so either counts as a read
     /**
      * @param array<Stmt> $statements
      */
@@ -117,14 +122,24 @@ final readonly class FlagParameterRule implements Rule
         $finder = new NodeFinder();
         $bareThis = count($finder->find($statements, fn (Node $found): bool => $found instanceof Variable && 'this' === $found->name)) - count($finder->find($statements, $this->isOwnProperty(...)));
 
-        return $bareThis > 0 || $finder->findFirst($statements, $this->readsScope(...)) instanceof Node;
+        return $bareThis > 0
+            || $finder->findFirst($statements, $this->readsScope(...)) instanceof Node
+            || $finder->findFirst($statements, $this->passesThisImplicitly(...)) instanceof Node;
     }
 
-    // a call by computed name could be any of them, so it counts too
+    // eval and include run in the local scope, and a call by computed name could be any scope reader, so each counts too
     private function readsScope(Node $node): bool
     {
-        return $node instanceof FuncCall
-            && (!$node->name instanceof Name || in_array($node->name->toLowerString(), self::SCOPE_READERS, true));
+        return $node instanceof Eval_
+            || $node instanceof Include_
+            || ($node instanceof FuncCall && (!$node->name instanceof Name || in_array($node->name->toLowerString(), self::SCOPE_READERS, true)));
+    }
+
+    // parent::, self:: and static:: calls carry $this without naming it, and a computed class could be any of them
+    private function passesThisImplicitly(Node $node): bool
+    {
+        return $node instanceof StaticCall
+            && (!$node->class instanceof Name || in_array($node->class->toLowerString(), self::THIS_CLASSES, true));
     }
 
     /**
