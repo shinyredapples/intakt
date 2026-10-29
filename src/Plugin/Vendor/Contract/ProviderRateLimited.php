@@ -10,7 +10,7 @@ use Throwable;
 
 final class ProviderRateLimited extends RuntimeException
 {
-    public const int MAX_RETRY_AFTER_SECONDS = 86400;
+    private const int MAX_RETRY_AFTER_SECONDS = 86400;
 
     public readonly ?int $retryAfterSeconds;
 
