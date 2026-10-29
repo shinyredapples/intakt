@@ -17,7 +17,7 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 final readonly class PanelConfiguration implements ConfigurationInterface
 {
     /**
-     * @param array<string, array<string, string>> $tierProviders
+     * @param array<int|string, array<string, string>> $tierProviders
      */
     public function __construct(
         private array $tierProviders,
@@ -52,15 +52,16 @@ final readonly class PanelConfiguration implements ConfigurationInterface
     }
 
     /**
-     * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $panels
+     * @param array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $panels
      *
-     * @return array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>
+     * @return array<int|string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>
      */
     private function refuseUnusablePanels(array $panels): array
     {
+        // PHP turns a numeric project name into an integer key.
         foreach ($panels as $project => $panel) {
             $this->refuseOtherProviders((string) $project, $panel['reviewers']);
-            $this->refuseUnreachableQuorum((string) $project, $panels);
+            $this->refuseUnreachableQuorum((string) $project, $panel);
         }
 
         return $panels;
@@ -82,12 +83,12 @@ final readonly class PanelConfiguration implements ConfigurationInterface
     }
 
     /**
-     * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $panels
+     * @param array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>} $panel
      */
-    private function refuseUnreachableQuorum(string $project, array $panels): void
+    private function refuseUnreachableQuorum(string $project, array $panel): void
     {
         try {
-            new ConfiguredPanels($panels)->panelFor($project);
+            new ConfiguredPanels([$project => $panel])->panelFor($project);
         } catch (PanelConfigurationFailure $failure) {
             throw new InvalidArgumentException(sprintf('The panel of project "%s" is unusable: %s', $project, $failure->getMessage()), 0, $failure);
         }

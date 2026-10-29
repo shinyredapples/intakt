@@ -42,6 +42,7 @@ final class PanelConfigurationTest extends TestCase
     private const array TIER_PROVIDERS = [
         'alpha' => ['strong' => 'anthropic', 'standard' => 'anthropic', 'light' => 'openai'],
         'beta' => ['light' => 'openai'],
+        '7' => ['light' => 'openai'],
     ];
 
     public function testAPanelOfOneReviewerLoads(): void
@@ -67,6 +68,13 @@ final class PanelConfigurationTest extends TestCase
 
         self::assertSame(['correctness', 'style', 'tests'], array_column($panel['reviewers'], 'role'));
         self::assertSame('one-strong-plus-one', $panel['quorum']);
+    }
+
+    public function testAProjectWithANumericNameLoadsItsPanel(): void
+    {
+        $processed = $this->process(['projects' => ['7' => ['quorum' => 'all', 'reviewers' => [$this->reviewer(['tier' => 'light', 'provider' => 'openai'])]]]]);
+
+        self::assertArrayHasKey('7', $processed['projects']);
     }
 
     public function testAnUnknownQuorumPolicyIsRefusedNamingTheKey(): void
