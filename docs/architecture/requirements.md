@@ -31,7 +31,7 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 
 | Command | Called by | What for | Needed | Version | In the image |
 |---|---|---|---|---|---|
-| `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ReadOnlyClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools Read,Grep,Glob --append-system-prompt <schema> --model <name> -p <prompt>` | only for that provider | a release with those flags | no |
+| `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ConfinedClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --append-system-prompt <schema> --model <name> -p <prompt>` | only for that provider | a release with those flags (2.1.302 accepts them) | no |
 
 ## Coming with planned parts
 
