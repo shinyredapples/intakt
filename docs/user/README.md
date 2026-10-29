@@ -5,7 +5,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 Only the install check and the provider configuration below exist so far. The other pages arrive with the review loop (see [the plan](../plan.md)):
 
 - Running the demo with `docker compose up` (planned)
-- Configuring the review panel (planned; providers and keys are below)
+- Configuring the review panel (planned; providers and keys are below). The three quorum policies exist in the code (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer), but you cannot choose one in configuration yet.
 - Reviewing a pull request and reading the verdicts (planned)
 - Connecting an agent through MCP (planned)
 
