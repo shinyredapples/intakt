@@ -115,7 +115,7 @@ Every such review is recorded in the ledger as `usage_recorded` events: one when
 
 A call the provider refuses because of a rate limit or quota fails with a clear error that carries the time to wait when the provider sent one; other temporary provider errors fail with their own error, so a later retry can tell them apart.
 
-`php bin/console intakt:vendor:probe` checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen.
+Run `php bin/console intakt:vendor:probe` after you set or change a provider key, to check the setup before a first review. It checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen. A provider that is switched off (see the `Provider "..." is disabled` lines above) is not probed.
 
 ## What a reviewer can read
 
