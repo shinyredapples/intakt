@@ -14,6 +14,7 @@ use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Throwable;
 
 // Public because no service injects it before the review agent (plan T7), and an unused private service is removed.
 #[Autoconfigure(public: true)]
@@ -22,6 +23,7 @@ final readonly class SymfonyAiVendor implements Vendor
     public function __construct(
         private TierInvoker $tiers,
         private VerdictParser $parser,
+        private UsageLedger $usage,
     ) {
     }
 
@@ -30,8 +32,20 @@ final readonly class SymfonyAiVendor implements Vendor
         $request = $task
             |> $this->asMessages(...)
             |> $this->askingForAVerdict(...);
+        $reservation = $this->usage->reserve($project, $tier);
 
-        return $this->parser->parse($this->tiers->invoke($project, $tier, $request));
+        try {
+            $result = $this->tiers->invoke($project, $tier, $request);
+            $verdict = $this->parser->parse($result);
+        } catch (Throwable $failure) {
+            $this->usage->leaveUnsettled($reservation, $failure);
+
+            throw $failure;
+        }
+
+        $this->usage->settle($reservation, $result);
+
+        return $verdict;
     }
 
     private function asMessages(string $task): MessageBag
