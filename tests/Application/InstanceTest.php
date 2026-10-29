@@ -87,6 +87,16 @@ final class InstanceTest extends TestCase
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
     }
 
+    public function testTheVarFolderItCreatedWithoutTmpdirIsGoneAfterABoot(): void
+    {
+        $project = $this->copyOfTheProject();
+
+        $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertDirectoryDoesNotExist($project.'/var');
+    }
+
     public function testTheProjectTreeIsUnchangedAfterABoot(): void
     {
         $project = $this->copyOfTheProject();
@@ -200,8 +210,8 @@ final class InstanceTest extends TestCase
     }
 
     /**
-     * @param list<string>          $command
-     * @param array<string, string> $environment
+     * @param list<string>                $command
+     * @param array<string, string|false> $environment
      *
      * @return array{status: string, exit: int, output: string, errors: string}
      */
@@ -293,7 +303,7 @@ final class InstanceTest extends TestCase
         return $project;
     }
 
-    // Holds descriptors 3 to 14 so that a duplicate of descriptor 3 lands above 9, because a shell redirection cannot name those.
+    // Regression guard: the caller holds descriptors 3 to 14 so a duplicate of descriptor 3 above 9 would show up, which a shell redirection cannot name.
     private function callerHoldingManyDescriptors(string $statusFile): Process
     {
         $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
