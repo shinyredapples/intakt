@@ -43,7 +43,7 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         self::assertNull($version);
     }
 
-    public function testThePostgreSqlTestConnectionIsBuiltWithoutAConfiguredVersion(): void
+    public function testThePostgreSqlTestConnectionGetsAPostgreSqlPlatformFromTheUrlAlone(): void
     {
         $connection = $this->connectionFor('postgresql://postgres@localhost:5432/intakt');
 
@@ -51,7 +51,7 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         self::assertInstanceOf(PostgreSQLPlatform::class, $connection->getDatabasePlatform());
     }
 
-    public function testThePostgreSqlTestConnectionOnTheNativeDriverIsBuiltWithoutAConfiguredVersion(): void
+    public function testThePostgreSqlTestConnectionOnTheNativeDriverGetsAPostgreSqlPlatformFromTheUrlAlone(): void
     {
         $connection = $this->connectionFor('postgresql://postgres@localhost:5432/intakt?driver=pgsql');
 
