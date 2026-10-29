@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Intakt\Tests\Application\EmptyDatabase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -33,6 +34,24 @@ final class ReviewerConversationStoreTest extends KernelTestCase
         self::assertCount(2, $store->load($round));
         self::assertCount(0, $store->load(new UuidV7()));
         self::assertSame(1, $this->connection()->fetchOne('SELECT COUNT(*) FROM reviewer_conversation'));
+    }
+
+    public function testTheStoreRefusesTheFirstMessagesOfAnotherReviewUnderAConversationAlreadyStored(): void
+    {
+        $this->migrateAnEmptyDatabase();
+        $store = self::getContainer()->get(MessageStoreInterface::class);
+        self::assertInstanceOf(MessageStoreInterface::class, $store);
+        $conversation = new UuidV7();
+        $store->save(MessageBag::forId($conversation, Message::forSystem('Role A.'), Message::ofUser('Review it.')));
+
+        try {
+            $store->save(MessageBag::forId($conversation, Message::forSystem('Role B.'), Message::ofUser('Review it.')));
+            self::fail('The store must not let a second review start a stored conversation.');
+        } catch (ConflictException) {
+            // Expected, because the reviewer agent claims a conversation by this refusal.
+        }
+
+        self::assertSame('Role A.', $store->load($conversation)->getSystemMessage()?->getContent());
     }
 
     private function migrateAnEmptyDatabase(): void

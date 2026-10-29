@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictParser;
+use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
+use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 
@@ -30,14 +35,17 @@ final readonly class ReviewerPrompt
         Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
         TEXT;
 
-    public function __construct(private Fence $fence)
-    {
+    public function __construct(
+        private Fence $fence,
+        private VerdictParser $parser,
+    ) {
     }
 
-    public function messagesFor(string $rolePrompt, string $task): MessageBag
+    public function messagesFor(ReviewerConversation $conversation, string $task): MessageBag
     {
-        return new MessageBag(
-            Message::forSystem(self::INSTRUCTIONS."\n\n".$rolePrompt),
+        return MessageBag::forId(
+            $conversation->id,
+            Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
             Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $task)),
         );
     }
@@ -46,5 +54,15 @@ final readonly class ReviewerPrompt
     public function fenced(ToolboxInterface $toolbox): FencedToolbox
     {
         return new FencedToolbox($toolbox, $this->fence);
+    }
+
+    // The instructions ask for a verdict, so an answer that is not one becomes the invalid-output verdict here.
+    public function verdictIn(ExecutionInterface $execution): Verdict
+    {
+        return $this->parser->parseWith(static function () use ($execution): Verdict {
+            $answer = $execution->getContent();
+
+            return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
+        });
     }
 }

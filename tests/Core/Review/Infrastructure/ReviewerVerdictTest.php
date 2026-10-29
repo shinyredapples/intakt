@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
@@ -24,10 +26,13 @@ use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\AiBundle\Profiler\DataCollector;
 use Symfony\AI\AiBundle\Test\AiAssertionsTrait;
+use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\ToolCall;
@@ -44,7 +49,9 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(UntrustedSource::class)]
+#[CoversClass(ConversationAlreadyStarted::class)]
 #[UsesClass(ReviewRequest::class)]
+#[UsesClass(ReviewerConversation::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(VerdictParser::class)]
@@ -61,9 +68,9 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private ReviewCheckout $fixture;
 
-    private InMemoryMessageStore $conversations;
+    private MessageStoreInterface $conversations;
 
-    private UuidV7 $round;
+    private UuidV7 $conversation;
 
     /**
      * @var list<string>
@@ -74,7 +81,7 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->fixture = new ReviewCheckout();
         $this->conversations = new InMemoryMessageStore();
-        $this->round = new UuidV7();
+        $this->conversation = new UuidV7();
     }
 
     protected function tearDown(): void
@@ -99,22 +106,53 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        $kept = $this->conversations->load($this->round);
+        $kept = $this->conversations->load($this->conversation);
 
-        self::assertSame(['system', 'user', 'assistant', 'tool', 'assistant'], array_map(static fn (MessageInterface $message): string => $message->getRole()->value, $kept->getMessages()));
+        self::assertSame(['system', 'user', 'assistant', 'tool', 'assistant'], $this->rolesIn($kept));
         self::assertCount(0, $this->conversations->load(new UuidV7()));
     }
 
-    public function testAnotherRoundStartsItsOwnConversationAndLeavesTheEarlierOneAlone(): void
+    public function testAnotherReviewerOrRoundStartsItsOwnConversationAndLeavesTheEarlierOneAlone(): void
     {
         $this->review('Add a cart.', [], self::APPROVE);
-        $first = $this->round;
-        $this->round = new UuidV7();
+        $first = $this->conversation;
+        $this->conversation = new UuidV7();
 
         $this->review('Add a cart.', [], self::APPROVE);
 
         self::assertCount(3, $this->conversations->load($first));
-        self::assertCount(3, $this->conversations->load($this->round));
+        self::assertCount(3, $this->conversations->load($this->conversation));
+    }
+
+    public function testASecondReviewUnderAConversationAlreadyStartedIsRefusedAndTheFirstKeepsOnlyItsOwnPrompt(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        try {
+            $this->review('Add a cart.', [], self::APPROVE);
+            self::fail('A second review must not continue the conversation of the first.');
+        } catch (ConversationAlreadyStarted) {
+            // Expected, because the first review started the conversation.
+        }
+
+        self::assertSame(['system', 'user', 'assistant'], $this->rolesIn($this->conversations->load($this->conversation)));
+        self::assertCount(1, $this->sent);
+    }
+
+    public function testAReviewWhoseConversationAnotherReviewClaimedAtTheSameTimeIsRefusedBeforeTheModelIsAsked(): void
+    {
+        $store = $this->createStub(MessageStoreInterface::class);
+        $store->method('save')->willThrowException(new ConflictException('Another review inserted the conversation first.'));
+        $this->conversations = $store;
+
+        try {
+            $this->review('Add a cart.', [], self::APPROVE);
+            self::fail('A review must not run on a conversation another review claimed.');
+        } catch (ConversationAlreadyStarted) {
+            // Expected, because the store refused the first messages.
+        }
+
+        self::assertSame([], $this->sent);
     }
 
     public function testAWellFormedReviewKeepsTheApprovalTheModelAnswered(): void
@@ -294,14 +332,22 @@ final class ReviewerVerdictTest extends WebTestCase
         };
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence()), static fn (): TraceableToolbox => $toolbox, new VerdictParser(), $this->conversations);
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), static fn (): TraceableToolbox => $toolbox, $this->conversations);
 
-        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, 'You review for correctness.', $task, $this->round), $platform, 'reviewer-model');
+        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, $task, new ReviewerConversation('You review for correctness.', $this->conversation)), $platform, 'reviewer-model');
 
         $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function rolesIn(MessageBag $conversation): array
+    {
+        return array_map(static fn (MessageInterface $message): string => $message->getRole()->value, $conversation->getMessages());
     }
 }

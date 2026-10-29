@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -103,6 +104,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
+#[UsesClass(ReviewerConversation::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
@@ -453,7 +455,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request);
 
-        self::assertCount(3, $conversations->load($request->round));
+        self::assertCount(3, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
@@ -461,12 +463,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'You review for correctness.', 'Review the change.', new UuidV7());
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'Review the change.', new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(new ReviewerPrompt(new Fence()), new ReviewerToolboxFactory()->create(...), new VerdictParser(), new InMemoryMessageStore());
+        return new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

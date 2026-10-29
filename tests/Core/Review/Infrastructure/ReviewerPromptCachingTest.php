@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -39,6 +40,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
+#[UsesClass(ReviewerConversation::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(VerdictParser::class)]
@@ -104,9 +106,9 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             return array_shift($responses) ?? self::fail('The reviewer asked for a third round.');
         });
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence()), new ReviewerToolboxFactory()->create(...), new VerdictParser(), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, 'You review for correctness.', 'Add a cart.', new UuidV7()), $platform, 'claude-sonnet-5-5');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, 'Add a cart.', new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
 
         return $platform;
     }
