@@ -6,7 +6,6 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
-use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
@@ -73,30 +72,61 @@ final readonly class FlagParameterRule implements Rule
             && $this->isOnlyStored($parameter, $node);
     }
 
-    // a boolean the constructor reads to decide something is a flag like any other, so the body may use it only in one plain $this->x = $x
+    // a boolean the constructor reads to decide something is a flag like any other, whether read as $x or as the $this->x it is kept in,
+    // so the body may touch it only in one plain $this->x = $x
     private function isOnlyStored(Param $parameter, ClassMethod $constructor): bool
     {
         $name = $this->nameOf($parameter);
         $statements = $constructor->stmts ?? [];
-        $uses = new NodeFinder()->find($statements, static fn (Node $found): bool => $found instanceof Variable && $found->name === $name);
 
-        if ($parameter->isPromoted()) {
-            return [] === $uses;
+        if (null === $name) {
+            return false;
         }
 
-        return 1 === count($uses)
-            && array_any($statements, fn (Stmt $statement): bool => $statement instanceof Expression && $this->storesUnchanged($statement->expr, $name));
+        if ($parameter->isPromoted()) {
+            return 0 === $this->variableUses($statements, $name) && 0 === $this->propertyUses($statements, $name);
+        }
+
+        $property = array_first(array_filter(array_map(fn (Stmt $statement): ?string => $this->storedProperty($statement, $name), $statements)));
+
+        return null !== $property
+            && 1 === $this->variableUses($statements, $name)
+            && 1 === $this->propertyUses($statements, $property);
     }
 
-    private function storesUnchanged(Expr $expression, ?string $name): bool
+    private function storedProperty(Stmt $statement, string $name): ?string
     {
-        return null !== $name
-            && $expression instanceof Assign
-            && $expression->var instanceof PropertyFetch
-            && $expression->var->var instanceof Variable
-            && 'this' === $expression->var->var->name
-            && $expression->expr instanceof Variable
-            && $expression->expr->name === $name;
+        $assign = $statement instanceof Expression ? $statement->expr : null;
+
+        return $assign instanceof Assign && $this->isOwnProperty($assign->var) && $assign->expr instanceof Variable && $assign->expr->name === $name
+            ? $this->propertyName($assign->var)
+            : null;
+    }
+
+    /**
+     * @param array<Stmt> $statements
+     */
+    private function variableUses(array $statements, string $name): int
+    {
+        return count(new NodeFinder()->find($statements, static fn (Node $found): bool => $found instanceof Variable && $found->name === $name));
+    }
+
+    /**
+     * @param array<Stmt> $statements
+     */
+    private function propertyUses(array $statements, string $property): int
+    {
+        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $this->isOwnProperty($found) && $this->propertyName($found) === $property));
+    }
+
+    private function isOwnProperty(Node $node): bool
+    {
+        return $node instanceof PropertyFetch && $node->var instanceof Variable && 'this' === $node->var->name;
+    }
+
+    private function propertyName(Node $node): ?string
+    {
+        return $node instanceof PropertyFetch && $node->name instanceof Identifier ? $node->name->toString() : null;
     }
 
     private function isBoolean(Identifier|Name|ComplexType|null $type): bool
