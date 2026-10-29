@@ -82,10 +82,14 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          # Each diff is saved first and must succeed (set -e), so a failing git or an early-exiting grep can never
+          # read as "untouched"; any doubt runs the engines.
           base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
+          git diff --name-only "$base" "$HEAD_SHA" > "$RUNNER_TEMP/changed-paths"
+          git diff "$base" "$HEAD_SHA" -- src > "$RUNNER_TEMP/src.diff"
           touched=no
-          if git diff --name-only "$base" "$HEAD_SHA" | grep -qE '^(src/Core/Ledger/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/workflows/)'; then touched=yes
-          elif git diff "$base" "$HEAD_SHA" -- src | grep -qE '^\+.*(Doctrine|ORM\\)'; then touched=yes
+          if grep -E '^(src/Core/Ledger/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/workflows/)' "$RUNNER_TEMP/changed-paths" > /dev/null; then touched=yes
+          elif grep -E '^\+.*(Doctrine|ORM\\)' "$RUNNER_TEMP/src.diff" > /dev/null; then touched=yes
           fi
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
