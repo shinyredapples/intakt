@@ -40,7 +40,9 @@ How to read them:
 - A review round is one review by each of the two reviewers on one head of the branch. Each round counts its findings again, so a finding that stays open for three rounds counts three times.
 - Findings are graded P1 (blocks the merge), P2 (should be fixed) and P3 (a small follow-up).
 - Reviewers report each probe on a line starting with `Probes:`. Since 2026-10-29 a reviewer can also attach the probe itself, as a fenced `probe` block, so the finding carries a test anyone can rerun. That is why the last probe figure is still small.
-- The `owner-approval` label marks a change that touched protected paths (the checks, CI, the agent rules). For two of those merges no owner approval is on record; the API does not say why.
+- The `owner-approval` label marks a change that touched protected paths (the checks, CI, the agent rules). For two of those merges no owner approval is on record:
+  - #162 was approved by the loop itself, by class: both reviewers classified its protected change (`AGENTS.md`) as tightening the rules.
+  - #74's final diff touches no protected path; an earlier head did, and the label stayed on.
 - Cost and token figures are kept by the loop, not shown here.
 
 ## Three examples
