@@ -97,6 +97,18 @@ final class InstanceTest extends TestCase
         self::assertDirectoryDoesNotExist($project.'/var');
     }
 
+    public function testAVarFolderThatAlreadyExistedStaysWithItsFilesAfterABootWithoutTmpdir(): void
+    {
+        $project = $this->copyOfTheProject();
+        mkdir($project.'/var');
+        file_put_contents($project.'/var/keep.txt', 'kept');
+
+        $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertSame('kept', file_get_contents($project.'/var/keep.txt'));
+    }
+
     public function testTheProjectTreeIsUnchangedAfterABoot(): void
     {
         $project = $this->copyOfTheProject();
