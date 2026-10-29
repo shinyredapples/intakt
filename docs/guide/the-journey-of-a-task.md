@@ -112,7 +112,7 @@ flowchart TD
   you -- approved --> m
 ```
 
-- **It merges exactly the version that was reviewed.** If anything was pushed in between, the merge refuses and the new version is reviewed.
+- **It merges exactly the version that was reviewed.** If anything was pushed in between, the merge refuses and the new version is reviewed. Two pushes keep the reviews for the parts they did not touch, so only the touched parts are reviewed again: a merge of main without conflicts, and a change that touches only documentation.
 - **Changes to the rules** follow the approval rules in [What needs you](how-intakt-works.md#what-needs-you-and-what-doesnt).
 - After merging, it **reads the result back** and only then closes the task.
 

@@ -57,13 +57,13 @@ So a change can never quietly switch off the check that would have caught it, an
 
 ## Layer 6: only you can approve what needs a person
 
-- **Your approval comes from your own GitHub account** and names the exact version you approved. A later push needs a new approval.
+- **Your approval comes from your own GitHub account** and names the exact version you approved. A later push needs a new approval. If reviewers send the change back after you approved, the fix is a new version: you are asked again only once it has passed review and CI, never while it is still being fixed.
 - **No agent can fake it:** agents have no GitHub access, and Intakt's own account never writes an approval. Labels can't stand in for an approval either.
 - **Only people with write access steer:** a label or comment from anyone else is ignored.
 
 ## Layer 7: merging exactly what was checked
 
-- Intakt merges **exactly the version that was reviewed and passed CI**. If anything was pushed in between, the merge refuses.
+- Intakt merges **exactly the version that was reviewed and passed CI**. If anything was pushed in between, the merge refuses. The only shortcut: a merge of main without conflicts, or a change that touches only documentation, keeps the reviews for the parts it did not touch, and the touched parts are reviewed again.
 - Main is **protected on GitHub**: no force-pushes, no deletion, required checks. A watchdog also checks that main's history was never rewritten.
 - If a CI change could reach more than a throwaway machine with read-only access, Intakt **asks you before pushing it**, because GitHub runs a pushed CI setup straight away.
 

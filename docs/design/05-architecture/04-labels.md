@@ -4,7 +4,7 @@ Labels are how people steer tasks from the forge, on any device, without the das
 - **Steering labels** are set by people and read by Intakt. Each family maps to a field in the task's database row; the label is the input, the row is the state.
 - **Status labels** are written by Intakt to mirror the row, so the issue list shows where each task stands. A person changing one changes nothing: Intakt puts it back and comments once. The queue never depends on them (see "Queue state lives in the database").
 
-Default families (names are configurable per project; one value per family):
+Default families (names are configurable per project; one value per family, except `review:`, which takes several: `full` and any number of roles):
 
 | Family | Values | Effect |
 |---|---|---|
