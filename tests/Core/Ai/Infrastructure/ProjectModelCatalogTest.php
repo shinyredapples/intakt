@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Infrastructure\AnthropicBridgeCatalog;
+use Intakt\Core\Ai\Infrastructure\OpenAiBridgeCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +18,8 @@ use Symfony\AI\Platform\Capability;
 
 #[CoversClass(ProjectModelCatalog::class)]
 #[UsesClass(Provider::class)]
+#[UsesClass(AnthropicBridgeCatalog::class)]
+#[UsesClass(OpenAiBridgeCatalog::class)]
 final class ProjectModelCatalogTest extends TestCase
 {
     public function testAModelTheBridgeDoesNotKnowIsAddedWithTheBridgeModelClass(): void
