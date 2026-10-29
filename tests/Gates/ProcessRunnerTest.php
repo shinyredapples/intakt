@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
-use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\ProcessRunner;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ProcessRunner::class)]
-#[UsesClass(HardenedGit::class)]
+#[UsesClass(HardenedGitCall::class)]
 final class ProcessRunnerTest extends TestCase
 {
     /** @var list<string> */

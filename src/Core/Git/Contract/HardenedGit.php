@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
+use Symfony\Component\Process\Process;
+
+// config/gates/src/HardenedGitCall.php is the protected copy the gates use; tests/Gates/HardenedGitCallTest.php keeps this one equal to it, because a forge read must be as hard as a gate's.
 final readonly class HardenedGit
 {
     // Because command-line settings beat the repository's own config; an empty diff.external switches the external diff driver off.
@@ -12,6 +15,21 @@ final readonly class HardenedGit
         'core.fsmonitor' => 'false',
         'diff.external' => '',
         'core.attributesFile' => '/dev/null',
+    ];
+
+    // Git's empty tree, so no .gitattributes of the repository applies; a SHA-256 repository refuses it, which fails closed.
+    private const string NO_ATTRIBUTES = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+    private const string DRIVER_SECTIONS = '^(filter|diff)\.';
+
+    // Because .git/info/attributes still names drivers: an empty filter changes nothing, and cat shows the file as it is.
+    private const array DRIVER_OVERRIDES = [
+        'clean' => '',
+        'smudge' => '',
+        'process' => '',
+        'required' => 'false',
+        'textconv' => 'cat',
+        'command' => '',
     ];
 
     // A path that does not exist, because git reads a missing user config silently but dies on "/dev/null/.gitconfig".
@@ -25,7 +43,7 @@ final readonly class HardenedGit
     public function command(array $arguments): array
     {
         // A refs/replace/ ref would swap in another object, and pathspec magic would read ":odd.txt" as "odd.txt".
-        return ['git', '--no-replace-objects', '--literal-pathspecs', ...$this->settings(), ...$arguments];
+        return ['git', '--no-replace-objects', '--literal-pathspecs', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
     }
 
     /**
@@ -36,15 +54,15 @@ final readonly class HardenedGit
     public function commandWithPathspecMagic(array $arguments): array
     {
         // Because a gate writes glob pathspecs itself, which literal pathspecs refuse; never use it for a path from the repository.
-        return ['git', '--no-replace-objects', ...$this->settings(), ...$arguments];
+        return ['git', '--no-replace-objects', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
     }
 
     /**
      * @return array<string, string|false>
      */
-    public function environment(): array
+    public function environment(string $directory): array
     {
-        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation()];
+        return $this->environmentWith([...self::SETTINGS, ...$this->driverOverrides($directory)]);
     }
 
     /**
@@ -59,6 +77,41 @@ final readonly class HardenedGit
         }
 
         return $settings;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function driverOverrides(string $directory): array
+    {
+        // Without the directory there is no repository config to read, and the git call itself fails.
+        if (!is_dir($directory)) {
+            return [];
+        }
+
+        $query = new Process($this->command(['config', '--null', '--name-only', '--get-regexp', self::DRIVER_SECTIONS]), $directory, $this->environmentWith(self::SETTINGS));
+        $query->run();
+
+        $overrides = [];
+        foreach (explode("\0", $query->getOutput()) as $name) {
+            $override = self::DRIVER_OVERRIDES[substr((string) strrchr($name, '.'), 1)] ?? null;
+
+            if (null !== $override) {
+                $overrides[$name] = $override;
+            }
+        }
+
+        return $overrides;
+    }
+
+    /**
+     * @param array<string, string> $settings
+     *
+     * @return array<string, string|false>
+     */
+    private function environmentWith(array $settings): array
+    {
+        return [...$this->inheritedGitVariables(), ...$this->configuration($settings), ...$this->isolation()];
     }
 
     /**
@@ -78,14 +131,16 @@ final readonly class HardenedGit
     }
 
     /**
+     * @param array<string, string> $settings
+     *
      * @return array<string, string>
      */
-    private function configuration(): array
+    private function configuration(array $settings): array
     {
-        // Because tools such as gitleaks start git themselves, they get the same settings as command() through the environment.
-        $environment = ['GIT_CONFIG_COUNT' => (string) count(self::SETTINGS)];
+        // Because tools such as gitleaks start git themselves; the variables also carry driver names that a -c option would split wrongly.
+        $environment = ['GIT_CONFIG_COUNT' => (string) count($settings)];
         $index = 0;
-        foreach (self::SETTINGS as $name => $value) {
+        foreach ($settings as $name => $value) {
             $environment['GIT_CONFIG_KEY_'.$index] = $name;
             $environment['GIT_CONFIG_VALUE_'.$index] = $value;
             ++$index;
@@ -102,6 +157,8 @@ final readonly class HardenedGit
         return [
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_CONFIG_GLOBAL' => '/dev/null',
+            'GIT_NO_REPLACE_OBJECTS' => '1',
+            'GIT_ATTR_SOURCE' => self::NO_ATTRIBUTES,
             'HOME' => self::NO_HOME,
             'XDG_CONFIG_HOME' => self::NO_HOME,
         ];

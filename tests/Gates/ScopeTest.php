@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\HardenedGitCall;
+use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\Scope;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,6 +15,8 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Scope::class)]
 #[UsesClass(ProcessRunner::class)]
+#[UsesClass(ProcessResult::class)]
+#[UsesClass(HardenedGitCall::class)]
 final class ScopeTest extends TestCase
 {
     /**
@@ -42,6 +46,27 @@ final class ScopeTest extends TestCase
 
         self::assertContains('bin/probe', $files);
         self::assertContains('bin/instance', $files);
+    }
+
+    public function testChangedPathsRunNoCleanFilterThatTheRepositoryConfigures(): void
+    {
+        $sandbox = Sandbox::empty();
+        $marker = $sandbox->root.'/.git/clean-ran';
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', "*.txt filter=evil\n");
+        $sandbox->write('note.txt', "base\n");
+        $sandbox->commitAll('Add a note');
+        $sandbox->git('config', 'filter.evil.clean', 'touch '.$marker.'; cat');
+        $sandbox->write('note.txt', "changed\n");
+
+        $sandbox->run('git', 'diff', '--name-only', 'HEAD');
+        self::assertFileExists($marker, 'the filter must run without hardening, or this test proves nothing');
+        unlink($marker);
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+        self::assertFileDoesNotExist($marker);
+        self::assertSame(['note.txt'], $changed);
+        $sandbox->remove();
     }
 
     private function scope(): Scope

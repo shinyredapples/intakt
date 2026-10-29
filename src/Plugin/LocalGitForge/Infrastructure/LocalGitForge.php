@@ -141,9 +141,8 @@ final readonly class LocalGitForge implements Forge
             throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
         }
 
-        $process = new Process($this->hardened->command($arguments), $this->repository->path, $this->hardened->environment(), timeout: self::TIMEOUT_SECONDS);
-
         try {
+            $process = new Process($this->hardened->command($arguments), $this->repository->path, $this->hardened->environment($this->repository->path), timeout: self::TIMEOUT_SECONDS);
             $process->run();
         } catch (ExceptionInterface $failure) {
             throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use Intakt\Core\Git\Contract\HardenedGit;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\InputStream;
@@ -38,7 +37,7 @@ final class ProcessRunner
 
     public function __construct(
         private readonly string $unshare = 'unshare',
-        private readonly HardenedGit $hardened = new HardenedGit(),
+        private readonly HardenedGitCall $hardened = new HardenedGitCall(),
     ) {
     }
 
@@ -52,7 +51,7 @@ final class ProcessRunner
      */
     public function git(array $arguments, string $directory): ProcessResult
     {
-        return $this->run($this->hardened->command($arguments), $directory, $this->hardened->environment());
+        return $this->run($this->hardened->command($arguments), $directory, $this->hardened->environment($directory));
     }
 
     /**
@@ -60,7 +59,7 @@ final class ProcessRunner
      */
     public function gitWithPathspecMagic(array $arguments, string $directory): ProcessResult
     {
-        return $this->run($this->hardened->commandWithPathspecMagic($arguments), $directory, $this->hardened->environment());
+        return $this->run($this->hardened->commandWithPathspecMagic($arguments), $directory, $this->hardened->environment($directory));
     }
 
     /**
