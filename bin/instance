@@ -147,8 +147,8 @@ final class Instance
 
     private function createScratch(): string
     {
-        $base = getenv('TMPDIR');
-        $base = false === $base || '' === $base ? $this->root.'/var' : $base;
+        $base = (string) getenv('TMPDIR');
+        $base = '' === $base ? $this->root.'/var' : $base;
         $path = $base.'/intakt-instance-'.bin2hex(random_bytes(6));
         $this->createdFallback = $base === $this->root.'/var' && !is_dir($base);
 
