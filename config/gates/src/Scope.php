@@ -127,8 +127,8 @@ final readonly class Scope
         $blobs = $this->unfilteredBlobsOf(array_column($files, 0));
         $unchanged = [];
 
-        foreach ($files as $index => [$path, $blob]) {
-            if (($blobs[$index] ?? '') === $blob) {
+        foreach ($files as $index => [$path, $blob, $mode]) {
+            if (($blobs[$index] ?? '') === $blob && $this->modeOf($path) === $mode) {
                 $unchanged[] = $path;
             }
         }
@@ -137,7 +137,7 @@ final readonly class Scope
     }
 
     /**
-     * @return list<array{string, string}>
+     * @return list<array{string, string, string}>
      */
     private function indexEntries(): array
     {
@@ -145,11 +145,17 @@ final readonly class Scope
 
         foreach ($this->gitLines(['ls-files', '-z', '--stage']) as $entry) {
             // A conflicted path, a link or a submodule never matches, so it always counts as changed.
-            $regular = 1 === preg_match('/^100(?:644|755) ([0-9a-f]+) 0\t(.*)$/s', $entry, $match);
-            $entries[] = $regular ? [$match[2], $match[1]] : [(string) preg_replace('/^[^\t]*\t/', '', $entry), ''];
+            $regular = 1 === preg_match('/^(100644|100755) ([0-9a-f]+) 0\t(.*)$/s', $entry, $match);
+            $entries[] = $regular ? [$match[3], $match[2], $match[1]] : [(string) preg_replace('/^[^\t]*\t/', '', $entry), '', ''];
         }
 
         return $entries;
+    }
+
+    private function modeOf(string $path): string
+    {
+        // Git records only the owner's execute bit, so that bit alone decides the mode it would see.
+        return 0 !== ((int) fileperms($this->root.'/'.$path) & 0o100) ? '100755' : '100644';
     }
 
     /**

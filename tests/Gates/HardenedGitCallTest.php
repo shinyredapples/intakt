@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
-use Intakt\Core\Git\Contract\GitCall as ForgeGitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
@@ -13,12 +12,13 @@ use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\RepositoryAttributesRefused;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\UsesNamespace;
 use PHPUnit\Framework\TestCase;
 
+// A namespace, because the forge's GitCall shares its short name with the gates' one and AGENTS.md allows no import alias.
 #[CoversClass(HardenedGitCall::class)]
-#[UsesClass(ForgeGitCall::class)]
 #[UsesClass(GitCall::class)]
-#[UsesClass(HardenedGit::class)]
+#[UsesNamespace('Intakt\Core\Git\Contract')]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
 #[UsesClass(RepositoryAttributesRefused::class)]

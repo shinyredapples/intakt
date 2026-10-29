@@ -110,6 +110,36 @@ final class ScopeTest extends TestCase
         $sandbox->remove();
     }
 
+    public function testChangedPathsIncludeAFileWhoseOnlyChangeIsItsExecuteMode(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('src/Unchanged.php', "<?php\n");
+        $sandbox->write('src/Executable.php', "<?php\n");
+        $sandbox->commitAll('Add two classes');
+        chmod($sandbox->root.'/src/Executable.php', 0o755);
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Executable.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileThatLostItsExecuteMode(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('bin/tool', "#!/bin/sh\n");
+        chmod($sandbox->root.'/bin/tool', 0o755);
+        $sandbox->commitAll('Add a tool');
+        chmod($sandbox->root.'/bin/tool', 0o644);
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['bin/tool'], $changed);
+        $sandbox->remove();
+    }
+
     // A git on the path that lets each info/attributes check pass and then writes the file for the call itself, which forces the order a racing writer needs.
     private function gitThatWritesInfoAttributesAfterEachCheck(Sandbox $sandbox): string
     {
