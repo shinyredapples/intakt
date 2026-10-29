@@ -25,7 +25,7 @@ final class FenceTest extends TestCase
 
         $fenced = new Fence()->wrap(UntrustedSource::ToolResult, $text);
 
-        $end = '<<<END '.self::boundaryOf($fenced).'>>>';
+        $end = '<<<END '.$this->boundaryOf($fenced).'>>>';
         self::assertSame(1, substr_count($fenced, $end));
         self::assertStringEndsWith($end, $fenced);
     }
@@ -35,7 +35,7 @@ final class FenceTest extends TestCase
         $first = new Fence()->wrap(UntrustedSource::Task, 'Add a cart.');
         $second = new Fence()->wrap(UntrustedSource::Task, 'Add a cart!');
 
-        self::assertNotSame(self::boundaryOf($first), self::boundaryOf($second));
+        self::assertNotSame($this->boundaryOf($first), $this->boundaryOf($second));
     }
 
     public function testTheSameTextIsFencedTheSameWayEveryTime(): void
@@ -46,7 +46,7 @@ final class FenceTest extends TestCase
         );
     }
 
-    private static function boundaryOf(string $fenced): string
+    private function boundaryOf(string $fenced): string
     {
         return 1 === preg_match('/^<<<UNTRUSTED [a-z ]+ (fence-[0-9a-f]{16})>>>/', $fenced, $opening) ? $opening[1] : self::fail('The text is not fenced.');
     }

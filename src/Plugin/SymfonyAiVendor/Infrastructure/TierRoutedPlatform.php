@@ -16,16 +16,16 @@ use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 
 // Lets an agent call a project's tier: the agent's model name is the tier, and every round is kept so the vendor can settle the usage of all of them.
-final class TierRoutedPlatform implements PlatformInterface
+final readonly class TierRoutedPlatform implements PlatformInterface
 {
     /**
      * @var ArrayObject<int, DeferredResult>
      */
-    private readonly ArrayObject $rounds;
+    private ArrayObject $rounds;
 
     public function __construct(
-        private readonly TierInvoker $tiers,
-        private readonly string $project,
+        private TierInvoker $tiers,
+        private string $project,
     ) {
         $this->rounds = new ArrayObject();
     }
@@ -44,7 +44,7 @@ final class TierRoutedPlatform implements PlatformInterface
         $name = $model instanceof Model ? $model->getName() : $model;
 
         $round = $this->tiers->invoke($this->project, Tier::from($name), new TierRequest($input, $options));
-        $this->rounds[] = $round;
+        $this->rounds->append($round);
 
         return $round;
     }
