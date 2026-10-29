@@ -83,7 +83,7 @@ final readonly class PlainFirstClassCallableFixer implements FixerInterface
             return null;
         }
 
-        // A segment before the backslash (Sample\run, namespace\run) names a namespaced function, which stays as written.
+        // Skipped when a segment precedes the backslash (Sample\run, namespace\run), because that names a namespaced function.
         $beforeIndex = $tokens->getPrevMeaningfulToken($separatorIndex);
 
         return null !== $beforeIndex && $tokens[$beforeIndex]->isGivenKind([T_STRING, T_NAMESPACE, CT::T_NAMESPACE_OPERATOR]) ? null : $separatorIndex;
