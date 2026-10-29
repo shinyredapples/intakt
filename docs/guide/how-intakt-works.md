@@ -98,7 +98,8 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules or keeps them as they are, and every reviewer agrees (at least two, from different companies) | Intakt approves it itself, and lists it in a daily summary for you |
+| only adds to the rules (for a check: a new check, its registration and its tests, with a mechanical proof that nothing existing changed), and every reviewer agrees (at least two, from different companies) | Intakt approves it itself, and lists it in a daily summary for you (planned: until this is built, every rule change goes to you) |
+| edits or removes an existing check, its tests or its settings | you |
 | removes, relaxes or skips a check | you |
 | touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
 

@@ -48,7 +48,8 @@ The project's **rules** (the checks that judge the code, the CI setup, the agent
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules, every reviewer agrees, and a mechanical check proves nothing existing was changed | Intakt, and it lists the change in your daily summary |
+| only adds to the rules, every reviewer agrees, and a mechanical check proves nothing existing was changed | Intakt, and it lists the change in your daily summary (planned: until this is built, every rule change goes to you) |
+| edits or removes an existing check, its tests or its settings | you |
 | removes, relaxes or skips any check | you |
 | touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
 

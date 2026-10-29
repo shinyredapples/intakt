@@ -107,8 +107,8 @@ flowchart TD
   b -- no --> wait[Wait for CI]
   b -- yes --> c{Touches the project's rules?}
   c -- no --> m[Merge]
-  c -- yes, and only adds to them --> m
-  c -- yes, and loosens them --> you[Ask the owner]
+  c -- "yes, only adds, proven" --> m
+  c -- "yes, edits, removes or loosens" --> you[Ask the owner]
   you -- approved --> m
 ```
 
