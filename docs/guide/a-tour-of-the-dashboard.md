@@ -42,7 +42,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 
 ## Waiting on you
 
-This is the only column that needs you, and the only one that sends notifications to your phone. Each card says exactly what to do, with a link: the label to add, the text to post, the setting to change. Typical cards:
+This is the only column that needs you. A card here and a notification on your phone are the same thing: each card was sent to you once, and nothing is sent that has no card. Each card says exactly what to do, with a link: the label to add, the text to post, the setting to change. Typical cards:
 - a question a builder asked;
 - a plan to approve;
 - a change to the project's rules that only you may approve;
@@ -52,6 +52,28 @@ This is the only column that needs you, and the only one that sends notification
 
 Anything Intakt or its maintainer agent can settle never shows up here.
 
+## Alerts and notifications
+
+Every event that might need attention is sorted by one question: who can act on it?
+
+```mermaid
+flowchart TD
+  e[Something happens] --> q{Who can act on it?}
+  q -- nobody needs to --> s[Status only:<br/>a count or line on the board]
+  q -- the maintainer agent --> m[The maintainer agent acts]
+  m -- settled --> s
+  m -- "can't settle it" --> o
+  q -- only you --> o[One notification<br/>+ a card in Waiting on you]
+  o -- you act --> d[The card clears by itself]
+```
+
+- **Nobody needs to act:** progress, recoveries ("the reviewer works again"), counts and the list of what Intakt approved by itself. These are on the board and in the status, and never notify.
+- **The maintainer agent can act:** a stuck task, a broken check, a label in the wrong place, a conflict with main. It gets the item first; you hear about it only if it can't settle it, as a decision with its options and recommendation.
+- **Only you can act:** an approval, a question only you can answer, an expired login, a halt only you may clear. You get one notification and a card, at the same moment.
+- **Once each:** a notification is sent once per item and change, not again every few minutes. The card stays until the reason is gone, then clears without you dismissing it.
+- **Nothing is lost:** every notice is recorded with whether it was delivered. If your phone can't be reached, the card says so and the fallback notifier is tried.
+- **Not yet yours:** a change still in review or being fixed doesn't ask you anything. You are asked once it has passed review and CI.
+
 ## Around the board
 
 - **Lanes and slots** (a strip above the board): each builder slot and the review lane, and what each is working on right now.
@@ -59,4 +81,4 @@ Anything Intakt or its maintainer agent can settle never shows up here.
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
-- **The daily summary:** the protected changes Intakt approved by itself, one line each with the reviewers' reasons.
+- **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.

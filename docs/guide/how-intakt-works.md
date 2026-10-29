@@ -98,7 +98,7 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules (for a check: a new check, its registration and its tests, with a mechanical proof that nothing existing changed), and every reviewer agrees (at least two, from different companies) | Intakt approves it itself, and lists it in a daily summary for you (planned: until this is built, every rule change goes to you) |
+| only adds to the rules (for a check: a new check, its registration and its tests, with a mechanical proof that nothing existing changed), and every reviewer agrees (at least two, from different companies) | Intakt approves it itself, and lists it on the dashboard for a week (planned: until this is built, every rule change goes to you) |
 | edits or removes an existing check, its tests or its settings | you |
 | removes, relaxes or skips a check | you |
 | touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
@@ -135,8 +135,8 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 ## Keeping you in the picture
 
 - **The dashboard** shows what is being built, what is in review, what is on hold, and a "Waiting on you" column with only the things that truly need a person, each with the exact click or comment to make.
-- **Notifications** go to your phone only for those things, once each.
-- **A daily summary** lists what Intakt approved by itself, so you can spot a wrong call without anything ever waiting on you.
+- **Notifications** go to your phone only for those things, once each: every card in "Waiting on you" was sent to you, and nothing is sent without a card ([how alerts work](a-tour-of-the-dashboard.md#alerts-and-notifications)).
+- **What Intakt approved by itself** is listed on the dashboard for a week, so you can spot a wrong call without anything ever waiting on you or notifying you.
 
 ## Words you will see
 

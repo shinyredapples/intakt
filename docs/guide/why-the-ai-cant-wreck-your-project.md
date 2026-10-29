@@ -48,7 +48,7 @@ The project's **rules** (the checks that judge the code, the CI setup, the agent
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules, every reviewer agrees, and a mechanical check proves nothing existing was changed | Intakt, and it lists the change in your daily summary (planned: until this is built, every rule change goes to you) |
+| only adds to the rules, every reviewer agrees, and a mechanical check proves nothing existing was changed | Intakt, and it lists the change on the dashboard for a week (planned: until this is built, every rule change goes to you) |
 | edits or removes an existing check, its tests or its settings | you |
 | removes, relaxes or skips any check | you |
 | touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
@@ -70,13 +70,13 @@ So a change can never quietly switch off the check that would have caught it, an
 ## When something still goes wrong
 
 - **Everything is recorded:** every decision, approval and merge is in Intakt's record, and each merge links to its task, its reviews and its CI run.
-- **The daily summary** lists what Intakt approved by itself, so a wrong call is visible within a day.
+- **The dashboard lists** what Intakt approved by itself for a week, so a wrong call is visible without a notification.
 - **Updates roll back** on their own if a new version of Intakt doesn't start cleanly.
 - **Nothing is ever force-pushed:** history is only added to, so any change can be traced and reverted.
 
 ## What this doesn't protect against
 
 No system is perfect, and it is better to be clear about the limits:
-- A change that is **wrong but passes every check and every reviewer** can still be merged. More and better checks, and specialist reviewers for risky areas, shrink this; the daily summary and the record help you spot it.
+- A change that is **wrong but passes every check and every reviewer** can still be merged. More and better checks, and specialist reviewers for risky areas, shrink this; the dashboard's list and the record help you spot it.
 - Whatever the AI companies themselves see: the code under review is sent to their models, as with any AI coding tool.
 - Your own accounts: Intakt can't protect a GitHub account or AI login that is itself compromised.

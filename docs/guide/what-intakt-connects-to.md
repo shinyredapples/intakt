@@ -51,10 +51,10 @@ Each vendor tells Intakt which models it has, what they cost and what they are g
 | **Browser and phone push** | the dashboard installed as an app on your phone |
 | **Home Assistant** | your phone through the Home Assistant app, or a light on the wall |
 | **ntfy** | simple push to any device |
-| **Email** | a daily digest |
+| **Email** | notices, as a fallback or for a quieter setup |
 | **Webhook** | anything else: chat tools, your own scripts |
 
-You choose which kind of notice goes where: approvals and urgent problems to your phone, digests by email, quiet hours at night, and a fallback if the first one fails. Each notice is sent **once** per item and change, with a link to it on the dashboard. Notices never carry secrets and never approve anything: approving is always a click or a comment by you, on the forge.
+You choose which kind of notice goes where: approvals and urgent problems to your phone, the rest by email if you like, quiet hours at night, and a fallback if the first one fails. Each notice is sent **once** per item and change, with a link to it on the dashboard. Notices never carry secrets and never approve anything: approving is always a click or a comment by you, on the forge.
 
 ## The project's checks (gates)
 
