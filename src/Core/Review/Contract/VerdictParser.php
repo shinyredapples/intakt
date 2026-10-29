@@ -10,7 +10,7 @@ use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\Result\DeferredResult;
-use Symfony\Component\Serializer\Exception\ExceptionInterface as SerializerException;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Validator\ConstraintViolationInterface;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
 
@@ -44,7 +44,7 @@ final readonly class VerdictParser
     private function mappingFailure(RuntimeException $exception): string
     {
         $cause = $exception->getPrevious();
-        if ($exception instanceof UnexpectedResultTypeException || $cause instanceof JsonException || $cause instanceof SerializerException) {
+        if ($exception instanceof UnexpectedResultTypeException || $cause instanceof JsonException || $cause instanceof ExceptionInterface) {
             return trim($exception->getMessage().' '.$cause?->getMessage());
         }
 
