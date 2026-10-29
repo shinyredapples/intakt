@@ -68,7 +68,7 @@ final class ProjectsConfigurationTest extends TestCase
     public function testAModelMadeOnlyOfSpacesIsRefusedNamingTheKey(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('The "model" key must not be blank.');
+        $this->expectExceptionMessageMatches('/The "model" key must not be blank\./');
 
         $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => '   ']]]]]);
     }
