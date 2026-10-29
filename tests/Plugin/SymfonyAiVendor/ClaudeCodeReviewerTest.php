@@ -45,6 +45,7 @@ use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
@@ -116,7 +117,9 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         self::assertSame(['tools', 'append_system_prompt'], array_keys($cli->options));
         self::assertSame('Read,Grep,Glob', $cli->options['tools']);
-        self::assertStringContainsString('"json_schema"', (string) $cli->options['append_system_prompt']);
+        $instruction = $cli->options['append_system_prompt'];
+        self::assertIsString($instruction);
+        self::assertStringContainsString('"json_schema"', $instruction);
     }
 
     public function testATruncatedRecordedStreamMakesTheBridgeRaiseIncompleteStream(): void
@@ -139,7 +142,8 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertInstanceOf(StreamResult::class, $result);
         $text = '';
         foreach ($result->getContent() as $delta) {
-            $text .= (string) $delta;
+            self::assertInstanceOf(TextDelta::class, $delta);
+            $text .= $delta->getText();
         }
         self::assertStringContainsString('"verdict"', $text);
     }
