@@ -200,6 +200,19 @@ final class SymfonyAiVendorTest extends KernelTestCase
         }
     }
 
+    public function testAHugeResetFromTheProviderIsCappedAtOneDay(): void
+    {
+        $limited = static fn (): never => throw new RateLimitExceededException(PHP_INT_MAX);
+
+        try {
+            $this->vendor($limited)->review('alpha', Tier::Strong, 'Review the change.');
+            self::fail('A rate limit must be a typed error.');
+        } catch (ProviderRateLimited $rateLimited) {
+            self::assertSame(86400, $rateLimited->retryAfterSeconds);
+            self::assertEquals(new MockClock('2026-10-28 12:00:00.000 UTC')->now(), $rateLimited->resetsAt(new MockClock(self::NOW)->now()));
+        }
+    }
+
     public function testAnotherTransientProviderErrorIsATypedError(): void
     {
         $down = static fn (): never => throw new ServerException(503);
