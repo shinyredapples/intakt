@@ -24,6 +24,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private TierInvoker $tiers,
         private VerdictParser $parser,
         private UsageLedger $usage,
+        private ProviderFailures $failures,
     ) {
     }
 
@@ -40,7 +41,7 @@ final readonly class SymfonyAiVendor implements Vendor
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure);
 
-            throw $failure;
+            throw $this->failures->typed($failure);
         }
 
         $this->usage->settle($reservation, $result);
