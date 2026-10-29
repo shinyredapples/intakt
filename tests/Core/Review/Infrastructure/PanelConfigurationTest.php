@@ -112,6 +112,56 @@ final class PanelConfigurationTest extends TestCase
         $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [['reviewers' => [$this->reviewer()]]]]]]);
     }
 
+    public function testACorePanelThatCannotMeetItsQuorumIsRefusedEvenWhenARuleWouldMakeItReachable(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/project "alpha".*never meet the "one-strong-plus-one" quorum/');
+
+        $rule = ['min_lines' => 500, 'reviewers' => [$this->reviewer(['role' => 'style', 'tier' => 'standard'])]];
+        $this->process(['projects' => ['alpha' => ['quorum' => 'one-strong-plus-one', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
+    }
+
+    /**
+     * @param list<mixed> $paths
+     */
+    #[DataProvider('brokenPathPatterns')]
+    public function testAPathPatternThatIsNotTextIsRefused(array $paths, string $reason): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.rules\.0\.paths.*'.$reason.'/');
+
+        $rule = ['paths' => $paths, 'reviewers' => [$this->reviewer()]];
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
+    }
+
+    /**
+     * @return iterable<string, array{list<mixed>, string}>
+     */
+    public static function brokenPathPatterns(): iterable
+    {
+        yield 'a number' => [[123], 'Expected "string"'];
+        yield 'a boolean' => [[true], 'Expected "string"'];
+        yield 'invalid UTF-8' => [["config/\xFF/**"], 'valid UTF-8'];
+    }
+
+    public function testRulesGivenAsAMapAreRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.rules.*list/');
+
+        $rule = ['min_lines' => 5, 'reviewers' => [$this->reviewer()]];
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => ['big' => $rule]]]]);
+    }
+
+    public function testPathsGivenAsAMapAreRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.rules\.0\.paths.*list/');
+
+        $rule = ['paths' => ['code' => 'src/**'], 'reviewers' => [$this->reviewer()]];
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
+    }
+
     public function testARuleReviewerOnAnotherProviderThanItsTierIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);

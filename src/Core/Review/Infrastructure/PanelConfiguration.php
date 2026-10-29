@@ -40,7 +40,10 @@ final readonly class PanelConfiguration implements ConfigurationInterface
         $rule->validate()->ifTrue(static fn (array $rule): bool => !isset($rule['min_lines']) && [] === $rule['paths'])->thenInvalid('A rule needs "min_lines" or "paths" to trigger on.');
         $ruleKeys = $rule->children();
         $ruleKeys->integerNode('min_lines')->min(1);
-        $ruleKeys->arrayNode('paths')->defaultValue([])->scalarPrototype()->cannotBeEmpty()->end()
+        $ruleKeys->arrayNode('paths')->defaultValue([])
+            ->stringPrototype()->cannotBeEmpty()
+                ->validate()->ifTrue(static fn (string $glob): bool => !mb_check_encoding($glob, 'UTF-8'))->thenInvalid('A path pattern must be valid UTF-8.')->end()
+            ->end()
             ->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The paths must be a list, not a map.');
         $this->reviewers($ruleKeys->arrayNode('reviewers'));
 
@@ -108,9 +111,12 @@ final readonly class PanelConfiguration implements ConfigurationInterface
      */
     private function refuseUnreachableQuorum(string $project, array $panel): void
     {
+        $panels = new ConfiguredPanels([$project => $panel]);
+
         try {
-            // Built with every rule added because that is the largest panel a change can get, and the quorum must hold for it too.
-            new ConfiguredPanels([$project => $panel])->panelForChange($project, new ChangeDescription(0, [], [ChangeDescription::FULL_REVIEW_LABEL]));
+            // Rules only add reviewers, so a quorum that holds for the core panel and for the panel with every rule holds for any change.
+            $panels->panelFor($project);
+            $panels->panelForChange($project, new ChangeDescription(0, [], [ChangeDescription::FULL_REVIEW_LABEL]));
         } catch (PanelConfigurationFailure $failure) {
             throw new InvalidArgumentException(sprintf('The panel of project "%s" is unusable: %s', $project, $failure->getMessage()), 0, $failure);
         }

@@ -12,7 +12,10 @@ final readonly class PathGlob
 
     public function matches(string $path): bool
     {
-        return 1 === preg_match($this->pattern(), $path);
+        // Git allows any bytes in a file name, and a UTF-8 pattern fails on other bytes, which would let such a path slip past its rule.
+        $modifier = mb_check_encoding($path, 'UTF-8') ? 'u' : '';
+
+        return 1 === preg_match($this->pattern().$modifier, $path);
     }
 
     private function pattern(): string
@@ -23,6 +26,6 @@ final readonly class PathGlob
             explode('**', $this->glob),
         );
 
-        return '#\A'.implode('.*', $parts).'\z#u';
+        return '#\A'.implode('.*', $parts).'\z#';
     }
 }

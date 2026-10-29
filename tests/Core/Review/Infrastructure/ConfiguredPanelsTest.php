@@ -94,6 +94,24 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testAChangedPathThatIsNotValidUtf8StillMatchesItsGlob(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, ["config/security/\xFF.php"], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testAOneCharacterWildcardMatchesOneCharacterOfAUtf8Path(): void
+    {
+        $panel = new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [$this->reviewer('correctness')],
+            'rules' => [['paths' => ['src/?.php'], 'reviewers' => [$this->reviewer('short')]]],
+        ]])->panelForChange('alpha', new ChangeDescription(1, ['src/é.php'], []));
+
+        self::assertSame(['correctness', 'short'], $this->roles($panel));
+    }
+
     public function testAChangeToNoMatchingPathKeepsTheCorePanelAndItsQuorum(): void
     {
         $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, ['src/a.php'], []));
