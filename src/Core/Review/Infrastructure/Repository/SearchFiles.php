@@ -41,19 +41,27 @@ final readonly class SearchFiles
         $matches = [];
         $bytes = 0;
 
-        foreach ($this->files($this->checkout->resolve($path)) as $file) {
-            foreach ($this->matchesIn($file, $text) as $match) {
-                $bytes += strlen($match) + 1;
+        foreach ($this->matches($this->checkout->resolve($path), $text) as $match) {
+            $bytes += strlen($match) + 1;
 
-                if (count($matches) >= self::MAX_MATCHES || $bytes > self::MAX_ANSWER_BYTES) {
-                    return implode("\n", $matches)."\n[more matches not shown]";
-                }
-
-                $matches[] = $match;
+            if (count($matches) >= self::MAX_MATCHES || $bytes > self::MAX_ANSWER_BYTES) {
+                return implode("\n", $matches)."\n[more matches not shown]";
             }
+
+            $matches[] = $match;
         }
 
         return [] === $matches ? 'No match.' : implode("\n", $matches);
+    }
+
+    /**
+     * @return Generator<string>
+     */
+    private function matches(string $real, string $text): Generator
+    {
+        foreach ($this->files($real) as $file) {
+            yield from $this->matchesIn($file, $text);
+        }
     }
 
     /**
