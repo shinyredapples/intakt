@@ -11,6 +11,8 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 #[CoversClass(DisabledProvidersWarning::class)]
 final class DisabledProvidersWarningTest extends TestCase
@@ -33,7 +35,20 @@ final class DisabledProvidersWarningTest extends TestCase
         self::assertSame('', $output->fetch());
     }
 
-    private function eventWith(BufferedOutput $output): ConsoleCommandEvent
+    public function testAConsoleOutputGetsTheMessagesOnItsErrorOutputOnly(): void
+    {
+        $errors = new BufferedOutput();
+        $output = $this->createMock(ConsoleOutputInterface::class);
+        $output->expects(self::atLeastOnce())->method('getErrorOutput')->willReturn($errors);
+        $output->expects(self::never())->method('write');
+        $output->expects(self::never())->method('writeln');
+
+        new DisabledProvidersWarning(['a' => 'first message'])->onConsoleCommand($this->eventWith($output));
+
+        self::assertSame("first message\n", $errors->fetch());
+    }
+
+    private function eventWith(OutputInterface $output): ConsoleCommandEvent
     {
         return new ConsoleCommandEvent(new Command('probe'), new ArrayInput([]), $output);
     }

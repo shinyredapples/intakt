@@ -10,6 +10,9 @@ use NoDiscard;
 
 interface Vendor
 {
+    /**
+     * @throws UsageNotRecorded
+     */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function review(string $project, Tier $tier, string $task): Verdict;
 }
