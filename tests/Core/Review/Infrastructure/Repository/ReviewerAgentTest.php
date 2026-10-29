@@ -39,7 +39,7 @@ final class ReviewerAgentTest extends WebTestCase
 {
     use AiAssertionsTrait;
 
-    private static ?DataCollector $collector = null;
+    private const string COLLECTOR = 'test.reviewer_agent.ai_data_collector';
 
     private ReviewCheckout $fixture;
 
@@ -51,7 +51,6 @@ final class ReviewerAgentTest extends WebTestCase
     protected function tearDown(): void
     {
         $this->fixture->remove();
-        self::$collector = null;
         parent::tearDown();
     }
 
@@ -208,9 +207,11 @@ final class ReviewerAgentTest extends WebTestCase
     // Because the toolbox is built per checkout and is no container service, the collector is built from this run's traceable platform and toolbox instead of a profiled request.
     protected static function getAiDataCollector(): DataCollector
     {
-        self::assertNotNull(self::$collector, 'No scripted run was made.');
+        self::assertTrue(self::getContainer()->has(self::COLLECTOR), 'No scripted run was made.');
+        $collector = self::getContainer()->get(self::COLLECTOR);
+        self::assertInstanceOf(DataCollector::class, $collector);
 
-        return self::$collector;
+        return $collector;
     }
 
     /**
@@ -227,8 +228,9 @@ final class ReviewerAgentTest extends WebTestCase
         $result = new Agent($platform, 'reviewer', toolbox: $toolbox)->call(new MessageBag())->getContent();
 
         self::assertSame('done', $result);
-        self::$collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
-        self::$collector->lateCollect();
+        $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
+        $collector->lateCollect();
+        self::getContainer()->set(self::COLLECTOR, $collector);
 
         return array_values(array_map(static function (ToolResult $call): string {
             $answer = $call->getResult();
