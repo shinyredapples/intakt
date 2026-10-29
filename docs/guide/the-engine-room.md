@@ -47,6 +47,8 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 **CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
 
+By default CI runs on GitHub's machines. A project can run it on its own machine instead by setting the repository variable `CI_RUNS_ON` to that machine's runner labels.
+
 If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
 ## Locks: one at a time
