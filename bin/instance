@@ -60,6 +60,7 @@ final class Instance
         private readonly string $root,
         private readonly array $command,
         private readonly int $commandSeconds,
+        private readonly DirectoryRemoval $directoryRemoval,
     ) {
     }
 
@@ -321,7 +322,7 @@ final class Instance
             return;
         }
 
-        new DirectoryRemoval()->remove($this->scratch);
+        $this->directoryRemoval->remove($this->scratch);
 
         if ($this->createdFallback) {
             // Another run may be using var/, so a plain rmdir that fails on a non-empty folder is the right check.
@@ -397,7 +398,7 @@ function statusChannel()
         return null;
     }
 
-    // OPcache's lock is an unlinked memfd named opcache_lock that can take a closed descriptor 3, so only another unlinked memfd is the caller's channel.
+    // OPcache's lock is an unlinked memfd named opcache_lock that can take a closed descriptor 3, so among unlinked descriptors only a memfd not named opcache_lock counts as the caller's channel.
     $unlinked = 0 === (fstat($channel)['nlink'] ?? 0);
     $target = (string) @readlink('/proc/self/fd/3');
     $callersMemfd = str_starts_with($target, '/memfd:') && '/memfd:opcache_lock (deleted)' !== $target;
@@ -411,7 +412,7 @@ $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Needed so a test can prove the cap without waiting for the full minute.
 $commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
-$instance = new Instance(dirname(__DIR__), $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS);
+$instance = new Instance(dirname(__DIR__), $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS, new DirectoryRemoval());
 $status = $instance->run();
 
 // A command's own output is what the caller wants, so the server log is noise unless the boot failed.

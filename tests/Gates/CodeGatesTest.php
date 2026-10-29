@@ -73,6 +73,11 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('cs', 'plain-first-class-callable');
     }
 
+    public function testANamespacedFirstClassCallableIsLeftUnchangedByTheCodingStandards(): void
+    {
+        $this->assertAcceptedBy('cs', 'namespaced-first-class-callable');
+    }
+
     public function testAFunctionOrConstantImportFailsStaticAnalysis(): void
     {
         $run = $this->sandboxWith('imported-function-and-constant')->check('--only=phpstan');
