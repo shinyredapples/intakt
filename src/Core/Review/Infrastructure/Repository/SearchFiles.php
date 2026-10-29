@@ -22,6 +22,9 @@ final readonly class SearchFiles
     // Because the answer is part of the prompt, and a file larger than this is generated or binary.
     private const int MAX_MATCHES = 100;
     private const int MAX_FILE_BYTES = 1_000_000;
+    // Because one long line, as in a minified file, would otherwise make a match as large as its file.
+    private const int MAX_LINE_BYTES = 500;
+    private const int MAX_ANSWER_BYTES = 100_000;
 
     public function __construct(private Checkout $checkout)
     {
@@ -36,12 +39,17 @@ final readonly class SearchFiles
         }
 
         $matches = [];
+        $bytes = 0;
 
         foreach ($this->files($this->checkout->resolve($path)) as $file) {
-            array_push($matches, ...$this->matchesIn($file, $text));
+            foreach ($this->matchesIn($file, $text) as $match) {
+                $bytes += strlen($match) + 1;
 
-            if (count($matches) >= self::MAX_MATCHES) {
-                return implode("\n", array_slice($matches, 0, self::MAX_MATCHES))."\n[more matches not shown]";
+                if (count($matches) >= self::MAX_MATCHES || $bytes > self::MAX_ANSWER_BYTES) {
+                    return implode("\n", $matches)."\n[more matches not shown]";
+                }
+
+                $matches[] = $match;
             }
         }
 
@@ -90,10 +98,15 @@ final readonly class SearchFiles
 
         foreach (explode("\n", $content) as $number => $line) {
             if (str_contains($line, $text)) {
-                $matches[] = sprintf('%s:%d:%s', $relative, $number + 1, rtrim($line, "\r"));
+                $matches[] = sprintf('%s:%d:%s', $relative, $number + 1, $this->cut(rtrim($line, "\r")));
             }
         }
 
         return $matches;
+    }
+
+    private function cut(string $line): string
+    {
+        return strlen($line) > self::MAX_LINE_BYTES ? mb_strcut($line, 0, self::MAX_LINE_BYTES, 'UTF-8').' [line cut]' : $line;
     }
 }

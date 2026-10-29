@@ -33,7 +33,13 @@ final readonly class ReviewCheckout
 
     public function write(string $path, string $content): void
     {
-        file_put_contents($this->head.'/'.$path, $content);
+        $file = $this->head.'/'.$path;
+
+        if (!is_dir(dirname($file))) {
+            mkdir(dirname($file), recursive: true);
+        }
+
+        file_put_contents($file, $content);
     }
 
     public function link(string $path, string $target): void

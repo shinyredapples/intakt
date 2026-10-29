@@ -133,6 +133,29 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertSame('No match.', $answers[0]);
     }
 
+    public function testALongMatchedLineIsCutSoMinifiedFilesCannotFloodTheAnswer(): void
+    {
+        foreach (range(0, 4) as $file) {
+            $this->fixture->write("dist/min{$file}.js", 'needle'.str_repeat('x', 990_000));
+        }
+
+        $answers = $this->runScript(new ToolCall('1', 'search_files', ['text' => 'needle', 'path' => 'dist']));
+
+        self::assertLessThan(5_000, strlen($answers[0]));
+        self::assertSame(5, substr_count($answers[0], '[line cut]'));
+    }
+
+    public function testASearchAnswerStopsAtTheAnswerLimitWhenPathsAreLong(): void
+    {
+        $file = implode('/', array_fill(0, 4, str_repeat('d', 250))).'/hits.txt';
+        $this->fixture->write($file, str_repeat("needle\n", 100));
+
+        $answers = $this->runScript(new ToolCall('1', 'search_files', ['text' => 'needle']));
+
+        self::assertLessThanOrEqual(100_100, strlen($answers[0]));
+        self::assertStringEndsWith("\n[more matches not shown]", $answers[0]);
+    }
+
     public function testABinaryFileAnswersTheModelWithAnErrorThatCanBeSentAsJson(): void
     {
         $this->fixture->write('logo.png', "\x89PNG\r\n\x1a\n\xff\xfe\x00 total");
