@@ -177,8 +177,7 @@ final readonly class HardenedGit
      */
     private function isolation(string $directory): array
     {
-        // The work tree is pinned because core.worktree in the repository config would point working-tree reads at another directory, and info/grafts would rewrite parents as a replace object does.
-        // A partial clone would fetch a missing object through the transport of a promisor remote the repository names; the empty allowlist beats every protocol.<name>.allow of the repository (protocol.allow=never would not, a more specific setting wins), so no remote helper, ssh command or credential helper it names can run.
+        // The work tree is pinned because core.worktree in the repository config would point working-tree reads at another directory, info/grafts would rewrite parents as a replace object does, and a partial clone would fetch a missing object through a promisor remote; the empty protocol allowlist beats every protocol.<name>.allow of the repository (protocol.allow=never would not, a more specific setting wins), so no remote helper, ssh command or credential helper it names can run.
         return [
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_CONFIG_GLOBAL' => '/dev/null',

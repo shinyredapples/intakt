@@ -84,7 +84,7 @@ final readonly class Sandbox
 
     public function promiseMissingObjectsFrom(string $command): void
     {
-        // A partial clone fetches a missing object lazily from its promisor remote, here a command that git starts through the ext transport.
+        // Because a partial clone fetches a missing object lazily from its promisor remote, a command behind an ext:: URL shows whether a call fetches.
         $this->git('config', 'core.repositoryFormatVersion', '1');
         $this->git('config', 'extensions.partialClone', 'origin');
         $this->git('config', 'remote.origin.url', 'ext::'.$command);
