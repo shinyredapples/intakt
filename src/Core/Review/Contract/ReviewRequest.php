@@ -8,8 +8,8 @@ final readonly class ReviewRequest
 {
     public function __construct(
         public Checkout $checkout,
-        public string $rolePrompt,
         public string $task,
+        public ReviewerConversation $conversation,
     ) {
     }
 }
