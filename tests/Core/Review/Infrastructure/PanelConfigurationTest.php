@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelCannotReachQuorum;
@@ -17,6 +18,7 @@ use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
+use Intakt\Core\Review\Infrastructure\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,6 +31,8 @@ use Symfony\Component\Config\Definition\Processor;
 #[UsesClass(Tier::class)]
 #[UsesClass(QuorumPolicy::class)]
 #[UsesClass(ConfiguredPanels::class)]
+#[UsesClass(ChangeDescription::class)]
+#[UsesClass(PathGlob::class)]
 #[UsesClass(Panel::class)]
 #[UsesClass(PanelReviewer::class)]
 #[UsesClass(ReviewerRole::class)]
@@ -75,6 +79,38 @@ final class PanelConfigurationTest extends TestCase
         $processed = $this->process(['projects' => ['7' => ['quorum' => 'all', 'reviewers' => [$this->reviewer(['tier' => 'light', 'provider' => 'openai'])]]]]);
 
         self::assertArrayHasKey('7', $processed['projects']);
+    }
+
+    public function testAProjectWithoutRulesLoadsWithAnEmptyRuleList(): void
+    {
+        self::assertSame([], $this->panel('all', [$this->reviewer()])['rules']);
+    }
+
+    public function testARuleWithTriggersAndReviewersLoads(): void
+    {
+        $rule = ['min_lines' => 200, 'paths' => ['src/**'], 'reviewers' => [$this->reviewer(['role' => 'extra'])]];
+
+        $processed = $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
+
+        self::assertSame(200, $processed['projects']['alpha']['rules'][0]['min_lines']);
+        self::assertSame(['src/**'], $processed['projects']['alpha']['rules'][0]['paths']);
+    }
+
+    public function testARuleWithoutATriggerIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/needs "min_lines" or "paths"/');
+
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [['reviewers' => [$this->reviewer()]]]]]]);
+    }
+
+    public function testARuleReviewerOnAnotherProviderThanItsTierIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/project "alpha" names provider "openai"/');
+
+        $rule = ['min_lines' => 5, 'reviewers' => [$this->reviewer(['provider' => 'openai'])]];
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
     }
 
     public function testAnUnknownQuorumPolicyIsRefusedNamingTheKey(): void
