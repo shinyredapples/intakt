@@ -16,14 +16,14 @@ final class InMemoryLedger implements Ledger
     /** @var list<LedgerEvent> */
     public array $events = [];
 
-    public function __construct(private readonly bool $failing = false)
+    public function __construct(private readonly int $accepted = PHP_INT_MAX)
     {
     }
 
     #[Override]
     public function append(LedgerEvent $event): AppendResult
     {
-        if ($this->failing) {
+        if (count($this->events) >= $this->accepted) {
             return AppendResult::failed('the ledger is down');
         }
 
