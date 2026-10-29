@@ -21,7 +21,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Small methods, early returns, no flag parameters, at most three parameters, no `else` after a jump, no nested `try` (enforced).
-- Imports only, no fully qualified names; the Doctrine `ORM` alias is the one alias.
+- Classes are imported, never fully qualified; global functions and constants are written plain (`count()`, `PHP_EOL`), with neither a backslash nor a `use function`/`use const` (enforced). A class alias only where two classes share a short name, plus Doctrine's `ORM`.
 - Names: commands imperative, events past tense, queries nouns or questions; exceptions named after the broken rule.
 - A closed set of values is a backed enum; a single named value stays a constant.
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
@@ -43,6 +43,13 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Use every component fully, behind Intakt's small vendor contract, at exactly pinned versions.
 - Test doubles: `MockPlatformFactory` with `ScriptedResponse`, or `RecordingProvider` with a redacted `HttpCassette`; the in-memory Store for retrieval. Message stores come from the Agent component (there is no Chat component).
 - A likely library bug becomes a minimal reproduction and draft report in `upstream/<name>/`; never posted without the owner.
+
+## Prompt injection ([threat model](docs/design/05-architecture/14-threat-model.md))
+
+- A steered model must stay harmless: every decision that matters is made or checked by plain code, and each model role has only the tools its job needs.
+- A change that adds a model role, a new input to a model or a new tool for one updates the threat model page in the same change.
+- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
+- Only tasks, steering labels and comments from people with write access count, checked through the forge's permission API on each event.
 
 ## Docs, pull requests, commits
 

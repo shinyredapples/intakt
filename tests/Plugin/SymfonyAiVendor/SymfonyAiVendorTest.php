@@ -10,9 +10,11 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Decision;
@@ -26,6 +28,8 @@ use Intakt\Kernel;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -34,8 +38,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use ReflectionProperty;
 use RuntimeException;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
@@ -57,6 +62,8 @@ use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(UsageLedger::class)]
+#[CoversClass(ProviderRateLimited::class)]
+#[CoversClass(ProviderFailedTransiently::class)]
 #[CoversClass(UsageReservation::class)]
 #[CoversClass(UsageNotRecorded::class)]
 #[UsesClass(LedgerEvent::class)]
@@ -123,7 +130,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         [$started, $settled] = $ledger->payloads();
         self::assertSame(2, $ledger->count());
-        self::assertSame(LedgerEventKind::UsageRecorded, $ledger->kinds()[0]);
+        self::assertEquals([LedgerEventKind::UsageRecorded, LedgerEventKind::UsageRecorded], $ledger->kinds());
         self::assertSame(['started', 'settled'], [$started['phase'], $settled['phase']]);
         self::assertSame($started['call'], $settled['call']);
         self::assertSame(['alpha', 'strong'], [$started['project'], $started['tier']]);
@@ -149,6 +156,57 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['started', 'unsettled'], [$started['phase'], $unsettled['phase']]);
         self::assertSame($started['call'], $unsettled['call']);
         self::assertSame(RuntimeException::class, $unsettled['failure']);
+    }
+
+    public function testARateLimitedCallIsATypedErrorWithTheResetTheProviderSent(): void
+    {
+        $ledger = new InMemoryLedger();
+        $limited = static fn (): never => throw new RateLimitExceededException(30);
+
+        try {
+            $this->vendor($limited, $ledger)->review('alpha', Tier::Strong, 'Review the change.');
+            self::fail('A rate limit must be a typed error.');
+        } catch (ProviderRateLimited $rateLimited) {
+            self::assertSame(30, $rateLimited->retryAfterSeconds);
+            self::assertEquals(new MockClock('2026-10-27 12:00:30.000 UTC')->now(), $rateLimited->resetsAt(new MockClock(self::NOW)->now()));
+            self::assertInstanceOf(RateLimitExceededException::class, $rateLimited->getPrevious());
+        }
+
+        self::assertSame(RateLimitExceededException::class, $ledger->payloads()[1]['failure']);
+    }
+
+    public function testARateLimitWithoutAResetHasNone(): void
+    {
+        $limited = static fn (): never => throw new RateLimitExceededException();
+
+        try {
+            $this->vendor($limited)->review('alpha', Tier::Strong, 'Review the change.');
+            self::fail('A rate limit must be a typed error.');
+        } catch (ProviderRateLimited $rateLimited) {
+            self::assertNull($rateLimited->resetsAt(new MockClock(self::NOW)->now()));
+        }
+    }
+
+    public function testANegativeResetFromTheProviderResetsNowInsteadOfInThePast(): void
+    {
+        $limited = static fn (): never => throw new RateLimitExceededException(-5);
+
+        try {
+            $this->vendor($limited)->review('alpha', Tier::Strong, 'Review the change.');
+            self::fail('A rate limit must be a typed error.');
+        } catch (ProviderRateLimited $rateLimited) {
+            self::assertSame(0, $rateLimited->retryAfterSeconds);
+            self::assertEquals(new MockClock(self::NOW)->now(), $rateLimited->resetsAt(new MockClock(self::NOW)->now()));
+        }
+    }
+
+    public function testAnotherTransientProviderErrorIsATypedError(): void
+    {
+        $down = static fn (): never => throw new ServerException(503);
+
+        $this->expectException(ProviderFailedTransiently::class);
+
+        $this->vendor($down)->review('alpha', Tier::Strong, 'Review the change.');
     }
 
     public function testAnAnswerWithoutUsageSettlesWithNoTokens(): void
@@ -292,10 +350,22 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
-        $vendor = self::getContainer()->get(SymfonyAiVendor::class);
-
+        $container = self::getContainer();
+        $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
+        $container->set(TierResolver::class, new ConfiguredTierResolver([
+            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
+        ], []));
+        $container->set(Ledger::class, new InMemoryLedger());
+        $container->set(TierPlatform::PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
+        $vendor = $container->get(SymfonyAiVendor::class);
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
-        self::assertInstanceOf(TierPlatform::class, new ReflectionProperty($vendor, 'tiers')->getValue($vendor));
+
+        $verdict = $vendor->review('alpha', Tier::Strong, 'Review the change.');
+
+        self::assertSame(['big'], $verdict->follow_ups);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertCount(1, $verdict->findings);
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

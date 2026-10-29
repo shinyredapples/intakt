@@ -21,6 +21,7 @@ rules:
     - Intakt\Gates\PhpStan\NoNestedTryRule
     - Intakt\Gates\PhpStan\ClockOnlyRule
     - Intakt\Gates\PhpStan\NoMockOptOutRule
+    - Intakt\Gates\PhpStan\ImportFormRule
 
 services:
     -
