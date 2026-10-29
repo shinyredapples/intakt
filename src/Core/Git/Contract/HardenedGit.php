@@ -6,7 +6,7 @@ namespace Intakt\Core\Git\Contract;
 
 final readonly class HardenedGit
 {
-    // Command-line settings beat the repository's own config; an empty diff.external switches the external diff driver off.
+    // Because command-line settings beat the repository's own config; an empty diff.external switches the external diff driver off.
     private const array SETTINGS = [
         'core.hooksPath' => '/dev/null',
         'core.fsmonitor' => 'false',
@@ -29,19 +29,18 @@ final readonly class HardenedGit
     }
 
     /**
-     * For pathspec magic the caller writes itself (a glob pattern of a gate); never for a path from the repository.
-     *
      * @param list<string> $arguments
      *
      * @return list<string>
      */
     public function commandWithPathspecMagic(array $arguments): array
     {
+        // Because a gate writes glob pathspecs itself, which literal pathspecs refuse; never use it for a path from the repository.
         return ['git', '--no-replace-objects', ...$this->settings(), ...$arguments];
     }
 
     /**
-     * @return array<string, string|false> false removes an inherited variable
+     * @return array<string, string|false>
      */
     public function environment(): array
     {
@@ -55,7 +54,8 @@ final readonly class HardenedGit
     {
         $settings = [];
         foreach (self::SETTINGS as $name => $value) {
-            array_push($settings, '-c', $name.'='.$value);
+            $settings[] = '-c';
+            $settings[] = $name.'='.$value;
         }
 
         return $settings;
@@ -82,7 +82,7 @@ final readonly class HardenedGit
      */
     private function configuration(): array
     {
-        // The same settings as command() for tools such as gitleaks that start git themselves.
+        // Because tools such as gitleaks start git themselves, they get the same settings as command() through the environment.
         $environment = ['GIT_CONFIG_COUNT' => (string) count(self::SETTINGS)];
         $index = 0;
         foreach (self::SETTINGS as $name => $value) {

@@ -114,7 +114,7 @@ final readonly class Workspace
     }
 
     /**
-     * @param list<string>                 $command
+     * @param list<string>                $command
      * @param array<string, string|false> $environment
      */
     public function command(array $command, array $environment = []): ProcessResult

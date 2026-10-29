@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
-use Intakt\Gates\ProcessRunner;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Gates\ProcessRunner;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

@@ -39,8 +39,7 @@ final class ProcessRunner
     public function __construct(
         private readonly string $unshare = 'unshare',
         private readonly HardenedGit $hardened = new HardenedGit(),
-    )
-    {
+    ) {
     }
 
     public function containment(): string
@@ -65,7 +64,7 @@ final class ProcessRunner
     }
 
     /**
-     * @param list<string>                 $command
+     * @param list<string>                $command
      * @param array<string, string|false> $environment
      */
     public function run(array $command, string $directory, array $environment = []): ProcessResult
