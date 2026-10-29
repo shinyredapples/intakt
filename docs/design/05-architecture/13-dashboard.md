@@ -17,3 +17,31 @@ The main view is a board, not a set of lists. Each task in flight is a card, and
 - **Map freshness:** how many memory entries are stale.
 
 Updates are pushed to the page from the orchestrator's events; the page never polls. The same events feed the JSON API for the CLI and the notifier plugins (see Plugins).
+
+## Notices and "Waiting on you"
+
+One rule decides what reaches the owner: an item is a "Waiting on you" card if and only if only the owner can act on it, and every such card is notified. Plain-words version: [alerts and notifications](../../guide/a-tour-of-the-dashboard.md#alerts-and-notifications).
+
+```mermaid
+flowchart LR
+  ev[Orchestrator event] --> k{Kind}
+  k -- info --> st[Board and status only]
+  k -- maintainer --> ma[Maintainer agent item]
+  ma -- resolved --> st
+  ma -- escalated --> ow
+  k -- owner --> ow[Notice record + card]
+  ow --> nt[Notifier plugins]
+  nt -- delivered --> rec[Delivery result on the record]
+  nt -- failed --> fb[Fallback notifier, card marked undelivered]
+```
+
+- **Every notice has a kind**, set where the event is raised, never inferred from its text:
+  - `owner`: only the owner can give or fix it (an approval, a question only the owner can answer, a credential or login, the host, a halt only the owner may clear). It becomes a card and is notified.
+  - `maintainer`: the maintainer agent can act. It becomes an item for that agent, never a card; the agent's escalation is a new `owner` notice with the decision and its options.
+  - `info`: nobody needs to act (progress, recoveries, counts, the protected changes the orchestrator approved by class). Shown on the board and in the status, never notified.
+- **A card and its notice are one record.** The record holds the project, the item (task, pull request, account, host step), the kind, the required action (for an approval, the exact head) and a key derived from them. A record is notified when it is created and again only when its required action changes, so the same item never notifies twice for the same action.
+- **The card follows the reason, not a dismissal.** Each record names the condition that keeps it open (the approval still missing, the login still failing); the orchestrator closes it when the condition is gone, and an owner action that resolves it closes the card at once.
+- **Delivery is recorded.** Each attempt stores its notifier and result. A failed delivery tries the fallback notifier and marks the card "not delivered", so a silent phone is visible on the board; delivery is retried with back-off until one notifier confirms.
+- **Nothing is lost on a crash.** The record is written before the notice is sent; a restart sends records without a confirmed delivery and never sends a confirmed one again.
+- **Not yet the owner's:** a protected change still in review, being fixed, or waiting for CI creates no record. Its record is created when the change has passed review and CI and only the owner's approval remains.
+- **Notices carry no secrets and no approval power** (see Plugins): their text is redacted like other outbound text, and approving stays a forge action by the owner's account.
