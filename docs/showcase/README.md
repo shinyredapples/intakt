@@ -4,13 +4,13 @@
 
 This repository is built by an AI loop. A builder takes an issue, writes the change and opens a pull request. A panel of reviewers from two AI companies, Claude and GPT, reviews every change. Probes give the reviewers evidence: small tests they write and run against the change. Plain code merges a change once CI is green and the reviewers approve. The owner steps in only where a person must: a change to the checks that judge the code, or a decision the loop cannot make.
 
-One fact matters here. Today the loop doing this is not Intakt. It is Intakt's predecessor, a Python loop Intakt was distilled from. This repository is built by the loop Intakt grew out of. Intakt takes over its own building as its parts land (see [the plan](../plan.md)).
+One fact matters here: this repository is built by the loop Intakt grew out of, a Python loop Intakt was distilled from, not by Intakt itself. Intakt takes over its own building as its parts land (see [the plan](../plan.md)).
 
 Everything below is public on this repository: the pull requests, the review comments, the labels and the owner's approvals.
 
 ## The figures
 
-As of 2026-10-29 12:50 UTC (loop merges from 2026-10-27 to 2026-10-29). To refresh them, run:
+As of 2026-10-29 14:35 UTC (loop merges from 2026-10-27 to 2026-10-29). To refresh them, run:
 
 ```
 docs/showcase/figures.sh
@@ -20,18 +20,18 @@ It needs `gh` with read access and `jq`, and only reads from the GitHub API.
 
 | Figure | Value |
 | --- | --- |
-| Pull requests merged by the loop (`intakt-runner[bot]` as merger) | 55 |
-| ... of those also opened by the loop | 54 |
-| Issues closed by those merges | 54 |
-| Review comments (Claude / GPT) | 379 (189 / 190) |
+| Pull requests merged by the loop (`intakt-runner[bot]` as merger) | 60 |
+| ... of those also opened by the loop | 59 |
+| Issues closed by those merges | 59 |
+| Review comments (Claude / GPT) | 401 (200 / 201) |
 | Review rounds per merged pull request (median / max) | 2 / 14 |
-| Findings (P1 / P2 / P3) | 747 (98 / 182 / 467) |
-| Review comments that report a probe run (a "Probes:" line saying it ran) | 290 of 379 |
-| Findings in a review that reports a probe run | 604 of 747 (81%) |
-| Findings in a review that carried probe evidence (a fenced `probe` block) | 2 of 747 (0%) |
+| Findings (P1 / P2 / P3) | 784 (102 / 195 / 487) |
+| Review comments that report a probe run (a "Probes:" line saying it ran) | 311 of 401 |
+| Findings in a review that reports a probe run | 640 of 784 (82%) |
+| Findings in a review that carried probe evidence (a fenced `probe` block) | 22 of 784 (3%) |
 | Time from opening to merge (median) | 1.4 hours |
-| Merges flagged for the owner's approval (`owner-approval` label: protected paths) | 24 of 55 |
-| ... of those with an owner approval on record (a review or an `approve <sha>` comment) | 22 |
+| Merges flagged for the owner's approval (`owner-approval` label: protected paths) | 25 of 60 |
+| ... of those with an owner approval on record (a review or an `approve <sha>` comment) | 23 |
 | Merges the owner approved without the flag | 0 |
 
 How to read them:
@@ -39,7 +39,7 @@ How to read them:
 - The loop acts as the GitHub App `intakt-runner`. It opens its pull requests and merges them itself. One more merge was a pull request the owner opened by hand. The owner merged 16 other pull requests by hand; they are not counted.
 - A review round is one review by each of the two reviewers on one head of the branch. Each round counts its findings again, so a finding that stays open for three rounds counts three times.
 - Findings are graded P1 (blocks the merge), P2 (should be fixed) and P3 (a small follow-up).
-- Reviewers report each probe on a line starting with `Probes:`. Since 2026-10-29 a reviewer can also attach the probe itself, as a fenced `probe` block, so the finding carries a test anyone can rerun. That is why the last probe figure is still small.
+- Reviewers report each probe on a line starting with `Probes:`. Since 2026-10-29 a reviewer can also attach the probe itself, as a fenced `probe` block, so the finding carries a test anyone can rerun. That is why the fenced-probe figure is still small.
 - The `owner-approval` label marks a change that touched protected paths (the checks, CI, the agent rules). For two of those merges no owner approval is on record:
   - #162 was approved by the loop itself, by class: both reviewers classified its protected change (`AGENTS.md`) as tightening the rules.
   - #74's final diff touches no protected path; an earlier head did, and the label stayed on.
@@ -67,7 +67,7 @@ Pull request #73 adds a PHPStan rule, so it changes the checks that judge every 
 
 > It touches protected paths (config/gates/phpstan.neon, config/gates/src/PhpStan/StatefulServiceResetRule.php, config/gates/src/ProcessRunner.php), so it merges only once the owner approves exactly this head
 
-The owner approved. Later rounds changed the branch, and "a new push needs a new approval", so the loop asked again for the final head. The owner approved it at 15:29 UTC and the loop merged it at 15:33. Those two approvals were the owner's whole part in the change. Of the 55 loop merges, 31 needed no owner approval at all.
+The owner approved. Later rounds changed the branch, and "a new push needs a new approval", so the loop asked again for the final head. The owner approved it at 15:29 UTC and the loop merged it at 15:33. Those two approvals were the owner's whole part in the change. Of the 60 loop merges, 35 needed no owner approval at all.
 
 ## What this shows
 

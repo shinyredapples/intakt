@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Prints the showcase figures as a markdown table.
-# Read-only: it only lists pull requests and comments through the GitHub API.
-# Needs gh (logged in with read access) and jq.
-#
-#   docs/showcase/figures.sh [owner/repo]
+# Usage: docs/showcase/figures.sh [owner/repo]
+# Read-only: lists pull requests and comments through the GitHub API (needs gh and jq).
 set -euo pipefail
 
 repo="${1:-shinyredapples/intakt}"
@@ -41,12 +38,12 @@ jq -rn --slurpfile prs "$tmp/prs.json" --slurpfile comments "$tmp/comments.json"
   | ($reviews | map(select(.probe) | .f[])) as $probed
   | ($reviews | map(select(.ran) | .f[])) as $ran
   | ($loop | map(.number as $n | $reviews | map(select(.pr == $n))
-      | [map(select(.who == "Claude")) | length, map(select(.who == "GPT")) | length] | max)) as $rounds
+      | [(map(select(.who == "Claude")) | length), (map(select(.who == "GPT")) | length)] | max)) as $rounds
   | ($loop | map(((.mergedAt | fromdateiso8601) - (.createdAt | fromdateiso8601)) / 3600)) as $hours
   | ($own | map(select(.user.login == $owner and (.body | test("^approve [0-9a-f]{7,40}\\b"))) | .pr)) as $approved
   | ($loop | map(select(.number as $n | (.reviews | map(select(.author.login == $owner and .state == "APPROVED")) | length > 0)
       or ($approved | index($n))))) as $owner_ok
-  | ($loop | map(select((.labels | map(.name) | index("owner-approval")) or (.number as $n | $approved | index($n))))) as $needed
+  | ($loop | map(select(.labels | map(.name) | index("owner-approval")))) as $needed
   | "| Figure | Value |",
     "| --- | --- |",
     "| Pull requests merged by the loop (`intakt-runner[bot]` as merger) | \($loop | length) |",
