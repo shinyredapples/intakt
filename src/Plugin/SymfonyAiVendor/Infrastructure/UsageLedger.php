@@ -46,10 +46,10 @@ final readonly class UsageLedger
     /**
      * @throws UsageNotRecorded
      */
-    public function settle(UsageReservation $reservation, DeferredResult $result): void
+    public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
     {
         try {
-            $usages = $this->usagesOf($result);
+            $usages = array_merge(...array_map($this->usagesOf(...), $rounds));
         } catch (Throwable $unreadable) {
             $this->leaveUnreadableUnsettled($reservation, $unreadable);
 

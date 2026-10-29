@@ -15,7 +15,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Anthropic prompt caching | later rounds of a review read cached tokens | planned | T7 (#12) |
 | `FailoverPlatform` | provider failover inside Intakt's own wrapper | planned | T14 (#19) |
 | Streaming | reviewer text shown live | planned | T21 (#27) |
-| `MockPlatformFactory` with `ScriptedResponse` | offline tests of every model call | in progress | T4 (#9), T5 (#10, part #98), `tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php`; T7 (#12) |
+| `MockPlatformFactory` with `ScriptedResponse` | offline tests of every model call | in progress | T4 (#9), T5 (#10, part #98), `tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php`; T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `RecordingProvider` with `HttpCassette` | real responses recorded once, replayed offline with redaction | planned | T25 (#32), T28 (#35) |
 | Claude Code and Codex platform bridges | a reviewer on a subscription login, `IncompleteStreamException` exercised | planned | T33 (#61) |
 
@@ -23,8 +23,8 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | in progress | T7 (#12), T12 (#17), `src/Core/Review/Infrastructure/Repository/` |
-| `FaultTolerantToolbox` | a failing tool answers the model with an error instead of ending the run | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php` |
+| Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | in progress | T7 (#12), T12 (#17), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `src/Core/Review/Infrastructure/Repository/` |
+| `FaultTolerantToolbox` | a failing tool answers the model with an error instead of ending the run | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php`, `src/Core/Review/Infrastructure/ReviewerAgent.php` |
 | `ToolCallRequested` event | a listener denies tool arguments that escape the checkout | in progress | T7 (#12), `src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php` |
 | Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each round | planned | T7 (#12), T29 (#29) |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
@@ -46,7 +46,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 |---|---|---|---|
 | Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51), `config/packages/ai.php` |
 | `model_catalog` and a model router | capability tiers mapped to provider models per project | in progress | T4 (#52), `config/packages/ai.php`, `src/Core/Ai/Infrastructure/TierPlatform.php` |
-| `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/Repository/ReviewerAgentTest.php`; T13 (#18) |
+| `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/Repository/ReviewerAgentTest.php`, `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php`; T13 (#18) |
 
 ## MCP Bundle and MCP SDK
 
