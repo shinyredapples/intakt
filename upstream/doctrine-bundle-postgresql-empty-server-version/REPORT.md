@@ -18,4 +18,4 @@ The connection is built, and the server version is detected on the first connect
 
 ## Effect in Intakt
 
-`config/packages/doctrine.yaml` sets `server_version` through `src/Core/Ledger/Infrastructure/PostgreSqlServerVersion.php`: a PostgreSQL URL gets version 12 (DBAL 4 has no newer PostgreSQL platform), any other URL none, so MySQL, MariaDB and SQLite keep detecting the server.
+`config/packages/doctrine.yaml` sets `server_version` through `src/Core/Platform/Infrastructure/PostgreSqlServerVersion.php`: a PostgreSQL URL gets version 12 (DBAL 4 has no newer PostgreSQL platform), any other URL none, so MySQL, MariaDB and SQLite keep detecting the server.
