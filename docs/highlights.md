@@ -46,7 +46,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 |---|---|---|---|
 | Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51), `config/packages/ai.php` |
 | `model_catalog` and a model router | capability tiers mapped to provider models per project | in progress | T4 (#52), `config/packages/ai.php`, `src/Core/Ai/Infrastructure/TierPlatform.php` |
-| `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | planned | T7 (#12), T13 (#18) |
+| `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/Repository/ReviewerAgentTest.php`; T13 (#18) |
 
 ## MCP Bundle and MCP SDK
 

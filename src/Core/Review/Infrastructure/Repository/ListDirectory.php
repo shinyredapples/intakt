@@ -34,6 +34,7 @@ final readonly class ListDirectory
         $entries = array_values(array_diff($names, ['.', '..', '.git']));
         sort($entries);
 
-        return implode("\n", array_map(static fn (string $entry): string => is_dir($real.'/'.$entry) ? $entry.'/' : $entry, $entries));
+        // Scrubbed because the answer reaches the provider as JSON, which carries only valid UTF-8, and a committed name need not be.
+        return implode("\n", array_map(static fn (string $entry): string => mb_scrub($entry, 'UTF-8').(is_dir($real.'/'.$entry) ? '/' : ''), $entries));
     }
 }

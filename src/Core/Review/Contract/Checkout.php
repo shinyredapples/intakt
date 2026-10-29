@@ -38,8 +38,8 @@ final readonly class Checkout
             throw PathNotInCheckout::for($path);
         }
 
-        // A symlink in the code under review can point anywhere, so the real location decides.
-        if ($real !== $this->root && !str_starts_with($real, $this->root.'/')) {
+        // A symlink in the code under review can point anywhere, including the git directory, so the real location decides.
+        if (!$this->isInside($real) || $this->isGitDirectory($real)) {
             throw PathOutsideCheckout::for($path);
         }
 
@@ -63,5 +63,15 @@ final readonly class Checkout
         if (in_array('..', $segments, true) || in_array(self::GIT_DIRECTORY, $segments, true)) {
             throw PathOutsideCheckout::for($path);
         }
+    }
+
+    private function isInside(string $real): bool
+    {
+        return $real === $this->root || str_starts_with($real, $this->root.'/');
+    }
+
+    private function isGitDirectory(string $real): bool
+    {
+        return in_array(self::GIT_DIRECTORY, explode('/', $this->relative($real)), true);
     }
 }

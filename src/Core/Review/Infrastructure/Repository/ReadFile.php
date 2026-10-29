@@ -34,6 +34,15 @@ final readonly class ReadFile
             throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
         }
 
-        return strlen($content) > self::MAX_BYTES ? substr($content, 0, self::MAX_BYTES)."\n[truncated]" : $content;
+        $truncated = strlen($content) > self::MAX_BYTES;
+        // Cut on a character boundary, since half a character is not valid UTF-8.
+        $text = $truncated ? mb_strcut($content, 0, self::MAX_BYTES, 'UTF-8') : $content;
+
+        // Because the answer reaches the provider as JSON, which carries only valid UTF-8, and a binary file holds nothing to review.
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            throw new RuntimeException(sprintf('"%s" is not a UTF-8 text file.', $path));
+        }
+
+        return $truncated ? $text."\n[truncated]" : $text;
     }
 }

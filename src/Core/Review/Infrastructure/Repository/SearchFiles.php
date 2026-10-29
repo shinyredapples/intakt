@@ -49,12 +49,12 @@ final readonly class SearchFiles
     }
 
     /**
-     * @return Generator<string>
+     * @return Generator<SplFileInfo>
      */
     private function files(string $real): Generator
     {
         if (is_file($real)) {
-            yield $real;
+            yield new SplFileInfo($real);
 
             return;
         }
@@ -67,8 +67,8 @@ final readonly class SearchFiles
 
         /** @var SplFileInfo $entry */
         foreach ($entries as $entry) {
-            if ($entry->isFile() && $entry->getSize() <= self::MAX_FILE_BYTES) {
-                yield $entry->getPathname();
+            if ($entry->isFile()) {
+                yield $entry;
             }
         }
     }
@@ -76,20 +76,21 @@ final readonly class SearchFiles
     /**
      * @return list<string>
      */
-    private function matchesIn(string $file, string $text): array
+    private function matchesIn(SplFileInfo $file, string $text): array
     {
-        $lines = file($file, FILE_IGNORE_NEW_LINES);
+        $content = $file->getSize() <= self::MAX_FILE_BYTES ? file_get_contents($file->getPathname()) : false;
 
-        if (false === $lines) {
+        // Because the answer reaches the provider as JSON, which carries only valid UTF-8, a binary file is not searched.
+        if (false === $content || !mb_check_encoding($content, 'UTF-8')) {
             return [];
         }
 
-        $relative = $this->checkout->relative($file);
+        $relative = mb_scrub($this->checkout->relative($file->getPathname()), 'UTF-8');
         $matches = [];
 
-        foreach ($lines as $number => $line) {
+        foreach (explode("\n", $content) as $number => $line) {
             if (str_contains($line, $text)) {
-                $matches[] = sprintf('%s:%d:%s', $relative, $number + 1, $line);
+                $matches[] = sprintf('%s:%d:%s', $relative, $number + 1, rtrim($line, "\r"));
             }
         }
 

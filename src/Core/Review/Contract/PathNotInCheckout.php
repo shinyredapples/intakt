@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-final class PathNotInCheckout extends CheckoutPathRefused
+use DomainException;
+
+final class PathNotInCheckout extends DomainException
 {
     public static function for(string $path): self
     {

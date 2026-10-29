@@ -19,13 +19,23 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(PathNotInCheckout::class)]
 final class CheckoutTest extends TestCase
 {
+    private ReviewCheckout $fixture;
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+    }
+
     public function testAFileInsideTheCheckoutResolvesToItsRealPath(): void
     {
-        $fixture = new ReviewCheckout();
+        $real = $this->fixture->checkout->resolve('src/Cart.php');
 
-        $real = $fixture->checkout->resolve('src/Cart.php');
-
-        self::assertSame('src/Cart.php', $fixture->checkout->relative($real));
+        self::assertSame('src/Cart.php', $this->fixture->checkout->relative($real));
     }
 
     /**
@@ -45,18 +55,35 @@ final class CheckoutTest extends TestCase
     #[DataProvider('escapingPaths')]
     public function testAPathThatEscapesTheCheckoutIsRefused(string $path): void
     {
-        $fixture = new ReviewCheckout();
         $this->expectException(PathOutsideCheckout::class);
 
-        $fixture->checkout->resolve($path);
+        $this->fixture->checkout->resolve($path);
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function linksIntoTheGitDirectory(): iterable
+    {
+        yield 'directory link' => ['alias', '.git', 'alias/config'];
+        yield 'file link' => ['config-link', '.git/config', 'config-link'];
+        yield 'link to the directory itself' => ['alias', '.git', 'alias'];
+    }
+
+    #[DataProvider('linksIntoTheGitDirectory')]
+    public function testALinkIntoTheGitDirectoryIsRefused(string $link, string $target, string $path): void
+    {
+        $this->fixture->link($link, $target);
+        $this->expectException(PathOutsideCheckout::class);
+
+        $this->fixture->checkout->resolve($path);
     }
 
     public function testAMissingPathIsNotAnEscape(): void
     {
-        $fixture = new ReviewCheckout();
         $this->expectException(PathNotInCheckout::class);
 
-        $fixture->checkout->resolve('src/Missing.php');
+        $this->fixture->checkout->resolve('src/Missing.php');
     }
 
     public function testACheckoutThatIsNotADirectoryIsRefused(): void
