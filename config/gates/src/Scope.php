@@ -20,6 +20,8 @@ final readonly class Scope
 
     private const array EXTENSIONLESS_PHP_FILES = ['bin/check', 'bin/instance', 'bin/probe'];
 
+    private const int PATHS_PER_CALL = 500;
+
     public function __construct(
         private string $root,
         private ProcessRunner $runner,
@@ -47,10 +49,10 @@ final readonly class Scope
      */
     public function changedPaths(string $mergeBase): array
     {
-        $changed = $this->gitLines(['diff', '--name-only', '-z', $mergeBase]);
+        $staged = $this->gitLines(['diff-index', '--cached', '--name-only', '-z', $mergeBase]);
         $untracked = $this->gitLines(['ls-files', '-z', '--others', '--exclude-standard']);
 
-        return array_values(array_unique(array_merge($changed, $untracked)));
+        return array_values(array_unique([...$staged, ...$this->unstagedPaths(), ...$untracked]));
     }
 
     public function includes(string $path): bool
@@ -112,6 +114,65 @@ final readonly class Scope
         }
 
         return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/')));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function unstagedPaths(): array
+    {
+        // Git would compare the working tree through the clean filters an info/attributes written after its check names, so the files are hashed as they are.
+        $entries = $this->indexEntries();
+        $files = array_values(array_filter($entries, fn (array $entry): bool => is_file($this->root.'/'.$entry[0]) && !is_link($this->root.'/'.$entry[0])));
+        $blobs = $this->unfilteredBlobsOf(array_column($files, 0));
+        $unchanged = [];
+
+        foreach ($files as $index => [$path, $blob]) {
+            if (($blobs[$index] ?? '') === $blob) {
+                $unchanged[] = $path;
+            }
+        }
+
+        return array_values(array_diff(array_column($entries, 0), $unchanged));
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function indexEntries(): array
+    {
+        $entries = [];
+
+        foreach ($this->gitLines(['ls-files', '-z', '--stage']) as $entry) {
+            // A conflicted path, a link or a submodule never matches, so it always counts as changed.
+            $regular = 1 === preg_match('/^100(?:644|755) ([0-9a-f]+) 0\t(.*)$/s', $entry, $match);
+            $entries[] = $regular ? [$match[2], $match[1]] : [(string) preg_replace('/^[^\t]*\t/', '', $entry), ''];
+        }
+
+        return $entries;
+    }
+
+    /**
+     * @param list<string> $paths
+     *
+     * @return list<string>
+     */
+    private function unfilteredBlobsOf(array $paths): array
+    {
+        $blobs = [];
+
+        // In batches, because the paths are arguments and the system limits their total length.
+        foreach (array_chunk($paths, self::PATHS_PER_CALL) as $batch) {
+            $result = $this->runner->git(['hash-object', '--no-filters', '--', ...$batch], $this->root);
+
+            if (!$result->succeeded()) {
+                throw new ScopeFailure('git hash-object failed: '.$result->firstErrorLine());
+            }
+
+            $blobs = [...$blobs, ...explode("\n", trim($result->output))];
+        }
+
+        return $blobs;
     }
 
     /**

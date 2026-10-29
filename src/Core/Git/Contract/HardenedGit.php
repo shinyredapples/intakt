@@ -28,8 +28,8 @@ final readonly class HardenedGit
     // Because git reads this file on top of every other attributes source and no option, setting or variable switches it off.
     private const string INFO_ATTRIBUTES = 'info/attributes';
 
-    // A path that does not exist, because git reads a missing user config silently but dies on "/dev/null/.gitconfig".
-    private const string NO_HOME = '/nonexistent';
+    // A path that does not exist, because git reads a missing user config or graft file silently but dies on "/dev/null/.gitconfig".
+    private const string NOWHERE = '/nonexistent';
 
     /**
      * @param list<string> $arguments
@@ -62,7 +62,7 @@ final readonly class HardenedGit
     {
         $this->refuseInfoAttributes($directory);
 
-        return $this->variables();
+        return $this->variables($directory);
     }
 
     /**
@@ -87,7 +87,7 @@ final readonly class HardenedGit
         }
 
         // Git names the file, because in a worktree or a submodule it is not under <directory>/.git; where git cannot, the call itself fails the same way.
-        $query = new Process($this->command(['rev-parse', '--git-path', self::INFO_ATTRIBUTES]), $directory, $this->variables());
+        $query = new Process($this->command(['rev-parse', '--git-path', self::INFO_ATTRIBUTES]), $directory, $this->variables($directory));
         $query->run();
 
         if (!$query->isSuccessful()) {
@@ -105,9 +105,9 @@ final readonly class HardenedGit
     /**
      * @return array<string, string|false>
      */
-    private function variables(): array
+    private function variables(string $directory): array
     {
-        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation()];
+        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($directory)];
     }
 
     /**
@@ -146,16 +146,19 @@ final readonly class HardenedGit
     /**
      * @return array<string, string>
      */
-    private function isolation(): array
+    private function isolation(string $directory): array
     {
+        // The work tree is pinned because core.worktree in the repository config would point working-tree reads at another directory, and info/grafts would rewrite parents as a replace object does.
         return [
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_CONFIG_GLOBAL' => '/dev/null',
             'GIT_NO_REPLACE_OBJECTS' => '1',
+            'GIT_GRAFT_FILE' => self::NOWHERE,
+            'GIT_WORK_TREE' => $directory,
             'GIT_ATTR_SOURCE' => self::NO_ATTRIBUTES,
             'GIT_ATTR_NOSYSTEM' => '1',
-            'HOME' => self::NO_HOME,
-            'XDG_CONFIG_HOME' => self::NO_HOME,
+            'HOME' => self::NOWHERE,
+            'XDG_CONFIG_HOME' => self::NOWHERE,
         ];
     }
 }

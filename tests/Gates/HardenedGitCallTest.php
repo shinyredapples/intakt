@@ -80,6 +80,22 @@ final class HardenedGitCallTest extends TestCase
         self::assertStringContainsString('+secret', $this->logWithTheHardenedEnvironment());
     }
 
+    public function testGitStartedByAnotherToolFollowsNoGraftFileThatHidesACommit(): void
+    {
+        $this->sandbox->commitAll('Base');
+        $base = trim($this->sandbox->git('rev-parse', 'HEAD')->output);
+        $this->sandbox->write('note.txt', "secret\n");
+        $this->sandbox->commitAll('Add a note');
+        $this->sandbox->write('note.txt', "public\n");
+        $this->sandbox->commitAll('Replace the note');
+        $this->sandbox->write('.git/info/grafts', trim($this->sandbox->git('rev-parse', 'HEAD')->output).' '.$base."\n");
+
+        self::assertStringNotContainsString('+secret', $this->sandbox->run('git', 'log', '-p')->output, 'the graft must hide the commit without hardening, or this test proves nothing');
+
+        $result = new ProcessRunner()->run(['git', 'log', '-p'], $this->sandbox->root, new HardenedGitCall()->environment($this->sandbox->root));
+        self::assertStringContainsString('+secret', $result->output);
+    }
+
     public function testGitStartedByAnotherToolGetsNoEnvironmentWhenInfoAttributesCouldHideAFileAsBinary(): void
     {
         $this->sandbox->write('note.txt', "secret\n");

@@ -69,6 +69,65 @@ final class ScopeTest extends TestCase
         $sandbox->remove();
     }
 
+    public function testChangedPathsRunNoCleanFilterThatInfoAttributesNameAfterTheirCheck(): void
+    {
+        $sandbox = Sandbox::empty();
+        $marker = $sandbox->root.'/.git/clean-ran';
+        $sandbox->startRepository();
+        $sandbox->write('note.txt', "base\n");
+        $sandbox->commitAll('Add a note');
+        $sandbox->git('config', 'filter.evil.clean', 'touch '.$marker.'; cat');
+        $sandbox->write('note.txt', "changed\n");
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$this->gitThatWritesInfoAttributesAfterEachCheck($sandbox).':'.$path);
+
+        try {
+            $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+        } finally {
+            putenv('PATH='.$path);
+        }
+
+        self::assertFileDoesNotExist($marker);
+        self::assertSame(['note.txt'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsReadTheWorkingTreeEvenWhenTheRepositoryConfigPointsElsewhere(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('src/Changed.php', "<?php\n");
+        $sandbox->commitAll('Add a class');
+        $sandbox->write('.git/elsewhere/src/Changed.php', "<?php\n");
+        $sandbox->git('config', 'core.worktree', $sandbox->root.'/.git/elsewhere');
+        $sandbox->write('src/Changed.php', "<?php\n\necho 'changed';\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Changed.php'], $changed);
+        $sandbox->remove();
+    }
+
+    // A git on the path that lets each info/attributes check pass and then writes the file for the call itself, which forces the order a racing writer needs.
+    private function gitThatWritesInfoAttributesAfterEachCheck(Sandbox $sandbox): string
+    {
+        $git = trim($sandbox->run('sh', '-c', 'command -v git')->output);
+        $attributes = $sandbox->root.'/.git/info/attributes';
+        $sandbox->write('.git/racing/git', implode("\n", [
+            '#!/bin/sh',
+            'case " $* " in *" --git-path info/attributes "*) exec '.$git.' "$@";; esac',
+            'printf "* filter=evil\n" > '.$attributes,
+            $git.' "$@"',
+            'status=$?',
+            'rm -f '.$attributes,
+            'exit $status',
+            '',
+        ]));
+        chmod($sandbox->root.'/.git/racing/git', 0o755);
+
+        return $sandbox->root.'/.git/racing';
+    }
+
     private function scope(): Scope
     {
         return new Scope(sys_get_temp_dir(), new ProcessRunner());

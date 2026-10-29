@@ -88,6 +88,43 @@ final class HardenedGitTest extends TestCase
         self::assertSame('1', $environment['GIT_ATTR_NOSYSTEM']);
     }
 
+    public function testTheEnvironmentPinsTheWorkTreeAndTurnsGraftsOff(): void
+    {
+        $_ENV['GIT_WORK_TREE'] = '/elsewhere';
+
+        $environment = new HardenedGit()->environment($this->repository->path);
+
+        self::assertSame($this->repository->path, $environment['GIT_WORK_TREE']);
+        self::assertSame('/nonexistent', $environment['GIT_GRAFT_FILE']);
+    }
+
+    public function testAGraftFileOfTheRepositoryDoesNotHideACommit(): void
+    {
+        $base = $this->repository->objectAt('HEAD');
+        $this->repository->commitEmpty('Hidden');
+        $head = $this->repository->commitEmpty('Head');
+        file_put_contents($this->repository->path.'/.git/info/grafts', $head.' '.$base."\n");
+        $subjects = ['log', '--format=%s'];
+
+        self::assertSame("Head\nChange README.md\n", $this->runGit(['git', ...$subjects], []), 'the graft must hide the commit without hardening, or this test proves nothing');
+
+        self::assertSame("Head\nHidden\nChange README.md\n", $this->runHardened($subjects));
+    }
+
+    public function testAWorkTreeInTheRepositoryConfigDoesNotRedirectWorkingTreeReads(): void
+    {
+        $elsewhere = $this->repository->path.'/.git/elsewhere';
+        mkdir($elsewhere);
+        copy($this->repository->path.'/README.md', $elsewhere.'/README.md');
+        $this->repository->configure('core.worktree', $elsewhere);
+        file_put_contents($this->repository->path.'/README.md', "changed\n");
+        $changed = ['diff', '--name-only'];
+
+        self::assertSame('', $this->runGit(['git', ...$changed], []), 'the setting must hide the change without hardening, or this test proves nothing');
+
+        self::assertSame("README.md\n", $this->runHardened($changed));
+    }
+
     public function testAHookOfTheRepositoryDoesNotRun(): void
     {
         $marker = $this->repository->path.'/hook-ran';

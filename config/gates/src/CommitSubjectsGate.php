@@ -81,7 +81,7 @@ final readonly class CommitSubjectsGate implements Gate
     {
         $baseTip = $workspace->baseTip();
 
-        return null !== $baseTip && $workspace->command(['git', 'merge-base', '--is-ancestor', $commit, $baseTip])->succeeded();
+        return null !== $baseTip && $workspace->git(['merge-base', '--is-ancestor', $commit, $baseTip])->succeeded();
     }
 
     private function conforms(string $subject): bool
