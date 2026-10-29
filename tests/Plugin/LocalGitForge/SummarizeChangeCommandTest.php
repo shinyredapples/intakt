@@ -19,6 +19,7 @@ use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeInput;
+use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
