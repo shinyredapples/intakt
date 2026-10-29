@@ -83,7 +83,12 @@ final class PanelConfigurationTest extends TestCase
 
     public function testAProjectWithoutRulesLoadsWithAnEmptyRuleList(): void
     {
-        self::assertSame([], $this->panel('all', [$this->reviewer()])['rules']);
+        $processed = $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()]]]]);
+
+        /** @var array{rules: list<mixed>} $alpha */
+        $alpha = $processed['projects']['alpha'];
+
+        self::assertSame([], $alpha['rules']);
     }
 
     public function testARuleWithTriggersAndReviewersLoads(): void
@@ -92,8 +97,11 @@ final class PanelConfigurationTest extends TestCase
 
         $processed = $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()], 'rules' => [$rule]]]]);
 
-        self::assertSame(200, $processed['projects']['alpha']['rules'][0]['min_lines']);
-        self::assertSame(['src/**'], $processed['projects']['alpha']['rules'][0]['paths']);
+        /** @var array{rules: list<array{min_lines: int, paths: list<string>}>} $alpha */
+        $alpha = $processed['projects']['alpha'];
+
+        self::assertSame(200, $alpha['rules'][0]['min_lines']);
+        self::assertSame(['src/**'], $alpha['rules'][0]['paths']);
     }
 
     public function testARuleWithoutATriggerIsRefused(): void

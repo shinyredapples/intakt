@@ -88,15 +88,24 @@ final class ChoosePanelCommandTest extends TestCase
 
     private function tester(): CommandTester
     {
-        $reviewer = static fn (string $role): array => ['role' => $role, 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Look.', 'budget' => 3];
         $panels = new ConfiguredPanels(['alpha' => [
             'quorum' => 'all',
-            'reviewers' => [$reviewer('correctness')],
-            'rules' => [['paths' => ['src/**'], 'reviewers' => [$reviewer('security')]]],
+            'reviewers' => [$this->reviewer('correctness')],
+            'rules' => [['paths' => ['src/**'], 'reviewers' => [$this->reviewer('security')]]],
         ]]);
         $application = new Application();
         $application->addCommand(new ChoosePanelCommand($panels));
 
         return new CommandTester($application->find('intakt:review:panel'));
+    }
+
+    /**
+     * @param non-empty-string $role
+     *
+     * @return array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}
+     */
+    private function reviewer(string $role): array
+    {
+        return ['role' => $role, 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Look.', 'budget' => 3];
     }
 }

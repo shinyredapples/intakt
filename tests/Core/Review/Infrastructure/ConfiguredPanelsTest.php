@@ -118,16 +118,24 @@ final class ConfiguredPanelsTest extends TestCase
 
     private function ruled(): ConfiguredPanels
     {
-        $reviewer = static fn (string $role): array => ['role' => $role, 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Look.', 'budget' => 3];
-
         return new ConfiguredPanels(['alpha' => [
             'quorum' => 'all',
-            'reviewers' => [$reviewer('correctness')],
+            'reviewers' => [$this->reviewer('correctness')],
             'rules' => [
-                ['min_lines' => 100, 'reviewers' => [$reviewer('big')]],
-                ['paths' => ['config/security/**', 'docs/*.md'], 'reviewers' => [$reviewer('security')]],
+                ['min_lines' => 100, 'reviewers' => [$this->reviewer('big')]],
+                ['paths' => ['config/security/**', 'docs/*.md'], 'reviewers' => [$this->reviewer('security')]],
             ],
         ]]);
+    }
+
+    /**
+     * @param non-empty-string $role
+     *
+     * @return array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}
+     */
+    private function reviewer(string $role): array
+    {
+        return ['role' => $role, 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Look.', 'budget' => 3];
     }
 
     /**

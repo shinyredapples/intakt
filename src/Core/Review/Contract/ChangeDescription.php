@@ -9,8 +9,8 @@ final readonly class ChangeDescription
     public const string FULL_REVIEW_LABEL = 'review:full';
 
     /**
-     * @param non-negative-int $lines  added and removed lines together
-     * @param list<string>     $paths  repository-relative paths of the changed files
+     * @param non-negative-int $lines
+     * @param list<string>     $paths
      * @param list<string>     $labels
      */
     public function __construct(

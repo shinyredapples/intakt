@@ -109,7 +109,7 @@ final readonly class PanelConfiguration implements ConfigurationInterface
     private function refuseUnreachableQuorum(string $project, array $panel): void
     {
         try {
-            // The full review adds every rule, the largest panel a change can get.
+            // Built with every rule added because that is the largest panel a change can get, and the quorum must hold for it too.
             new ConfiguredPanels([$project => $panel])->panelForChange($project, new ChangeDescription(0, [], [ChangeDescription::FULL_REVIEW_LABEL]));
         } catch (PanelConfigurationFailure $failure) {
             throw new InvalidArgumentException(sprintf('The panel of project "%s" is unusable: %s', $project, $failure->getMessage()), 0, $failure);
