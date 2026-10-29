@@ -74,7 +74,7 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
 
     private function connectionFor(string $url): Connection
     {
-        $previous = ['_SERVER' => $_SERVER, '_ENV' => $_ENV];
+        $previous = [$_SERVER, $_ENV];
         $_SERVER['DATABASE_URL'] = $_ENV['DATABASE_URL'] = $url;
 
         try {
@@ -82,7 +82,7 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
             self::assertInstanceOf(ManagerRegistry::class, $registry);
             $connection = $registry->getConnection();
         } finally {
-            $this->restoreDatabaseUrl($previous);
+            $this->restoreDatabaseUrl(...$previous);
         }
 
         self::assertInstanceOf(Connection::class, $connection);
@@ -91,18 +91,27 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
     }
 
     /**
-     * @param array{_SERVER: array<string, mixed>, _ENV: array<string, mixed>} $previous
+     * @param array<mixed> $server
+     * @param array<mixed> $env
      */
-    private function restoreDatabaseUrl(array $previous): void
+    private function restoreDatabaseUrl(array $server, array $env): void
     {
-        foreach (['_SERVER', '_ENV'] as $name) {
-            if (array_key_exists('DATABASE_URL', $previous[$name])) {
-                $GLOBALS[$name]['DATABASE_URL'] = $previous[$name]['DATABASE_URL'];
+        $this->restore($_SERVER, $server);
+        $this->restore($_ENV, $env);
+    }
 
-                continue;
-            }
+    /**
+     * @param array<mixed> $target
+     * @param array<mixed> $previous
+     */
+    private function restore(array &$target, array $previous): void
+    {
+        if (array_key_exists('DATABASE_URL', $previous)) {
+            $target['DATABASE_URL'] = $previous['DATABASE_URL'];
 
-            unset($GLOBALS[$name]['DATABASE_URL']);
+            return;
         }
+
+        unset($target['DATABASE_URL']);
     }
 }
