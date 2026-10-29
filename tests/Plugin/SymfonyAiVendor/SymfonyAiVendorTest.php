@@ -122,8 +122,8 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, 'Review the change.');
 
         [$started, $settled] = $ledger->payloads();
-        self::assertCount(2, $ledger->events);
-        self::assertSame(LedgerEventKind::UsageRecorded, $ledger->events[0]->kind);
+        self::assertSame(2, $ledger->count());
+        self::assertSame(LedgerEventKind::UsageRecorded, $ledger->kinds()[0]);
         self::assertSame(['started', 'settled'], [$started['phase'], $settled['phase']]);
         self::assertSame($started['call'], $settled['call']);
         self::assertSame(['alpha', 'strong'], [$started['project'], $started['tier']]);
@@ -145,7 +145,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         }
 
         [$started, $unsettled] = $ledger->payloads();
-        self::assertCount(2, $ledger->events);
+        self::assertSame(2, $ledger->count());
         self::assertSame(['started', 'unsettled'], [$started['phase'], $unsettled['phase']]);
         self::assertSame($started['call'], $unsettled['call']);
         self::assertSame(RuntimeException::class, $unsettled['failure']);
@@ -206,7 +206,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         [$started, $unsettled] = $ledger->payloads();
-        self::assertCount(2, $ledger->events);
+        self::assertSame(2, $ledger->count());
         self::assertSame(['started', 'unsettled', JsonException::class], [$started['phase'], $unsettled['phase'], $unsettled['failure']]);
         /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
         $logs = $logger->cleanLogs();
