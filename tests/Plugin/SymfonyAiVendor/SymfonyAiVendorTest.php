@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
@@ -28,15 +29,18 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
+use JsonException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -182,6 +186,31 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[0]['usages'];
         self::assertSame(9, $usages[0]['prompt']);
+    }
+
+    public function testAnAnswerWhoseUsageCannotBeReadKeepsItsVerdictAndIsLeftUnsettled(): void
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willThrowException(new JsonException('Syntax error'));
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willThrowException(new UnexpectedResultTypeException(ObjectResult::class, TextResult::class));
+        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
+        $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
+        $ledger = new InMemoryLedger();
+        $logger = new BufferingLogger();
+        $vendor = new SymfonyAiVendor($tiers, new VerdictParser(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+
+        $verdict = $vendor->review('alpha', Tier::Strong, 'Review the change.');
+
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        [$started, $unsettled] = $ledger->payloads();
+        self::assertCount(2, $ledger->events);
+        self::assertSame(['started', 'unsettled', JsonException::class], [$started['phase'], $unsettled['phase'], $unsettled['failure']]);
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame('warning', $logs[0][0]);
+        self::assertInstanceOf(JsonException::class, $logs[0][2]['exception']);
     }
 
     public function testAnAggregatedUsageSettlesAsOneEntryPerPart(): void

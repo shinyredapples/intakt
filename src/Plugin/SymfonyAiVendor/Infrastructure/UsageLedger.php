@@ -48,7 +48,15 @@ final readonly class UsageLedger
      */
     public function settle(UsageReservation $reservation, DeferredResult $result): void
     {
-        $this->record(['call' => $reservation->call, 'phase' => 'settled', 'usages' => $this->usagesOf($result)]);
+        try {
+            $usages = $this->usagesOf($result);
+        } catch (Throwable $unreadable) {
+            $this->leaveUnreadableUnsettled($reservation, $unreadable);
+
+            return;
+        }
+
+        $this->record(['call' => $reservation->call, 'phase' => 'settled', 'usages' => $usages]);
     }
 
     /**
@@ -57,6 +65,16 @@ final readonly class UsageLedger
     public function leaveUnsettled(UsageReservation $reservation, Throwable $failure): void
     {
         $this->record(['call' => $reservation->call, 'phase' => 'unsettled', 'failure' => $failure::class], $failure);
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     */
+    private function leaveUnreadableUnsettled(UsageReservation $reservation, Throwable $unreadable): void
+    {
+        // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
+        $this->logger->warning('Token usage of an answered call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
+        $this->leaveUnsettled($reservation, $unreadable);
     }
 
     /**
