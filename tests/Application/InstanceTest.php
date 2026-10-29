@@ -283,6 +283,41 @@ final class InstanceTest extends TestCase
         self::assertSame(0, $run['exit']);
     }
 
+    public function testTheMessageNamesAnUnknownReasonWhenMkdirFailsWithoutAWarning(): void
+    {
+        $prepend = $this->scratch.'/silent_mkdir_failure.php';
+        file_put_contents($prepend, <<<'PHP'
+            <?php
+            final class SilentMkdirFailure
+            {
+                public $context;
+
+                public function url_stat(string $path, int $flags): array|false
+                {
+                    stream_wrapper_restore('file');
+                    $result = @stat($path);
+                    stream_wrapper_unregister('file');
+                    stream_wrapper_register('file', self::class);
+
+                    return $result;
+                }
+
+                public function mkdir(string $path, int $mode, int $options): bool
+                {
+                    return false;
+                }
+            }
+            stream_wrapper_unregister('file');
+            stream_wrapper_register('file', SilentMkdirFailure::class);
+            PHP);
+
+        $run = $this->runInstanceWithPhpOptions(['-d', 'auto_prepend_file='.$prepend]);
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertSame('cannot create the scratch directory: unknown reason', $status['reason']);
+    }
+
     /**
      * @param list<string> $phpOptions
      *

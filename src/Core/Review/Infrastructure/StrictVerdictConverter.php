@@ -12,6 +12,7 @@ use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Serializer\Encoder\JsonDecode;
@@ -44,6 +45,11 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     public function convert(RawResultInterface $result, array $options = []): ResultInterface
     {
         $text = $this->inner->convert($result, $options);
+        // A tool call is a step towards the verdict, so the agent loop gets it as it is; the final answer is the one that must be a verdict.
+        if ($text instanceof ToolCallResult) {
+            return $text;
+        }
+
         if (!$text instanceof TextResult) {
             throw new UnexpectedResultTypeException(TextResult::class, $text::class);
         }
