@@ -141,7 +141,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testAReviewWhoseConversationAnotherReviewClaimedAtTheSameTimeIsRefusedBeforeTheModelIsAsked(): void
     {
-        $store = $this->createStub(MessageStoreInterface::class);
+        $store = self::createStub(MessageStoreInterface::class);
         $store->method('save')->willThrowException(new ConflictException('Another review inserted the conversation first.'));
         $this->conversations = $store;
 

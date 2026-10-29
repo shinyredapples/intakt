@@ -50,7 +50,7 @@ final readonly class ReviewerAgent implements Reviewer
         return $tools->seen() ? Verdict::invalidOutput('the reviewer made a malformed tool call.') : $verdict;
     }
 
-    // Saving the first messages claims the conversation: the store refuses them when another review stored its own under the same id, also when both started at once.
+    // Saved before the agent runs because the store refuses them when another review stored its own under the same id, also when both started at once, so no reviewer continues another's conversation.
     private function started(MessageBag $conversation): MessageBag
     {
         try {
