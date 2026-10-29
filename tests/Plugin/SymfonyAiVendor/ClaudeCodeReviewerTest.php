@@ -44,6 +44,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
@@ -155,9 +156,16 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliThatFailsWithItsFinalResultIsAFailureAndNotABlockedReview(): void
     {
-        $this->expectExceptionMessage('Not logged in');
+        try {
+            $this->vendor(RecordedClaudeCodeCli::exitingAfter('failed', 1))->review('alpha', Tier::Strong, $this->request());
+        } catch (RuntimeException $failure) {
+            self::assertNotInstanceOf(IncompleteStreamException::class, $failure);
+            self::assertStringContainsString('Not logged in', $failure->getMessage());
 
-        $this->vendor(RecordedClaudeCodeCli::exitingAfter('failed', 1))->review('alpha', Tier::Strong, $this->request());
+            return;
+        }
+
+        self::fail('A failed CLI run gave a verdict.');
     }
 
     public function testATruncatedRecordedStreamMakesTheBridgeRaiseIncompleteStream(): void

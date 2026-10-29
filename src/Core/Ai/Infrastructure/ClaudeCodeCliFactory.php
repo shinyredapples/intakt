@@ -29,12 +29,12 @@ final readonly class ClaudeCodeCliFactory
     }
 
     /**
-     * @return array<string, string|false>
+     * @return array<string, string>
      */
     private function environment(): array
     {
-        // Process hands a child every inherited variable unless each is unset by name: other providers' keys, the decryption secret and an API key that would win over the login.
-        $inherited = array_fill_keys(array_keys([...getenv(), ...$_ENV]), false);
+        // Process hands a child every inherited variable unless each is overridden by name: other providers' keys, the decryption secret and an API key that would win over the login. Emptied, not unset, because the bridge accepts strings only.
+        $inherited = array_fill_keys(array_map(strval(...), array_keys([...getenv(), ...$_ENV])), '');
 
         return [...$inherited, 'PATH' => (string) getenv('PATH'), 'HOME' => $this->directory, 'CLAUDE_CODE_OAUTH_TOKEN' => $this->token];
     }

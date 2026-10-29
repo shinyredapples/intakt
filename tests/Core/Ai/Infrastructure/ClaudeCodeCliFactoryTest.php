@@ -52,12 +52,12 @@ final class ClaudeCodeCliFactoryTest extends TestCase
         self::assertSame($this->root.'/home', $seen['cwd']);
     }
 
-    public function testTheCliInheritsNoVariableOfIntaktsEnvironmentButItsPath(): void
+    public function testTheCliGetsNoValueOfIntaktsEnvironmentButItsPath(): void
     {
         $seen = $this->cliRunBy(new ClaudeCodeCliFactory($this->root.'/home', 'login'));
 
-        self::assertSame(['CLAUDE_CODE_OAUTH_TOKEN', 'HOME', 'PATH'], $this->sortedNames($seen['environment']));
-        self::assertSame($this->root.'/bin:'.$this->path, $seen['environment']['PATH']);
+        self::assertSame(['CLAUDE_CODE_OAUTH_TOKEN', 'HOME', 'PATH'], $this->sortedNamesWithAValue($seen['environment']));
+        self::assertSame(['', $this->root.'/bin:'.$this->path], [$seen['environment'][self::INHERITED], $seen['environment']['PATH']]);
     }
 
     public function testTheCliLogsInWithTheSubscriptionTokenAndKeepsItsStateInItsDirectory(): void
@@ -84,9 +84,9 @@ final class ClaudeCodeCliFactoryTest extends TestCase
      *
      * @return list<string>
      */
-    private function sortedNames(array $environment): array
+    private function sortedNamesWithAValue(array $environment): array
     {
-        $names = array_keys($environment);
+        $names = array_keys(array_filter($environment, static fn (string $value): bool => '' !== $value));
         sort($names);
 
         return $names;

@@ -73,8 +73,15 @@ final readonly class FinishedProcessResult implements RawResultInterface
 
         return $process instanceof Process && array_any(
             explode(PHP_EOL, $process->getOutput()),
-            static fn (string $line): bool => 'result' === (json_decode($line, true)['type'] ?? null),
+            $this->isResultEvent(...),
         );
+    }
+
+    private function isResultEvent(string $line): bool
+    {
+        $event = json_decode($line, true);
+
+        return is_array($event) && 'result' === ($event['type'] ?? null);
     }
 
     private function cutOff(string $how, ?Throwable $failure): IncompleteStreamException
