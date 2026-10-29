@@ -267,6 +267,16 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-property-by-expression', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
     }
 
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAnAliasOfThisInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-property-through-alias', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughItsDefinedVariablesInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-defined-vars', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
     public function testAPromotedBooleanOfAReadonlyClassOutsideTheSourceFolderFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'readonly-gate-class-with-flag', 'config/gates/src/Strictness.php:9 intakt.flagParameter Parameter $strict is a flag');

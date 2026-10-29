@@ -8,6 +8,7 @@ use PhpParser\Node;
 use PhpParser\Node\ComplexType;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\FuncCall;
 use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
@@ -38,6 +39,8 @@ final readonly class FlagParameterRule implements Rule
 
     // a test double or builder may take a flag to stay short, so only code outside tests/ is held to the rule
     private const string TEST_FOLDER = '/tests/';
+
+    private const array SCOPE_READERS = ['compact', 'func_get_arg', 'func_get_args', 'get_defined_vars'];
 
     public function __construct(private string $root, private ContainerRegistration $registration)
     {
@@ -81,7 +84,7 @@ final readonly class FlagParameterRule implements Rule
         $name = $this->nameOf($parameter);
         $statements = $constructor->stmts ?? [];
 
-        if (null === $name) {
+        if (null === $name || $this->readsIndirectly($statements)) {
             return false;
         }
 
@@ -103,6 +106,25 @@ final readonly class FlagParameterRule implements Rule
         return $assign instanceof Assign && $this->isOwnProperty($assign->var) && $assign->var->name instanceof Identifier && $assign->expr instanceof Variable && $assign->expr->name === $name
             ? $assign->var->name->toString()
             : null;
+    }
+
+    // $this handed on (an alias, a method call) or the local scope read wholesale reaches the boolean out of sight, so either counts as a read
+    /**
+     * @param array<Stmt> $statements
+     */
+    private function readsIndirectly(array $statements): bool
+    {
+        $finder = new NodeFinder();
+        $bareThis = count($finder->find($statements, fn (Node $found): bool => $found instanceof Variable && 'this' === $found->name)) - count($finder->find($statements, $this->isOwnProperty(...)));
+
+        return $bareThis > 0 || null !== $finder->findFirst($statements, $this->readsScope(...));
+    }
+
+    // a call by computed name could be any of them, so it counts too
+    private function readsScope(Node $node): bool
+    {
+        return $node instanceof FuncCall
+            && (!$node->name instanceof Name || in_array($node->name->toLowerString(), self::SCOPE_READERS, true));
     }
 
     /**
