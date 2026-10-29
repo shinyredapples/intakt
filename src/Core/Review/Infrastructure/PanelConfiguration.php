@@ -6,25 +6,90 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use InvalidArgumentException;
+use Symfony\Component\Config\Definition\Builder\NodeBuilder;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
 // Its own tree because the projects tree of the AI module refuses keys it does not know; each tree gets only its part of a project.
-final class PanelConfiguration implements ConfigurationInterface
+final readonly class PanelConfiguration implements ConfigurationInterface
 {
+    /**
+     * @param array<string, array<string, string>> $tierProviders
+     */
+    public function __construct(
+        private array $tierProviders,
+    ) {
+    }
+
     public function getConfigTreeBuilder(): TreeBuilder
     {
         $tree = new TreeBuilder('intakt');
-        $panel = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false)->arrayPrototype()->children();
+        $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false);
+        $projects->validate()->always($this->refuseUnusablePanels(...));
+        $panel = $projects->arrayPrototype()->children();
         $panel->enumNode('quorum')->isRequired()->values(array_column(QuorumPolicy::cases(), 'value'));
-        $reviewer = $panel->arrayNode('reviewers')->isRequired()->requiresAtLeastOneElement()->arrayPrototype()->children();
-        $reviewer->stringNode('role')->isRequired()->cannotBeEmpty();
+        $reviewers = $panel->arrayNode('reviewers')->isRequired()->requiresAtLeastOneElement();
+        // Keys would be dropped silently, and a key that reads like a role name is easy to mistake for the role.
+        $reviewers->validate()->ifTrue(static fn (array $list): bool => !array_is_list($list))->thenInvalid('The reviewers must be a list, not a map.');
+        $reviewer = $reviewers->arrayPrototype()->children();
+        $this->text($reviewer, 'role');
         $reviewer->enumNode('tier')->isRequired()->values(array_column(Tier::cases(), 'value'));
         $reviewer->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-        $reviewer->stringNode('prompt')->isRequired()->cannotBeEmpty();
+        $this->text($reviewer, 'prompt');
         $reviewer->integerNode('budget')->isRequired()->min(1);
 
         return $tree;
+    }
+
+    private function text(NodeBuilder $reviewer, string $key): void
+    {
+        $reviewer->stringNode($key)->isRequired()->cannotBeEmpty()
+            ->validate()->ifTrue(static fn (string $text): bool => !mb_check_encoding($text, 'UTF-8'))->thenInvalid(sprintf('The "%s" key must be valid UTF-8.', $key))->end()
+            ->validate()->ifTrue(static fn (string $text): bool => 1 === preg_match('/^\s*$/u', $text))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
+    }
+
+    /**
+     * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $panels
+     *
+     * @return array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>
+     */
+    private function refuseUnusablePanels(array $panels): array
+    {
+        foreach ($panels as $project => $panel) {
+            $this->refuseOtherProviders((string) $project, $panel['reviewers']);
+            $this->refuseUnreachableQuorum((string) $project, $panels);
+        }
+
+        return $panels;
+    }
+
+    /**
+     * @param list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}> $reviewers
+     */
+    private function refuseOtherProviders(string $project, array $reviewers): void
+    {
+        foreach ($reviewers as $index => $reviewer) {
+            $mapped = $this->tierProviders[$project][$reviewer['tier']] ?? null;
+
+            if ($mapped !== $reviewer['provider']) {
+                // A tier call reaches the provider the project maps the tier to, so a reviewer naming another one would silently run elsewhere.
+                throw new InvalidArgumentException(sprintf('Reviewer %d of project "%s" names provider "%s", but the project maps tier "%s" to %s.', $index, $project, $reviewer['provider'], $reviewer['tier'], null === $mapped ? 'no provider' : '"'.$mapped.'"'));
+            }
+        }
+    }
+
+    /**
+     * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $panels
+     */
+    private function refuseUnreachableQuorum(string $project, array $panels): void
+    {
+        try {
+            new ConfiguredPanels($panels)->panelFor($project);
+        } catch (PanelConfigurationFailure $failure) {
+            throw new InvalidArgumentException(sprintf('The panel of project "%s" is unusable: %s', $project, $failure->getMessage()), 0, $failure);
+        }
     }
 }

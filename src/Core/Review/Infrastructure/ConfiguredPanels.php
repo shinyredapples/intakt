@@ -10,6 +10,8 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerModel;
+use Intakt\Core\Review\Contract\ReviewerRole;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class ConfiguredPanels
@@ -39,10 +41,8 @@ final readonly class ConfiguredPanels
     private function reviewer(array $reviewer): PanelReviewer
     {
         return new PanelReviewer(
-            $reviewer['role'],
-            Tier::from($reviewer['tier']),
-            Provider::from($reviewer['provider']),
-            $reviewer['prompt'],
+            new ReviewerRole($reviewer['role'], $reviewer['prompt']),
+            new ReviewerModel(Tier::from($reviewer['tier']), Provider::from($reviewer['provider'])),
             $reviewer['budget'],
         );
     }

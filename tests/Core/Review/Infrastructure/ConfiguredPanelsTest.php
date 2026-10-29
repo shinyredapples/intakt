@@ -6,10 +6,15 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerModel;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,6 +27,11 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(QuorumPolicy::class)]
+#[UsesClass(ReviewerRole::class)]
+#[UsesClass(ReviewerModel::class)]
+#[UsesClass(PanelVerdict::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Decision::class)]
 final class ConfiguredPanelsTest extends TestCase
 {
     public function testThePanelOfAProjectCarriesItsReviewersInConfigOrderAndItsPolicy(): void
@@ -37,10 +47,10 @@ final class ConfiguredPanelsTest extends TestCase
         $panel = $panels->panelFor('alpha');
 
         self::assertSame(QuorumPolicy::Majority, $panel->quorum);
-        self::assertSame(['correctness', 'style'], array_map(static fn (PanelReviewer $reviewer): string => $reviewer->role, $panel->reviewers));
-        self::assertSame(Tier::Light, $panel->reviewers[1]->tier);
-        self::assertSame(Provider::OpenAi, $panel->reviewers[1]->provider);
-        self::assertSame('Style.', $panel->reviewers[1]->prompt);
+        self::assertSame(['correctness', 'style'], array_map(static fn (PanelReviewer $reviewer): string => $reviewer->role->name, $panel->reviewers));
+        self::assertSame(Tier::Light, $panel->reviewers[1]->model->tier);
+        self::assertSame(Provider::OpenAi, $panel->reviewers[1]->model->provider);
+        self::assertSame('Style.', $panel->reviewers[1]->role->prompt);
         self::assertSame(2, $panel->reviewers[1]->budget);
     }
 

@@ -16,5 +16,20 @@ final readonly class Panel
         if ([] === $reviewers) {
             throw new PanelWithoutReviewers();
         }
+
+        // Asked of the policy itself, so a panel that could never pass fails when it is configured instead of on every review.
+        if (!$quorum->isMet($this->unanimousApproval())) {
+            throw new PanelCannotReachQuorum($quorum);
+        }
+    }
+
+    /**
+     * @return list<PanelVerdict>
+     */
+    private function unanimousApproval(): array
+    {
+        $approval = new Verdict(Decision::Approve, [], [], []);
+
+        return array_map(static fn (PanelReviewer $reviewer): PanelVerdict => new PanelVerdict($reviewer->model->tier, $approval), $this->reviewers);
     }
 }

@@ -53,21 +53,25 @@ return static function (ContainerConfigurator $container): void {
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
     /** @var array<string, mixed> $contents */
     $contents = is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : [];
-    $contentProjects = is_array($contents['projects'] ?? null) ? $contents['projects'] : [];
-    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only.
+    $contentProjects = $contents['projects'] ?? [];
+    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
-    foreach ($contentProjects as $name => $project) {
-        if (is_array($project) && array_key_exists('review', $project)) {
-            $reviews[$name] = $project['review'];
-            unset($project['review']);
-            $contentProjects[$name] = $project;
+    if (is_array($contentProjects)) {
+        foreach ($contentProjects as $name => $project) {
+            if (is_array($project) && array_key_exists('review', $project)) {
+                $reviews[$name] = $project['review'];
+                unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
         }
+
+        $contents['projects'] = $contentProjects;
     }
 
-    $contents['projects'] = $contentProjects;
     /** @var array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects */
     $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents])['projects'];
-    $panels = new Processor()->processConfiguration(new PanelConfiguration(), [['projects' => $reviews]])['projects'];
+    $tierProviders = array_map(static fn (array $project): array => array_map(static fn (array $tier): string => $tier['provider'], $project['tiers']), $projects);
+    $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
 

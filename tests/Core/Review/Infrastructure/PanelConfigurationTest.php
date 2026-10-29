@@ -6,7 +6,16 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Panel;
+use Intakt\Core\Review\Contract\PanelCannotReachQuorum;
+use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerModel;
+use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -19,8 +28,22 @@ use Symfony\Component\Config\Definition\Processor;
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(QuorumPolicy::class)]
+#[UsesClass(ConfiguredPanels::class)]
+#[UsesClass(Panel::class)]
+#[UsesClass(PanelReviewer::class)]
+#[UsesClass(ReviewerRole::class)]
+#[UsesClass(ReviewerModel::class)]
+#[UsesClass(PanelVerdict::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Decision::class)]
+#[UsesClass(PanelCannotReachQuorum::class)]
 final class PanelConfigurationTest extends TestCase
 {
+    private const array TIER_PROVIDERS = [
+        'alpha' => ['strong' => 'anthropic', 'standard' => 'anthropic', 'light' => 'openai'],
+        'beta' => ['light' => 'openai'],
+    ];
+
     public function testAPanelOfOneReviewerLoads(): void
     {
         $panel = $this->panel('all', [$this->reviewer()]);
@@ -124,6 +147,75 @@ final class PanelConfigurationTest extends TestCase
 
     /**
      * @param array<string, mixed> $override
+     */
+    #[DataProvider('blankTexts')]
+    public function testABlankRoleOrPromptIsRefusedNamingTheKey(array $override, string $key): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.reviewers\.0\.'.$key.'.*blank/');
+
+        $this->panel('all', [$override + $this->reviewer()]);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function blankTexts(): iterable
+    {
+        yield 'spaces as role' => [['role' => '   '], 'role'];
+        yield 'no-break space as prompt' => [['prompt' => "\u{00A0}"], 'prompt'];
+    }
+
+    public function testReviewersGivenAsAMapAreRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.reviewers.*list/');
+
+        $this->process(['projects' => ['alpha' => ['quorum' => 'all', 'reviewers' => ['logic' => $this->reviewer()]]]]);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $reviewers
+     */
+    #[DataProvider('unreachablePanels')]
+    public function testAPanelThatCanNeverMeetItsQuorumIsRefused(array $reviewers): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/project "alpha".*never meet the "one-strong-plus-one" quorum/');
+
+        $this->panel('one-strong-plus-one', $reviewers);
+    }
+
+    /**
+     * @return iterable<string, array{list<array<string, mixed>>}>
+     */
+    public static function unreachablePanels(): iterable
+    {
+        $strong = ['role' => 'correctness', 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Check the logic.', 'budget' => 5];
+        $light = ['tier' => 'light', 'provider' => 'openai'] + $strong;
+
+        yield 'one reviewer' => [[$strong]];
+        yield 'no strong reviewer' => [[$light, $light]];
+    }
+
+    public function testAReviewerNamingAnotherProviderThanItsTierMapsToIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/provider "openai", but the project maps tier "standard" to "anthropic"/');
+
+        $this->panel('all', [$this->reviewer(['tier' => 'standard', 'provider' => 'openai'])]);
+    }
+
+    public function testAReviewerWithATierTheProjectDoesNotMapIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/maps tier "strong" to no provider/');
+
+        $this->process(['projects' => ['beta' => ['quorum' => 'all', 'reviewers' => [$this->reviewer()]]]]);
+    }
+
+    /**
+     * @param array<string, mixed> $override
      *
      * @return array<string, mixed>
      */
@@ -153,7 +245,7 @@ final class PanelConfigurationTest extends TestCase
     private function process(array $contents): array
     {
         /** @var array{projects: array<string, mixed>} $processed */
-        $processed = new Processor()->processConfiguration(new PanelConfiguration(), [$contents]);
+        $processed = new Processor()->processConfiguration(new PanelConfiguration(self::TIER_PROVIDERS), [$contents]);
 
         return $processed;
     }
