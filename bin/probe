@@ -131,7 +131,7 @@ final readonly class Probe
         return null === $problem ? null : 'PROBE_ISOLATED is set but the run is not offline: '.$problem;
     }
 
-    // Without this a missing tool shows up as an instance that never became ready.
+    // Because a missing tool otherwise shows up only as an instance that never became ready.
     private function missingTools(): ?string
     {
         $missing = array_filter(['unshare', 'sh', 'ip'], fn (string $tool): bool => !$this->isOnPath($tool));
@@ -141,13 +141,10 @@ final readonly class Probe
 
     private function isOnPath(string $tool): bool
     {
-        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $folder) {
-            if ('' !== $folder && is_file($folder.'/'.$tool) && is_executable($folder.'/'.$tool)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(
+            explode(PATH_SEPARATOR, (string) getenv('PATH')),
+            static fn (string $folder): bool => '' !== $folder && is_file($folder.'/'.$tool) && is_executable($folder.'/'.$tool),
+        );
     }
 
     /**
