@@ -96,6 +96,20 @@ final class LocalGitForgeTest extends TestCase
         self::assertStringContainsString('-<?php', $change->diff->patch);
     }
 
+    public function testItReturnsTheDiffOfABranchInASha256Repository(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('README.md', "changed\n");
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame([['README.md', FileStatus::Modified]], $this->pathsAndStatuses($change));
+        self::assertStringContainsString('+changed', $change->diff->patch);
+    }
+
     public function testItLeavesOutWhatTheBaseBranchChangedAfterTheBranchWasCut(): void
     {
         $this->repository->checkoutNewBranch('feature');

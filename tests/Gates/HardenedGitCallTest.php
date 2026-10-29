@@ -91,6 +91,23 @@ final class HardenedGitCallTest extends TestCase
         );
     }
 
+    public function testASha256RepositoryGetsTheEmptyTreeOfItsObjectFormat(): void
+    {
+        $this->sandbox->remove();
+        $this->sandbox = Sandbox::empty();
+        $this->sandbox->git('init', '--quiet', '--object-format=sha256');
+        $this->sandbox->write('note.txt', "public\n");
+        $this->sandbox->commitAll('Add a note');
+        $this->sandbox->write('note.txt', "changed\n");
+
+        $call = new HardenedGitCall()->call(['diff', '--name-only', 'HEAD'], $this->sandbox->root);
+        $result = new ProcessRunner()->run($call->command, $call->directory, $call->environment);
+
+        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->environment['GIT_ATTR_SOURCE']);
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame("note.txt\n", $result->output);
+    }
+
     public function testTheForgeCopyBuildsTheSameEnvironment(): void
     {
         $this->sandbox->git('config', 'diff.evil.textconv', 'cat');

@@ -141,6 +141,20 @@ final class HardenedGitTest extends TestCase
         self::assertSame('1', $environment['GIT_ATTR_NOSYSTEM']);
     }
 
+    public function testASha256RepositoryGetsTheEmptyTreeOfItsObjectFormat(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitFile('README.md', "base\n");
+        file_put_contents($this->repository->path.'/README.md', "changed\n");
+
+        $call = new HardenedGit()->call(['diff', '--name-only', 'HEAD'], $this->repository->path);
+
+        self::assertContains('--attr-source=6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->command);
+        self::assertSame('6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321', $call->environment['GIT_ATTR_SOURCE']);
+        self::assertSame("README.md\n", $this->runGit($call->command, $call->environment));
+    }
+
     public function testTheEnvironmentPinsTheWorkTreeAndTurnsGraftsOff(): void
     {
         $_ENV['GIT_WORK_TREE'] = '/elsewhere';

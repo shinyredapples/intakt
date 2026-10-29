@@ -23,8 +23,11 @@ final readonly class HardenedGitCall
         'core.ignoreCase' => 'false',
     ];
 
-    // Git's empty tree, so no .gitattributes of the repository applies; a SHA-256 repository refuses it, which fails closed.
-    private const string NO_ATTRIBUTES = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+    // Git's empty tree in each object format, so no .gitattributes of the repository applies; a format git adds later gets SHA-1's, which git refuses there, so a call that reads attributes fails closed.
+    private const array EMPTY_TREES = [
+        'sha1' => '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+        'sha256' => '6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321',
+    ];
 
     // Because git reads this file on top of every other attributes source and no option, setting or variable switches it off.
     private const string INFO_ATTRIBUTES = 'info/attributes';
@@ -39,7 +42,8 @@ final readonly class HardenedGitCall
      */
     public function call(array $arguments, string $directory): GitCall
     {
-        return $this->callWith($this->command($arguments), $directory);
+        // Pathspec magic would read ":odd.txt" as "odd.txt".
+        return $this->callWith(['--literal-pathspecs'], $arguments, $directory);
     }
 
     /**
@@ -50,7 +54,7 @@ final readonly class HardenedGitCall
     public function callWithPathspecMagic(array $arguments, string $directory): GitCall
     {
         // Because a gate writes glob pathspecs itself, which literal pathspecs refuse; never use it for a path from the repository.
-        return $this->callWith(['git', '--no-replace-objects', '--no-lazy-fetch', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments], $directory);
+        return $this->callWith([], $arguments, $directory);
     }
 
     /**
@@ -61,30 +65,34 @@ final readonly class HardenedGitCall
     public function environment(string $directory): array
     {
         $directory = $this->absolute($directory);
-        $this->refuseInfoAttributes($directory);
 
-        return $this->variables($directory);
+        return $this->variables($directory, $this->emptyTree($directory));
     }
 
     /**
-     * @param list<string> $command
+     * @param list<string> $options
+     * @param list<string> $arguments
+     *
+     * @throws RepositoryAttributesRefused
      */
-    private function callWith(array $command, string $directory): GitCall
+    private function callWith(array $options, array $arguments, string $directory): GitCall
     {
         $directory = $this->absolute($directory);
+        $emptyTree = $this->emptyTree($directory);
 
-        return new GitCall($command, $directory, $this->environment($directory));
+        return new GitCall($this->command($options, $arguments, $emptyTree), $directory, $this->variables($directory, $emptyTree));
     }
 
     /**
+     * @param list<string> $options
      * @param list<string> $arguments
      *
      * @return list<string>
      */
-    private function command(array $arguments): array
+    private function command(array $options, array $arguments, string $emptyTree): array
     {
-        // A refs/replace/ ref would swap in another object, a lazy fetch would start the transport of a promisor remote the repository names, and pathspec magic would read ":odd.txt" as "odd.txt".
-        return ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
+        // A refs/replace/ ref would swap in another object, and a lazy fetch would start the transport of a promisor remote the repository names.
+        return ['git', '--no-replace-objects', '--no-lazy-fetch', ...$options, '--attr-source='.$emptyTree, ...$this->settings(), ...$arguments];
     }
 
     /**
@@ -109,22 +117,41 @@ final readonly class HardenedGitCall
         return false === $absolute ? $directory : $absolute;
     }
 
-    private function refuseInfoAttributes(string $directory): void
+    /**
+     * @throws RepositoryAttributesRefused
+     */
+    private function emptyTree(string $directory): string
     {
         // Because a missing directory holds no repository, and the git call itself fails there.
         if (!is_dir($directory)) {
-            return;
+            return self::EMPTY_TREES['sha1'];
         }
 
-        // Git names the file, because in a worktree or a submodule it is not under <directory>/.git; where git cannot, the call itself fails the same way.
-        $query = new Process($this->command(['rev-parse', '--git-path', self::INFO_ATTRIBUTES]), $directory, $this->variables($directory));
+        // Git names the object format and the attributes file, because in a worktree or a submodule the file is not under <directory>/.git; where git cannot, the call itself fails the same way. rev-parse reads no attributes, so SHA-1's empty tree serves before the format is known.
+        $query = new Process(
+            $this->command(['--literal-pathspecs'], ['rev-parse', '--show-object-format', '--git-path', self::INFO_ATTRIBUTES], self::EMPTY_TREES['sha1']),
+            $directory,
+            $this->variables($directory, self::EMPTY_TREES['sha1']),
+        );
         $query->run();
 
-        if (!$query->isSuccessful()) {
-            return;
+        $answer = explode("\n", trim($query->getOutput()), 2);
+
+        if (!$query->isSuccessful() || 2 !== count($answer)) {
+            return self::EMPTY_TREES['sha1'];
         }
 
-        $path = trim($query->getOutput());
+        [$format, $path] = $answer;
+        $this->refuseInfoAttributes($directory, $path);
+
+        return self::EMPTY_TREES[$format] ?? self::EMPTY_TREES['sha1'];
+    }
+
+    /**
+     * @throws RepositoryAttributesRefused
+     */
+    private function refuseInfoAttributes(string $directory, string $path): void
+    {
         $file = str_starts_with($path, '/') ? $path : $directory.'/'.$path;
 
         if (file_exists($file)) {
@@ -135,9 +162,9 @@ final readonly class HardenedGitCall
     /**
      * @return array<string, string|false>
      */
-    private function variables(string $directory): array
+    private function variables(string $directory, string $emptyTree): array
     {
-        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($directory)];
+        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation($directory, $emptyTree)];
     }
 
     /**
@@ -176,7 +203,7 @@ final readonly class HardenedGitCall
     /**
      * @return array<string, string>
      */
-    private function isolation(string $directory): array
+    private function isolation(string $directory, string $emptyTree): array
     {
         // The work tree is pinned because core.worktree in the repository config would point working-tree reads at another directory, info/grafts would rewrite parents as a replace object does, and a partial clone would fetch a missing object through a promisor remote; the empty protocol allowlist beats every protocol.<name>.allow of the repository (protocol.allow=never would not, a more specific setting wins), so no remote helper, ssh command or credential helper it names can run.
         return [
@@ -187,7 +214,7 @@ final readonly class HardenedGitCall
             'GIT_ALLOW_PROTOCOL' => '',
             'GIT_GRAFT_FILE' => self::NOWHERE,
             'GIT_WORK_TREE' => $directory,
-            'GIT_ATTR_SOURCE' => self::NO_ATTRIBUTES,
+            'GIT_ATTR_SOURCE' => $emptyTree,
             'GIT_ATTR_NOSYSTEM' => '1',
             'HOME' => self::NOWHERE,
             'XDG_CONFIG_HOME' => self::NOWHERE,

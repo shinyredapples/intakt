@@ -12,11 +12,11 @@ final readonly class TemporaryRepository
 {
     public string $path;
 
-    public function __construct()
+    public function __construct(string $objectFormat = 'sha1')
     {
         $this->path = sys_get_temp_dir().'/intakt-forge-'.bin2hex(random_bytes(6));
         mkdir($this->path);
-        $this->git('init', '--quiet', '--initial-branch=main');
+        $this->git('init', '--quiet', '--initial-branch=main', '--object-format='.$objectFormat);
     }
 
     public function commitFile(string $path, string $content): string
