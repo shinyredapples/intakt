@@ -10,9 +10,11 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Decision;
@@ -34,7 +36,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use ReflectionProperty;
 use RuntimeException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Model;
@@ -292,10 +293,22 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
-        $vendor = self::getContainer()->get(SymfonyAiVendor::class);
-
+        $container = self::getContainer();
+        $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
+        $container->set(TierResolver::class, new ConfiguredTierResolver([
+            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
+        ], []));
+        $container->set(Ledger::class, new InMemoryLedger());
+        $container->set(TierPlatform::PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
+        $vendor = $container->get(SymfonyAiVendor::class);
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
-        self::assertInstanceOf(TierPlatform::class, new ReflectionProperty($vendor, 'tiers')->getValue($vendor));
+
+        $verdict = $vendor->review('alpha', Tier::Strong, 'Review the change.');
+
+        self::assertSame(['big'], $verdict->follow_ups);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertCount(1, $verdict->findings);
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

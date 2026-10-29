@@ -28,5 +28,6 @@ Architecture:
 11. [Setup](05-architecture/11-setup.md)
 12. [New and existing projects](05-architecture/12-new-and-existing-projects.md)
 13. [Dashboard](05-architecture/13-dashboard.md)
+14. [Threat model: prompt injection and third-party text](05-architecture/14-threat-model.md)
 
 The single-file draft this folder was split from is in the git history (`docs/design.md`).
