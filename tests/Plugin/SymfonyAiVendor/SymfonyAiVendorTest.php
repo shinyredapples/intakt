@@ -56,7 +56,10 @@ use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\ObjectResult;
+use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
@@ -174,6 +177,50 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['started', 'unsettled'], [$started['phase'], $unsettled['phase']]);
         self::assertSame($started['call'], $unsettled['call']);
         self::assertSame(RuntimeException::class, $unsettled['failure']);
+    }
+
+    public function testACallThatFailsAfterAnAnsweredRoundLeavesItUnsettledWithThatRoundsTokens(): void
+    {
+        $ledger = new InMemoryLedger();
+        $step = 0;
+        $rounds = static function () use (&$step): ToolCallResult {
+            if (0 === $step++) {
+                return self::carrying(new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]), new TokenUsage(promptTokens: 100, model: 'big'));
+            }
+
+            throw new ServerException(503);
+        };
+
+        try {
+            $this->vendor($rounds, $ledger)->review('alpha', Tier::Strong, $this->request());
+            self::fail('The failed round must stay an exception.');
+        } catch (ProviderFailedTransiently) {
+            // Expected, because the second round failed.
+        }
+
+        [, $unsettled] = $ledger->payloads();
+        self::assertSame(['unsettled', ServerException::class], [$unsettled['phase'], $unsettled['failure']]);
+        /** @var list<array<string, int>> $usages */
+        $usages = $unsettled['usages'];
+        self::assertSame([100], array_column($usages, 'prompt'));
+    }
+
+    public function testARoundWhoseUsageCannotBeReadBeforeAFailureIsLoggedAndTheFailureStillRecorded(): void
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willThrowException(new JsonException('Syntax error'));
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
+        $ledger = new InMemoryLedger();
+        $logger = new BufferingLogger();
+
+        new UsageLedger($ledger, new MockClock(self::NOW), $logger)->leaveUnsettled(new UsageReservation('a call'), new ServerException(503), new DeferredResult($converter, new InMemoryRawResult()));
+
+        self::assertSame(['unsettled', ServerException::class, []], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure'], $ledger->payloads()[0]['usages']]);
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame('warning', $logs[0][0]);
+        self::assertInstanceOf(JsonException::class, $logs[0][2]['exception']);
     }
 
     public function testARateLimitedCallIsATypedErrorWithTheResetTheProviderSent(): void
@@ -411,7 +458,18 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
     {
-        $result = new TextResult($json);
+        return self::carrying(new TextResult($json), $usage);
+    }
+
+    /**
+     * @template T of ResultInterface
+     *
+     * @param T $result
+     *
+     * @return T
+     */
+    private static function carrying(ResultInterface $result, TokenUsageInterface $usage): ResultInterface
+    {
         $result->getMetadata()->add('token_usage', $usage);
 
         return $result;

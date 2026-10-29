@@ -159,7 +159,16 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('Tool \"write_file\" was not found', $this->sent[1]);
     }
 
-    public function testAReviewerThatKeepsAskingForToolsEndsAsChangesInsteadOfCrashing(): void
+    public function testAPathThatIsNotAStringEndsAsChangesEvenWhenTheModelApproves(): void
+    {
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 5])], self::APPROVE);
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertStringContainsString('malformed tool call', $verdict->findings[0]->text);
+        self::assertStringContainsString('The path must be a string.', $this->sent[1]);
+    }
+
+    public function testAReviewerThatStillAsksForToolsAfterThirtyRoundsEndsAsChangesInsteadOfCrashing(): void
     {
         $forever = array_fill(0, 40, new ToolCall('1', 'read_file', ['path' => 'src/Cart.php']));
 
@@ -167,8 +176,19 @@ final class ReviewerVerdictTest extends WebTestCase
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-        self::assertStringContainsString('still asking for tools after 30 calls', $verdict->findings[0]->text);
+        self::assertStringContainsString('still asking for tools after 30 rounds', $verdict->findings[0]->text);
         self::assertPlatformCallCount(31);
+    }
+
+    public function testARoundThatAsksForMoreThanThirtyFilesCountsAsOneRoundOfTheCap(): void
+    {
+        $batch = array_map(static fn (int $id): ToolCall => new ToolCall((string) $id, 'read_file', ['path' => 'src/Cart.php']), range(1, 35));
+
+        $verdict = $this->reviewRounds('Add a cart.', [$batch], self::APPROVE);
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertPlatformCallCount(2);
+        self::assertToolCallCount(35);
     }
 
     public function testAFinalAnswerThatIsNotAVerdictEndsAsChanges(): void
@@ -213,11 +233,20 @@ final class ReviewerVerdictTest extends WebTestCase
     // Because the script asks for one tool call per round, the answer follows the last call.
     private function review(string $task, array $toolCalls, string $answer): Verdict
     {
-        $script = function (mixed $model, mixed $input) use (&$toolCalls, $answer): string|ResultInterface {
-            $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
-            $next = array_shift($toolCalls);
+        return $this->reviewRounds($task, array_map(static fn (ToolCall $call): array => [$call], $toolCalls), $answer);
+    }
 
-            return null === $next ? $answer : new ToolCallResult([$next]);
+    /**
+     * @param list<list<ToolCall>> $rounds
+     */
+    // Each round carries the calls one model answer asks for; the verdict follows the last round.
+    private function reviewRounds(string $task, array $rounds, string $answer): Verdict
+    {
+        $script = function (mixed $model, mixed $input) use (&$rounds, $answer): string|ResultInterface {
+            $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
+            $next = array_shift($rounds);
+
+            return null === $next ? $answer : new ToolCallResult($next);
         };
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));

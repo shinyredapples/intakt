@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\PathNotInCheckout;
 use Intakt\Core\Review\Contract\PathOutsideCheckout;
 use Symfony\AI\Agent\Toolbox\Event\ToolCallRequested;
+use Symfony\AI\Agent\Toolbox\Exception\InvalidToolCallArgumentsException;
 
 // A listener, not a prompt rule: the model's arguments are untrusted, so plain code refuses before any tool runs.
 final readonly class DenyPathsOutsideCheckout
@@ -27,10 +28,9 @@ final readonly class DenyPathsOutsideCheckout
             return;
         }
 
+        // Thrown as an invalid argument rather than denied, because the toolbox's resolver would coerce a wrong type and the reviewer counts a malformed call as changes; a denial is the answer to an escape.
         if (!is_string($path)) {
-            $event->deny('The path must be a string.');
-
-            return;
+            throw new InvalidToolCallArgumentsException('The path must be a string.');
         }
 
         try {

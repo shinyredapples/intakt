@@ -49,7 +49,7 @@ final readonly class UsageLedger
     public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
     {
         try {
-            $usages = array_merge(...array_map($this->usagesOf(...), $rounds));
+            $usages = $this->usagesOfRounds(...$rounds);
         } catch (Throwable $unreadable) {
             $this->leaveUnreadableUnsettled($reservation, $unreadable);
 
@@ -60,11 +60,35 @@ final readonly class UsageLedger
     }
 
     /**
+     * @param DeferredResult ...$rounds the rounds that answered before the failure
+     *
      * @throws UsageNotRecorded
      */
-    public function leaveUnsettled(UsageReservation $reservation, Throwable $failure): void
+    public function leaveUnsettled(UsageReservation $reservation, Throwable $failure, DeferredResult ...$rounds): void
     {
-        $this->record(['call' => $reservation->call, 'phase' => 'unsettled', 'failure' => $failure::class], $failure);
+        $this->record([
+            'call' => $reservation->call,
+            'phase' => 'unsettled',
+            'failure' => $failure::class,
+            'usages' => $this->usagesBeforeFailure($reservation, $rounds),
+        ], $failure);
+    }
+
+    /**
+     * @param list<DeferredResult> $rounds
+     *
+     * @return list<array<string, int|string|null>>
+     */
+    // The rounds that answered spent their tokens, so the row keeps them; when they cannot be read, the failure is still what the row is for, so it is recorded without them.
+    private function usagesBeforeFailure(UsageReservation $reservation, array $rounds): array
+    {
+        try {
+            return $this->usagesOfRounds(...$rounds);
+        } catch (Throwable $unreadable) {
+            $this->logger->warning('Token usage of the rounds before a failed call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
+
+            return [];
+        }
     }
 
     /**
@@ -75,6 +99,14 @@ final readonly class UsageLedger
         // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
         $this->logger->warning('Token usage of an answered call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
         $this->leaveUnsettled($reservation, $unreadable);
+    }
+
+    /**
+     * @return list<array<string, int|string|null>>
+     */
+    private function usagesOfRounds(DeferredResult ...$rounds): array
+    {
+        return array_merge(...array_map($this->usagesOf(...), $rounds));
     }
 
     /**

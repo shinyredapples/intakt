@@ -221,7 +221,7 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertStringEndsWith("é\n[truncated]", $answers[0]);
     }
 
-    public function testAPathThatIsNotAStringIsDenied(): void
+    public function testAPathThatIsNotAStringIsRefusedAsAnInvalidArgument(): void
     {
         $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 42]));
 

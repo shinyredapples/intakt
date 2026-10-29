@@ -36,7 +36,7 @@ final readonly class SymfonyAiVendor implements Vendor
         try {
             $verdict = $this->reviewer->review($request, $platform, $tier->value);
         } catch (Throwable $failure) {
-            $this->usage->leaveUnsettled($reservation, $failure);
+            $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 
             throw $this->typed($failure);
         }

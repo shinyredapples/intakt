@@ -23,8 +23,8 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
 
 final readonly class ReviewerAgent implements Reviewer
 {
-    // Because a reviewer that keeps asking for tools never answers: a review reads a handful of files, and the agent's default of 50 rounds is a long bill.
-    private const int MAX_TOOL_CALLS = 30;
+    // Rounds, not calls, because the bill grows with every round that resends the conversation, however many files one round asks for; the agent's default of 50 is a long bill for a review that reads a handful of files.
+    private const int MAX_ROUNDS = 30;
 
     /**
      * @param Closure(Checkout): ToolboxInterface $toolboxes
@@ -57,7 +57,7 @@ final readonly class ReviewerAgent implements Reviewer
     {
         $toolbox = $this->prompt->fenced(new FaultTolerantToolbox($tools));
 
-        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_TOOL_CALLS);
+        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS);
     }
 
     private function answerOf(ExecutionInterface $execution): Verdict
@@ -65,7 +65,7 @@ final readonly class ReviewerAgent implements Reviewer
         try {
             return $this->parser->parseWith(fn (): Verdict => $this->verdictOf($execution));
         } catch (MaxIterationsExceededException) {
-            return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d calls.', self::MAX_TOOL_CALLS));
+            return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', self::MAX_ROUNDS));
         }
     }
 
