@@ -27,6 +27,12 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 
 `unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
 
+## Called when a tier maps to `claude_code`
+
+| Command | Called by | What for | Needed | Version | In the image |
+|---|---|---|---|---|---|
+| `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ReadOnlyClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools Read,Grep,Glob --append-system-prompt <schema> --model <name> -p <prompt>` | only for that provider | a release with those flags | no |
+
 ## Coming with planned parts
 
 | Command | Where | What for |

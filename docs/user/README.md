@@ -49,15 +49,22 @@ A caller that already runs `bin/probe` without network access and in its own pro
 
 ## Configuring providers and API keys
 
-Intakt knows three providers: `anthropic`, `openai` and `openai_compatible` (any endpoint that speaks the OpenAI API). Each reads its key from Symfony secrets (`php bin/console secrets:set ANTHROPIC_API_KEY`) or from the environment (`.env.local` or the real environment), never from a plain committed file; a non-empty environment value wins over the secret:
+Intakt knows four providers: `anthropic`, `openai`, `openai_compatible` (any endpoint that speaks the OpenAI API) and `claude_code` (a reviewer on a Claude subscription, see below). Each reads its key from Symfony secrets (`php bin/console secrets:set ANTHROPIC_API_KEY`) or from the environment (`.env.local` or the real environment), never from a plain committed file; a non-empty environment value wins over the secret:
 
 | Provider | Variables it needs |
 |---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` |
 | `openai` | `OPENAI_API_KEY` |
 | `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY` |
+| `claude_code` | `CLAUDE_CODE_OAUTH_TOKEN` |
 
 A provider whose variables are not all set (empty counts as not set, and so does a secret Intakt cannot decrypt when the container is built), neither in the environment nor in the secrets, is switched off, and Intakt still starts. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`.
+
+### A reviewer on a Claude subscription
+
+Map a tier to `provider: claude_code` and a Claude Code model name (`opus`, `sonnet` or `haiku`) to run that reviewer through the `claude` command-line tool, which must be installed where Intakt runs. Create the login token with `claude setup-token` and store it as `CLAUDE_CODE_OAUTH_TOKEN`. Intakt withholds `ANTHROPIC_API_KEY` from that process, so the subscription is used and not an API key. The tool runs in Intakt's working directory, so run the review there, in the checkout under review. It is given only the read-only tools `Read`, `Grep` and `Glob`; its usage is recorded in the ledger like any other call. If its stream ends before the final result, the reviewer's verdict is `blocked` with that reason, and its usage is recorded once as unsettled.
+
+Which plans may be used this way is the vendor's decision, not Intakt's. Anthropic's [Claude Code legal and compliance page](https://code.claude.com/docs/en/legal-and-compliance) says that Free, Pro and Max plans fall under the Consumer Terms of Service and that Team and Enterprise plans fall under the Commercial Terms of Service, that the subscription login is meant for ordinary use of Claude Code by the plan's own purchaser, and that routing requests through Free, Pro or Max credentials on behalf of other users is not permitted. Use your own plan for your own reviews, read those terms for your case, and use an API key (`anthropic`) when in doubt. Intakt does not check your plan.
 
 To decrypt the secrets, Intakt reads `SYMFONY_DECRYPTION_SECRET` the way Symfony does: a base64 value, in the standard or the URL-safe alphabet (`-` and `_`). When it is not set, or decodes to nothing, the vault's own private key file in `config/secrets/<environment>/` is used. A secret that cannot be decrypted (a wrong key, or no key at all) counts as not set, so its provider is switched off and named on standard error as above.
 
