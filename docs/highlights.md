@@ -89,7 +89,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Validator | checks typed verdicts from structured output | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98) |
 | Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`, `JsonDecode::ASSOCIATIVE`) | maps a verdict strictly: no unknown and no left-out fields, no object as a list | in progress | T1 (#5), `src/Core/Review/Infrastructure/StrictVerdictConverter.php` |
 | Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
-| Process | the local git forge; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
+| Process | the local git forge; every git call hardened, in the forge and in the gates; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T6 (#11, part #124), `src/Core/Git/Contract/HardenedGit.php`, `config/gates/src/HardenedGitCall.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
 

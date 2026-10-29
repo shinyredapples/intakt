@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Git\Contract;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
-use Intakt\Tests\Plugin\LocalGitForge\TemporaryRepository;
+use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
