@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Closure;
 use JsonException;
 use NoDiscard;
 use Symfony\AI\Platform\Exception\RuntimeException;
@@ -19,8 +20,17 @@ final readonly class VerdictParser
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function parse(DeferredResult $result): Verdict
     {
+        return $this->parseWith(static fn (): Verdict => $result->asObject(Verdict::class));
+    }
+
+    /**
+     * @param Closure(): Verdict $read
+     */
+    #[NoDiscard('a verdict that is not read approves nothing')]
+    public function parseWith(Closure $read): Verdict
+    {
         try {
-            return $result->asObject(Verdict::class);
+            return $read();
         } catch (ValidationException $exception) {
             return Verdict::invalidOutput($this->firstViolation($exception));
         } catch (RuntimeException $exception) {

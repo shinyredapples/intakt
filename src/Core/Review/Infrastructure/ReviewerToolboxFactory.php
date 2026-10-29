@@ -10,21 +10,24 @@ use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
 use Symfony\AI\Agent\Toolbox\Event\ToolCallRequested;
-use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\Toolbox;
+use Symfony\AI\Agent\Toolbox\ToolCallArgumentResolver;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 
 final readonly class ReviewerToolboxFactory
 {
-    // Built per checkout because the tools and the listener hold the head under review; a failing tool answers the model with an error.
-    public function create(Checkout $checkout): FaultTolerantToolbox
+    // Built per checkout because the tools and the listener hold the head under review.
+    public function create(Checkout $checkout): Toolbox
     {
+        // One resolver for the listener and the toolbox, so a required argument is known in one place.
+        $arguments = new ToolCallArgumentResolver();
         $dispatcher = new EventDispatcher();
-        $dispatcher->addListener(ToolCallRequested::class, new DenyPathsOutsideCheckout($checkout));
+        $dispatcher->addListener(ToolCallRequested::class, new DenyPathsOutsideCheckout($checkout, $arguments));
 
-        return new FaultTolerantToolbox(new Toolbox(
+        return new Toolbox(
             [new ReadFile($checkout), new ListDirectory($checkout), new SearchFiles($checkout)],
+            argumentResolver: $arguments,
             eventDispatcher: $dispatcher,
-        ));
+        );
     }
 }

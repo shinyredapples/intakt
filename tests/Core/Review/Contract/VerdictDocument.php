@@ -48,8 +48,24 @@ final readonly class VerdictDocument
         return clone ($this, ['finding' => array_diff_key($this->finding, [$key => true])]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function finding(): array
+    {
+        return $this->finding;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function decoded(): array
+    {
+        return ['findings' => [$this->finding], ...$this->verdict];
+    }
+
     public function json(): string
     {
-        return json_encode(['findings' => [$this->finding], ...$this->verdict], JSON_THROW_ON_ERROR);
+        return json_encode($this->decoded(), JSON_THROW_ON_ERROR);
     }
 }
