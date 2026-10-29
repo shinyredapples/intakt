@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\GitCall;
+use Intakt\Gates\HardenedGitCall;
+use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\Scope;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,6 +16,9 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Scope::class)]
 #[UsesClass(ProcessRunner::class)]
+#[UsesClass(ProcessResult::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(HardenedGitCall::class)]
 final class ScopeTest extends TestCase
 {
     /**
@@ -42,6 +48,178 @@ final class ScopeTest extends TestCase
 
         self::assertContains('bin/probe', $files);
         self::assertContains('bin/instance', $files);
+    }
+
+    public function testChangedPathsRunNoCleanFilterThatTheRepositoryConfigures(): void
+    {
+        $sandbox = Sandbox::empty();
+        $marker = $sandbox->root.'/.git/clean-ran';
+        $sandbox->startRepository();
+        $sandbox->write('.gitattributes', "*.txt filter=evil\n");
+        $sandbox->write('note.txt', "base\n");
+        $sandbox->commitAll('Add a note');
+        $sandbox->git('config', 'filter.evil.clean', 'touch '.$marker.'; cat');
+        $sandbox->write('note.txt', "changed\n");
+
+        $sandbox->run('git', 'diff', '--name-only', 'HEAD');
+        self::assertFileExists($marker, 'the filter must run without hardening, or this test proves nothing');
+        unlink($marker);
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+        self::assertFileDoesNotExist($marker);
+        self::assertSame(['note.txt'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsRunNoCleanFilterThatInfoAttributesNameAfterTheirCheck(): void
+    {
+        $sandbox = Sandbox::empty();
+        $marker = $sandbox->root.'/.git/clean-ran';
+        $sandbox->startRepository();
+        $sandbox->write('note.txt', "base\n");
+        $sandbox->commitAll('Add a note');
+        $sandbox->git('config', 'filter.evil.clean', 'touch '.$marker.'; cat');
+        $sandbox->write('note.txt', "changed\n");
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$this->gitThatWritesInfoAttributesAfterEachCheck($sandbox).':'.$path);
+
+        try {
+            $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+        } finally {
+            putenv('PATH='.$path);
+        }
+
+        self::assertFileDoesNotExist($marker);
+        self::assertSame(['note.txt'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsReadTheWorkingTreeEvenWhenTheRepositoryConfigPointsElsewhere(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('src/Changed.php', "<?php\n");
+        $sandbox->commitAll('Add a class');
+        $sandbox->write('.git/elsewhere/src/Changed.php', "<?php\n");
+        $sandbox->git('config', 'core.worktree', $sandbox->root.'/.git/elsewhere');
+        $sandbox->write('src/Changed.php', "<?php\n\necho 'changed';\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Changed.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileWhoseOnlyChangeIsItsExecuteMode(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('src/Unchanged.php', "<?php\n");
+        $sandbox->write('src/Executable.php', "<?php\n");
+        $sandbox->commitAll('Add two classes');
+        chmod($sandbox->root.'/src/Executable.php', 0o755);
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Executable.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileThatLostItsExecuteMode(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('bin/tool', "#!/bin/sh\n");
+        chmod($sandbox->root.'/bin/tool', 0o755);
+        $sandbox->commitAll('Add a tool');
+        chmod($sandbox->root.'/bin/tool', 0o644);
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['bin/tool'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileBesideOneThatDiffersOnlyInCaseWhenTheRepositoryIgnoresCase(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('safe.php', "<?php\n");
+        $sandbox->commitAll('Add a class');
+        $sandbox->write('SAFE.php', "<?php\n");
+        $sandbox->git('config', 'core.ignoreCase', 'true');
+
+        self::assertSame('', $sandbox->run('git', 'ls-files', '--others')->output, 'the setting must hide the file without hardening, or this test proves nothing');
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['SAFE.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileThatTheRepositoryConfigExcludes(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "base\n");
+        $sandbox->commitAll('Add a readme');
+        $sandbox->write('.git/hidden', "*.php\n");
+        $sandbox->git('config', 'core.excludesFile', $sandbox->root.'/.git/hidden');
+        $sandbox->write('src/Hidden.php', "<?php\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Hidden.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileThatTheRepositoryInfoExcludeNames(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "base\n");
+        $sandbox->commitAll('Add a readme');
+        $sandbox->write('.git/info/exclude', "*.php\n");
+        $sandbox->write('src/Hidden.php', "<?php\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Hidden.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsLeaveOutAFileThatAGitignoreOfTheRepositoryNames(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('.gitignore', "/var/\n");
+        $sandbox->commitAll('Ignore var');
+        $sandbox->write('var/cache.php', "<?php\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame([], $changed);
+        $sandbox->remove();
+    }
+
+    // A git on the path that lets each info/attributes check pass and then writes the file for the call itself, which forces the order a racing writer needs.
+    private function gitThatWritesInfoAttributesAfterEachCheck(Sandbox $sandbox): string
+    {
+        $git = trim($sandbox->run('sh', '-c', 'command -v git')->output);
+        $attributes = $sandbox->root.'/.git/info/attributes';
+        $sandbox->write('.git/racing/git', implode("\n", [
+            '#!/bin/sh',
+            'case " $* " in *" --git-path info/attributes "*) exec '.$git.' "$@";; esac',
+            'printf "* filter=evil\n" > '.$attributes,
+            $git.' "$@"',
+            'status=$?',
+            'rm -f '.$attributes,
+            'exit $status',
+            '',
+        ]));
+        chmod($sandbox->root.'/.git/racing/git', 0o755);
+
+        return $sandbox->root.'/.git/racing';
     }
 
     private function scope(): Scope
