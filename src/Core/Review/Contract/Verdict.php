@@ -10,6 +10,7 @@ use Symfony\Component\Validator\Constraints\Valid;
 final readonly class Verdict
 {
     public const string INVALID_OUTPUT = 'invalid-output';
+    public const string INCOMPLETE_STREAM = 'incomplete-stream';
 
     /**
      * @param list<Finding> $findings
@@ -41,5 +42,23 @@ final readonly class Verdict
         );
 
         return new self(Decision::Changes, [$finding], [], []);
+    }
+
+    public static function incompleteStream(string $reason): self
+    {
+        $finding = new Finding(
+            id: self::INCOMPLETE_STREAM,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'The reviewer stream ended before its verdict, so the review is blocked: '.$reason,
+            fixable_by: FixableBy::Owner,
+            repeat: false,
+            requirement: 'A verdict counts only when the reviewer finished it; a cut-off stream blocks and never counts as approval or changes.',
+            evidence: null,
+        );
+
+        return new self(Decision::Blocked, [$finding], [], []);
     }
 }

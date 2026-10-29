@@ -1,0 +1,187 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\SymfonyAiVendor;
+
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierRequest;
+use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
+use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
+use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
+use Intakt\Core\Ai\Infrastructure\ReadOnlyClaudeCodeClient;
+use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Evidence;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
+use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
+use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Kernel;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
+use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Clock\MockClock;
+use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Uid\UuidV7;
+
+#[CoversClass(ReadOnlyClaudeCodeClient::class)]
+#[CoversClass(FinishedProcessResult::class)]
+#[CoversClass(ClaudeCodePlatformFactory::class)]
+#[CoversClass(SymfonyAiVendor::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(UsageLedger::class)]
+#[UsesClass(UsageReservation::class)]
+#[UsesClass(ProjectModelCatalog::class)]
+#[UsesClass(Provider::class)]
+#[UsesClass(LedgerEvent::class)]
+#[UsesClass(LedgerEventKind::class)]
+#[UsesClass(AppendResult::class)]
+#[UsesClass(TierPlatform::class)]
+#[UsesClass(TierRequest::class)]
+#[UsesClass(ConfiguredTierResolver::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(Tier::class)]
+#[UsesClass(VerdictParser::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Evidence::class)]
+#[UsesClass(StrictVerdictSubscriber::class)]
+#[UsesClass(StrictVerdictConverter::class)]
+#[UsesClass(ReviewerAgent::class)]
+#[UsesClass(ReviewerPrompt::class)]
+#[UsesClass(ReviewerToolboxFactory::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(ReviewRequest::class)]
+#[UsesClass(ReviewerConversation::class)]
+#[UsesClass(Checkout::class)]
+#[UsesClass(TierRoutedPlatform::class)]
+#[UsesClass(FencedToolbox::class)]
+#[UsesClass(MalformedToolCalls::class)]
+#[UsesClass(Kernel::class)]
+final class ClaudeCodeReviewerTest extends KernelTestCase
+{
+    private const string NOW = '2026-10-27 12:00:00.000 UTC';
+
+    public function testACompleteRecordedStreamYieldsATypedVerdict(): void
+    {
+        $verdict = $this->vendor(new RecordedClaudeCodeCli('complete'))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+    }
+
+    public function testACompleteRecordedStreamSettlesItsUsageOnce(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(new RecordedClaudeCodeCli('complete'), $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
+        /** @var list<array<string, int>> $usages */
+        $usages = $ledger->payloads()[1]['usages'];
+        self::assertSame([120, 40], [$usages[0]['prompt'], $usages[0]['completion']]);
+    }
+
+    public function testTheCliGetsOnlyReadOnlyToolsAndTheVerdictSchema(): void
+    {
+        $cli = new RecordedClaudeCodeCli('complete');
+
+        $this->vendor($cli)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['tools', 'append_system_prompt'], array_keys($cli->options));
+        self::assertSame('Read,Grep,Glob', $cli->options['tools']);
+        self::assertStringContainsString('"json_schema"', (string) $cli->options['append_system_prompt']);
+    }
+
+    public function testATruncatedRecordedStreamMakesTheBridgeRaiseIncompleteStream(): void
+    {
+        $platform = $this->claudeCodePlatform(new RecordedClaudeCodeCli('truncated'));
+
+        $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
+
+        self::assertInstanceOf(StreamResult::class, $result);
+        $this->expectException(IncompleteStreamException::class);
+        iterator_to_array($result->getContent());
+    }
+
+    public function testACompleteRecordedStreamIsReadToTheEndByTheBridge(): void
+    {
+        $platform = $this->claudeCodePlatform(new RecordedClaudeCodeCli('complete'));
+
+        $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
+
+        self::assertInstanceOf(StreamResult::class, $result);
+        $text = '';
+        foreach ($result->getContent() as $delta) {
+            $text .= (string) $delta;
+        }
+        self::assertStringContainsString('"verdict"', $text);
+    }
+
+    public function testATruncatedStreamEndsTheReviewerAsBlockedWithTheReason(): void
+    {
+        $verdict = $this->vendor(new RecordedClaudeCodeCli('truncated'))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
+        self::assertStringContainsString('ended before its final result', $verdict->findings[0]->text);
+    }
+
+    public function testATruncatedStreamCountsItsUsageOnceAsUnsettled(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(new RecordedClaudeCodeCli('truncated'), $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'Review the change.', new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function claudeCodePlatform(RecordedClaudeCodeCli $cli): PlatformInterface
+    {
+        $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
+
+        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
+    }
+
+    private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
+        $platform = $this->claudeCodePlatform($cli);
+        $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+    }
+}

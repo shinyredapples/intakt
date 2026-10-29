@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
@@ -35,6 +36,11 @@ final readonly class SymfonyAiVendor implements Vendor
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $tier->value);
+        } catch (IncompleteStreamException $incomplete) {
+            // Left unsettled, never settled as well, so the call's usage is counted once.
+            $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
+
+            return Verdict::incompleteStream($incomplete->getMessage());
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 

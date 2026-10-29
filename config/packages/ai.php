@@ -3,10 +3,13 @@
 declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
+use Symfony\AI\Platform\Bridge\ClaudeCode\ModelClient;
+use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\Container;
@@ -90,6 +93,7 @@ return static function (ContainerConfigurator $container): void {
         Provider::Anthropic->value => 'ai.platform.anthropic',
         Provider::OpenAi->value => 'ai.platform.openai',
         Provider::OpenAiCompatible->value => 'ai.platform.generic.openai_compatible',
+        Provider::ClaudeCode->value => 'intakt.ai.platform.claude_code',
     ];
 
     $platform = [];
@@ -105,8 +109,17 @@ return static function (ContainerConfigurator $container): void {
             continue;
         }
 
-        $platform = array_replace_recursive($platform, $configs[$provider->value]);
+        $platform = array_replace_recursive($platform, $configs[$provider->value] ?? []);
         $tierPlatforms[$provider->value] = new ReferenceConfigurator($bundlePlatforms[$provider->value]);
+    }
+
+    if (!array_key_exists(Provider::ClaudeCode->value, $disabled)) {
+        // The CLI logs in with the subscription token; an API key in the environment would take precedence over it, so it is withheld from the process.
+        $container->services()->set('intakt.ai.claude_code.cli', ModelClient::class)
+            ->args([null, null, 300.0, ['CLAUDE_CODE_OAUTH_TOKEN' => '%env(CLAUDE_CODE_OAUTH_TOKEN)%', 'ANTHROPIC_API_KEY' => false]]);
+        $container->services()->set('intakt.ai.platform.claude_code', PlatformInterface::class)
+            ->factory([new ReferenceConfigurator(ClaudeCodePlatformFactory::class), 'create'])
+            ->args([new ReferenceConfigurator('intakt.ai.claude_code.cli'), $catalog->models(Provider::ClaudeCode)]);
     }
 
     // The reviewer's rounds each keep a conversation, in the table the migration creates for the DBAL store.
