@@ -43,7 +43,7 @@ final readonly class FlagParameterRule implements Rule
     // a test double or builder may take a flag to stay short, so only code outside tests/ is held to the rule
     private const string TEST_FOLDER = '/tests/';
 
-    private const array SCOPE_READERS = ['compact', 'func_get_arg', 'func_get_args', 'get_defined_vars'];
+    private const array SCOPE_READERS = ['compact', 'debug_backtrace', 'debug_print_backtrace', 'func_get_arg', 'func_get_args', 'get_defined_vars'];
 
     private const array THIS_CLASSES = ['parent', 'self', 'static'];
 
@@ -127,7 +127,7 @@ final readonly class FlagParameterRule implements Rule
             || $finder->findFirst($statements, $this->passesThisImplicitly(...)) instanceof Node;
     }
 
-    // eval and include run in the local scope, and a call by computed name could be any scope reader, so each counts too
+    // eval and include run in the local scope, a backtrace carries the arguments, and a call by computed name could be any scope reader, so each counts too
     private function readsScope(Node $node): bool
     {
         return $node instanceof Eval_
