@@ -38,8 +38,8 @@ final readonly class HardenedGitCall
      */
     public function command(array $arguments): array
     {
-        // A refs/replace/ ref would swap in another object, and pathspec magic would read ":odd.txt" as "odd.txt".
-        return ['git', '--no-replace-objects', '--literal-pathspecs', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
+        // A refs/replace/ ref would swap in another object, a lazy fetch would start the transport of a promisor remote the repository names, and pathspec magic would read ":odd.txt" as "odd.txt".
+        return ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
     }
 
     /**
@@ -50,7 +50,7 @@ final readonly class HardenedGitCall
     public function commandWithPathspecMagic(array $arguments): array
     {
         // Because a gate writes glob pathspecs itself, which literal pathspecs refuse; never use it for a path from the repository.
-        return ['git', '--no-replace-objects', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
+        return ['git', '--no-replace-objects', '--no-lazy-fetch', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
     }
 
     /**
@@ -60,9 +60,18 @@ final readonly class HardenedGitCall
      */
     public function environment(string $directory): array
     {
+        $directory = $this->absolute($directory);
         $this->refuseInfoAttributes($directory);
 
         return $this->variables($directory);
+    }
+
+    private function absolute(string $directory): string
+    {
+        // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
+        $absolute = realpath($directory);
+
+        return false === $absolute ? $directory : $absolute;
     }
 
     /**
@@ -149,10 +158,13 @@ final readonly class HardenedGitCall
     private function isolation(string $directory): array
     {
         // The work tree is pinned because core.worktree in the repository config would point working-tree reads at another directory, and info/grafts would rewrite parents as a replace object does.
+        // A partial clone would fetch a missing object through the transport of a promisor remote the repository names; the empty allowlist beats every protocol.<name>.allow of the repository (protocol.allow=never would not, a more specific setting wins), so no remote helper, ssh command or credential helper it names can run.
         return [
             'GIT_CONFIG_NOSYSTEM' => '1',
             'GIT_CONFIG_GLOBAL' => '/dev/null',
             'GIT_NO_REPLACE_OBJECTS' => '1',
+            'GIT_NO_LAZY_FETCH' => '1',
+            'GIT_ALLOW_PROTOCOL' => '',
             'GIT_GRAFT_FILE' => self::NOWHERE,
             'GIT_WORK_TREE' => $directory,
             'GIT_ATTR_SOURCE' => self::NO_ATTRIBUTES,

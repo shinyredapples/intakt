@@ -26,14 +26,20 @@ final class HardenedGitTest extends TestCase
         '-c', 'i18n.logOutputEncoding=UTF-8',
     ];
 
+    // Because the process that runs the tests may itself be hardened, and an inherited variable would hide what the repository does.
+    private const array UNHARDENED = ['GIT_NO_LAZY_FETCH' => false, 'GIT_ALLOW_PROTOCOL' => false];
+
     private TemporaryRepository $repository;
 
     /** @var array<array-key, mixed> */
     private array $environment;
 
+    private string $workingDirectory;
+
     protected function setUp(): void
     {
         $this->environment = $_ENV;
+        $this->workingDirectory = (string) getcwd();
         $this->repository = new TemporaryRepository();
         $this->repository->commitFile('README.md', "base\n");
     }
@@ -41,6 +47,7 @@ final class HardenedGitTest extends TestCase
     protected function tearDown(): void
     {
         $_ENV = $this->environment;
+        chdir($this->workingDirectory);
         $this->repository->remove();
     }
 
@@ -49,7 +56,7 @@ final class HardenedGitTest extends TestCase
         $command = new HardenedGit()->command(['status']);
 
         self::assertSame(
-            ['git', '--no-replace-objects', '--literal-pathspecs', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'status'],
+            ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'status'],
             $command,
         );
     }
@@ -60,8 +67,50 @@ final class HardenedGitTest extends TestCase
 
         self::assertNotContains('--literal-pathspecs', $command);
         self::assertContains('--no-replace-objects', $command);
+        self::assertContains('--no-lazy-fetch', $command);
         self::assertContains('--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', $command);
         self::assertContains('core.hooksPath=/dev/null', $command);
+    }
+
+    public function testTheEnvironmentTurnsLazyFetchesAndEveryTransportOff(): void
+    {
+        $_ENV['GIT_ALLOW_PROTOCOL'] = 'ext';
+
+        $environment = new HardenedGit()->environment($this->repository->path);
+
+        self::assertSame('1', $environment['GIT_NO_LAZY_FETCH']);
+        self::assertSame('', $environment['GIT_ALLOW_PROTOCOL']);
+    }
+
+    public function testARelativeDirectoryIsPinnedAsAnAbsoluteWorkTree(): void
+    {
+        file_put_contents($this->repository->path.'/README.md', "changed\n");
+        chdir(dirname($this->repository->path));
+        $relative = basename($this->repository->path);
+
+        $environment = new HardenedGit()->environment($relative);
+
+        self::assertSame(realpath($this->repository->path), $environment['GIT_WORK_TREE']);
+        self::assertSame(" M README.md\n", $this->runGit(new HardenedGit()->command(['status', '--short']), $environment, $relative));
+    }
+
+    public function testAPromisorRemoteOfTheRepositoryDoesNotFetchAMissingObjectThroughItsCommand(): void
+    {
+        $marker = $this->repository->path.'/.git/promisor-ran';
+        $script = $this->repository->writeHook('promisor', "#!/bin/sh\ntouch ".$marker."\nexit 1\n");
+        $this->repository->commitFile('note.txt', "secret\n");
+        $blob = $this->repository->objectAt('HEAD:note.txt');
+        $this->repository->promiseMissingObjectsFrom($script);
+        $this->repository->removeObject($blob);
+        $read = ['cat-file', 'blob', $blob];
+
+        $this->start(['git', ...$read], self::UNHARDENED, $this->repository->path);
+        self::assertFileExists($marker, 'the command must run without hardening, or this test proves nothing');
+        unlink($marker);
+
+        $hardened = $this->start(new HardenedGit()->command($read), new HardenedGit()->environment($this->repository->path), $this->repository->path);
+        self::assertFileDoesNotExist($marker);
+        self::assertFalse($hardened->isSuccessful(), 'a missing object must fail the call');
     }
 
     public function testTheEnvironmentRemovesInheritedGitVariablesAndIgnoresUserConfig(): void
@@ -223,13 +272,24 @@ final class HardenedGitTest extends TestCase
      * @param list<string>                $command
      * @param array<string, string|false> $environment
      */
-    private function runGit(array $command, array $environment): string
+    private function runGit(array $command, array $environment, ?string $directory = null): string
     {
-        $process = new Process($command, $this->repository->path, $environment);
-        $process->run();
+        $process = $this->start($command, $environment, $directory ?? $this->repository->path);
 
         self::assertTrue($process->isSuccessful(), $process->getErrorOutput());
 
         return $process->getOutput();
+    }
+
+    /**
+     * @param list<string>                $command
+     * @param array<string, string|false> $environment
+     */
+    private function start(array $command, array $environment, string $directory): Process
+    {
+        $process = new Process($command, $directory, $environment);
+        $process->run();
+
+        return $process;
     }
 }

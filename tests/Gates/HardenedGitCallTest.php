@@ -20,17 +20,57 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RepositoryAttributesRefused::class)]
 final class HardenedGitCallTest extends TestCase
 {
+    // Because the process that runs the tests may itself be hardened, and an inherited variable would hide what the repository does.
+    private const array UNHARDENED = ['GIT_NO_LAZY_FETCH' => false, 'GIT_ALLOW_PROTOCOL' => false];
+
     private Sandbox $sandbox;
+
+    private string $workingDirectory;
 
     protected function setUp(): void
     {
+        $this->workingDirectory = (string) getcwd();
         $this->sandbox = Sandbox::empty();
         $this->sandbox->startRepository();
     }
 
     protected function tearDown(): void
     {
+        chdir($this->workingDirectory);
         $this->sandbox->remove();
+    }
+
+    public function testARelativeDirectoryIsPinnedAsAnAbsoluteWorkTree(): void
+    {
+        $this->sandbox->write('note.txt', "public\n");
+        $this->sandbox->commitAll('Add a note');
+        $this->sandbox->write('note.txt', "changed\n");
+        chdir(dirname($this->sandbox->root));
+
+        $result = new ProcessRunner()->git(['status', '--short'], basename($this->sandbox->root));
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame(" M note.txt\n", $result->output);
+    }
+
+    public function testGitStartedByAnotherToolFetchesNoMissingObjectThroughAPromisorRemoteCommand(): void
+    {
+        $marker = $this->sandbox->root.'/.git/promisor-ran';
+        $script = $this->sandbox->root.'/.git/promisor';
+        $this->sandbox->write('.git/promisor', "#!/bin/sh\ntouch ".$marker."\nexit 1\n");
+        chmod($script, 0o755);
+        $this->sandbox->write('note.txt', "secret\n");
+        $this->sandbox->commitAll('Add a note');
+        $this->sandbox->promiseMissingObjectsFrom($script);
+        $this->sandbox->removeObject(trim($this->sandbox->git('rev-parse', 'HEAD:note.txt')->output));
+
+        new ProcessRunner()->run(['git', 'log', '-p', '-1'], $this->sandbox->root, self::UNHARDENED);
+        self::assertFileExists($marker, 'the command must run without hardening, or this test proves nothing');
+        unlink($marker);
+
+        $result = new ProcessRunner()->run(['git', 'log', '-p', '-1'], $this->sandbox->root, new HardenedGitCall()->environment($this->sandbox->root));
+        self::assertFileDoesNotExist($marker);
+        self::assertFalse($result->succeeded(), 'a missing object must fail the call');
     }
 
     public function testTheForgeCopyBuildsTheSameCommands(): void

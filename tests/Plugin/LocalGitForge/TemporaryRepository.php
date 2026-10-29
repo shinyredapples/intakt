@@ -88,6 +88,22 @@ final readonly class TemporaryRepository
         $this->git('config', $key, $value);
     }
 
+    public function promiseMissingObjectsFrom(string $command): void
+    {
+        // A partial clone fetches a missing object lazily from its promisor remote, here a command that git starts through the ext transport.
+        $this->configure('core.repositoryFormatVersion', '1');
+        $this->configure('extensions.partialClone', 'origin');
+        $this->configure('remote.origin.url', 'ext::'.$command);
+        $this->configure('remote.origin.promisor', 'true');
+        $this->configure('remote.origin.partialCloneFilter', 'blob:none');
+        $this->configure('protocol.ext.allow', 'always');
+    }
+
+    public function removeObject(string $hash): void
+    {
+        unlink($this->path.'/.git/objects/'.substr($hash, 0, 2).'/'.substr($hash, 2));
+    }
+
     public function writeHook(string $name, string $script): string
     {
         $path = $this->path.'/.git/hooks/'.$name;
