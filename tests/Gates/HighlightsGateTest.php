@@ -1,0 +1,86 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Intakt\Gates\HighlightsGate;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+#[CoversClass(HighlightsGate::class)]
+final class HighlightsGateTest extends SandboxTestCase
+{
+    private const string HEADER = "| Feature | How Intakt uses it | Status | Where |\n|---|---|---|---|\n";
+
+    public function testRowsWithAKnownStatusAndAnExistingPathPass(): void
+    {
+        $run = $this->checkRows("| A | a | planned | T1 (#5) |\n| B | b | in progress | T2 (#6), `src/Kernel.php` |\n| C | c | done | `src/` |\n");
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testAStatusOutsideTheThreeKnownOnesFails(): void
+    {
+        $run = $this->checkRows("| A | a | started | T1 (#5) |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md:5: status "started"', $run->findingsOf('highlights'));
+    }
+
+    public function testAPullRequestNumberInWhereFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | T1 (#5), PR #77 |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('cites a pull request ("PR #77")', $run->findingsOf('highlights'));
+    }
+
+    public function testAnIssueNumberInWhereIsAllowed(): void
+    {
+        $run = $this->checkRows("| A | a | done | T1 (#77, part #78) |\n");
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testABacktickedPathThatDoesNotExistFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | T1 (#5), `src/Missing.php` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`src/Missing.php`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testATableWithoutAWhereColumnOnlyChecksItsStatus(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "| Probe | Status | Reproduction |\n|---|---|---|\n| P | done | `upstream/none/` |\n| Q | open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertStringContainsString('status "open"', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testAMissingHighlightsFilePasses(): void
+    {
+        $run = $this->sandboxWithKernel()->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    private function checkRows(string $rows): CheckRun
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::HEADER.$rows);
+
+        return $sandbox->check('--only=highlights');
+    }
+
+    private function sandboxWithKernel(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Kernel.php', "<?php\n");
+
+        return $sandbox;
+    }
+}
