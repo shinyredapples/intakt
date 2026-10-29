@@ -88,13 +88,13 @@ final readonly class ProbeProvidersCommand
         try {
             $result = $this->tiers->invoke($project, $tier, new TierRequest(new MessageBag(Message::ofUser(self::PROMPT))));
             $result->asText();
+            $io->writeln(sprintf('%s: %s', $provider, $this->usageLine($result)));
         } catch (Throwable $failure) {
-            $io->error(sprintf('%s: %s (%s)', $provider, $failure->getMessage(), $failure::class));
+            // The class only, because a provider's message can echo the request URL or headers that carry its key.
+            $io->writeln(sprintf('<error>%s: the call failed with %s</error>', $provider, $failure::class));
 
             return false;
         }
-
-        $io->writeln(sprintf('%s: %s', $provider, $this->usageLine($result)));
 
         return true;
     }

@@ -16,11 +16,13 @@ use Intakt\Plugin\SymfonyAiVendor\UseCase\ProbeProviders\ProbeProvidersCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
 
@@ -71,7 +73,40 @@ final class ProbeProvidersCommandTest extends TestCase
         $tester = $this->execute($this->resolver(), $this->invoker($calls, $failFirst));
 
         self::assertSame(1, $tester->getStatusCode());
-        self::assertStringContainsString('anthropic: Rate limit exceeded.', $tester->getDisplay());
+        self::assertStringContainsString('anthropic: the call failed with '.RateLimitExceededException::class, $tester->getDisplay());
+        self::assertStringContainsString('openai: the provider reported no token usage', $tester->getDisplay());
+    }
+
+    public function testAFailureMessageIsNotPrintedBecauseItCanCarryAKey(): void
+    {
+        $calls = new ArrayObject();
+        $leaking = static fn (): never => throw new RuntimeException('GET https://provider.example/v1?key=probe-secret-value failed');
+
+        $tester = $this->execute($this->resolver(), $this->invoker($calls, $leaking));
+
+        self::assertStringNotContainsString('probe-secret-value', $tester->getDisplay());
+        self::assertStringContainsString('anthropic: the call failed with '.RuntimeException::class, $tester->getDisplay());
+    }
+
+    public function testAUsageThatCannotBeReadFailsOnlyItsProvider(): void
+    {
+        $calls = new ArrayObject();
+        $unreadable = self::createStub(TokenUsageInterface::class);
+        $unreadable->method('getModel')->willThrowException(new RuntimeException('unreadable usage'));
+        $unreadableFirst = static function () use ($calls, $unreadable): TextResult {
+            $result = new TextResult('ok');
+            if (1 === $calls->count()) {
+                $result->getMetadata()->add('token_usage', $unreadable);
+            }
+
+            return $result;
+        };
+
+        $tester = $this->execute($this->resolver(), $this->invoker($calls, $unreadableFirst));
+
+        self::assertSame(1, $tester->getStatusCode());
+        self::assertSame(['alpha/strong', 'alpha/light'], $calls->getArrayCopy());
+        self::assertStringContainsString('anthropic: the call failed with '.RuntimeException::class, $tester->getDisplay());
         self::assertStringContainsString('openai: the provider reported no token usage', $tester->getDisplay());
     }
 
