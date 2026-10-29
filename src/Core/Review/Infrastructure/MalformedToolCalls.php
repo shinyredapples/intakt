@@ -12,8 +12,7 @@ use Symfony\AI\Agent\Toolbox\ToolResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// The fault-tolerant toolbox answers a malformed call to the model and hides it from the reviewer, which must still end such a review as changes.
-// Excluded from the container because one is built per review around that review's toolbox, so its mark never outlives the review.
+// The fault-tolerant toolbox answers a malformed call to the model and hides it from the reviewer, which must still end such a review as changes; excluded from the container because one is built per review, so its mark never outlives the review.
 #[Exclude]
 final class MalformedToolCalls implements ToolboxInterface
 {

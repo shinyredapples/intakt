@@ -60,8 +60,6 @@ final readonly class UsageLedger
     }
 
     /**
-     * @param DeferredResult ...$rounds the rounds that answered before the failure
-     *
      * @throws UsageNotRecorded
      */
     public function leaveUnsettled(UsageReservation $reservation, Throwable $failure, DeferredResult ...$rounds): void
@@ -70,7 +68,7 @@ final readonly class UsageLedger
             'call' => $reservation->call,
             'phase' => 'unsettled',
             'failure' => $failure::class,
-            'usages' => $this->usagesBeforeFailure($reservation, $rounds),
+            'usages' => $this->usagesBeforeFailure($reservation, array_values($rounds)),
         ], $failure);
     }
 

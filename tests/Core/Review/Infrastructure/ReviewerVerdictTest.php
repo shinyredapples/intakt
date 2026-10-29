@@ -239,7 +239,7 @@ final class ReviewerVerdictTest extends WebTestCase
     /**
      * @param list<list<ToolCall>> $rounds
      */
-    // Each round carries the calls one model answer asks for; the verdict follows the last round.
+    // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round.
     private function reviewRounds(string $task, array $rounds, string $answer): Verdict
     {
         $script = function (mixed $model, mixed $input) use (&$rounds, $answer): string|ResultInterface {
