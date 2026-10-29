@@ -28,3 +28,14 @@ Allowance per task:
 Limits and accounting:
 - **Only structured signals count as "out of budget":** a vendor's usage-exhausted error or an HTTP 429 with its code, never the model's own text. The reset time is parsed from the vendor's error or headers, and the cooldown is kept per quota account, not per agent, so two agents on one account wait together.
 - **Usage is recorded per vendor call** with three states: started, settled, unsettled. Prices are fixed when the call is admitted. A crash in the middle of a call is settled from the vendor's usage later, never billed twice and never lost.
+
+## CI (design for later)
+
+Not in the first release. What a merge needs is an independent second run of the checks, on a machine the builder does not control; the forge's CI is one way to get it, not a requirement. A loop on a private repository's hosted runners spent a month's included minutes in under two days.
+- **Where checks run is a per-project setting, and the default needs no setup.** The default is Intakt's own check container: for each head the orchestrator starts a fresh container from the job image, with the project's sidecars (databases) and no network or secrets, runs the project's check command there, and posts the result to the pull request as a commit status itself, from outside the container, so the code under test cannot write its own result. A fresh install therefore needs no CI plan, runner or forge workflow. Opt-in: the forge's CI (hosted runners, or the owner's self-hosted ones), alone or as well, for example for pull requests from outside contributors. When more than one is set, each is a required status.
+- **Forge CI capacity is a budget** like a vendor window, when the forge's CI is in use:
+  - **Minutes are a budget input.** Per project, the plan's included minutes, their reset date and the used share are read from the forge's billing API where it has one; for self-hosted runners, their count and busy share. The planner treats CI like a vendor window: a forecast that runs out before the reset slows the admission of new builds first, before the reviews of heads already pushed.
+  - **Fewer runs per change.** Each push costs a run, so a newer push cancels the runs of the head it replaces, red-CI send-backs are capped (see [Reviews](07-reviews.md)), and the pre-push check catches what it can before a push.
+  - **Spent minutes are a cause, not a wait.** A run refused for spent minutes, or with no runner to take it, is recorded with its cause. Heads wait without a slot, and the owner gets one card (raise the limit, add a runner, or wait for the reset) with the reset date.
+  - **Paid minutes are capped** like paid vendor accounts: minutes billed past the plan count against the owner's spend cap and never start silently.
+  - **The dashboard shows** minutes used, the forecast at reset and minutes per merge.
