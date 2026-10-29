@@ -6,6 +6,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\Container;
@@ -50,8 +51,20 @@ return static function (ContainerConfigurator $container): void {
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
+    $contents = is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : [];
+    $contents = is_array($contents) ? $contents : [];
+    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only.
+    $reviews = [];
+    foreach (is_array($contents['projects'] ?? null) ? $contents['projects'] : [] as $name => $project) {
+        if (is_array($project) && array_key_exists('review', $project)) {
+            $reviews[$name] = $project['review'];
+            unset($contents['projects'][$name]['review']);
+        }
+    }
+
     /** @var array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects */
-    $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : []])['projects'];
+    $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents])['projects'];
+    $panels = new Processor()->processConfiguration(new PanelConfiguration(), [['projects' => $reviews]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
 
@@ -95,6 +108,7 @@ return static function (ContainerConfigurator $container): void {
     $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
     $container->parameters()->set('intakt.projects', $projects);
+    $container->parameters()->set('intakt.review.panels', $panels);
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');

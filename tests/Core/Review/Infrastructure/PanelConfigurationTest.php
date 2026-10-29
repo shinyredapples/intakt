@@ -1,0 +1,160 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Review\Infrastructure;
+
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Infrastructure\PanelConfiguration;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
+use Symfony\Component\Config\Definition\Processor;
+
+#[CoversClass(PanelConfiguration::class)]
+#[UsesClass(Provider::class)]
+#[UsesClass(Tier::class)]
+#[UsesClass(QuorumPolicy::class)]
+final class PanelConfigurationTest extends TestCase
+{
+    public function testAPanelOfOneReviewerLoads(): void
+    {
+        $panel = $this->panel('all', [$this->reviewer()]);
+
+        self::assertCount(1, $panel['reviewers']);
+        self::assertSame('all', $panel['quorum']);
+        self::assertSame(['role' => 'correctness', 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Check the logic.', 'budget' => 5], $panel['reviewers'][0]);
+    }
+
+    public function testAPanelOfTwoReviewersLoadsWithTheMajorityPolicy(): void
+    {
+        $panel = $this->panel('majority', [$this->reviewer(), $this->reviewer(['role' => 'style'])]);
+
+        self::assertCount(2, $panel['reviewers']);
+        self::assertSame('majority', $panel['quorum']);
+    }
+
+    public function testAPanelOfThreeReviewersLoadsWithTheOneStrongPlusOnePolicy(): void
+    {
+        $panel = $this->panel('one-strong-plus-one', [$this->reviewer(), $this->reviewer(['role' => 'style']), $this->reviewer(['role' => 'tests'])]);
+
+        self::assertSame(['correctness', 'style', 'tests'], array_column($panel['reviewers'], 'role'));
+        self::assertSame('one-strong-plus-one', $panel['quorum']);
+    }
+
+    public function testAnUnknownQuorumPolicyIsRefusedNamingTheKey(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.quorum/');
+
+        $this->panel('unanimous', [$this->reviewer()]);
+    }
+
+    public function testAPanelWithoutAQuorumIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['projects' => ['alpha' => ['reviewers' => [$this->reviewer()]]]]);
+    }
+
+    public function testAPanelWithoutReviewersIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->panel('all', []);
+    }
+
+    /**
+     * @param array<string, mixed> $override
+     */
+    #[DataProvider('brokenReviewers')]
+    public function testABrokenReviewerIsRefusedNamingTheKey(array $override, string $key): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.reviewers\.0\.'.$key.'/');
+
+        $this->panel('all', [$override + $this->reviewer()]);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function brokenReviewers(): iterable
+    {
+        yield 'unknown tier' => [['tier' => 'huge'], 'tier'];
+        yield 'unknown provider' => [['provider' => 'nowhere'], 'provider'];
+        yield 'empty role' => [['role' => ''], 'role'];
+        yield 'empty prompt' => [['prompt' => ''], 'prompt'];
+        yield 'zero budget' => [['budget' => 0], 'budget'];
+        yield 'negative budget' => [['budget' => -3], 'budget'];
+        yield 'budget that is no number' => [['budget' => 'lots'], 'budget'];
+    }
+
+    #[DataProvider('missingFields')]
+    public function testAReviewerWithoutAFieldIsRefused(string $field): void
+    {
+        $reviewer = $this->reviewer();
+        unset($reviewer[$field]);
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/'.$field.'/');
+
+        $this->panel('all', [$reviewer]);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function missingFields(): iterable
+    {
+        foreach (['role', 'tier', 'provider', 'prompt', 'budget'] as $field) {
+            yield $field => [$field];
+        }
+    }
+
+    public function testAnUnknownReviewerKeyIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->panel('all', [$this->reviewer(['modle' => 'x'])]);
+    }
+
+    /**
+     * @param array<string, mixed> $override
+     *
+     * @return array<string, mixed>
+     */
+    private function reviewer(array $override = []): array
+    {
+        return $override + ['role' => 'correctness', 'tier' => 'strong', 'provider' => 'anthropic', 'prompt' => 'Check the logic.', 'budget' => 5];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $reviewers
+     *
+     * @return array{quorum: string, reviewers: list<array<string, mixed>>}
+     */
+    private function panel(string $quorum, array $reviewers): array
+    {
+        /** @var array{quorum: string, reviewers: list<array<string, mixed>>} $panel */
+        $panel = $this->process(['projects' => ['alpha' => ['quorum' => $quorum, 'reviewers' => $reviewers]]])['projects']['alpha'];
+
+        return $panel;
+    }
+
+    /**
+     * @param array<string, mixed> $contents
+     *
+     * @return array{projects: array<string, mixed>}
+     */
+    private function process(array $contents): array
+    {
+        /** @var array{projects: array<string, mixed>} $processed */
+        $processed = new Processor()->processConfiguration(new PanelConfiguration(), [$contents]);
+
+        return $processed;
+    }
+}

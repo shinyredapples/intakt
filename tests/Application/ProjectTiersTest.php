@@ -9,6 +9,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\PlatformInterface;
@@ -42,6 +44,10 @@ final class ProjectTiersTest extends KernelTestCase
                     tiers:
                         strong: { provider: anthropic, model: big }
                         light: { provider: anthropic, model: small }
+                    review:
+                        quorum: all
+                        reviewers:
+                            - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
                 beta:
                     tiers:
                         strong: { provider: openai, model: other }
@@ -80,6 +86,18 @@ final class ProjectTiersTest extends KernelTestCase
 
         $this->expectException(TierProviderDisabled::class);
         $resolver->resolve('beta', Tier::Strong);
+    }
+
+    public function testAProjectReviewSectionLoadsAsAPanelAndLeavesTheTiersStrict(): void
+    {
+        // Nothing injects the loader yet, so the compiled container drops it; the parameter is what the config feeds it.
+        /** @var array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $parameter */
+        $parameter = $this->bootedContainer()->getParameter('intakt.review.panels');
+        $panels = new ConfiguredPanels($parameter);
+
+        self::assertSame('correctness', $panels->panelFor('alpha-one')->reviewers[0]->role);
+        $this->expectException(PanelNotConfigured::class);
+        $panels->panelFor('beta');
     }
 
     public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void

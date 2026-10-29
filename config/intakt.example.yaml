@@ -6,6 +6,13 @@ projects:
             strong: { provider: anthropic, model: claude-opus-5-5 }
             standard: { provider: anthropic, model: claude-sonnet-5-5 }
             light: { provider: anthropic, model: claude-haiku-5-5 }
+        # An optional review section sets the panel: quorum is all, majority or one-strong-plus-one;
+        # each reviewer needs a role, a tier, a provider, a prompt and a budget (a whole number of at least 1).
+        review:
+            quorum: majority
+            reviewers:
+                - { role: correctness, tier: strong, provider: anthropic, prompt: Check that the change does what the task asks., budget: 10 }
+                - { role: maintainability, tier: standard, provider: openai, prompt: Check that the code reads clearly., budget: 6 }
     beta:
         tiers:
             strong: { provider: openai, model: gpt-5 }
