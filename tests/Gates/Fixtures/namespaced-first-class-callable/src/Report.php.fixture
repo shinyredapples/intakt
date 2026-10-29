@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Closure;
+
+final readonly class Report
+{
+    public function qualified(): Closure
+    {
+        return \Other\run(...);
+    }
+
+    public function relative(): Closure
+    {
+        return namespace\run(...);
+    }
+}
