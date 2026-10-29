@@ -31,7 +31,7 @@ final class Version20261029120000 extends AbstractMigration
         $this->addSql($this->platform->getDropTableSQL('reviewer_conversation'));
     }
 
-    // The columns the Agent's DBAL message store reads and writes.
+    // Because the Agent's DBAL message store reads and writes exactly these columns, they are spelled out here instead of left to its setup command.
     private function conversation(): Table
     {
         return Table::editor()

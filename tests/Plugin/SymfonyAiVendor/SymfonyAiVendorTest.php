@@ -446,6 +446,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
         $conversations = $container->get(MessageStoreInterface::class);
         self::assertInstanceOf(ManagedMessageStoreInterface::class, $conversations);
+        self::assertInstanceOf(MessageStoreInterface::class, $conversations);
         EmptyDatabase::in($container);
         $conversations->setup();
         $request = $this->request();

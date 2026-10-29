@@ -51,7 +51,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
     private ReviewCheckout $fixture;
 
     /**
-     * @var list<array<string, mixed>>
+     * @var list<string>
      */
     private array $requests = [];
 
@@ -82,11 +82,12 @@ final class ReviewerPromptCachingTest extends KernelTestCase
         $this->reviewWithTwoRounds();
 
         self::assertCount(2, $this->requests);
-        foreach ($this->requests as $request) {
-            self::assertSame(['type' => 'ephemeral'], end($request['system'])['cache_control']);
-            self::assertSame(['type' => 'ephemeral'], end($request['tools'])['cache_control']);
-            $last = end($request['messages']);
-            self::assertSame(['type' => 'ephemeral'], end($last['content'])['cache_control']);
+        foreach ($this->requests as $body) {
+            /** @var array{system: non-empty-list<array{cache_control?: array<string, string>}>, tools: non-empty-list<array{cache_control?: array<string, string>}>, messages: non-empty-list<array{content: non-empty-list<array{cache_control?: array<string, string>}>}>} $request */
+            $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+            self::assertSame(['type' => 'ephemeral'], array_last($request['system'])['cache_control'] ?? null);
+            self::assertSame(['type' => 'ephemeral'], array_last($request['tools'])['cache_control'] ?? null);
+            self::assertSame(['type' => 'ephemeral'], array_last(array_last($request['messages'])['content'])['cache_control'] ?? null);
         }
     }
 
@@ -97,7 +98,8 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             $this->anthropic([['type' => 'text', 'text' => VerdictDocument::fromTheDesign()->json()]], ['cache_read_input_tokens' => 1_200, 'input_tokens' => 80]),
         ];
         $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$responses): JsonMockResponse {
-            $this->requests[] = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsString($options['body']);
+            $this->requests[] = $options['body'];
 
             return array_shift($responses) ?? self::fail('The reviewer asked for a third round.');
         });
@@ -131,13 +133,13 @@ final class ReviewerPromptCachingTest extends KernelTestCase
      */
     private function usagesOf(TraceablePlatform $platform): array
     {
-        return array_map(static function (array $call): TokenUsageInterface {
+        return array_values(array_map(static function (array $call): TokenUsageInterface {
             $result = $call['result'];
             self::assertInstanceOf(DeferredResult::class, $result);
             $usage = $result->getResult()->getMetadata()->get('token_usage');
             self::assertInstanceOf(TokenUsageInterface::class, $usage);
 
             return $usage;
-        }, $platform->getCalls());
+        }, $platform->getCalls()));
     }
 }

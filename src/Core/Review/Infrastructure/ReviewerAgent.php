@@ -59,7 +59,7 @@ final readonly class ReviewerAgent implements Reviewer
     {
         $toolbox = $this->prompt->fenced(new FaultTolerantToolbox($tools));
 
-        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, messageStore: $this->conversations, maxToolCalls: self::MAX_ROUNDS);
+        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
     }
 
     private function answerOf(ExecutionInterface $execution): Verdict
