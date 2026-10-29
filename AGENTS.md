@@ -48,7 +48,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 
 - A steered model must stay harmless: every decision that matters is made or checked by plain code, and each model role has only the tools its job needs.
 - A change that adds a model role, a new input to a model or a new tool for one updates the threat model page in the same change.
-- Every untrusted value that goes into a prompt goes through the fencing helper: issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
+- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
 - Only tasks, steering labels and comments from people with write access count, checked through the forge's permission API on each event.
 
 ## Docs, pull requests, commits

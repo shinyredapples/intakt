@@ -48,7 +48,7 @@ Bundled details:
 
 External details:
 - **Isolation is the owner's responsibility,** and the wizard says so. Parallel builds and reviews hit the same instance, so tests must use their own tenant, namespace or prefix, or only read. Intakt passes a per-job id (`INTAKT_JOB_ID`) that tests can use for that.
-- **Credentials** are stored in the orchestrator and injected only into the job types the owner allows. By default that is check and review jobs. Build jobs get them only if the owner opts in, because a build job runs model-written code. Test-scoped, low-privilege credentials are recommended.
+- **Credentials** are stored in the orchestrator and injected only into the job types the owner allows. By default that is check and review jobs. Build jobs get them only if the owner opts in, because a build job runs model-written code. Test-scoped, low-privilege credentials are recommended. Before Intakt pushes or posts anything a job returned, it redacts their values and runs the secret scan ([Threat model](14-threat-model.md#roles)).
 
 Projects that change together:
 - When several dependent projects are all built by Intakt, a change in one can need a change in another. The loop links tasks across projects ("Waits for billing#12") and builds them in order.
