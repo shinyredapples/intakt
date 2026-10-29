@@ -13,6 +13,7 @@ use Doctrine\Migrations\AbstractMigration;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
+use DoctrineMigrations\Version20261028120000;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -157,7 +158,7 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         require_once dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
 
         $connection = $this->manager->getConnection();
-        $migration = $this->instantiate('DoctrineMigrations\\Version20261028120000', $connection);
+        $migration = $this->instantiate(Version20261028120000::class, $connection);
         $migration->up(new Schema());
 
         foreach ($migration->getSql() as $query) {
