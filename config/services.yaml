@@ -18,6 +18,8 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     Intakt\:
         resource: '../src/'
+        # Built per review with the checkout under review, so the container cannot wire them.
+        exclude: '../src/Core/Review/Infrastructure/Repository/'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

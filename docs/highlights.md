@@ -23,9 +23,9 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | planned | T7 (#12), T12 (#17) |
-| `FaultTolerantToolbox` | a failing tool answers the model with an error instead of ending the run | planned | T7 (#12) |
-| `ToolCallRequested` event | a listener denies tool arguments that escape the checkout | planned | T7 (#12) |
+| Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | in progress | T7 (#12), T12 (#17), `src/Core/Review/Infrastructure/Repository/` |
+| `FaultTolerantToolbox` | a failing tool answers the model with an error instead of ending the run | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php` |
+| `ToolCallRequested` event | a listener denies tool arguments that escape the checkout | in progress | T7 (#12), `src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php` |
 | Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each round | planned | T7 (#12), T29 (#29) |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
 | `MemoryInputProcessor` | the project memory briefing, with a size cap | planned | T17 (#22) |
