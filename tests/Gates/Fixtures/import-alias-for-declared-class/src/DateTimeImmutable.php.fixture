@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use DateTimeImmutable as BaseDateTimeImmutable;
+
+final readonly class DateTimeImmutable
+{
+    public function __construct(public BaseDateTimeImmutable $moment)
+    {
+    }
+}
