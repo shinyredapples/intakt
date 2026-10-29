@@ -19,7 +19,7 @@ git --no-replace-objects --no-lazy-fetch --literal-pathspecs
 - `--no-replace-objects`: a `refs/replace/` ref cannot swap in another commit or blob.
 - `--no-lazy-fetch` (git 2.45 or later; an older git refuses the option, so every call fails): a partial clone (`extensions.partialClone`) fetches no missing object, so the transport of a promisor remote the repository config names (an `ext::<command>` URL with `protocol.ext.allow=always`, say) never starts; the call fails on the missing object instead (`Not a valid object name`, which the forge turns into `ForgeReadFailed`).
 - `--literal-pathspecs`: a path is read as its exact name, so a leading `:` is not pathspec magic. `callWithPathspecMagic()` leaves it out for the two gate calls that pass their own `:(glob)` pathspecs, never a path from the repository.
-- `--attr-source=` git's empty tree: no `.gitattributes` of the repository applies (no filter, diff driver, `binary` or `eol` attribute from the tree). A SHA-256 repository refuses this SHA-1 tree, so every call in it fails instead of reading attributes.
+- `--attr-source=` git's empty tree: no `.gitattributes` of the repository applies (no filter, diff driver, `binary` or `eol` attribute from the tree). A SHA-256 repository refuses this SHA-1 tree: a command there that consults attributes (such as `status` or `diff` over a changed file) fails with `bad --attr-source` instead of reading them, while one that does not (such as `rev-parse HEAD`, `ls-files` or `log`) still succeeds.
 - `core.hooksPath=/dev/null`: no repository hook runs.
 - `core.fsmonitor=false`: no repository fsmonitor command runs.
 - `diff.external=` and `core.attributesFile=/dev/null`: no external diff command and no attributes file outside the repository.
