@@ -25,7 +25,7 @@ Every model output is untrusted too: it is validated against its schema before u
 ## Roles
 
 ### Builder
-- **Reads:** the task (with its fenced external blocks), answers and steering comments, the judge's act list, CI log excerpts, the project memory briefing, the checkout including `vendor/`, and a split part's source ref.
+- **Reads:** the task (with its fenced external blocks), answers and steering comments, the judge's act list, the strong-tier plan when the planner wrote one (fenced as another model's advice), CI log excerpts, the project memory briefing, the checkout including `vendor/`, and a split part's source ref.
 - **Can:** run anything inside its job container: edit files, run tests, install packages from the allowed registries, reach its vendor's API, and reach the project's external dependencies the job uses (see [External dependencies](#external-dependencies)). It returns a git bundle, pull request text, and optionally a structured question or upgrade request.
 - **Holds:** its vendor's subscription login when the vendor uses one, mounted read-only because the vendor CLI needs it ([Security model](../04-constraints.md#security-model)); the project's credentials only when the owner opts in for build jobs ([New and existing projects](12-new-and-existing-projects.md)).
 - **Checks:** the job holds no forge token, signing key or vendor API key, has an egress allowlist (its vendor's API, the package registries and the address of each external dependency the job uses) and a read-only root. What it does to an external dependency happens before any check below; that path has its own [section](#external-dependencies). A credential it holds can leave the job only through that allowlist or in what it hands back, and before Intakt pushes or posts anything a job returned, it redacts the values of every credential mounted or injected into that job and runs the secret scan; a hit fails the hand-back. The hand-back is data: the bundle must build on the expected base and is re-signed by the orchestrator; a check job runs the project's check command in a fresh container; secrets are scanned before every push; protected paths and dependency changes are held by the merge rules and the dependency policy; the change then needs its review panel, green CI on its exact head and the [merge](08-merge.md) steps. A question only parks the task; an upgrade request is one signal to the planner, which picks the model.
@@ -44,6 +44,11 @@ Every model output is untrusted too: it is validated against its schema before u
 - **Reads:** the reviewers' findings, the task's acceptance criteria and non-goals.
 - **Can:** mark each finding act, defer or reject; no tools.
 - **Checks:** its output is a typed list over the finding ids it was given; an unknown id or a missing mark is a failure. It decides only what the next build works on: it never turns a reviewer's `changes` into an approval, because the quorum counts the reviewers' own verdicts on the exact head.
+
+### Planner (strong-tier plan for a cheaper build)
+- **Reads:** the task text with its fenced external blocks, and the code at main; both are untrusted.
+- **Can:** read-only repository tools (read, search) within a turn cap; no writes, no network beyond its vendor, no credentials of the project or the forge.
+- **Checks:** its output is a plan capped in size, which reaches the builder fenced as another model's advice, never as the task ([Budget and model planner](06-budget-and-model-planner.md)). It is advice only: the build it informs is checked, reviewed and merged like any other, so a steered plan can only produce a build that the same gates judge.
 
 ### Triage and sizing
 - **Reads:** the task text with its fenced external blocks, and items of the follow-up inbox.
