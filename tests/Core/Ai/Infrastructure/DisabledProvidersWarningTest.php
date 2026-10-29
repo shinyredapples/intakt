@@ -39,7 +39,7 @@ final class DisabledProvidersWarningTest extends TestCase
     {
         $errors = new BufferedOutput();
         $output = $this->createMock(ConsoleOutputInterface::class);
-        $output->method('getErrorOutput')->willReturn($errors);
+        $output->expects(self::atLeastOnce())->method('getErrorOutput')->willReturn($errors);
         $output->expects(self::never())->method('write');
         $output->expects(self::never())->method('writeln');
 

@@ -40,8 +40,8 @@ return static function (ContainerConfigurator $container): void {
 
         try {
             return $vault->reveal($name);
-        } catch (SodiumException) {
-            // A decryption key of the wrong length throws where a wrong key only returns null; either way the secret is unusable, so it counts as missing.
+        } catch (SodiumException|RuntimeException) {
+            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it counts as missing.
             return null;
         }
     };
