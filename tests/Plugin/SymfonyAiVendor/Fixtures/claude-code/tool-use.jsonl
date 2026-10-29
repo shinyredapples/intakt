@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","model":"sonnet","tools":[]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"Read","input":{"file_path":"README.md"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","is_error":true,"content":"No such tool available: Read"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"findings\":[],\"verdict\":\"approve\",\"resolved\":[],\"follow_ups\":[]}","usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

@@ -10,10 +10,18 @@ use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 
-// The CLI is a full agent with shell and edit tools, so a reviewer gets only what the options below leave it: the agent's own tools and every other option are dropped because the bridge turns each option into a CLI flag.
-final readonly class ReadOnlyClaudeCodeClient implements ModelClientInterface
+// The CLI is a full agent whose own file tools bypass the checkout's path checks and the fence, so it gets no tool, no project settings and no MCP server; every option the agent passes is dropped because the bridge turns each into a CLI flag.
+final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
 {
-    private const string TOOLS = 'Read,Grep,Glob';
+    private const array CONFINEMENT = [
+        'tools' => [],
+        'setting_sources' => '',
+        'strict_mcp_config' => true,
+        'no_session_persistence' => true,
+    ];
+
+    // Because the reviewer's instructions offer Intakt's tools, which the CLI cannot call (plan T15 serves them over MCP).
+    private const string NO_TOOLS = 'In this session no tool is available: judge the change from the fenced text you were given, and cite only what it shows.';
 
     public function __construct(
         private ModelClientInterface $inner,
@@ -39,14 +47,11 @@ final readonly class ReadOnlyClaudeCodeClient implements ModelClientInterface
      */
     private function confined(array $options): array
     {
-        $confined = ['tools' => self::TOOLS];
         $format = $options[PlatformSubscriber::RESPONSE_FORMAT] ?? null;
 
         // The CLI has no response format option, so the schema travels as an instruction.
-        if (null !== $format) {
-            $confined['append_system_prompt'] = 'Answer with one JSON object that matches this JSON schema and nothing else: '.json_encode($format, JSON_THROW_ON_ERROR);
-        }
+        $schema = null === $format ? '' : ' Answer with one JSON object that matches this JSON schema and nothing else: '.json_encode($format, JSON_THROW_ON_ERROR);
 
-        return $confined;
+        return [...self::CONFINEMENT, 'append_system_prompt' => self::NO_TOOLS.$schema];
     }
 }

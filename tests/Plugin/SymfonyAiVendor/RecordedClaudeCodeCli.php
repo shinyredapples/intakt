@@ -15,14 +15,38 @@ use Symfony\Component\Process\Process;
 // Replays a recorded CLI stream through the bridge's own process result, so the bridge parses it as it would a live run.
 final class RecordedClaudeCodeCli implements ModelClientInterface
 {
+    private const float STALL_TIMEOUT = 0.5;
+
     /**
      * @var array<string, mixed>
      */
     public array $options = [];
 
-    public function __construct(
+    private function __construct(
         private readonly string $recording,
+        private readonly string $ending,
+        private readonly ?float $timeout,
     ) {
+    }
+
+    public static function replaying(string $recording): self
+    {
+        return new self($recording, 'exit 0', null);
+    }
+
+    public static function exitingAfter(string $recording, int $exitCode): self
+    {
+        return new self($recording, 'exit '.$exitCode, null);
+    }
+
+    public static function killedAfter(string $recording): self
+    {
+        return new self($recording, 'kill -TERM $$', null);
+    }
+
+    public static function stalledAfter(string $recording): self
+    {
+        return new self($recording, 'sleep 10', self::STALL_TIMEOUT);
     }
 
     #[Override]
@@ -35,7 +59,7 @@ final class RecordedClaudeCodeCli implements ModelClientInterface
     public function request(Model $model, array|string $payload, array $options = []): RawResultInterface
     {
         $this->options = $options;
-        $replay = new Process(['cat', __DIR__.'/Fixtures/claude-code/'.$this->recording.'.jsonl']);
+        $replay = new Process(['sh', '-c', 'cat "$0"; '.$this->ending, __DIR__.'/Fixtures/claude-code/'.$this->recording.'.jsonl'], timeout: $this->timeout);
         $replay->start();
 
         return new RawProcessResult($replay);

@@ -70,6 +70,13 @@ final class AiProvidersTest extends KernelTestCase
         self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
     }
 
+    public function testTheSubscriptionPlatformIsBuiltWhenItsLoginTokenIsSet(): void
+    {
+        $container = $this->bootWith($this->allSet());
+
+        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.claude_code'));
+    }
+
     public function testTheSubscriptionProviderIsDisabledUntilItsLoginTokenIsSet(): void
     {
         $values = $this->allSet();

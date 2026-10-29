@@ -12,7 +12,7 @@ use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
-use Intakt\Core\Ai\Infrastructure\ReadOnlyClaudeCodeClient;
+use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -52,7 +52,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Uid\UuidV7;
 
-#[CoversClass(ReadOnlyClaudeCodeClient::class)]
+#[CoversClass(ConfinedClaudeCodeClient::class)]
 #[CoversClass(FinishedProcessResult::class)]
 #[CoversClass(ClaudeCodePlatformFactory::class)]
 #[CoversClass(SymfonyAiVendor::class)]
@@ -91,7 +91,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
-        $verdict = $this->vendor(new RecordedClaudeCodeCli('complete'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
@@ -101,7 +101,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $this->vendor(new RecordedClaudeCodeCli('complete'), $ledger)->review('alpha', Tier::Strong, $this->request());
+        $this->vendor(RecordedClaudeCodeCli::replaying('complete'), $ledger)->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
         /** @var list<array<string, int>> $usages */
@@ -109,22 +109,60 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertSame([120, 40], [$usages[0]['prompt'], $usages[0]['completion']]);
     }
 
-    public function testTheCliGetsOnlyReadOnlyToolsAndTheVerdictSchema(): void
+    public function testTheCliGetsNoToolsNoProjectSettingsAndTheVerdictSchema(): void
     {
-        $cli = new RecordedClaudeCodeCli('complete');
+        $cli = RecordedClaudeCodeCli::replaying('complete');
 
         $this->vendor($cli)->review('alpha', Tier::Strong, $this->request());
 
-        self::assertSame(['tools', 'append_system_prompt'], array_keys($cli->options));
-        self::assertSame('Read,Grep,Glob', $cli->options['tools']);
+        self::assertSame(['tools', 'setting_sources', 'strict_mcp_config', 'no_session_persistence', 'append_system_prompt'], array_keys($cli->options));
+        self::assertSame([[], '', true, true], [$cli->options['tools'], $cli->options['setting_sources'], $cli->options['strict_mcp_config'], $cli->options['no_session_persistence']]);
         $instruction = $cli->options['append_system_prompt'];
         self::assertIsString($instruction);
         self::assertStringContainsString('"json_schema"', $instruction);
     }
 
+    public function testAStreamInWhichTheCliUsedOneOfItsOwnToolsStillYieldsItsVerdict(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testACliThatExitsMidStreamEndsTheReviewerAsBlocked(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertStringContainsString('exit code 143', $verdict->findings[0]->text);
+    }
+
+    public function testACliKilledMidStreamEndsTheReviewerAsBlocked(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::killedAfter('truncated'))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertStringContainsString('stopped by signal 15', $verdict->findings[0]->text);
+    }
+
+    public function testACliThatTimesOutMidStreamEndsTheReviewerAsBlocked(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::stalledAfter('truncated'))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertStringContainsString('the CLI timed out', $verdict->findings[0]->text);
+    }
+
+    public function testACliThatFailsWithItsFinalResultIsAFailureAndNotABlockedReview(): void
+    {
+        $this->expectExceptionMessage('Not logged in');
+
+        $this->vendor(RecordedClaudeCodeCli::exitingAfter('failed', 1))->review('alpha', Tier::Strong, $this->request());
+    }
+
     public function testATruncatedRecordedStreamMakesTheBridgeRaiseIncompleteStream(): void
     {
-        $platform = $this->claudeCodePlatform(new RecordedClaudeCodeCli('truncated'));
+        $platform = $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying('truncated'));
 
         $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
 
@@ -135,7 +173,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACompleteRecordedStreamIsReadToTheEndByTheBridge(): void
     {
-        $platform = $this->claudeCodePlatform(new RecordedClaudeCodeCli('complete'));
+        $platform = $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying('complete'));
 
         $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
 
@@ -150,7 +188,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testATruncatedStreamEndsTheReviewerAsBlockedWithTheReason(): void
     {
-        $verdict = $this->vendor(new RecordedClaudeCodeCli('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('truncated'))->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
@@ -161,7 +199,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $this->vendor(new RecordedClaudeCodeCli('truncated'), $ledger)->review('alpha', Tier::Strong, $this->request());
+        $this->vendor(RecordedClaudeCodeCli::replaying('truncated'), $ledger)->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
