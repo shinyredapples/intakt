@@ -83,7 +83,7 @@ enum Isolation: string
     case ByUnshare = 'unshare';
     case ByCaller = 'caller';
 
-    // The caller (the build loop's sandbox) must set PROBE_ISOLATED=1 when it already gives the run its own network and PID namespaces.
+    // Without the variable the probe cannot know the caller isolates it, and without it, a run must never have the network open.
     public static function fromVariable(string|false $value): self
     {
         return '1' === $value ? self::ByCaller : self::ByUnshare;

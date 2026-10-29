@@ -7,6 +7,7 @@ namespace Intakt\Core\Ledger\Infrastructure;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\OnFlushEventArgs;
 use Doctrine\ORM\Events;
+use Doctrine\ORM\UnitOfWork;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
 
@@ -15,14 +16,29 @@ final readonly class RefuseChangesToStoredEvents
 {
     public function onFlush(OnFlushEventArgs $args): void
     {
-        $unitOfWork = $args->getObjectManager()->getUnitOfWork();
+        $manager = $args->getObjectManager();
+        $refusal = $this->refusalOf($manager->getUnitOfWork());
 
+        if (!$refusal instanceof LedgerEventsAreAppendOnly) {
+            return;
+        }
+
+        // The entity manager is shared, so a refused change left scheduled would refuse every later flush in this worker, the ledger's own appends too.
+        $manager->clear();
+
+        throw $refusal;
+    }
+
+    private function refusalOf(UnitOfWork $unitOfWork): ?LedgerEventsAreAppendOnly
+    {
         if (array_any($unitOfWork->getScheduledEntityUpdates(), static fn (object $entity): bool => $entity instanceof EventRecord)) {
-            throw LedgerEventsAreAppendOnly::updated();
+            return LedgerEventsAreAppendOnly::updated();
         }
 
         if (array_any($unitOfWork->getScheduledEntityDeletions(), static fn (object $entity): bool => $entity instanceof EventRecord)) {
-            throw LedgerEventsAreAppendOnly::deleted();
+            return LedgerEventsAreAppendOnly::deleted();
         }
+
+        return null;
     }
 }

@@ -11,7 +11,7 @@ Only the install check and the provider configuration below exist so far. The ot
 
 ## Reading a change from a local repository
 
-Intakt can treat a branch of a local git repository as a pull request: the branch is the change and the repository's base branch is what it is compared with. It reads the branch's latest commit, the diff against the point where the branch left the base, the list of changed files and any file as it was at that commit (by its exact name, even one starting with `:`), ignoring git's replacement refs (`git replace`), which could otherwise show other content under the same commit. It notices when the branch has moved to a newer commit since it was read. It only reads; it never changes the repository. There is no command for it yet.
+Intakt can treat a branch of a local git repository as a pull request: the branch is the change and the repository's base branch is what it is compared with. It reads the branch's latest commit, the diff against the point where the branch left the base, the list of changed files and any file as it was at that commit (by its exact name, even one starting with `:`), ignoring git's replacement refs (`git replace`), which could otherwise show other content under the same commit. It notices when the branch has moved to a newer commit since it was read. A name that is not a valid branch name (such as `../tags/v1`) is treated like a branch that does not exist. It only reads; it never changes the repository. `php bin/console intakt:change:summarize <branch>` prints what it reads (see [Summarizing a branch](#summarizing-a-branch)); for an invalid name it prints the same error as for a missing branch and exits with 1.
 
 ## Checking that an install boots
 
@@ -27,7 +27,7 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 ## When `bin/check` reports a stateful service
 
-Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class under `src/` with a property which is not `readonly`, including properties from a parent class or a trait under `src/`, and static ones, because the container registers every class under `src/` as a service. A property a vendor base class declares, such as those of Symfony's `Command` or `AbstractController`, is framework wiring rather than request state and is not reported. The finding names the property. To resolve it, do one of:
+Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class under `src/` with a property which is not `readonly`, including properties from a parent class or a trait under `src/`, and static ones, because the container registers every class under `src/` as a service. A property a vendor base class declares, such as those of Symfony's `Command` or `AbstractController`, is framework wiring rather than request state and is not reported. A virtual property, a hooked property without a backing store such as one with only a `get` hook that computes its value from other properties, keeps no value and is not reported either; a hooked property with a backing store is. The finding names the property. To resolve it, do one of:
 
 - make the property, or the whole class, `readonly`;
 - implement `Symfony\Contracts\Service\ResetInterface` and clear the property in `reset()`, which Symfony calls between requests and messages;
@@ -38,6 +38,8 @@ Doctrine entities, embeddables, mapped superclasses and column types, and except
 ## Running a probe against an install
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`, which cut the network for the run.
+
+The instance and the probe do not inherit your whole environment, so a token you have set in your shell is not visible to them. They get only `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR` (when you set them), the application variables `bin/instance` sets itself (`APP_*` and `DATABASE_URL`) and `INTAKT_INSTANCE_URL`. `APP_ENV` and `APP_SECRET` keep your value when it is set and not empty or `0`.
 
 A caller that already runs `bin/probe` without network access and in its own process namespace (as the build loop's sandbox does) sets the environment variable `PROBE_ISOLATED=1`. `bin/probe` then starts the instance directly and needs neither `unshare` nor `ip`, but first checks that the run really is offline: when `/proc/net/dev` cannot be read or lists something unexpected, when it shows a network interface other than `lo`, or when `lo` is down, it prints the reason and exits with code 2 before anything starts. The caller is responsible for ending whatever the probe leaves running. Any other value, or no value, keeps the `unshare` way.
 
@@ -94,3 +96,7 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 ## Checking a new Symfony AI release against the known bugs
 
 `php bin/console intakt:upstream:run` runs every reproduction in `upstream/` and prints the installed Symfony AI versions, then `passes` (the bug seems fixed) or `still fails` for each reproduction, and a count. Add `-v` to see why a reproduction fails. The exit code is 1 while any reproduction still fails. A reproduction counts as `passes` only when its PHPUnit tests ran and asserted something, or when its `reproduce.php` script exits with 0 and prints `REPRODUCTION PASSES` as its last line. One without tests or script, with a skipped or incomplete test, or that runs longer than 5 minutes is reported as `still fails`, and the other reproductions still run. A folder that does not exist or cannot be read is an error (exit code 2).
+
+## Asking a model for a verdict
+
+Inside Intakt, the vendor asks the model of a project's capability tier to review a change and gets back a verdict: an approve or changes decision with findings. An answer that is not a valid verdict counts as changes. There is no command for it yet; the review loop will use it.
