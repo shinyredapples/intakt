@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor\UseCase;
 
+use ArrayObject;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -33,7 +34,7 @@ final class ProbeProvidersCommandTest extends TestCase
 {
     public function testEachConfiguredProviderIsCalledOnceAndItsUsageLineIsPrinted(): void
     {
-        $calls = [];
+        $calls = new ArrayObject();
         $tester = $this->execute($this->resolver(), $this->invoker($calls, static function (): TextResult {
             $result = new TextResult('ok');
             $result->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 12, completionTokens: 3, cachedTokens: 4, remainingTokens: 900, totalTokens: 15, model: 'big'));
@@ -42,14 +43,14 @@ final class ProbeProvidersCommandTest extends TestCase
         }));
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertSame(['alpha/strong', 'alpha/light'], $calls);
+        self::assertSame(['alpha/strong', 'alpha/light'], $calls->getArrayCopy());
         self::assertStringContainsString('anthropic: model big, prompt 12, completion 3, cached 4, total 15, remaining 900', $tester->getDisplay());
         self::assertStringContainsString('openai: model big, prompt 12', $tester->getDisplay());
     }
 
     public function testAnAnswerWithoutUsageSaysSo(): void
     {
-        $calls = [];
+        $calls = new ArrayObject();
 
         $tester = $this->execute($this->resolver(), $this->invoker($calls, static fn (): string => 'ok'));
 
@@ -58,9 +59,9 @@ final class ProbeProvidersCommandTest extends TestCase
 
     public function testAFailingProviderIsReportedAndTheOthersStillRun(): void
     {
-        $calls = [];
-        $failFirst = static function () use (&$calls): string {
-            if (1 === count($calls)) {
+        $calls = new ArrayObject();
+        $failFirst = static function () use ($calls): string {
+            if (1 === $calls->count()) {
                 throw new RateLimitExceededException(30);
             }
 
@@ -79,12 +80,12 @@ final class ProbeProvidersCommandTest extends TestCase
         $resolver = self::createStub(TierResolver::class);
         $resolver->method('projects')->willReturn(['alpha']);
         $resolver->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): never => throw new TierNotMapped($project, $tier));
-        $calls = [];
+        $calls = new ArrayObject();
 
         $tester = $this->execute($resolver, $this->invoker($calls, static fn (): string => 'ok'));
 
         self::assertStringContainsString('No enabled provider is configured.', $tester->getDisplay());
-        self::assertSame([], $calls);
+        self::assertCount(0, $calls);
     }
 
     private function resolver(): TierResolver
@@ -100,14 +101,14 @@ final class ProbeProvidersCommandTest extends TestCase
     }
 
     /**
-     * @param list<string> $calls
+     * @param ArrayObject<int, string> $calls
      */
-    private function invoker(array &$calls, callable $answer): TierInvoker
+    private function invoker(ArrayObject $calls, callable $answer): TierInvoker
     {
         $platform = MockPlatformFactory::createPlatform($answer(...));
         $invoker = self::createStub(TierInvoker::class);
-        $invoker->method('invoke')->willReturnCallback(static function (string $project, Tier $tier, TierRequest $request) use (&$calls, $platform): DeferredResult {
-            $calls[] = $project.'/'.$tier->value;
+        $invoker->method('invoke')->willReturnCallback(static function (string $project, Tier $tier, TierRequest $request) use ($calls, $platform): DeferredResult {
+            $calls->append($project.'/'.$tier->value);
 
             return $platform->invoke('big', $request->input);
         });

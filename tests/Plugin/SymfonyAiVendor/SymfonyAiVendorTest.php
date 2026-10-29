@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
-use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -169,7 +168,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
             self::fail('A rate limit must be a typed error.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(30, $rateLimited->retryAfterSeconds);
-            self::assertEquals(new DateTimeImmutable('2026-10-27 12:00:30 UTC'), $rateLimited->resetsAt(new MockClock(self::NOW)->now()));
+            self::assertEquals(new MockClock('2026-10-27 12:00:30.000 UTC')->now(), $rateLimited->resetsAt(new MockClock(self::NOW)->now()));
             self::assertInstanceOf(RateLimitExceededException::class, $rateLimited->getPrevious());
         }
 

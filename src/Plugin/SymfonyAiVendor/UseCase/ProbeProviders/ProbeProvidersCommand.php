@@ -42,16 +42,15 @@ final readonly class ProbeProvidersCommand
 
         $failed = false;
 
-        foreach ($targets as $provider => [$project, $tier]) {
-            $failed = !$this->probe($io, $provider, $project, $tier) || $failed;
+        foreach ($targets as $provider => $target) {
+            $failed = !$this->probe($io, $provider, $target) || $failed;
         }
 
         return $failed ? Command::FAILURE : Command::SUCCESS;
     }
 
+    // The first project and tier that maps a provider is enough, because the call checks the provider's key.
     /**
-     * The first project and tier that maps each enabled provider.
-     *
      * @return array<string, array{string, Tier}>
      */
     private function targets(): array
@@ -79,8 +78,13 @@ final readonly class ProbeProvidersCommand
         }
     }
 
-    private function probe(SymfonyStyle $io, string $provider, string $project, Tier $tier): bool
+    /**
+     * @param array{string, Tier} $target
+     */
+    private function probe(SymfonyStyle $io, string $provider, array $target): bool
     {
+        [$project, $tier] = $target;
+
         try {
             $result = $this->tiers->invoke($project, $tier, new TierRequest(new MessageBag(Message::ofUser(self::PROMPT))));
             $result->asText();

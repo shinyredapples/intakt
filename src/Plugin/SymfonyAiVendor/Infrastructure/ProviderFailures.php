@@ -12,7 +12,7 @@ use Throwable;
 
 final readonly class ProviderFailures
 {
-    // By exception type only: the provider's own status and headers are already in the type, and model text is never parsed (plan T5).
+    // Matched on the exception type because the provider's text can change and carries anything (plan T5).
     public function typed(Throwable $failure): Throwable
     {
         return match (true) {
