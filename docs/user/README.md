@@ -57,7 +57,7 @@ A provider whose variables are not all set (empty counts as not set, and so does
 
 ### Capability tiers per project
 
-Each project maps three capability tiers (`strong`, `standard`, `light`) to a provider and a model. Copy `config/intakt.example.yaml` to `config/intakt.yaml` (or point `INTAKT_CONFIG` at another file), edit it, and run `php bin/console cache:clear`. Project names are kept exactly as written, dashes included, and a model must be a text value. Several projects can map the tiers differently; a tier you leave out is reported as not mapped. A model name the provider's built-in list does not know is added to it, so newer models work too. An invalid file stops Intakt from starting and names the bad key. `php bin/console intakt:ai:tiers` lists every project with the provider and model of each tier; a tier whose provider is switched off (see above) shows the reason instead of a model.
+Each project maps three capability tiers (`strong`, `standard`, `light`) to a provider and a model. Copy `config/intakt.example.yaml` to `config/intakt.yaml` (or point `INTAKT_CONFIG` at another file), edit it, and run `php bin/console cache:clear`. Project names are kept exactly as written, dashes included, and a model must be a text value that is not blank. Several projects can map the tiers differently; a tier you leave out is reported as not mapped. A model name the provider's built-in list does not know is added to it, so newer models work too. An invalid file stops Intakt from starting and names the bad key. `php bin/console intakt:ai:tiers` lists every project with the provider and model of each tier; a tier whose provider is switched off (see above) shows the reason instead of a model.
 
 ## Looking inside the development install with Mate
 
