@@ -53,7 +53,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T3 Persistence tests on MySQL, MariaDB and PostgreSQL in CI
-- **Description:** A CI job matrix with service containers runs the `persistence` group on each engine. Protected path: the owner approves the workflow change before it is pushed.
+- **Description:** A CI job matrix with service containers runs the `persistence` group on each engine. Protected path: the owner approves the merge of the workflow change; it is pushed without a separate approval only when the workflow scan finds it not risky (see Merge).
 - **Acceptance:** the matrix runs on the branch and is green on all three engines; the SQLite run in `bin/check` stays unchanged.
 - **Evidence:** the CI run link with the three jobs.
 - **Waits for:** T2. **Size:** S. **Labels:** `class:tooling`, `priority:normal`.
@@ -83,6 +83,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Acceptance:** with `MockPlatformFactory` and `ScriptedResponse` scripted to call tools, the agent reads files at the head and returns a verdict; a tool call outside the repository is refused; a malformed tool call ends as `changes`, not a crash; round two reads cached tokens (a test on the recorded usage). Tests assert through the AI Bundle's `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`). A sample change with a what-comment and a single-implementation interface gets findings that cite those rules.
 - **Evidence:** a real review of a sample branch by one provider: the verdict JSON and the tool calls it made.
 - **Symfony AI:** Anthropic prompt caching on; tools run in a `FaultTolerantToolbox`, so a failing tool answers the model with an error; a `ToolCallRequested` listener denies tool calls whose arguments escape the checkout.
+- **Prompt safety:** this task brings the fencing helper of the [threat model](design/05-architecture/14-threat-model.md#third-party-text); the task text, the diff and tool results reach the prompt only through it.
 - **Waits for:** T5, T6. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ## M2 Panel and rounds
@@ -162,8 +163,8 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T12. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T18 GitHub forge plugin
-- **Description:** `Plugin/GitHubForge` reads a pull request (head, base, diff, files at head) with a token from the environment and posts the outcome as one review comment carrying the round's one-time token. It calls GitHub through a scoped HttpClient wrapped in `RetryableHttpClient`.
-- **Acceptance:** recorded HTTP responses drive the tests; a head that moved during review is detected; nothing is posted when the round is stale.
+- **Description:** `Plugin/GitHubForge` reads a pull request (head, base, diff, files at head) with a token from the environment and posts the outcome as one review comment carrying the round's one-time token. It calls GitHub through a scoped HttpClient wrapped in `RetryableHttpClient`. Before a review body and its findings are posted, the values of every credential mounted or injected into that job are redacted and the secret scan runs over the text; a hit fails the review as `changes` ([Threat model](design/05-architecture/14-threat-model.md)). Build bundles are not taken in by any task of this plan: the task that first takes in a build's hand-back carries the same step, so it is not lost when that task is planned.
+- **Acceptance:** recorded HTTP responses drive the tests; a head that moved during review is detected; nothing is posted when the round is stale; a review text holding a mounted credential's value is posted redacted, and one that still trips the secret scan is not posted and fails the review as `changes`.
 - **Evidence:** a review of a real pull request in a test repository, with the posted comment.
 - **PHP 8.5:** `Uri\Rfc3986\Uri` instead of `parse_url` for pull-request and API URLs.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:normal`.

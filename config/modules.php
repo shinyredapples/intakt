@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 return [
     'Core/Ai',
+    'Core/Git',
     'Core/Ledger',
+    'Core/Platform',
     'Core/Review',
     'Core/Upstream',
     'Plugin/Forge',

@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
@@ -63,6 +64,32 @@ final class ProjectsConfigurationTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 5]]]]]);
+    }
+
+    #[DataProvider('blankModels')]
+    public function testAModelMadeOnlyOfWhitespaceIsRefusedNamingTheKey(string $model): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.tiers\.light\.model.*The "model" key must not be blank\./');
+
+        $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => $model]]]]]);
+    }
+
+    public function testAModelThatIsNotValidUtf8IsRefusedNamingTheKey(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.tiers\.light\.model.*must be valid UTF-8/');
+
+        $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => "\xA0"]]]]]);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function blankModels(): iterable
+    {
+        yield 'ASCII spaces' => ['   '];
+        yield 'no-break space' => ["\u{00A0}"];
     }
 
     /**

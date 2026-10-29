@@ -56,9 +56,12 @@ Then open the dashboard, pick the sample pull request and start a review.
 
 ## Documentation
 
+- [Intakt in plain words](docs/guide/README.md): friendly guides with diagrams, from the big picture to troubleshooting.
+- [Contributing](CONTRIBUTING.md): reporting bugs, suggesting features, sending pull requests.
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
+- [Why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md): the safety design in plain words.
 - [Spec](docs/spec.md) and [plan](docs/plan.md) of the first release.
 - [AGENTS.md](AGENTS.md): the rules for anyone, person or agent, changing the code.
 

@@ -20,6 +20,11 @@ final readonly class Scope
 
     private const array EXTENSIONLESS_PHP_FILES = ['bin/check', 'bin/instance', 'bin/probe'];
 
+    private const int PATHS_PER_CALL = 500;
+
+    // Only the committed .gitignore files, because --exclude-standard also reads info/exclude and core.excludesFile, which the repository sets without a diff showing it.
+    private const string GITIGNORE_ONLY = '--exclude-per-directory=.gitignore';
+
     public function __construct(
         private string $root,
         private ProcessRunner $runner,
@@ -47,10 +52,10 @@ final readonly class Scope
      */
     public function changedPaths(string $mergeBase): array
     {
-        $changed = $this->gitLines(['diff', '--name-only', '-z', $mergeBase]);
-        $untracked = $this->gitLines(['ls-files', '-z', '--others', '--exclude-standard']);
+        $staged = $this->gitLines(['diff-index', '--cached', '--name-only', '-z', $mergeBase]);
+        $untracked = $this->gitLines(['ls-files', '-z', '--others', self::GITIGNORE_ONLY]);
 
-        return array_values(array_unique(array_merge($changed, $untracked)));
+        return array_values(array_unique([...$staged, ...$this->unstagedPaths(), ...$untracked]));
     }
 
     public function includes(string $path): bool
@@ -86,7 +91,7 @@ final readonly class Scope
             return $this->walkDirectory();
         }
 
-        return $this->gitLines(['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
+        return $this->gitLines(['ls-files', '-z', '--cached', '--others', self::GITIGNORE_ONLY]);
     }
 
     /**
@@ -115,13 +120,78 @@ final readonly class Scope
     }
 
     /**
+     * @return list<string>
+     */
+    private function unstagedPaths(): array
+    {
+        // Git would compare the working tree through the clean filters an info/attributes written after its check names, so the files are hashed as they are.
+        $entries = $this->indexEntries();
+        $files = array_values(array_filter($entries, fn (array $entry): bool => is_file($this->root.'/'.$entry[0]) && !is_link($this->root.'/'.$entry[0])));
+        $blobs = $this->unfilteredBlobsOf(array_column($files, 0));
+        $unchanged = [];
+
+        foreach ($files as $index => [$path, $blob, $mode]) {
+            if (($blobs[$index] ?? '') === $blob && $this->modeOf($path) === $mode) {
+                $unchanged[] = $path;
+            }
+        }
+
+        return array_values(array_diff(array_column($entries, 0), $unchanged));
+    }
+
+    /**
+     * @return list<array{string, string, string}>
+     */
+    private function indexEntries(): array
+    {
+        $entries = [];
+
+        foreach ($this->gitLines(['ls-files', '-z', '--stage']) as $entry) {
+            // A conflicted path, a link or a submodule never matches, so it always counts as changed.
+            $regular = 1 === preg_match('/^(100644|100755) ([0-9a-f]+) 0\t(.*)$/s', $entry, $match);
+            $entries[] = $regular ? [$match[3], $match[2], $match[1]] : [(string) preg_replace('/^[^\t]*\t/', '', $entry), '', ''];
+        }
+
+        return $entries;
+    }
+
+    private function modeOf(string $path): string
+    {
+        // Git records only the owner's execute bit, so that bit alone decides the mode it would see.
+        return 0 !== ((int) fileperms($this->root.'/'.$path) & 0o100) ? '100755' : '100644';
+    }
+
+    /**
+     * @param list<string> $paths
+     *
+     * @return list<string>
+     */
+    private function unfilteredBlobsOf(array $paths): array
+    {
+        $blobs = [];
+
+        // In batches, because the paths are arguments and the system limits their total length.
+        foreach (array_chunk($paths, self::PATHS_PER_CALL) as $batch) {
+            $result = $this->runner->git(['hash-object', '--no-filters', '--', ...$batch], $this->root);
+
+            if (!$result->succeeded()) {
+                throw new ScopeFailure('git hash-object failed: '.$result->firstErrorLine());
+            }
+
+            $blobs = [...$blobs, ...explode("\n", trim($result->output))];
+        }
+
+        return $blobs;
+    }
+
+    /**
      * @param list<string> $arguments
      *
      * @return list<string>
      */
     private function gitLines(array $arguments): array
     {
-        $result = $this->runner->run(['git', ...$arguments], $this->root);
+        $result = $this->runner->git($arguments, $this->root);
 
         if (!$result->succeeded()) {
             throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());

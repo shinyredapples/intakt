@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CodingStandardsGate;
+use Intakt\Gates\PhpCsFixer\PlainFirstClassCallableFixer;
 use Intakt\Gates\PhpStan\ContainerRegistration;
 use Intakt\Gates\PhpStan\FlagParameterRule;
+use Intakt\Gates\PhpStan\ImportFormRule;
 use Intakt\Gates\PhpStan\NoMockOptOutRule;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
 use Intakt\Gates\PhpStan\ParameterLimitRule;
@@ -22,6 +24,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(FlagParameterRule::class)]
 #[CoversClass(NoNestedTryRule::class)]
 #[CoversClass(NoMockOptOutRule::class)]
+#[CoversClass(ImportFormRule::class)]
+#[CoversClass(PlainFirstClassCallableFixer::class)]
 #[CoversClass(StatefulServiceResetRule::class)]
 #[CoversClass(ContainerRegistration::class)]
 final class CodeGatesTest extends SandboxTestCase
@@ -46,6 +50,76 @@ final class CodeGatesTest extends SandboxTestCase
     public function testAFullyQualifiedClassNameInADocblockFailsTheCodingStandards(): void
     {
         $this->assertRejectedBy('cs', 'fully-qualified-name-in-docblock', 'src/Report.php: fully_qualified_strict_types');
+    }
+
+    public function testAFullyQualifiedFunctionOrConstantFailsTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'qualified-function-and-constant', 'src/Report.php: native_constant_invocation, native_function_invocation');
+    }
+
+    public function testAPlainFunctionAndConstantPassTheCodingStandardsAndStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('cs', 'plain-function-and-constant');
+        $this->assertAcceptedBy('phpstan', 'plain-function-and-constant');
+    }
+
+    public function testAFullyQualifiedFirstClassCallableFailsTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'qualified-first-class-callable', 'src/Report.php: Intakt/plain_first_class_callable');
+    }
+
+    public function testAPlainFirstClassCallablePassesTheCodingStandards(): void
+    {
+        $this->assertAcceptedBy('cs', 'plain-first-class-callable');
+    }
+
+    public function testAFunctionOrConstantImportFailsStaticAnalysis(): void
+    {
+        $run = $this->sandboxWith('imported-function-and-constant')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Report.php:7 intakt.functionOrConstantImport', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Report.php:9 intakt.functionOrConstantImport', $run->findingsOf('phpstan'));
+    }
+
+    public function testAFunctionOrConstantImportIsRemovedByTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'imported-function-and-constant', 'src/Report.php: global_namespace_import');
+    }
+
+    public function testAnImportAliasWithoutAShortNameClashFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'unneeded-import-alias', 'src/Report.php:7 intakt.unneededImportAlias');
+    }
+
+    public function testAnImportAliasThatResolvesAShortNameClashPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash');
+    }
+
+    public function testAnImportAliasThatResolvesAShortNameClashInAnotherLetterCasePassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash-in-another-case');
+    }
+
+    public function testAnImportAliasWithoutAShortNameClashInItsOwnNamespaceFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'import-alias-in-another-namespace', 'src/Report.php:17 intakt.unneededImportAlias');
+    }
+
+    public function testAnImportAliasForAClassImportedTwiceFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'duplicate-import-alias', 'src/Report.php:8 intakt.unneededImportAlias');
+    }
+
+    public function testAnImportAliasForTheShortNameOfTheDeclaredClassPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'import-alias-for-declared-class');
+    }
+
+    public function testTheDoctrineOrmAliasPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'doctrine-orm-alias');
     }
 
     public function testASuperfluousDocblockFailsTheCodingStandards(): void
@@ -230,6 +304,15 @@ final class CodeGatesTest extends SandboxTestCase
         self::assertStringNotContainsString('Command::$', $run->findingsOf('phpstan'));
         self::assertStringNotContainsString('src/Greet.php', $run->findingsOf('phpstan'));
         self::assertStringNotContainsString('src/Home.php', $run->findingsOf('phpstan'));
+    }
+
+    public function testOnlyABackedHookedPropertyOfAServiceFailsStaticAnalysis(): void
+    {
+        $run = $this->sandboxWith('hooked-properties')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Mailer.php:13 intakt.statefulService Service property $subject', $run->findingsOf('phpstan'));
+        self::assertStringNotContainsString('$greeting', $run->findingsOf('phpstan'));
     }
 
     public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void

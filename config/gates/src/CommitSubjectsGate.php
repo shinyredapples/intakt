@@ -30,13 +30,13 @@ final readonly class CommitSubjectsGate implements Gate
             return GateResult::failedBecause($this->name(), 'no base branch found, pass --base=<ref>');
         }
 
-        $log = $workspace->command(['git', 'log', '--format=%H%x09%P%x09%s', $mergeBase.'..HEAD']);
+        $log = $workspace->git(['log', '--format=%H%x09%P%x09%s', $mergeBase.'..HEAD']);
 
         if (!$log->succeeded()) {
             return GateResult::failedBecause($this->name(), 'git log failed: '.$log->firstErrorLine());
         }
 
-        $findings = $this->nonConformingCommits($log->output);
+        $findings = $this->nonConformingCommits($workspace, $log->output);
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
@@ -44,7 +44,7 @@ final readonly class CommitSubjectsGate implements Gate
     /**
      * @return list<string>
      */
-    private function nonConformingCommits(string $log): array
+    private function nonConformingCommits(Workspace $workspace, string $log): array
     {
         $findings = [];
         $lines = array_values(array_filter(explode("\n", $log), static fn (string $line): bool => '' !== $line));
@@ -52,7 +52,7 @@ final readonly class CommitSubjectsGate implements Gate
         foreach ($lines as $line) {
             [$hash, $parents, $subject] = explode("\t", $line, 3) + ['', '', ''];
 
-            if (!$this->isGithubTestMerge($hash, $parents) && !$this->conforms($subject)) {
+            if (!$this->isGithubTestMerge($workspace, $hash, $parents) && !$this->conforms($subject)) {
                 $findings[] = substr($hash, 0, 8).' '.$subject;
             }
         }
@@ -60,15 +60,34 @@ final readonly class CommitSubjectsGate implements Gate
         return $findings;
     }
 
-    private function isGithubTestMerge(string $hash, string $parents): bool
+    private function isGithubTestMerge(Workspace $workspace, string $hash, string $parents): bool
     {
         if (null === $this->testMerge) {
             return false;
         }
 
-        [$merge, $base, $head] = explode(':', $this->testMerge, 3) + ['', '', ''];
+        $fields = explode(':', $this->testMerge);
+        $parentHashes = explode(' ', $parents);
 
-        return '' !== $merge && $hash === $merge && $parents === $base.' '.$head;
+        if (2 !== count($fields)) {
+            return false;
+        }
+
+        [$merge, $head] = $fields;
+
+        if ('' === $merge || $hash !== $merge || 2 !== count($parentHashes) || $parentHashes[1] !== $head) {
+            return false;
+        }
+
+        return $this->isOnBaseBranch($workspace, $parentHashes[0]);
+    }
+
+    // Because GitHub builds the test merge on the current base tip, which can be newer than the base the event reports.
+    private function isOnBaseBranch(Workspace $workspace, string $commit): bool
+    {
+        $baseTip = $workspace->baseTip();
+
+        return null !== $baseTip && $workspace->git(['merge-base', '--is-ancestor', $commit, $baseTip])->succeeded();
     }
 
     private function conforms(string $subject): bool

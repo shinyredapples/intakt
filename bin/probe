@@ -83,7 +83,7 @@ enum Isolation: string
     case ByUnshare = 'unshare';
     case ByCaller = 'caller';
 
-    // Without the variable the probe cannot know the caller isolates it, and an unset one must never run with the network open.
+    // Without the variable the probe cannot know the caller isolates it, and without it, a run must never have the network open.
     public static function fromVariable(string $value): self
     {
         return '1' === $value ? self::ByCaller : self::ByUnshare;

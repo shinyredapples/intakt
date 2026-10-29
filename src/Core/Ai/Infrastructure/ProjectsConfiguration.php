@@ -21,7 +21,9 @@ final class ProjectsConfiguration implements ConfigurationInterface
         foreach (Tier::cases() as $tier) {
             $mapping = $tiers->arrayNode($tier->value)->children();
             $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-            $mapping->stringNode('model')->isRequired()->cannotBeEmpty();
+            $mapping->stringNode('model')->isRequired()->cannotBeEmpty()
+                ->validate()->ifTrue(static fn (string $model): bool => !mb_check_encoding($model, 'UTF-8'))->thenInvalid('The "model" key must be valid UTF-8.')->end()
+                ->validate()->ifTrue(static fn (string $model): bool => 1 === preg_match('/^\s*$/u', $model))->thenInvalid('The "model" key must not be blank.')->end();
         }
 
         return $tree;

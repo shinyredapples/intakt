@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\First {
+    use Intakt\Sample\A\Client;
+
+    final readonly class FirstReport
+    {
+        public function __construct(public Client $client)
+        {
+        }
+    }
+}
+
+namespace Intakt\Sample\Second {
+    use Intakt\Sample\B\Client as Unneeded;
+
+    final readonly class SecondReport
+    {
+        public function __construct(public Unneeded $client)
+        {
+        }
+    }
+}

@@ -35,6 +35,7 @@ final readonly class InstanceStatus
 
 final class Instance
 {
+    private const array INHERITED_VARIABLES = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR'];
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
     // Keeps boot, command and stop together well inside the build loop's 120 seconds per call.
@@ -45,6 +46,8 @@ final class Instance
     private $server;
 
     private string $scratch = '';
+
+    private bool $createdFallback = false;
 
     private string $output = '';
 
@@ -146,13 +149,12 @@ final class Instance
 
     private function createScratch(): string
     {
-        $base = getenv('TMPDIR');
-        $base = false === $base || '' === $base ? $this->root.'/var' : $base;
+        $base = (string) getenv('TMPDIR');
+        $base = '' === $base ? $this->root.'/var' : $base;
         $path = $base.'/intakt-instance-'.bin2hex(random_bytes(6));
+        $this->createdFallback = $base === $this->root.'/var' && !is_dir($base);
 
-        if (!mkdir($path, 0o700, true) && !is_dir($path)) {
-            throw new RuntimeException('cannot create the scratch directory');
-        }
+        new ScratchCreation()->create($path);
 
         return $path;
     }
@@ -191,8 +193,13 @@ final class Instance
     {
         $environment = [];
 
-        foreach (getenv() as $name => $value) {
-            $environment[$name] = $value;
+        // An allowlist, so code under test cannot print a token the caller happens to have set.
+        foreach (self::INHERITED_VARIABLES as $name) {
+            $value = getenv($name);
+
+            if (false !== $value) {
+                $environment[$name] = $value;
+            }
         }
 
         return [
@@ -315,6 +322,41 @@ final class Instance
         }
 
         new DirectoryRemoval()->remove($this->scratch);
+
+        if ($this->createdFallback) {
+            // Another run may be using var/, so a plain rmdir that fails on a non-empty folder is the right check.
+            @rmdir($this->root.'/var');
+        }
+    }
+}
+
+final readonly class ScratchCreation
+{
+    public function create(string $path): void
+    {
+        // A concurrent run may rmdir the var/ fallback between its creation and the scratch folder below it, so retry once.
+        $failure = $this->attempt($path);
+        $failure = null === $failure ? null : $this->attempt($path);
+
+        if (null !== $failure) {
+            throw new RuntimeException('cannot create the scratch directory: '.$failure);
+        }
+    }
+
+    private function attempt(string $path): ?string
+    {
+        $reason = '';
+        // The handler keeps the operating system's reason without printing the warning of a lost race; null means the folder exists.
+        set_error_handler(static function (int $severity, string $message) use (&$reason): bool {
+            $reason = $message;
+
+            return true;
+        });
+
+        mkdir($path, 0o700, true);
+        restore_error_handler();
+
+        return is_dir($path) ? null : $reason;
     }
 }
 

@@ -191,6 +191,43 @@ final class AiProvidersTest extends KernelTestCase
         );
     }
 
+    public function testAKeyInAVaultBehindAUrlSafeEncodedDecryptionSecretEnablesItsProvider(): void
+    {
+        // All bits set, so the encoded key is made of the characters only the URL-safe alphabet has.
+        $secretKey = str_repeat("\xFF", SODIUM_CRYPTO_BOX_SECRETKEYBYTES);
+        $keyPair = sodium_crypto_box_keypair_from_secretkey_and_publickey($secretKey, sodium_crypto_box_publickey_from_secretkey($secretKey));
+        $vault = new SodiumVault($this->vaultDirectory(), $keyPair);
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = strtr(base64_encode($keyPair), '+/', '-_');
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+    }
+
+    public function testAKeyStoredOnlyInAVaultWithoutAnyUsableDecryptionKeyCountsAsMissing(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'test-value');
+        unlink($this->vaultDirectory().'/'.self::VAULT_ENVIRONMENT.'.encrypt.public.php');
+        unlink($this->vaultDirectory().'/'.self::VAULT_ENVIRONMENT.'.decrypt.private.php');
+        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        // Only characters base64 ignores, so the secret decodes to an empty key.
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
+    }
+
     // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
     private function useMalformedDecryptionSecret(): void
     {

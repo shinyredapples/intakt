@@ -35,8 +35,10 @@ final class ProcessRunner
 
     private ?string $containment = null;
 
-    public function __construct(private readonly string $unshare = 'unshare')
-    {
+    public function __construct(
+        private readonly string $unshare = 'unshare',
+        private readonly HardenedGitCall $hardened = new HardenedGitCall(),
+    ) {
     }
 
     public function containment(): string
@@ -45,8 +47,24 @@ final class ProcessRunner
     }
 
     /**
-     * @param list<string>          $command
-     * @param array<string, string> $environment
+     * @param list<string> $arguments
+     */
+    public function git(array $arguments, string $directory): ProcessResult
+    {
+        return $this->runCall($this->hardened->call($arguments, $directory));
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    public function gitWithPathspecMagic(array $arguments, string $directory): ProcessResult
+    {
+        return $this->runCall($this->hardened->callWithPathspecMagic($arguments, $directory));
+    }
+
+    /**
+     * @param list<string>                $command
+     * @param array<string, string|false> $environment
      */
     public function run(array $command, string $directory, array $environment = []): ProcessResult
     {
@@ -87,7 +105,7 @@ final class ProcessRunner
     /**
      * @template Name of array-key
      *
-     * @param array<Name, array{list<string>, array<string, string>}> $commands
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
      *
      * @return array<Name, ProcessResult>
      */
@@ -112,6 +130,11 @@ final class ProcessRunner
         }
 
         return $results;
+    }
+
+    private function runCall(GitCall $call): ProcessResult
+    {
+        return $this->run($call->command, $call->directory, $call->environment);
     }
 
     /**

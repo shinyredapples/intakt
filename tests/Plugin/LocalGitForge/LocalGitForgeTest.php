@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -32,18 +35,25 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(Diff::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(HardenedGit::class)]
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(FileStatus::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(NameStatusParser::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class LocalGitForgeTest extends TestCase
 {
     private TemporaryRepository $repository;
 
+    /** @var array<array-key, mixed> */
+    private array $environment;
+
     protected function setUp(): void
     {
+        $this->environment = $_ENV;
         $this->repository = new TemporaryRepository();
         $this->repository->commitFile('README.md', "base\n");
         $this->repository->commitFile('src/Gone.php', "<?php\n");
@@ -51,7 +61,7 @@ final class LocalGitForgeTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($_ENV['GIT_DIR']);
+        $_ENV = $this->environment;
         $this->repository->remove();
     }
 
@@ -84,6 +94,20 @@ final class LocalGitForgeTest extends TestCase
         self::assertStringContainsString('+echo 1;', $change->diff->patch);
         self::assertStringContainsString('+changed', $change->diff->patch);
         self::assertStringContainsString('-<?php', $change->diff->patch);
+    }
+
+    public function testItReturnsTheDiffOfABranchInASha256Repository(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('README.md', "changed\n");
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame([['README.md', FileStatus::Modified]], $this->pathsAndStatuses($change));
+        self::assertStringContainsString('+changed', $change->diff->patch);
     }
 
     public function testItLeavesOutWhatTheBaseBranchChangedAfterTheBranchWasCut(): void
@@ -154,6 +178,56 @@ final class LocalGitForgeTest extends TestCase
 
         self::assertSame("head\n", $content->content);
         self::assertStringNotContainsString('decoy', $change->diff->patch);
+    }
+
+    public function testItRunsNoCommandThatTheRepositoryConfigures(): void
+    {
+        $marker = $this->repository->path.'/command-ran';
+        $script = $this->repository->writeHook('evil', "#!/bin/sh\ntouch ".$marker."\ncat \"$1\" 2>/dev/null\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('.gitattributes', "*.txt diff=evil\n");
+        $this->repository->commitFile('note.txt', "head\n");
+        $this->repository->configure('core.fsmonitor', $script);
+        $this->repository->configure('diff.external', $script);
+        $this->repository->configure('diff.evil.textconv', $script);
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+        $content = $this->forge()->fileAtHead($change, 'note.txt');
+
+        self::assertFileDoesNotExist($marker);
+        self::assertStringContainsString('+head', $change->diff->patch);
+        self::assertSame("head\n", $content->content);
+    }
+
+    public function testItRefusesARepositoryWhoseInfoAttributesExistBecauseTheyCouldHideAFileAsBinary(): void
+    {
+        $base = $this->repository->commitFile('NOTES.md', "notes\n");
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('note.txt', "secret\n");
+        file_put_contents($this->repository->path.'/.git/info/attributes', "*.txt -diff\n");
+
+        self::assertStringContainsString('Binary files', $this->repository->diff($base, $head), 'the attribute must hide the file without hardening, or this test proves nothing');
+
+        try {
+            $this->forge()->change(new ChangeId('feature'));
+            self::fail('A repository with info/attributes must be refused.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertStringContainsString('/.git/info/attributes exists', $failure->getMessage());
+        }
+    }
+
+    public function testItShowsABinaryFileAsTextSoThatNothingHidesAChangeAsBinaryFilesDiffer(): void
+    {
+        $base = $this->repository->commitFile('NOTES.md', "notes\n");
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('blob.bin', "\0secret\n");
+
+        self::assertStringContainsString('Binary files', $this->repository->diff($base, $head), 'git must treat the file as binary without --text, or this test proves nothing');
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertStringContainsString("+\0secret", $change->diff->patch);
+        self::assertStringNotContainsString('Binary files', $change->diff->patch);
     }
 
     public function testItReturnsAFileWhoseNameHasSpacesTabsAndColons(): void
@@ -252,6 +326,16 @@ final class LocalGitForgeTest extends TestCase
         $this->forge()->change(new ChangeId('v1'));
     }
 
+    public function testItDoesNotTreatATraversingNameAsAChange(): void
+    {
+        $this->repository->commitFile('src/Tagged.php', "<?php\n");
+        $this->repository->tag('v1');
+
+        $this->expectException(ChangeNotFound::class);
+
+        $this->forge()->change(new ChangeId('../tags/v1'));
+    }
+
     public function testItDoesNotTreatARevisionExpressionAsAChange(): void
     {
         $this->repository->checkoutNewBranch('feature');
@@ -322,6 +406,19 @@ final class LocalGitForgeTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $forge->change(new ChangeId('feature'));
+    }
+
+    public function testItIgnoresTheUserConfigOfTheHome(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $home = $this->repository->path.'/home';
+        mkdir($home);
+        file_put_contents($home.'/.gitconfig', "[broken\n");
+        $_ENV['HOME'] = $home;
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame('feature', $change->id->value);
     }
 
     public function testItIgnoresAGitDirectoryItInherits(): void

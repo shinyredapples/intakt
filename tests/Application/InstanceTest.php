@@ -87,6 +87,39 @@ final class InstanceTest extends TestCase
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
     }
 
+    public function testTheVarFolderItCreatedWithoutTmpdirIsGoneAfterABoot(): void
+    {
+        $project = $this->copyOfTheProject();
+
+        $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertDirectoryDoesNotExist($project.'/var');
+    }
+
+    public function testAVarFolderThatAlreadyExistedStaysWithItsFilesAfterABootWithoutTmpdir(): void
+    {
+        $project = $this->copyOfTheProject();
+        mkdir($project.'/var');
+        file_put_contents($project.'/var/keep.txt', 'kept');
+
+        $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertSame('kept', file_get_contents($project.'/var/keep.txt'));
+    }
+
+    public function testAnEmptyVarFolderThatAlreadyExistedStaysAfterABootWithoutTmpdir(): void
+    {
+        $project = $this->copyOfTheProject();
+        mkdir($project.'/var');
+
+        $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertDirectoryExists($project.'/var');
+    }
+
     public function testTheProjectTreeIsUnchangedAfterABoot(): void
     {
         $project = $this->copyOfTheProject();
@@ -152,6 +185,16 @@ final class InstanceTest extends TestCase
         self::assertSame(5, $run['exit']);
     }
 
+    public function testACommandDoesNotInheritAVariableThatIsNotOnTheAllowlist(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'foreach (getenv() as $name => $value) { echo $name, "=", $value, "\n"; }'], ['INTAKT_TEST_CANARY' => 'visible']);
+
+        self::assertStringNotContainsString('INTAKT_TEST_CANARY', $run['output']);
+        self::assertStringNotContainsString('visible', $run['output']);
+        self::assertMatchesRegularExpression('/^PATH=./m', $run['output']);
+        self::assertMatchesRegularExpression('#^INTAKT_INSTANCE_URL=http://127\.0\.0\.1:\d+$#m', $run['output']);
+    }
+
     public function testTheServerLogIsLeftOutOfACommandsOutputOnAReadyBoot(): void
     {
         $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo "probe output\n";']);
@@ -189,9 +232,75 @@ final class InstanceTest extends TestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
+    public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
+    {
+        $notAFolder = $this->scratch.'/file';
+        file_put_contents($notAFolder, 'x');
+
+        $run = $this->runInstance(self::ROOT, environment: ['TMPDIR' => $notAFolder]);
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertMatchesRegularExpression('/^cannot create the scratch directory: mkdir\(\): .+/', $status['reason']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testTheScratchFolderIsCreatedWhenTheFirstAttemptLosesTheRaceWithARmdir(): void
+    {
+        // The first mkdir must fail as if var/ had just been removed, because a real race cannot be forced; later calls reach the real file system.
+        $prepend = $this->scratch.'/lose_first_mkdir.php';
+        file_put_contents($prepend, <<<'PHP'
+            <?php
+            final class LoseFirstMkdir
+            {
+                public $context;
+
+                public function url_stat(string $path, int $flags): array|false
+                {
+                    stream_wrapper_restore('file');
+                    $result = @stat($path);
+                    stream_wrapper_unregister('file');
+                    stream_wrapper_register('file', self::class);
+
+                    return $result;
+                }
+
+                public function mkdir(string $path, int $mode, int $options): bool
+                {
+                    stream_wrapper_restore('file');
+                    trigger_error('mkdir(): No such file or directory', E_USER_WARNING);
+
+                    return false;
+                }
+            }
+            stream_wrapper_unregister('file');
+            stream_wrapper_register('file', LoseFirstMkdir::class);
+            PHP);
+
+        $run = $this->runInstanceWithPhpOptions(['-d', 'auto_prepend_file='.$prepend]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
     /**
-     * @param list<string>          $command
-     * @param array<string, string> $environment
+     * @param list<string> $phpOptions
+     *
+     * @return array{status: string, exit: int}
+     */
+    private function runInstanceWithPhpOptions(array $phpOptions): array
+    {
+        $statusFile = $this->scratch.'/status';
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>'.escapeshellarg($statusFile);
+        $process = Process::fromShellCommandline($shell, null, $this->environment());
+        $process->run();
+
+        return ['status' => trim((string) file_get_contents($statusFile)), 'exit' => (int) $process->getExitCode()];
+    }
+
+    /**
+     * @param list<string>                $command
+     * @param array<string, string|false> $environment
      *
      * @return array{status: string, exit: int, output: string, errors: string}
      */
@@ -283,7 +392,7 @@ final class InstanceTest extends TestCase
         return $project;
     }
 
-    // Holds descriptors 3 to 14 so that a duplicate of descriptor 3 lands above 9, because a shell redirection cannot name those.
+    // Regression guard: the caller holds descriptors 3 to 14 so a duplicate of descriptor 3 above 9 would show up, which a shell redirection cannot name.
     private function callerHoldingManyDescriptors(string $statusFile): Process
     {
         $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
@@ -24,10 +26,12 @@ final readonly class LocalGitForge implements Forge
 {
     private const int TIMEOUT_SECONDS = 60;
     private const int REFERENCE_MISSING = 2;
+    private const int REFERENCE_INVALID = 1;
 
     public function __construct(
         private LocalRepository $repository,
         private NameStatusParser $nameStatus,
+        private HardenedGit $hardened = new HardenedGit(),
     ) {
     }
 
@@ -57,6 +61,16 @@ final readonly class LocalGitForge implements Forge
         // An exact ref only, so tags and revision expressions such as "feature~1" are not branches.
         $reference = 'refs/heads/'.$id->value;
 
+        // No branch can carry an invalid name; --branch is not used because it expands shorthands such as "@{-1}".
+        $format = $this->git(['check-ref-format', $reference]);
+        if (self::REFERENCE_INVALID === $format->getExitCode()) {
+            throw ChangeNotFound::named($id);
+        }
+
+        if (!$format->isSuccessful()) {
+            throw new ForgeReadFailed(sprintf('git check-ref-format failed: %s', trim($format->getErrorOutput())));
+        }
+
         if (self::REFERENCE_MISSING === $this->git(['show-ref', '--exists', $reference])->getExitCode()) {
             throw ChangeNotFound::named($id);
         }
@@ -71,8 +85,8 @@ final readonly class LocalGitForge implements Forge
 
     private function diff(CommitRange $commits): Diff
     {
-        // Submodules are never ignored, because a repository's diff.ignoreSubmodules would hide a changed submodule commit.
-        $options = ['--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--ignore-submodules=none'];
+        // Every file is text, because a binary attribute would hide a change as "Binary files differ"; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
+        $options = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
         $range = [$commits->base->hash, $commits->head->hash];
 
         return new Diff(
@@ -128,31 +142,16 @@ final readonly class LocalGitForge implements Forge
             throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
         }
 
-        // A refs/replace/ ref would swap in another object, and pathspec magic would read ":odd.txt" as "odd.txt".
-        $process = new Process(['git', '--no-replace-objects', '--literal-pathspecs', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
-
         try {
+            $call = $this->hardened->call($arguments, $this->repository->path);
+            $process = new Process($call->command, $call->directory, $call->environment, timeout: self::TIMEOUT_SECONDS);
             $process->run();
+        } catch (RepositoryAttributesRefused $refused) {
+            throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
         } catch (ExceptionInterface $failure) {
             throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 
         return $process;
-    }
-
-    /**
-     * @return array<string, false>
-     */
-    private function withoutGitVariables(): array
-    {
-        // Inherited GIT_DIR, GIT_INDEX_FILE and the like (as inside a git hook) would point git at another repository.
-        $unset = [];
-        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
-            if (is_string($name) && str_starts_with($name, 'GIT_')) {
-                $unset[$name] = false;
-            }
-        }
-
-        return $unset;
     }
 }

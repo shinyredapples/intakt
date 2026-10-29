@@ -15,7 +15,7 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Serializer\Encoder\JsonDecode;
-use Symfony\Component\Serializer\Exception\ExceptionInterface as SerializerException;
+use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -64,13 +64,13 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     {
         try {
             return $this->deserialized($content);
-        } catch (SerializerException $exception) {
+        } catch (ExceptionInterface $exception) {
             throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
         }
     }
 
     /**
-     * @throws SerializerException
+     * @throws ExceptionInterface
      */
     private function deserialized(string $content): Verdict
     {

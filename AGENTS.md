@@ -21,7 +21,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Small methods, early returns, no flag parameters, at most three parameters, no `else` after a jump, no nested `try` (enforced).
-- Imports only, no fully qualified names; the Doctrine `ORM` alias is the one alias.
+- Classes are imported, never fully qualified; global functions and constants are written plain (`count()`, `PHP_EOL`), with neither a backslash nor a `use function`/`use const` (enforced). A class alias only where two classes share a short name, plus Doctrine's `ORM`.
 - Names: commands imperative, events past tense, queries nouns or questions; exceptions named after the broken rule.
 - A closed set of values is a backed enum; a single named value stays a constant.
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
@@ -44,17 +44,27 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Test doubles: `MockPlatformFactory` with `ScriptedResponse`, or `RecordingProvider` with a redacted `HttpCassette`; the in-memory Store for retrieval. Message stores come from the Agent component (there is no Chat component).
 - A likely library bug becomes a minimal reproduction and draft report in `upstream/<name>/`; never posted without the owner.
 
+## Prompt injection ([threat model](docs/design/05-architecture/14-threat-model.md))
+
+- A steered model must stay harmless: every decision that matters is made or checked by plain code, and each model role has only the tools its job needs.
+- A change that adds a model role, a new input to a model or a new tool for one updates the threat model page in the same change.
+- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
+- Only tasks, steering labels and comments from people with write access count, checked through the forge's permission API on each event.
+
 ## Docs, pull requests, commits
 
 - User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
 - A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row in `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change.
+- A change that adds, removes or changes an external command Intakt or its gates call updates `docs/architecture/requirements.md` in the same change.
+- A change that alters behavior a plain-words guide in `docs/guide/` describes updates that guide in the same change, in the same plain words (no jargon, diagrams kept true); a guide that describes a planned part marks it planned until it is built. A change that adds something a newcomer would need explained (a new concept, workflow, screen or command) that no guide covers adds a section or page to `docs/guide/`, or names it as a follow-up in the pull request.
 - One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
+- Every Evidence item of a task must be producible inside the builder's sandbox (no network beyond the model provider and the package registries, no forge access, no real credentials). Evidence only the owner or the orchestrator can produce is marked `(owner provides)` and is not the builder's to satisfy ([Writing a good task](docs/guide/writing-a-good-task.md)).
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
 ## Secrets and protected paths
 
 - Nothing secret in the repository; gitleaks scans files and history, and inline allow directives are refused.
-- `config/gates/`, `bin/check`, `bin/instance`, `bin/probe`, `.github/`, `AGENTS.md` and the PHPUnit configs need the owner's approval (`.github/CODEOWNERS`; a code-owner ruleset is turned on when the repository goes public, since a private free-plan repository cannot enforce it). A dependency change is decided by the build loop's composer policy: a new `symfony/` or `doctrine/` package from its own repository, with no binaries, Composer plugin or autoload files, is routine; any other vendor, and any change to Composer's own settings (scripts, plugins, repositories, config), waits for the owner. Never weaken a gate, inline or otherwise.
+- `config/gates/`, `bin/check`, `bin/instance`, `bin/probe`, `.github/`, `AGENTS.md` and the PHPUnit configs are protected. Until approval by class is implemented, every protected change needs the owner's approval: `.github/CODEOWNERS` names the owner for `config/gates/`, `.github/`, `bin/check`, `bin/instance`, `bin/probe` and `AGENTS.md`, enforced by a code-owner ruleset once the repository goes public (a private free-plan repository cannot enforce it). Approval by class is planned (see `docs/design/05-architecture/08-merge.md`): the loop will then approve a change itself only when every reviewer classifies it as tightening or keeping the rules and existing gate code provably only grows, and the owner narrows `.github/CODEOWNERS` to the owner-only files in that task. The protected-path list and the rules for what the loop may approve live in the owner's config in the orchestrator, never in the repository, and the code that applies those rules joins the protected paths in the approval-by-class task; anything that removes, relaxes or skips a check, and anything under `.github/`, always needs the owner. A dependency change is decided by the build loop's composer policy: a new `symfony/` or `doctrine/` package from its own repository, with no binaries, Composer plugin or autoload files, is routine; any other vendor, and any change to Composer's own settings (scripts, plugins, repositories, config), waits for the owner. Never weaken a gate, inline or otherwise.
 - The `comments` gate checks why-comments with a reason-word heuristic; reviewers are the backstop.
 
 <!-- BEGIN AI_MATE_INSTRUCTIONS -->

@@ -73,7 +73,8 @@ final readonly class StatefulServiceResetRule implements Rule
     {
         $declared = array_map($this->declaredProperties(...), [$class, ...$class->getParents()]);
 
-        return array_values(array_filter(array_merge(...$declared), fn (ReflectionProperty $property): bool => !$property->isReadOnly() && $this->isDeclaredInTheRegisteredResource($property)));
+        // a virtual property has no backing store, so it holds no state to carry into the next request
+        return array_values(array_filter(array_merge(...$declared), fn (ReflectionProperty $property): bool => !$property->isReadOnly() && !$property->isVirtual() && $this->isDeclaredInTheRegisteredResource($property)));
     }
 
     private function isDeclaredInTheRegisteredResource(ReflectionProperty $property): bool

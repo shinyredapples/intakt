@@ -42,7 +42,7 @@ final readonly class CheckCommand
         $failed = [];
 
         foreach ($this->selectedGates($options) as $gate) {
-            $result = $gate->run($workspace);
+            $result = $this->resultOf($gate, $workspace);
             fwrite(STDOUT, $result->toJson()."\n");
 
             if (!$result->isPassing()) {
@@ -53,6 +53,16 @@ final readonly class CheckCommand
         $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
 
         return [] === $failed ? 0 : 1;
+    }
+
+    private function resultOf(Gate $gate, Workspace $workspace): GateResult
+    {
+        // Because a gate that reads git cannot run then, and the reason belongs on its own line like any other failure.
+        try {
+            return $gate->run($workspace);
+        } catch (RepositoryAttributesRefused $refused) {
+            return GateResult::failedBecause($gate->name(), $refused->getMessage());
+        }
     }
 
     /**
