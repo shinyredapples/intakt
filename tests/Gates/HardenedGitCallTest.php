@@ -71,7 +71,9 @@ final class HardenedGitCallTest extends TestCase
         $decoy = trim($this->sandbox->git('hash-object', '-w', 'decoy.txt')->output);
         $this->sandbox->git('replace', $original, $decoy);
 
-        self::assertStringContainsString('+decoy', $this->sandbox->run('git', 'log', '-p', '-1')->output, 'the replacement must apply without hardening, or this test proves nothing');
+        // Because the process that runs the tests may itself be hardened, and an inherited GIT_NO_REPLACE_OBJECTS would hide the replacement.
+        $unhardened = new ProcessRunner()->run(['git', 'log', '-p', '-1'], $this->sandbox->root, ['GIT_NO_REPLACE_OBJECTS' => false]);
+        self::assertStringContainsString('+decoy', $unhardened->output, 'the replacement must apply without hardening, or this test proves nothing');
 
         self::assertStringContainsString('+secret', $this->logWithTheHardenedEnvironment());
     }
