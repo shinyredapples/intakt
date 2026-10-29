@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Ledger\Infrastructure;
+namespace Intakt\Core\Platform\Infrastructure;
 
 use Closure;
 use Doctrine\DBAL\Tools\DsnParser;

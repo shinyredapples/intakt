@@ -232,6 +232,72 @@ final class InstanceTest extends TestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
+    public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
+    {
+        $notAFolder = $this->scratch.'/file';
+        file_put_contents($notAFolder, 'x');
+
+        $run = $this->runInstance(self::ROOT, environment: ['TMPDIR' => $notAFolder]);
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertMatchesRegularExpression('/^cannot create the scratch directory: mkdir\(\): .+/', $status['reason']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testTheScratchFolderIsCreatedWhenTheFirstAttemptLosesTheRaceWithARmdir(): void
+    {
+        // The first mkdir must fail as if var/ had just been removed, because a real race cannot be forced; later calls reach the real file system.
+        $prepend = $this->scratch.'/lose_first_mkdir.php';
+        file_put_contents($prepend, <<<'PHP'
+            <?php
+            final class LoseFirstMkdir
+            {
+                public $context;
+
+                public function url_stat(string $path, int $flags): array|false
+                {
+                    stream_wrapper_restore('file');
+                    $result = @stat($path);
+                    stream_wrapper_unregister('file');
+                    stream_wrapper_register('file', self::class);
+
+                    return $result;
+                }
+
+                public function mkdir(string $path, int $mode, int $options): bool
+                {
+                    stream_wrapper_restore('file');
+                    trigger_error('mkdir(): No such file or directory', E_USER_WARNING);
+
+                    return false;
+                }
+            }
+            stream_wrapper_unregister('file');
+            stream_wrapper_register('file', LoseFirstMkdir::class);
+            PHP);
+
+        $run = $this->runInstanceWithPhpOptions(['-d', 'auto_prepend_file='.$prepend]);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    /**
+     * @param list<string> $phpOptions
+     *
+     * @return array{status: string, exit: int}
+     */
+    private function runInstanceWithPhpOptions(array $phpOptions): array
+    {
+        $statusFile = $this->scratch.'/status';
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>'.escapeshellarg($statusFile);
+        $process = Process::fromShellCommandline($shell, null, $this->environment());
+        $process->run();
+
+        return ['status' => trim((string) file_get_contents($statusFile)), 'exit' => (int) $process->getExitCode()];
+    }
+
     /**
      * @param list<string>                $command
      * @param array<string, string|false> $environment
