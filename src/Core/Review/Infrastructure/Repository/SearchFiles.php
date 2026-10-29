@@ -4,7 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure\Repository;
 
+use FilesystemIterator;
+use Generator;
 use Intakt\Core\Review\Contract\Checkout;
+use InvalidArgumentException;
+use RecursiveCallbackFilterIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use SplFileInfo;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
@@ -25,7 +32,7 @@ final readonly class SearchFiles
         #[Schema(description: 'File or directory to search, relative to the repository root; "." is the root.')] string $path = '.',
     ): string {
         if ('' === $text) {
-            throw new \InvalidArgumentException('The text to find is empty.');
+            throw new InvalidArgumentException('The text to find is empty.');
         }
 
         $matches = [];
@@ -42,9 +49,9 @@ final readonly class SearchFiles
     }
 
     /**
-     * @return \Generator<string>
+     * @return Generator<string>
      */
-    private function files(string $real): \Generator
+    private function files(string $real): Generator
     {
         if (is_file($real)) {
             yield $real;
@@ -52,12 +59,13 @@ final readonly class SearchFiles
             return;
         }
 
-        // Symlinks are not followed: a link in the code under review can point out of the checkout.
-        $entries = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
-            new \RecursiveDirectoryIterator($real, \FilesystemIterator::SKIP_DOTS),
-            static fn (\SplFileInfo $entry): bool => '.git' !== $entry->getFilename() && !$entry->isLink(),
+        // Because a link in the code under review can point out of the checkout, symlinks are not followed.
+        $entries = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
+            new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS),
+            static fn (SplFileInfo $entry): bool => '.git' !== $entry->getFilename() && !$entry->isLink(),
         ));
 
+        /** @var SplFileInfo $entry */
         foreach ($entries as $entry) {
             if ($entry->isFile() && $entry->getSize() <= self::MAX_FILE_BYTES) {
                 yield $entry->getPathname();
@@ -70,7 +78,12 @@ final readonly class SearchFiles
      */
     private function matchesIn(string $file, string $text): array
     {
-        $lines = file($file, FILE_IGNORE_NEW_LINES) ?: [];
+        $lines = file($file, FILE_IGNORE_NEW_LINES);
+
+        if (false === $lines) {
+            return [];
+        }
+
         $relative = $this->checkout->relative($file);
         $matches = [];
 

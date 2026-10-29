@@ -6,11 +6,11 @@ namespace Intakt\Tests\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
 
-final class ReviewCheckout
+final readonly class ReviewCheckout
 {
     private string $outside;
 
-    public readonly Checkout $checkout;
+    public Checkout $checkout;
 
     public function __construct()
     {

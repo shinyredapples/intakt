@@ -12,7 +12,7 @@ use Symfony\AI\Agent\Toolbox\Event\ToolCallRequested;
 // A listener, not a prompt rule: the model's arguments are untrusted, so plain code refuses before any tool runs.
 final readonly class DenyPathsOutsideCheckout
 {
-    // Every repository tool names its path parameter this way; the tests prove it for each tool.
+    // Because the listener reads this one argument for all three tools, a test checks each tool's parameters for it.
     public const string PATH_ARGUMENT = 'path';
 
     public function __construct(private Checkout $checkout)
@@ -38,7 +38,7 @@ final readonly class DenyPathsOutsideCheckout
         } catch (PathOutsideCheckout $refused) {
             $event->deny($refused->getMessage());
         } catch (PathNotInCheckout) {
-            // Missing is the tool's own failure to report, not an escape.
+            // Because a missing path is the tool's failure to report, not an escape.
         }
     }
 }

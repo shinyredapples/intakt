@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use InvalidArgumentException;
+
 // The one place that decides what is inside the checkout, so the tools and the listener that denies their calls cannot disagree.
 final readonly class Checkout
 {
@@ -16,7 +18,7 @@ final readonly class Checkout
         $real = realpath($root);
 
         if (false === $real || !is_dir($real)) {
-            throw new \InvalidArgumentException('The checkout is not a directory.');
+            throw new InvalidArgumentException('The checkout is not a directory.');
         }
 
         $this->root = $real;
@@ -55,8 +57,8 @@ final readonly class Checkout
             throw PathOutsideCheckout::for($path);
         }
 
-        // The git directory is not part of the head: it holds the repository's own config.
-        $segments = preg_split('#[/\\\\]#', $path) ?: [];
+        // Because the git directory is not part of the head and holds the repository's own config.
+        $segments = explode('/', str_replace('\\', '/', $path));
 
         if (in_array('..', $segments, true) || in_array(self::GIT_DIRECTORY, $segments, true)) {
             throw PathOutsideCheckout::for($path);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
+use RuntimeException;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
@@ -24,13 +25,13 @@ final readonly class ReadFile
         $real = $this->checkout->resolve($path);
 
         if (!is_file($real)) {
-            throw new \RuntimeException(sprintf('"%s" is not a file.', $path));
+            throw new RuntimeException(sprintf('"%s" is not a file.', $path));
         }
 
         $content = file_get_contents($real, length: self::MAX_BYTES + 1);
 
         if (false === $content) {
-            throw new \RuntimeException(sprintf('"%s" cannot be read.', $path));
+            throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
         }
 
         return strlen($content) > self::MAX_BYTES ? substr($content, 0, self::MAX_BYTES)."\n[truncated]" : $content;

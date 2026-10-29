@@ -16,9 +16,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Agent\Agent;
+use Symfony\AI\Agent\Toolbox\ToolResult;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Message\ToolCallMessage;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
@@ -96,15 +96,13 @@ final class ReviewerAgentTest extends TestCase
         self::assertCount(3, $tools);
 
         foreach ($tools as $tool) {
-            self::assertTrue($tool->getEffectHints()?->readOnlyHint, $tool->getName());
+            self::assertTrue($tool->getEffectHints()->readOnlyHint, $tool->getName());
             self::assertArrayHasKey(DenyPathsOutsideCheckout::PATH_ARGUMENT, $tool->getParameters()['properties'] ?? [], $tool->getName());
         }
     }
 
     /**
-     * Runs an agent whose scripted model asks for the given tool calls, one platform call each, then answers.
-     *
-     * @return list<string> the answers the model got for each tool call
+     * @return list<string>
      */
     private function runScript(ToolCall ...$calls): array
     {
@@ -119,6 +117,11 @@ final class ReviewerAgentTest extends TestCase
 
         self::assertSame('done', $result);
 
-        return array_map(static fn ($call): string => (string) $call->getResult(), $toolbox->getCalls());
+        return array_values(array_map(static function (ToolResult $call): string {
+            $answer = $call->getResult();
+            self::assertIsString($answer);
+
+            return $answer;
+        }, $toolbox->getCalls()));
     }
 }
