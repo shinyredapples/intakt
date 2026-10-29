@@ -36,7 +36,9 @@ Some files are the project's rules: the gates in `config/gates/`, `bin/check`, `
 
 ## Dependencies
 
-A new package from `symfony/` or `doctrine/` is routine when it comes from that vendor's own repository and ships no binaries, Composer plugin or autoloaded files. Any other new package needs a short justification in the pull request: a recent release, real use on Packagist, and no open security advisory.
+A dependency change is decided by the build loop's composer policy, as `AGENTS.md` says:
+- **Routine:** a new `symfony/` or `doctrine/` package from that vendor's own repository, resolved to an upstream release tag, with no binaries, no Composer plugin and no autoloaded files or class maps.
+- **Waits for the owner:** a package from any other vendor, and any change to Composer's own settings (scripts, plugins, repositories, config). A justification in the pull request (a recent release, real use on Packagist, no open security advisory) helps the owner decide; it does not replace the approval.
 
 ## A bug in Symfony AI or another dependency
 
