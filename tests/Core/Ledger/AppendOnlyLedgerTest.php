@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Ledger;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception\DriverException;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -69,6 +70,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testUpdatingAStoredEventInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $this->storedEvent();
         $this->migrate();
 
@@ -79,6 +82,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testDeletingAStoredEventInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $this->storedEvent();
         $this->migrate();
 
@@ -89,6 +94,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testReplacingAStoredEventAtItsPositionInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $record = $this->storedEvent();
         $this->migrate();
 
@@ -102,6 +109,8 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     public function testReplacingAStoredEventByItsIdInTheDatabaseIsRefused(): void
     {
+        $this->requireSqlite();
+
         $this->storedEvent();
         $this->migrate();
         $connection = $this->manager->getConnection();
@@ -124,6 +133,14 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         self::assertSame(1, $this->manager->getConnection()->fetchOne('SELECT COUNT(*) FROM ledger_event'));
     }
 
+    // Only SQLite has the triggers and INSERT OR REPLACE, because the migration adds them nowhere else; other engines rely on the Doctrine listener.
+    private function requireSqlite(): void
+    {
+        if (!$this->manager->getConnection()->getDatabasePlatform() instanceof SQLitePlatform) {
+            self::markTestSkipped('The database refuses changes through SQLite triggers only.');
+        }
+    }
+
     private function storedEvent(): EventRecord
     {
         $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted, '{}', new DateTimeImmutable('2026-10-28 12:00:00'));
@@ -136,9 +153,6 @@ final class AppendOnlyLedgerTest extends KernelTestCase
     // The test schema comes from the mapping, which has no triggers, so the migration adds them.
     private function migrate(): void
     {
-        // The migrations bundle loads migrations by path, so Composer's autoloader does not know this class.
-        require_once dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
-
         $connection = $this->manager->getConnection();
         $migration = new Version20261028120000($connection, new NullLogger());
         $migration->up(new Schema());
