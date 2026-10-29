@@ -294,7 +294,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
         $container = self::getContainer();
-        $answer = static fn (): string => VerdictDocument::fromTheDesign()->json();
+        $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
         $container->set(TierResolver::class, new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
@@ -306,7 +306,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $vendor->review('alpha', Tier::Strong, 'Review the change.');
 
-        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['big'], $verdict->follow_ups);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertCount(1, $verdict->findings);
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
