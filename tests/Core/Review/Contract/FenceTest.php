@@ -7,9 +7,10 @@ namespace Intakt\Tests\Core\Review\Contract;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Fence::class)]
-final class FenceTest extends \PHPUnit\Framework\TestCase
+final class FenceTest extends TestCase
 {
     public function testTheFenceNamesTheSourceAndSurroundsTheTextWithTheSameBoundary(): void
     {

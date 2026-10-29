@@ -20,8 +20,8 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
-use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -106,7 +106,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->json());
 
-        $verdict = $vendor->review('alpha', Tier::Strong, self::request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
@@ -117,7 +117,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
 
-        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, self::request());
+        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(['big'], $verdict->follow_ups);
     }
@@ -126,7 +126,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering('not a verdict');
 
-        $verdict = $vendor->review('alpha', Tier::Strong, self::request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
@@ -142,7 +142,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $ledger = new InMemoryLedger();
         $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json());
 
-        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, self::request());
+        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
 
         [$started, $settled] = $ledger->payloads();
         self::assertSame(2, $ledger->count());
@@ -161,7 +161,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $failing = static fn (): never => throw new RuntimeException('provider down');
 
         try {
-            $this->vendor($failing, $ledger)->review('alpha', Tier::Strong, self::request());
+            $this->vendor($failing, $ledger)->review('alpha', Tier::Strong, $this->request());
             self::fail('The failed call must stay an exception.');
         } catch (RuntimeException) {
             // Expected, because a failed call must not be turned into a verdict.
@@ -180,7 +180,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $limited = static fn (): never => throw new RateLimitExceededException(30);
 
         try {
-            $this->vendor($limited, $ledger)->review('alpha', Tier::Strong, self::request());
+            $this->vendor($limited, $ledger)->review('alpha', Tier::Strong, $this->request());
             self::fail('A rate limit must be a typed error.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(30, $rateLimited->retryAfterSeconds);
@@ -196,7 +196,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $limited = static fn (): never => throw new RateLimitExceededException();
 
         try {
-            $this->vendor($limited)->review('alpha', Tier::Strong, self::request());
+            $this->vendor($limited)->review('alpha', Tier::Strong, $this->request());
             self::fail('A rate limit must be a typed error.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertNull($rateLimited->resetsAt(new MockClock(self::NOW)->now()));
@@ -208,7 +208,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $limited = static fn (): never => throw new RateLimitExceededException(-5);
 
         try {
-            $this->vendor($limited)->review('alpha', Tier::Strong, self::request());
+            $this->vendor($limited)->review('alpha', Tier::Strong, $this->request());
             self::fail('A rate limit must be a typed error.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(0, $rateLimited->retryAfterSeconds);
@@ -222,14 +222,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $this->expectException(ProviderFailedTransiently::class);
 
-        $this->vendor($down)->review('alpha', Tier::Strong, self::request());
+        $this->vendor($down)->review('alpha', Tier::Strong, $this->request());
     }
 
     public function testAnAnswerWithoutUsageSettlesWithNoTokens(): void
     {
         $ledger = new InMemoryLedger();
 
-        $this->vendor(static fn (): string => VerdictDocument::fromTheDesign()->json(), $ledger)->review('alpha', Tier::Strong, self::request());
+        $this->vendor(static fn (): string => VerdictDocument::fromTheDesign()->json(), $ledger)->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame([], $ledger->payloads()[1]['usages']);
     }
@@ -238,7 +238,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, self::request());
+        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         /** @var list<array<string, int>> $usages */
@@ -274,9 +274,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, self::reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+        $vendor = new SymfonyAiVendor($tiers, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
 
-        $verdict = $vendor->review('alpha', Tier::Strong, self::request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         [$started, $unsettled] = $ledger->payloads();
@@ -294,7 +294,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $aggregation = new TokenUsageAggregation([new TokenUsage(promptTokens: 7, model: 'big'), new TokenUsage(promptTokens: 3, cachedTokens: 2, model: 'small')]);
         $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json(), $aggregation);
 
-        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, self::request());
+        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
 
         /** @var list<array<string, int|string|null>> $usages */
         $usages = $ledger->payloads()[1]['usages'];
@@ -311,7 +311,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         };
 
         try {
-            $this->vendor($answer, new InMemoryLedger(accepted: 0))->review('alpha', Tier::Strong, self::request());
+            $this->vendor($answer, new InMemoryLedger(accepted: 0))->review('alpha', Tier::Strong, $this->request());
             self::fail('A call that cannot be reserved must not run.');
         } catch (UsageNotRecorded) {
             // Expected, because an unreserved call would spend tokens no row accounts for.
@@ -326,7 +326,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json());
 
         try {
-            $this->vendor($answer, new InMemoryLedger(accepted: 1), $logger)->review('alpha', Tier::Strong, self::request());
+            $this->vendor($answer, new InMemoryLedger(accepted: 1), $logger)->review('alpha', Tier::Strong, $this->request());
             self::fail('A call whose usage is lost must not pass as answered.');
         } catch (UsageNotRecorded $refused) {
             self::assertStringContainsString('"prompt":100', $refused->getMessage());
@@ -346,7 +346,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $failure = new RuntimeException('provider down');
 
         try {
-            $this->vendor(static fn (): never => throw $failure, new InMemoryLedger(accepted: 1))->review('alpha', Tier::Strong, self::request());
+            $this->vendor(static fn (): never => throw $failure, new InMemoryLedger(accepted: 1))->review('alpha', Tier::Strong, $this->request());
             self::fail('A call whose usage is lost must fail.');
         } catch (UsageNotRecorded $refused) {
             self::assertSame($failure, $refused->getPrevious());
@@ -357,7 +357,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $this->vendor(static fn (): string => VerdictDocument::fromTheDesign()->json(), $ledger)->review('alpha', Tier::Strong, self::request());
+        $this->vendor(static fn (): string => VerdictDocument::fromTheDesign()->json(), $ledger)->review('alpha', Tier::Strong, $this->request());
 
         /** @var string $call */
         $call = $ledger->payloads()[0]['call'];
@@ -377,19 +377,19 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $vendor = $container->get(SymfonyAiVendor::class);
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
 
-        $verdict = $vendor->review('alpha', Tier::Strong, self::request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
     }
 
-    private static function request(): ReviewRequest
+    private function request(): ReviewRequest
     {
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'You review for correctness.', 'Review the change.');
     }
 
-    private static function reviewer(): ReviewerAgent
+    private function reviewer(): ReviewerAgent
     {
         $fence = new Fence();
 
@@ -413,6 +413,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), self::reviewer(), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $this->reviewer(), $usage);
     }
 }
