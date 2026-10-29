@@ -62,6 +62,7 @@ Then open the dashboard, pick the sample pull request and start a review.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
 - [Why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md): the safety design in plain words.
+- [Showcase](docs/showcase/README.md): this repository built by an AI loop, in figures and examples.
 - [Spec](docs/spec.md) and [plan](docs/plan.md) of the first release.
 - [AGENTS.md](AGENTS.md): the rules for anyone, person or agent, changing the code.
 
