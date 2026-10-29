@@ -130,7 +130,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         [$started, $settled] = $ledger->payloads();
         self::assertSame(2, $ledger->count());
-        self::assertSame(LedgerEventKind::UsageRecorded, $ledger->kinds()[0]);
+        self::assertEquals([LedgerEventKind::UsageRecorded, LedgerEventKind::UsageRecorded], $ledger->kinds());
         self::assertSame(['started', 'settled'], [$started['phase'], $settled['phase']]);
         self::assertSame($started['call'], $settled['call']);
         self::assertSame(['alpha', 'strong'], [$started['project'], $started['tier']]);
