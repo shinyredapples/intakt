@@ -22,6 +22,9 @@ final readonly class Scope
 
     private const int PATHS_PER_CALL = 500;
 
+    // Only the committed .gitignore files, because --exclude-standard also reads info/exclude and core.excludesFile, which the repository sets without a diff showing it.
+    private const string GITIGNORE_ONLY = '--exclude-per-directory=.gitignore';
+
     public function __construct(
         private string $root,
         private ProcessRunner $runner,
@@ -50,7 +53,7 @@ final readonly class Scope
     public function changedPaths(string $mergeBase): array
     {
         $staged = $this->gitLines(['diff-index', '--cached', '--name-only', '-z', $mergeBase]);
-        $untracked = $this->gitLines(['ls-files', '-z', '--others', '--exclude-standard']);
+        $untracked = $this->gitLines(['ls-files', '-z', '--others', self::GITIGNORE_ONLY]);
 
         return array_values(array_unique([...$staged, ...$this->unstagedPaths(), ...$untracked]));
     }
@@ -88,7 +91,7 @@ final readonly class Scope
             return $this->walkDirectory();
         }
 
-        return $this->gitLines(['ls-files', '-z', '--cached', '--others', '--exclude-standard']);
+        return $this->gitLines(['ls-files', '-z', '--cached', '--others', self::GITIGNORE_ONLY]);
     }
 
     /**

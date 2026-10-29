@@ -25,7 +25,7 @@ final class HardenedGitTest extends TestCase
     private const array SETTINGS = [
         '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'diff.external=', '-c', 'core.attributesFile=/dev/null',
         '-c', 'log.showSignature=false', '-c', 'gpg.program=/dev/null', '-c', 'gpg.ssh.program=/dev/null', '-c', 'gpg.x509.program=/dev/null',
-        '-c', 'i18n.logOutputEncoding=UTF-8',
+        '-c', 'i18n.logOutputEncoding=UTF-8', '-c', 'core.ignoreCase=false',
     ];
 
     // Because the process that runs the tests may itself be hardened, and an inherited variable would hide what the repository does.
@@ -247,6 +247,18 @@ final class HardenedGitTest extends TestCase
         self::assertSame("Subject -- with a long dash\n", $this->runGit(['git', ...self::SUBJECT], []), 'the encoding must rewrite the dash without hardening, or this test proves nothing');
 
         self::assertSame($subject."\n", $this->runHardened(self::SUBJECT));
+    }
+
+    public function testACaseInsensitiveSettingOfTheRepositoryDoesNotHideAFileBesideOneThatDiffersOnlyInCase(): void
+    {
+        $this->repository->commitFile('safe.php', "<?php\n");
+        file_put_contents($this->repository->path.'/SAFE.php', "<?php\n");
+        $this->repository->configure('core.ignoreCase', 'true');
+        $untracked = ['ls-files', '--others'];
+
+        self::assertSame('', $this->runGit(['git', ...$untracked], []), 'the setting must hide the file without hardening, or this test proves nothing');
+
+        self::assertSame("SAFE.php\n", $this->runHardened($untracked));
     }
 
     public function testARepositoryWhoseInfoAttributesExistIsRefusedBecauseTheyCouldHideAFileAsBinary(): void

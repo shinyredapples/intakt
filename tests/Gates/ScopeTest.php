@@ -140,6 +140,68 @@ final class ScopeTest extends TestCase
         $sandbox->remove();
     }
 
+    public function testChangedPathsIncludeAFileBesideOneThatDiffersOnlyInCaseWhenTheRepositoryIgnoresCase(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('safe.php', "<?php\n");
+        $sandbox->commitAll('Add a class');
+        $sandbox->write('SAFE.php', "<?php\n");
+        $sandbox->git('config', 'core.ignoreCase', 'true');
+
+        self::assertSame('', $sandbox->run('git', 'ls-files', '--others')->output, 'the setting must hide the file without hardening, or this test proves nothing');
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['SAFE.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileThatTheRepositoryConfigExcludes(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "base\n");
+        $sandbox->commitAll('Add a readme');
+        $sandbox->write('.git/hidden', "*.php\n");
+        $sandbox->git('config', 'core.excludesFile', $sandbox->root.'/.git/hidden');
+        $sandbox->write('src/Hidden.php', "<?php\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Hidden.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsIncludeAFileThatTheRepositoryInfoExcludeNames(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "base\n");
+        $sandbox->commitAll('Add a readme');
+        $sandbox->write('.git/info/exclude', "*.php\n");
+        $sandbox->write('src/Hidden.php', "<?php\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame(['src/Hidden.php'], $changed);
+        $sandbox->remove();
+    }
+
+    public function testChangedPathsLeaveOutAFileThatAGitignoreOfTheRepositoryNames(): void
+    {
+        $sandbox = Sandbox::empty();
+        $sandbox->startRepository();
+        $sandbox->write('.gitignore', "/var/\n");
+        $sandbox->commitAll('Ignore var');
+        $sandbox->write('var/cache.php', "<?php\n");
+
+        $changed = new Scope($sandbox->root, new ProcessRunner())->changedPaths('HEAD');
+
+        self::assertSame([], $changed);
+        $sandbox->remove();
+    }
+
     // A git on the path that lets each info/attributes check pass and then writes the file for the call itself, which forces the order a racing writer needs.
     private function gitThatWritesInfoAttributesAfterEachCheck(Sandbox $sandbox): string
     {

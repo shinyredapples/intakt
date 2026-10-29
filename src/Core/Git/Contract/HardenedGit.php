@@ -9,7 +9,7 @@ use Symfony\Component\Process\Process;
 // config/gates/src/HardenedGitCall.php is the protected copy the gates use; tests/Gates/HardenedGitCallTest.php keeps this one equal to it, because a forge read must be as hard as a gate's.
 final readonly class HardenedGit
 {
-    // Because command-line settings beat the repository's own config: an empty diff.external switches the external diff off, a signature check would start the repository's gpg program, and an output encoding would rewrite what git prints.
+    // Because command-line settings beat the repository's own config: an empty diff.external switches the external diff off, a signature check would start the repository's gpg program, an output encoding would rewrite what git prints, and ignoring case would hide a file beside one that differs only in case.
     private const array SETTINGS = [
         'core.hooksPath' => '/dev/null',
         'core.fsmonitor' => 'false',
@@ -20,6 +20,7 @@ final readonly class HardenedGit
         'gpg.ssh.program' => '/dev/null',
         'gpg.x509.program' => '/dev/null',
         'i18n.logOutputEncoding' => 'UTF-8',
+        'core.ignoreCase' => 'false',
     ];
 
     // Git's empty tree, so no .gitattributes of the repository applies; a SHA-256 repository refuses it, which fails closed.
