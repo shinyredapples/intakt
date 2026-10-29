@@ -30,7 +30,7 @@ final readonly class CommitSubjectsGate implements Gate
             return GateResult::failedBecause($this->name(), 'no base branch found, pass --base=<ref>');
         }
 
-        $log = $workspace->command(['git', 'log', '--format=%H%x09%P%x09%s', $mergeBase.'..HEAD']);
+        $log = $workspace->git(['log', '--format=%H%x09%P%x09%s', $mergeBase.'..HEAD']);
 
         if (!$log->succeeded()) {
             return GateResult::failedBecause($this->name(), 'git log failed: '.$log->firstErrorLine());
@@ -87,7 +87,7 @@ final readonly class CommitSubjectsGate implements Gate
     {
         $baseTip = $workspace->baseTip();
 
-        return null !== $baseTip && $workspace->command(['git', 'merge-base', '--is-ancestor', $commit, $baseTip])->succeeded();
+        return null !== $baseTip && $workspace->git(['merge-base', '--is-ancestor', $commit, $baseTip])->succeeded();
     }
 
     private function conforms(string $subject): bool

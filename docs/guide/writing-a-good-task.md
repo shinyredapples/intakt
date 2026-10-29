@@ -31,8 +31,9 @@ One or two sentences: what should be different when this is done, and why.
 - Another one, if needed: "a review with no findings exits with code 0"
 
 ## Evidence
-- E1: the command's output for a real pull request
-- E2: the test run
+- E1: the test run
+- E2: the command's output on a local install
+- E3: a CI run link (owner provides)
 
 Waits for #12
 ```
@@ -45,6 +46,22 @@ What each part is for:
 | **Acceptance** | results anyone can check: a command's output, a page that shows something, a test that passes | "it works" can't be checked; "prints the verdict as JSON" can |
 | **Evidence** | what the finished change must show, numbered E1, E2, ... | reviewers check each item one by one; missing evidence sends the work back |
 | **Waits for #n** | another task this one needs first (optional) | the task isn't started until that one is done, so nothing is built on a missing base |
+
+## Evidence the builder can produce
+
+Every evidence item must be something the builder can produce inside its sandbox. The sandbox has no network beyond the AI company and the package registries, no access to GitHub, and no real credentials.
+
+Evidence only you or Intakt itself can produce is marked `(owner provides)`. It is not the builder's to deliver. Without the mark, reviewers ask for the item round after round and the builder cannot deliver it.
+
+| The builder can produce | Only you or Intakt can produce (mark it `(owner provides)`) |
+|---|---|
+| a test run listing the cases, or one named test | a CI run link (the builder has no GitHub access) |
+| the output of a console command on a local install (`bin/console doctrine:migrations:migrate` on SQLite) | a call to a real AI company with a real key |
+| `bin/instance` and `bin/probe` runs, which work offline | a webhook delivered by GitHub, or a comment posted there |
+| a call against `MockPlatformFactory` with a `ScriptedResponse`, or a recorded `HttpCassette` | a run on your own install |
+| the diff, for a change to documentation only | |
+
+An item marked `(owner provides)` still belongs in the list: it tells reviewers what you check before the merge.
 
 ## Good and not so good
 
@@ -84,6 +101,6 @@ Labels on the issue tell Intakt how to treat the task. Only people with write ac
 
 - [ ] It says what should be different, and why.
 - [ ] Every acceptance point can be checked by someone who didn't write it.
-- [ ] The evidence says what the change must show.
+- [ ] The evidence says what the change must show, and anything the builder can't produce is marked `(owner provides)`.
 - [ ] It is one outcome.
 - [ ] Anything it depends on is named with `Waits for #n`.

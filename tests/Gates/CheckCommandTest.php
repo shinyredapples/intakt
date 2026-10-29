@@ -44,6 +44,21 @@ final class CheckCommandTest extends SandboxTestCase
         self::assertSame(2, $this->emptySandbox()->check('--skip=magic')->exitCode());
     }
 
+    public function testAGateThatReadsGitFailsWithTheReasonWhenInfoAttributesExist(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "base\n");
+        $sandbox->commitAll('feat: start');
+        $sandbox->write('.git/info/attributes', "*.txt -diff\n");
+
+        $run = $sandbox->check('--only=commits');
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue($run->failed('commits'), $run->output());
+        self::assertStringContainsString('/.git/info/attributes exists', $run->findingsOf('commits'));
+    }
+
     public function testSkipLeavesOutTheNamedGates(): void
     {
         $output = $this->emptySandbox()->check('--only=audit,secrets', '--skip=audit')->output();

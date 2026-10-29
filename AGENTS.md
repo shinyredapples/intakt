@@ -51,6 +51,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - A change that adds, removes or changes an external command Intakt or its gates call updates `docs/architecture/requirements.md` in the same change.
 - A change that alters behavior a plain-words guide in `docs/guide/` describes updates that guide in the same change, in the same plain words (no jargon, diagrams kept true); a guide that describes a planned part marks it planned until it is built. A change that adds something a newcomer would need explained (a new concept, workflow, screen or command) that no guide covers adds a section or page to `docs/guide/`, or names it as a follow-up in the pull request.
 - One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
+- Every Evidence item of a task must be producible inside the builder's sandbox (no network beyond the model provider and the package registries, no forge access, no real credentials). Evidence only the owner or the orchestrator can produce is marked `(owner provides)` and is not the builder's to satisfy ([Writing a good task](docs/guide/writing-a-good-task.md)).
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
 ## Secrets and protected paths
