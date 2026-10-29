@@ -153,18 +153,23 @@ final class Instance
         $this->createdFallback = $base === $this->root.'/var' && !is_dir($base);
 
         // A concurrent run may rmdir the var/ fallback between its creation and the scratch folder below it, so retry once.
-        $reason = '';
+        $failure = $this->makeDirectory($path);
+        $failure = null === $failure ? null : $this->makeDirectory($path);
 
-        if (!$this->makeDirectory($path, $reason) && !is_dir($path) && !$this->makeDirectory($path, $reason)) {
-            throw new RuntimeException('cannot create the scratch directory: '.$reason);
+        if (null !== $failure) {
+            throw new RuntimeException('cannot create the scratch directory: '.$failure);
         }
 
         return $path;
     }
 
-    private function makeDirectory(string $path, string &$reason): bool
+    /**
+     * Returns null when the directory exists afterwards, else the operating system's reason.
+     */
+    private function makeDirectory(string $path): ?string
     {
-        // The handler keeps the operating system's reason without printing the warning of a lost race.
+        $reason = '';
+        // The handler keeps the reason without printing the warning of a lost race.
         set_error_handler(static function (int $severity, string $message) use (&$reason): bool {
             $reason = $message;
 
@@ -172,7 +177,7 @@ final class Instance
         });
 
         try {
-            return mkdir($path, 0o700, true);
+            return mkdir($path, 0o700, true) || is_dir($path) ? null : $reason;
         } finally {
             restore_error_handler();
         }
