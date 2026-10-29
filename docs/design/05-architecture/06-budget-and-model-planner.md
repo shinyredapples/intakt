@@ -28,3 +28,12 @@ Allowance per task:
 Limits and accounting:
 - **Only structured signals count as "out of budget":** a vendor's usage-exhausted error or an HTTP 429 with its code, never the model's own text. The reset time is parsed from the vendor's error or headers, and the cooldown is kept per quota account, not per agent, so two agents on one account wait together.
 - **Usage is recorded per vendor call** with three states: started, settled, unsettled. Prices are fixed when the call is admitted. A crash in the middle of a call is settled from the vendor's usage later, never billed twice and never lost.
+
+## CI (design for later)
+
+Not in the first release. CI runs on the forge's runners, and their capacity is a budget like a vendor window: when a private repository's hosted-runner minutes ran out, every new head waited on CI that never started, and nothing had forecast it.
+- **Minutes are a budget input.** Per project, the plan's included minutes, their reset date and the used share are read from the forge's billing API where it has one; for self-hosted runners, their count and busy share. The planner treats CI like a vendor window: a forecast that runs out before the reset slows the admission of new builds first, before the reviews of heads already pushed.
+- **Fewer runs per change.** Each push costs a run, so a newer push cancels the runs of the head it replaces, red-CI send-backs are capped (see [Reviews](07-reviews.md)), and the pre-push check catches what it can before a push.
+- **Spent minutes are a cause, not a wait.** A run refused for spent minutes, or with no runner to take it, is recorded with its cause. Heads wait without a slot, and the owner gets one card (raise the limit, add a runner, or wait for the reset) with the reset date.
+- **Paid minutes are capped** like paid vendor accounts: minutes billed past the plan count against the owner's spend cap and never start silently.
+- **The dashboard shows** minutes used, the forecast at reset and minutes per merge.

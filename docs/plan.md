@@ -80,7 +80,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 ### T7 One reviewer agent with read-only repository tools
 - **Description:** A reviewer is a Symfony AI Agent with tools to read a file, list a directory and search at the exact head (tool effect hints: read-only), a prompt per role and the task text. It returns the T1 verdict through the T5 vendor; the conversation is kept per round in an Agent message store (`MessageStoreInterface`, the agent's `message_store` option; the Doctrine DBAL store in production). The reviewer prompt includes the rubric of [How code reads](design/02-principles.md#how-code-reads): story readability, needless abstraction, duplication of knowledge and what-comments, each finding citing the rule it breaks.
-- **Acceptance:** with `MockPlatformFactory` and `ScriptedResponse` scripted to call tools, the agent reads files at the head and returns a verdict; a tool call outside the repository is refused; a malformed tool call ends as `changes`, not a crash; round two reads cached tokens (a test on the recorded usage). Tests assert through the AI Bundle's `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`). A sample change with a what-comment and a single-implementation interface gets findings that cite those rules.
+- **Acceptance:** with `MockPlatformFactory` and `ScriptedResponse` scripted to call tools, the agent reads files at the head and returns a verdict; a tool call outside the repository is refused; a malformed tool call ends as a failed review (`blocked`, no review cycle used), not a crash; round two reads cached tokens (a test on the recorded usage). Tests assert through the AI Bundle's `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`). A sample change with a what-comment and a single-implementation interface gets findings that cite those rules.
 - **Evidence:** a real review of a sample branch by one provider: the verdict JSON and the tool calls it made.
 - **Symfony AI:** Anthropic prompt caching on; tools run in a `FaultTolerantToolbox`, so a failing tool answers the model with an error; a `ToolCallRequested` listener denies tool calls whose arguments escape the checkout.
 - **Prompt safety:** this task brings the fencing helper of the [threat model](design/05-architecture/14-threat-model.md#third-party-text); the task text, the diff and tool results reach the prompt only through it.
@@ -251,7 +251,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 ### T25 Provider outages and quotas on purpose
 - **Description:** Scripted runs push the Platform and the Agent where providers fail: an outage mid-stream, parallel calls that hit a rate limit together, a quota exhausted during a round, a long run. Each likely library bug gets a reproduction in `upstream/`.
-- **Acceptance:** Intakt degrades to `changes` or `blocked` with a recorded reason in every case; usage of an interrupted call is settled once; each reproduction runs alone against the pinned versions.
+- **Acceptance:** Intakt degrades to a failed review (`blocked`, no review cycle used) with a recorded reason in every case; usage of an interrupted call is settled once; each reproduction runs alone against the pinned versions.
 - **Evidence:** the list of cases with their outcomes, and any `upstream/` folders.
 - **Upstream probes:** Each probe is an isolated PHPUnit test under `upstream/<slug>/` at pinned versions, driven by `MockPlatformFactory` with `ScriptedResponse` or a redacted `HttpCassette`; the owner approves each report before it is posted.
   1. Failover with errors that surface only when the result is read (a 429 in a `DeferredResult`): the second platform must answer. Two platforms of the same class must not share one rate-limit key.
@@ -272,7 +272,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 ### T28 Tool calls and context size on purpose
 - **Description:** Tests and scripted runs push the Agent on its inputs: malformed and unknown tool calls, tool results too large for the context, an oversized diff, a task text that tries to steer the reviewer. Each likely library bug gets a reproduction in `upstream/`.
-- **Acceptance:** every case ends as `changes` or `blocked` with a recorded reason, never a crash; oversized input is cut with a note the reviewer sees; each reproduction runs alone.
+- **Acceptance:** every case ends as a valid verdict or a failed review (`blocked`, no review cycle used) with a recorded reason, never a crash; oversized input is cut with a note the reviewer sees; each reproduction runs alone.
 - **Evidence:** the list of cases with their outcomes, and any `upstream/` folders.
 - **Upstream probes:** Each probe is an isolated PHPUnit test under `upstream/<slug>/` at pinned versions, driven by `MockPlatformFactory` with `ScriptedResponse` or a redacted `HttpCassette`; the owner approves each report before it is posted.
   1. Worker-mode state: one kernel, alternating requests with two models and two MCP sessions; no model or tool list crosses over, and memory stays flat over 1,000 calls (see T29).
