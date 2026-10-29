@@ -15,7 +15,7 @@ Intakt can treat a branch of a local git repository as a pull request: the branc
 
 ## Checking that an install boots
 
-After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. Without `TMPDIR` it keeps its scratch files in `var/`; a `var/` folder that the run created is removed again when it is empty, and one that existed before is left in place. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
+After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. Without `TMPDIR` it keeps its scratch files in `var/`; a `var/` folder that the run created is removed again when it is empty, and one that existed before is left in place. If it cannot create its scratch folder, the reason names the cause, for example `cannot create the scratch directory: mkdir(): Permission denied`. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
 
 ```
 php bin/instance 3>&1 >/dev/null
@@ -63,7 +63,7 @@ To decrypt the secrets, Intakt reads `SYMFONY_DECRYPTION_SECRET` the way Symfony
 
 ### Capability tiers per project
 
-Each project maps three capability tiers (`strong`, `standard`, `light`) to a provider and a model. Copy `config/intakt.example.yaml` to `config/intakt.yaml` (or point `INTAKT_CONFIG` at another file), edit it, and run `php bin/console cache:clear`. Project names are kept exactly as written, dashes included, and a model must be a text value that is not blank (a value made only of whitespace, including Unicode spaces such as a no-break space, counts as blank). Several projects can map the tiers differently; a tier you leave out is reported as not mapped. A model name the provider's built-in list does not know is added to it, so newer models work too. An invalid file stops Intakt from starting and names the bad key. `php bin/console intakt:ai:tiers` lists every project with the provider and model of each tier; a tier whose provider is switched off (see above) shows the reason instead of a model.
+Each project maps three capability tiers (`strong`, `standard`, `light`) to a provider and a model. Copy `config/intakt.example.yaml` to `config/intakt.yaml` (or point `INTAKT_CONFIG` at another file), edit it, and run `php bin/console cache:clear`. Project names are kept exactly as written, dashes included, and a model must be a text value that is valid UTF-8 and not blank (a value made only of whitespace, including Unicode spaces such as a no-break space, counts as blank). Several projects can map the tiers differently; a tier you leave out is reported as not mapped. A model name the provider's built-in list does not know is added to it, so newer models work too. An invalid file stops Intakt from starting and names the bad key. `php bin/console intakt:ai:tiers` lists every project with the provider and model of each tier; a tier whose provider is switched off (see above) shows the reason instead of a model.
 
 ## Looking inside the development install with Mate
 
@@ -115,4 +115,8 @@ Every such call is recorded in the ledger as `usage_recorded` events: one when t
 
 A call the provider refuses because of a rate limit or quota fails with a clear error that carries the time to wait when the provider sent one; other temporary provider errors fail with their own error, so a later retry can tell them apart.
 
-`php bin/console intakt:vendor:probe` checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen.
+Run `php bin/console intakt:vendor:probe` after you set or change a provider key, to check the setup before a first review. It checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen. A provider that is switched off (see the `Provider "..." is disabled` lines above) is not probed.
+
+## What a reviewer can read
+
+A reviewer reads the change through three read-only tools: it can read a file, list a directory and search for text, all at the head under review and nothing else. A request for a file outside the repository (a `../` path, an absolute path, the `.git` folder, or a link pointing out of the checkout or into the `.git` folder) is refused with a message, and the file is never opened. A tool that fails, such as a file that does not exist or a binary file, gives the reviewer an error message and the review goes on. A search skips binary files and files over 1 MB, shortens very long matching lines and returns at most 100 matches; a listing of a very large directory is shortened too. The reviewer agent that uses these tools is not part of this release yet.
