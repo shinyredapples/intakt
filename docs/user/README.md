@@ -79,7 +79,7 @@ If Mate stops with a PHP version mismatch, it was started with a PHP other than 
 
 ## The ledger
 
-Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Nothing writes to it yet. Create the table with:
+Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Only the model calls of the vendor write to it so far (their token usage). Create the table with:
 
 ```
 php bin/console doctrine:migrations:migrate
@@ -106,3 +106,5 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 ## Asking a model for a verdict
 
 Inside Intakt, the vendor asks the model of a project's capability tier to review a change and gets back a verdict: an approve or changes decision with findings. An answer that is not a valid verdict counts as changes. There is no command for it yet; the review loop will use it.
+
+Every such call is recorded in the ledger as `usage_recorded` events: one when the call starts, and one when it ends, either with the tokens it used (prompt, completion, cached and the others the provider reports, plus the remaining-token figures) or marked unsettled when the call failed. Both carry the same call id, so a call is counted once. An answer that is not a valid verdict still records the tokens it used. If the tokens of an answer cannot be read, the call is marked unsettled and a warning is logged, but the review still gets its verdict. If the ledger cannot store the first row, the call is not sent; if it cannot store the last one, the call fails and the row, tokens included, is logged as an error so it can be recorded later. `php bin/console intakt:ledger:events` shows the rows.
