@@ -97,9 +97,9 @@ jobs:
           fi
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
-  # The persistence group on each supported engine; bin/check keeps running it on SQLite. The database is a service
-  # container with its port published on the runner, and the tests run in the CI image as uid 1000 on the runner's
-  # network, reaching it at 127.0.0.1 (no job container, so no Docker socket inside). The databases take no password
+  # The persistence group on each supported engine; bin/check keeps running it on SQLite. The tests run in the CI image
+  # as uid 1000 on the network the runner creates for the job's services, and reach the database by its service name;
+  # no port is published and there is no job container, so no Docker socket inside. The databases take no password
   # (throwaway, never published).
   # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database service instead:
   # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
@@ -143,8 +143,6 @@ jobs:
     services:
       database:
         image: ${{ needs.changes.outputs.persistence == 'true' && matrix.image || '' }}
-        ports:
-          - ${{ matrix.port }}
         env:
           MYSQL_DATABASE: intakt_test
           MARIADB_DATABASE: intakt_test
@@ -167,8 +165,9 @@ jobs:
       - name: Run the persistence group on ${{ matrix.name }}
         if: env.ENGINES == 'true'
         env:
-          DATABASE_URL: ${{ matrix.scheme }}://${{ matrix.user }}@127.0.0.1:${{ job.services.database.ports[matrix.port] }}/intakt
+          DATABASE_URL: ${{ matrix.scheme }}://${{ matrix.user }}@database:${{ matrix.port }}/intakt
+          SERVICE_NETWORK: ${{ job.services.database.network }}
         run: |
-          docker run --rm --user 1000:1000 --network host --env DATABASE_URL \
+          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
