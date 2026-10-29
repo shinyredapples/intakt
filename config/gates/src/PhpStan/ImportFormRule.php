@@ -131,7 +131,7 @@ final readonly class ImportFormRule implements Rule
     {
         $classes = new NodeFinder()->findInstanceOf($nodes, ClassLike::class);
 
-        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => $class->name?->toLowerString(), $classes), is_string(...)));
+        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => $class->namespacedName?->toLowerString(), $classes), is_string(...)));
     }
 
     /**
@@ -143,7 +143,9 @@ final readonly class ImportFormRule implements Rule
     private function unneededAliases(array $imports, array $declaredClassNames): array
     {
         $classes = array_values(array_filter($imports, static fn (array $import): bool => Use_::TYPE_NORMAL === $import['type']));
-        $shortNameCounts = array_count_values([...array_map(fn (array $import): string => $this->shortName($import['name']), $classes), ...$declaredClassNames]);
+        // Distinct class names only, so importing the same class twice is no clash that needs an alias.
+        $classNames = array_unique([...array_map(static fn (array $import): string => strtolower($import['name']), $classes), ...$declaredClassNames]);
+        $shortNameCounts = array_count_values(array_map($this->shortName(...), $classNames));
         $unneeded = array_filter(
             $classes,
             fn (array $import): bool => null !== $import['alias']

@@ -91,6 +91,11 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'import-alias-in-another-namespace', 'src/Report.php:17 intakt.unneededImportAlias');
     }
 
+    public function testAnImportAliasForAClassImportedTwiceFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'duplicate-import-alias', 'src/Report.php:8 intakt.unneededImportAlias');
+    }
+
     public function testAnImportAliasForTheShortNameOfTheDeclaredClassPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'import-alias-for-declared-class');
