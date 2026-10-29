@@ -213,16 +213,19 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->fixture->write('src/CartRepository.php', "<?php\n\ninterface CartRepository\n{\n    public function find(int \$id): Cart;\n}\n");
         $this->fixture->write('src/DoctrineCartRepository.php', "<?php\n\nfinal class DoctrineCartRepository implements CartRepository\n{\n    public function find(int \$id): Cart\n    {\n        // loop over the items and add up the price\n        return new Cart();\n    }\n}\n");
-        $findings = [
-            VerdictDocument::fromTheDesign()->withFinding('id', 'F1')->withFinding('file', 'src/DoctrineCartRepository.php')->withFinding('line', 7)->withFinding('requirement', 'Comments say why, never what')->finding(),
-            VerdictDocument::fromTheDesign()->withFinding('id', 'F2')->withFinding('file', 'src/CartRepository.php')->withFinding('line', 3)->withFinding('requirement', 'SOLID, pragmatically')->finding(),
-        ];
-        $answer = json_encode([...VerdictDocument::fromTheDesign()->decoded(), 'findings' => $findings], JSON_THROW_ON_ERROR);
+        $whatComment = VerdictDocument::fromTheDesign()->withFinding('id', 'F1')->withFinding('file', 'src/DoctrineCartRepository.php')->withFinding('line', 7)
+            ->withFinding('symbol', 'DoctrineCartRepository::find')->withFinding('text', 'The comment restates what the next line does instead of giving a reason.')
+            ->withFinding('requirement', 'Comments say why, never what')->withFinding('evidence', ['probe' => 'read_file src/DoctrineCartRepository.php', 'output' => '// loop over the items and add up the price']);
+        $singleImplementation = VerdictDocument::fromTheDesign()->withFinding('id', 'F2')->withFinding('file', 'src/CartRepository.php')->withFinding('line', 3)
+            ->withFinding('symbol', 'CartRepository')->withFinding('text', 'The interface has one implementation inside the module and is no module boundary.')
+            ->withFinding('requirement', 'SOLID, pragmatically')->withFinding('evidence', ['probe' => 'read_file src/CartRepository.php', 'output' => 'interface CartRepository']);
+        $answer = json_encode(['verdict' => 'changes', 'findings' => [$whatComment->finding(), $singleImplementation->finding()], 'resolved' => [], 'follow_ups' => []], JSON_THROW_ON_ERROR);
         $reads = [new ToolCall('1', 'read_file', ['path' => 'src/CartRepository.php']), new ToolCall('2', 'read_file', ['path' => 'src/DoctrineCartRepository.php'])];
 
         $verdict = $this->review('Load carts through a repository.', $reads, $answer);
 
         self::assertSame(['Comments say why, never what', 'SOLID, pragmatically'], array_map(static fn ($finding): ?string => $finding->requirement, $verdict->findings));
+        self::assertSame(['DoctrineCartRepository::find', 'CartRepository'], array_map(static fn ($finding): ?string => $finding->symbol, $verdict->findings));
         self::assertToolCallCount(2);
         self::assertStringContainsString('loop over the items and add up the price', $this->sent[2]);
         self::assertStringContainsString('interface CartRepository', $this->sent[2]);
