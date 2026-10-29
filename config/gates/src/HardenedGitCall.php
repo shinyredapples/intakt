@@ -84,7 +84,7 @@ final readonly class HardenedGitCall
      */
     private function driverOverrides(string $directory): array
     {
-        // Without the directory there is no repository config to read, and the git call itself fails.
+        // Because a missing directory holds no repository config, and the git call itself fails there.
         if (!is_dir($directory)) {
             return [];
         }
