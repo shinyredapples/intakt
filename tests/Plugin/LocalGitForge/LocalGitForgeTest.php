@@ -192,10 +192,12 @@ final class LocalGitForgeTest extends TestCase
 
         self::assertStringContainsString('Binary files', $this->repository->diff($base, $head), 'the attribute must hide the file without hardening, or this test proves nothing');
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('/.git/info/attributes exists');
-
-        $this->forge()->change(new ChangeId('feature'));
+        try {
+            $this->forge()->change(new ChangeId('feature'));
+            self::fail('A repository with info/attributes must be refused.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertStringContainsString('/.git/info/attributes exists', $failure->getMessage());
+        }
     }
 
     public function testItShowsABinaryFileAsTextSoThatNothingHidesAChangeAsBinaryFilesDiffer(): void

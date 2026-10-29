@@ -166,10 +166,12 @@ final class HardenedGitTest extends TestCase
 
         self::assertStringContainsString('Binary files', $this->runGit(['git', 'log', '-p', '-1'], []), 'the attribute must hide the file without hardening, or this test proves nothing');
 
-        $this->expectException(RepositoryAttributesRefused::class);
-        $this->expectExceptionMessage('/.git/info/attributes exists');
-
-        new HardenedGit()->environment($this->repository->path);
+        try {
+            new HardenedGit()->environment($this->repository->path);
+            self::fail('A repository with info/attributes must be refused.');
+        } catch (RepositoryAttributesRefused $refused) {
+            self::assertStringContainsString('/.git/info/attributes exists', $refused->getMessage());
+        }
     }
 
     /**

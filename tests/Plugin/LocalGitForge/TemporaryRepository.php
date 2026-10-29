@@ -136,7 +136,7 @@ final readonly class TemporaryRepository
 
     private function git(string ...$arguments): string
     {
-        return $this->run($arguments, null);
+        return $this->run(array_values($arguments), null);
     }
 
     /**
