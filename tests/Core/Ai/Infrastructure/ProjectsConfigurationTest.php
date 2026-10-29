@@ -75,6 +75,14 @@ final class ProjectsConfigurationTest extends TestCase
         $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => $model]]]]]);
     }
 
+    public function testAModelThatIsNotValidUtf8IsRefusedNamingTheKey(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.tiers\.light\.model.*must be valid UTF-8/');
+
+        $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => "\xA0"]]]]]);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
