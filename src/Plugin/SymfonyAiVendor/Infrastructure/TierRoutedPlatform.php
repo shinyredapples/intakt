@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use ArrayObject;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
@@ -18,14 +19,15 @@ use Symfony\AI\Platform\Result\DeferredResult;
 final class TierRoutedPlatform implements PlatformInterface
 {
     /**
-     * @var list<DeferredResult>
+     * @var ArrayObject<int, DeferredResult>
      */
-    private array $rounds = [];
+    private readonly ArrayObject $rounds;
 
     public function __construct(
         private readonly TierInvoker $tiers,
         private readonly string $project,
     ) {
+        $this->rounds = new ArrayObject();
     }
 
     /**
@@ -33,7 +35,7 @@ final class TierRoutedPlatform implements PlatformInterface
      */
     public function rounds(): array
     {
-        return $this->rounds;
+        return $this->rounds->getArrayCopy();
     }
 
     #[Override]
@@ -41,7 +43,10 @@ final class TierRoutedPlatform implements PlatformInterface
     {
         $name = $model instanceof Model ? $model->getName() : $model;
 
-        return $this->rounds[] = $this->tiers->invoke($this->project, Tier::from($name), new TierRequest($input, $options));
+        $round = $this->tiers->invoke($this->project, Tier::from($name), new TierRequest($input, $options));
+        $this->rounds[] = $round;
+
+        return $round;
     }
 
     #[Override]

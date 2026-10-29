@@ -171,8 +171,9 @@ final class ReviewerVerdictTest extends WebTestCase
     }
 
     /**
-     * @param list<ToolCall> $toolCalls one is asked for per round, then the answer follows
+     * @param list<ToolCall> $toolCalls
      */
+    // One tool call is asked for per round, then the answer follows.
     private function review(string $task, array $toolCalls, string $answer): Verdict
     {
         $script = function (mixed $model, mixed $input) use (&$toolCalls, $answer): string|ResultInterface {

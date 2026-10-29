@@ -45,6 +45,9 @@ final readonly class ReviewerAgent implements Reviewer
         }
     }
 
+    /**
+     * @param non-empty-string $model
+     */
     private function agent(ReviewRequest $request, PlatformInterface $platform, string $model): Agent
     {
         $toolbox = new FencedToolbox($this->toolboxes->create($request->checkout), $this->fence);
