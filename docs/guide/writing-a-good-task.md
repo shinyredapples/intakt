@@ -12,7 +12,7 @@ The builder can produce, for example:
 
 - a test run listing the cases, or one named test;
 - the output of a console command on a local install (`bin/console doctrine:migrations:migrate` on SQLite);
-- `bin/instance` and `bin/probe` runs, which work offline (the builder's sandbox refuses new user namespaces, so the builder runs `bin/probe` with `PROBE_ISOLATED=1`, and the output is valid Evidence);
+- `bin/instance` and `bin/probe` runs, which work offline (the builder's sandbox refuses new user namespaces, so the builder runs `bin/probe` with `PROBE_ISOLATED=1`, which does not open the network: `bin/probe` first checks that only `lo` is visible and up, and refuses with exit code 2 if not; the output is valid Evidence);
 - a call against `MockPlatformFactory` with a `ScriptedResponse`, or a recorded `HttpCassette`;
 - the diff, for a change to documentation only.
 
