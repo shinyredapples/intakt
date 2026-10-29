@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Review\Contract\Fence;
+use Closure;
+use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
@@ -13,46 +14,59 @@ use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
+use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
+use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
+use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
 
 final readonly class ReviewerAgent implements Reviewer
 {
     // Because a reviewer that keeps asking for tools never answers: a review reads a handful of files, and the agent's default of 50 rounds is a long bill.
     private const int MAX_TOOL_CALLS = 30;
 
+    /**
+     * @param Closure(Checkout): ToolboxInterface $toolboxes
+     */
     public function __construct(
         private ReviewerPrompt $prompt,
-        private ReviewerToolboxFactory $toolboxes,
+        #[AutowireCallable(service: ReviewerToolboxFactory::class, method: 'create')]
+        private Closure $toolboxes,
         private VerdictParser $parser,
-        private Fence $fence,
     ) {
     }
 
     #[Override]
     public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
     {
-        $execution = $this->agent($request, $platform, $model)->call(
+        $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
+
+        $verdict = $this->answerOf($this->agent($tools, $platform, $model)->call(
             $this->prompt->messagesFor($request->rolePrompt, $request->task),
             [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class],
-        );
+        ));
 
-        try {
-            return $this->parser->parseWith(fn (): Verdict => $this->verdictOf($execution));
-        } catch (MaxIterationsExceededException) {
-            return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d calls.', self::MAX_TOOL_CALLS));
-        }
+        return $tools->seen() ? Verdict::invalidOutput('the reviewer made a malformed tool call.') : $verdict;
     }
 
     /**
      * @param non-empty-string $model
      */
-    private function agent(ReviewRequest $request, PlatformInterface $platform, string $model): Agent
+    private function agent(ToolboxInterface $tools, PlatformInterface $platform, string $model): Agent
     {
-        $toolbox = new FencedToolbox($this->toolboxes->create($request->checkout), $this->fence);
+        $toolbox = $this->prompt->fenced(new FaultTolerantToolbox($tools));
 
         return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_TOOL_CALLS);
+    }
+
+    private function answerOf(ExecutionInterface $execution): Verdict
+    {
+        try {
+            return $this->parser->parseWith(fn (): Verdict => $this->verdictOf($execution));
+        } catch (MaxIterationsExceededException) {
+            return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d calls.', self::MAX_TOOL_CALLS));
+        }
     }
 
     private function verdictOf(ExecutionInterface $execution): Verdict

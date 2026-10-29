@@ -15,6 +15,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\Agent;
+use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolResult;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\AiBundle\Profiler\DataCollector;
@@ -243,7 +244,7 @@ final class ReviewerAgentTest extends WebTestCase
      */
     private function runScript(ToolCall ...$calls): array
     {
-        $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
+        $toolbox = new TraceableToolbox(new FaultTolerantToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout)));
         $step = 0;
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform(static function () use (&$step, $calls) {
             return $step < count($calls) ? new ToolCallResult([$calls[$step++]]) : new TextResult('done');
