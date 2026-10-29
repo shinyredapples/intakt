@@ -15,6 +15,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\Agent;
+use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolResult;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\AiBundle\Profiler\DataCollector;
@@ -220,11 +221,18 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertStringEndsWith("é\n[truncated]", $answers[0]);
     }
 
-    public function testAPathThatIsNotAStringIsDenied(): void
+    public function testAPathThatIsNotAStringIsRefusedAsAnInvalidArgument(): void
     {
         $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 42]));
 
         self::assertSame('The path must be a string.', $answers[0]);
+    }
+
+    public function testAMissingArgumentIsRefusedBeforeAnEscapingPathIsDenied(): void
+    {
+        $answers = $this->runScript(new ToolCall('1', 'search_files', ['path' => '/etc']));
+
+        self::assertSame('Parameter "text" is mandatory for tool "search_files".', $answers[0]);
     }
 
     public function testAFailingToolAnswersTheModelWithAnErrorInsteadOfCrashing(): void
@@ -261,7 +269,7 @@ final class ReviewerAgentTest extends WebTestCase
      */
     private function runScript(ToolCall ...$calls): array
     {
-        $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
+        $toolbox = new TraceableToolbox(new FaultTolerantToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout)));
         $step = 0;
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform(static function () use (&$step, $calls) {
             return $step < count($calls) ? new ToolCallResult([$calls[$step++]]) : new TextResult('done');
