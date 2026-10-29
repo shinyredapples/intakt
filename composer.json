@@ -65,6 +65,7 @@
   },
   "autoload-dev": {
     "psr-4": {
+      "DoctrineMigrations\\": "migrations/",
       "Intakt\\Gates\\": "config/gates/src/",
       "Intakt\\Tests\\": "tests/"
     }

@@ -62,3 +62,78 @@ jobs:
       - name: Run the gates on main
         if: github.event_name == 'push'
         run: bin/check --base=origin/main
+  # The persistence group on each supported engine; bin/check keeps running it on SQLite. The job runs in a container
+  # so the database is reached by its service name, and the databases take no password (throwaway, never published).
+  persistence:
+    name: persistence (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    container: ubuntu:24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mysql 8.4
+            image: mysql:8.4
+            scheme: mysql
+            port: 3306
+            user: root
+            extension: pdo_mysql
+            health: mysqladmin ping --silent
+            open_switch: MYSQL_ALLOW_EMPTY_PASSWORD
+            open_value: 'yes'
+          - name: mariadb 11.4
+            image: mariadb:11.4
+            scheme: mysql
+            port: 3306
+            user: root
+            extension: pdo_mysql
+            health: healthcheck.sh --connect --innodb_initialized
+            open_switch: MARIADB_ALLOW_EMPTY_ROOT_PASSWORD
+            open_value: 'yes'
+          - name: postgresql 17
+            image: postgres:17
+            scheme: postgresql
+            port: 5432
+            user: postgres
+            extension: pdo_pgsql
+            health: pg_isready --username=postgres
+            open_switch: POSTGRES_HOST_AUTH_METHOD
+            open_value: trust
+    env:
+      # The test environment appends _test to the database name of the URL, so the service creates intakt_test and the URL names intakt.
+      DATABASE_NAME: intakt
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_DATABASE: intakt_test
+          MARIADB_DATABASE: intakt_test
+          POSTGRES_DB: intakt_test
+        options: >-
+          --env ${{ matrix.open_switch }}=${{ matrix.open_value }}
+          --health-cmd "${{ matrix.health }}"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Install git and unzip for the checkout and Composer
+        run: apt-get update && apt-get install --yes --no-install-recommends ca-certificates curl git unzip
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.5'
+          extensions: ctype, iconv, pdo_sqlite, sqlite3, ${{ matrix.extension }}
+          coverage: none
+          tools: composer:v2
+      - name: Require PHP 8.5.12 or later (fixes PHP2Shell, CVE-2026-109618 and CVE-2026-109619)
+        run: |
+          php -r 'echo PHP_VERSION, PHP_EOL; exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
+      - name: Install the locked dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Run the persistence group on ${{ matrix.name }}
+        env:
+          DATABASE_URL: ${{ matrix.scheme }}://${{ matrix.user }}@database:${{ matrix.port }}/${{ env.DATABASE_NAME }}
+        run: vendor/bin/phpunit --group persistence
