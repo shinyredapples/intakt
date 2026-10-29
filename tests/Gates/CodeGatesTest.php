@@ -44,6 +44,21 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('cs', 'fully-qualified-name-in-docblock', 'src/Report.php: fully_qualified_strict_types');
     }
 
+    public function testAFunctionAndAConstantUsedWithoutImportFailTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'function-and-constant-not-imported', 'src/Report.php: global_namespace_import');
+    }
+
+    public function testImportedFunctionsAndConstantsPassTheCodingStandards(): void
+    {
+        $this->assertAcceptedBy('cs', 'imported-function-and-constant');
+    }
+
+    public function testAnImportAliasThatRenamesNothingFailsTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'unneeded-import-alias', 'src/Report.php: no_unneeded_import_alias');
+    }
+
     public function testASuperfluousDocblockFailsTheCodingStandards(): void
     {
         $this->assertRejectedBy('cs', 'superfluous-docblock', 'no_superfluous_phpdoc_tags');
