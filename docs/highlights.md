@@ -28,7 +28,8 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `TraceableToolbox` | tests hand the reviewer a traced toolbox, so `assertToolCalled()` sees its tool calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `ToolCallRequested` event | a listener denies tool arguments that escape the checkout | in progress | T7 (#12), `src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php` |
 | `ToolCallArgumentResolver` | the listener validates a call's arguments before it denies a path, so a malformed call never passes as a denial | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php` |
-| Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each round | planned | T7 (#12), T29 (#29) |
+| Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each reviewer round, kept in the `reviewer_conversation` table | in progress | T7 (#12), T29 (#29), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `config/packages/ai.php`, `migrations/Version20261029120000.php` |
+| Anthropic prompt caching (`cache_retention`) | the system prompt, the tools and the latest message are cached, so round two reads the tokens round one cached | in progress | T7 (#12), `config/packages/ai.php`, `tests/Core/Review/Infrastructure/ReviewerPromptCachingTest.php` |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
 | `MemoryInputProcessor` | the project memory briefing, with a size cap | planned | T17 (#22) |
 | Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button | planned | T21 (#27) |
