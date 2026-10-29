@@ -221,7 +221,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $limited = static fn (): never => throw new RateLimitExceededException(PHP_INT_MAX);
 
         try {
-            $this->vendor($limited)->review('alpha', Tier::Strong, 'Review the change.');
+            $this->vendor($limited)->review('alpha', Tier::Strong, $this->request());
             self::fail('A rate limit must be a typed error.');
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(86400, $rateLimited->retryAfterSeconds);
