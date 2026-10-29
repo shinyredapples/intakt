@@ -10,9 +10,14 @@ use Throwable;
 
 final class ProviderRateLimited extends RuntimeException
 {
-    public function __construct(public readonly ?int $retryAfterSeconds, ?Throwable $previous = null)
+    public readonly ?int $retryAfterSeconds;
+
+    public function __construct(?int $retryAfterSeconds, Throwable $previous)
     {
         parent::__construct('The provider limited the call (rate limit or quota).', previous: $previous);
+
+        // Clamped so that a negative wait never puts the reset in the past.
+        $this->retryAfterSeconds = null === $retryAfterSeconds ? null : max(0, $retryAfterSeconds);
     }
 
     // Null when the provider sent no reset, so a caller never invents one.
