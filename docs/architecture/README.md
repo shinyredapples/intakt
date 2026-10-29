@@ -136,10 +136,11 @@ Both exceptions are caught.
 - one key missing;
 - an empty key;
 - no keys;
-- a key stored only in a vault (disabled with its message);
+- a key stored only in a vault;
 - an empty key stored in a vault;
-- a malformed `SYMFONY_DECRYPTION_SECRET`;
-- all keys in the environment plus an unrelated vault entry (nothing disabled);
+- a malformed `SYMFONY_DECRYPTION_SECRET`:
+  - all keys in the environment plus an unrelated vault entry boots with nothing disabled;
+  - a vault-only key is disabled with its message;
 - a URL-safe encoded `SYMFONY_DECRYPTION_SECRET` that opens a vault-only key;
 - a `SYMFONY_DECRYPTION_SECRET` that decodes to nothing, for a vault without key files (the vault-only key is disabled).
 
