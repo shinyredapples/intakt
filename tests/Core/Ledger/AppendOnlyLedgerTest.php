@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ledger;
 
 use DateTimeImmutable;
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Schema\Schema;
-use Doctrine\Migrations\AbstractMigration;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
+use DoctrineMigrations\Version20261028120000;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
@@ -28,6 +27,7 @@ use Symfony\Component\Uid\UuidV7;
 #[Group('persistence')]
 #[CoversClass(RefuseChangesToStoredEvents::class)]
 #[CoversClass(LedgerEventsAreAppendOnly::class)]
+#[CoversClass(Version20261028120000::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
@@ -153,23 +153,12 @@ final class AppendOnlyLedgerTest extends KernelTestCase
     // The test schema comes from the mapping, which has no triggers, so the migration adds them.
     private function migrate(): void
     {
-        // The class name comes from the file because migrations load by path, unknown to Composer and static analysis.
-        $file = dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
-        require_once $file;
-
         $connection = $this->manager->getConnection();
-        $migration = $this->instantiate('DoctrineMigrations\\'.basename($file, '.php'), $connection);
+        $migration = new Version20261028120000($connection, new NullLogger());
         $migration->up(new Schema());
 
         foreach ($migration->getSql() as $query) {
             $connection->executeStatement($query->getStatement());
         }
-    }
-
-    private function instantiate(string $class, Connection $connection): AbstractMigration
-    {
-        self::assertTrue(is_subclass_of($class, AbstractMigration::class));
-
-        return new $class($connection, new NullLogger());
     }
 }
