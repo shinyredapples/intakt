@@ -42,7 +42,7 @@ final readonly class DoctrineLedger implements Ledger
             // A failed flush closes the entity manager for every holder, and Doctrine refuses to reopen it, so the manager is reset.
             $this->registry->resetManager();
 
-            // The failure may not be this event's, because the flush also wrote another holder's pending change.
+            // The failure may not be this event's, because the flush may also have written another holder's pending change.
             return AppendResult::failed('the event was not stored: '.$failure::class);
         }
 
