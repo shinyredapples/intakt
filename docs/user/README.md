@@ -15,7 +15,7 @@ Intakt can treat a branch of a local git repository as a pull request: the branc
 
 ## Checking that an install boots
 
-After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
+After `composer install`, `php bin/instance` starts Intakt on a local port with a scratch SQLite database, checks that it answers, stops it and removes everything it created. Without `TMPDIR` it keeps its scratch files in `var/`; a `var/` folder that the run created is removed again when it is empty, and one that existed before is left in place. It needs no network. Descriptor 3 receives one line, `{"status":"ready"}` or `{"status":"failed","reason":"..."}`, for example:
 
 ```
 php bin/instance 3>&1 >/dev/null
@@ -34,6 +34,10 @@ Intakt keeps one process alive across many requests and messages, so a service t
 - if the class is a value object or a data transfer object rather than a service (a console input object for `#[MapInput]` included), mark it with Symfony's `#[Exclude]` attribute so the container does not register it. An `#[Argument]` or `#[Option]` property alone does not exempt a class, because the container still registers it.
 
 Doctrine entities, embeddables, mapped superclasses and column types, and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
+
+## GitHub's test merge and the `commits` gate
+
+On a pull request, GitHub checks out a merge of the branch into the base branch, with a subject such as `Merge <sha> into <sha>`, which is not a Conventional Commit. CI names that merge with `--test-merge`, and the `commits` gate skips it when its second parent is the pull request's head and its first parent is on the base branch, also when the base branch moved after the pull request's last update. Every other commit, merges included, still needs a conforming subject.
 
 ## Running a probe against an install
 
