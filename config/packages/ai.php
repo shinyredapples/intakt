@@ -11,10 +11,9 @@ use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
-
-use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
@@ -87,7 +86,7 @@ return static function (ContainerConfigurator $container): void {
         }
 
         $platform = array_replace_recursive($platform, $configs[$provider->value]);
-        $tierPlatforms[$provider->value] = service($bundlePlatforms[$provider->value]);
+        $tierPlatforms[$provider->value] = new ReferenceConfigurator($bundlePlatforms[$provider->value]);
     }
 
     $container->extension('ai', ['platform' => $platform]);

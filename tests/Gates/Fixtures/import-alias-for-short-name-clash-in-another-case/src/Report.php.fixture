@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Sample\A\Client;
+use Intakt\Sample\B\CLIENT as BClient;
+
+final readonly class Report
+{
+    public function __construct(public Client $first, public BClient $second)
+    {
+    }
+}

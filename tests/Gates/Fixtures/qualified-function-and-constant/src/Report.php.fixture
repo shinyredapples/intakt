@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Report
+{
+    public function size(string $text): int
+    {
+        return \strlen($text) + \PHP_INT_SIZE;
+    }
+}

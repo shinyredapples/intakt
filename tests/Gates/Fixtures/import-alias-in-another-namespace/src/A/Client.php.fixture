@@ -1,0 +1,9 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\A;
+
+final readonly class Client
+{
+}

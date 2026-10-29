@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use function count;
+
+use const PHP_EOL;
+
+final readonly class Report
+{
+    /**
+     * @param list<string> $lines
+     */
+    public function summary(array $lines): string
+    {
+        return count($lines).PHP_EOL;
+    }
+}
