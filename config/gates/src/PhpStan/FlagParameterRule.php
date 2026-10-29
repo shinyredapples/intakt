@@ -72,8 +72,7 @@ final readonly class FlagParameterRule implements Rule
             && $this->isOnlyStored($parameter, $node);
     }
 
-    // a boolean the constructor reads to decide something is a flag like any other, whether read as $x or as the $this->x it is kept in,
-    // so the body may touch it only in one plain $this->x = $x
+    // a boolean the constructor reads, as $x or as $this->x, is a flag like any other, so the body may touch it only in one plain $this->x = $x
     private function isOnlyStored(Param $parameter, ClassMethod $constructor): bool
     {
         $name = $this->nameOf($parameter);
@@ -87,7 +86,7 @@ final readonly class FlagParameterRule implements Rule
             return 0 === $this->variableUses($statements, $name) && 0 === $this->propertyUses($statements, $name);
         }
 
-        $property = array_first(array_filter(array_map(fn (Stmt $statement): ?string => $this->storedProperty($statement, $name), $statements)));
+        $property = array_first(array_filter(array_map(fn (Stmt $statement): ?string => $this->storedProperty($statement, $name), $statements), is_string(...)));
 
         return null !== $property
             && 1 === $this->variableUses($statements, $name)
