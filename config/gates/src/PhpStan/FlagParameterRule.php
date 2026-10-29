@@ -6,7 +6,9 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
+use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
+use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
@@ -17,6 +19,7 @@ use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
+use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\UnionType;
 use PhpParser\NodeFinder;
@@ -97,8 +100,8 @@ final readonly class FlagParameterRule implements Rule
     {
         $assign = $statement instanceof Expression ? $statement->expr : null;
 
-        return $assign instanceof Assign && $this->isOwnProperty($assign->var) && $assign->expr instanceof Variable && $assign->expr->name === $name
-            ? $this->propertyName($assign->var)
+        return $assign instanceof Assign && $this->isOwnProperty($assign->var) && $assign->var->name instanceof Identifier && $assign->expr instanceof Variable && $assign->expr->name === $name
+            ? $assign->var->name->toString()
             : null;
     }
 
@@ -107,7 +110,7 @@ final readonly class FlagParameterRule implements Rule
      */
     private function variableUses(array $statements, string $name): int
     {
-        return count(new NodeFinder()->find($statements, static fn (Node $found): bool => $found instanceof Variable && $found->name === $name));
+        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $found instanceof Variable && $this->mayName($found->name, $name)));
     }
 
     /**
@@ -115,17 +118,26 @@ final readonly class FlagParameterRule implements Rule
      */
     private function propertyUses(array $statements, string $property): int
     {
-        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $this->isOwnProperty($found) && $this->propertyName($found) === $property));
+        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $this->isOwnProperty($found) && $this->mayName($found->name, $property)));
     }
 
+    /**
+     * @phpstan-assert-if-true PropertyFetch|NullsafePropertyFetch $node
+     */
     private function isOwnProperty(Node $node): bool
     {
-        return $node instanceof PropertyFetch && $node->var instanceof Variable && 'this' === $node->var->name;
+        return ($node instanceof PropertyFetch || $node instanceof NullsafePropertyFetch) && $node->var instanceof Variable && 'this' === $node->var->name;
     }
 
-    private function propertyName(Node $node): ?string
+    // a name computed at run time could be any name, so it counts as a read of the boolean rather than letting a flag through
+    private function mayName(string|Identifier|Expr $name, string $wanted): bool
     {
-        return $node instanceof PropertyFetch && $node->name instanceof Identifier ? $node->name->toString() : null;
+        return match (true) {
+            is_string($name) => $name === $wanted,
+            $name instanceof Identifier => $name->toString() === $wanted,
+            $name instanceof String_ => $name->value === $wanted,
+            default => true,
+        };
     }
 
     private function isBoolean(Identifier|Name|ComplexType|null $type): bool
