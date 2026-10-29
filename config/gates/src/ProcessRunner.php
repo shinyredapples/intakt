@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Intakt\Core\Git\Contract\HardenedGit;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\InputStream;
@@ -35,7 +36,10 @@ final class ProcessRunner
 
     private ?string $containment = null;
 
-    public function __construct(private readonly string $unshare = 'unshare')
+    public function __construct(
+        private readonly string $unshare = 'unshare',
+        private readonly HardenedGit $hardened = new HardenedGit(),
+    )
     {
     }
 
@@ -45,8 +49,24 @@ final class ProcessRunner
     }
 
     /**
-     * @param list<string>          $command
-     * @param array<string, string> $environment
+     * @param list<string> $arguments
+     */
+    public function git(array $arguments, string $directory): ProcessResult
+    {
+        return $this->run($this->hardened->command($arguments), $directory, $this->hardened->environment());
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    public function gitWithPathspecMagic(array $arguments, string $directory): ProcessResult
+    {
+        return $this->run($this->hardened->commandWithPathspecMagic($arguments), $directory, $this->hardened->environment());
+    }
+
+    /**
+     * @param list<string>                 $command
+     * @param array<string, string|false> $environment
      */
     public function run(array $command, string $directory, array $environment = []): ProcessResult
     {
@@ -87,7 +107,7 @@ final class ProcessRunner
     /**
      * @template Name of array-key
      *
-     * @param array<Name, array{list<string>, array<string, string>}> $commands
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
      *
      * @return array<Name, ProcessResult>
      */

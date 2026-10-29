@@ -27,7 +27,7 @@ The Notifier, WorkSource and Gate contracts are empty for now. The first impleme
 - `Forge::fileAtHead(Change, path)` returns a `FileContent` as it is at the `Change`'s head hash, not at the branch tip, so a branch that moved on does not change what is read.
 - Failures are typed: `ChangeNotFound`, `FileNotFoundAtHead` and `ForgeReadFailed` (git could not run, timed out, failed or printed something unexpected).
 
-`Plugin/LocalGitForge` implements it for a local repository (`LocalRepository`: path and base branch). A local branch (`refs/heads/<id>`, never a tag) against the base branch is the pull request. Every call runs `git --no-replace-objects --literal-pathspecs` through the Process component with an argument list (no shell) in the repository, so a `refs/replace/` ref cannot swap in another commit or blob for the head and a path is read as its exact name (a leading `:` is not pathspec magic), with a 60-second timeout and without the `GIT_*` environment variables Intakt inherited (such as `GIT_DIR` inside a git hook). A Process failure (a missing directory, a timeout) becomes a `ForgeReadFailed`, and so does a NUL byte in a path or change id, which is refused before git starts.
+`Plugin/LocalGitForge` implements it for a local repository (`LocalRepository`: path and base branch). A local branch (`refs/heads/<id>`, never a tag) against the base branch is the pull request. Every call is built by `Core/Git/Contract/HardenedGit` and runs through the Process component with an argument list (no shell) in the repository, with a 60-second timeout; the hardened call (no replace objects, literal pathspecs, no repository hooks, fsmonitor or external diff, no inherited `GIT_*` variables, no system or user config) is described in [Requirements](requirements.md#the-hardened-git-call). A Process failure (a missing directory, a timeout) becomes a `ForgeReadFailed`, and so does a NUL byte in a path or change id, which is refused before git starts.
 
 1. The head is the branch's commit (`git check-ref-format` on `refs/heads/<id>`, then `git show-ref`; an invalid branch name or a missing branch is `ChangeNotFound`, any other git failure `ForgeReadFailed`); the base is the merge base of the base branch and the head, so what the base branch gained after the branch was cut is not in the diff.
 2. The diff is `git diff` between those two hashes, without colors, renames, external diff drivers or text conversion, and with `--ignore-submodules=none`, so a changed submodule commit shows even when the repository sets `diff.ignoreSubmodules`. The changed files come from `git diff --name-status -z` with the same options and hashes; `NameStatusParser` turns that output into `ChangedFiles` with the pipe operator (split on NUL, pair status with path, map to objects). An unknown status or a status without a path is a `ForgeReadFailed`.
@@ -54,6 +54,8 @@ The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$T
 | `secrets-history` | gitleaks on every commit of the change |
 | `commits` | Conventional Commit subjects, at most 100 characters |
 | `dashes` | no em-dashes or other long dashes in files or commit messages |
+
+The gates start `git` only through `Workspace::git()`, which runs the [hardened call](requirements.md#the-hardened-git-call); the gitleaks gates start gitleaks with the hardened `git` environment.
 
 Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
 

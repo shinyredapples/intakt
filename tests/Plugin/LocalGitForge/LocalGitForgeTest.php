@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
+use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -32,6 +33,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(Diff::class)]
+#[UsesClass(HardenedGit::class)]
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(FileStatus::class)]
@@ -158,6 +160,25 @@ final class LocalGitForgeTest extends TestCase
 
         self::assertSame("head\n", $content->content);
         self::assertStringNotContainsString('decoy', $change->diff->patch);
+    }
+
+    public function testItRunsNoCommandThatTheRepositoryConfigures(): void
+    {
+        $marker = $this->repository->path.'/command-ran';
+        $script = $this->repository->writeHook('evil', "#!/bin/sh\ntouch ".$marker."\ncat \"$1\" 2>/dev/null\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('.gitattributes', "*.txt diff=evil\n");
+        $this->repository->commitFile('note.txt', "head\n");
+        $this->repository->configure('core.fsmonitor', $script);
+        $this->repository->configure('diff.external', $script);
+        $this->repository->configure('diff.evil.textconv', $script);
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+        $content = $this->forge()->fileAtHead($change, 'note.txt');
+
+        self::assertFileDoesNotExist($marker);
+        self::assertStringContainsString('+head', $change->diff->patch);
+        self::assertSame("head\n", $content->content);
     }
 
     public function testItReturnsAFileWhoseNameHasSpacesTabsAndColons(): void
@@ -338,7 +359,7 @@ final class LocalGitForgeTest extends TestCase
         $forge->change(new ChangeId('feature'));
     }
 
-    public function testItFailsToReadABranchWhenGitCannotRun(): void
+    public function testItIgnoresTheUserConfigOfTheHome(): void
     {
         $this->repository->checkoutNewBranch('feature');
         $home = $this->repository->path.'/home';
@@ -346,9 +367,9 @@ final class LocalGitForgeTest extends TestCase
         file_put_contents($home.'/.gitconfig', "[broken\n");
         $_ENV['HOME'] = $home;
 
-        $this->expectException(ForgeReadFailed::class);
+        $change = $this->forge()->change(new ChangeId('feature'));
 
-        $this->forge()->change(new ChangeId('feature'));
+        self::assertSame('feature', $change->id->value);
     }
 
     public function testItIgnoresAGitDirectoryItInherits(): void

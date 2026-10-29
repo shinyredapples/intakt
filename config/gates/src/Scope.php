@@ -121,7 +121,7 @@ final readonly class Scope
      */
     private function gitLines(array $arguments): array
     {
-        $result = $this->runner->run(['git', ...$arguments], $this->root);
+        $result = $this->runner->git($arguments, $this->root);
 
         if (!$result->succeeded()) {
             throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());

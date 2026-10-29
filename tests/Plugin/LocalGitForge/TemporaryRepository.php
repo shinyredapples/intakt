@@ -51,6 +51,15 @@ final readonly class TemporaryRepository
         $this->git('config', $key, $value);
     }
 
+    public function writeHook(string $name, string $script): string
+    {
+        $path = $this->path.'/.git/hooks/'.$name;
+        file_put_contents($path, $script);
+        chmod($path, 0o755);
+
+        return $path;
+    }
+
     public function checkoutNewBranch(string $name): void
     {
         $this->git('checkout', '--quiet', '-b', $name);

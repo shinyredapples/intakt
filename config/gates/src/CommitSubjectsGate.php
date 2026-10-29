@@ -30,7 +30,7 @@ final readonly class CommitSubjectsGate implements Gate
             return GateResult::failedBecause($this->name(), 'no base branch found, pass --base=<ref>');
         }
 
-        $log = $workspace->command(['git', 'log', '--format=%H%x09%P%x09%s', $mergeBase.'..HEAD']);
+        $log = $workspace->git(['log', '--format=%H%x09%P%x09%s', $mergeBase.'..HEAD']);
 
         if (!$log->succeeded()) {
             return GateResult::failedBecause($this->name(), 'git log failed: '.$log->firstErrorLine());

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
@@ -29,6 +30,7 @@ final readonly class LocalGitForge implements Forge
     public function __construct(
         private LocalRepository $repository,
         private NameStatusParser $nameStatus,
+        private HardenedGit $hardened = new HardenedGit(),
     ) {
     }
 
@@ -139,8 +141,7 @@ final readonly class LocalGitForge implements Forge
             throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
         }
 
-        // A refs/replace/ ref would swap in another object, and pathspec magic would read ":odd.txt" as "odd.txt".
-        $process = new Process(['git', '--no-replace-objects', '--literal-pathspecs', ...$arguments], $this->repository->path, $this->withoutGitVariables(), timeout: self::TIMEOUT_SECONDS);
+        $process = new Process($this->hardened->command($arguments), $this->repository->path, $this->hardened->environment(), timeout: self::TIMEOUT_SECONDS);
 
         try {
             $process->run();
@@ -149,21 +150,5 @@ final readonly class LocalGitForge implements Forge
         }
 
         return $process;
-    }
-
-    /**
-     * @return array<string, false>
-     */
-    private function withoutGitVariables(): array
-    {
-        // Inherited GIT_DIR, GIT_INDEX_FILE and the like (as inside a git hook) would point git at another repository.
-        $unset = [];
-        foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
-            if (is_string($name) && str_starts_with($name, 'GIT_')) {
-                $unset[$name] = false;
-            }
-        }
-
-        return $unset;
     }
 }

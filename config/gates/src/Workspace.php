@@ -74,7 +74,7 @@ final readonly class Workspace
     public function baseTip(): ?string
     {
         foreach ($this->candidateBases() as $base) {
-            $result = $this->command(['git', 'rev-parse', '--verify', '--quiet', $base.'^{commit}']);
+            $result = $this->git(['rev-parse', '--verify', '--quiet', $base.'^{commit}']);
 
             if ($result->succeeded()) {
                 return trim($result->output);
@@ -87,7 +87,7 @@ final readonly class Workspace
     public function mergeBase(): ?string
     {
         foreach ($this->candidateBases() as $base) {
-            $result = $this->command(['git', 'merge-base', $base, 'HEAD']);
+            $result = $this->git(['merge-base', $base, 'HEAD']);
 
             if ($result->succeeded()) {
                 return trim($result->output);
@@ -98,8 +98,24 @@ final readonly class Workspace
     }
 
     /**
-     * @param list<string>          $command
-     * @param array<string, string> $environment
+     * @param list<string> $arguments
+     */
+    public function git(array $arguments): ProcessResult
+    {
+        return $this->runner->git($arguments, $this->root);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    public function gitWithPathspecMagic(array $arguments): ProcessResult
+    {
+        return $this->runner->gitWithPathspecMagic($arguments, $this->root);
+    }
+
+    /**
+     * @param list<string>                 $command
+     * @param array<string, string|false> $environment
      */
     public function command(array $command, array $environment = []): ProcessResult
     {
@@ -109,7 +125,7 @@ final readonly class Workspace
     /**
      * @template Name of array-key
      *
-     * @param array<Name, array{list<string>, array<string, string>}> $commands
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
      *
      * @return array<Name, ProcessResult>
      */

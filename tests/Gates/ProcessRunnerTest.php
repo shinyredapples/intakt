@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\ProcessRunner;
+use Intakt\Core\Git\Contract\HardenedGit;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ProcessRunner::class)]
+#[UsesClass(HardenedGit::class)]
 final class ProcessRunnerTest extends TestCase
 {
     /** @var list<string> */
@@ -26,6 +29,21 @@ final class ProcessRunnerTest extends TestCase
         self::assertSame(str_repeat('b', 300000), $results['first']->errors);
         self::assertTrue($results['second']->succeeded());
         self::assertSame(str_repeat('c', 300000).'second', $results['second']->output);
+    }
+
+    public function testGitIgnoresAnFsmonitorCommandOfTheRepository(): void
+    {
+        $sandbox = Sandbox::empty();
+        $marker = $sandbox->root.'/fsmonitor-ran';
+        $sandbox->write('monitor.sh', "#!/bin/sh\ntouch ".$marker."\n");
+        chmod($sandbox->root.'/monitor.sh', 0o755);
+        $sandbox->git('init', '--quiet');
+        $sandbox->git('config', 'core.fsmonitor', $sandbox->root.'/monitor.sh');
+
+        $result = new ProcessRunner()->git(['status', '--short'], $sandbox->root);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertFileDoesNotExist($marker);
     }
 
     public function testACommandThatCannotStartIsReportedWithoutStoppingTheOthers(): void
