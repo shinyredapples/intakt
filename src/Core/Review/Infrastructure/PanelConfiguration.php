@@ -58,7 +58,7 @@ final readonly class PanelConfiguration implements ConfigurationInterface
      */
     private function refuseUnusablePanels(array $panels): array
     {
-        // PHP turns a numeric project name into an integer key.
+        // Cast because PHP turns a numeric project name into an integer key.
         foreach ($panels as $project => $panel) {
             $this->refuseOtherProviders((string) $project, $panel['reviewers']);
             $this->refuseUnreachableQuorum((string) $project, $panel);
