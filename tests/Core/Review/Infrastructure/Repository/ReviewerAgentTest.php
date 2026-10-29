@@ -228,6 +228,13 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertSame('The path must be a string.', $answers[0]);
     }
 
+    public function testAMissingArgumentIsRefusedBeforeAnEscapingPathIsDenied(): void
+    {
+        $answers = $this->runScript(new ToolCall('1', 'search_files', ['path' => '/etc']));
+
+        self::assertSame('Parameter "text" is mandatory for tool "search_files".', $answers[0]);
+    }
+
     public function testAFailingToolAnswersTheModelWithAnErrorInsteadOfCrashing(): void
     {
         $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'src/Missing.php']));

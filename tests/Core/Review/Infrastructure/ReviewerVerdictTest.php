@@ -168,6 +168,16 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('The path must be a string.', $this->sent[1]);
     }
 
+    public function testASearchWithoutItsTextWhosePathEscapesTheCheckoutEndsAsChangesEvenWhenTheModelApproves(): void
+    {
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'search_files', ['path' => '../outside'])], self::APPROVE);
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertStringContainsString('malformed tool call', $verdict->findings[0]->text);
+        self::assertStringContainsString('Parameter \"text\" is mandatory for tool \"search_files\"', $this->sent[1]);
+        self::assertStringNotContainsString('outside the repository', $this->sent[1]);
+    }
+
     public function testAReviewerThatStillAsksForToolsAfterThirtyRoundsEndsAsChangesInsteadOfCrashing(): void
     {
         $forever = array_fill(0, 40, new ToolCall('1', 'read_file', ['path' => 'src/Cart.php']));
