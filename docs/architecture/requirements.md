@@ -4,7 +4,7 @@
 
 A builder writes the repository content Intakt later reads with `git`, so the repository's own config and attributes must never run code or change what is read. Every `git` call is built by one of two equal classes: `Core/Git/Contract/HardenedGit` for the local git forge (`Plugin/LocalGitForge`), and `config/gates/src/HardenedGitCall.php` for the gates (`ProcessRunner::git()`, reached through `Workspace::git()`). The gates keep their own copy because `config/gates/` is a protected path, so no builder can weaken how a gate reads the repository; `tests/Gates/HardenedGitCallTest.php` fails when the two build a different command or environment. No other code starts `git`.
 
-`command()` builds the argument list (no shell):
+`call(arguments, directory)` returns a `GitCall`, a typed object with the argument list (no shell), the absolute directory the process runs in, and the environment; `callWithPathspecMagic()` does the same without `--literal-pathspecs`. `environment(directory)` alone serves a tool that starts `git` itself (gitleaks). The argument list:
 
 ```
 git --no-replace-objects --no-lazy-fetch --literal-pathspecs
@@ -18,7 +18,7 @@ git --no-replace-objects --no-lazy-fetch --literal-pathspecs
 
 - `--no-replace-objects`: a `refs/replace/` ref cannot swap in another commit or blob.
 - `--no-lazy-fetch` (git 2.45 or later; an older git refuses the option, so every call fails): a partial clone (`extensions.partialClone`) fetches no missing object, so the transport of a promisor remote the repository config names (an `ext::<command>` URL with `protocol.ext.allow=always`, say) never starts; the call fails on the missing object instead (`Not a valid object name`, which the forge turns into `ForgeReadFailed`).
-- `--literal-pathspecs`: a path is read as its exact name, so a leading `:` is not pathspec magic. `commandWithPathspecMagic()` leaves it out for the two gate calls that pass their own `:(glob)` pathspecs, never a path from the repository.
+- `--literal-pathspecs`: a path is read as its exact name, so a leading `:` is not pathspec magic. `callWithPathspecMagic()` leaves it out for the two gate calls that pass their own `:(glob)` pathspecs, never a path from the repository.
 - `--attr-source=` git's empty tree: no `.gitattributes` of the repository applies (no filter, diff driver, `binary` or `eol` attribute from the tree). A SHA-256 repository refuses this SHA-1 tree, so every call in it fails instead of reading attributes.
 - `core.hooksPath=/dev/null`: no repository hook runs.
 - `core.fsmonitor=false`: no repository fsmonitor command runs.

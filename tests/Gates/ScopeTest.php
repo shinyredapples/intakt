@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Scope::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGitCall::class)]
 final class ScopeTest extends TestCase
 {

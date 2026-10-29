@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\Contract;
 
+use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Tests\Plugin\LocalGitForge\TemporaryRepository;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(HardenedGit::class)]
+#[UsesClass(GitCall::class)]
 #[UsesClass(RepositoryAttributesRefused::class)]
 final class HardenedGitTest extends TestCase
 {
@@ -53,7 +55,7 @@ final class HardenedGitTest extends TestCase
 
     public function testTheCommandDisablesHooksFsmonitorExternalDiffAttributesSignaturesAndOutputEncodings(): void
     {
-        $command = new HardenedGit()->command(['status']);
+        $command = new HardenedGit()->call(['status'], $this->repository->path)->command;
 
         self::assertSame(
             ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'status'],
@@ -63,7 +65,7 @@ final class HardenedGitTest extends TestCase
 
     public function testTheMagicVariantKeepsTheHardeningButAllowsPathspecMagic(): void
     {
-        $command = new HardenedGit()->commandWithPathspecMagic(['ls-files']);
+        $command = new HardenedGit()->callWithPathspecMagic(['ls-files'], $this->repository->path)->command;
 
         self::assertNotContains('--literal-pathspecs', $command);
         self::assertContains('--no-replace-objects', $command);
@@ -88,10 +90,11 @@ final class HardenedGitTest extends TestCase
         chdir(dirname($this->repository->path));
         $relative = basename($this->repository->path);
 
-        $environment = new HardenedGit()->environment($relative);
+        $call = new HardenedGit()->call(['status', '--short'], $relative);
 
-        self::assertSame(realpath($this->repository->path), $environment['GIT_WORK_TREE']);
-        self::assertSame(" M README.md\n", $this->runGit(new HardenedGit()->command(['status', '--short']), $environment, $relative));
+        self::assertSame(realpath($this->repository->path), $call->directory);
+        self::assertSame($call->directory, $call->environment['GIT_WORK_TREE']);
+        self::assertSame(" M README.md\n", $this->runGit($call->command, $call->environment, $relative));
     }
 
     public function testAPromisorRemoteOfTheRepositoryDoesNotFetchAMissingObjectThroughItsCommand(): void
@@ -108,7 +111,8 @@ final class HardenedGitTest extends TestCase
         self::assertFileExists($marker, 'the command must run without hardening, or this test proves nothing');
         unlink($marker);
 
-        $hardened = $this->start(new HardenedGit()->command($read), new HardenedGit()->environment($this->repository->path), $this->repository->path);
+        $call = new HardenedGit()->call($read, $this->repository->path);
+        $hardened = $this->start($call->command, $call->environment, $call->directory);
         self::assertFileDoesNotExist($marker);
         self::assertFalse($hardened->isSuccessful(), 'a missing object must fail the call');
     }
@@ -265,7 +269,9 @@ final class HardenedGitTest extends TestCase
      */
     private function runHardened(array $arguments): string
     {
-        return $this->runGit(new HardenedGit()->command($arguments), new HardenedGit()->environment($this->repository->path));
+        $call = new HardenedGit()->call($arguments, $this->repository->path);
+
+        return $this->runGit($call->command, $call->environment);
     }
 
     /**

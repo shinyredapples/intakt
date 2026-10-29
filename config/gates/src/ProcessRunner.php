@@ -51,7 +51,7 @@ final class ProcessRunner
      */
     public function git(array $arguments, string $directory): ProcessResult
     {
-        return $this->run($this->hardened->command($arguments), $directory, $this->hardened->environment($directory));
+        return $this->runCall($this->hardened->call($arguments, $directory));
     }
 
     /**
@@ -59,7 +59,7 @@ final class ProcessRunner
      */
     public function gitWithPathspecMagic(array $arguments, string $directory): ProcessResult
     {
-        return $this->run($this->hardened->commandWithPathspecMagic($arguments), $directory, $this->hardened->environment($directory));
+        return $this->runCall($this->hardened->callWithPathspecMagic($arguments, $directory));
     }
 
     /**
@@ -130,6 +130,11 @@ final class ProcessRunner
         }
 
         return $results;
+    }
+
+    private function runCall(GitCall $call): ProcessResult
+    {
+        return $this->run($call->command, $call->directory, $call->environment);
     }
 
     /**

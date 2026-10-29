@@ -34,23 +34,22 @@ final readonly class HardenedGitCall
     /**
      * @param list<string> $arguments
      *
-     * @return list<string>
+     * @throws RepositoryAttributesRefused
      */
-    public function command(array $arguments): array
+    public function call(array $arguments, string $directory): GitCall
     {
-        // A refs/replace/ ref would swap in another object, a lazy fetch would start the transport of a promisor remote the repository names, and pathspec magic would read ":odd.txt" as "odd.txt".
-        return ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
+        return $this->callWith($this->command($arguments), $directory);
     }
 
     /**
      * @param list<string> $arguments
      *
-     * @return list<string>
+     * @throws RepositoryAttributesRefused
      */
-    public function commandWithPathspecMagic(array $arguments): array
+    public function callWithPathspecMagic(array $arguments, string $directory): GitCall
     {
         // Because a gate writes glob pathspecs itself, which literal pathspecs refuse; never use it for a path from the repository.
-        return ['git', '--no-replace-objects', '--no-lazy-fetch', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
+        return $this->callWith(['git', '--no-replace-objects', '--no-lazy-fetch', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments], $directory);
     }
 
     /**
@@ -66,12 +65,25 @@ final readonly class HardenedGitCall
         return $this->variables($directory);
     }
 
-    private function absolute(string $directory): string
+    /**
+     * @param list<string> $command
+     */
+    private function callWith(array $command, string $directory): GitCall
     {
-        // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
-        $absolute = realpath($directory);
+        $directory = $this->absolute($directory);
 
-        return false === $absolute ? $directory : $absolute;
+        return new GitCall($command, $directory, $this->environment($directory));
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return list<string>
+     */
+    private function command(array $arguments): array
+    {
+        // A refs/replace/ ref would swap in another object, a lazy fetch would start the transport of a promisor remote the repository names, and pathspec magic would read ":odd.txt" as "odd.txt".
+        return ['git', '--no-replace-objects', '--no-lazy-fetch', '--literal-pathspecs', '--attr-source='.self::NO_ATTRIBUTES, ...$this->settings(), ...$arguments];
     }
 
     /**
@@ -86,6 +98,14 @@ final readonly class HardenedGitCall
         }
 
         return $settings;
+    }
+
+    private function absolute(string $directory): string
+    {
+        // Because the process changes into the directory before git reads GIT_WORK_TREE, a relative one would be resolved twice; a missing one stays as it is, and the call itself fails there.
+        $absolute = realpath($directory);
+
+        return false === $absolute ? $directory : $absolute;
     }
 
     private function refuseInfoAttributes(string $directory): void

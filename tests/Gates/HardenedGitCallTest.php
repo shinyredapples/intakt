@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Core\Git\Contract\GitCall as ForgeGitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Gates\GitCall;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
@@ -14,6 +16,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(HardenedGitCall::class)]
+#[UsesClass(ForgeGitCall::class)]
+#[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
@@ -73,10 +77,18 @@ final class HardenedGitCallTest extends TestCase
         self::assertFalse($result->succeeded(), 'a missing object must fail the call');
     }
 
-    public function testTheForgeCopyBuildsTheSameCommands(): void
+    public function testTheForgeCopyBuildsTheSameCalls(): void
     {
-        self::assertSame(new HardenedGitCall()->command(['status']), new HardenedGit()->command(['status']));
-        self::assertSame(new HardenedGitCall()->commandWithPathspecMagic(['status']), new HardenedGit()->commandWithPathspecMagic(['status']));
+        $gate = new HardenedGitCall()->call(['status'], $this->sandbox->root);
+        $forge = new HardenedGit()->call(['status'], $this->sandbox->root);
+
+        self::assertSame($gate->command, $forge->command);
+        self::assertSame($gate->directory, $forge->directory);
+        self::assertSame($gate->environment, $forge->environment);
+        self::assertSame(
+            new HardenedGitCall()->callWithPathspecMagic(['status'], $this->sandbox->root)->command,
+            new HardenedGit()->callWithPathspecMagic(['status'], $this->sandbox->root)->command,
+        );
     }
 
     public function testTheForgeCopyBuildsTheSameEnvironment(): void
