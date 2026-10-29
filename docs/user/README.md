@@ -85,6 +85,10 @@ Intakt has a ledger that can store review events (review started, reviewer start
 php bin/console doctrine:migrations:migrate
 ```
 
+### Choosing the database
+
+Intakt uses SQLite unless you set `DATABASE_URL` (in `.env.local` or the real environment) to another database; MySQL, MariaDB and PostgreSQL are tested too, for example `DATABASE_URL="postgresql://intakt@localhost:5432/intakt"`. Intakt finds out the MySQL or MariaDB server version itself on the first connection. For PostgreSQL it does not ask the server and always uses its support for PostgreSQL 12 and later, the newest it has. The test environment appends `_test` to the database name, so tests against `intakt` use the database `intakt_test`.
+
 Stored events cannot be changed or removed. Intakt refuses to update or delete one with a `LedgerEventsAreAppendOnly` error, and on SQLite the same migration adds database triggers that abort any `UPDATE` or `DELETE` on the table, and any insert that would replace a stored event (for example `INSERT OR REPLACE` with the position or id of an existing event), even from another tool. On other database engines only the refusal inside Intakt applies.
 
 Read the events back, oldest first, with:

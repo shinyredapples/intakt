@@ -108,7 +108,43 @@ The `Core/Review` module's `Contract` holds the verdict a reviewer returns (plan
 
 `config/packages/ai.php` configures the AI Bundle platforms `anthropic`, `openai` and a generic endpoint named `openai_compatible` (packages `symfony/ai-anthropic-platform`, `symfony/ai-open-ai-platform` and `symfony/ai-generic-platform`, pinned like the other Symfony AI packages). Each provider is a case of the `Intakt\Core\Ai\Contract\Provider` enum, which lists the environment variables it needs (`ANTHROPIC_API_KEY`; `OPENAI_API_KEY`; `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY`).
 
-When the container is built, a provider is included only if each of its variables is non-empty in `$_ENV`, `$_SERVER` or the process environment, or has a non-empty value in the Symfony secrets vault (the sources of Symfony's env processor, which falls back to the vault for an empty variable). The vault is read from the framework's default directory `config/secrets/<runtime environment>` (`APP_RUNTIME_ENV`, else the kernel environment) with the framework's default decryption key (the value of `SYMFONY_DECRYPTION_SECRET` when it is set, decoded by the framework's own `base64:` env processor (`EnvVarProcessor`, lenient and accepting the standard or URL-safe alphabet), which overrides the vault's `decrypt.private.php`, else that file): `SodiumVault::list()` gives the names without decrypting, and only a needed variable that is empty in the environment and listed in the vault is revealed with `SodiumVault::reveal()`, as the framework's env loader does. A secret that cannot be decrypted counts as missing (a wrong key returns null; a key of the wrong length throws `SodiumException`, and no key at all (a secret that decodes to nothing and no key file in the vault) throws `RuntimeException`; both are caught), so a broken decryption key never aborts the boot. The revealed values are used only for this check and are not written into the container. Otherwise it is left out and the parameter `intakt.ai.disabled_providers` (provider name to message) records `Provider "<name>" is disabled: set <VARIABLE> to enable it.` `Intakt\Core\Ai\Infrastructure\DisabledProvidersWarning` writes each message to standard error on every `ConsoleCommandEvent` (the application has no log handler that prints warnings yet). The check is at build time because an unset `%env()%` makes the service fail when it is first built; the key itself stays a `%env()%` reference, so no secret is written into the compiled container. The consequence is that a changed key needs a cache clear. `tests/Application/AiProvidersTest.php` boots the kernel with all keys, with one missing, with an empty key, with none, with a key stored only in a vault, with an empty key stored in a vault, and with a malformed `SYMFONY_DECRYPTION_SECRET` (all keys in the environment plus an unrelated vault entry boots with nothing disabled; a vault-only key is disabled with its message), and with a URL-safe encoded `SYMFONY_DECRYPTION_SECRET` that opens a vault-only key, and with a `SYMFONY_DECRYPTION_SECRET` that decodes to nothing for a vault without key files (the vault-only key is disabled), in a vault it creates under `config/secrets/ai_providers_test` and removes afterwards (git ignores that directory, so a crashed run leaves nothing to commit; saving and restoring `$_SERVER`, `$_ENV` and the process environment); `tests/Core/Ai/Infrastructure/DisabledProvidersWarningTest.php` covers the warning, including that a console output gets it on its error output only. Tests that need a model answer use Symfony AI's `MockPlatformFactory`, never a provider.
+When the container is built, a provider is included only if each of its variables has a value. This is decided at build time because an unset `%env()%` makes the service fail when it is first built. The key itself stays a `%env()%` reference, so no secret is written into the compiled container. The consequence is that a changed key needs a cache clear.
+
+**Where a value comes from.** A variable counts when it is non-empty in `$_ENV`, `$_SERVER` or the process environment, or has a non-empty value in the Symfony secrets vault. These are the sources of Symfony's env processor, which falls back to the vault for an empty variable.
+
+**How the vault is read.**
+
+- The directory is the framework's default, `config/secrets/<runtime environment>` (`APP_RUNTIME_ENV`, else the kernel environment).
+- The decryption key is the framework's default: the value of `SYMFONY_DECRYPTION_SECRET` when it is set, else the vault's `decrypt.private.php`. The environment value overrides the file.
+- The environment value is decoded by the framework's own `base64:` env processor (`EnvVarProcessor`, lenient and accepting the standard or URL-safe alphabet).
+- `SodiumVault::list()` gives the names without decrypting. Only a needed variable that is empty in the environment and listed in the vault is revealed with `SodiumVault::reveal()`, as the framework's env loader does.
+- The revealed values are used only for this check and are not written into the container.
+
+**What counts as missing.** A secret that cannot be decrypted counts as missing, so a broken decryption key never aborts the boot:
+
+- a wrong key returns null;
+- a key of the wrong length throws `SodiumException`;
+- no key at all (a secret that decodes to nothing and no key file in the vault) throws `RuntimeException`.
+
+Both exceptions are caught.
+
+**A disabled provider.** A provider with a missing variable is left out, and the parameter `intakt.ai.disabled_providers` (provider name to message) records `Provider "<name>" is disabled: set <VARIABLE> to enable it.` `Intakt\Core\Ai\Infrastructure\DisabledProvidersWarning` writes each message to standard error on every `ConsoleCommandEvent` (the application has no log handler that prints warnings yet).
+
+**Tests.** `tests/Application/AiProvidersTest.php` boots the kernel with:
+
+- all keys;
+- one key missing;
+- an empty key;
+- no keys;
+- a key stored only in a vault;
+- an empty key stored in a vault;
+- a malformed `SYMFONY_DECRYPTION_SECRET`:
+  - all keys in the environment plus an unrelated vault entry boots with nothing disabled;
+  - a vault-only key is disabled with its message;
+- a URL-safe encoded `SYMFONY_DECRYPTION_SECRET` that opens a vault-only key;
+- a `SYMFONY_DECRYPTION_SECRET` that decodes to nothing, for a vault without key files (the vault-only key is disabled).
+
+It uses a vault it creates under `config/secrets/ai_providers_test` and removes afterwards (git ignores that directory, so a crashed run leaves nothing to commit), saving and restoring `$_SERVER`, `$_ENV` and the process environment. `tests/Core/Ai/Infrastructure/DisabledProvidersWarningTest.php` covers the warning, including that a console output gets it on its error output only. Tests that need a model answer use Symfony AI's `MockPlatformFactory`, never a provider.
 
 ## Capability tiers per project
 
@@ -136,7 +172,7 @@ For each enabled provider, `Infrastructure\ProjectModelCatalog` adds to the AI B
 
 ## Persistence
 
-SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets; their CI jobs start with the first entity (see [the plan](../plan.md)).
+SQLite by default (`DATABASE_URL` in `.env`). MySQL, MariaDB and PostgreSQL are supported targets: the `persistence` job in `.github/workflows/ci.yml` runs `vendor/bin/phpunit --group persistence` on MySQL 8.4, MariaDB 11.4 and PostgreSQL 17 (one matrix entry each, a service container reached by its service name, no password; the test environment appends `_test` to the database name, so the URL names `intakt` and the service creates `intakt_test`). `bin/check` still runs the whole suite on SQLite. `doctrine.dbal.server_version` comes from the `postgresql_server_version` env var processor (`src/Core/Ledger/Infrastructure/PostgreSqlServerVersion.php`) applied to `DATABASE_URL`: a PostgreSQL URL (driver `pdo_pgsql`, or `pgsql` through `?driver=pgsql`) gets `12`, the version of DBAL 4's newest PostgreSQL platform, and any other URL none, so MySQL, MariaDB and SQLite detect the server on the first connection. DoctrineBundle picks a platform before it connects and refuses an empty PostgreSQL version (`upstream/doctrine-bundle-postgresql-empty-server-version`); `tests/Core/Ledger/PostgreSqlServerVersionTest.php` builds the test connection for both PostgreSQL drivers and for MySQL. `migrations/` is in Composer's `autoload-dev` (`DoctrineMigrations\`), so tests and static analysis name a migration class directly; the migrations bundle still finds migrations by path.
 
 ## Vendor
 
