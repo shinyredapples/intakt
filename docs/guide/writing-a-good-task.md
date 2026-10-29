@@ -57,7 +57,7 @@ Evidence only you or Intakt itself can produce is marked `(owner provides)`. It 
 |---|---|
 | a test run listing the cases, or one named test | a CI run link (the builder has no GitHub access) |
 | the output of a console command on a local install (`bin/console doctrine:migrations:migrate` on SQLite) | a call to a real AI company with a real key |
-| `bin/instance` and `bin/probe` runs, which work offline | a webhook delivered by GitHub, or a comment posted there |
+| `bin/instance` and `bin/probe` runs, which work offline (the builder's sandbox refuses new user namespaces, so it runs `bin/probe` with `PROBE_ISOLATED=1`; that output is valid evidence) | a webhook delivered by GitHub, or a comment posted there |
 | a call against `MockPlatformFactory` with a `ScriptedResponse`, or a recorded `HttpCassette` | a run on your own install |
 | the diff, for a change to documentation only | |
 
