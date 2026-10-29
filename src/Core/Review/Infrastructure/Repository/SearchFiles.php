@@ -90,27 +90,43 @@ final readonly class SearchFiles
     }
 
     /**
-     * @return list<string>
+     * @return Generator<string>
      */
-    private function matchesIn(SplFileInfo $file, string $text): array
+    private function matchesIn(SplFileInfo $file, string $text): Generator
     {
         $content = $file->getSize() <= self::MAX_FILE_BYTES ? file_get_contents($file->getPathname()) : false;
 
         // Because the answer reaches the provider as JSON, which carries only valid UTF-8, a binary file is not searched.
         if (false === $content || !mb_check_encoding($content, 'UTF-8')) {
-            return [];
+            return;
         }
 
         $relative = mb_scrub($this->checkout->relative($file->getPathname()), 'UTF-8');
-        $matches = [];
 
-        foreach (explode("\n", $content) as $number => $line) {
+        foreach ($this->lines($content) as $number => $line) {
             if (str_contains($line, $text)) {
-                $matches[] = sprintf('%s:%d:%s', $relative, $number + 1, $this->cut(rtrim($line, "\r")));
+                yield sprintf('%s:%d:%s', $relative, $number, $this->cut(rtrim($line, "\r")));
             }
         }
+    }
 
-        return $matches;
+    /**
+     * @return Generator<int, string>
+     */
+    private function lines(string $content): Generator
+    {
+        $start = 0;
+        $number = 1;
+
+        // Because a file of many short lines would otherwise hold them all at once, lines are cut out one at a time.
+        while ($start <= strlen($content)) {
+            $end = strpos($content, "\n", $start);
+            $end = false === $end ? strlen($content) : $end;
+
+            yield $number++ => substr($content, $start, $end - $start);
+
+            $start = $end + 1;
+        }
     }
 
     private function cut(string $line): string

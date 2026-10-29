@@ -155,6 +155,18 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertStringEndsWith("\n[more matches not shown]", $answers[0]);
     }
 
+    public function testASearchOfAFileWithManyMatchesStopsCollectingAtTheLimit(): void
+    {
+        $file = implode('/', array_fill(0, 4, str_repeat('d', 200))).'/hits.txt';
+        $this->fixture->write($file, str_repeat("x\n", 50_000));
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $this->runScript(new ToolCall('1', 'search_files', ['text' => 'x']));
+
+        self::assertLessThan(10_000_000, memory_get_peak_usage() - $before);
+    }
+
     public function testAListingStopsAtTheAnswerLimitWhenADirectoryIsLarge(): void
     {
         foreach (range(0, 999) as $file) {
