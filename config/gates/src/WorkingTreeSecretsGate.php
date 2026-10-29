@@ -119,7 +119,7 @@ final class WorkingTreeSecretsGate extends GitleaksGate
             return [];
         }
 
-        $tracked = $workspace->command(['git', 'ls-files', '--cached', '--', ...self::UNSCANNED_FOLDERS]);
+        $tracked = $workspace->gitWithPathspecMagic(['ls-files', '--cached', '--', ...self::UNSCANNED_FOLDERS]);
 
         if (!$tracked->succeeded()) {
             return ['cannot list tracked files: '.$tracked->firstErrorLine()];

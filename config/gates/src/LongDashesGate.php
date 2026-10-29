@@ -103,7 +103,7 @@ final readonly class LongDashesGate implements Gate
      */
     private function gitOutput(Workspace $workspace, array $arguments): string
     {
-        $result = $workspace->command(['git', ...$arguments]);
+        $result = $workspace->git($arguments);
 
         if (!$result->succeeded()) {
             throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());

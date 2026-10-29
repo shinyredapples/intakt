@@ -82,6 +82,22 @@ final readonly class Sandbox
         $this->git('init', '--quiet', '--initial-branch=main');
     }
 
+    public function promiseMissingObjectsFrom(string $command): void
+    {
+        // Because a partial clone fetches a missing object lazily from its promisor remote, a command behind an ext:: URL shows whether a call fetches.
+        $this->git('config', 'core.repositoryFormatVersion', '1');
+        $this->git('config', 'extensions.partialClone', 'origin');
+        $this->git('config', 'remote.origin.url', 'ext::'.$command);
+        $this->git('config', 'remote.origin.promisor', 'true');
+        $this->git('config', 'remote.origin.partialCloneFilter', 'blob:none');
+        $this->git('config', 'protocol.ext.allow', 'always');
+    }
+
+    public function removeObject(string $hash): void
+    {
+        unlink($this->root.'/.git/objects/'.substr($hash, 0, 2).'/'.substr($hash, 2));
+    }
+
     public function check(string ...$arguments): CheckRun
     {
         return $this->checkWith([], ...$arguments);
