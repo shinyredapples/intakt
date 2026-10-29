@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Gates\HardenedGitCall;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\RepositoryAttributesRefused;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class HardenedGitCallTest extends TestCase
 {
     private Sandbox $sandbox;
@@ -76,6 +78,20 @@ final class HardenedGitCallTest extends TestCase
         self::assertStringContainsString('+decoy', $unhardened->output, 'the replacement must apply without hardening, or this test proves nothing');
 
         self::assertStringContainsString('+secret', $this->logWithTheHardenedEnvironment());
+    }
+
+    public function testGitStartedByAnotherToolGetsNoEnvironmentWhenInfoAttributesCouldHideAFileAsBinary(): void
+    {
+        $this->sandbox->write('note.txt', "secret\n");
+        $this->sandbox->commitAll('Add a note');
+        $this->sandbox->write('.git/info/attributes', "*.txt -diff\n");
+
+        self::assertStringContainsString('Binary files', $this->sandbox->run('git', 'log', '-p', '-1')->output, 'the attribute must hide the file without hardening, or this test proves nothing');
+
+        $this->expectException(RepositoryAttributesRefused::class);
+        $this->expectExceptionMessage('/.git/info/attributes exists');
+
+        new HardenedGitCall()->environment($this->sandbox->root);
     }
 
     private function logWithTheHardenedEnvironment(): string

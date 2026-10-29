@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
@@ -84,8 +85,8 @@ final readonly class LocalGitForge implements Forge
 
     private function diff(CommitRange $commits): Diff
     {
-        // Submodules are never ignored, because a repository's diff.ignoreSubmodules would hide a changed submodule commit.
-        $options = ['--no-color', '--no-ext-diff', '--no-textconv', '--no-renames', '--ignore-submodules=none'];
+        // Every file is text, because a binary attribute would hide a change as "Binary files differ"; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
+        $options = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
         $range = [$commits->base->hash, $commits->head->hash];
 
         return new Diff(
@@ -144,6 +145,8 @@ final readonly class LocalGitForge implements Forge
         try {
             $process = new Process($this->hardened->command($arguments), $this->repository->path, $this->hardened->environment($this->repository->path), timeout: self::TIMEOUT_SECONDS);
             $process->run();
+        } catch (RepositoryAttributesRefused $refused) {
+            throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
         } catch (ExceptionInterface $failure) {
             throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
         }

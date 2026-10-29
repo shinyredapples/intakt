@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -40,6 +41,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(NameStatusParser::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class LocalGitForgeTest extends TestCase
 {
     private TemporaryRepository $repository;
@@ -179,6 +181,35 @@ final class LocalGitForgeTest extends TestCase
         self::assertFileDoesNotExist($marker);
         self::assertStringContainsString('+head', $change->diff->patch);
         self::assertSame("head\n", $content->content);
+    }
+
+    public function testItRefusesARepositoryWhoseInfoAttributesExistBecauseTheyCouldHideAFileAsBinary(): void
+    {
+        $base = $this->repository->commitFile('NOTES.md', "notes\n");
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('note.txt', "secret\n");
+        file_put_contents($this->repository->path.'/.git/info/attributes', "*.txt -diff\n");
+
+        self::assertStringContainsString('Binary files', $this->repository->diff($base, $head), 'the attribute must hide the file without hardening, or this test proves nothing');
+
+        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionMessage('/.git/info/attributes exists');
+
+        $this->forge()->change(new ChangeId('feature'));
+    }
+
+    public function testItShowsABinaryFileAsTextSoThatNothingHidesAChangeAsBinaryFilesDiffer(): void
+    {
+        $base = $this->repository->commitFile('NOTES.md', "notes\n");
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('blob.bin', "\0secret\n");
+
+        self::assertStringContainsString('Binary files', $this->repository->diff($base, $head), 'git must treat the file as binary without --text, or this test proves nothing');
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertStringContainsString("+\0secret", $change->diff->patch);
+        self::assertStringNotContainsString('Binary files', $change->diff->patch);
     }
 
     public function testItReturnsAFileWhoseNameHasSpacesTabsAndColons(): void

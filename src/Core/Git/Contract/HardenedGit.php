@@ -9,28 +9,24 @@ use Symfony\Component\Process\Process;
 // config/gates/src/HardenedGitCall.php is the protected copy the gates use; tests/Gates/HardenedGitCallTest.php keeps this one equal to it, because a forge read must be as hard as a gate's.
 final readonly class HardenedGit
 {
-    // Because command-line settings beat the repository's own config; an empty diff.external switches the external diff driver off.
+    // Because command-line settings beat the repository's own config: an empty diff.external switches the external diff off, a signature check would start the repository's gpg program, and an output encoding would rewrite what git prints.
     private const array SETTINGS = [
         'core.hooksPath' => '/dev/null',
         'core.fsmonitor' => 'false',
         'diff.external' => '',
         'core.attributesFile' => '/dev/null',
+        'log.showSignature' => 'false',
+        'gpg.program' => '/dev/null',
+        'gpg.ssh.program' => '/dev/null',
+        'gpg.x509.program' => '/dev/null',
+        'i18n.logOutputEncoding' => 'UTF-8',
     ];
 
     // Git's empty tree, so no .gitattributes of the repository applies; a SHA-256 repository refuses it, which fails closed.
     private const string NO_ATTRIBUTES = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
-    private const string DRIVER_SECTIONS = '^(filter|diff)\.';
-
-    // Because .git/info/attributes still names drivers: an empty filter changes nothing, and cat shows the file as it is.
-    private const array DRIVER_OVERRIDES = [
-        'clean' => '',
-        'smudge' => '',
-        'process' => '',
-        'required' => 'false',
-        'textconv' => 'cat',
-        'command' => '',
-    ];
+    // Because git reads this file on top of every other attributes source and no option, setting or variable switches it off.
+    private const string INFO_ATTRIBUTES = 'info/attributes';
 
     // A path that does not exist, because git reads a missing user config silently but dies on "/dev/null/.gitconfig".
     private const string NO_HOME = '/nonexistent';
@@ -59,10 +55,14 @@ final readonly class HardenedGit
 
     /**
      * @return array<string, string|false>
+     *
+     * @throws RepositoryAttributesRefused
      */
     public function environment(string $directory): array
     {
-        return $this->environmentWith([...self::SETTINGS, ...$this->driverOverrides($directory)]);
+        $this->refuseInfoAttributes($directory);
+
+        return $this->variables();
     }
 
     /**
@@ -79,39 +79,35 @@ final readonly class HardenedGit
         return $settings;
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private function driverOverrides(string $directory): array
+    private function refuseInfoAttributes(string $directory): void
     {
-        // Because a missing directory holds no repository config, and the git call itself fails there.
+        // Because a missing directory holds no repository, and the git call itself fails there.
         if (!is_dir($directory)) {
-            return [];
+            return;
         }
 
-        $query = new Process($this->command(['config', '--null', '--name-only', '--get-regexp', self::DRIVER_SECTIONS]), $directory, $this->environmentWith(self::SETTINGS));
+        // Git names the file, because in a worktree or a submodule it is not under <directory>/.git; where git cannot, the call itself fails the same way.
+        $query = new Process($this->command(['rev-parse', '--git-path', self::INFO_ATTRIBUTES]), $directory, $this->variables());
         $query->run();
 
-        $overrides = [];
-        foreach (explode("\0", $query->getOutput()) as $name) {
-            $override = self::DRIVER_OVERRIDES[substr((string) strrchr($name, '.'), 1)] ?? null;
-
-            if (null !== $override) {
-                $overrides[$name] = $override;
-            }
+        if (!$query->isSuccessful()) {
+            return;
         }
 
-        return $overrides;
+        $path = trim($query->getOutput());
+        $file = str_starts_with($path, '/') ? $path : $directory.'/'.$path;
+
+        if (file_exists($file)) {
+            throw RepositoryAttributesRefused::at($file);
+        }
     }
 
     /**
-     * @param array<string, string> $settings
-     *
      * @return array<string, string|false>
      */
-    private function environmentWith(array $settings): array
+    private function variables(): array
     {
-        return [...$this->inheritedGitVariables(), ...$this->configuration($settings), ...$this->isolation()];
+        return [...$this->inheritedGitVariables(), ...$this->configuration(), ...$this->isolation()];
     }
 
     /**
@@ -131,16 +127,14 @@ final readonly class HardenedGit
     }
 
     /**
-     * @param array<string, string> $settings
-     *
      * @return array<string, string>
      */
-    private function configuration(array $settings): array
+    private function configuration(): array
     {
-        // Because tools such as gitleaks start git themselves; the variables also carry driver names that a -c option would split wrongly.
-        $environment = ['GIT_CONFIG_COUNT' => (string) count($settings)];
+        // Because tools such as gitleaks start git themselves, which only the environment reaches.
+        $environment = ['GIT_CONFIG_COUNT' => (string) count(self::SETTINGS)];
         $index = 0;
-        foreach ($settings as $name => $value) {
+        foreach (self::SETTINGS as $name => $value) {
             $environment['GIT_CONFIG_KEY_'.$index] = $name;
             $environment['GIT_CONFIG_VALUE_'.$index] = $value;
             ++$index;
@@ -159,6 +153,7 @@ final readonly class HardenedGit
             'GIT_CONFIG_GLOBAL' => '/dev/null',
             'GIT_NO_REPLACE_OBJECTS' => '1',
             'GIT_ATTR_SOURCE' => self::NO_ATTRIBUTES,
+            'GIT_ATTR_NOSYSTEM' => '1',
             'HOME' => self::NO_HOME,
             'XDG_CONFIG_HOME' => self::NO_HOME,
         ];

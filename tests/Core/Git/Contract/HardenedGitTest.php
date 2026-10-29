@@ -5,15 +5,26 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Git\Contract;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Tests\Plugin\LocalGitForge\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(HardenedGit::class)]
+#[UsesClass(RepositoryAttributesRefused::class)]
 final class HardenedGitTest extends TestCase
 {
     private const array EMPTY_COMMIT = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '--allow-empty', '--quiet', '-m', 'Empty'];
+
+    private const array SUBJECT = ['log', '-1', '--format=%s'];
+
+    private const array SETTINGS = [
+        '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'diff.external=', '-c', 'core.attributesFile=/dev/null',
+        '-c', 'log.showSignature=false', '-c', 'gpg.program=/dev/null', '-c', 'gpg.ssh.program=/dev/null', '-c', 'gpg.x509.program=/dev/null',
+        '-c', 'i18n.logOutputEncoding=UTF-8',
+    ];
 
     private TemporaryRepository $repository;
 
@@ -33,12 +44,12 @@ final class HardenedGitTest extends TestCase
         $this->repository->remove();
     }
 
-    public function testTheCommandDisablesHooksFsmonitorExternalDiffAndAttributes(): void
+    public function testTheCommandDisablesHooksFsmonitorExternalDiffAttributesSignaturesAndOutputEncodings(): void
     {
         $command = new HardenedGit()->command(['status']);
 
         self::assertSame(
-            ['git', '--no-replace-objects', '--literal-pathspecs', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'diff.external=', '-c', 'core.attributesFile=/dev/null', 'status'],
+            ['git', '--no-replace-objects', '--literal-pathspecs', '--attr-source=4b825dc642cb6eb9a060e54bf8d69288fbee4904', ...self::SETTINGS, 'status'],
             $command,
         );
     }
@@ -74,6 +85,7 @@ final class HardenedGitTest extends TestCase
 
         self::assertSame('1', $environment['GIT_NO_REPLACE_OBJECTS']);
         self::assertSame('4b825dc642cb6eb9a060e54bf8d69288fbee4904', $environment['GIT_ATTR_SOURCE']);
+        self::assertSame('1', $environment['GIT_ATTR_NOSYSTEM']);
     }
 
     public function testAHookOfTheRepositoryDoesNotRun(): void
@@ -120,20 +132,44 @@ final class HardenedGitTest extends TestCase
         self::assertFileDoesNotExist($marker);
     }
 
-    public function testATextconvDriverThatInfoAttributesNamesDoesNotRunEvenForAToolThatStartsGitItself(): void
+    public function testAGpgProgramOfTheRepositoryDoesNotRunToShowACommitSignature(): void
     {
-        $marker = $this->repository->path.'/.git/textconv-ran';
-        $this->repository->commitFile('note.txt', "secret\n");
-        $this->repository->configure('diff.evil.textconv', 'touch '.$marker.'; echo hidden; true');
-        file_put_contents($this->repository->path.'/.git/info/attributes', "*.txt diff=evil\n");
+        $marker = $this->repository->path.'/.git/gpg-ran';
+        $gpg = $this->repository->writeHook('gpg', "#!/bin/sh\ntouch ".$marker."\n");
+        $this->repository->commitWithASignatureHeader();
+        $this->repository->configure('log.showSignature', 'true');
+        $this->repository->configure('gpg.program', $gpg);
 
-        $this->runGit(['git', 'log', '-p', '-1'], []);
-        self::assertFileExists($marker, 'the driver must run without hardening, or this test proves nothing');
+        $this->runGit(['git', ...self::SUBJECT], []);
+        self::assertFileExists($marker, 'the program must run without hardening, or this test proves nothing');
         unlink($marker);
 
-        $patch = $this->runGit(['git', 'log', '-p', '-1'], new HardenedGit()->environment($this->repository->path));
+        self::assertSame("Signed\n", $this->runHardened(self::SUBJECT));
         self::assertFileDoesNotExist($marker);
-        self::assertStringContainsString('+secret', $patch);
+    }
+
+    public function testAnOutputEncodingOfTheRepositoryDoesNotRewriteACommitSubject(): void
+    {
+        $subject = "Subject \u{2014} with a long dash";
+        $this->repository->commitEmpty($subject);
+        $this->repository->configure('i18n.logOutputEncoding', 'ASCII//TRANSLIT');
+
+        self::assertSame("Subject -- with a long dash\n", $this->runGit(['git', ...self::SUBJECT], []), 'the encoding must rewrite the dash without hardening, or this test proves nothing');
+
+        self::assertSame($subject."\n", $this->runHardened(self::SUBJECT));
+    }
+
+    public function testARepositoryWhoseInfoAttributesExistIsRefusedBecauseTheyCouldHideAFileAsBinary(): void
+    {
+        $this->repository->commitFile('note.txt', "secret\n");
+        file_put_contents($this->repository->path.'/.git/info/attributes', "*.txt -diff\n");
+
+        self::assertStringContainsString('Binary files', $this->runGit(['git', 'log', '-p', '-1'], []), 'the attribute must hide the file without hardening, or this test proves nothing');
+
+        $this->expectException(RepositoryAttributesRefused::class);
+        $this->expectExceptionMessage('/.git/info/attributes exists');
+
+        new HardenedGit()->environment($this->repository->path);
     }
 
     /**

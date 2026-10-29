@@ -46,6 +46,43 @@ final readonly class TemporaryRepository
         return $this->commit('Point '.$path.' at '.$commit);
     }
 
+    public function commitEmpty(string $subject): string
+    {
+        return $this->commit($subject);
+    }
+
+    public function commitWithASignatureHeader(): string
+    {
+        // A literal block, because git starts the gpg program for any gpgsig header that looks like one, valid or not.
+        $commit = implode("\n", [
+            'tree '.$this->git('rev-parse', 'HEAD^{tree}'),
+            'parent '.$this->git('rev-parse', 'HEAD'),
+            'author Test <test@example.invalid> 1700000000 +0000',
+            'committer Test <test@example.invalid> 1700000000 +0000',
+            'gpgsig -----BEGIN PGP SIGNATURE-----',
+            ' ',
+            ' iQEzBAABCAAdFiEEnotarealsignature',
+            ' -----END PGP SIGNATURE-----',
+            '',
+            'Signed',
+            '',
+        ]);
+        $hash = $this->run(['hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], $commit);
+        $this->git('update-ref', 'HEAD', $hash);
+
+        return $hash;
+    }
+
+    public function diff(string $base, string $head): string
+    {
+        return $this->git('diff', $base, $head);
+    }
+
+    public function log(string ...$options): string
+    {
+        return $this->git('log', ...$options);
+    }
+
     public function configure(string $key, string $value): void
     {
         $this->git('config', $key, $value);
@@ -92,12 +129,20 @@ final readonly class TemporaryRepository
 
     private function commit(string $message): string
     {
-        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', $message);
+        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty', '-m', $message);
 
         return $this->git('rev-parse', 'HEAD');
     }
 
     private function git(string ...$arguments): string
+    {
+        return $this->run($arguments, null);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function run(array $arguments, ?string $input): string
     {
         // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
         $unset = [];
@@ -106,7 +151,7 @@ final readonly class TemporaryRepository
                 $unset[$name] = false;
             }
         }
-        $process = new Process(['git', ...$arguments], $this->path, $unset);
+        $process = new Process(['git', ...$arguments], $this->path, $unset, $input);
         $process->run();
 
         if (!$process->isSuccessful()) {
