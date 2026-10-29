@@ -111,4 +111,4 @@ Every such call is recorded in the ledger as `usage_recorded` events: one when t
 
 A call the provider refuses because of a rate limit or quota fails with a clear error that carries the time to wait when the provider sent one; other temporary provider errors fail with their own error, so a later retry can tell them apart.
 
-`php bin/console intakt:vendor:probe` checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails.
+`php bin/console intakt:vendor:probe` checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen.

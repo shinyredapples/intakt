@@ -23,7 +23,6 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\ProviderFailures;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
@@ -61,7 +60,6 @@ use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(UsageLedger::class)]
-#[CoversClass(ProviderFailures::class)]
 #[CoversClass(ProviderRateLimited::class)]
 #[CoversClass(ProviderFailedTransiently::class)]
 #[CoversClass(UsageReservation::class)]
@@ -245,7 +243,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, new VerdictParser(), new UsageLedger($ledger, new MockClock(self::NOW), $logger), new ProviderFailures());
+        $vendor = new SymfonyAiVendor($tiers, new VerdictParser(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
 
         $verdict = $vendor->review('alpha', Tier::Strong, 'Review the change.');
 
@@ -352,6 +350,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), new VerdictParser(), $usage, new ProviderFailures());
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), new VerdictParser(), $usage);
     }
 }
