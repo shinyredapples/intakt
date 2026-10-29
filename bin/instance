@@ -343,8 +343,8 @@ final readonly class ScratchCreation
 
     private function attempt(string $path): ?string
     {
-        $reason = '';
-        // The handler keeps the operating system's reason without printing the warning of a lost race; null means the folder exists.
+        $reason = 'unknown reason';
+        // The handler keeps the operating system's reason without printing the warning of a lost race.
         set_error_handler(static function (int $severity, string $message) use (&$reason): bool {
             $reason = $message;
 

@@ -42,7 +42,7 @@ What Intakt gets from it:
 
 ## Reviewers with tools
 
-**Symfony AI Agent** turns a model into an agent: a model that can use tools. Each reviewer role is an agent with read-only tools for the change it reviews (read a file, search the code, run a small test). *(planned)*
+**Symfony AI Agent** turns a model into an agent: a model that can use tools. Each reviewer role is an agent with read-only tools for the change it reviews (read a file, search the code, run a small test). *(in progress: reading files, listing folders and searching the code work; running a test is planned)*
 
 ```mermaid
 flowchart LR
@@ -52,8 +52,17 @@ flowchart LR
   tool --> reviewer
 ```
 
-- **Guardrails:** before any tool runs, Intakt checks the request. A reviewer that asks for a file outside the code under review is refused. *(planned)*
-- **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(planned)*
+- **Guardrails:** before any tool runs, Intakt checks the request. A reviewer that asks for a file outside the code under review is refused. *(in progress)*
+- **Fencing:** text that comes from a task or from the code under review is marked as data before the reviewer sees it, so it cannot give the reviewer orders. The mark closes only at a closing marker that repeats its own boundary, so a fake closing marker inside a file stays data. *(in progress)*
+
+```mermaid
+flowchart LR
+  task[Task text] --> fence[Fence: marked as data]
+  answers[Tool answers] --> fence
+  fence --> reviewer[Reviewer sees data, not orders]
+```
+
+- **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(in progress)*
 - **MCP** is a standard way for AI agents to reach tools. Intakt serves the review tools over MCP, each tool labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides which tools may write. You can also drive Intakt itself from your own AI assistant over MCP: start a review, read a verdict. *(planned)*
 
 ## Project memory
