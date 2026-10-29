@@ -119,7 +119,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox = $this->testMergeOnMovedBase();
         $described = explode(':', $this->describe($sandbox));
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.str_repeat('c', 40).':'.$described[1].':'.$described[2]);
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.str_repeat('c', 40).':'.$described[1]);
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
@@ -129,7 +129,18 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox = $this->testMergeOnMovedBase();
         $described = explode(':', $this->describe($sandbox));
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.$described[1].':'.str_repeat('c', 40));
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.str_repeat('c', 40));
+
+        self::assertTrue($run->failed('commits'), $run->output());
+    }
+
+    public function testTheOldThreeFieldDescriptionExemptsNothing(): void
+    {
+        $sandbox = $this->testMergeOnReportedBase();
+        $described = explode(':', $this->describe($sandbox));
+        $reportedBase = trim($sandbox->git('rev-parse', 'main~1')->output);
+
+        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.$reportedBase.':'.$described[1]);
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
@@ -154,7 +165,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
     {
         $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', 'HEAD')->output));
 
-        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.trim($sandbox->git('rev-parse', 'main~1')->output).':'.$parents[1];
+        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.$parents[1];
     }
 
     // Because main~1 plays the base the event reports, a merge on it is GitHub's test merge before main moved.
