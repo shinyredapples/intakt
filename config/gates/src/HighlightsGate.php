@@ -46,26 +46,24 @@ final readonly class HighlightsGate implements Gate
     private function findingsOf(string $contents, string $root): array
     {
         $findings = [];
-        $statusColumn = null;
-        $whereColumn = null;
+        $columns = null;
 
         foreach (explode("\n", $contents) as $index => $line) {
             $cells = $this->cellsOf($line);
 
             if (null === $cells) {
-                [$statusColumn, $whereColumn] = [null, null];
+                $columns = null;
 
                 continue;
             }
 
-            if (null === $statusColumn) {
-                $statusColumn = array_search('Status', $cells, true);
-                $whereColumn = array_search('Where', $cells, true);
+            if (null === $columns) {
+                $columns = ['status' => array_search('Status', $cells, true), 'where' => array_search('Where', $cells, true)];
 
                 continue;
             }
 
-            foreach ($this->rowFindings($cells, $statusColumn, $whereColumn, $root) as $finding) {
+            foreach ($this->rowFindings($cells, $columns, $root) as $finding) {
                 $findings[] = self::FILE.':'.($index + 1).': '.$finding;
             }
         }
@@ -74,25 +72,26 @@ final readonly class HighlightsGate implements Gate
     }
 
     /**
-     * @param list<string> $cells
+     * @param list<string>                               $cells
+     * @param array{status: int|false, where: int|false} $columns
      *
      * @return list<string>
      */
-    private function rowFindings(array $cells, int|false $statusColumn, int|false $whereColumn, string $root): array
+    private function rowFindings(array $cells, array $columns, string $root): array
     {
         if ($this->isSeparator($cells)) {
             return [];
         }
 
         $findings = [];
-        $status = false === $statusColumn ? null : ($cells[$statusColumn] ?? '');
+        $status = false === $columns['status'] ? null : ($cells[$columns['status']] ?? '');
 
         if (null !== $status && !in_array($status, self::STATUSES, true)) {
             $findings[] = 'status "'.$status.'" is not one of '.implode(', ', self::STATUSES);
         }
 
-        if (false !== $whereColumn) {
-            $findings = [...$findings, ...$this->whereFindings($cells[$whereColumn] ?? '', $root)];
+        if (false !== $columns['where']) {
+            $findings = [...$findings, ...$this->whereFindings($cells[$columns['where']] ?? '', $root)];
         }
 
         return $findings;
