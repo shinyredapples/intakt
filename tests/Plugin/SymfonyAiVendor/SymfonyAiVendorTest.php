@@ -36,6 +36,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use ReflectionProperty;
 use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
@@ -331,6 +332,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var string $call */
         $call = $ledger->payloads()[0]['call'];
         self::assertEquals(new MockClock(self::NOW)->now(), UuidV7::fromString($call)->getDateTime());
+    }
+
+    public function testTheContainerWiresTheVendorToTheTierPlatform(): void
+    {
+        $vendor = self::getContainer()->get(SymfonyAiVendor::class);
+
+        self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
+        self::assertInstanceOf(TierPlatform::class, new ReflectionProperty($vendor, 'tiers')->getValue($vendor));
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
