@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CodingStandardsGate;
+use Intakt\Gates\PhpCsFixer\PlainFirstClassCallableFixer;
 use Intakt\Gates\PhpStan\ImportFormRule;
 use Intakt\Gates\PhpStan\NoMockOptOutRule;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
@@ -21,6 +22,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(NoNestedTryRule::class)]
 #[CoversClass(NoMockOptOutRule::class)]
 #[CoversClass(ImportFormRule::class)]
+#[CoversClass(PlainFirstClassCallableFixer::class)]
 #[CoversClass(StatefulServiceResetRule::class)]
 final class CodeGatesTest extends SandboxTestCase
 {
@@ -55,6 +57,16 @@ final class CodeGatesTest extends SandboxTestCase
     {
         $this->assertAcceptedBy('cs', 'plain-function-and-constant');
         $this->assertAcceptedBy('phpstan', 'plain-function-and-constant');
+    }
+
+    public function testAFullyQualifiedFirstClassCallableFailsTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'qualified-first-class-callable', 'src/Report.php: Intakt/plain_first_class_callable');
+    }
+
+    public function testAPlainFirstClassCallablePassesTheCodingStandards(): void
+    {
+        $this->assertAcceptedBy('cs', 'plain-first-class-callable');
     }
 
     public function testAFunctionOrConstantImportFailsStaticAnalysis(): void
