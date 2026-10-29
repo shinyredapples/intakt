@@ -47,6 +47,11 @@ final readonly class ReviewCheckout
         symlink($target, $this->head.'/'.$path);
     }
 
+    public function chmod(string $path, int $mode): void
+    {
+        chmod($this->head.'/'.$path, $mode);
+    }
+
     public function remove(): void
     {
         new Filesystem()->remove($this->base);

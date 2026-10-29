@@ -79,7 +79,7 @@ final readonly class SearchFiles
         $entries = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
             new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS),
             static fn (SplFileInfo $entry): bool => '.git' !== $entry->getFilename() && !$entry->isLink(),
-        ));
+        ), RecursiveIteratorIterator::LEAVES_ONLY, RecursiveIteratorIterator::CATCH_GET_CHILD);
 
         /** @var SplFileInfo $entry */
         foreach ($entries as $entry) {

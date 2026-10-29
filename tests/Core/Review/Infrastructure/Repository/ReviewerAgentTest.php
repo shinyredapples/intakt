@@ -123,6 +123,24 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertSame('No match.', $answers[0]);
     }
 
+    public function testASearchSkipsADirectoryItCannotReadAndStillFindsMatchesInTheRest(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('A mode has no effect on root.');
+        }
+
+        $this->fixture->write('locked/hidden.txt', 'total');
+        $this->fixture->chmod('locked', 0000);
+
+        try {
+            $answers = $this->runScript(new ToolCall('1', 'search_files', ['text' => 'total']));
+        } finally {
+            $this->fixture->chmod('locked', 0755);
+        }
+
+        self::assertSame('src/Cart.php:2:// total the cart', $answers[0]);
+    }
+
     public function testASearchOfOneFileOverTheSizeLimitFindsNothing(): void
     {
         $this->fixture->write('large.txt', 'needle'.str_repeat('x', 1_000_001));
