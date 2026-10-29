@@ -297,6 +297,16 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'readonly-value-object-printing-backtrace', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
     }
 
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughABacktraceCalledByCallableInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-backtrace-by-callable', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAnExceptionTraceInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-exception-trace', 'src/Label.php:15 intakt.flagParameter Parameter $upper is a flag');
+    }
+
     public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAnIncludedFileInItsConstructorFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-include', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');

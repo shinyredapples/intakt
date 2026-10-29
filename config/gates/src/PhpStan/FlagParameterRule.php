@@ -6,14 +6,8 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\ComplexType;
-use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Assign;
-use PhpParser\Node\Expr\Eval_;
-use PhpParser\Node\Expr\FuncCall;
-use PhpParser\Node\Expr\Include_;
-use PhpParser\Node\Expr\NullsafePropertyFetch;
 use PhpParser\Node\Expr\PropertyFetch;
-use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\Variable;
 use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Identifier;
@@ -21,7 +15,6 @@ use PhpParser\Node\IntersectionType;
 use PhpParser\Node\Name;
 use PhpParser\Node\NullableType;
 use PhpParser\Node\Param;
-use PhpParser\Node\Scalar\String_;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Expression;
@@ -42,10 +35,6 @@ final readonly class FlagParameterRule implements Rule
 
     // a test double or builder may take a flag to stay short, so only code outside tests/ is held to the rule
     private const string TEST_FOLDER = '/tests/';
-
-    private const array SCOPE_READERS = ['compact', 'debug_backtrace', 'debug_print_backtrace', 'func_get_arg', 'func_get_args', 'get_defined_vars'];
-
-    private const array THIS_CLASSES = ['parent', 'self', 'static'];
 
     public function __construct(private string $root, private ContainerRegistration $registration)
     {
@@ -83,63 +72,30 @@ final readonly class FlagParameterRule implements Rule
             && $this->isOnlyStored($parameter, $node);
     }
 
-    // a boolean the constructor reads, as $x or as $this->x, is a flag like any other, so the body may touch it only in one plain $this->x = $x
+    // any call, eval or include can read the arguments out of sight (a backtrace, an exception trace, the local scope), and naming every way never ends, so a boolean is kept as it is only by a body of plain $this->x = $y statements that hands $x to none or exactly one of them
     private function isOnlyStored(Param $parameter, ClassMethod $constructor): bool
     {
         $name = $this->nameOf($parameter);
         $statements = $constructor->stmts ?? [];
 
-        if (null === $name || $this->readsIndirectly($statements)) {
+        if (null === $name || !array_all($statements, $this->isPlainAssignment(...))) {
             return false;
         }
 
-        if ($parameter->isPromoted()) {
-            return 0 === $this->variableUses($statements, $name) && 0 === $this->propertyUses($statements, $name);
-        }
-
-        $property = array_first(array_filter(array_map(fn (Stmt $statement): ?string => $this->storedProperty($statement, $name), $statements), is_string(...)));
-
-        return null !== $property
-            && 1 === $this->variableUses($statements, $name)
-            && 1 === $this->propertyUses($statements, $property);
+        return ($parameter->isPromoted() ? 0 : 1) === $this->variableUses($statements, $name);
     }
 
-    private function storedProperty(Stmt $statement, string $name): ?string
+    private function isPlainAssignment(Stmt $statement): bool
     {
         $assign = $statement instanceof Expression ? $statement->expr : null;
 
-        return $assign instanceof Assign && $this->isOwnProperty($assign->var) && $assign->var->name instanceof Identifier && $assign->expr instanceof Variable && $assign->expr->name === $name
-            ? $assign->var->name->toString()
-            : null;
-    }
-
-    // $this handed on (an alias, a method call, a parent:: call) or the local scope read wholesale reaches the boolean out of sight, so either counts as a read
-    /**
-     * @param array<Stmt> $statements
-     */
-    private function readsIndirectly(array $statements): bool
-    {
-        $finder = new NodeFinder();
-        $bareThis = count($finder->find($statements, fn (Node $found): bool => $found instanceof Variable && 'this' === $found->name)) - count($finder->find($statements, $this->isOwnProperty(...)));
-
-        return $bareThis > 0
-            || $finder->findFirst($statements, $this->readsScope(...)) instanceof Node
-            || $finder->findFirst($statements, $this->passesThisImplicitly(...)) instanceof Node;
-    }
-
-    // eval and include run in the local scope, a backtrace carries the arguments, and a call by computed name could be any scope reader, so each counts too
-    private function readsScope(Node $node): bool
-    {
-        return $node instanceof Eval_
-            || $node instanceof Include_
-            || ($node instanceof FuncCall && (!$node->name instanceof Name || in_array($node->name->toLowerString(), self::SCOPE_READERS, true)));
-    }
-
-    // counts as a use of $this because a parent::, self:: or static:: call hands it on unnamed, and a computed class could be any of them
-    private function passesThisImplicitly(Node $node): bool
-    {
-        return $node instanceof StaticCall
-            && (!$node->class instanceof Name || in_array($node->class->toLowerString(), self::THIS_CLASSES, true));
+        return $assign instanceof Assign
+            && $assign->var instanceof PropertyFetch
+            && $assign->var->var instanceof Variable
+            && 'this' === $assign->var->var->name
+            && $assign->var->name instanceof Identifier
+            && $assign->expr instanceof Variable
+            && is_string($assign->expr->name);
     }
 
     /**
@@ -147,34 +103,7 @@ final readonly class FlagParameterRule implements Rule
      */
     private function variableUses(array $statements, string $name): int
     {
-        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $found instanceof Variable && $this->mayName($found->name, $name)));
-    }
-
-    /**
-     * @param array<Stmt> $statements
-     */
-    private function propertyUses(array $statements, string $property): int
-    {
-        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $this->isOwnProperty($found) && $this->mayName($found->name, $property)));
-    }
-
-    /**
-     * @phpstan-assert-if-true PropertyFetch|NullsafePropertyFetch $node
-     */
-    private function isOwnProperty(Node $node): bool
-    {
-        return ($node instanceof PropertyFetch || $node instanceof NullsafePropertyFetch) && $node->var instanceof Variable && 'this' === $node->var->name;
-    }
-
-    // a name computed at run time could be any name, so it counts as a read of the boolean rather than letting a flag through
-    private function mayName(string|Identifier|Expr $name, string $wanted): bool
-    {
-        return match (true) {
-            is_string($name) => $name === $wanted,
-            $name instanceof Identifier => $name->toString() === $wanted,
-            $name instanceof String_ => $name->value === $wanted,
-            default => true,
-        };
+        return count(new NodeFinder()->find($statements, fn (Node $found): bool => $found instanceof Variable && $found->name === $name));
     }
 
     private function isBoolean(Identifier|Name|ComplexType|null $type): bool
