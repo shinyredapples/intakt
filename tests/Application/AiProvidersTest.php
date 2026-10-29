@@ -213,7 +213,8 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        array_map(unlink(...), glob($this->vaultDirectory().'/*.{encrypt.public,decrypt.private}.php', GLOB_BRACE) ?: []);
+        unlink($this->vaultDirectory().'/'.self::VAULT_ENVIRONMENT.'.encrypt.public.php');
+        unlink($this->vaultDirectory().'/'.self::VAULT_ENVIRONMENT.'.decrypt.private.php');
         $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
         // Only characters base64 ignores, so the secret decodes to an empty key.
         $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
