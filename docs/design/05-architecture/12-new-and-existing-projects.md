@@ -47,7 +47,7 @@ Bundled details:
 - **Cost.** Images are built once per ref and cached. Sidecars start only for jobs that need them (check and review, and builds whose tests need them), with memory and CPU limits counted in the slot's budget. A warm pool per slot, reset between jobs, is a later optimization.
 
 External details:
-- **Isolation is the owner's responsibility,** and the wizard says so. Parallel builds and reviews hit the same instance, so tests must use their own tenant, namespace or prefix, or only read. Intakt passes a per-job id (`INTAKT_JOB_ID`) that tests can use for that.
+- **Isolation is the owner's responsibility,** and the wizard says so. Parallel builds and reviews hit the same instance, so tests must use their own tenant, namespace or prefix, or only read. Intakt passes a per-job id (`INTAKT_JOB_ID`) that tests can use for that. Check jobs, and build jobs that get the credentials, run model-written code against the instance before any review ([Threat model](14-threat-model.md#external-dependencies)).
 - **Credentials** are stored in the orchestrator and injected only into the job types the owner allows. By default that is check and review jobs. Build jobs get them only if the owner opts in, because a build job runs model-written code. Test-scoped, low-privilege credentials are recommended. Before Intakt pushes or posts anything a job returned, it redacts their values and runs the secret scan ([Threat model](14-threat-model.md#roles)).
 
 Projects that change together:
