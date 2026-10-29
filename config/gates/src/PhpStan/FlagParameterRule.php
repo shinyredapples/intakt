@@ -20,6 +20,7 @@ use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassMethod;
 use PhpParser\Node\Stmt\Expression;
 use PhpParser\Node\UnionType;
+use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
 use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
@@ -69,17 +70,24 @@ final readonly class FlagParameterRule implements Rule
             && $class instanceof ClassReflection
             && $class->isReadOnly()
             && $this->registration->excludes($class)
-            && ($parameter->isPromoted() || $this->isStoredUnchanged($parameter, $node));
+            && $this->isOnlyStored($parameter, $node);
     }
 
-    private function isStoredUnchanged(Param $parameter, ClassMethod $constructor): bool
+    // a boolean the constructor reads to decide something is a flag like any other, so the body may use it only in one plain $this->x = $x
+    private function isOnlyStored(Param $parameter, ClassMethod $constructor): bool
     {
         $name = $this->nameOf($parameter);
+        $statements = $constructor->stmts ?? [];
+        $uses = new NodeFinder()->find($statements, static fn (Node $found): bool => $found instanceof Variable && $found->name === $name);
 
-        return array_any($constructor->stmts ?? [], fn (Stmt $statement): bool => $statement instanceof Expression && $this->storesUnchanged($statement->expr, $name));
+        if ($parameter->isPromoted()) {
+            return [] === $uses;
+        }
+
+        return 1 === count($uses)
+            && array_any($statements, fn (Stmt $statement): bool => $statement instanceof Expression && $this->storesUnchanged($statement->expr, $name));
     }
 
-    // a boolean the constructor reads to decide something is a flag like any other, so only a plain $this->x = $x counts
     private function storesUnchanged(Expr $expression, ?string $name): bool
     {
         return null !== $name
