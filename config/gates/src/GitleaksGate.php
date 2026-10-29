@@ -33,10 +33,10 @@ abstract class GitleaksGate implements Gate
         }
 
         $result = $workspace->command([
-            'env', '--chdir='.$target->source, 'GIT_CONFIG_COUNT=1', 'GIT_CONFIG_KEY_0=core.attributesFile', 'GIT_CONFIG_VALUE_0=/dev/null',
+            'env', '--chdir='.$target->source,
             $scanner, 'detect', '--no-banner', '--redact', '--report-format=json', '--report-path='.$reportPath,
             '--source=.', '--config='.$configPath, ...$target->options,
-        ]);
+        ], new HardenedGitCall()->environment($target->source));
 
         $report = (string) file_get_contents($reportPath);
         unlink($reportPath);

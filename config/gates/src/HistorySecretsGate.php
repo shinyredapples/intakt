@@ -62,7 +62,7 @@ final class HistorySecretsGate extends GitleaksGate
             return null;
         }
 
-        $listing = $workspace->command(['git', 'ls-tree', '-d', '--name-only', $tip, '--', 'config/gates']);
+        $listing = $workspace->git(['ls-tree', '-d', '--name-only', $tip, '--', 'config/gates']);
 
         if (!$listing->succeeded()) {
             return null;
@@ -73,7 +73,7 @@ final class HistorySecretsGate extends GitleaksGate
 
     private function baseConfiguration(Workspace $workspace, string $source): ?string
     {
-        $base = $workspace->command(['git', 'show', $source.':config/gates/'.self::CONFIGURATION]);
+        $base = $workspace->git(['show', $source.':config/gates/'.self::CONFIGURATION]);
         $created = tempnam(sys_get_temp_dir(), 'gitleaks-config');
 
         if (!$base->succeeded() || false === $created) {
@@ -98,7 +98,7 @@ final class HistorySecretsGate extends GitleaksGate
 
     private function hasCommits(Workspace $workspace, string $mergeBase): bool
     {
-        $result = $workspace->command(['git', 'rev-list', '--count', $mergeBase.'..HEAD']);
+        $result = $workspace->git(['rev-list', '--count', $mergeBase.'..HEAD']);
 
         return !$result->succeeded() || '0' !== trim($result->output);
     }
@@ -109,20 +109,16 @@ final class HistorySecretsGate extends GitleaksGate
 
         return [
             ...$this->ignoreFileFindings($workspace),
-            ...$this->commitsWith($workspace, [...self::FULL_DIFF_OPTIONS, '-G', self::INLINE_ALLOW, $range], 'carries an inline allow directive that hides findings from the scan'),
-            ...$this->commitsWith($workspace, [...self::FULL_DIFF_OPTIONS, $range, '--', ...self::UNSCANNED_FOLDERS], 'adds files in a folder the scanner skips'),
+            ...$this->commitsWith($workspace->git(['log', '--format=%h', ...self::FULL_DIFF_OPTIONS, '-G', self::INLINE_ALLOW, $range]), 'carries an inline allow directive that hides findings from the scan'),
+            ...$this->commitsWith($workspace->gitWithPathspecMagic(['log', '--format=%h', ...self::FULL_DIFF_OPTIONS, $range, '--', ...self::UNSCANNED_FOLDERS]), 'adds files in a folder the scanner skips'),
         ];
     }
 
     /**
-     * @param list<string> $selection
-     *
      * @return list<string>
      */
-    private function commitsWith(Workspace $workspace, array $selection, string $problem): array
+    private function commitsWith(ProcessResult $commits, string $problem): array
     {
-        $commits = $workspace->command(['git', 'log', '--format=%h', ...$selection]);
-
         if (!$commits->succeeded()) {
             return ['cannot search the commits: '.$commits->firstErrorLine()];
         }
