@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CodingStandardsGate;
+use Intakt\Gates\PhpStan\ImportFormRule;
 use Intakt\Gates\PhpStan\NoMockOptOutRule;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
 use Intakt\Gates\PhpStan\ParameterLimitRule;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(ParameterLimitRule::class)]
 #[CoversClass(NoNestedTryRule::class)]
 #[CoversClass(NoMockOptOutRule::class)]
+#[CoversClass(ImportFormRule::class)]
 #[CoversClass(StatefulServiceResetRule::class)]
 final class CodeGatesTest extends SandboxTestCase
 {
@@ -44,19 +46,49 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('cs', 'fully-qualified-name-in-docblock', 'src/Report.php: fully_qualified_strict_types');
     }
 
-    public function testAFunctionAndAConstantUsedWithoutImportFailTheCodingStandards(): void
+    public function testAFullyQualifiedFunctionOrConstantFailsTheCodingStandards(): void
     {
-        $this->assertRejectedBy('cs', 'function-and-constant-not-imported', 'src/Report.php: global_namespace_import');
+        $this->assertRejectedBy('cs', 'qualified-function-and-constant', 'src/Report.php: native_constant_invocation, native_function_invocation');
     }
 
-    public function testImportedFunctionsAndConstantsPassTheCodingStandards(): void
+    public function testAPlainFunctionAndConstantPassTheCodingStandardsAndStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('cs', 'imported-function-and-constant');
+        $this->assertAcceptedBy('cs', 'plain-function-and-constant');
+        $this->assertAcceptedBy('phpstan', 'plain-function-and-constant');
     }
 
-    public function testAnImportAliasThatRenamesNothingFailsTheCodingStandards(): void
+    public function testAFunctionOrConstantImportFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('cs', 'unneeded-import-alias', 'src/Report.php: no_unneeded_import_alias');
+        $run = $this->sandboxWith('imported-function-and-constant')->check('--only=phpstan');
+
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertStringContainsString('src/Report.php:7 intakt.functionOrConstantImport', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Report.php:9 intakt.functionOrConstantImport', $run->findingsOf('phpstan'));
+    }
+
+    public function testAFunctionOrConstantImportIsRemovedByTheCodingStandards(): void
+    {
+        $this->assertRejectedBy('cs', 'imported-function-and-constant', 'src/Report.php: global_namespace_import');
+    }
+
+    public function testAnImportAliasWithoutAShortNameClashFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'unneeded-import-alias', 'src/Report.php:7 intakt.unneededImportAlias');
+    }
+
+    public function testAnImportAliasThatResolvesAShortNameClashPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash');
+    }
+
+    public function testAnImportAliasForTheShortNameOfTheDeclaredClassPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'import-alias-for-declared-class');
+    }
+
+    public function testTheDoctrineOrmAliasPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'doctrine-orm-alias');
     }
 
     public function testASuperfluousDocblockFailsTheCodingStandards(): void

@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Sample;
 
-use function strlen;
+use function count;
 
-use const PHP_INT_SIZE;
+use const PHP_EOL;
 
-final class Report
+final readonly class Report
 {
-    public function size(string $text): int
+    /**
+     * @param list<string> $lines
+     */
+    public function summary(array $lines): string
     {
-        return strlen($text) + PHP_INT_SIZE;
+        return count($lines).PHP_EOL;
     }
 }
