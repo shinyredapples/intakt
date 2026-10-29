@@ -66,8 +66,14 @@ final readonly class CommitSubjectsGate implements Gate
             return false;
         }
 
-        [$merge, , $head] = explode(':', $this->testMerge, 3) + ['', '', ''];
+        $fields = explode(':', $this->testMerge);
         $parentHashes = explode(' ', $parents);
+
+        if (2 !== count($fields)) {
+            return false;
+        }
+
+        [$merge, $head] = $fields;
 
         if ('' === $merge || $hash !== $merge || 2 !== count($parentHashes) || $parentHashes[1] !== $head) {
             return false;
