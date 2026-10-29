@@ -117,7 +117,7 @@ final readonly class FlagParameterRule implements Rule
         $finder = new NodeFinder();
         $bareThis = count($finder->find($statements, fn (Node $found): bool => $found instanceof Variable && 'this' === $found->name)) - count($finder->find($statements, $this->isOwnProperty(...)));
 
-        return $bareThis > 0 || null !== $finder->findFirst($statements, $this->readsScope(...));
+        return $bareThis > 0 || $finder->findFirst($statements, $this->readsScope(...)) instanceof Node;
     }
 
     // a call by computed name could be any of them, so it counts too
