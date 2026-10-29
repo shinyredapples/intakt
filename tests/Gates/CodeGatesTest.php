@@ -81,6 +81,16 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash');
     }
 
+    public function testAnImportAliasThatResolvesAShortNameClashInAnotherLetterCasePassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash-in-another-case');
+    }
+
+    public function testAnImportAliasWithoutAShortNameClashInItsOwnNamespaceFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'import-alias-in-another-namespace', 'src/Report.php:17 intakt.unneededImportAlias');
+    }
+
     public function testAnImportAliasForTheShortNameOfTheDeclaredClassPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'import-alias-for-declared-class');

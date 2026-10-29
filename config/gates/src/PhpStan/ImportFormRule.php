@@ -7,6 +7,7 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\Node\Stmt\GroupUse;
+use PhpParser\Node\Stmt\Namespace_;
 use PhpParser\Node\Stmt\Use_;
 use PhpParser\Node\UseItem;
 use PhpParser\NodeFinder;
@@ -37,9 +38,33 @@ final readonly class ImportFormRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $nodes = $node->getNodes();
-        $imports = $this->importsIn($nodes);
 
-        return [...$this->functionAndConstantImports($imports), ...$this->unneededAliases($imports, $this->declaredClassNames($nodes))];
+        return [
+            ...$this->functionAndConstantImports($this->importsIn($nodes)),
+            ...array_merge(...array_map($this->unneededAliasesIn(...), $this->namespaceScopes($nodes))),
+        ];
+    }
+
+    /**
+     * @param array<Node> $nodes
+     *
+     * @return list<array<Node>>
+     */
+    private function namespaceScopes(array $nodes): array
+    {
+        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
+
+        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
+    }
+
+    /**
+     * @param array<Node> $nodes
+     *
+     * @return list<IdentifierRuleError>
+     */
+    private function unneededAliasesIn(array $nodes): array
+    {
+        return $this->unneededAliases($this->importsIn($nodes), $this->declaredClassNames($nodes));
     }
 
     /**
@@ -106,7 +131,7 @@ final readonly class ImportFormRule implements Rule
     {
         $classes = new NodeFinder()->findInstanceOf($nodes, ClassLike::class);
 
-        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => $class->name?->toString(), $classes), is_string(...)));
+        return array_values(array_filter(array_map(static fn (ClassLike $class): ?string => $class->name?->toLowerString(), $classes), is_string(...)));
     }
 
     /**
@@ -135,9 +160,10 @@ final readonly class ImportFormRule implements Rule
         ));
     }
 
+    // Lowercase because PHP class names are case-insensitive, so Client and CLIENT clash.
     private function shortName(string $name): string
     {
-        $parts = explode('\\', $name);
+        $parts = explode('\\', strtolower($name));
 
         return array_last($parts);
     }
