@@ -116,3 +116,7 @@ Every such call is recorded in the ledger as `usage_recorded` events: one when t
 A call the provider refuses because of a rate limit or quota fails with a clear error that carries the time to wait when the provider sent one; other temporary provider errors fail with their own error, so a later retry can tell them apart.
 
 `php bin/console intakt:vendor:probe` checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen.
+
+## What a reviewer can read
+
+A reviewer reads the change through three read-only tools: it can read a file, list a directory and search for text, all at the head under review and nothing else. A request for a file outside the repository (a `../` path, an absolute path, the `.git` folder, or a link pointing out of the checkout or into the `.git` folder) is refused with a message, and the file is never opened. A tool that fails, such as a file that does not exist or a binary file, gives the reviewer an error message and the review goes on. A search skips binary files and files over 1 MB, shortens very long matching lines and returns at most 100 matches; a listing of a very large directory is shortened too. The reviewer agent that uses these tools is not part of this release yet.
