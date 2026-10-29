@@ -153,8 +153,7 @@ final class AppendOnlyLedgerTest extends KernelTestCase
     // The test schema comes from the mapping, which has no triggers, so the migration adds them.
     private function migrate(): void
     {
-        // The migrations bundle loads migrations by path, so neither Composer nor static analysis knows the class;
-        // its name follows from the file, as in the bundle's migrations_paths.
+        // The class name comes from the file because migrations load by path, unknown to Composer and static analysis.
         $file = dirname(__DIR__, 3).'/migrations/Version20261028120000.php';
         require_once $file;
 
