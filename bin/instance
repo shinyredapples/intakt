@@ -152,7 +152,10 @@ final class Instance
         $path = $base.'/intakt-instance-'.bin2hex(random_bytes(6));
         $this->createdFallback = $base === $this->root.'/var' && !is_dir($base);
 
-        if (!mkdir($path, 0o700, true) && !is_dir($path)) {
+        // A concurrent run may rmdir the var/ fallback between its creation and the scratch folder below it, so retry once.
+        $created = array_any([1, 2], static fn (int $attempt): bool => @mkdir($path, 0o700, true) || is_dir($path));
+
+        if (!$created) {
             throw new RuntimeException('cannot create the scratch directory');
         }
 
