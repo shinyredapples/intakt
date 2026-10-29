@@ -4,7 +4,7 @@ Labels are how people steer tasks from the forge, on any device, without the das
 - **Steering labels** are set by people and read by Intakt. Each family maps to a field in the task's database row; the label is the input, the row is the state.
 - **Status labels** are written by Intakt to mirror the row, so the issue list shows where each task stands. A person changing one changes nothing: Intakt puts it back and comments once. The queue never depends on them (see "Queue state lives in the database").
 
-Default families (names are configurable per project; one value per family):
+Default families (names are configurable per project; one value per family, except `review:`, which takes several: `full` and any number of roles):
 
 | Family | Values | Effect |
 |---|---|---|
@@ -13,7 +13,7 @@ Default families (names are configurable per project; one value per family):
 | `class:` | `core`, `feature`, `tooling`, `process` | slot allocation by class (step 5); the triage call proposes one when missing |
 | `model:` | a capability tier, for example `strong`, `standard`, `light` | the start tier for every build of the task; escalations can still raise it |
 | `plan:` | `required`, `skip` | overrides the per-size plan approval default (step 4) |
-| `review:` | `full` | the full review panel on every round, even for small diffs |
+| `review:` | `full`, or a reviewer role such as `security` | `full`: the full review panel on every round, even for small diffs; a role: adds that specialist reviewer (see [Reviews](07-reviews.md)) |
 | keep | `keep` | on a closed, unmerged pull request: its branch is not deleted (see [Branch cleanup](08-merge.md#branch-cleanup)) |
 | `status:` (Intakt only) | `queued`, `building`, `in-review`, `waiting-on-you`, `parked`, `blocked`, `merged` | mirror of the row; exactly one at a time |
 
