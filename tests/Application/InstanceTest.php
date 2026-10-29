@@ -247,7 +247,7 @@ final class InstanceTest extends TestCase
 
     public function testTheScratchFolderIsCreatedWhenTheFirstAttemptLosesTheRaceWithARmdir(): void
     {
-        // Forced order: the first mkdir fails as if var/ had just been removed, every later call reaches the real file system.
+        // The first mkdir must fail as if var/ had just been removed, because a real race cannot be forced; later calls reach the real file system.
         $prepend = $this->scratch.'/lose_first_mkdir.php';
         file_put_contents($prepend, <<<'PHP'
             <?php
