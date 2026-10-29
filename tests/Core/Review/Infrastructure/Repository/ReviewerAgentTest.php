@@ -155,6 +155,18 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertStringEndsWith("\n[more matches not shown]", $answers[0]);
     }
 
+    public function testAListingStopsAtTheAnswerLimitWhenADirectoryIsLarge(): void
+    {
+        foreach (range(0, 999) as $file) {
+            $this->fixture->write('many/'.str_repeat('f', 200).$file, '');
+        }
+
+        $answers = $this->runScript(new ToolCall('1', 'list_directory', ['path' => 'many']));
+
+        self::assertLessThanOrEqual(100_100, strlen($answers[0]));
+        self::assertStringEndsWith("\n[more entries not shown]", $answers[0]);
+    }
+
     public function testABinaryFileAnswersTheModelWithAnErrorThatCanBeSentAsJson(): void
     {
         $this->fixture->write('logo.png', "\x89PNG\r\n\x1a\n\xff\xfe\x00 total");
