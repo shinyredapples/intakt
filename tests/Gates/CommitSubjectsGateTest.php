@@ -105,6 +105,15 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('commits'), $run->output());
     }
 
+    public function testTheBaseBranchCheckOfATestMergeIgnoresAnInheritedGitDirectory(): void
+    {
+        $sandbox = $this->testMergeOnMovedBase();
+
+        $run = $sandbox->checkWith(['GIT_DIR' => '/nonexistent'], '--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
+
+        self::assertTrue($run->passed('commits'), $run->output());
+    }
+
     public function testAMergeCommitWithTheSyntheticSubjectButAnotherShaFails(): void
     {
         $sandbox = $this->testMergeOnMovedBase();

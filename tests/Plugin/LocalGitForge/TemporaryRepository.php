@@ -12,11 +12,11 @@ final readonly class TemporaryRepository
 {
     public string $path;
 
-    public function __construct()
+    public function __construct(string $objectFormat = 'sha1')
     {
         $this->path = sys_get_temp_dir().'/intakt-forge-'.bin2hex(random_bytes(6));
         mkdir($this->path);
-        $this->git('init', '--quiet', '--initial-branch=main');
+        $this->git('init', '--quiet', '--initial-branch=main', '--object-format='.$objectFormat);
     }
 
     public function commitFile(string $path, string $content): string
@@ -46,9 +46,71 @@ final readonly class TemporaryRepository
         return $this->commit('Point '.$path.' at '.$commit);
     }
 
+    public function commitEmpty(string $subject): string
+    {
+        return $this->commit($subject);
+    }
+
+    public function commitWithASignatureHeader(): string
+    {
+        // A literal block, because git starts the gpg program for any gpgsig header that looks like one, valid or not.
+        $commit = implode("\n", [
+            'tree '.$this->git('rev-parse', 'HEAD^{tree}'),
+            'parent '.$this->git('rev-parse', 'HEAD'),
+            'author Test <test@example.invalid> 1700000000 +0000',
+            'committer Test <test@example.invalid> 1700000000 +0000',
+            'gpgsig -----BEGIN PGP SIGNATURE-----',
+            ' ',
+            ' iQEzBAABCAAdFiEEnotarealsignature',
+            ' -----END PGP SIGNATURE-----',
+            '',
+            'Signed',
+            '',
+        ]);
+        $hash = $this->run(['hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], $commit);
+        $this->git('update-ref', 'HEAD', $hash);
+
+        return $hash;
+    }
+
+    public function diff(string $base, string $head): string
+    {
+        return $this->git('diff', $base, $head);
+    }
+
+    public function log(string ...$options): string
+    {
+        return $this->git('log', ...$options);
+    }
+
     public function configure(string $key, string $value): void
     {
         $this->git('config', $key, $value);
+    }
+
+    public function promiseMissingObjectsFrom(string $command): void
+    {
+        // Because a partial clone fetches a missing object lazily from its promisor remote, a command behind an ext:: URL shows whether a call fetches.
+        $this->configure('core.repositoryFormatVersion', '1');
+        $this->configure('extensions.partialClone', 'origin');
+        $this->configure('remote.origin.url', 'ext::'.$command);
+        $this->configure('remote.origin.promisor', 'true');
+        $this->configure('remote.origin.partialCloneFilter', 'blob:none');
+        $this->configure('protocol.ext.allow', 'always');
+    }
+
+    public function removeObject(string $hash): void
+    {
+        unlink($this->path.'/.git/objects/'.substr($hash, 0, 2).'/'.substr($hash, 2));
+    }
+
+    public function writeHook(string $name, string $script): string
+    {
+        $path = $this->path.'/.git/hooks/'.$name;
+        file_put_contents($path, $script);
+        chmod($path, 0o755);
+
+        return $path;
     }
 
     public function checkoutNewBranch(string $name): void
@@ -83,12 +145,20 @@ final readonly class TemporaryRepository
 
     private function commit(string $message): string
     {
-        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', $message);
+        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty', '-m', $message);
 
         return $this->git('rev-parse', 'HEAD');
     }
 
     private function git(string ...$arguments): string
+    {
+        return $this->run(array_values($arguments), null);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function run(array $arguments, ?string $input): string
     {
         // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
         $unset = [];
@@ -97,7 +167,7 @@ final readonly class TemporaryRepository
                 $unset[$name] = false;
             }
         }
-        $process = new Process(['git', ...$arguments], $this->path, $unset);
+        $process = new Process(['git', ...$arguments], $this->path, $unset, $input);
         $process->run();
 
         if (!$process->isSuccessful()) {
