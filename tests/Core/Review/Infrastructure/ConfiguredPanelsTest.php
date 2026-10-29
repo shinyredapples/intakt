@@ -47,7 +47,7 @@ final class ConfiguredPanelsTest extends TestCase
     public function testAProjectWithoutAPanelIsRefused(): void
     {
         $this->expectException(PanelNotConfigured::class);
-        $this->expectExceptionMessage('Project "beta" has no review panel configured.');
+        $this->expectExceptionObject(new PanelNotConfigured('beta'));
 
         new ConfiguredPanels([])->panelFor('beta');
     }

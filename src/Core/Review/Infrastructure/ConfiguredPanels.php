@@ -28,7 +28,7 @@ final readonly class ConfiguredPanels
         $panel = $this->panels[$project] ?? throw new PanelNotConfigured($project);
 
         return new Panel(
-            array_map(self::reviewer(...), $panel['reviewers']),
+            array_map($this->reviewer(...), $panel['reviewers']),
             QuorumPolicy::from($panel['quorum']),
         );
     }
@@ -36,7 +36,7 @@ final readonly class ConfiguredPanels
     /**
      * @param array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int} $reviewer
      */
-    private static function reviewer(array $reviewer): PanelReviewer
+    private function reviewer(array $reviewer): PanelReviewer
     {
         return new PanelReviewer(
             $reviewer['role'],

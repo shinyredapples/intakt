@@ -51,17 +51,20 @@ return static function (ContainerConfigurator $container): void {
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
+    /** @var array<string, mixed> $contents */
     $contents = is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : [];
-    $contents = is_array($contents) ? $contents : [];
+    $contentProjects = is_array($contents['projects'] ?? null) ? $contents['projects'] : [];
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only.
     $reviews = [];
-    foreach (is_array($contents['projects'] ?? null) ? $contents['projects'] : [] as $name => $project) {
+    foreach ($contentProjects as $name => $project) {
         if (is_array($project) && array_key_exists('review', $project)) {
             $reviews[$name] = $project['review'];
-            unset($contents['projects'][$name]['review']);
+            unset($project['review']);
+            $contentProjects[$name] = $project;
         }
     }
 
+    $contents['projects'] = $contentProjects;
     /** @var array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects */
     $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents])['projects'];
     $panels = new Processor()->processConfiguration(new PanelConfiguration(), [['projects' => $reviews]])['projects'];
