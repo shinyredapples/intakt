@@ -92,6 +92,18 @@ final class ProbeTest extends TestCase
         self::assertSame(1, $run->getExitCode());
     }
 
+    public function testAProbeNamesEveryMissingToolBeforeAnythingStarts(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+        new Filesystem()->mkdir($this->scratch.'/empty');
+
+        $run = $this->runProbe('tests/Probe/Ran.php', ['PATH' => $this->scratch.'/empty']);
+
+        self::assertStringContainsString('unshare not found, see docs/architecture/requirements.md', $run->getErrorOutput());
+        self::assertStringContainsString('ip not found, see docs/architecture/requirements.md', $run->getErrorOutput());
+        self::assertSame(2, $run->getExitCode());
+    }
+
     public function testAPathOutsideTheProbeFolderIsRefused(): void
     {
         $run = $this->runProbe('composer.json');

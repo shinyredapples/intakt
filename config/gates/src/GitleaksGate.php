@@ -10,7 +10,6 @@ abstract class GitleaksGate implements Gate
     protected const array UNSCANNED_FOLDERS = [':(glob)**/vendor/**', ':(glob)**/node_modules/**'];
     private const string IGNORE_FILE = '.gitleaksignore';
     private const string PINNED_VERSION = '8.30.1';
-    private const string SCANNER_ENVIRONMENT = 'INTAKT_GITLEAKS';
 
     final protected function scan(Workspace $workspace, ScanTarget $target, string $configPath): GateResult
     {
@@ -23,7 +22,7 @@ abstract class GitleaksGate implements Gate
         $scanner = $this->pinnedScanner($workspace);
 
         if (null === $scanner) {
-            return GateResult::failedBecause($this->name(), 'gitleaks '.self::PINNED_VERSION.' is required, set '.self::SCANNER_ENVIRONMENT.' to it or put it first on the path, an override is checked too');
+            return GateResult::failedBecause($this->name(), 'gitleaks '.self::PINNED_VERSION.' is required, set '.RequiredTools::SCANNER_ENVIRONMENT.' to it or put it first on the path, an override is checked too, see '.RequiredTools::REQUIREMENTS);
         }
 
         $reportPath = tempnam(sys_get_temp_dir(), 'gitleaks');
@@ -46,8 +45,7 @@ abstract class GitleaksGate implements Gate
 
     private function pinnedScanner(Workspace $workspace): ?string
     {
-        $named = getenv(self::SCANNER_ENVIRONMENT);
-        $scanner = is_string($named) && '' !== $named ? $named : 'gitleaks';
+        $scanner = RequiredTools::scanner();
         $version = $workspace->command([$scanner, 'version']);
 
         return $version->succeeded() && self::PINNED_VERSION === ltrim(trim($version->output), 'v') ? $scanner : null;

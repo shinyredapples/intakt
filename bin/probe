@@ -123,12 +123,31 @@ final readonly class Probe
     public function refusal(): ?string
     {
         if (Isolation::ByUnshare === $this->isolation) {
-            return null;
+            return $this->missingTools();
         }
 
         $problem = $this->network->offlineProblem();
 
         return null === $problem ? null : 'PROBE_ISOLATED is set but the run is not offline: '.$problem;
+    }
+
+    // Without this a missing tool shows up as an instance that never became ready.
+    private function missingTools(): ?string
+    {
+        $missing = array_filter(['unshare', 'sh', 'ip'], fn (string $tool): bool => !$this->isOnPath($tool));
+
+        return [] === $missing ? null : implode(PHP_EOL, array_map(static fn (string $tool): string => $tool.' not found, see docs/architecture/requirements.md', $missing));
+    }
+
+    private function isOnPath(string $tool): bool
+    {
+        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $folder) {
+            if ('' !== $folder && is_file($folder.'/'.$tool) && is_executable($folder.'/'.$tool)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
