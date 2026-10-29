@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Plugin\LocalGitForge;
+namespace Intakt\Tests\Core\Git;
 
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
