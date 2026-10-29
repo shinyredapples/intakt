@@ -3,6 +3,8 @@ doctrine:
         url: '%env(resolve:DATABASE_URL)%'
         server_version: '%env(postgresql_server_version:resolve:DATABASE_URL)%'
 
+        # The Agent message store owns this table and keeps it in step; the migration only creates it.
+        schema_filter: '~^(?!reviewer_conversation$)~'
         profiling_collect_backtrace: '%kernel.debug%'
         types:
             utc_datetime_immutable: Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType

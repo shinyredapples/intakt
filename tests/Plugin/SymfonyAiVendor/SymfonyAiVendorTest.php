@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -40,14 +41,19 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
+use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use JsonException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
+use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
@@ -98,6 +104,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
+#[UsesClass(ReviewerConversation::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
@@ -426,6 +433,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertEquals(new MockClock(self::NOW)->now(), UuidV7::fromString($call)->getDateTime());
     }
 
+    #[Group('persistence')]
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
         $container = self::getContainer();
@@ -438,9 +446,16 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $container->set(TierPlatform::PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
         $vendor = $container->get(SymfonyAiVendor::class);
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
+        $conversations = $container->get(MessageStoreInterface::class);
+        self::assertInstanceOf(ManagedMessageStoreInterface::class, $conversations);
+        self::assertInstanceOf(MessageStoreInterface::class, $conversations);
+        EmptyDatabase::in($container);
+        $conversations->setup();
+        $request = $this->request();
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $request);
 
+        self::assertCount(3, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
@@ -448,12 +463,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'You review for correctness.', 'Review the change.');
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'Review the change.', new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(new ReviewerPrompt(new Fence()), new ReviewerToolboxFactory()->create(...), new VerdictParser());
+        return new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

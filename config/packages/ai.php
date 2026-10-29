@@ -56,7 +56,7 @@ return static function (ContainerConfigurator $container): void {
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
 
     $configs = [
-        Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%', 'model_catalog' => $modelCatalog(Provider::Anthropic)]],
+        Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%', 'cache_retention' => 'short', 'model_catalog' => $modelCatalog(Provider::Anthropic)]],
         Provider::OpenAi->value => ['openai' => ['api_key' => '%env(OPENAI_API_KEY)%', 'model_catalog' => $modelCatalog(Provider::OpenAi)]],
         Provider::OpenAiCompatible->value => ['generic' => ['openai_compatible' => [
             'base_url' => '%env(OPENAI_COMPATIBLE_BASE_URL)%',
@@ -89,7 +89,10 @@ return static function (ContainerConfigurator $container): void {
         $tierPlatforms[$provider->value] = new ReferenceConfigurator($bundlePlatforms[$provider->value]);
     }
 
-    $container->extension('ai', ['platform' => $platform]);
+    // The reviewer's rounds each keep a conversation, in the table the migration creates for the DBAL store.
+    $conversations = ['doctrine' => ['dbal' => ['reviewer_conversation' => ['connection' => 'default']]]];
+
+    $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
     $container->parameters()->set('intakt.projects', $projects);
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
