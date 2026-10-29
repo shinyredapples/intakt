@@ -49,6 +49,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
 - A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row in `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change.
 - One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
+- Every Evidence item of a task must be producible inside the builder's sandbox (no network beyond the model provider and the package registries, no forge access, no real credentials). Evidence only the owner or the orchestrator can produce is marked `(owner provides)` and is not the builder's to satisfy ([Writing a good task](docs/guide/writing-a-good-task.md)).
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
 ## Secrets and protected paths
