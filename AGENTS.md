@@ -44,11 +44,19 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Test doubles: `MockPlatformFactory` with `ScriptedResponse`, or `RecordingProvider` with a redacted `HttpCassette`; the in-memory Store for retrieval. Message stores come from the Agent component (there is no Chat component).
 - A likely library bug becomes a minimal reproduction and draft report in `upstream/<name>/`; never posted without the owner.
 
+## Prompt injection ([threat model](docs/design/05-architecture/14-threat-model.md))
+
+- A steered model must stay harmless: every decision that matters is made or checked by plain code, and each model role has only the tools its job needs.
+- A change that adds a model role, a new input to a model or a new tool for one updates the threat model page in the same change.
+- Every untrusted value that goes into a prompt goes through the fencing helper (arriving with plan T7): issue and comment text, `<!-- external -->` blocks, pull request text, code including `vendor/`, CI log excerpts, project memory and other reviews.
+- Only tasks, steering labels and comments from people with write access count, checked through the forge's permission API on each event.
+
 ## Docs, pull requests, commits
 
 - User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
 - A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row in `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change.
 - One task per pull request, mergeable alone, with an **Evidence** section from a running install; `Waits for #n` and `Source: <branch>@<sha>` lines.
+- Every Evidence item of a task must be producible inside the builder's sandbox (no network beyond the model provider and the package registries, no forge access, no real credentials). Evidence only the owner or the orchestrator can produce is marked `(owner provides)` and is not the builder's to satisfy ([Writing a good task](docs/guide/writing-a-good-task.md)).
 - Conventional Commits, at most 100 characters; US English, no em-dashes. Run `bin/check` before every commit.
 
 ## Secrets and protected paths
