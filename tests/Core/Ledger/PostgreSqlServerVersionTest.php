@@ -22,6 +22,13 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         self::assertSame('12', $version);
     }
 
+    public function testAPostgreSqlUrlOnTheNativeDriverNamesTheVersionOfTheNewestPostgreSqlPlatform(): void
+    {
+        $version = $this->serverVersionOf('postgresql://postgres@localhost:5432/intakt?driver=pgsql');
+
+        self::assertSame('12', $version);
+    }
+
     public function testAMySqlUrlLeavesTheVersionToTheServer(): void
     {
         $version = $this->serverVersionOf('mysql://root@localhost:3306/intakt');
@@ -41,6 +48,14 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         $connection = $this->connectionFor('postgresql://postgres@localhost:5432/intakt');
 
         self::assertSame('intakt_test', $connection->getParams()['dbname'] ?? null);
+        self::assertInstanceOf(PostgreSQLPlatform::class, $connection->getDatabasePlatform());
+    }
+
+    public function testThePostgreSqlTestConnectionOnTheNativeDriverIsBuiltWithoutAConfiguredVersion(): void
+    {
+        $connection = $this->connectionFor('postgresql://postgres@localhost:5432/intakt?driver=pgsql');
+
+        self::assertSame('pgsql', $connection->getParams()['driver'] ?? null);
         self::assertInstanceOf(PostgreSQLPlatform::class, $connection->getDatabasePlatform());
     }
 

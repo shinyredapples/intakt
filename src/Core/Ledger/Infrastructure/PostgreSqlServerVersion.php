@@ -15,6 +15,8 @@ final readonly class PostgreSqlServerVersion implements EnvVarProcessorInterface
     // DBAL 4 has no PostgreSQL platform newer than the one for 12, so naming 12 picks what a detected version would.
     private const string NEWEST_PLATFORM = '12';
 
+    private const array POSTGRESQL_DRIVERS = ['pdo_pgsql', 'pgsql'];
+
     public function __construct(
         #[Autowire(service: 'doctrine.dbal.connection_factory.dsn_parser')]
         private DsnParser $dsnParser,
@@ -29,7 +31,7 @@ final readonly class PostgreSqlServerVersion implements EnvVarProcessorInterface
             return null;
         }
 
-        return 'pdo_pgsql' === ($this->dsnParser->parse($url)['driver'] ?? null) ? self::NEWEST_PLATFORM : null;
+        return in_array($this->dsnParser->parse($url)['driver'] ?? null, self::POSTGRESQL_DRIVERS, true) ? self::NEWEST_PLATFORM : null;
     }
 
     public static function getProvidedTypes(): array
