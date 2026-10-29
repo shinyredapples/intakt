@@ -11,6 +11,9 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -19,9 +22,6 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
-use Intakt\Core\Ledger\Contract\AppendResult;
-use Intakt\Core\Ledger\Contract\LedgerEvent;
-use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
@@ -34,8 +34,8 @@ use RuntimeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\TextResult;
-use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 
@@ -108,7 +108,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['started', 'settled'], [$started['phase'], $settled['phase']]);
         self::assertSame($started['call'], $settled['call']);
         self::assertSame(['alpha', 'strong'], [$started['project'], $started['tier']]);
-        self::assertSame([100, 20, 60, 5000], [$settled['usages'][0]['prompt'], $settled['usages'][0]['completion'], $settled['usages'][0]['cached'], $settled['usages'][0]['remaining']]);
+        /** @var list<array<string, int>> $usages */
+        $usages = $settled['usages'];
+        self::assertSame([100, 20, 60, 5000], [$usages[0]['prompt'], $usages[0]['completion'], $usages[0]['cached'], $usages[0]['remaining']]);
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void
@@ -120,7 +122,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
             $this->vendor($failing, $ledger)->review('alpha', Tier::Strong, 'Review the change.');
             self::fail('The failed call must stay an exception.');
         } catch (RuntimeException) {
-            // Expected: the failure is not turned into a verdict.
+            // Expected, because a failed call must not be turned into a verdict.
         }
 
         [$started, $unsettled] = $ledger->payloads();

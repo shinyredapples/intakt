@@ -43,6 +43,13 @@ final class InMemoryLedger implements Ledger
      */
     public function payloads(): array
     {
-        return array_map(static fn (LedgerEvent $event): array => json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR), $this->events);
+        $payloads = [];
+        foreach ($this->events as $event) {
+            /** @var array<string, mixed> $payload */
+            $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+            $payloads[] = $payload;
+        }
+
+        return $payloads;
     }
 }
