@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 use Symfony\Component\Uid\Uuid;
@@ -14,7 +15,7 @@ use Symfony\Component\Uid\Uuid;
 final class InMemoryLedger implements Ledger
 {
     /** @var list<LedgerEvent> */
-    public array $events = [];
+    private array $events = [];
 
     public function __construct(private readonly int $accepted = PHP_INT_MAX)
     {
@@ -36,6 +37,19 @@ final class InMemoryLedger implements Ledger
     public function readInOrder(): RecordedEvents
     {
         return new RecordedEvents([]);
+    }
+
+    public function count(): int
+    {
+        return count($this->events);
+    }
+
+    /**
+     * @return list<LedgerEventKind>
+     */
+    public function kinds(): array
+    {
+        return array_map(static fn (LedgerEvent $event): LedgerEventKind => $event->kind, $this->events);
     }
 
     /**
