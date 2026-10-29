@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "67f64219f31267bb54b274be82f7195a",
+    "content-hash": "f319d4abebaf688e1d3f2d2b70c771b8",
     "packages": [
         {
             "name": "doctrine/collections",
@@ -2629,6 +2629,95 @@
             "description": "Integration bundle for Symfony AI components",
             "support": {
                 "source": "https://github.com/symfony/ai-bundle/tree/v1.0.0-BETA1"
+            },
+            "funding": [
+                {
+                    "url": "https://symfony.com/sponsor",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/fabpot",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2026-10-26T14:03:07+00:00"
+        },
+        {
+            "name": "symfony/ai-doctrine-message-store",
+            "version": "v1.0.0-BETA1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/ai-doctrine-message-store.git",
+                "reference": "2c62eadbe244817c06a1a228107fb5e1e6c6b928"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/ai-doctrine-message-store/zipball/2c62eadbe244817c06a1a228107fb5e1e6c6b928",
+                "reference": "2c62eadbe244817c06a1a228107fb5e1e6c6b928",
+                "shasum": ""
+            },
+            "require": {
+                "doctrine/dbal": "^4.0",
+                "php": ">=8.2",
+                "symfony/ai-agent": "^1.0",
+                "symfony/ai-platform": "^1.0",
+                "symfony/clock": "^7.3|^8.0",
+                "symfony/serializer": "^7.3|^8.0"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpstan/phpstan-strict-rules": "^2.0",
+                "phpunit/phpunit": "^11.5.53"
+            },
+            "type": "symfony-ai-message-store",
+            "extra": {
+                "thanks": {
+                    "url": "https://github.com/symfony/ai",
+                    "name": "symfony/ai"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\AI\\Agent\\Bridge\\Doctrine\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christopher Hertel",
+                    "email": "mail@christopher-hertel.de"
+                },
+                {
+                    "name": "Oskar Stark",
+                    "email": "oskarstark@googlemail.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Doctrine DBAL message store bridge for Symfony AI Agent",
+            "keywords": [
+                "Agent",
+                "Bridge",
+                "ai",
+                "doctrine",
+                "message-store"
+            ],
+            "support": {
+                "source": "https://github.com/symfony/ai-doctrine-message-store/tree/v1.0.0-BETA1"
             },
             "funding": [
                 {
@@ -11448,6 +11537,7 @@
         "symfony/ai-agent": 10,
         "symfony/ai-anthropic-platform": 10,
         "symfony/ai-bundle": 10,
+        "symfony/ai-doctrine-message-store": 10,
         "symfony/ai-generic-platform": 10,
         "symfony/ai-mate": 10,
         "symfony/ai-open-ai-platform": 10,

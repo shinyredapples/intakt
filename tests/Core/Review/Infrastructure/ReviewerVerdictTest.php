@@ -24,15 +24,18 @@ use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\AiBundle\Profiler\DataCollector;
 use Symfony\AI\AiBundle\Test\AiAssertionsTrait;
+use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ReviewerAgent::class)]
 #[CoversClass(ReviewerPrompt::class)]
@@ -58,6 +61,10 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private ReviewCheckout $fixture;
 
+    private InMemoryMessageStore $conversations;
+
+    private UuidV7 $round;
+
     /**
      * @var list<string>
      */
@@ -66,6 +73,8 @@ final class ReviewerVerdictTest extends WebTestCase
     protected function setUp(): void
     {
         $this->fixture = new ReviewCheckout();
+        $this->conversations = new InMemoryMessageStore();
+        $this->round = new UuidV7();
     }
 
     protected function tearDown(): void
@@ -84,6 +93,28 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);
         self::assertStringContainsString('final class Cart', $this->sent[1]);
+    }
+
+    public function testTheConversationOfTheRoundIsKeptInTheMessageStore(): void
+    {
+        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        $kept = $this->conversations->load($this->round);
+
+        self::assertSame(['system', 'user', 'assistant', 'tool', 'assistant'], array_map(static fn (MessageInterface $message): string => $message->getRole()->value, $kept->getMessages()));
+        self::assertCount(0, $this->conversations->load(new UuidV7()));
+    }
+
+    public function testAnotherRoundStartsItsOwnConversationAndLeavesTheEarlierOneAlone(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+        $first = $this->round;
+        $this->round = new UuidV7();
+
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertCount(3, $this->conversations->load($first));
+        self::assertCount(3, $this->conversations->load($this->round));
     }
 
     public function testAWellFormedReviewKeepsTheApprovalTheModelAnswered(): void
@@ -263,9 +294,9 @@ final class ReviewerVerdictTest extends WebTestCase
         };
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence()), static fn (): TraceableToolbox => $toolbox, new VerdictParser());
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence()), static fn (): TraceableToolbox => $toolbox, new VerdictParser(), $this->conversations);
 
-        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, 'You review for correctness.', $task), $platform, 'reviewer-model');
+        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, 'You review for correctness.', $task, $this->round), $platform, 'reviewer-model');
 
         $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();

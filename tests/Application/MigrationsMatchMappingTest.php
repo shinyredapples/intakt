@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Tools\SchemaTool;
-use Doctrine\Persistence\ManagerRegistry;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -22,7 +19,7 @@ final class MigrationsMatchMappingTest extends KernelTestCase
     public function testTheMigrationsBuildTheSchemaTheMappingDescribes(): void
     {
         $console = $this->console();
-        $this->emptyDatabase();
+        EmptyDatabase::in(self::getContainer());
 
         $console->run(['command' => 'doctrine:migrations:migrate', '--no-interaction' => true]);
         $console->assertCommandIsSuccessful($console->getDisplay());
@@ -37,15 +34,5 @@ final class MigrationsMatchMappingTest extends KernelTestCase
         $application->setAutoExit(false);
 
         return new ApplicationTester($application);
-    }
-
-    private function emptyDatabase(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $manager = $registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-
-        new SchemaTool($manager)->dropDatabase();
     }
 }

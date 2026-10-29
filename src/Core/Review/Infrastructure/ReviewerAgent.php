@@ -14,6 +14,7 @@ use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
+use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
@@ -34,6 +35,7 @@ final readonly class ReviewerAgent implements Reviewer
         #[AutowireCallable(service: ReviewerToolboxFactory::class, method: 'create')]
         private Closure $toolboxes,
         private VerdictParser $parser,
+        private MessageStoreInterface $conversations,
     ) {
     }
 
@@ -43,7 +45,7 @@ final readonly class ReviewerAgent implements Reviewer
         $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
 
         $verdict = $this->answerOf($this->agent($tools, $platform, $model)->call(
-            $this->prompt->messagesFor($request->rolePrompt, $request->task),
+            $this->prompt->messagesFor($request->rolePrompt, $request->task)->withId($request->round),
             [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class],
         ));
 
@@ -57,7 +59,7 @@ final readonly class ReviewerAgent implements Reviewer
     {
         $toolbox = $this->prompt->fenced(new FaultTolerantToolbox($tools));
 
-        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS);
+        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, messageStore: $this->conversations, maxToolCalls: self::MAX_ROUNDS);
     }
 
     private function answerOf(ExecutionInterface $execution): Verdict
