@@ -1,5 +1,7 @@
-# The owner reviews what only the owner may approve: the CI definition, the protected-path list, code ownership
-# (all under .github/) and the merge rules the orchestrator's own approvals follow. Other protected paths are
-# guarded by those merge rules, so approval by class keeps working under a code-owner ruleset.
-/.github/                                  @haraldpdl
-/docs/design/05-architecture/08-merge.md   @haraldpdl
+# The owner reviews every change to the rules the project is checked by.
+/config/gates/  @haraldpdl
+/.github/       @haraldpdl
+/bin/check      @haraldpdl
+/AGENTS.md      @haraldpdl
+/bin/instance @haraldpdl
+/bin/probe @haraldpdl
