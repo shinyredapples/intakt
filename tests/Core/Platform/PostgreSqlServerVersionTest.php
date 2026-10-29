@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Ledger;
+namespace Intakt\Tests\Core\Platform;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Tools\DsnParser;
 use Doctrine\Persistence\ManagerRegistry;
-use Intakt\Core\Ledger\Infrastructure\PostgreSqlServerVersion;
+use Intakt\Core\Platform\Infrastructure\PostgreSqlServerVersion;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
@@ -59,7 +59,7 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
         self::assertInstanceOf(PostgreSQLPlatform::class, $connection->getDatabasePlatform());
     }
 
-    public function testTheMySqlTestConnectionKeepsDetectingTheServer(): void
+    public function testTheMySqlTestConnectionNamesNoServerVersion(): void
     {
         $connection = $this->connectionFor('mysql://root@localhost:3306/intakt');
 
@@ -74,7 +74,7 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
 
     private function connectionFor(string $url): Connection
     {
-        $previous = [$_SERVER['DATABASE_URL'] ?? null, $_ENV['DATABASE_URL'] ?? null];
+        $previous = ['_SERVER' => $_SERVER, '_ENV' => $_ENV];
         $_SERVER['DATABASE_URL'] = $_ENV['DATABASE_URL'] = $url;
 
         try {
@@ -82,11 +82,27 @@ final class PostgreSqlServerVersionTest extends KernelTestCase
             self::assertInstanceOf(ManagerRegistry::class, $registry);
             $connection = $registry->getConnection();
         } finally {
-            [$_SERVER['DATABASE_URL'], $_ENV['DATABASE_URL']] = $previous;
+            $this->restoreDatabaseUrl($previous);
         }
 
         self::assertInstanceOf(Connection::class, $connection);
 
         return $connection;
+    }
+
+    /**
+     * @param array{_SERVER: array<string, mixed>, _ENV: array<string, mixed>} $previous
+     */
+    private function restoreDatabaseUrl(array $previous): void
+    {
+        foreach (['_SERVER', '_ENV'] as $name) {
+            if (array_key_exists('DATABASE_URL', $previous[$name])) {
+                $GLOBALS[$name]['DATABASE_URL'] = $previous[$name]['DATABASE_URL'];
+
+                continue;
+            }
+
+            unset($GLOBALS[$name]['DATABASE_URL']);
+        }
     }
 }
