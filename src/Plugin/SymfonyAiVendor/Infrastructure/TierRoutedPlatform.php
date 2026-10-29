@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
-use ArrayObject;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
@@ -14,20 +13,21 @@ use Symfony\AI\Platform\ModelCatalog\FallbackModelCatalog;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Lets an agent call a project's tier: the agent's model name is the tier, and every round is kept so the vendor can settle the usage of all of them.
-final readonly class TierRoutedPlatform implements PlatformInterface
+// Lets an agent call a project's tier: the agent's model name is the tier, and every round is kept so the vendor can settle the usage of all of them; excluded from the container because one is built per review (SymfonyAiVendor creates it with new), so its rounds never outlive the review.
+#[Exclude]
+final class TierRoutedPlatform implements PlatformInterface
 {
     /**
-     * @var ArrayObject<int, DeferredResult>
+     * @var list<DeferredResult>
      */
-    private ArrayObject $rounds;
+    private array $rounds = [];
 
     public function __construct(
-        private TierInvoker $tiers,
-        private string $project,
+        private readonly TierInvoker $tiers,
+        private readonly string $project,
     ) {
-        $this->rounds = new ArrayObject();
     }
 
     /**
@@ -35,7 +35,7 @@ final readonly class TierRoutedPlatform implements PlatformInterface
      */
     public function rounds(): array
     {
-        return $this->rounds->getArrayCopy();
+        return $this->rounds;
     }
 
     #[Override]
@@ -44,7 +44,7 @@ final readonly class TierRoutedPlatform implements PlatformInterface
         $name = $model instanceof Model ? $model->getName() : $model;
 
         $round = $this->tiers->invoke($this->project, Tier::from($name), new TierRequest($input, $options));
-        $this->rounds->append($round);
+        $this->rounds[] = $round;
 
         return $round;
     }
