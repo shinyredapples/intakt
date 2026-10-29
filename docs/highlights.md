@@ -10,7 +10,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 |---|---|---|---|
 | Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.php` |
 | Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Core/Review/Infrastructure/StrictVerdictSubscriber.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98), T12 (#17) |
-| Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | planned | T5 (#10) |
+| Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | in progress | T5 (#10, part #99), `src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php` |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | planned | T5 (#10), T9 (#14), T14 (#19) |
 | Anthropic prompt caching | later rounds of a review read cached tokens | planned | T7 (#12) |
 | `FailoverPlatform` | provider failover inside Intakt's own wrapper | planned | T14 (#19) |
