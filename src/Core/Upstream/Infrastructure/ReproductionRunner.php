@@ -47,7 +47,7 @@ final readonly class ReproductionRunner
         try {
             $process->run();
         } catch (ProcessTimedOutException) {
-            return new ReproductionOutcome(basename($directory), ReproductionStatus::StillFails, sprintf('Timed out after %d seconds.', $this->timeoutSeconds));
+            return new ReproductionOutcome(basename($directory), ReproductionStatus::StillFails, sprintf('Timed out after %g seconds.', $this->timeoutSeconds));
         }
 
         return new ReproductionOutcome(
