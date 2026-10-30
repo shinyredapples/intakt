@@ -13,9 +13,27 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 - **Why it will be different:** a panel of reviewers from different providers will return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
 - **Why you will be able to trust it:** it is to spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
-**See it (planned):** a dashboard screenshot and a one to two minute recording of a review, from `docker compose up` to the judge's list and an AI assistant's call over MCP, will be added to `docs/assets/` once the dashboard and the compose setup are built. Until then, read the [demo walkthrough](docs/guide/demo-walkthrough.md).
-
 [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
+
+## Five-minute start
+
+The demo (planned, see [Status](#status)):
+
+```
+git clone https://github.com/shinyredapples/intakt.git && cd intakt
+cp .env.dist .env.local   # add one or more provider API keys
+docker compose up         # Intakt, its database and a sample repository
+```
+
+Then open the dashboard, pick the sample pull request and start a review. The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+
+What works now:
+
+```
+composer install
+bin/check            # every quality gate, one JSON line per gate
+bin/console about    # the app boots on SQLite
+```
 
 ## The first release: the review loop
 
@@ -32,26 +50,6 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 **Works today:** the foundation. A Symfony 8.1 app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max, Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects and long dashes.
 
 **Planned:** everything in the list above, in the order of [the plan](docs/plan.md).
-
-## Quick start
-
-What works now:
-
-```
-composer install
-bin/check            # every quality gate, one JSON line per gate
-bin/console about    # the app boots on SQLite
-```
-
-The demo (planned):
-
-```
-git clone https://github.com/shinyredapples/intakt.git && cd intakt
-cp .env.dist .env.local   # add one or more provider API keys
-docker compose up         # Intakt, its database and a sample repository
-```
-
-Then open the dashboard, pick the sample pull request and start a review.
 
 ## How it is built
 
