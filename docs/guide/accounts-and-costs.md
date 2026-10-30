@@ -40,7 +40,7 @@ flowchart TD
 
 ## Several projects on one install
 
-Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 means no new builds for that project.
+Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 means no new builds for that project; its open pull requests are still fixed, updated and merged.
 
 ## Where the money goes, and how to spend less
 
