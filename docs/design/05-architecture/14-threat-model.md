@@ -16,7 +16,7 @@ Every model output is untrusted too: it is validated against its schema before u
 
 ## Third-party text
 
-- **Only tasks written by people with write access are built.** A task's author must have write access, checked through the forge's permission API when the task becomes eligible and again before each build ([Choosing work](03-choosing-work.md)).
+- **Only tasks written by people with write access are built.** A task's author and the last editor of its body must have write access, checked through the forge's permission API when the task becomes eligible and again before each build ([Choosing work](03-choosing-work.md)).
 - **Only steering from people with write access counts.** Steering labels, answers and steering comments count only from accounts with write access, checked through the forge's permission API on each event, never from the author association a comment carries ([Labels](04-labels.md), [Questions and steering](05-questions-and-steering.md)). Other comments never reach a prompt. A bot account never steers, whatever its permission, except Intakt's own identity and its maintainer's: a CI workflow's token can hold write access, so without this rule a changed workflow could label tasks ready or urgent. A task's body counts only while its last editor has write access too, since the body is the build's instructions.
 - **Copied text is marked.** Text a person copies into a task from an untrusted source (an outside report, a forum post, a log) goes inside an `<!-- external -->` ... `<!-- /external -->` block. Intakt fences that block as untrusted although the task itself is trusted; an unclosed block runs to the end of the task.
 - **Dependency code is untrusted input** to builders and reviewers, whoever wrote the task.
