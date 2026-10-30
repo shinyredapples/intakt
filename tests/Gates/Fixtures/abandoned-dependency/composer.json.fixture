@@ -1,5 +1,9 @@
 {
     "name": "intakt/fixture",
+    "version": "1.0.0",
+    "repositories": [
+        {"packagist.org": false}
+    ],
     "require": {
         "intakt/retired-package": "1.0.0"
     }

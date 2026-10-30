@@ -59,7 +59,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Skill (reviewer)** | a reviewer role's own checklist and test recipes | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Specialist reviewer** | a reviewer that joins only when the change calls for it | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Stale (note)** | a memory note whose code changed since it was written | [project memory](project-memory.md) |
-| **Stand-in** | a reviewer from another company standing in for one that is over its limit | [engine room](the-engine-room.md#reviewers-stand-ins-and-catch-ups) |
+| **Stand-in** | a reviewer from another company standing in when every account of the usual reviewer's company is over its limit | [engine room](the-engine-room.md#reviewers-stand-ins-and-catch-ups) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
 | **Verdict** | a reviewer's answer: approve, or changes with findings | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Waiting on you** | the dashboard column with only what needs a person | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |

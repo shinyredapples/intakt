@@ -15,7 +15,14 @@ final readonly class PathGlob
         // Git allows any bytes in a file name, and a UTF-8 pattern fails on other bytes, which would let such a path slip past its rule.
         $modifier = mb_check_encoding($path, 'UTF-8') ? 'u' : '';
 
-        return 1 === preg_match($this->pattern().$modifier, '/'.$path);
+        $result = preg_match($this->pattern().$modifier, '/'.$path);
+
+        // False is a PCRE error, and reading it as "no match" would silently skip the rule, so the check fails closed.
+        if (false === $result) {
+            throw new GlobCannotBeEvaluated($this->glob, preg_last_error_msg());
+        }
+
+        return 1 === $result;
     }
 
     private function pattern(): string

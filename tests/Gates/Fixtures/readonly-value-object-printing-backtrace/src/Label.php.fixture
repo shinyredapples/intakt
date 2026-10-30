@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
+final readonly class Label
+{
+    public string $value;
+
+    public function __construct(string $value, public bool $upper)
+    {
+        ob_start();
+        debug_print_backtrace();
+        $this->value = str_contains((string) ob_get_clean(), 'true') ? strtoupper($value) : $value;
+    }
+}

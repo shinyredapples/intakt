@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Mailer
+{
+    public function __construct(private ?bool $urgent)
+    {
+    }
+
+    public function send(string $body): string
+    {
+        return true === $this->urgent ? strtoupper($body) : $body;
+    }
+}

@@ -6,6 +6,8 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CodingStandardsGate;
 use Intakt\Gates\PhpCsFixer\PlainFirstClassCallableFixer;
+use Intakt\Gates\PhpStan\ContainerRegistration;
+use Intakt\Gates\PhpStan\FlagParameterRule;
 use Intakt\Gates\PhpStan\ImportFormRule;
 use Intakt\Gates\PhpStan\NoMockOptOutRule;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
@@ -19,11 +21,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(StaticAnalysisGate::class)]
 #[CoversClass(RectorGate::class)]
 #[CoversClass(ParameterLimitRule::class)]
+#[CoversClass(FlagParameterRule::class)]
 #[CoversClass(NoNestedTryRule::class)]
 #[CoversClass(NoMockOptOutRule::class)]
 #[CoversClass(ImportFormRule::class)]
 #[CoversClass(PlainFirstClassCallableFixer::class)]
 #[CoversClass(StatefulServiceResetRule::class)]
+#[CoversClass(ContainerRegistration::class)]
 final class CodeGatesTest extends SandboxTestCase
 {
     public function testACompliantClassPassesEveryCodeGate(): void
@@ -216,6 +220,111 @@ final class CodeGatesTest extends SandboxTestCase
     public function testAConstructorWithManyParametersPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'constructor-with-many-parameters');
+    }
+
+    public function testABooleanParameterOfAServiceMethodFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'flag-parameter-in-service', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
+    }
+
+    public function testANullableBooleanParameterOfAReadonlyServiceConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'flag-parameter-in-constructor', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
+    }
+
+    public function testABooleanPropertyOfAReadonlyValueObjectExcludedFromTheContainerPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'readonly-value-object-boolean');
+    }
+
+    public function testABooleanAReadonlyValueObjectConsumesInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-consuming-boolean', 'src/Label.php:14 intakt.flagParameter Parameter $uppercase is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectAlsoReadsInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-promoted-boolean', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAStoredBooleanAReadonlyValueObjectAlsoReadsInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-stored-boolean', 'src/Label.php:16 intakt.flagParameter Parameter $flag is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughItsPropertyInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-promoted-property', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAStoredBooleanAReadonlyValueObjectReadsThroughItsPropertyInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-stored-property', 'src/Label.php:16 intakt.flagParameter Parameter $flag is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAStringPropertyNameInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-property-by-string', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAComputedPropertyNameInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-property-by-expression', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAnAliasOfThisInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-property-through-alias', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughItsDefinedVariablesInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-defined-vars', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughEvalInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-eval', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughTheBacktraceInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-backtrace', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectPrintsThroughTheBacktraceInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-printing-backtrace', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughABacktraceCalledByCallableInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-backtrace-by-callable', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAnExceptionTraceInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-exception-trace', 'src/Label.php:15 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectReadsThroughAnIncludedFileInItsConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-include', 'src/Label.php:14 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanAReadonlyValueObjectHandsToItsParentConstructorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-reading-in-parent-constructor', 'src/Label.php:12 intakt.flagParameter Parameter $upper is a flag');
+    }
+
+    public function testAPromotedBooleanOfAReadonlyClassOutsideTheSourceFolderFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-gate-class-with-flag', 'config/gates/src/Strictness.php:9 intakt.flagParameter Parameter $strict is a flag');
+    }
+
+    public function testAnEnumParameterPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'enum-parameter');
     }
 
     public function testAServiceWithAMutablePropertyFailsStaticAnalysis(): void

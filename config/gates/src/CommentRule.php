@@ -46,18 +46,20 @@ final readonly class CommentRule
             return $this->docblocks->problem($comment->text);
         }
 
-        return $this->lineCommentProblem($comment->text, null !== $previousLine && $comment->line === $previousLine + 1);
+        return $this->lineCommentProblem($comment, $previousLine);
     }
 
-    private function lineCommentProblem(string $text, bool $continuesPreviousComment): ?string
+    private function lineCommentProblem(PhpToken $comment, ?int $previousLine): ?string
     {
+        $text = $comment->text;
+
         return match (true) {
             str_starts_with($text, '/*') => 'block comment',
             SuppressionDirective::appearsIn($text) => 'suppression directive, fix the code instead',
             1 === preg_match(self::MARKERS, $text) => 'TODO comment, open an issue instead',
             1 === preg_match(self::LOOKS_LIKE_CODE, $text) => 'commented-out code',
             1 !== preg_match(self::GIVES_A_REASON, $text) => 'comment that does not say why (a reason or a link); let names and small methods say what',
-            $continuesPreviousComment => 'comment longer than one line',
+            null !== $previousLine && $comment->line === $previousLine + 1 => 'comment longer than one line',
             default => null,
         };
     }
