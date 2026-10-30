@@ -19,9 +19,9 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 | `env` (coreutils) | the gitleaks gate | running gitleaks in the scanned directory (`env --chdir`) | for `bin/check` | coreutils 8.28 or later | development only |
 | `true` | the gate runner | probing once whether `unshare` may create namespaces | for `bin/check` | any | development only |
 | `setsid` (util-linux) | the gate runner | putting a contained run in its own session, so it can be stopped as a whole | for `bin/check` | any | development only |
-| `bash` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`), `docs/showcase/figures.sh` | running the showcase script offline against fixtures | for `bin/check` | any | development only |
+| `bash` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`, `ReleaseLabelsTest.php`), `docs/showcase/figures.sh` | running the showcase script and the release-labels workflow script offline against fixtures | for `bin/check` | any | development only |
 | `jq` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`, its fake `gh`), `docs/showcase/figures.sh` | computing the showcase figures from the API's JSON | for `bin/check` | 1.7 or later | development only |
-| `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner | reading pull requests and comments from the GitHub API, read-only; labeling a pull request with its title's type | only for the showcase figures and the release labels | any | no |
+| `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner | reading pull requests and comments from the GitHub API; labeling a pull request | only for the showcase figures | any | no |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
 | `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe` | tests, static analysis, code style | yes | as locked in `composer.lock` | development only |
 
