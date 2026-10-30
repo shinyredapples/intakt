@@ -86,13 +86,13 @@ flowchart TD
 ## Steering budgets and pauses
 
 The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. Only you can use it:
-- On the first start, Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change in the admin area asks for it.
+- On the first start, you type the one-time setup code from `docker logs intakt`, and Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change in the admin area asks for it.
 - The dashboard only answers on the computer it runs on, unless you turn on phone access, which needs HTTPS and the same secret or passkey.
 - Another website open in your browser can't change anything, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
 
 ### Every change ends by itself
 
-Each change asks **until when**: a date and time, or "until the window resets" (for example the next weekly reset of an AI account). When that moment comes, the change lapses and the normal setting is back, so a forgotten change can't keep spending. The board and the status show every change in effect and when it ends, and the history lists every change: who made it, what it was before and after, and until when.
+Each change asks **until when**: a date and time, or "until the window resets" (for example the next weekly reset of an AI account). When that moment comes, the change lapses and the normal setting is back, so a forgotten change can't keep spending. The board and the status show every change in effect and when it ends; your accounts' limits and reset times show only in the admin area. The history lists every change: who made it, what it was before and after, and until when.
 
 | You can | For example |
 |---|---|

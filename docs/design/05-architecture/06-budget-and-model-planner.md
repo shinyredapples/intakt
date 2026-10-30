@@ -14,7 +14,7 @@ The planner spends in this order, within each account's cap and roles:
 2. subscription windows, within Intakt's share of them;
 3. paid usage, overage or API keys, up to Intakt's cap per period.
 
-This is also the fallback order: when one step is spent, blocked at the vendor or backing off, the next step of the same vendor's accounts in the owner's order takes over, then another vendor's (with a catch-up review owed, as below). When nothing is allowed, work waits and the reason (each account's cause and when it ends) shows on the board.
+This is also the fallback order, across vendors: when an account is spent, blocked at the vendor or backing off, the next account of the same step takes over, the owner's order deciding among them, whichever vendor it belongs to (with a catch-up review owed when the vendor changes, as below). Only when no account of a step is allowed for the job's role does the next step start, so Intakt never pays while another vendor's subscription still has room for that work. When nothing is allowed, work waits and the reason (each account's cause and when it ends) shows on the board.
 
 ## Planning
 

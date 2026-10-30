@@ -53,12 +53,12 @@ The owner steers budgets and pauses from an admin area in the dashboard instead 
 ### Only the owner
 
 Intakt has one user, so there are no accounts and no sign-up, but every change must provably come from the owner:
-- **Localhost by default.** The dashboard port is published on the host's loopback address only (see [Setup](11-setup.md)).
-- **One owner credential.** Before anything else, the first-run wizard creates the owner secret (shown once, stored only as a password hash) or registers a passkey (WebAuthn). Every admin action needs a session opened with it. A lost secret is reset by a console command on the host, because access to the host is what proves ownership then.
-- **No cross-site requests.** Every admin request also needs a CSRF token of the owner's session and a `Host` header that matches the configured dashboard address; the session cookie is `SameSite=Strict`. A web page open in the owner's browser therefore cannot change a setting.
-- **Jobs cannot reach it.** The job containers' network has no route to the dashboard port, and the admin endpoints refuse anything that is not the owner's session even if it did.
-- **Phone access is opt-in:** HTTPS only (a secure cookie), with the same secret or passkey. Without it, a request to the admin area from any address but loopback is refused.
-- **Nothing an agent or a job can reach changes a control.** No MCP tool, JSON API token, forge label or comment, job output or model answer counts as the owner's session; those doors read controls, never write them (see [Threat model](14-threat-model.md#agents-over-mcp)).
+- **Localhost by default.** The dashboard port is published on the host's loopback address only (see [Setup](11-setup.md)). The container cannot see that from inside: behind a published port, Docker and Podman forward the owner's requests from a bridge or gateway address, never from loopback, so no check relies on the source address. The host's port binding keeps other machines out, and the checks below keep out everything else.
+- **One owner credential, claimed with proof of the host.** The first start prints a one-time setup code to the container's log (`docker logs intakt`) and nowhere else; the first-run wizard asks for it before anything else, and only then creates the owner secret (shown once, stored only as a password hash) or registers a passkey (WebAuthn). Reading the container's log needs the host's container runtime, so whoever claims the install has the host; a process that only reaches the port cannot. The code works once and is void as soon as an owner credential exists. Every admin action needs a session opened with the credential. A lost secret is reset by a console command on the host, which prints a new setup code, for the same reason.
+- **No cross-site requests.** Every admin request also needs a CSRF token of the owner's session and a `Host` header that matches the configured dashboard address (`localhost:7780` by default, the HTTPS name once phone access is on); the session cookie is `SameSite=Strict`. A web page open in the owner's browser therefore cannot change a setting.
+- **Jobs cannot reach it.** Job containers run on their own network, which the orchestrator's container does not join, so it has no route to the dashboard port; the admin endpoints refuse anything that is not the owner's session even if it did.
+- **Phone access is opt-in:** the owner publishes the port beyond loopback and turns on HTTPS (a secure cookie), with the same secret or passkey. Without it, a request whose `Host` is not the loopback dashboard address is refused.
+- **Nothing an agent or a job can reach changes a control.** No MCP tool, JSON API token, forge label or comment, job output or model answer counts as the owner's session; those doors read which controls are in effect, never write them (see [Threat model](14-threat-model.md#agents-over-mcp)).
 
 ### Controls
 
@@ -71,7 +71,7 @@ Every control needs an expiry when it is set: a time, or "until the window reset
 | **Share** | a project's share of the week (0 starts no new builds for it) | a time, or until a chosen window resets | the project's summary card, the status |
 | **Clear a back-off** | ends an account's cooldown or a bench's back-off at once; the next structured failure starts a new one as usual | the cleared back-off's own end, after which there is nothing left to lift | the account or bench, the history |
 
-What is in effect and until when is shown on the board and in the status. Limits, ceilings and reset times show only to the owner (the admin area, the board and the status), never on a public surface such as the shared usage report or the forge.
+What is in effect and until when is shown on the board and in the status, and MCP read tools and the JSON API return the same: the control, its scope, and its end as a time the owner chose or as the named window ("until the weekly window resets"). The values behind it (an account's plan limits, the ceilings as numbers, window reset times, credit balances and test results) show only in the admin area, behind the owner's session; the board, the status, MCP tools, JSON API tokens and public surfaces such as the shared usage report or the forge never carry them.
 
 ### Accounts
 
@@ -87,7 +87,11 @@ How the planner spends across these is the [order of use](06-budget-and-model-pl
 
 **Billing stays with the vendor.** Intakt never mirrors the vendor's own billing settings (paid usage on or off, the vendor's monthly limit, top-ups, auto-reload), which it cannot change anyway. Each account records only what Intakt needs: whether it bills past its plan limit; Intakt's own cap below the vendor's limit, as a share of the plan and as an amount per period past it; and a link to manage billing at the vendor. The vendor's limit is the hard backstop; Intakt's cap is its share of it.
 
-**Secrets.** A key or token is stored encrypted at rest in Intakt's secret storage (the Symfony secrets vault the AI providers already read). It is never shown again after saving, only a fingerprint (its last four characters), is never written to logs or the ledger, and is handed only to that vendor's jobs. Removing or replacing it takes effect for the next job; a running job keeps its own until it ends.
+**Secrets.** A key or token is stored encrypted at rest in Intakt's secret storage (sealed into the Symfony secrets vault). It is never shown again after saving, only a fingerprint (its last four characters), and is never written to logs or the ledger. Where it goes follows the [security model](../04-constraints.md#security-model):
+- **An API key never enters a job.** It stays in the orchestrator, which makes that vendor's API calls itself.
+- **A subscription login** is mounted read-only into that vendor's jobs only, never into another vendor's job.
+
+The AI providers configured in `config/packages/ai.php` read the vault when the service container is built, so a key saved at runtime would not reach them. Instead, the orchestrator reads an admin-saved account's credential from the vault when it starts a job or sets up that job's model calls, never from the built container. Removing or replacing a credential therefore takes effect for the next job without a restart; a running job keeps its own until it ends.
 
 **Test button.** Each account has a "test" button that makes one minimal call and shows the result and the remaining allowance, in the admin area only.
 
