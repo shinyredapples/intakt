@@ -17,7 +17,11 @@ The planner spends in this order, within each account's cap and roles:
 2. subscription windows, within Intakt's share of them;
 3. paid usage, overage or API keys, up to Intakt's cap per period.
 
-This is also the fallback order: when an account is spent, blocked at the vendor or backing off, the next account of the same step takes over, first another account of the same vendor and role by the owner's order (several subscriptions of one vendor), then an account of another vendor (with a catch-up review owed when the vendor changes, as below). Only when no account of a step is allowed for the job's role does the next step start, so Intakt never pays while another vendor's subscription still has room for that work. For a reviewer, vendor diversity outranks the step order: a substitute never shares a vendor with another reviewer of the same head, so a paid key of another vendor is taken before a subscription of a vendor already on the panel. When nothing is allowed, work waits and the board shows each account's cause (a spent window, a vendor-side block, a back-off); when it ends is a reset time and shows only in the admin area ([Owner controls](13-dashboard.md#controls)).
+This is also the fallback order: when an account is spent, blocked at the vendor or backing off, another account takes over, in an order that depends on the job:
+- *A build or any other job but a review* goes to the next account of the same step: first another account of the same vendor and role by the owner's order (several subscriptions of one vendor), then an account of another vendor. Only when no account of a step is allowed for the job's role does the next step start, so a build never pays while another vendor's subscription still has room for it.
+- *A review stays with its vendor:* it moves through every account of its vendor its role may use, in the order of use, paid ones included, and only when all of them are out does the panel substitute a reviewer of another vendor, with a catch-up review owed ([Reviews](07-reviews.md), as below). Among the substitutes the order of use applies again, but vendor diversity outranks it: a substitute never shares a vendor with another reviewer of the same head, so a paid key of another vendor is taken before a subscription of a vendor already on the panel.
+
+When nothing is allowed, work waits and the board shows each account's cause (a spent window, a vendor-side block, a back-off); when it ends is a reset time and shows only in the admin area ([Owner controls](13-dashboard.md#controls)).
 
 ## Planning
 
@@ -35,7 +39,7 @@ The planner runs before each job and picks a model and a pace:
 - **The week is paced, not only each window.** On or behind the weekly pace, each short window may run to its ceiling; ahead of pace, the short-window ceiling drops, so the week's limit is not spent by day three and the owner's own sessions on the same account are not locked out.
 - **No reading is not a free pass.** A usage reading is trusted for a limited age (shorter for a second parallel start). While none is trusted, one build runs at a time; after an outage of a few hours the planner's own token accounting refuses again and the owner is notified once.
 - **A job that cannot start for a reason of its own never idles a slot:** the slot takes the next job that fits and says why the first waits.
-- When an account is out, it falls back in the [order of use](#order-of-use): to the next account of the same vendor and role by priority, then across vendors within the same step, then to the next step; it records that a catch-up review is owed when a review changed vendor. Each switch is shown on the dashboard.
+- When an account is out, it falls back as [order of use](#order-of-use) says: a build to the next account of the same vendor and role by priority, then across vendors within the same step, then to the next step; a review through every account of its vendor first, then to a substitute of another vendor, recording that a catch-up review is owed. Each switch is shown on the dashboard.
 
 Pacing goal: each window should end near its ceiling. The dashboard shows the forecast, so an owner can see whether capacity is being wasted.
 

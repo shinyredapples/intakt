@@ -26,7 +26,7 @@ flowchart TD
 ## Backing up
 
 Back up the data volume. Two ways:
-- **Quick and safe:** pause Intakt from the dashboard (running jobs finish, nothing new starts), copy the volume, resume.
+- **Quick and safe:** pause Intakt from the dashboard and wait until nothing is running, then stop the container (`docker stop intakt`), copy the volume and start it again (`docker start intakt`). A pause alone is not enough: approved work still merges during a pause, which writes to the volume, and a pause ends by itself at the time you chose.
 - **Without pausing:** take a consistent copy of the database with SQLite's own backup command, and copy the config file, the keys and the secrets vault next to it.
 
 Treat the backup like a password manager's file: it holds keys. Store it encrypted.
@@ -34,9 +34,10 @@ Treat the backup like a password manager's file: it holds keys. Store it encrypt
 ## Moving to another machine
 
 1. Pause Intakt and wait until nothing is running.
-2. Copy the data volume to the new machine.
-3. Start Intakt there with the same volume; it picks up where it stopped.
-4. Remove the old container, so two copies never run against the same repositories.
+2. Stop the old container (`docker stop intakt`), so nothing writes to the volume while you copy it and the pause can't run out and start new work.
+3. Copy the data volume to the new machine.
+4. Start Intakt there with the same volume; it picks up where it stopped.
+5. Remove the old container, so two copies never run against the same repositories.
 
 ## Uninstalling
 
