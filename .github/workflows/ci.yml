@@ -13,6 +13,9 @@ permissions:
 # Each job runs where the repository variable CI_RUNS_ON says: unset, on GitHub's ubuntu-24.04; set to a JSON label list
 # such as ["self-hosted","linux","x64","intakt-ci"], on a self-hosted runner. Every job is fork-guarded (it runs for a push
 # to main and for pull requests from this repository only), so a fork's pull request never reaches a self-hosted runner.
+# A self-hosted runner must be ephemeral (a clean machine state for every job, registered --ephemeral) with no network
+# path to the owner's other machines: a same-repository pull request runs its own workflow and scripts there with Docker
+# access, and only a clean state keeps that from reaching a later job. A persistent self-hosted runner is not supported.
 jobs:
   # bin/check runs in the CI image (.github/ci/Dockerfile: the PHP image pinned by digest plus the tools bin/check needs),
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
@@ -60,7 +63,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
-  # configuration, the dependencies, the CI definition, or added lines naming Doctrine anywhere in src/. Every push to
+  # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), or added lines naming Doctrine anywhere in src/. Every push to
   # main runs the engines regardless, so a change this filter misses is caught on main.
   changes:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
@@ -91,7 +94,7 @@ jobs:
           git diff --name-only "$base" "$HEAD_SHA" > "$RUNNER_TEMP/changed-paths"
           git diff "$base" "$HEAD_SHA" -- src > "$RUNNER_TEMP/src.diff"
           touched=no
-          if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/workflows/)' "$RUNNER_TEMP/changed-paths" > /dev/null; then touched=yes
+          if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/(workflows|ci)/)' "$RUNNER_TEMP/changed-paths" > /dev/null; then touched=yes
           elif grep -E '^\+.*(Doctrine|ORM\\)' "$RUNNER_TEMP/src.diff" > /dev/null; then touched=yes
           fi
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
