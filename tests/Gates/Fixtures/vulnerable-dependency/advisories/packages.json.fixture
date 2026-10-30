@@ -1,4 +1,5 @@
 {
+    "_readme": ["fixture: the metadata-url is relative because Composer resolves it against the working directory, the sandbox root the gate runs in, and a static fixture cannot hold an absolute path"],
     "packages": [],
     "metadata-url": "advisories/p2/%package%.json",
     "available-packages": ["symfony/http-kernel"],
