@@ -17,7 +17,7 @@ flowchart TD
 |---|---|---|
 | **The database** | every task's state, the record of every decision, budgets, project memory | Intakt forgets its history; your code and pull requests on GitHub are untouched |
 | **The config file** | your settings | you redo the setup wizard |
-| **Its keys** | the App's private key, the signing key, AI logins | you reconnect the App and log in again |
+| **Its keys** | the App's private key, the signing key, AI tokens and logins | you reconnect the App and paste new tokens or log in again |
 | **The repository copies** | a mirror of each project | nothing: rebuilt from GitHub |
 | **Caches** | images and downloads | nothing: rebuilt, just slower once |
 

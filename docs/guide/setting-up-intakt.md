@@ -11,7 +11,7 @@ flowchart TD
   run[Start the container] --> open[Open the dashboard]
   open --> repo[1. Enter your repository]
   repo --> app[2. Create Intakt's own GitHub identity<br/>one click to confirm]
-  app --> ai[3. Log in to your AI accounts]
+  app --> ai[3. Add your AI accounts]
   ai --> read[4. Intakt reads your project]
   read --> defaults[5. Confirm the proposed defaults]
   defaults --> go[It starts on tasks labeled intakt]

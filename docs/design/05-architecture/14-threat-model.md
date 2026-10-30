@@ -48,7 +48,7 @@ Every model output is untrusted too: it is validated against its schema before u
 ### Planner (strong-tier plan for a cheaper build)
 - **Reads:** the task text with its fenced external blocks, and the code at main; both are untrusted.
 - **Can:** read-only repository tools (read, search) within a turn cap; no writes, no network beyond its vendor, no credentials of the project or the forge.
-- **Holds:** its vendor's login only.
+- **Holds:** the credential of the one account it runs on only (an automation token, or a login file mounted read-only).
 - **Checks:** its output is a plan capped in size, which reaches the builder fenced as another model's advice, never as the task ([Budget and model planner](06-budget-and-model-planner.md)). It is advice only: it cannot pick a model, make a task eligible or approve anything, and the build it informs is checked, reviewed and merged like any other, so a steered plan can only produce a build that the same gates judge.
 
 ### Triage and sizing

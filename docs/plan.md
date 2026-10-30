@@ -131,7 +131,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 ### T14 Provider limits and substitutes
 - **Description:** A rate-limited or failing provider puts its account in cooldown until the reset time; the reviewer moves to the next account of the same vendor and role by priority, and only when every such account is out does the panel substitute a reviewer from the same tier on another provider and record that a catch-up review is owed.
 - **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason.
-- **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up.
+- **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up; and a round with one of two same-vendor accounts out, showing the move to the other account and no catch-up owed.
 - **Symfony:** provider failover through `FailoverPlatform`, wrapped by Intakt's own class that records the switch and does not rely on it alone; per-account cooldowns as RateLimiter windows aligned to the vendor's reset; Scheduler ticks for usage probes and deadlines.
 - **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 

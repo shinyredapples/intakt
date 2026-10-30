@@ -12,7 +12,7 @@ You can give Intakt any mix of these, per AI company, and it treats them as one 
 | **API key** (personal or company) | per token used | a monthly or daily spending cap that you set |
 | **Cloud sessions** (where a company offers them) | usually per use | the same caps, and where each job ran |
 
-If a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each login.
+If a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
 
 You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately and puts them in the order you choose.
 
