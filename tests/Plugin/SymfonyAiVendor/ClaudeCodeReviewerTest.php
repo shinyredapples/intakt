@@ -240,6 +240,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer,new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
     }
 }

@@ -352,7 +352,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, self::createStub(TierResolver::class), $this->reviewer(),new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+        $vendor = new SymfonyAiVendor($tiers, self::createStub(TierResolver::class), $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
