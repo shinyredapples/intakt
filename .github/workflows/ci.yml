@@ -10,64 +10,64 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+# Each job runs where the repository variable CI_RUNS_ON says: unset, on GitHub's ubuntu-24.04; set to a JSON label list
+# such as ["self-hosted","linux","x64","intakt-ci"], on a self-hosted runner. Every job is fork-guarded (it runs for a push
+# to main and for pull requests from this repository only), so a fork's pull request never reaches a self-hosted runner.
+# A self-hosted runner must be ephemeral (a clean machine state for every job, registered --ephemeral) with no network
+# path to the owner's other machines: a same-repository pull request runs its own workflow and scripts there with Docker
+# access, and only a clean state keeps that from reaching a later job. A persistent self-hosted runner is not supported.
 jobs:
+  # bin/check runs in the CI image (.github/ci/Dockerfile: the PHP image pinned by digest plus the tools bin/check needs),
+  # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
   check:
-    runs-on: ubuntu-24.04
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
-        with:
-          php-version: '8.5'
-          extensions: ctype, iconv, pdo_sqlite, sqlite3
-          coverage: none
-          tools: composer:v2
-      - name: Require PHP 8.5.12 or later (fixes PHP2Shell, CVE-2026-109618 and CVE-2026-109619)
-        run: |
-          php -r 'echo PHP_VERSION, PHP_EOL; exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/composer/files
-          key: composer-${{ hashFiles('composer.lock') }}
-          restore-keys: composer-
-      - name: Install the locked dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
-      - name: Install the pinned gitleaks
-        run: |
-          set -euo pipefail
-          version=8.30.1
-          checksum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          directory="$RUNNER_TEMP/gitleaks-$version"
-          mkdir -p "$directory"
-          curl -fsSL -o "$directory/gitleaks.tar.gz" "https://github.com/gitleaks/gitleaks/releases/download/v$version/gitleaks_${version}_linux_x64.tar.gz"
-          echo "$checksum  $directory/gitleaks.tar.gz" | sha256sum --check --strict
-          tar -xzf "$directory/gitleaks.tar.gz" -C "$directory" gitleaks
-          echo "$directory" >> "$GITHUB_PATH"
-      # The gate tests contain processes in a user namespace, which Ubuntu 24.04 restricts for unprivileged users by default.
-      # Only for GitHub-hosted runners, which are discarded after the job: never copy this step to a self-hosted runner.
+      # Ubuntu 24.04 restricts user namespaces for unprivileged users by default. Only for GitHub-hosted runners, which
+      # are discarded after the job: never on a self-hosted runner.
       - name: Allow unprivileged user namespaces
+        if: runner.environment == 'github-hosted'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # bin/check runs every gate, the tests on SQLite included. On a pull request the change is read against the
-      # target branch, and GitHub's synthetic test merge commit is exempt from the commit-subject gate.
-      - name: Run the gates on a pull request
-        if: github.event_name == 'pull_request'
+      - name: Build the CI image
+        run: .github/ci/build-image.sh
+      # The gate tests run processes in a new user namespace and mount a fresh /proc there. The seccomp profile is
+      # Docker's default plus unshare (only together with a new user namespace) and mount. systempaths=unconfined is
+      # needed because the kernel refuses a new /proc in a user namespace while Docker's masks cover parts of the old
+      # one. Docker's AppArmor profile forbids mount, so it is lifted where the host has AppArmor (GitHub-hosted).
+      # On a pull request the change is read against the target branch, and GitHub's synthetic test merge commit is
+      # exempt from the commit-subject gate.
+      - name: Run the gates
         env:
+          EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           MERGE_SHA: ${{ github.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bin/check --base="origin/$BASE_REF" --test-merge="$MERGE_SHA:$HEAD_SHA"
-      - name: Run the gates on main
-        if: github.event_name == 'push'
-        run: bin/check --base=origin/main
+        run: |
+          set -eu
+          if [ "$EVENT" = pull_request ]; then
+            set -- --base="origin/$BASE_REF" --test-merge="$MERGE_SHA:$HEAD_SHA"
+          else
+            set -- --base=origin/main
+          fi
+          apparmor=
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          docker run --rm --user 1000:1000 \
+            --security-opt seccomp=.github/ci/seccomp-userns.json \
+            --security-opt systempaths=unconfined \
+            $apparmor \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
-  # configuration, the dependencies, the CI definition, or added lines naming Doctrine anywhere in src/. Every push to
+  # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), or added lines naming Doctrine anywhere in src/. Every push to
   # main runs the engines regardless, so a change this filter misses is caught on main.
   changes:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     outputs:
       persistence: ${{ steps.paths.outputs.persistence }}
@@ -78,31 +78,40 @@ jobs:
           persist-credentials: false
       - id: paths
         env:
+          EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          if [ "$EVENT" = push ]; then
+            echo "persistence=true" >> "$GITHUB_OUTPUT"
+            echo "persistence engines needed: always on main"
+            exit 0
+          fi
           # Each diff is saved first and must succeed (set -e), so a failing git or an early-exiting grep can never
-          # read as "untouched"; any doubt runs the engines.
+          # read as "untouched"; it fails this job, and the run with it.
           base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
           git diff --name-only "$base" "$HEAD_SHA" > "$RUNNER_TEMP/changed-paths"
           git diff "$base" "$HEAD_SHA" -- src > "$RUNNER_TEMP/src.diff"
           touched=no
-          if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/workflows/)' "$RUNNER_TEMP/changed-paths" > /dev/null; then touched=yes
+          if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/(workflows|ci)/)' "$RUNNER_TEMP/changed-paths" > /dev/null; then touched=yes
           elif grep -E '^\+.*(Doctrine|ORM\\)' "$RUNNER_TEMP/src.diff" > /dev/null; then touched=yes
           fi
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
-  # The persistence group on each supported engine; bin/check keeps running it on SQLite. The job runs in a container
-  # so the database is reached by its service name, and the databases take no password (throwaway, never published).
-  # On a pull request it runs only when the changes job says the change touches persistence (or could not tell); always on main.
+  # The persistence group on each supported engine; bin/check keeps running it on SQLite. The tests run in the CI image
+  # as uid 1000 on the network the runner creates for the job's services, and reach the database by its service name;
+  # no port is published and there is no job container, so no Docker socket inside. The databases take no password
+  # (throwaway, never published).
+  # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database service instead:
+  # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
+  # job that fails skips the engines and fails the run.
   persistence:
     name: persistence (${{ matrix.name }})
     needs: changes
-    if: ${{ !cancelled() && (github.event_name == 'push' || needs.changes.result != 'success' || needs.changes.outputs.persistence == 'true') }}
-    runs-on: ubuntu-24.04
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
-    container: ubuntu:24.04
     strategy:
       fail-fast: false
       matrix:
@@ -110,36 +119,32 @@ jobs:
           - name: mysql 8.4
             image: mysql:8.4
             scheme: mysql
-            port: 3306
+            port: '3306'
             user: root
-            extension: pdo_mysql
             health: mysqladmin ping --silent
             open_switch: MYSQL_ALLOW_EMPTY_PASSWORD
             open_value: 'yes'
           - name: mariadb 11.4
             image: mariadb:11.4
             scheme: mysql
-            port: 3306
+            port: '3306'
             user: root
-            extension: pdo_mysql
             health: healthcheck.sh --connect --innodb_initialized
             open_switch: MARIADB_ALLOW_EMPTY_ROOT_PASSWORD
             open_value: 'yes'
           - name: postgresql 17
             image: postgres:17
             scheme: postgresql
-            port: 5432
+            port: '5432'
             user: postgres
-            extension: pdo_pgsql
             health: pg_isready --username=postgres
             open_switch: POSTGRES_HOST_AUTH_METHOD
             open_value: trust
     env:
-      # The test environment appends _test to the database name of the URL, so the service creates intakt_test and the URL names intakt.
-      DATABASE_NAME: intakt
+      ENGINES: ${{ needs.changes.outputs.persistence }}
     services:
       database:
-        image: ${{ matrix.image }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && matrix.image || '' }}
         env:
           MYSQL_DATABASE: intakt_test
           MARIADB_DATABASE: intakt_test
@@ -151,23 +156,20 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
-      - name: Install git and unzip for the checkout and Composer
-        run: apt-get update && apt-get install --yes --no-install-recommends ca-certificates curl git unzip
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.ENGINES == 'true'
         with:
           persist-credentials: false
-      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
-        with:
-          php-version: '8.5'
-          extensions: ctype, iconv, pdo_sqlite, sqlite3, ${{ matrix.extension }}
-          coverage: none
-          tools: composer:v2
-      - name: Require PHP 8.5.12 or later (fixes PHP2Shell, CVE-2026-109618 and CVE-2026-109619)
-        run: |
-          php -r 'echo PHP_VERSION, PHP_EOL; exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
-      - name: Install the locked dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Build the CI image
+        if: env.ENGINES == 'true'
+        run: .github/ci/build-image.sh
+      # The test environment appends _test to the database name of the URL, so the service creates intakt_test and the URL names intakt.
       - name: Run the persistence group on ${{ matrix.name }}
+        if: env.ENGINES == 'true'
         env:
-          DATABASE_URL: ${{ matrix.scheme }}://${{ matrix.user }}@database:${{ matrix.port }}/${{ env.DATABASE_NAME }}
-        run: vendor/bin/phpunit --group persistence
+          DATABASE_URL: ${{ matrix.scheme }}://${{ matrix.user }}@database:${{ matrix.port }}/intakt
+          SERVICE_NETWORK: ${{ job.services.database.network }}
+        run: |
+          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
