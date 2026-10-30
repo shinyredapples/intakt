@@ -38,7 +38,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 | CI | GitHub hasn't finished the checks yet |
 | on hold | it needs something outside the task; it comes back by itself |
 
-**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. Buttons let you **stop** the job, **continue** it, or **send it back with a note**.
+**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
 
 ## Waiting on you
 
@@ -77,7 +77,7 @@ flowchart TD
 ## Around the board
 
 - **Lanes and slots** (a strip above the board): each builder slot and the review lane, and what each is working on right now.
-- **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast at the next reset.
+- **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast for the rest of the window. When a window resets shows only in the admin area.
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
@@ -85,10 +85,10 @@ flowchart TD
 
 ## Steering budgets and pauses
 
-The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. Only you can use it:
-- On the first start, you type the one-time setup code from `docker logs intakt`, and Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change in the admin area asks for it.
-- The dashboard only answers on the computer it runs on, unless you turn on phone access, which needs HTTPS and the same secret or passkey.
-- Another website open in your browser can't change anything, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
+The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. Only you can change anything on the dashboard:
+- On the first start, you type the one-time setup code from `docker logs intakt`, and Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change asks for it: the admin area and the buttons on a card alike. Without it, the dashboard shows a login page and changes nothing.
+- The dashboard only answers on the computer it runs on, so there you can look at the board without logging in. If you turn on phone access, which needs HTTPS, everything asks for the same secret or passkey, even looking at the board: someone else on the network sees only the login page.
+- Another website open in your browser can't press a button or change a setting, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
 
 ### Every change ends by itself
 
