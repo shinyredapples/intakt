@@ -150,6 +150,34 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testConsecutiveDoubleStarsBetweenSlashesMatchNoFolderAtAll(): void
+    {
+        $panel = $this->securityRule('src/**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, ['src/Security/Door.php'], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testConsecutiveDoubleStarsBetweenSlashesMatchANestedFolder(): void
+    {
+        $panel = $this->securityRule('src/**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, ['src/a/Security/Door.php'], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testConsecutiveLeadingDoubleStarsMatchAFolderAtTheRoot(): void
+    {
+        $panel = $this->securityRule('**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, ['Security/Door.php'], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testConsecutiveLeadingDoubleStarsDoNotMatchAFolderThatOnlyEndsInTheName(): void
+    {
+        $panel = $this->securityRule('**/**/Security/**')->panelForChange('alpha', new ChangeDescription(1, ['NoSecurity/Door.php'], []));
+
+        self::assertSame(['correctness'], $this->roles($panel));
+    }
+
     public function testAOneCharacterWildcardMatchesOneCharacterOfAUtf8Path(): void
     {
         $panel = new ConfiguredPanels(['alpha' => [
@@ -197,19 +225,20 @@ final class ConfiguredPanelsTest extends TestCase
 
     private function nested(): ConfiguredPanels
     {
-        return new ConfiguredPanels(['alpha' => [
-            'quorum' => 'all',
-            'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => ['src/**/Security/**'], 'reviewers' => [$this->reviewer('security')]]],
-        ]]);
+        return $this->securityRule('src/**/Security/**');
     }
 
     private function anywhere(): ConfiguredPanels
     {
+        return $this->securityRule('**/Security/**');
+    }
+
+    private function securityRule(string $glob): ConfiguredPanels
+    {
         return new ConfiguredPanels(['alpha' => [
             'quorum' => 'all',
             'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => ['**/Security/**'], 'reviewers' => [$this->reviewer('security')]]],
+            'rules' => [['paths' => [$glob], 'reviewers' => [$this->reviewer('security')]]],
         ]]);
     }
 

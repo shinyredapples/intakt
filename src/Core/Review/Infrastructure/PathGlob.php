@@ -21,11 +21,17 @@ final readonly class PathGlob
     private function pattern(): string
     {
         // Anchored; "*" and "?" stop at a slash, "/**/" (a leading "**/" too, by the added slash) may match no folder as in gitignore, "[\s\S]" because git allows a newline in a name.
-        return '#\A'.strtr(preg_quote('/'.$this->glob, '#'), [
+        return '#\A'.strtr(preg_quote($this->withOneDoubleStarPerRun(), '#'), [
             '/\*\*/' => '/(?:[\s\S]*/)?',
             '\*\*' => '[\s\S]*',
             '\*' => '[^/]*',
             '\?' => '[^/]',
         ]).'\z#';
+    }
+
+    private function withOneDoubleStarPerRun(): string
+    {
+        // Consecutive "**/" segments share a slash that the "/**/" translation would consume, so the second one would demand a folder.
+        return (string) preg_replace('#(?:\*\*/)+#', '**/', '/'.$this->glob);
     }
 }
