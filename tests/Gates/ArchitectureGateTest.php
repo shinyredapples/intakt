@@ -48,6 +48,11 @@ final class ArchitectureGateTest extends SandboxTestCase
         $this->assertRejectedBy('architecture', 'handler-in-kernel', 'use AsCommandHandler or AsQueryHandler');
     }
 
+    public function testAHandlerUsingAsMessageHandlerInLowercaseFails(): void
+    {
+        $this->assertRejectedBy('architecture', 'handler-lowercase', 'use AsCommandHandler or AsQueryHandler');
+    }
+
     public function testThePlatformContractMayUseAsMessageHandler(): void
     {
         $this->assertAcceptedBy('architecture', 'handler-contract');

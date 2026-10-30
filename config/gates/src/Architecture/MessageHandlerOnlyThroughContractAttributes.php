@@ -28,7 +28,8 @@ final class MessageHandlerOnlyThroughContractAttributes implements Expression
         }
 
         foreach ($theClass->getDependencies() as $dependency) {
-            if (AsMessageHandler::class !== $dependency->getFQCN()->toString()) {
+            // PHP resolves class names case-insensitively, so `asmessagehandler` is the same attribute.
+            if (0 !== strcasecmp(AsMessageHandler::class, $dependency->getFQCN()->toString())) {
                 continue;
             }
 
