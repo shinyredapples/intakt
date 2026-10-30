@@ -30,6 +30,21 @@ final class ArchitectureGateTest extends SandboxTestCase
         $this->assertRejectedBy('architecture', 'domain-uses-use-case', 'PlaceOrderHandler');
     }
 
+    public function testAHandlerUsingAsMessageHandlerDirectlyFails(): void
+    {
+        $this->assertRejectedBy('architecture', 'handler-direct', 'use AsCommandHandler or AsQueryHandler');
+    }
+
+    public function testAHandlerUsingAsMessageHandlerThroughAnAliasFails(): void
+    {
+        $this->assertRejectedBy('architecture', 'handler-through-alias', 'use AsCommandHandler or AsQueryHandler');
+    }
+
+    public function testThePlatformContractMayUseAsMessageHandler(): void
+    {
+        $this->assertAcceptedBy('architecture', 'handler-contract');
+    }
+
     public function testAClassWhoseFolderDoesNotMatchItsNamespaceFails(): void
     {
         $this->assertRejectedBy('architecture', 'class-in-wrong-folder', 'is not in src/Core/Order/Domain/Placed.php');

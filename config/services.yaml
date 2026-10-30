@@ -23,3 +23,13 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+when@test:
+    services:
+        _defaults:
+            autowire: true
+            autoconfigure: true
+
+        # Handlers that prove the bus separation; they live in tests/ because src/ has no handler yet.
+        Intakt\Tests\Core\Platform\Handler\:
+            resource: '../tests/Core/Platform/Handler/'
