@@ -14,7 +14,7 @@ projects:
                 - { role: correctness, tier: strong, provider: anthropic, prompt: Check that the change does what the task asks., budget: 10 }
                 - { role: maintainability, tier: standard, provider: anthropic, prompt: Check that the code reads clearly., budget: 6 }
             # Optional rules add reviewers to a change with at least min_lines changed lines or a path matching one of paths
-            # ("*" stays in one folder, "**" crosses folders); the label review:full applies every rule.
+            # ("*" stays in one folder, "**" crosses folders, "/**/" also matches none); the label review:full applies every rule.
             rules:
                 - paths: [config/**, src/**/Security/**]
                   reviewers:

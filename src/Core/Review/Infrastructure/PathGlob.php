@@ -21,11 +21,12 @@ final readonly class PathGlob
     private function pattern(): string
     {
         // Anchored on the whole path; "**" crosses folders while "*" and "?" stop at a slash, so "src/*" does not reach "src/a/b.php".
-        $parts = array_map(
-            static fn (string $part): string => str_replace(['\*', '\?'], ['[^/]*', '[^/]'], preg_quote($part, '#')),
-            explode('**', $this->glob),
-        );
-
-        return '#\A'.implode('.*', $parts).'\z#';
+        // "/**/" also matches no folder, as in gitignore; "[\s\S]" because git allows a newline in a file name.
+        return '#\A'.strtr(preg_quote($this->glob, '#'), [
+            '/\*\*/' => '/(?:[\s\S]*/)?',
+            '\*\*' => '[\s\S]*',
+            '\*' => '[^/]*',
+            '\?' => '[^/]',
+        ]).'\z#';
     }
 }

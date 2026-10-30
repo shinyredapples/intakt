@@ -101,6 +101,34 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness', 'security'], $this->roles($panel));
     }
 
+    public function testAChangedPathWithANewlineStillMatchesADoubleStarGlob(): void
+    {
+        $panel = $this->ruled()->panelForChange('alpha', new ChangeDescription(1, ["config/security/a\nb.php"], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testADoubleStarBetweenSlashesMatchesNoFolderAtAll(): void
+    {
+        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, ['src/Security/Door.php'], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testADoubleStarBetweenSlashesMatchesNestedFoldersWithANewline(): void
+    {
+        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, ["src/x\ny/Security/a.php"], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testADoubleStarBetweenSlashesDoesNotMatchAFolderThatOnlyEndsInTheName(): void
+    {
+        $panel = $this->nested()->panelForChange('alpha', new ChangeDescription(1, ['src/NoSecurity/Door.php'], []));
+
+        self::assertSame(['correctness'], $this->roles($panel));
+    }
+
     public function testAOneCharacterWildcardMatchesOneCharacterOfAUtf8Path(): void
     {
         $panel = new ConfiguredPanels(['alpha' => [
@@ -143,6 +171,15 @@ final class ConfiguredPanelsTest extends TestCase
                 ['min_lines' => 100, 'reviewers' => [$this->reviewer('big')]],
                 ['paths' => ['config/security/**', 'docs/*.md'], 'reviewers' => [$this->reviewer('security')]],
             ],
+        ]]);
+    }
+
+    private function nested(): ConfiguredPanels
+    {
+        return new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [$this->reviewer('correctness')],
+            'rules' => [['paths' => ['src/**/Security/**'], 'reviewers' => [$this->reviewer('security')]]],
         ]]);
     }
 
