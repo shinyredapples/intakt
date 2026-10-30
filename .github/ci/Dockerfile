@@ -9,7 +9,7 @@ ARG GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f24
 
 RUN set -eu; \
     apt-get update; \
-    apt-get install --yes --no-install-recommends git iproute2 libpq-dev python3 unzip; \
+    apt-get install --yes --no-install-recommends git iproute2 jq libpq-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
     docker-php-ext-install -j"$(nproc)" pdo_mysql pdo_pgsql; \
     echo 'memory_limit=-1' > "$PHP_INI_DIR/conf.d/ci.ini"; \
