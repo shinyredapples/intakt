@@ -69,23 +69,23 @@ final readonly class FlagParameterRule implements Rule
             && $class instanceof ClassReflection
             && $class->isReadOnly()
             && $this->registration->excludes($class)
-            && $this->isOnlyStored($parameter, $node);
+            && $this->isOnlyStored($parameter, $node, $class);
     }
 
     // any call, eval or include can read the arguments out of sight (a backtrace, an exception trace, the local scope), and naming every way never ends, so a boolean is kept as it is only by a body of plain $this->x = $y statements that hands $x to none or exactly one of them
-    private function isOnlyStored(Param $parameter, ClassMethod $constructor): bool
+    private function isOnlyStored(Param $parameter, ClassMethod $constructor, ClassReflection $class): bool
     {
         $name = $this->nameOf($parameter);
         $statements = $constructor->stmts ?? [];
 
-        if (null === $name || !array_all($statements, $this->isPlainAssignment(...))) {
+        if (null === $name || !array_all($statements, fn (Stmt $statement): bool => $this->isPlainAssignment($statement, $class))) {
             return false;
         }
 
         return ($parameter->isPromoted() ? 0 : 1) === $this->variableUses($statements, $name);
     }
 
-    private function isPlainAssignment(Stmt $statement): bool
+    private function isPlainAssignment(Stmt $statement, ClassReflection $class): bool
     {
         $assign = $statement instanceof Expression ? $statement->expr : null;
 
@@ -94,8 +94,16 @@ final readonly class FlagParameterRule implements Rule
             && $assign->var->var instanceof Variable
             && 'this' === $assign->var->var->name
             && $assign->var->name instanceof Identifier
+            && $this->declares($class, $assign->var->name->toString())
             && $assign->expr instanceof Variable
             && is_string($assign->expr->name);
+    }
+
+    // PHP hands an assignment to a property the class does not declare itself (undeclared, or private to a parent) to __set(), which can read the value
+    private function declares(ClassReflection $class, string $property): bool
+    {
+        return $class->hasNativeProperty($property)
+            && $class->getNativeProperty($property)->getDeclaringClass()->getName() === $class->getName();
     }
 
     /**
