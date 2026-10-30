@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\Architecture\MessageHandlerOnlyThroughContractAttributes;
 use Intakt\Gates\ArchitectureGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(ArchitectureGate::class)]
+#[UsesClass(MessageHandlerOnlyThroughContractAttributes::class)]
 final class ArchitectureGateTest extends SandboxTestCase
 {
     public function testModulesThatKeepToTheirLayersPass(): void

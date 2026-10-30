@@ -6,10 +6,15 @@ namespace Intakt\Tests\Core\Platform;
 
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
+use Intakt\Core\Platform\Contract\Bus;
 use Intakt\Tests\Core\Platform\Handler\FindThing;
+use Intakt\Tests\Core\Platform\Handler\FindThingHandler;
 use Intakt\Tests\Core\Platform\Handler\Ping;
+use Intakt\Tests\Core\Platform\Handler\PingHandler;
 use Intakt\Tests\Core\Platform\Handler\RenameThing;
+use Intakt\Tests\Core\Platform\Handler\RenameThingHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Exception\NoHandlerForMessageException;
 use Symfony\Component\Messenger\HandleTrait;
@@ -17,6 +22,13 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 #[CoversClass(AsCommandHandler::class)]
 #[CoversClass(AsQueryHandler::class)]
+#[UsesClass(Bus::class)]
+#[UsesClass(RenameThing::class)]
+#[UsesClass(RenameThingHandler::class)]
+#[UsesClass(FindThing::class)]
+#[UsesClass(FindThingHandler::class)]
+#[UsesClass(Ping::class)]
+#[UsesClass(PingHandler::class)]
 final class BusSeparationTest extends KernelTestCase
 {
     use HandleTrait;
