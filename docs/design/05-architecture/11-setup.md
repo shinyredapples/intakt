@@ -11,4 +11,6 @@ Then open the dashboard. The port is published on loopback only; phone access is
 4. reads the project (see "New and existing projects") to propose the toolchain, job image and check command, and runs the check once; an empty repository goes to the foundation flow instead;
 5. proposes defaults (one build slot, at most two built heads waiting for review, so builds cannot outrun reviews, label `intakt`), and writes one config file that the owner can edit later.
 
+The `intakt` volume at `/data` survives an image update. Among Intakt's state it holds `/data/secrets` (the runtime secrets vault for credentials saved in the admin area, see [Dashboard](13-dashboard.md#accounts)) and `/data/keys` (the forge App's private key, the signing key and the runtime vault's decryption key, readable by the orchestrator's user only and never mounted into a job).
+
 Podman works through its Docker-compatible socket. Rootless mode is the default where available.
