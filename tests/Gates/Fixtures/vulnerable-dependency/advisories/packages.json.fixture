@@ -1,0 +1,6 @@
+{
+    "packages": [],
+    "metadata-url": "advisories/p2/%package%.json",
+    "available-packages": ["symfony/http-kernel"],
+    "security-advisories": {"metadata": true}
+}
