@@ -64,7 +64,7 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 - The **review panel** is the set of reviewers for a change: a fixed core panel plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 - A **stand-in** steps in when a reviewer's account is over its limit: first the same company's next account, if you added one; when every account of that company is out, another company's reviewer reviews in its place, so work doesn't stall.
-- A **catch-up review** is the missing reviewer's review, done later once its company is available again. It never blocks a merge; if it finds a real problem, that becomes a new task.
+- A **catch-up review** is the missing reviewer's review, done later once its company is available again. Intakt runs it by itself and checks the change as it was merged. It never blocks a merge; if it finds a real problem, that becomes a new task the builders pick up, and smaller suggestions become a task for you to sort.
 
 ## Cycles and generations: second chances
 

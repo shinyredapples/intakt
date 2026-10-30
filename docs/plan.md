@@ -133,6 +133,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason.
 - **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up.
 - **Symfony:** provider failover through `FailoverPlatform`, wrapped by Intakt's own class that records the switch and does not rely on it alone; per-account cooldowns as RateLimiter windows aligned to the vendor's reset; Scheduler ticks for usage probes and deadlines.
+- **Catch-up:** a merge with a substitute's verdict queues the missing reviewer's catch-up of the merged change, run automatically once its vendor has room ([Reviews](design/05-architecture/07-reviews.md)); a rejection is filed as a new ready task naming the pull request, an approval's follow-ups as one task for triage.
 - **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ## M3 Agents and memory
