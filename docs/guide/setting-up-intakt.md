@@ -19,7 +19,7 @@ flowchart TD
   defaults --> go[It starts on tasks labeled intakt]
 ```
 
-First, the dashboard asks for a one-time **setup code**: run `docker logs intakt` on the computer Intakt runs on and copy it from there, which proves the install is yours. Then Intakt creates your **owner secret** (shown once) or registers a passkey; only you can change its settings or press a card's buttons with it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). Then:
+First, the dashboard asks for a one-time **setup code**: run `docker logs intakt` on the computer Intakt runs on and copy it from there, which proves the install is yours. The code works once and expires an hour after it is printed; if it has expired, a command on that computer prints a new one. Then Intakt creates your **owner secret** (shown once) or registers a passkey; only you can change its settings or press a card's buttons with it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). Then:
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token.
