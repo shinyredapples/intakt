@@ -7,11 +7,11 @@
   </picture>
 </p>
 
-Give it a spec: AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI.
+The aim: give it a spec, and AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI. All of this is planned; [Status](#status) says what works today.
 
-- **What it does:** turns a spec into small tasks, has AI agents build each one, and merges what passes review.
-- **Why it is different:** a panel of reviewers from different providers returns structured verdicts, and findings keep their ids across rounds, so reviewers cannot move the goalposts.
-- **Why you can trust it:** it spends only the budget you give it, asks you only when a person is needed, and acts as its own forge identity, never as you.
+- **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review.
+- **Why it will be different:** a panel of reviewers from different providers will return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
+- **Why you will be able to trust it:** it is to spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
 **See it (planned):** a dashboard screenshot and a one to two minute recording of a review, from `docker compose up` to the judge's list and an AI assistant's call over MCP, will be added to `docs/assets/` once the dashboard and the compose setup are built. Until then, read the [demo walkthrough](docs/guide/demo-walkthrough.md).
 
