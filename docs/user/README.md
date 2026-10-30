@@ -142,3 +142,7 @@ Run `php bin/console intakt:vendor:probe` after you set or change a provider key
 ## What a reviewer can read
 
 A reviewer reads the change through three read-only tools: it can read a file, list a directory and search for text, all at the head under review and nothing else. A request for a file outside the repository (a `../` path, an absolute path, the `.git` folder, or a link pointing out of the checkout or into the `.git` folder) is refused with a message, and the file is never opened. A tool that fails, such as a file that does not exist or a binary file, gives the reviewer an error message and the review goes on. A search skips binary files and files over 1 MB, shortens very long matching lines and returns at most 100 matches; a listing of a very large directory is shortened too. The reviewer agent uses these tools; a request it makes that is refused or fails is answered with a message and the review goes on.
+
+## Releases
+
+The owner cuts each release: a signed tag on a green `main`, then a GitHub release with generated notes, marked pre-release before `v1.0.0`. A pull request is labeled `feat`, `fix` or `docs` from the type in its title, so the notes list it under Features, Fixes or Docs; anything else lands under "Other changes". No CHANGELOG file is kept. See [Releasing](../releasing.md).
