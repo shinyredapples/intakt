@@ -16,6 +16,8 @@ If a subscription can bill **overage** (extra usage past its allowance), Intakt 
 
 You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately and puts them in the order you choose.
 
+For a subscription, Intakt doesn't use the login you sign in with yourself. Where the AI company offers one, it uses a **long-lived token**: a key you create once for that account with the company's own tool (for Claude, `claude setup-token`) and paste into Intakt. It lets Intakt's agents use that subscription without your password or your personal session, and you can revoke it at any time. Where a company has no such token, Intakt keeps that account's login to itself and lends it to each job read-only.
+
 ## How it decides what to spend
 
 ```mermaid

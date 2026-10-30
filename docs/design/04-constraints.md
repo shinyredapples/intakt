@@ -9,7 +9,7 @@
 
 ## Security model
 
-- **Secrets stay in the orchestrator.** The forge token, signing key and vendor API keys never enter a job. Vendor subscription logins are mounted per job as a read-only credential, not a writable config dir.
+- **Secrets stay in the orchestrator.** The forge token, signing key and vendor API keys never enter a job. A subscription account reaches a job only as that one account's credential: its vendor's automation token where the vendor offers one, passed by the orchestrator, otherwise its login file mounted read-only, never a writable config dir ([Budget and model planner](05-architecture/06-budget-and-model-planner.md)).
 - **Cached credentials stay private.** Short-lived tokens the orchestrator or the dashboard caches live in a directory only their own user can read, never under a directory a web server serves, and are read with symlink and owner checks.
 - **Jobs are disposable.** A fresh container per job, read-only root filesystem, a tmpfs work area, no host mounts beyond its inputs, resource limits, and an egress allowlist.
 - **Every job has its own memory limit inside the shared one.** A build or CI job that runs away is killed alone, by its own limit, and recorded with cause `oom`, instead of exhausting a shared limit and taking unrelated jobs with it (one runaway test killed a CI job and a builder together). A job's limit is set from measured peaks, overcommitted on purpose, with the shared limit as the outer bound.
