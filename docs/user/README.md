@@ -9,13 +9,13 @@ Only the install check and the provider configuration below exist so far. The ot
 - Reviewing a pull request and reading the verdicts (planned)
 - Connecting an agent through MCP (planned)
 
-## Background work
-
-Intakt has two internal message buses, one for commands and one for questions. A command handler cannot answer a question and the reverse. No feature sends messages through them yet, so there is nothing to set up or watch; retries and failed-message handling arrive with the review loop.
-
 ## Reading a change from a local repository
 
 Intakt can treat a branch of a local git repository as a pull request: the branch is the change and the repository's base branch is what it is compared with. It reads the branch's latest commit, the diff against the point where the branch left the base, the list of changed files and any file as it was at that commit (by its exact name, even one starting with `:`), ignoring git's replacement refs (`git replace`) and graft file (`.git/info/grafts`), which could otherwise show other content under the same commit or hide commits. It reads the repository with its own git settings: the repository's configuration and attributes cannot run a program (a hook, a filter, a diff or signature tool, or a fetch from a remote the repository names for an object it lacks: such an object is an error, never fetched) or change what is read, every file in the diff is shown as text, and the git configuration of the user running Intakt (`~/.gitconfig`, even a broken one) is not read. A repository whose `.git/info/attributes` file exists cannot be read, because that file could hide a change and git offers no way to ignore it: remove it first. It notices when the branch has moved to a newer commit since it was read. A name that is not a valid branch name (such as `../tags/v1`) is treated like a branch that does not exist. It only reads; it never changes the repository. `php bin/console intakt:change:summarize <branch>` prints what it reads (see [Summarizing a branch](#summarizing-a-branch)); for an invalid name it prints the same error as for a missing branch and exits with 1.
+
+## Background work
+
+Intakt has two internal message buses, one for commands and one for questions. A command handler cannot answer a question and the reverse. No feature sends messages through them yet, so there is nothing to set up or watch; retries and failed-message handling arrive with the review loop.
 
 ## Checking that an install boots
 
