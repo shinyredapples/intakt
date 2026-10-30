@@ -79,7 +79,7 @@ So a change can never quietly switch off the check that would have caught it, an
 No system is perfect, and it is better to be clear about the limits:
 - A change that is **wrong but passes every check and every reviewer** can still be merged. More and better checks, and specialist reviewers for risky areas, shrink this; the dashboard's list and the record help you spot it.
 - Whatever the AI companies themselves see: the code under review is sent to their models, as with any AI coding tool.
-- Your own accounts: Intakt can't protect a GitHub account or AI login that is itself compromised.
+- Your own accounts: Intakt can't protect a GitHub account, AI token or AI login that is itself compromised.
 
 ## Prompt injection and third-party text
 

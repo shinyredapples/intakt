@@ -48,7 +48,7 @@ This is the only column that needs you. A card here and a notification on your p
 - a change to the project's rules that only you may approve;
 - a decision the maintainer agent couldn't make, with its options and recommendation;
 - a broken part of Intakt itself (red), such as an expired login, with the cause and since when;
-- a dated chore, such as renewing an AI login before it expires.
+- a dated chore, such as renewing an AI token or login before it expires.
 
 Anything Intakt or its maintainer agent can settle never shows up here.
 
@@ -119,4 +119,4 @@ Running jobs finish, nothing new starts, and finished work that is fully approve
 
 ### Accounts
 
-You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription login or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Intakt spends prepaid credit that is about to expire first, then your subscriptions, then paid usage up to your cap ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
+You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription (its long-lived token, or a login where the company has no such token) or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Intakt spends prepaid credit that is about to expire first, then your subscriptions, then paid usage up to your cap ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.

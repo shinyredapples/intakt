@@ -13,7 +13,7 @@ flowchart TD
   code --> owner[Create your owner secret<br/>or passkey]
   owner --> repo[1. Enter your repository]
   repo --> app[2. Create Intakt's own GitHub identity<br/>one click to confirm]
-  app --> ai[3. Log in to your AI accounts]
+  app --> ai[3. Add your AI accounts]
   ai --> read[4. Intakt reads your project]
   read --> defaults[5. Confirm the proposed defaults]
   defaults --> go[It starts on tasks labeled intakt]
@@ -23,7 +23,7 @@ First, the dashboard asks for a one-time **setup code**: run `docker logs intakt
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token.
-3. **AI accounts:** log in to each subscription, or paste an API key ([accounts and costs](accounts-and-costs.md)).
+3. **AI accounts:** for each subscription, paste its long-lived token (Intakt shows the command that creates it) or log in where the AI company has no such token; or paste an API key. You can add more than one account per company ([accounts and costs](accounts-and-costs.md)).
 4. **Reading the project:** see below.
 5. **Defaults:** one builder, at most two finished changes waiting for review, the label `intakt`. Everything ends up in one config file you can edit later.
 

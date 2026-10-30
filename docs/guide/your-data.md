@@ -8,7 +8,7 @@ Everything Intakt knows lives in one place, so it is easy to back up, move or re
 flowchart TD
   vol[(The intakt data volume)] --> db[The database<br/>SQLite: tasks, queue, the record,<br/>budgets, project memory]
   vol --> cfg[The config file<br/>projects, accounts, panels, routing]
-  vol --> keys[Its keys<br/>the GitHub App key, its signing key,<br/>AI logins and API keys]
+  vol --> keys[Its keys<br/>the GitHub App key, its signing key,<br/>AI tokens, logins and API keys]
   vol --> mirror[A copy of each repository<br/>rebuilt from GitHub if lost]
   vol --> cache[Caches<br/>job images, package downloads]
 ```
@@ -17,7 +17,7 @@ flowchart TD
 |---|---|---|
 | **The database** | every task's state, the record of every decision, budgets, project memory | Intakt forgets its history; your code and pull requests on GitHub are untouched |
 | **The config file** | your settings | you redo the setup wizard |
-| **Its keys** | the App's private key, the signing key, AI logins | you reconnect the App and log in again |
+| **Its keys** | the App's private key, the signing key, AI tokens and logins | you reconnect the App and paste new tokens or log in again |
 | **The repository copies** | a mirror of each project | nothing: rebuilt from GitHub |
 | **Caches** | images and downloads | nothing: rebuilt, just slower once |
 
