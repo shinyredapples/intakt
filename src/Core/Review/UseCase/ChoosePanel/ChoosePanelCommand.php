@@ -24,7 +24,13 @@ final readonly class ChoosePanelCommand
 
     public function __invoke(SymfonyStyle $io, #[MapInput] ChoosePanelInput $input): int
     {
-        $change = new ChangeDescription(max(0, $input->lines), $input->path, $input->label);
+        if ($input->lines < 0) {
+            $io->error('--lines must be zero or more.');
+
+            return Command::FAILURE;
+        }
+
+        $change = new ChangeDescription($input->lines, $input->path, $input->label);
 
         try {
             $panel = $this->panels->panelForChange($input->project, $change);

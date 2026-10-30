@@ -8,6 +8,8 @@ final readonly class Workflow
 {
     private const string DIRECTORY = __DIR__.'/../../.github/workflows';
 
+    private const string CI_DIRECTORY = __DIR__.'/../../.github/ci';
+
     /**
      * @return list<string>
      */
@@ -22,18 +24,11 @@ final readonly class Workflow
         return $lines;
     }
 
-    public static function runOf(string $step): string
+    public static function ciImageDefinition(): string
     {
-        $block = self::blockOf($step);
-        $start = array_search(true, array_map(static fn (string $line): bool => 1 === preg_match('/^\s+run: /', $line), $block), true);
+        $definition = file_get_contents(self::CI_DIRECTORY.'/Dockerfile');
 
-        if (!is_int($start)) {
-            return '';
-        }
-
-        $first = preg_replace('/^\s+run: \|?/', '', $block[$start]) ?? '';
-
-        return trim(implode("\n", [$first, ...array_map(static fn (string $line): string => substr($line, 10), array_slice($block, $start + 1))]));
+        return false === $definition ? '' : $definition;
     }
 
     /**
@@ -54,26 +49,5 @@ final readonly class Workflow
         $lines = file($file, FILE_IGNORE_NEW_LINES);
 
         return false === $lines ? [] : $lines;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private static function blockOf(string $step): array
-    {
-        $block = [];
-        $inside = false;
-
-        foreach (self::linesOf(self::DIRECTORY.'/ci.yml') as $line) {
-            if (1 === preg_match('/^\s+- /', $line)) {
-                $inside = str_contains($line, 'name: '.$step);
-            }
-
-            if ($inside) {
-                $block[] = $line;
-            }
-        }
-
-        return $block;
     }
 }

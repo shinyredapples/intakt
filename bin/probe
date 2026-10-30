@@ -84,7 +84,7 @@ enum Isolation: string
     case ByCaller = 'caller';
 
     // Without the variable the probe cannot know the caller isolates it, and without it, a run must never have the network open.
-    public static function fromVariable(string|false $value): self
+    public static function fromVariable(string $value): self
     {
         return '1' === $value ? self::ByCaller : self::ByUnshare;
     }
@@ -198,5 +198,5 @@ final readonly class Probe
 $script = $_SERVER['SCRIPT_FILENAME'] ?? '';
 
 if (is_string($script) && __FILE__ === realpath($script)) {
-    exit(new Probe(dirname(__DIR__), Isolation::fromVariable(getenv('PROBE_ISOLATED')), new Network())->run($argv[1] ?? ''));
+    exit(new Probe(dirname(__DIR__), Isolation::fromVariable((string) getenv('PROBE_ISOLATED')), new Network())->run($argv[1] ?? ''));
 }

@@ -86,6 +86,17 @@ final class ChoosePanelCommandTest extends TestCase
         self::assertStringContainsString(new PanelNotConfigured('nowhere')->getMessage(), $tester->getDisplay());
     }
 
+    public function testANegativeLinesOptionIsRefusedWithoutChoosingAPanel(): void
+    {
+        $tester = $this->tester();
+
+        $status = $tester->execute(['project' => 'alpha', '--lines' => '-1']);
+
+        self::assertSame(Command::FAILURE, $status);
+        self::assertStringContainsString('--lines must be zero or more', $tester->getDisplay());
+        self::assertStringNotContainsString('quorum', $tester->getDisplay());
+    }
+
     private function tester(): CommandTester
     {
         $panels = new ConfiguredPanels(['alpha' => [
