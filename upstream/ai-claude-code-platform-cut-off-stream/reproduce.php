@@ -7,7 +7,7 @@ use Symfony\AI\Platform\Bridge\ClaudeCode\ResultConverter;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\Component\Process\Process;
 
-// The first lines of a CLI run that stops before its final `type=result` event.
+// No `type=result` event at the end, because only that event tells a finished run from a cut-off one.
 $cutOff = '{"type":"system","subtype":"init"}'.PHP_EOL
     .'{"type":"stream_event","event":{"type":"message_start","message":{"role":"assistant"}}}'.PHP_EOL;
 
