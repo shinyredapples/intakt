@@ -8,7 +8,7 @@ Everything Intakt knows lives in one place, so it is easy to back up, move or re
 flowchart TD
   vol[(The intakt data volume)] --> db[The database<br/>SQLite: tasks, queue, the record,<br/>budgets, project memory]
   vol --> cfg[The config file<br/>projects, accounts, panels, routing]
-  vol --> keys[Its keys<br/>the GitHub App key, its signing key,<br/>AI logins and API keys]
+  vol --> keys[Its keys<br/>the GitHub App key, its signing key,<br/>AI tokens, logins and API keys]
   vol --> mirror[A copy of each repository<br/>rebuilt from GitHub if lost]
   vol --> cache[Caches<br/>job images, package downloads]
 ```
