@@ -50,6 +50,36 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringContainsString('`src/Missing.php`, which does not exist', $run->findingsOf('highlights'));
     }
 
+    public function testAMissingRootFileWithAnyExtensionFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | `missing.lock`, `missing.txt` |\n");
+
+        self::assertStringContainsString('`missing.lock`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringContainsString('`missing.txt`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testATableWithoutOuterPipesIsCheckedByEveryRule(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "Feature | Status | Where\n---|---|---\nA | invalid | PR #77, `src/Missing.php`\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertStringContainsString('docs/highlights.md:3: status "invalid"', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("PR #77")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('`src/Missing.php`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testAPipeOutsideATableIsNotLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "Status | Where are we\nsome text | more text\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
     public function testATableWithoutAWhereColumnOnlyChecksItsStatus(): void
     {
         $sandbox = $this->sandboxWithKernel();
