@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Platform\Contract;
+
+use Attribute;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+
+#[Attribute(Attribute::TARGET_CLASS)]
+final class AsCommandHandler extends AsMessageHandler
+{
+}
