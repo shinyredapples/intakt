@@ -25,9 +25,10 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           NUMBER: ${{ github.event.pull_request.number }}
           TITLE: ${{ github.event.pull_request.title }}
-          CURRENT: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
+          # Read now, not from the event: a run this one cancelled may have changed the labels since.
+          current="$(gh pr view "$NUMBER" --repo "$REPOSITORY" --json labels --jq '[.labels[].name] | join(",")')"
           pattern='^([a-z]+)(\([^)]*\))?!?: '
           type=''
           if [[ "$TITLE" =~ $pattern ]]; then
@@ -37,7 +38,7 @@ jobs:
             if [[ "$label" == "$type" ]]; then
               gh label create "$label" --repo "$REPOSITORY" --force --description "Conventional Commit type $label"
               gh pr edit "$NUMBER" --repo "$REPOSITORY" --add-label "$label"
-            elif [[ ",$CURRENT," == *",$label,"* ]]; then
+            elif [[ ",$current," == *",$label,"* ]]; then
               gh pr edit "$NUMBER" --repo "$REPOSITORY" --remove-label "$label"
             fi
           done
