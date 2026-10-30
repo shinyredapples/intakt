@@ -23,3 +23,8 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+when@test:
+    imports:
+        # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
+        - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }
