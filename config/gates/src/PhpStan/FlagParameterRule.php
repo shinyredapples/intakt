@@ -99,7 +99,7 @@ final readonly class FlagParameterRule implements Rule
             && is_string($assign->expr->name);
     }
 
-    // PHP hands an assignment to a property the class does not declare itself (undeclared, or private to a parent) to __set(), which can read the value
+    // only a property the class declares itself, since PHP hands any other assignment (undeclared, or private to a parent) to __set(), which can read the value
     private function declares(ClassReflection $class, string $property): bool
     {
         return $class->hasNativeProperty($property)
