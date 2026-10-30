@@ -48,7 +48,7 @@ This is the only column that needs you. A card here and a notification on your p
 - a change to the project's rules that only you may approve;
 - a decision the maintainer agent couldn't make, with its options and recommendation;
 - a broken part of Intakt itself (red), such as an expired login, with the cause and since when;
-- a dated chore, such as renewing an AI login before it expires.
+- a dated chore, such as renewing an AI token or login before it expires.
 
 Anything Intakt or its maintainer agent can settle never shows up here.
 

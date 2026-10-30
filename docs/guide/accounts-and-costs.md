@@ -12,7 +12,11 @@ You can give Intakt any mix of these, per AI company, and it treats them as one 
 | **API key** (personal or company) | per token used | a monthly or daily spending cap that you set |
 | **Cloud sessions** (where a company offers them) | usually per use | the same caps, and where each job ran |
 
-If a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each login.
+If a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
+
+You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately and puts them in the order you choose.
+
+For a subscription, Intakt doesn't use the login you sign in with yourself. Where the AI company offers one, it uses a **long-lived token**: a key you create once for that account with the company's own tool (for Claude, `claude setup-token`) and paste into Intakt. It lets Intakt's agents use that subscription without your password or your personal session, and you can revoke it at any time. Where a company has no such token, Intakt keeps that account's login to itself and lends it to each job read-only.
 
 ## How it decides what to spend
 
@@ -32,7 +36,7 @@ flowchart TD
 - **Moving up when it struggles:** if the same check keeps failing or a reviewer keeps finding the same problem, the next attempt gets a stronger model.
 - **Measured, not guessed:** whether a job may start depends on the account's measured use, not on Intakt's estimate. A running job is never stopped just because the window is nearly full or the estimate was too low. Three things end it: it makes no progress for a set number of steps (no new content and no change in which tests fail), it reaches a ceiling of a few times its allowance, or the task reaches its total across all its attempts. The last two catch a runaway the progress check misses, on a subscription too. A stopped build keeps its commits, so the next attempt or the maintainer starts from them. On an account that bills overage past the subscription, the guards that are lenient on a subscription turn strict: with no fresh usage reading, nothing new starts, a call already running past the ceiling is not let finish, and your spending cap applies.
 - **Spending headroom:** if a window will refill with room to spare, Intakt uses it: stronger models, more builders in parallel.
-- **Falling back:** when one account is out, work moves to another; a reviewer from another company stands in and the usual one catches up later.
+- **Falling back:** when one account is out, work moves to the next account from the same company, then to another company; a reviewer from another company stands in and the usual one catches up later. The dashboard shows each switch.
 
 ## Several projects on one install
 

@@ -38,8 +38,8 @@ Intakt always acts as **itself**, never as you, so its comments and your approva
 
 | Vendor | How you connect it |
 |---|---|
-| **Claude** (Claude Code) | a subscription login, or an API key |
-| **Codex** (OpenAI) | a subscription login, or an API key |
+| **Claude** (Claude Code) | a subscription's long-lived token (from `claude setup-token`), or an API key; one or more accounts |
+| **Codex** (OpenAI) | a subscription login, or an API key; one or more accounts |
 | **Any OpenAI-compatible service** | an API key and its address |
 
 Each vendor tells Intakt which models it has, what they cost and what they are good at (building, reviewing, quick triage), so Intakt can pick a model without special code per company. See [accounts and costs](accounts-and-costs.md) for how spending works.
