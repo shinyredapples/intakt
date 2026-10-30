@@ -119,6 +119,8 @@ flowchart LR
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
 
+A finished pull request is never kept waiting for a much bigger task. If only one part of it needs that task (say, a screenshot of a screen not built yet), that part becomes its own follow-up task, and the rest is reviewed and merged now.
+
 ## Spending wisely
 
 AI agents cost money, usually as a subscription with a weekly allowance. Intakt watches how much of the week's allowance is used against how much of the week has passed:

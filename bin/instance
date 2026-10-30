@@ -7,20 +7,22 @@ declare(strict_types=1);
 
 final readonly class InstanceStatus
 {
-    private function __construct(
-        public bool $ready,
-        public string $reason,
-    ) {
+    public bool $ready;
+
+    private function __construct(public string $reason)
+    {
+        // a failure always carries a reason, so the status without one is the ready status
+        $this->ready = '' === $reason;
     }
 
     public static function ready(): self
     {
-        return new self(true, '');
+        return new self('');
     }
 
     public static function failed(string $reason): self
     {
-        return new self(false, '' === trim($reason) ? 'unknown reason' : $reason);
+        return new self('' === trim($reason) ? 'unknown reason' : $reason);
     }
 
     public function toJson(): string
