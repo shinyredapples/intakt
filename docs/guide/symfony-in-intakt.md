@@ -74,7 +74,7 @@ These Symfony components keep many jobs running in the right order, without anyo
 
 | Component | Everyday comparison | What it does in Intakt | Status |
 |---|---|---|---|
-| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | planned |
+| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, nothing is sent through them yet, and retries are planned |
 | **Workflow** | a board game's rules | the steps of a review round (waiting, reviewing, changes, approved) and which moves are allowed, drawn as a diagram | planned |
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
 | **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | planned |
