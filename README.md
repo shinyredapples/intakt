@@ -9,7 +9,13 @@
 
 Give it a spec: AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI.
 
-Intakt turns a spec into a plan of small tasks, has AI agents build each one, has a panel of other agents from different providers review it, and merges what passes. It spends the AI budget you give it, asks you only when a person is needed, and acts as its own forge identity, never as you.
+- **What it does:** turns a spec into small tasks, has AI agents build each one, and merges what passes review.
+- **Why it is different:** a panel of reviewers from different providers returns structured verdicts, and findings keep their ids across rounds, so reviewers cannot move the goalposts.
+- **Why you can trust it:** it spends only the budget you give it, asks you only when a person is needed, and acts as its own forge identity, never as you.
+
+**See it (planned):** a dashboard screenshot and a one to two minute recording of a review, from `docker compose up` to the judge's list and an AI assistant's call over MCP, will be added to `docs/assets/` once the dashboard and the compose setup are built. Until then, read the [demo walkthrough](docs/guide/demo-walkthrough.md).
+
+[Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
 ## The first release: the review loop
 
