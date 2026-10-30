@@ -17,7 +17,7 @@ final class ProbeIsolationTest extends TestCase
 {
     private const string DECIDE = <<<'PHP'
         require $argv[1].'/bin/probe';
-        $probe = new Probe('/project', Isolation::fromVariable(getenv('PROBE_ISOLATED')), new Network($argv[2], $argv[3]));
+        $probe = new Probe('/project', Isolation::fromVariable((string) getenv('PROBE_ISOLATED')), new Network($argv[2], $argv[3]));
         echo json_encode(['command' => $probe->command('tests/Probe/ATest.php'), 'refusal' => $probe->refusal()]);
         PHP;
 

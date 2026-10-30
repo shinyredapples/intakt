@@ -37,6 +37,14 @@ Intakt keeps one process alive across many requests and messages, so a service t
 
 Doctrine entities, embeddables, mapped superclasses and column types, and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
 
+## When `bin/check` reports a flag parameter
+
+A boolean parameter that switches what a function does hides two behaviors behind one name, so the `phpstan` gate of `bin/check` reports a finding `intakt.flagParameter` for every parameter typed `bool`, `true` or `false` (also nullable or in a union) of a function, method, closure or constructor, except in `tests/`. The finding names the parameter. A `readonly` service is reported like any other. To resolve it, do one of:
+
+- replace the boolean with a backed enum whose cases name the modes;
+- split the method in two, one per behavior;
+- if the boolean is data of a value object, make the class `readonly`, mark it with Symfony's `#[Exclude]` attribute (Doctrine entities, embeddables and mapped superclasses count as excluded too) and keep the boolean as it is, as a promoted constructor property or assigned unchanged to a property in the constructor body. Only such a constructor parameter passes, and only when the constructor body does nothing but assign variables to properties, one plain `$this->name = $variable;` per statement: a promoted boolean must appear nowhere in the body, and a stored one exactly once, as the variable of one of those assignments. Any other statement in the body (a condition, a call, `new`, `eval`, `include`, a `parent::__construct()` call) could read the boolean, so every boolean of that constructor is reported then, even in a value object, while the class's other methods may read the stored property, and the exemption follows the attribute, not the folder, so an unmarked `readonly` class under `bin/` or `config/gates/src/` is reported too.
+
 ## GitHub's test merge and the `commits` gate
 
 On a pull request, GitHub checks out a merge of the branch into the base branch, with a subject such as `Merge <sha> into <sha>`, which is not a Conventional Commit. CI names that merge and the pull request's head with `--test-merge=<merge>:<head>`, and the `commits` gate skips it when its second parent is the pull request's head and its first parent is on the base branch, also when the base branch moved after the pull request's last update. Every other commit, merges included, still needs a conforming subject.

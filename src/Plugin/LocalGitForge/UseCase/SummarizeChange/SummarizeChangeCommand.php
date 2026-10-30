@@ -82,19 +82,19 @@ final readonly class SummarizeChangeCommand
         $inHunk = false;
 
         foreach (explode("\n", $change->diff->patch) as $line) {
-            $inHunk = $this->isInHunk($line, $inHunk);
+            $inHunk = $this->hunkStateAt($line) ?? $inHunk;
             $count += $inHunk && str_starts_with($line, $marker) ? 1 : 0;
         }
 
         return $count;
     }
 
-    private function isInHunk(string $line, bool $wasInHunk): bool
+    private function hunkStateAt(string $line): ?bool
     {
         return match (true) {
             str_starts_with($line, 'diff ') => false,
             str_starts_with($line, '@@') => true,
-            default => $wasInHunk,
+            default => null,
         };
     }
 }
