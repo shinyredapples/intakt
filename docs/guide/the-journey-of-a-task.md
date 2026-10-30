@@ -130,7 +130,7 @@ flowchart TD
 | Situation | What Intakt does |
 |---|---|
 | The checks fail | the builder gets the failure and tries again |
-| A reviewer's AI company is over its limit | a reviewer from another company stands in, and the usual one catches up later |
+| A reviewer's account is over its limit | the same company's next account takes over; when all of them are out, a reviewer from another company stands in, and the usual one catches up later |
 | GitHub misses an update | Intakt notices that CI never started and nudges GitHub once, then alerts |
 | The change conflicts with main | the builder merges main in and resolves it |
 | The same problem keeps coming back | a stronger model, then the maintainer agent |

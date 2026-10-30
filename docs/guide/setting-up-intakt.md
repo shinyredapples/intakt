@@ -19,7 +19,7 @@ flowchart TD
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token.
-3. **AI accounts:** log in to each subscription, or paste an API key ([accounts and costs](accounts-and-costs.md)).
+3. **AI accounts:** for each subscription, paste its long-lived token (Intakt shows the command that creates it) or log in where the AI company has no such token; or paste an API key. You can add more than one account per company ([accounts and costs](accounts-and-costs.md)).
 4. **Reading the project:** see below.
 5. **Defaults:** one builder, at most two finished changes waiting for review, the label `intakt`. Everything ends up in one config file you can edit later.
 

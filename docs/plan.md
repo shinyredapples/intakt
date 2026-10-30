@@ -129,8 +129,8 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T12. **Size:** S. **Labels:** `class:feature`, `priority:high`.
 
 ### T14 Provider limits and substitutes
-- **Description:** A rate-limited or failing provider puts its account in cooldown until the reset time; the panel substitutes a reviewer from the same tier on another provider and records that a catch-up review is owed.
-- **Acceptance:** cooldown is per account, shared by all reviewers on it; substitution follows config; an outage of every provider ends the round as `blocked` with the reason.
+- **Description:** A rate-limited or failing provider puts its account in cooldown until the reset time; the reviewer moves to the next account of the same vendor and role by priority, and only when every such account is out does the panel substitute a reviewer from the same tier on another provider and record that a catch-up review is owed.
+- **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason.
 - **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up.
 - **Symfony:** provider failover through `FailoverPlatform`, wrapped by Intakt's own class that records the switch and does not rely on it alone; per-account cooldowns as RateLimiter windows aligned to the vendor's reset; Scheduler ticks for usage probes and deadlines.
 - **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:normal`.
@@ -191,7 +191,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T33 A subscription reviewer through the Claude Code or Codex platform bridge
-- **Description:** One reviewer role runs through `symfony/ai-claude-code-platform` or `symfony/ai-codex-platform` (BETA1) on a subscription login, behind the same vendor contract as the API providers. Its stream parsing is exercised on purpose, including a stream that ends early (`IncompleteStreamException`). The package is a new dependency the owner approves.
+- **Description:** One reviewer role runs through `symfony/ai-claude-code-platform` or `symfony/ai-codex-platform` (BETA1) on a subscription account (its automation token where the vendor has one), behind the same vendor contract as the API providers. Its stream parsing is exercised on purpose, including a stream that ends early (`IncompleteStreamException`). The package is a new dependency the owner approves.
 - **Acceptance:** recorded streams drive the tests; a complete stream yields a typed verdict; a truncated stream raises `IncompleteStreamException` and the reviewer ends as `blocked` with the reason, its usage counted once; the setup shows which plans the vendor's terms allow for this use.
 - **Evidence:** a real review of the sample branch by the subscription reviewer, with its verdict and usage line.
 - **Waits for:** T7. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
