@@ -140,4 +140,5 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 - The pipe operator for turning `git diff` output into changed files: `src/Plugin/LocalGitForge/Infrastructure/NameStatusParser.php` (done, T6).
 - `#[NoDiscard]` on the parse result: `src/Core/Review/Contract/VerdictParser.php` (in progress, T1).
 - `clone()` with overrides in the verdict test builder: `tests/Core/Review/Contract/VerdictDocument.php` (in progress, T1).
-- Planned: the pipe operator (T5, T28, T30), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19), closures in constant expressions (T8).
+- Closures in constant expressions for the built-in quorum policies, and `#[NoDiscard]` on `QuorumPolicy::isMet()`: `src/Core/Review/Contract/QuorumPolicy.php` (in progress, T8 (#13, part #222)).
+- Planned: the pipe operator (T5, T28, T30), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19).

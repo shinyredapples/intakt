@@ -5,7 +5,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 Only the install check and the provider configuration below exist so far. The other pages arrive with the review loop (see [the plan](../plan.md)):
 
 - Running the demo with `docker compose up` (planned)
-- Configuring the review panel (planned; providers and keys are below)
+- Choosing a review panel by the size or paths of a change (planned). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), but nothing runs the panel yet.
 - Reviewing a pull request and reading the verdicts (planned)
 - Connecting an agent through MCP (planned)
 
@@ -66,6 +66,8 @@ To decrypt the secrets, Intakt reads `SYMFONY_DECRYPTION_SECRET` the way Symfony
 ### Capability tiers per project
 
 Each project maps three capability tiers (`strong`, `standard`, `light`) to a provider and a model. Copy `config/intakt.example.yaml` to `config/intakt.yaml` (or point `INTAKT_CONFIG` at another file), edit it, and run `php bin/console cache:clear`. Project names are kept exactly as written, dashes included, and a model must be a text value that is valid UTF-8 and not blank (a value made only of whitespace, including Unicode spaces such as a no-break space, counts as blank). Several projects can map the tiers differently; a tier you leave out is reported as not mapped. A model name the provider's built-in list does not know is added to it, so newer models work too. An invalid file stops Intakt from starting and names the bad key. `php bin/console intakt:ai:tiers` lists every project with the provider and model of each tier; a tier whose provider is switched off (see above) shows the reason instead of a model.
+
+A project can also carry a `review:` section that sets its review panel (see `config/intakt.example.yaml`): `quorum` is `all`, `majority` or `one-strong-plus-one`, and `reviewers` lists one or more reviewers, each with a `role`, a `tier` (`strong`, `standard`, `light`), a `provider` (`anthropic`, `openai`, `openai_compatible`), a `prompt` and a `budget` (a whole number of at least 1). Every field is required, and the panel comes from the file alone. A reviewer's `provider` must be the provider the project maps that `tier` to under `tiers:`. A panel of one, two or three reviewers works, as long as its policy can be met when every reviewer approves: `one-strong-plus-one` needs at least two reviewers, one of them on the `strong` tier. An unknown policy, tier or provider, a missing, empty or blank field, a budget below 1, an empty reviewer list, reviewers written as a map instead of a list, a provider that differs from the tier's, or a policy the panel can never meet stops Intakt from starting and names the problem. A `projects:` value that is not a map of projects stops Intakt too. A project without a `review:` section has no panel yet. Choosing a panel by the size or paths of a change is not built yet.
 
 ## Looking inside the development install with Mate
 
