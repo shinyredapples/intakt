@@ -129,6 +129,27 @@ final class ConfiguredPanelsTest extends TestCase
         self::assertSame(['correctness'], $this->roles($panel));
     }
 
+    public function testALeadingDoubleStarMatchesAFolderAtTheRoot(): void
+    {
+        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, ['Security/Door.php'], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testALeadingDoubleStarMatchesANestedFolder(): void
+    {
+        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, ['a/Security/Door.php'], []));
+
+        self::assertSame(['correctness', 'security'], $this->roles($panel));
+    }
+
+    public function testALeadingDoubleStarDoesNotMatchAFolderThatOnlyEndsInTheName(): void
+    {
+        $panel = $this->anywhere()->panelForChange('alpha', new ChangeDescription(1, ['NoSecurity/Door.php'], []));
+
+        self::assertSame(['correctness'], $this->roles($panel));
+    }
+
     public function testAOneCharacterWildcardMatchesOneCharacterOfAUtf8Path(): void
     {
         $panel = new ConfiguredPanels(['alpha' => [
@@ -180,6 +201,15 @@ final class ConfiguredPanelsTest extends TestCase
             'quorum' => 'all',
             'reviewers' => [$this->reviewer('correctness')],
             'rules' => [['paths' => ['src/**/Security/**'], 'reviewers' => [$this->reviewer('security')]]],
+        ]]);
+    }
+
+    private function anywhere(): ConfiguredPanels
+    {
+        return new ConfiguredPanels(['alpha' => [
+            'quorum' => 'all',
+            'reviewers' => [$this->reviewer('correctness')],
+            'rules' => [['paths' => ['**/Security/**'], 'reviewers' => [$this->reviewer('security')]]],
         ]]);
     }
 

@@ -15,13 +15,14 @@ final readonly class PathGlob
         // Git allows any bytes in a file name, and a UTF-8 pattern fails on other bytes, which would let such a path slip past its rule.
         $modifier = mb_check_encoding($path, 'UTF-8') ? 'u' : '';
 
-        return 1 === preg_match($this->pattern().$modifier, $path);
+        return 1 === preg_match($this->pattern().$modifier, '/'.$path);
     }
 
     private function pattern(): string
     {
         // Anchored; "*" and "?" stop at a slash, "/**/" may match no folder as in gitignore, "[\s\S]" because git allows a newline in a name.
-        return '#\A'.strtr(preg_quote($this->glob, '#'), [
+        // The leading slash on both sides gives a leading "**/" the same rule, so it matches the root folder too.
+        return '#\A'.strtr(preg_quote('/'.$this->glob, '#'), [
             '/\*\*/' => '/(?:[\s\S]*/)?',
             '\*\*' => '[\s\S]*',
             '\*' => '[^/]*',
