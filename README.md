@@ -11,7 +11,7 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 
 - **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review.
 - **Why it will be different:** a panel of reviewers from different providers will return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
-- **Why you will be able to trust it:** it is to spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
+- **Why you will be able to trust it:** it will spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
 [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
