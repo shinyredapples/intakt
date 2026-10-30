@@ -33,12 +33,12 @@ final class ReleaseLabelsTest extends SandboxTestCase
         self::assertSame("wip\nfeat\n", file_get_contents($sandbox->root.'/labels'));
     }
 
-    public function testALabelAddedAfterTheEventIsRemovedWhenTheTitleNoLongerMatchesIt(): void
+    public function testATypeLabelOnThePullRequestIsRemovedWhenTheTitleNoLongerMatchesIt(): void
     {
-        // feat is on the pull request but not in the event, since a run this one cancelled added it late.
+        // A run this one cancelled may have added feat late, so the labels are read from the pull request itself.
         $sandbox = $this->sandboxLabeled("docs\nfeat\n");
 
-        $this->runWorkflow($sandbox, 'fix: y', 'docs');
+        $this->runWorkflow($sandbox, 'fix: y');
 
         self::assertSame("fix\n", file_get_contents($sandbox->root.'/labels'));
     }
@@ -60,11 +60,11 @@ final class ReleaseLabelsTest extends SandboxTestCase
         return $sandbox;
     }
 
-    private function runWorkflow(Sandbox $sandbox, string $title, string $eventLabels = ''): ProcessResult
+    private function runWorkflow(Sandbox $sandbox, string $title): ProcessResult
     {
         /** @var array{jobs: array{label: array{steps: list<array{run: string}>}}} $workflow */
         $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/release-labels.yml');
-        $environment = ['TITLE' => $title, 'CURRENT' => $eventLabels, 'REPOSITORY' => 'example/repo', 'NUMBER' => '7', 'LABELS' => $sandbox->root.'/labels'];
+        $environment = ['TITLE' => $title, 'REPOSITORY' => 'example/repo', 'NUMBER' => '7', 'LABELS' => $sandbox->root.'/labels'];
 
         return $sandbox->runScript('chmod +x bin/gh; PATH="$PWD/bin:$PATH"; '.$workflow['jobs']['label']['steps'][0]['run'], $environment);
     }
