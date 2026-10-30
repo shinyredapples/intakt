@@ -1,5 +1,9 @@
 {
     "name": "intakt/fixture",
+    "version": "1.0.0",
+    "repositories": [
+        {"packagist.org": false}
+    ],
     "require": {},
     "config": {
         "audit": {
