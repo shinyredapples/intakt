@@ -41,10 +41,12 @@ final class PathGlobTest extends TestCase
         ini_set('pcre.backtrack_limit', '10');
         $glob = '**/a/**/a/**/c.php';
 
-        $this->expectException(GlobCannotBeEvaluated::class);
-        $this->expectExceptionMessage($glob);
-        $this->expectExceptionMessage('Backtrack limit exhausted');
-
-        new PathGlob($glob)->matches(str_repeat('a/', 40).'d.php');
+        try {
+            new PathGlob($glob)->matches(str_repeat('a/', 40).'d.php');
+            self::fail('The glob should not have been evaluated.');
+        } catch (GlobCannotBeEvaluated $failure) {
+            self::assertStringContainsString($glob, $failure->getMessage());
+            self::assertStringContainsString('Backtrack limit exhausted', $failure->getMessage());
+        }
     }
 }
