@@ -9,13 +9,16 @@ Intakt is one container, and Docker or Podman is all you need: the image ships e
 ```mermaid
 flowchart TD
   run[Start the container] --> open[Open the dashboard]
-  open --> repo[1. Enter your repository]
+  open --> owner[Create your owner secret<br/>or passkey]
+  owner --> repo[1. Enter your repository]
   repo --> app[2. Create Intakt's own GitHub identity<br/>one click to confirm]
   app --> ai[3. Log in to your AI accounts]
   ai --> read[4. Intakt reads your project]
   read --> defaults[5. Confirm the proposed defaults]
   defaults --> go[It starts on tasks labeled intakt]
 ```
+
+First, Intakt creates your **owner secret** (shown once) or registers a passkey; only you can change its settings with it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). Then:
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token.

@@ -3,8 +3,21 @@
 For each vendor account Intakt keeps a budget model:
 - **Subscription:** rolling windows (for example five hours and weekly), each with a measured used fraction from the vendor's own usage probe, and a reset time.
 - **API key:** a monthly or daily spend cap set by the owner, tracked from the vendor's billing or token counts.
-- **Overage:** whether the account bills extra usage past its subscription (asked at setup, shown on the dashboard). With overage on, a subscription window behaves like an API key past its limit: every guard below that fails open on a subscription (a missing usage reading, a call already in flight past the ceiling) must fail closed instead, and the owner's spend cap applies.
-- **Accounts are a list, not a choice.** Per vendor the owner can enter a subscription login, API keys, or both, equally: personal keys, company or organization keys (with their workspace, spend limits and admin-visible usage), and cloud execution where the vendor offers it (for example Claude Code cloud sessions, which run a job on the vendor's infrastructure instead of a local container). Each account has a role (which jobs it may run), a priority and its own budget model, so a project can say "subscription first, then the company API key when the subscription's window is spent, never more than its spend cap". Falling over to a paid account is a planner decision shown on the dashboard and capped per day and per month; it never happens silently. Symfony AI's Platform provides the API side for every provider it supports; subscription CLIs and cloud sessions are vendor plugins of their own.
+- **Overage:** whether the account bills extra usage past its subscription (asked at setup, kept in the dashboard's admin area). With overage on, a subscription window behaves like an API key past its limit: every guard below that fails open on a subscription (a missing usage reading, a call already in flight past the ceiling) must fail closed instead, and the owner's spend cap applies.
+- **Accounts are a list, not a choice.** Per vendor the owner can enter a subscription login, API keys, or both, equally: personal keys, company or organization keys (with their workspace, spend limits and admin-visible usage), and cloud execution where the vendor offers it (for example Claude Code cloud sessions, which run a job on the vendor's infrastructure instead of a local container). Each account has a role (which jobs it may run), a priority and its own budget model, so a project can say "subscription first, then the company API key when the subscription's window is spent, never more than its spend cap". Falling over to a paid account is a planner decision shown on the dashboard and capped per day and per month; it never happens silently. Symfony AI's Platform provides the API side for every provider it supports; subscription CLIs and cloud sessions are vendor plugins of their own. The owner adds, orders and removes accounts in the dashboard's admin area, in a vendor-neutral model of kinds, usage windows, overage, credit pools, vendor-side blocks and roles (see [Dashboard](13-dashboard.md#accounts)).
+- **Ceilings are the owner's to move.** The ceiling of each window (the default stop at 90% of the five-hour window, the weekly one the pace aims at) can be raised or lowered by the owner from the dashboard, always with an expiry; a raised ceiling never passes the plan limit of an account that bills overage. A project's share, a pause and a back-off are the owner's in the same way (see [Owner controls](13-dashboard.md#controls)).
+
+## Order of use
+
+The planner spends in this order, within each account's cap and roles:
+1. credit that expires soon or can only be spent on certain work, while it can be (a credit pool that expires before the next weekly reset counts as expiring soon);
+2. subscription windows, within Intakt's share of them;
+3. paid usage, overage or API keys, up to Intakt's cap per period.
+
+This is also the fallback order: when one step is spent, blocked at the vendor or backing off, the next step of the same vendor's accounts in the owner's order takes over, then another vendor's (with a catch-up review owed, as below). When nothing is allowed, work waits and the reason (each account's cause and when it ends) shows on the board.
+
+## Planning
+
 
 The planner runs before each job and picks a model and a pace:
 - It sizes the task first (a cheap triage call), then chooses the cheapest model that is fit for that size and role.

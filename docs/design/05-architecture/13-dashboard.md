@@ -9,7 +9,7 @@ The main view is a board, not a set of lists. Each task in flight is a card, and
 - **Waiting on you** is the column where a human is the bottleneck: questions, plan approvals, protected-path changes the orchestrator may not approve itself (each with the reviewers' reasons), escalations and halts, oldest first. Every action the loop waits on a person for is a card here, with the exact action (the label to add, the `approve <sha>` text to post, the command to run, the setting to change) and a link: not only the loop's own requests but also pull requests opened by the owner or the maintainer agent that need the owner's approval of the exact head (an `approve <sha>` comment or a review), asked once they pass CI and review, setup and switch-over steps, and dated chores such as revoking a retired credential or renewing a vendor login before it expires (shown early, red near the date). It is the only column that notifies, and a card and its notice are one event: every card is notified once when it appears (and again only when its required action changes), and no notice is sent without a card, so the column never holds an item the owner was not told about. It holds only what needs a person: an item an automatic triage can resolve gets that first try, and appears here (and notifies) only when it escalates or stays unresolved past a grace period. A hand-over goes to the maintainer agent first and parks its card here only when the maintainer agent escalates it as a decision; it never stops the loop.
 - **Opening a card** shows its timeline (plan, builds, checks, verdicts with their findings and ids), the live log of the job running now (tool calls as they happen), and buttons to stop it, continue it, or send it back with a note.
 - **Lanes and slots** stay visible as a strip above the board: each slot, its card, and how busy each job runner is.
-- **Budgets:** each vendor window, used, reserved, and the forecast at reset.
+- **Budgets:** each vendor window, used, reserved, and the forecast at reset, with every owner control in effect on it and until when (see [Owner controls](#owner-controls)).
 - **Several projects:** every card, lane and "Waiting on you" item carries its project, and a filter shows one project or all. Each project has a summary card: its weekly share against its actual spend, its harness and boot gate state, whether it is halted and why, and what it is working on now.
 - **Shared accounts once:** vendor accounts and the reviewers and builders running on them are one pool for the whole install, so they are shown once, each with the project and task it is working on now, never repeated per project (a per-project copy reads as more reviewers than exist).
 - **Infrastructure health:** a failing piece of the loop's own machinery (the sandbox, package installs, the boot gate, a forge token) is shown red on the board with the step, the cause and since when, raised on its first failure and cleared by the first real success, not by a cached one. It goes to the maintainer agent first; it becomes a "Waiting on you" item (and notifies) only when only the owner can fix it (an expired login, a credential, the host) or the maintainer agent escalates it.
@@ -45,3 +45,52 @@ flowchart LR
 - **Nothing is lost on a crash.** The record is written before the notice is sent; a restart sends records without a confirmed delivery and never sends a confirmed one again.
 - **Not yet the owner's:** a protected change still in review, being fixed, or waiting for CI creates no record. Its record is created when the change has passed review and CI and only the owner's approval remains.
 - **Notices carry no secrets and no approval power** (see Plugins): their text is redacted like other outbound text, and approving stays a forge action by the owner's account.
+
+## Owner controls
+
+The owner steers budgets and pauses from an admin area in the dashboard instead of editing config or state files. Plain-words version: [steering budgets and pauses](../../guide/a-tour-of-the-dashboard.md#steering-budgets-and-pauses).
+
+### Only the owner
+
+Intakt has one user, so there are no accounts and no sign-up, but every change must provably come from the owner:
+- **Localhost by default.** The dashboard port is published on the host's loopback address only (see [Setup](11-setup.md)).
+- **One owner credential.** Before anything else, the first-run wizard creates the owner secret (shown once, stored only as a password hash) or registers a passkey (WebAuthn). Every admin action needs a session opened with it. A lost secret is reset by a console command on the host, because access to the host is what proves ownership then.
+- **No cross-site requests.** Every admin request also needs a CSRF token of the owner's session and a `Host` header that matches the configured dashboard address; the session cookie is `SameSite=Strict`. A web page open in the owner's browser therefore cannot change a setting.
+- **Jobs cannot reach it.** The job containers' network has no route to the dashboard port, and the admin endpoints refuse anything that is not the owner's session even if it did.
+- **Phone access is opt-in:** HTTPS only (a secure cookie), with the same secret or passkey. Without it, a request to the admin area from any address but loopback is refused.
+- **Nothing an agent or a job can reach changes a control.** No MCP tool, JSON API token, forge label or comment, job output or model answer counts as the owner's session; those doors read controls, never write them (see [Threat model](14-threat-model.md#agents-over-mcp)).
+
+### Controls
+
+Every control needs an expiry when it is set: a time, or "until the window resets". "Until the window resets" names one vendor window (the account's own for a ceiling or a back-off; the owner picks one for a pause or a share), and the reset time the vendor reported is fixed as the expiry when the control is set, so a vendor that stops reporting cannot extend it. An expired control lapses by itself: the orchestrator records the lapse and the setting returns to its configured value.
+
+| Control | What it changes | Expiry | Where it shows |
+|---|---|---|---|
+| **Ceiling** | an account's five-hour or weekly ceiling, raised or lowered (see [Budget and model planner](06-budget-and-model-planner.md)); never above the plan limit on an account that bills overage, because past it Intakt's paid cap applies | a time, or until that window resets | the window on the budgets strip, the account, the status |
+| **Pause** | a project or the whole install: running jobs finish, nothing new starts, approved heads still merge; resume ends it early | a time, or until a chosen window resets | the project's summary card or a banner across the board, the status |
+| **Share** | a project's share of the week (0 starts no new builds for it) | a time, or until a chosen window resets | the project's summary card, the status |
+| **Clear a back-off** | ends an account's cooldown or a bench's back-off at once; the next structured failure starts a new one as usual | the cleared back-off's own end, after which there is nothing left to lift | the account or bench, the history |
+
+What is in effect and until when is shown on the board and in the status. Limits, ceilings and reset times show only to the owner (the admin area, the board and the status), never on a public surface such as the shared usage report or the forge.
+
+### Accounts
+
+The owner adds, orders and removes vendor accounts in the admin area instead of in config files. The model is vendor-neutral, and each vendor plugin declares which of its parts its accounts support; the admin shows only those fields:
+- **Kinds:** a subscription login used through the vendor's CLI (for example Claude Code or Codex), an API key, or both for one vendor.
+- **Usage windows:** the windows a subscription has (for example five-hour and weekly), read from the vendor where it reports them, with their reset times.
+- **Overage:** whether the account keeps working past its plan limit at paid rates (for example usage credits on a plan). The guards then treat limits as hard, and Intakt's paid cap applies.
+- **Credit pools:** prepaid or promotional credit with its balance, expiry and scope, read from the vendor where it exposes them or entered by the owner (for example organization API credits, a cloud-session credit only certain products may spend, or a sponsor's credit for an inference service).
+- **Vendor-side blocks:** a limit set at the vendor (an organization spend limit, a tier limit) that blocks an account until a date. It is detected from the vendor's structured error or API, shown as a cause with its end time, and the account is skipped until then; it is never shown as a plain failure.
+- **Roles:** what the account may serve (building, reviewing, light work such as triage and sizing) and which tiers or models.
+
+How the planner spends across these is the [order of use](06-budget-and-model-planner.md#order-of-use).
+
+**Billing stays with the vendor.** Intakt never mirrors the vendor's own billing settings (paid usage on or off, the vendor's monthly limit, top-ups, auto-reload), which it cannot change anyway. Each account records only what Intakt needs: whether it bills past its plan limit; Intakt's own cap below the vendor's limit, as a share of the plan and as an amount per period past it; and a link to manage billing at the vendor. The vendor's limit is the hard backstop; Intakt's cap is its share of it.
+
+**Secrets.** A key or token is stored encrypted at rest in Intakt's secret storage (the Symfony secrets vault the AI providers already read). It is never shown again after saving, only a fingerprint (its last four characters), is never written to logs or the ledger, and is handed only to that vendor's jobs. Removing or replacing it takes effect for the next job; a running job keeps its own until it ends.
+
+**Test button.** Each account has a "test" button that makes one minimal call and shows the result and the remaining allowance, in the admin area only.
+
+### History
+
+Every change is a ledger event: who (the owner, by the credential the session was opened with), what, the value before and after, and the expiry. A lapse is an event of its own, by the orchestrator. The dashboard's history lists them, newest first. An account's secret appears in them only as its fingerprint.

@@ -82,3 +82,41 @@ flowchart TD
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
 - **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.
+
+## Steering budgets and pauses
+
+The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. Only you can use it:
+- On the first start, Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change in the admin area asks for it.
+- The dashboard only answers on the computer it runs on, unless you turn on phone access, which needs HTTPS and the same secret or passkey.
+- Another website open in your browser can't change anything, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
+
+### Every change ends by itself
+
+Each change asks **until when**: a date and time, or "until the window resets" (for example the next weekly reset of an AI account). When that moment comes, the change lapses and the normal setting is back, so a forgotten change can't keep spending. The board and the status show every change in effect and when it ends, and the history lists every change: who made it, what it was before and after, and until when.
+
+| You can | For example |
+|---|---|
+| **raise or lower a ceiling** | let an account use more, or less, of its five-hour or weekly allowance |
+| **pause and resume** | stop one project, or all of Intakt, for the evening |
+| **change a project's share** | give one project most of the week until Friday |
+| **clear a back-off** | try an account again at once when you know the problem is over |
+
+### Letting Intakt use the rest of the week
+
+Intakt normally leaves room in each AI account for your own use and spreads the week evenly. If the week is nearly over and you won't need the account yourself:
+1. Open the admin area and pick the account.
+2. Raise its **weekly ceiling** (up to all of the allowance).
+3. Choose **until the window resets**, so it ends with the week.
+
+Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. On an account that can bill past its plan, the ceiling stops at the plan's limit; anything past it counts against the spending cap you set.
+
+### Pausing
+
+1. Open the admin area and choose **pause**, for one project or the whole install.
+2. Choose until when: a time, or until a window resets.
+
+Running jobs finish, nothing new starts, and finished work that is fully approved still merges. **Resume** ends the pause early; otherwise it ends by itself at the time you chose.
+
+### Accounts
+
+You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription login or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Intakt spends prepaid credit that is about to expire first, then your subscriptions, then paid usage up to your cap ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
