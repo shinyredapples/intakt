@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
+use Intakt\Core\Review\Infrastructure\GlobCannotBeEvaluated;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -24,11 +25,17 @@ final readonly class ChoosePanelCommand
 
     public function __invoke(SymfonyStyle $io, #[MapInput] ChoosePanelInput $input): int
     {
-        $change = new ChangeDescription(max(0, $input->lines), $input->path, $input->label);
+        if ($input->lines < 0) {
+            $io->error('--lines must be zero or more.');
+
+            return Command::FAILURE;
+        }
+
+        $change = new ChangeDescription($input->lines, $input->path, $input->label);
 
         try {
             $panel = $this->panels->panelForChange($input->project, $change);
-        } catch (PanelNotConfigured $failure) {
+        } catch (PanelNotConfigured|GlobCannotBeEvaluated $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

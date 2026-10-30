@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
+final readonly class Label extends Text
+{
+    public function __construct(string $value, public bool $upper)
+    {
+        parent::__construct($value);
+    }
+
+    protected function upper(): bool
+    {
+        return $this->upper;
+    }
+}

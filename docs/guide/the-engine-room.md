@@ -26,7 +26,7 @@ How many build slots run at the same time depends on the budget (below): when th
 
 ## Queues: who is next
 
-There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. Both are sorted the same way: priority first (`urgent`, `high`, `normal`, `low`), then milestone, then age.
+There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. Both are sorted the same way: priority first (`urgent`, `high`, `normal`, `low`), then milestone, then age. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins.
 
 **The review cap** stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Work that is waiting for *you*, or on hold, doesn't count towards the cap, because no reviewer can move it.
 
@@ -46,6 +46,8 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 ## CI: the second opinion
 
 **CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+
+Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them.
 
 If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
@@ -95,7 +97,7 @@ flowchart LR
   ceiling -- yes --> wait[No new jobs until it refills]
 ```
 
-- **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 means "start no new builds for this project".
+- **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 means "start no new builds for this project"; its open pull requests are still finished.
 - **Ceilings:** near the top of a window, new jobs wait for it to refill. A job already running is never stopped just because the window is nearly full or its estimate was too low. It is stopped when it makes no progress for a set number of steps, when it reaches its own ceiling (a few times its allowance), or when the task reaches its total across attempts, and it keeps its commits. On an account that bills overage, a missing usage reading or a call running past the ceiling stops work instead of being let through, and your spending cap applies ([costs](accounts-and-costs.md)).
 - **Back-off:** after a failure (an AI company error, a broken environment), a bench waits a little before trying again (a minute for a quick internal hiccup, longer for real failures) instead of hammering. Four failures in a row stop it and call the maintainer agent.
 
