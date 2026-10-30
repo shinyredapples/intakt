@@ -87,7 +87,7 @@ flowchart TD
 
 The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. Only you can change anything on the dashboard:
 - On the first start, you type the one-time setup code from `docker logs intakt`, and Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change asks for it: the admin area and the buttons on a card alike. Without it, the dashboard shows a login page and changes nothing.
-- The dashboard only answers on the computer it runs on, so there you can look at the board without logging in. If you turn on phone access, which needs HTTPS, everything asks for the same secret or passkey, even looking at the board: someone else on the network sees only the login page.
+- The dashboard only answers on the computer it runs on, so there you can look at the board without logging in. If you turn on phone access, which needs HTTPS, everything asks for the same secret or passkey, even looking at the board: someone else on the network sees only the login page. The secret is one Intakt made up, long and random, and after a few wrong tries the login slows down and you get a card, so guessing gets nowhere.
 - Another website open in your browser can't press a button or change a setting, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
 
 ### Every change ends by itself

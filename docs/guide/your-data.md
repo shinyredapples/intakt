@@ -6,18 +6,18 @@ Everything Intakt knows lives in one place, so it is easy to back up, move or re
 
 ```mermaid
 flowchart TD
-  vol[(The intakt data volume)] --> db[The database<br/>SQLite: tasks, queue, the record,<br/>budgets, project memory]
-  vol --> cfg[The config file<br/>projects, accounts, panels, routing]
-  vol --> keys[Its keys<br/>the GitHub App key, its signing key,<br/>AI tokens, logins and API keys]
+  vol[(The intakt data volume)] --> db[The database<br/>SQLite: tasks, queue, the record,<br/>budgets, your AI accounts, project memory]
+  vol --> cfg[The config file<br/>projects, panels, routing]
+  vol --> keys[Its keys and secrets<br/>the GitHub App key, its signing key, the secrets vault's key;<br/>the vault: AI tokens, logins and API keys, encrypted]
   vol --> mirror[A copy of each repository<br/>rebuilt from GitHub if lost]
   vol --> cache[Caches<br/>job images, package downloads]
 ```
 
 | Part | What's in it | If you lose it |
 |---|---|---|
-| **The database** | every task's state, the record of every decision, budgets, project memory | Intakt forgets its history; your code and pull requests on GitHub are untouched |
-| **The config file** | your settings | you redo the setup wizard |
-| **Its keys** | the App's private key, the signing key, AI tokens and logins | you reconnect the App and paste new tokens or log in again |
+| **The database** | every task's state, the record of every decision, budgets, the AI accounts and controls you set in the admin area, project memory | Intakt forgets its history and you add your accounts again; your code and pull requests on GitHub are untouched |
+| **The config file** | your settings: projects, panels, routing | you redo the setup wizard |
+| **Its keys and secrets** | the App's private key, the signing key and the key of the secrets vault; the vault itself with the AI tokens, logins and API keys you saved, encrypted | you reconnect the App and paste new tokens or log in again in the admin area |
 | **The repository copies** | a mirror of each project | nothing: rebuilt from GitHub |
 | **Caches** | images and downloads | nothing: rebuilt, just slower once |
 
@@ -27,7 +27,7 @@ flowchart TD
 
 Back up the data volume. Two ways:
 - **Quick and safe:** pause Intakt from the dashboard (running jobs finish, nothing new starts), copy the volume, resume.
-- **Without pausing:** take a consistent copy of the database with SQLite's own backup command, and copy the config file and keys next to it.
+- **Without pausing:** take a consistent copy of the database with SQLite's own backup command, and copy the config file, the keys and the secrets vault next to it.
 
 Treat the backup like a password manager's file: it holds keys. Store it encrypted.
 
