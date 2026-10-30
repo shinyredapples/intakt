@@ -1,0 +1,43 @@
+name: release-labels
+# GitHub groups generated release notes only by pull-request labels (.github/release.yml), so the Conventional Commit
+# type of each pull request's title becomes its label. No checkout: no pull-request code runs with the write token.
+# Never pull_request_target: a pull request from a fork gets a read-only token and is skipped.
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+concurrency:
+  group: release-labels-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  label:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Label the pull request with the type of its title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          CURRENT: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          pattern='^([a-z]+)(\([^)]*\))?!?: '
+          type=''
+          if [[ "$TITLE" =~ $pattern ]]; then
+            type="${BASH_REMATCH[1]}"
+          fi
+          for label in feat fix docs; do
+            if [[ "$label" == "$type" ]]; then
+              gh label create "$label" --repo "$REPOSITORY" --force --description "Conventional Commit type $label"
+              gh pr edit "$NUMBER" --repo "$REPOSITORY" --add-label "$label"
+            elif [[ ",$CURRENT," == *",$label,"* ]]; then
+              gh pr edit "$NUMBER" --repo "$REPOSITORY" --remove-label "$label"
+            fi
+          done

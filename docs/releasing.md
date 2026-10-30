@@ -31,4 +31,6 @@ Releases are cut by the owner. A build or review job never sets a tag and never 
 
 ## Release notes
 
-GitHub generates the notes from the merged pull requests since the previous tag. `.github/release.yml` groups them by the label on each pull request: `feat` (Features), `fix` (Fixes), `docs` (Docs), and everything else under "Other changes". The label is set on the pull request by hand and matches the Conventional Commit type of its title; nothing sets it automatically. Pull requests without a matching label land under "Other changes". Pull requests by `dependabot` are left out.
+GitHub generates the notes from the merged pull requests since the previous tag, and groups them only by pull-request label. So `.github/workflows/release-labels.yml` labels every pull request with the Conventional Commit type of its title (the part before the optional scope, `!` and colon) when it is opened, reopened or its title is edited: `feat`, `fix` or `docs`, and it removes a label of the three that no longer matches. It creates a missing label first. It never checks out the pull request, and it skips a pull request from a fork, whose token cannot write labels.
+
+`.github/release.yml` then groups the notes by those labels: `feat` (Features), `fix` (Fixes), `docs` (Docs), and everything else under "Other changes". Pull requests by `dependabot` are left out. A pull request merged before the workflow existed, or from a fork, has no label and lands under "Other changes"; label it by its title type before generating the notes.
