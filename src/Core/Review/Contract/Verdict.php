@@ -11,6 +11,7 @@ final readonly class Verdict
 {
     public const string INVALID_OUTPUT = 'invalid-output';
     public const string INCOMPLETE_STREAM = 'incomplete-stream';
+    public const string UNREAD_APPROVAL = 'unread-approval';
 
     /**
      * @param list<Finding> $findings
@@ -56,6 +57,24 @@ final readonly class Verdict
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'A verdict counts only when the reviewer finished it; a cut-off stream blocks and never counts as approval or changes.',
+            evidence: null,
+        );
+
+        return new self(Decision::Blocked, [$finding], [], []);
+    }
+
+    public static function unreadApproval(): self
+    {
+        $finding = new Finding(
+            id: self::UNREAD_APPROVAL,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'The reviewer approved a change it could not read: its provider gives it no access to the checkout, so the approval is refused and the review is blocked.',
+            fixable_by: FixableBy::Owner,
+            repeat: false,
+            requirement: 'An approval counts only from a reviewer that could read the change.',
             evidence: null,
         );
 

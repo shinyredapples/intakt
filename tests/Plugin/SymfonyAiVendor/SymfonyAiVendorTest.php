@@ -134,6 +134,15 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['big'], $verdict->follow_ups);
     }
 
+    public function testAnApprovalFromAReviewerThatReadsTheCheckoutCounts(): void
+    {
+        $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->json());
+
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
     public function testAnAnswerThatIsNotAVerdictCountsAsChanges(): void
     {
         $vendor = $this->vendorAnswering('not a verdict');
@@ -343,7 +352,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+        $vendor = new SymfonyAiVendor($tiers, self::createStub(TierResolver::class), $this->reviewer(),new UsageLedger($ledger, new MockClock(self::NOW), $logger));
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
@@ -499,6 +508,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $this->reviewer(), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), $usage);
     }
 }

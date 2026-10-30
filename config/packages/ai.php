@@ -3,13 +3,12 @@
 declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Ai\Infrastructure\ClaudeCodeCliFactory;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
+use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
-use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Config\Definition\Processor;
@@ -115,9 +114,7 @@ return static function (ContainerConfigurator $container): void {
     }
 
     if (!array_key_exists(Provider::ClaudeCode->value, $disabled)) {
-        $container->services()->set('intakt.ai.claude_code.cli', ModelClientInterface::class)
-            ->factory([new ReferenceConfigurator('intakt.ai.claude_code.cli_factory'), 'create']);
-        $container->services()->set('intakt.ai.claude_code.cli_factory', ClaudeCodeCliFactory::class)
+        $container->services()->set('intakt.ai.claude_code.cli', IsolatedClaudeCodeCli::class)
             ->args(['%kernel.project_dir%/var/claude-code', '%env(CLAUDE_CODE_OAUTH_TOKEN)%']);
         $container->services()->set('intakt.ai.platform.claude_code', PlatformInterface::class)
             ->factory([new ReferenceConfigurator(ClaudeCodePlatformFactory::class), 'create'])

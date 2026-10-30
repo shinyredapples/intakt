@@ -24,6 +24,12 @@ enum Provider: string
         };
     }
 
+    // The subscription CLI gets no tool until the per-review MCP server serves it the fenced ones (plan T15), so it never sees the change.
+    public function readsTheCheckout(): bool
+    {
+        return self::ClaudeCode !== $this;
+    }
+
     /**
      * @param list<string> $missing
      */

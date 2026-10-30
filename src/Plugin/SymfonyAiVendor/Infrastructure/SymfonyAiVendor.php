@@ -6,6 +6,8 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
@@ -24,6 +26,7 @@ final readonly class SymfonyAiVendor implements Vendor
 {
     public function __construct(
         private TierInvoker $tiers,
+        private TierResolver $resolver,
         private Reviewer $reviewer,
         private UsageLedger $usage,
     ) {
@@ -49,7 +52,17 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $verdict;
+        return $this->readOrRefused($project, $tier, $verdict);
+    }
+
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
+    private function readOrRefused(string $project, Tier $tier, Verdict $verdict): Verdict
+    {
+        if (Decision::Approve !== $verdict->verdict || $this->resolver->resolve($project, $tier)->provider->readsTheCheckout()) {
+            return $verdict;
+        }
+
+        return Verdict::unreadApproval();
     }
 
     // Matched on the exception type because the provider's text can change and carries anything (plan T5).

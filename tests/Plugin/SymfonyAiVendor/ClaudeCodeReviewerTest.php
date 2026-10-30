@@ -127,7 +127,15 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
 
-        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testTheSubscriptionReviewerCannotApproveAChangeItNeverRead(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertStringContainsString('could not read', $verdict->findings[0]->text);
     }
 
     public function testACliThatExitsMidStreamEndsTheReviewerAsBlocked(): void
@@ -232,6 +240,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer,new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
     }
 }
