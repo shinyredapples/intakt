@@ -25,11 +25,6 @@ services:
     # please note that last definitions always *replace* previous ones
 
 when@test:
-    services:
-        _defaults:
-            autowire: true
-            autoconfigure: true
-
-        # Handlers that prove the bus separation; they live in tests/ because src/ has no handler yet.
-        Intakt\Tests\Core\Platform\Handler\:
-            resource: '../tests/Core/Platform/Handler/'
+    imports:
+        # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
+        - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }

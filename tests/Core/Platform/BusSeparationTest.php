@@ -62,6 +62,9 @@ final class BusSeparationTest extends KernelTestCase
 
     private function bus(string $id): MessageBusInterface
     {
-        return self::getContainer()->get($id);
+        $bus = self::getContainer()->get($id);
+        self::assertInstanceOf(MessageBusInterface::class, $bus);
+
+        return $bus;
     }
 }
