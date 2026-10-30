@@ -102,7 +102,9 @@ On a development install (`composer install` with the dev packages), `vendor/bin
 
 The useful tools today are `symfony-services` and `symfony-service-detail` (which services the container holds and how one is wired), `symfony-dotenv-check` (which `.env*` file declares a variable and whether it resolves, with the value masked) and `server-info` (PHP version, system and extensions). The profiler tools are listed too, but Intakt does not turn on Symfony's profiler, so they find no profiles.
 
-If Mate stops with a PHP version mismatch, it was started with a PHP other than 8.5 (the version `mate/config.php` pins); run it with the PHP 8.5 the app uses. If a container tool reports "No compiled container found", run `bin/console cache:warmup` first so the dev container exists. If `tools:list` says "No tools found", check whether `vendor/` is a symlink: Mate then looks for its settings next to the folder the symlink points to and finds none, so it needs a real `vendor/` folder in the project.
+If Mate stops with a PHP version mismatch, it was started with a PHP other than 8.5 (the version `mate/config.php` pins); run it with the PHP 8.5 the app uses. If a container tool reports "No compiled container found", run `bin/console cache:warmup` first so the dev container exists. If `tools:list` says "No tools found", check whether `vendor/` is a symlink: Mate then looks for its settings next to the folder the symlink points to and finds none, so it needs a real `vendor/` folder in the project. The other cause is missing package information: Mate finds its packages through `vendor/composer/installed.json`, so if that file is missing or does not list `symfony/ai-mate`, run `composer install` again with the dev packages (without `--no-dev`).
+
+`vendor/bin/mate discover` writes files for coding agents: skill copies in `.agents/skills/` and `.claude/skills/`, and a `CLAUDE.md` in the project root; Git ignores all three. It also rewrites the committed `mate/extensions.php` and `mate/AGENT_INSTRUCTIONS.md`; do not commit those changes, and restore the files with `git checkout -- mate/`.
 
 ## The ledger
 

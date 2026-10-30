@@ -21,7 +21,9 @@
 
 ###> symfony/ai-mate ###
 # Local copies that vendor/bin/mate discover writes for the agent.
+/.agents/
 /.claude/skills/
+/CLAUDE.md
 ###< symfony/ai-mate ###
 
 ###> build loop ###
