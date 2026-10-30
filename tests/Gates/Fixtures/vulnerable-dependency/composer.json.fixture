@@ -1,5 +1,10 @@
 {
     "name": "intakt/fixture",
+    "version": "1.0.0",
+    "repositories": [
+        {"type": "composer", "url": "advisories"},
+        {"packagist.org": false}
+    ],
     "require": {
         "symfony/http-kernel": "5.4.0"
     }

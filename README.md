@@ -7,9 +7,33 @@
   </picture>
 </p>
 
-Give it a spec: AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI.
+The aim: give it a spec, and AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI. All of this is planned; [Status](#status) says what works today.
 
-Intakt turns a spec into a plan of small tasks, has AI agents build each one, has a panel of other agents from different providers review it, and merges what passes. It spends the AI budget you give it, asks you only when a person is needed, and acts as its own forge identity, never as you.
+- **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review.
+- **Why it will be different:** a panel of reviewers from different providers will return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
+- **Why you will be able to trust it:** it is to spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
+
+[Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
+
+## Five-minute start
+
+The demo (planned, see [Status](#status)):
+
+```
+git clone https://github.com/shinyredapples/intakt.git && cd intakt
+cp .env.dist .env.local   # add one or more provider API keys
+docker compose up         # Intakt, its database and a sample repository
+```
+
+Then open the dashboard, pick the sample pull request and start a review. The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+
+What works now:
+
+```
+composer install
+bin/check            # every quality gate, one JSON line per gate
+bin/console about    # the app boots on SQLite
+```
 
 ## The first release: the review loop
 
@@ -27,26 +51,6 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 **Planned:** everything in the list above, in the order of [the plan](docs/plan.md).
 
-## Quick start
-
-What works now:
-
-```
-composer install
-bin/check            # every quality gate, one JSON line per gate
-bin/console about    # the app boots on SQLite
-```
-
-The demo (planned):
-
-```
-git clone https://github.com/shinyredapples/intakt.git && cd intakt
-cp .env.dist .env.local   # add one or more provider API keys
-docker compose up         # Intakt, its database and a sample repository
-```
-
-Then open the dashboard, pick the sample pull request and start a review.
-
 ## How it is built
 
 - **PHP 8.5 and Symfony 8.1**, with the latest stable tools, and Symfony AI used for every model call, agent and memory, on purpose, to find the beta's bugs early.
@@ -62,6 +66,7 @@ Then open the dashboard, pick the sample pull request and start a review.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
 - [Why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md): the safety design in plain words.
+- [Showcase](docs/showcase/README.md): this repository built by an AI loop, in figures and examples.
 - [Spec](docs/spec.md) and [plan](docs/plan.md) of the first release.
 - [AGENTS.md](AGENTS.md): the rules for anyone, person or agent, changing the code.
 

@@ -357,9 +357,9 @@ final class SecretsGatesTest extends SandboxTestCase
         self::assertTrue($this->checkWithScannerReporting('8.30.1')->passed('secrets'));
     }
 
-    public function testThePinnedVersionMatchesTheOneTheWorkflowInstalls(): void
+    public function testThePinnedVersionMatchesTheOneTheCiImageInstalls(): void
     {
-        self::assertMatchesRegularExpression('/^version=8\.30\.1$/m', Workflow::runOf('Install the pinned gitleaks'));
+        self::assertMatchesRegularExpression('/^ARG GITLEAKS_VERSION=8\.30\.1$/m', Workflow::ciImageDefinition());
     }
 
     public function testAPlantedSecretInTheWorkingTreeFailsTheScan(): void

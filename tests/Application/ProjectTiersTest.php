@@ -9,10 +9,13 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Review\Contract\PanelNotConfigured;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Config\Exception\LoaderLoadException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Contracts\Service\ServiceProviderInterface;
@@ -42,6 +45,10 @@ final class ProjectTiersTest extends KernelTestCase
                     tiers:
                         strong: { provider: anthropic, model: big }
                         light: { provider: anthropic, model: small }
+                    review:
+                        quorum: all
+                        reviewers:
+                            - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
                 beta:
                     tiers:
                         strong: { provider: openai, model: other }
@@ -82,6 +89,49 @@ final class ProjectTiersTest extends KernelTestCase
         $resolver->resolve('beta', Tier::Strong);
     }
 
+    public function testAProjectReviewSectionLoadsAsAPanel(): void
+    {
+        self::assertSame('correctness', $this->bootedPanels()->panelFor('alpha-one')->reviewers[0]->role->name);
+    }
+
+    public function testAProjectWithoutAReviewSectionHasNoPanel(): void
+    {
+        $panels = $this->bootedPanels();
+
+        $this->expectException(PanelNotConfigured::class);
+        $panels->panelFor('beta');
+    }
+
+    public function testAnUnknownKeyBesideTheReviewSectionStillStopsTheBoot(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            projects:
+                alpha-one:
+                    tiers:
+                        strong: { provider: anthropic, model: big }
+                    review:
+                        quorum: all
+                        reviewers:
+                            - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
+                    reveiw: { quorum: all }
+            YAML);
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/reveiw/');
+
+        $this->bootedContainer();
+    }
+
+    public function testAProjectsValueThatIsNoMapStopsTheBoot(): void
+    {
+        file_put_contents($this->file, "projects: broken\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/Invalid type for path "intakt\.projects"/');
+
+        $this->bootedContainer();
+    }
+
     public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void
     {
         $platforms = $this->bootedContainer()->get(TierPlatform::PLATFORMS);
@@ -92,6 +142,15 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame([Provider::Anthropic->value], array_keys($platforms->getProvidedServices()));
         self::assertInstanceOf(Claude::class, $anthropic->getModelCatalog()->getModel('big'));
         self::assertInstanceOf(TierPlatform::class, self::getContainer()->get(TierPlatform::class));
+    }
+
+    private function bootedPanels(): ConfiguredPanels
+    {
+        // Nothing injects the loader yet, so the compiled container drops it; the parameter is what the config feeds it.
+        /** @var array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $parameter */
+        $parameter = $this->bootedContainer()->getParameter('intakt.review.panels');
+
+        return new ConfiguredPanels($parameter);
     }
 
     private function bootedContainer(): ContainerInterface
