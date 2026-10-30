@@ -16,11 +16,11 @@ final class ClaudeCodeCliFactoryTest extends TestCase
     private const string INHERITED = 'INTAKT_TEST_INHERITED_CREDENTIAL';
 
     // Prints what the CLI would see, in the shape of the CLI's final result event.
-    private const string FAKE_CLI = <<<'PHP'
-        #!/usr/bin/env php
-        <?php echo json_encode(['type' => 'result', 'result' => json_encode(['cwd' => getcwd(), 'environment' => getenv()])]), PHP_EOL;
-
-        PHP;
+    private const string FAKE_CLI = <<<'PHP_WRAP'
+    #!/usr/bin/env php
+    <?php echo json_encode(['type' => 'result', 'result' => json_encode(['cwd' => getcwd(), 'environment' => getenv()])]), PHP_EOL;
+    
+    PHP_WRAP;
 
     private string $root;
 
@@ -75,8 +75,10 @@ final class ClaudeCodeCliFactoryTest extends TestCase
         $result = $factory->create()->request(new ClaudeCode('sonnet'), 'Review.')->getData()['result'];
         self::assertIsString($result);
 
-        /** @var array{cwd: string, environment: array<string, string>} */
-        return json_decode($result, true, flags: JSON_THROW_ON_ERROR);
+        /** @var array{cwd: string, environment: array<string, string>} $seen */
+        $seen = json_decode($result, true, flags: JSON_THROW_ON_ERROR);
+
+        return $seen;
     }
 
     /**
