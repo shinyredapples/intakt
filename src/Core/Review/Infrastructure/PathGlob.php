@@ -20,8 +20,7 @@ final readonly class PathGlob
 
     private function pattern(): string
     {
-        // Anchored on the whole path; "**" crosses folders while "*" and "?" stop at a slash, so "src/*" does not reach "src/a/b.php".
-        // "/**/" also matches no folder, as in gitignore; "[\s\S]" because git allows a newline in a file name.
+        // Anchored; "*" and "?" stop at a slash, "/**/" may match no folder as in gitignore, "[\s\S]" because git allows a newline in a name.
         return '#\A'.strtr(preg_quote($this->glob, '#'), [
             '/\*\*/' => '/(?:[\s\S]*/)?',
             '\*\*' => '[\s\S]*',
