@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
+use Intakt\Core\Review\Infrastructure\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Infrastructure\PathGlob;
 use Intakt\Core\Review\UseCase\ChoosePanel\ChoosePanelCommand;
 use Intakt\Core\Review\UseCase\ChoosePanel\ChoosePanelInput;
@@ -35,6 +36,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(Panel::class)]
 #[UsesClass(PanelReviewer::class)]
 #[UsesClass(PanelNotConfigured::class)]
+#[UsesClass(GlobCannotBeEvaluated::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(QuorumPolicy::class)]
@@ -45,6 +47,22 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(Decision::class)]
 final class ChoosePanelCommandTest extends TestCase
 {
+    private string|false $backtrackLimit;
+
+    private string|false $jit;
+
+    protected function setUp(): void
+    {
+        $this->backtrackLimit = ini_get('pcre.backtrack_limit');
+        $this->jit = ini_get('pcre.jit');
+    }
+
+    protected function tearDown(): void
+    {
+        ini_set('pcre.backtrack_limit', (string) $this->backtrackLimit);
+        ini_set('pcre.jit', (string) $this->jit);
+    }
+
     public function testItPrintsTheCorePanelForAChangeNoRuleMatches(): void
     {
         $tester = $this->tester();
@@ -97,12 +115,25 @@ final class ChoosePanelCommandTest extends TestCase
         self::assertStringNotContainsString('quorum', $tester->getDisplay());
     }
 
-    private function tester(): CommandTester
+    public function testAGlobThatCannotBeEvaluatedFailsTheCommandNamingTheGlob(): void
+    {
+        ini_set('pcre.jit', '0');
+        ini_set('pcre.backtrack_limit', '500');
+        $tester = $this->tester('**/a/**/a/**/c.php');
+
+        $status = $tester->execute(['project' => 'alpha', '--path' => [str_repeat('a/', 60).'d.php']]);
+
+        self::assertSame(Command::FAILURE, $status);
+        self::assertStringContainsString('**/a/**/a/**/c.php', $tester->getDisplay());
+        self::assertStringNotContainsString('quorum', $tester->getDisplay());
+    }
+
+    private function tester(string $glob = 'src/**'): CommandTester
     {
         $panels = new ConfiguredPanels(['alpha' => [
             'quorum' => 'all',
             'reviewers' => [$this->reviewer('correctness')],
-            'rules' => [['paths' => ['src/**'], 'reviewers' => [$this->reviewer('security')]]],
+            'rules' => [['paths' => [$glob], 'reviewers' => [$this->reviewer('security')]]],
         ]]);
         $application = new Application();
         $application->addCommand(new ChoosePanelCommand($panels));

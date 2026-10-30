@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
+use Intakt\Core\Review\Infrastructure\GlobCannotBeEvaluated;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -34,7 +35,7 @@ final readonly class ChoosePanelCommand
 
         try {
             $panel = $this->panels->panelForChange($input->project, $change);
-        } catch (PanelNotConfigured $failure) {
+        } catch (PanelNotConfigured|GlobCannotBeEvaluated $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

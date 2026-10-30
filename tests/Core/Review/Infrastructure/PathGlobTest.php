@@ -32,6 +32,10 @@ final class PathGlobTest extends TestCase
     public function testAGlobThatMatchesReportsAMatch(): void
     {
         self::assertTrue(new PathGlob('src/**/*.php')->matches('src/a/b.php'));
+    }
+
+    public function testAGlobThatDoesNotMatchReportsNoMatch(): void
+    {
         self::assertFalse(new PathGlob('src/**/*.php')->matches('docs/b.md'));
     }
 
