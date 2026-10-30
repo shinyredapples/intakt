@@ -35,7 +35,7 @@ final class ReleaseLabelsTest extends SandboxTestCase
 
     public function testALabelAddedAfterTheEventIsRemovedWhenTheTitleNoLongerMatchesIt(): void
     {
-        // An older run, cancelled by this one, added feat after this event's labels were read.
+        // feat is on the pull request but not in the event, since a run this one cancelled added it late.
         $sandbox = $this->sandboxLabeled("docs\nfeat\n");
 
         $this->runWorkflow($sandbox, 'fix: y', 'docs');
@@ -62,6 +62,7 @@ final class ReleaseLabelsTest extends SandboxTestCase
 
     private function runWorkflow(Sandbox $sandbox, string $title, string $eventLabels = ''): ProcessResult
     {
+        /** @var array{jobs: array{label: array{steps: list<array{run: string}>}}} $workflow */
         $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/release-labels.yml');
         $environment = ['TITLE' => $title, 'CURRENT' => $eventLabels, 'REPOSITORY' => 'example/repo', 'NUMBER' => '7', 'LABELS' => $sandbox->root.'/labels'];
 
