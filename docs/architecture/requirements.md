@@ -24,6 +24,20 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 
 `unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
 
+## To run Intakt's own CI
+
+`.github/workflows/ci.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../user/self-hosted-ci.md)).
+
+| Command | Called by | What for | Needed |
+|---|---|---|---|
+| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the runner for the `persistence` service container | building the CI image, running `bin/check` and the persistence group in it, the database service | yes |
+| `docker run` security options | the `check` job | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
+| `sudo sysctl` | the `check` job, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
+| `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from the Dockerfile's hash | yes |
+| `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
+
+Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
+
 ## Coming with planned parts
 
 | Command | Where | What for |

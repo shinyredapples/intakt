@@ -91,9 +91,17 @@ No deterministic check stands between that code and the shared instance: the han
 ## CI log excerpts
 
 The builder holds no forge credentials, so it gets red CI as an excerpt the orchestrator reads from the forge. A builder controls the workflow on its branch, and could make a CI job print whatever the job can reach, encoded past redaction, and read it back. So:
-- **Only from a throwaway runner.** The excerpt is given only when the workflow scan of the merge rules ([Merge](08-merge.md)) finds every job of the head's, main's and the merged workflows on a forge-hosted runner with a read-only token and no secrets. Otherwise, or when the scan fails, the builder gets one line with the number of failed jobs, not their names, since job names come from the workflow.
+- **Only from a throwaway runner.** The excerpt is given only when the workflow scan of the merge rules ([Merge](08-merge.md)) finds every job of the head's, main's and the merged workflows on a forge-hosted runner with a read-only token and no secrets. A `runs-on` from a variable counts as not forge-hosted (the scan cannot read it), so such a project's builders always get the one line. Otherwise, or when the scan fails, the builder gets one line with the number of failed jobs, not their names, since job names come from the workflow.
 - **Small and clean.** At most a few failed jobs, each with its first failed step and the lines that name the failure (else the step's last lines), with terminal sequences, control characters and timestamps stripped and a cap on lines and characters. A log is read line by line under size and time limits, so a flooded log is never held whole.
 - **Redacted, then fenced.** Every line is redacted, a line that still holds a credential-shaped string is dropped, and the excerpt reaches the builder fenced as untrusted. A log that cannot be read gives one line; the send-back never waits for it.
+
+## Self-hosted CI runners
+
+A pull request from a branch of the repository runs its own workflow, and every script that workflow runs, on the project's runner before any review; Intakt's builds push such branches. On a self-hosted runner with Docker access that is as good as root on the host. So a self-hosted runner is supported only when it is ephemeral and isolated:
+- **A clean state for every job.** A fresh VM or container, or a snapshot rolled back before the job, with the runner registered for exactly one job (`--ephemeral` on GitHub). Nothing a job leaves on the host (a re-tagged image, a changed tool, a process) reaches a later job, main's included, and anything that exists when a job starts comes from the clean state the owner prepared. Intakt's own CI relies on this: it reuses a CI image whose tag is its Dockerfile's hash, which a persistent runner would let a pull request replace for every later run.
+- **No path to the owner's network.** The runner reaches the forge and the registries its jobs download from, nothing else, so a job cannot use the host to reach other machines.
+
+A persistent self-hosted runner is not supported. The workflow scan cannot tell an ephemeral runner from a persistent one, so self-hosted runners always need the owner's approval for a CI change ([Merge](08-merge.md)).
 
 ## Tests of the defenses
 
