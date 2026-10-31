@@ -24,6 +24,12 @@ final readonly class RequiredTools
         'secrets-history' => [self::SCANNER, 'env'],
     ];
 
+    // Because the gates run their commands in the workspace root, a relative path resolves there.
+    public function __construct(
+        private string $root,
+    ) {
+    }
+
     public static function scanner(): string
     {
         $named = getenv(self::SCANNER_ENVIRONMENT);
@@ -49,9 +55,12 @@ final readonly class RequiredTools
             array_push($commands, ...(self::BY_GATE[$gate] ?? []));
         }
 
-        $missing = array_filter(array_unique($commands), fn (string $command): bool => !$this->isAvailable($command));
+        // Because the override may name a command another gate needs too, names are deduplicated after it applies.
+        $missing = array_map($this->nameOf(...), $commands)
+            |> array_unique(...)
+            |> (fn (array $names): array => array_filter($names, fn (string $name): bool => !$this->isAvailable($name)));
 
-        return array_map(fn (string $command): string => self::notFound($this->nameOf($command)), array_values($missing));
+        return array_map(self::notFound(...), array_values($missing));
     }
 
     private function nameOf(string $command): string
@@ -59,14 +68,14 @@ final readonly class RequiredTools
         return self::SCANNER === $command ? self::scanner() : $command;
     }
 
-    private function isAvailable(string $command): bool
+    private function isAvailable(string $name): bool
     {
-        $name = $this->nameOf($command);
-
-        if (str_contains($name, '/')) {
-            return is_file($name) && is_executable($name);
+        if (!str_contains($name, '/')) {
+            return null !== new ExecutableFinder()->find($name);
         }
 
-        return null !== new ExecutableFinder()->find($name);
+        $path = str_starts_with($name, '/') ? $name : $this->root.'/'.$name;
+
+        return is_file($path) && is_executable($path);
     }
 }

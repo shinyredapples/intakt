@@ -13,23 +13,29 @@ final class RequiredToolsTest extends TestCase
 {
     private string|false $path;
 
+    private string $root;
+
     protected function setUp(): void
     {
         $this->path = getenv('PATH');
         putenv('INTAKT_GITLEAKS');
+        $this->root = sys_get_temp_dir().'/intakt-required-tools-'.bin2hex(random_bytes(6));
+        mkdir($this->root);
     }
 
     protected function tearDown(): void
     {
         putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
         putenv('INTAKT_GITLEAKS');
+        array_map(unlink(...), glob($this->root.'/*') ?: []);
+        rmdir($this->root);
     }
 
     public function testEveryMissingToolOfTheSelectedGatesIsListedOnce(): void
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
 
-        $missing = new RequiredTools()->missingFor(['audit', 'tests', 'secrets', 'secrets-history']);
+        $missing = $this->tools()->missingFor(['audit', 'tests', 'secrets', 'secrets-history']);
 
         self::assertSame(
             array_map(RequiredTools::notFound(...), ['git', 'composer', 'sh', 'unshare', 'setsid', 'true', 'bash', 'jq', 'gitleaks', 'env']),
@@ -41,7 +47,7 @@ final class RequiredToolsTest extends TestCase
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
 
-        $missing = new RequiredTools()->missingFor(['tests']);
+        $missing = $this->tools()->missingFor(['tests']);
 
         self::assertContains(RequiredTools::notFound('bash'), $missing);
         self::assertContains(RequiredTools::notFound('jq'), $missing);
@@ -51,7 +57,7 @@ final class RequiredToolsTest extends TestCase
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
 
-        self::assertSame([RequiredTools::notFound('git')], new RequiredTools()->missingFor(['cs']));
+        self::assertSame([RequiredTools::notFound('git')], $this->tools()->missingFor(['cs']));
     }
 
     public function testTheMessageNamesTheCommandAndTheRequirementsPage(): void
@@ -63,11 +69,42 @@ final class RequiredToolsTest extends TestCase
     {
         putenv('INTAKT_GITLEAKS=/nonexistent/scanner');
 
-        self::assertSame([RequiredTools::notFound('/nonexistent/scanner')], new RequiredTools()->missingFor(['secrets']));
+        self::assertSame([RequiredTools::notFound('/nonexistent/scanner')], $this->tools()->missingFor(['secrets']));
+    }
+
+    public function testAScannerOverrideNamingAnotherRequiredToolIsListedOnce(): void
+    {
+        putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
+        putenv('INTAKT_GITLEAKS=env');
+
+        $missing = $this->tools()->missingFor(['secrets', 'secrets-history']);
+
+        self::assertSame(array_map(RequiredTools::notFound(...), ['git', 'env']), $missing);
+    }
+
+    public function testARelativeScannerPathIsFoundInTheWorkspaceRoot(): void
+    {
+        file_put_contents($this->root.'/scanner', "#!/bin/sh\n");
+        chmod($this->root.'/scanner', 0o700);
+        putenv('INTAKT_GITLEAKS=./scanner');
+
+        self::assertSame([], $this->tools()->missingFor(['secrets']));
+    }
+
+    public function testARelativeScannerPathMissingFromTheWorkspaceRootIsListed(): void
+    {
+        putenv('INTAKT_GITLEAKS=./scanner');
+
+        self::assertSame([RequiredTools::notFound('./scanner')], $this->tools()->missingFor(['secrets']));
     }
 
     public function testToolsOnThePathAreFound(): void
     {
-        self::assertSame([], new RequiredTools()->missingFor(['cs']));
+        self::assertSame([], $this->tools()->missingFor(['cs']));
+    }
+
+    private function tools(): RequiredTools
+    {
+        return new RequiredTools($this->root);
     }
 }
