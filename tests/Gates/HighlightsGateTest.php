@@ -416,6 +416,24 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('highlights'), $run->output());
     }
 
+    public function testAWhereCellTooLongToMatchFailsTheGate(): void
+    {
+        $run = $this->checkRows('| A | a | done | `'.str_repeat('a', 1_100_000)." PR12 |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('Where cannot be checked', $run->findingsOf('highlights'));
+    }
+
+    public function testALongWhereCellWithinTheLimitIsStillChecked(): void
+    {
+        $run = $this->checkRows('| A | a | done | `'.str_repeat('a', 20_000).".md` PR12 |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringNotContainsString('cannot be checked', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("PR12")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('Where names `aaaa', $run->findingsOf('highlights'));
+    }
+
     public function testAMissingHighlightsFilePasses(): void
     {
         $run = $this->sandboxWithKernel()->check('--only=highlights');

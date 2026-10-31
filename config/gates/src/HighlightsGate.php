@@ -148,19 +148,25 @@ final readonly class HighlightsGate implements Gate
      */
     private function whereFindings(string $where, Closure $exists): array
     {
+        // A backticked span is a path or a name, checked below, so `upstream/pr1-repro/` is no pull request.
+        $unspanned = preg_replace(self::BACKTICKED, '', $where);
+
+        // A pattern that gives up on a long cell (the backtrack limit) matches nothing, which must not read as a clean cell.
+        if (null === $unspanned || false === preg_match_all(self::BACKTICKED, $where, $matches)) {
+            return ['Where cannot be checked ('.preg_last_error_msg().'), shorten the cell'];
+        }
+
         $findings = [];
 
-        // A backticked span is a path or a name, checked below, so `upstream/pr1-repro/` is no pull request.
-        if (1 === preg_match(self::PULL_REQUEST_NUMBER, (string) preg_replace(self::BACKTICKED, '', $where), $match)) {
+        if (1 === preg_match(self::PULL_REQUEST_NUMBER, $unspanned, $match)) {
             $findings[] = 'Where cites a pull request ("'.$match[0].'"), cite the task and issue instead';
         }
 
-        preg_match_all(self::BACKTICKED, $where, $matches);
-
         foreach ($matches[2] as $span) {
-            $path = (string) preg_replace(self::PADDED_SPAN, '$1', $span);
+            // Falling back to the raw span keeps a failed match checked, since padding makes no tracked path.
+            $path = preg_replace(self::PADDED_SPAN, '$1', $span) ?? $span;
 
-            if (1 === preg_match(self::PATH_LIKE, $path) && !$exists((string) preg_replace(self::LEADING_DOT_SLASH, '', $path))) {
+            if (1 === preg_match(self::PATH_LIKE, $path) && !$exists(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path)) {
                 $findings[] = 'Where names `'.$path.'`, which does not exist on the branch';
             }
         }
