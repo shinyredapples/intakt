@@ -75,6 +75,13 @@ final class RequiredToolsTest extends TestCase
         self::assertSame([RequiredTools::notFound('git')], $this->tools()->missingFor(['cs']));
     }
 
+    public function testNoCommandIsRequiredWhenNoGateIsSelected(): void
+    {
+        putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
+
+        self::assertSame([], $this->tools()->missingFor([]));
+    }
+
     public function testTheMessageNamesTheCommandAndTheRequirementsPage(): void
     {
         self::assertSame('gitleaks not found, see docs/architecture/requirements.md', RequiredTools::notFound('gitleaks'));
