@@ -327,7 +327,7 @@ T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.m
 - **Acceptance:** detection is counted per category over its own canaries; a category below 100% detection, or with fewer canaries than the minimum, cannot be switched on; a missed canary switches it off; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the cap holds under two concurrent approvals (forced order); the dashboard line names the head, the category and its checks.
 - **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
 - **PHP 8.5:** the pipe operator for the canary run's steps.
-- **Waits for:** T20, T77, T79. **Size:** L. **Labels:** `class:process`, `priority:normal`.
+- **Waits for:** T20, T77, T79. **Size:** L. **Labels:** `class:process`, `priority:normal`, `plan:required`.
 
 ### T32 GitHub webhooks through Webhook and RemoteEvent (optional, last)
 - **Description:** Optional, and only for installs that already have a public endpoint: polling stays the default and Intakt works fully without webhooks ([Merge](design/05-architecture/08-merge.md#waiting-for-ci)). A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so a change is seen sooner than the next poll.
@@ -555,9 +555,9 @@ Conventions, in addition to the ones above:
 - **Waits for:** T59, T60. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ### T62 Merge: signed fast-forward of the exact head
-- **Description:** A new `Core/Merge` module: right before merging it re-reads the task and pull request, requires green CI on exactly the head, merges main into the branch only now (a clean merge keeps verdicts and approvals; CI runs once more), signs, records the merge, then moves main to the head by a non-force ref update, so a push in between fails the merge; it reads the result back, closes the issues and deletes the merged branch. A budget back-off still merges approved heads. Updates design decision 9 (merges are signed fast-forwards of main, not forge merge commits), as the owner decided.
+- **Description:** A new `Core/Merge` module: right before merging it re-reads the task and pull request, requires green CI on exactly the head, merges main into the branch only now (a clean merge keeps verdicts and approvals; CI runs once more), signs, records the merge, then moves main to the head by a non-force ref update, so a push in between fails the merge; it reads the result back, closes the issues and deletes the merged branch. A budget back-off still merges approved heads. A head that touches protected paths (T54) is parked and never merged until T64 adds the owner's approval, so no increment between T62 and T64 merges a protected change. Updates design decision 9 (merges are signed fast-forwards of main, not forge merge commits), as the owner decided.
 - **Reference:** `test_fixpass_git.py` (refuses a non-fast-forward, rejected when main moves after the checks, a push whose response was lost stays covered), `test_merge_only.py`, `test_lanes.py` (a crash after publishing never publishes twice).
-- **Acceptance:** each case above with a temporary repository and recorded forge responses.
+- **Acceptance:** each case above with a temporary repository and recorded forge responses; a head touching a protected path with green CI and every verdict stays parked.
 - **Evidence:** a merged test pull request with main's verified signature.
 - **Waits for:** T57, T54. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
 
@@ -653,5 +653,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
 - The shadow week (after T43) runs while M7 is built.
-- M7: T45 and T46 after T44; T47 and T54 in parallel; T48, then T49 to T52 in order; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56.
+- M7: T45 and T46 after T44; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56.
 - M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 alongside; T74 last.
