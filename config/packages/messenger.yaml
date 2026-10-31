@@ -4,3 +4,8 @@ framework:
         buses:
             command.bus: ~
             query.bus: ~
+        transports:
+            # One worker per reviewer message runs the reviewers of a round in parallel; the table is created on first use.
+            async: '%env(MESSENGER_TRANSPORT_DSN)%'
+        routing:
+            Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer: async
