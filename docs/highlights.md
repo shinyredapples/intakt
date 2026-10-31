@@ -76,7 +76,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `ResetInterface` and `kernel.reset` | every stateful service resets between requests in worker mode and between messages in consumers; a PHPStan rule enforces it | in progress | T36 (#67), `config/gates/src/PhpStan/StatefulServiceResetRule.php`; T29 (#29) planned |
 | Scheduler | usage probes, deadlines and the weekly branch cleanup | planned | T14 (#19), T30 (#24) |
 | Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | in progress | T9 (#14, part #240), `config/packages/workflow.php`, `src/Core/Review/Domain/`, `docs/architecture/review-round.dot` |
-| Lock (Semaphore) | caps parallel calls per vendor account (file locks, since the other store needs Redis) | in progress | T9 (#14, part #241), `src/Plugin/SymfonyAiVendor/Infrastructure/VendorAccountLimit.php` |
+| Lock (Semaphore) | caps parallel calls per vendor account (file locks, since the other store needs Redis) | in progress | T9 (#14, part #241), `src/Plugin/SymfonyAiVendor/Infrastructure/VendorAccountLimit.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/AccountLimitedVendor.php` |
 | RateLimiter | per-account cooldown windows aligned to the vendor's reset | planned | T14 (#19) |
 | Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned (optional, last) | T32 (#60) |
 | HttpClient | `RetryableHttpClient` and scoped clients for GitHub | planned | T18 (#23) |
