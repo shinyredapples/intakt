@@ -7,8 +7,7 @@ namespace Intakt\Core\Review\Domain;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\PanelReviewer;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
@@ -16,6 +15,9 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: 'review_round')]
 final class ReviewRound implements HasPlace
 {
+    // The one transition of a round; a single named value, so a constant rather than an enum.
+    public const string COMPLETION = 'complete';
+
     // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
     /** @var Collection<int, RoundReviewer> */
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]
@@ -28,20 +30,15 @@ final class ReviewRound implements HasPlace
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
         private Uuid $id,
-        #[ORM\Column(length: 255)]
-        private string $project,
-        // The path, not a Checkout, because a worker that restarts rebuilds the checkout from the stored row.
-        #[ORM\Column(type: 'text')]
-        private string $checkoutRoot,
-        #[ORM\Column(type: 'text')]
-        private string $task,
+        #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
+        private ReviewSubject $subject,
     ) {
         $this->reviewers = new ArrayCollection();
     }
 
-    public function addReviewer(UuidV7 $id, ReviewerRole $role, Tier $tier): void
+    public function addReviewer(UuidV7 $id, PanelReviewer $member): void
     {
-        $this->reviewers->add(new RoundReviewer($id, $this, $role->name, $role->prompt, $tier));
+        $this->reviewers->add(new RoundReviewer($id, $this, $member));
     }
 
     public function id(): Uuid
@@ -51,17 +48,17 @@ final class ReviewRound implements HasPlace
 
     public function project(): string
     {
-        return $this->project;
+        return $this->subject->project;
     }
 
     public function checkoutRoot(): string
     {
-        return $this->checkoutRoot;
+        return $this->subject->checkoutRoot;
     }
 
     public function task(): string
     {
-        return $this->task;
+        return $this->subject->task;
     }
 
     /**

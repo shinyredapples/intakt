@@ -4,22 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
-use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
-use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Domain\ReviewRound;
-use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Uid\UuidV7;
 
 #[AsCommandHandler]
 final readonly class RunReviewRoundHandler
 {
     public function __construct(
-        private EntityManagerInterface $entities,
+        private ReviewRounds $rounds,
         private RoundLedger $ledger,
         private MessageBusInterface $commands,
-        private ClockInterface $clock,
     ) {
     }
 
@@ -27,8 +22,8 @@ final readonly class RunReviewRoundHandler
     public function __invoke(RunReviewRound $command): string
     {
         // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
-        return $this->entities->wrapInTransaction(function () use ($command): string {
-            $round = $this->open($command);
+        return $this->rounds->inOneTransaction(function () use ($command): string {
+            $round = $this->rounds->open($command);
             $this->ledger->reviewStarted($round);
             $this->dispatchOneMessagePerReviewer($round);
 
@@ -36,32 +31,10 @@ final readonly class RunReviewRoundHandler
         });
     }
 
-    private function open(RunReviewRound $command): ReviewRound
-    {
-        // Built only to refuse a path that is no directory, because a round stored for one could never be reviewed.
-        new Checkout($command->checkoutRoot);
-
-        $round = new ReviewRound($this->newId(), $command->project, $command->checkoutRoot, $command->task);
-
-        foreach ($command->panel->reviewers as $reviewer) {
-            $round->addReviewer($this->newId(), $reviewer->role, $reviewer->model->tier);
-        }
-
-        $this->entities->persist($round);
-        $this->entities->flush();
-
-        return $round;
-    }
-
     private function dispatchOneMessagePerReviewer(ReviewRound $round): void
     {
         foreach ($round->reviewers() as $reviewer) {
             $this->commands->dispatch(new ReviewWithReviewer($reviewer->id()->toRfc4122()));
         }
-    }
-
-    private function newId(): UuidV7
-    {
-        return new UuidV7(UuidV7::generate($this->clock->now()));
     }
 }

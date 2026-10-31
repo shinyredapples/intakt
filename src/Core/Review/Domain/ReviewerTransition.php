@@ -10,12 +10,13 @@ enum ReviewerTransition: string
     case Start = 'start';
     case Receive = 'receive';
     case Fail = 'fail';
+    case Requeue = 'requeue';
 
     public function fromPlace(): ReviewerState
     {
         return match ($this) {
             self::Start => ReviewerState::Queued,
-            self::Receive, self::Fail => ReviewerState::Running,
+            self::Receive, self::Fail, self::Requeue => ReviewerState::Running,
         };
     }
 
@@ -25,6 +26,7 @@ enum ReviewerTransition: string
             self::Start => ReviewerState::Running,
             self::Receive => ReviewerState::Verdict,
             self::Fail => ReviewerState::Failed,
+            self::Requeue => ReviewerState::Queued,
         };
     }
 }

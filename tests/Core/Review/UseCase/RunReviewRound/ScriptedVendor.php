@@ -12,7 +12,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Override;
 use Throwable;
 
-// Answers every review with an approval, or throws the failure it was given; counts the calls so a test sees which reviewers ran.
+// Stands in for a vendor because a test must never reach a provider; the call count tells a test which reviewers ran.
 final class ScriptedVendor implements Vendor
 {
     public int $calls = 0;

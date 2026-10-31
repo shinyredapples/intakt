@@ -74,8 +74,8 @@ These Symfony components keep many jobs running in the right order, without anyo
 
 | Component | Everyday comparison | What it does in Intakt | Status |
 |---|---|---|---|
-| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, and a review round puts one message per reviewer into a queue that workers empty in parallel; retries are planned |
-| **Workflow** | a board game's rules | the steps of a review round and of each reviewer in it, and which moves are allowed, drawn as a diagram | partly built: a round (collecting, complete) and each reviewer (queued, running, verdict or failed) are built; the steps of the whole review loop below are planned |
+| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, and a review round puts one message per reviewer into a queue that workers empty in parallel; a message that finds its reviewer still with another worker comes back when that worker's hour is over; the other retries are planned |
+| **Workflow** | a board game's rules | the steps of a review round and of each reviewer in it, and which moves are allowed, drawn as a diagram | partly built: a round (collecting, complete) and each reviewer (queued, running, verdict or failed, and back to queued when its result could not be written down) are built; the steps of the whole review loop below are planned |
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
 | **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | planned |
 | **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | planned |
@@ -95,7 +95,8 @@ stateDiagram-v2
     [*] --> Queued
     Queued --> Running: a worker picks it up
     Running --> Verdict: the reviewer answers
-    Running --> Failed: the call fails
+    Running --> Failed: the call fails, or the worker is gone for an hour
+    Running --> Queued: the result could not be written down
   }
 ```
 

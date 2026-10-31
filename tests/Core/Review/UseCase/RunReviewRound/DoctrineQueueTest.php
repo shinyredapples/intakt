@@ -1,0 +1,105 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
+
+use Doctrine\DBAL\Exception\TableNotFoundException;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
+use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
+use Symfony\Component\Messenger\Exception\TransportException;
+use Symfony\Component\Messenger\MessageBusInterface;
+
+// On the application's Doctrine transport, which the test environment otherwise replaces with the in-memory one; the queue table is made as messenger:setup-transports makes it.
+#[Group('persistence')]
+#[CoversClass(RunReviewRoundHandler::class)]
+#[CoversClass(ReviewRounds::class)]
+#[UsesClass(RoundLedger::class)]
+final class DoctrineQueueTest extends KernelTestCase
+{
+    private const string TRANSPORT_DSN = 'MESSENGER_TRANSPORT_DSN';
+
+    private string $configuredDsn;
+    private RoundFixture $fixture;
+    private MessageBusInterface $commands;
+    private DoctrineTransport $queue;
+
+    protected function setUp(): void
+    {
+        $this->configuredDsn = (string) ($_ENV[self::TRANSPORT_DSN] ?? '');
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $container = self::getContainer();
+        $this->fixture = new RoundFixture($container);
+        $commands = $container->get('command.bus');
+        assert($commands instanceof MessageBusInterface);
+        $this->commands = $commands;
+        $queue = $container->get('messenger.transport.async');
+        assert($queue instanceof DoctrineTransport);
+        $this->queue = $queue;
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+
+        parent::tearDown();
+    }
+
+    public function testAFirstSendNeverCreatesTheQueueTableInsideARoundsTransaction(): void
+    {
+        try {
+            $this->fixture->startOn($this->commands, 1);
+            self::fail('The round was queued although its table does not exist.');
+        } catch (TransportException $refused) {
+            self::assertInstanceOf(TableNotFoundException::class, $refused->getPrevious());
+        }
+
+        self::assertSame([], $this->fixture->storedRounds());
+    }
+
+    public function testTheMessagesOfARoundAreQueuedInTheRoundsTransaction(): void
+    {
+        $this->queue->setup();
+
+        $this->fixture->startOn($this->commands, 3);
+
+        self::assertSame(3, $this->queue->getMessageCount());
+    }
+
+    public function testARoundWhoseDispatchBreaksTakesItsQueuedMessageBackWithIt(): void
+    {
+        $this->queue->setup();
+
+        try {
+            $this->fixture->startOn(new RefusingQueue($this->commands), 3);
+            self::fail('The refused dispatch was swallowed.');
+        } catch (RuntimeException $refused) {
+            self::assertSame('queue unavailable', $refused->getMessage());
+        }
+
+        self::assertSame(0, $this->queue->getMessageCount());
+        self::assertSame([], $this->fixture->storedRounds());
+    }
+
+    public function testTheQueueStillTakesTheNextRoundAfterARolledBackOne(): void
+    {
+        $this->queue->setup();
+
+        try {
+            $this->fixture->startOn(new RefusingQueue($this->commands), 3);
+        } catch (RuntimeException) {
+        }
+
+        $this->fixture->startOn($this->commands, 1);
+
+        self::assertSame(1, $this->queue->getMessageCount());
+    }
+}

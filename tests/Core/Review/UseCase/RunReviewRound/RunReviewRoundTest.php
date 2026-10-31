@@ -8,13 +8,18 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewEventNotRecorded;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerNotFound;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStillHeld;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
-use Intakt\Core\Review\UseCase\RunReviewRound\RoundCompletion;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -25,7 +30,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[Group('persistence')]
 #[CoversClass(RunReviewRoundHandler::class)]
 #[CoversClass(ReviewWithReviewerHandler::class)]
-#[CoversClass(RoundCompletion::class)]
+#[CoversClass(ReviewRounds::class)]
+#[CoversClass(ReviewerLeases::class)]
+#[CoversClass(ReviewerMoves::class)]
+#[CoversClass(ReviewerStillHeld::class)]
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(RoundState::class)]
 #[UsesClass(ReviewerState::class)]
@@ -51,7 +59,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testARoundWhoseMessagesCannotAllBeQueuedLeavesNoRoundAndNoLedgerEventBehind(): void
     {
         try {
-            $this->fixture->startOn(new RefusingQueue(), 3);
+            $this->fixture->startOn(new RefusingQueue(new RecordingBus()), 3);
             self::fail('The refused dispatch was swallowed.');
         } catch (RuntimeException $refused) {
             self::assertSame('queue unavailable', $refused->getMessage());
@@ -147,6 +155,43 @@ final class RunReviewRoundTest extends KernelTestCase
         );
     }
 
+    public function testAnEndTheLedgerRefusesIsNotStoredEitherAndTheReviewerGoesBackToTheQueue(): void
+    {
+        $round = $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = new ScriptedVendor();
+        $refusingAfterTheStart = new InMemoryLedger(accepted: 1);
+
+        try {
+            $this->fixture->worker($this->fixture->entities, $vendor, $refusingAfterTheStart)($message);
+            self::fail('The refused ledger event was swallowed.');
+        } catch (ReviewEventNotRecorded) {
+        }
+
+        $reviewer = $this->fixture->reviewer($message->reviewerId);
+        self::assertSame(1, $vendor->calls);
+        self::assertSame(ReviewerState::Queued, $reviewer->state());
+        self::assertNull($reviewer->verdictJson());
+        self::assertSame(RoundState::Collecting, $this->fixture->round($round->id()->toRfc4122())->state());
+    }
+
+    public function testTheRetryAfterARefusedEndRunsTheReviewerAgainAndRecordsItsEnd(): void
+    {
+        $round = $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = new ScriptedVendor();
+
+        try {
+            $this->fixture->worker($this->fixture->entities, $vendor, new InMemoryLedger(accepted: 1))($message);
+        } catch (ReviewEventNotRecorded) {
+        }
+        $this->fixture->deliver($message, $vendor);
+
+        self::assertSame(2, $vendor->calls);
+        self::assertSame(RoundState::Complete, $this->fixture->round($round->id()->toRfc4122())->state());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
+    }
+
     public function testARestartedWorkerSkipsFinishedReviewersAndRunsTheRest(): void
     {
         $round = $this->fixture->start(3);
@@ -164,12 +209,29 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(RoundState::Complete, $this->fixture->round($round->id()->toRfc4122())->state());
     }
 
-    public function testAReviewerThatWasRunningWhenTheWorkerStoppedFailsAndTheRoundStillCompletes(): void
+    public function testARedeliveryInsideTheHoldOfARunningReviewerComesBackWhenTheHoldEnds(): void
+    {
+        $this->fixture->start(1);
+        $this->leaveRunning($this->fixture->bus->messages[0]);
+        $this->fixture->clock->modify('+15 minutes');
+        $vendor = new ScriptedVendor();
+
+        try {
+            $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
+            self::fail('The held reviewer was taken over.');
+        } catch (ReviewerStillHeld $held) {
+            self::assertSame(45 * 60 * 1000, $held->getRetryDelay());
+        }
+
+        self::assertSame(0, $vendor->calls);
+        self::assertSame(ReviewerState::Running, $this->fixture->reviewer($this->fixture->bus->messages[0]->reviewerId)->state());
+    }
+
+    public function testAReviewerStillRunningWhenItsHoldEndedFailsAsStoppedAndTheRoundStillCompletes(): void
     {
         $round = $this->fixture->start(1);
-        $reviewer = $this->fixture->reviewer($this->fixture->bus->messages[0]->reviewerId);
-        $this->fixture->machine('state_machine.reviewer')->apply($reviewer, ReviewerTransition::Start->value);
-        $this->fixture->entities->flush();
+        $this->leaveRunning($this->fixture->bus->messages[0]);
+        $this->fixture->clock->modify('+1 hour');
         $vendor = new ScriptedVendor();
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
@@ -177,6 +239,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(0, $vendor->calls);
         self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
+        self::assertSame('the worker stopped before the reviewer had a verdict', $stored->reviewers()[0]->failure());
         self::assertSame(RoundState::Complete, $stored->state());
     }
 
@@ -187,5 +250,14 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->expectException(ReviewerNotFound::class);
 
         $this->fixture->deliver(new ReviewWithReviewer('019a2600-0000-7000-8000-000000000000'), new ScriptedVendor());
+    }
+
+    // As a worker leaves a reviewer when it is killed between the start and the end of the review.
+    private function leaveRunning(ReviewWithReviewer $message): void
+    {
+        $reviewer = $this->fixture->reviewer($message->reviewerId);
+        $reviewer->recordStart($this->fixture->clock->now());
+        $this->fixture->machine('state_machine.reviewer')->apply($reviewer, ReviewerTransition::Start->value);
+        $this->fixture->entities->flush();
     }
 }

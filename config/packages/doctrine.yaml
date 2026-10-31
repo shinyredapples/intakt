@@ -3,7 +3,7 @@ doctrine:
         url: '%env(resolve:DATABASE_URL)%'
         server_version: '%env(postgresql_server_version:resolve:DATABASE_URL)%'
 
-        # The Agent message store owns the first table and keeps it in step; the migration only creates it. The Messenger transport creates and keeps the second on first use.
+        # The Agent message store owns the first table and keeps it in step; the Messenger transport owns the second. The migrations only create them.
         schema_filter: '~^(?!reviewer_conversation$|messenger_messages$)~'
         profiling_collect_backtrace: '%kernel.debug%'
         types:

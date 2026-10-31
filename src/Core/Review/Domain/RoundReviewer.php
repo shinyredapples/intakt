@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Domain;
 
+use DateInterval;
+use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\Uid\UuidV7;
 
@@ -14,8 +17,23 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Index(name: 'round_reviewer_round', columns: ['round_id'])]
 final class RoundReviewer implements HasPlace
 {
+    // A worker holds a running reviewer this long; a redelivery inside the hold waits, one after it may treat the worker as stopped. The transport's redeliver_timeout stays above it.
+    public const string REVIEW_CEILING = 'PT1H';
+
+    #[ORM\Column(length: 255)]
+    private readonly string $roleName;
+
+    #[ORM\Column(type: 'text')]
+    private readonly string $rolePrompt;
+
+    #[ORM\Column(length: 16, enumType: Tier::class)]
+    private readonly Tier $tier;
+
     #[ORM\Column(length: 16, enumType: ReviewerState::class)]
     private ReviewerState $state = ReviewerState::Queued;
+
+    #[ORM\Column(type: 'utc_datetime_immutable', nullable: true)]
+    private ?DateTimeImmutable $startedAt = null;
 
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $verdict = null;
@@ -31,13 +49,16 @@ final class RoundReviewer implements HasPlace
         #[ORM\ManyToOne(targetEntity: ReviewRound::class, inversedBy: 'reviewers')]
         #[ORM\JoinColumn(nullable: false)]
         private readonly ReviewRound $round,
-        #[ORM\Column(length: 255)]
-        private readonly string $roleName,
-        #[ORM\Column(type: 'text')]
-        private readonly string $rolePrompt,
-        #[ORM\Column(length: 16, enumType: Tier::class)]
-        private readonly Tier $tier,
+        PanelReviewer $member,
     ) {
+        $this->roleName = $member->role->name;
+        $this->rolePrompt = $member->role->prompt;
+        $this->tier = $member->model->tier;
+    }
+
+    public function recordStart(DateTimeImmutable $now): void
+    {
+        $this->startedAt = $now;
     }
 
     public function recordVerdict(Verdict $verdict): void
@@ -83,6 +104,12 @@ final class RoundReviewer implements HasPlace
     public function isFinished(): bool
     {
         return $this->state->isFinished();
+    }
+
+    // The end of the worker's hold on a running reviewer; null when no worker holds it.
+    public function heldUntil(): ?DateTimeImmutable
+    {
+        return ReviewerState::Running === $this->state ? $this->startedAt?->add(new DateInterval(self::REVIEW_CEILING)) : null;
     }
 
     public function verdictJson(): ?string

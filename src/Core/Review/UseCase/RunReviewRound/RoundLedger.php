@@ -11,7 +11,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 
-// Callers flush their own changes first, because a failed append resets the entity manager and drops whatever is pending.
+// Called inside the caller's transaction, so a refused event rolls the move it reports back with it.
 final readonly class RoundLedger
 {
     public function __construct(private Ledger $ledger)

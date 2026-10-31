@@ -9,10 +9,14 @@ use RuntimeException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 
-// Accepts the first message and refuses the next, so a round has stored rows and one sent message when the dispatch breaks.
+// Passes the first message on and refuses the next, so a round has stored rows and one sent message when the dispatch breaks.
 final class RefusingQueue implements MessageBusInterface
 {
     private int $accepted = 0;
+
+    public function __construct(private readonly MessageBusInterface $queue)
+    {
+    }
 
     #[Override]
     public function dispatch(object $message, array $stamps = []): Envelope
@@ -23,6 +27,6 @@ final class RefusingQueue implements MessageBusInterface
 
         ++$this->accepted;
 
-        return new Envelope($message, $stamps);
+        return $this->queue->dispatch($message, $stamps);
     }
 }
