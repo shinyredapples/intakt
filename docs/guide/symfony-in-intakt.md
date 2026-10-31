@@ -74,8 +74,8 @@ These Symfony components keep many jobs running in the right order, without anyo
 
 | Component | Everyday comparison | What it does in Intakt | Status |
 |---|---|---|---|
-| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, nothing is sent through them yet, and retries are planned |
-| **Workflow** | a board game's rules | the steps of a review round (waiting, reviewing, changes, approved) and which moves are allowed, drawn as a diagram | planned |
+| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, and a review round puts one message per reviewer into a queue that workers empty in parallel; retries are planned |
+| **Workflow** | a board game's rules | the steps of a review round and of each reviewer in it, and which moves are allowed, drawn as a diagram | partly built: a round (collecting, complete) and each reviewer (queued, running, verdict or failed) are built; the steps of the whole review loop below are planned |
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
 | **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | planned |
 | **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | planned |
@@ -83,7 +83,23 @@ These Symfony components keep many jobs running in the right order, without anyo
 | **Uid** | a ticket number | every event gets a unique id that also says when it happened | in progress |
 | **Process** | a helper that runs errands | runs git and test commands safely, with a time limit | in use |
 
-A review round as the Workflow component would draw it:
+The part that is built, a round and its reviewers (the technical drawing is `docs/architecture/review-round.dot`). A round is complete as soon as every reviewer has either a verdict or has failed, whichever reviewer is last; the state is stored in the database, so a restarted worker carries on:
+
+```mermaid
+stateDiagram-v2
+  state "A round" as Round {
+    [*] --> Collecting
+    Collecting --> Complete: every reviewer has a verdict or failed
+  }
+  state "Each reviewer" as Reviewer {
+    [*] --> Queued
+    Queued --> Running: a worker picks it up
+    Running --> Verdict: the reviewer answers
+    Running --> Failed: the call fails
+  }
+```
+
+The whole review loop as the Workflow component would draw it (planned):
 
 ```mermaid
 stateDiagram-v2

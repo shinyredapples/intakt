@@ -72,10 +72,10 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Messenger | command and query buses; a rate-limited reviewer retries after `getRetryAfter()` through `RecoverableExceptionInterface::getRetryDelay()`; the failure transport means `blocked`. Built: the two buses `command.bus` and `query.bus` and the typed handler attributes `AsCommandHandler` and `AsQueryHandler` | in progress | T9 (#14, part #271), `config/packages/messenger.yaml`, `src/Core/Platform/Contract/AsCommandHandler.php`, `src/Core/Platform/Contract/AsQueryHandler.php`; T9 (#14) for the retry and the failure transport |
+| Messenger | command and query buses; a rate-limited reviewer retries after `getRetryAfter()` through `RecoverableExceptionInterface::getRetryDelay()`; the failure transport means `blocked`. Built: the two buses `command.bus` and `query.bus`, the typed handler attributes `AsCommandHandler` and `AsQueryHandler`, and the `async` Doctrine transport that carries one message per reviewer of a round | in progress | T9 (#14, part #271), `config/packages/messenger.yaml`, `src/Core/Platform/Contract/AsCommandHandler.php`, `src/Core/Platform/Contract/AsQueryHandler.php`; T9 (#14, part #240), `src/Core/Review/UseCase/RunReviewRound/`; T9 (#14) for the retry and the failure transport |
 | `ResetInterface` and `kernel.reset` | every stateful service resets between requests in worker mode and between messages in consumers; a PHPStan rule enforces it | in progress | T36 (#67), `config/gates/src/PhpStan/StatefulServiceResetRule.php`; T29 (#29) planned |
 | Scheduler | usage probes, deadlines and the weekly branch cleanup | planned | T14 (#19), T30 (#24) |
-| Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | planned | T9 (#14) |
+| Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | in progress | T9 (#14, part #240), `config/packages/workflow.php`, `src/Core/Review/Domain/`, `docs/architecture/review-round.dot` |
 | Lock (Semaphore) | caps parallel calls per vendor account | planned | T9 (#14) |
 | RateLimiter | per-account cooldown windows aligned to the vendor's reset | planned | T14 (#19) |
 | Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned (optional, last) | T32 (#60) |
