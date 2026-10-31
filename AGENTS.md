@@ -27,7 +27,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
 - Time only through Symfony's `ClockInterface`, `DateTimeImmutable` in UTC; system-time functions and non-literal moments are refused (enforced). `hrtime()` for elapsed time.
 - Worker mode: services keep no per-request state; what must reset implements `ResetInterface`.
-- Handlers use Intakt's `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler` (arriving with the first handler, plan T9). A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
+- Handlers use Intakt's `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`. A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
 - Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>`.
 - Logging, Doctrine mapping and the dependency policy: see [Conventions](docs/architecture/README.md#conventions).
 
