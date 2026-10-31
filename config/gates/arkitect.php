@@ -25,6 +25,6 @@ return static function (Config $config) use ($rules): void {
 
     $config->add(
         ClassSet::fromDir($root.'/src')->excludePath('Kernel.php'),
-        ...array_map(static fn (string $rule): ArchRule => (new $rule())->rule(), $rules),
+        ...array_map(static fn (string $rule): ArchRule => new $rule()->rule(), $rules),
     );
 };
