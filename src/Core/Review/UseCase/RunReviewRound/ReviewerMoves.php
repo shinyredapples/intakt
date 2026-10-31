@@ -42,6 +42,21 @@ final readonly class ReviewerMoves
         $this->ledger->reviewerFailed($reviewer, $failure);
     }
 
+    public function block(RoundReviewer $reviewer, string $reason): void
+    {
+        $reviewer->recordFailure($reason);
+        $this->machine->apply($reviewer, ReviewerTransition::Block->value);
+        $this->ledger->reviewerBlocked($reviewer, $reason);
+    }
+
+    // The start is reported again, because the ledger then shows every attempt a stopped worker cost.
+    public function restart(RoundReviewer $reviewer, DateTimeImmutable $now): void
+    {
+        $reviewer->recordRestart();
+        $this->requeue($reviewer);
+        $this->start($reviewer, $now);
+    }
+
     // No ledger event, because the ledger refusing one is why a reviewer is handed back; its next start is reported again.
     public function requeue(RoundReviewer $reviewer): void
     {

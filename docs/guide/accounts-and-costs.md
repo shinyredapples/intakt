@@ -14,7 +14,7 @@ You can give Intakt any mix of these, per AI company, and it treats them as one 
 
 If a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
 
-You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately and puts them in the order you choose.
+You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately, and all of them work at the same time (see [every account works at once](#every-account-works-at-once), planned).
 
 For a subscription, Intakt doesn't use the login you sign in with yourself. Where the AI company offers one, it uses a **long-lived token**: a key you create once for that account with the company's own tool (for Claude, `claude setup-token`) and paste into Intakt. It lets Intakt's agents use that subscription without your password or your personal session, and you can revoke it at any time. Where a company has no such token, Intakt keeps that account's login to itself and lends it to each job read-only.
 
@@ -27,7 +27,7 @@ flowchart TD
   job[A job is about to start] --> size[How big is the task?<br/>a quick, cheap estimate]
   size --> model[Pick the cheapest model<br/>that fits the size and role]
   model --> room{Room in the account?}
-  room -- "window nearly full" --> wait[Wait until it refills,<br/>or use another account]
+  room -- "window nearly full" --> wait[Use another account with room,<br/>or wait until it refills]
   room -- yes --> pace{Ahead of the week's pace?}
   pace -- ahead --> less[Fewer builders, cheaper model]
   pace -- behind --> more[More builders, stronger model]
@@ -38,8 +38,17 @@ flowchart TD
 - **Moving up when it struggles:** if the same check keeps failing or a reviewer keeps finding the same problem, the next attempt gets a stronger model.
 - **Measured, not guessed:** whether a job may start depends on the account's measured use, not on Intakt's estimate. A running job is never stopped just because the window is nearly full or the estimate was too low. Three things end it: it makes no progress for a set number of steps (no new content and no change in which tests fail), it reaches a ceiling of a few times its allowance, or the task reaches its total across all its attempts. The last two catch a runaway the progress check misses, on a subscription too. A stopped build keeps its commits, so the next attempt or the maintainer starts from them. On an account that bills overage past the subscription, the guards that are lenient on a subscription turn strict: with no fresh usage reading, nothing new starts, a call already running past the ceiling is not let finish, and your spending cap applies.
 - **Spending headroom:** if a window will refill with room to spare, Intakt uses it: stronger models, more builders in parallel.
-- **What is spent first:** prepaid credit that is about to expire or can only pay for certain work, while it can; then your subscriptions, within Intakt's share of them; then paid usage (overage or API keys), up to your cap. When nothing is allowed, work waits and the board says why.
-- **Falling back:** when one account is out, work moves to the next account of the same kind in the order you set. A build tries another account from the same company first, then one from another company, so another company's subscription is used before anything is paid. Reviews are the exception: a reviewer stays with its company, its paid accounts too, and only when all of them are out does a reviewer from another company take its place as a substitute (the usual one catches up later). That substitute comes from a company not yet reviewing the same change if there is one, even if this means a paid account while another company's subscription has room. With only two companies, it comes from the other reviewer's company, and the change can still merge, protected files included. Only when the security reviewer or the attacker would need a substitute does the change wait for you. The dashboard shows each switch.
+- **What is spent first:** prepaid credit that is about to expire or can only pay for certain work, while it can; then your subscriptions, within Intakt's share of them; then paid usage (overage or API keys), up to your cap. Among accounts at the same step, the room that refills soonest is used first. When nothing is allowed, work waits and the board says why.
+- **Falling back:** when one account is out, work moves to another account that has room. A build moves to whichever account the usual order picks next, from any company: room that refills soonest first, and nothing paid while a subscription still has room. Reviews are the exception: a reviewer stays with its company, its paid accounts too, and only when all of them are out does a reviewer from another company take its place as a substitute (the usual one catches up later). That substitute comes from a company not yet reviewing the same change if there is one, even if this means a paid account while another company's subscription has room. With only two companies, it comes from the other reviewer's company, and the change can still merge, protected files included. Only when the security reviewer or the attacker would need a substitute does the change wait for you. The dashboard shows each switch.
+
+## Every account works at once
+
+This part is planned, not built yet ([details](../design/05-architecture/06-budget-and-model-planner.md#a-limit-never-loses-work)). Every account you add is used, at the same time, unless you leave an account or a model out. Intakt doesn't use one account until it is empty and only then the next: a job can run on each account at once, so a second subscription never sits idle while the first is nearly full.
+
+- **Room that is about to refill is used first.** An account whose allowance refills in an hour is used before one that refills in four days, because room left unused at a refill is lost. Paid usage still comes only after the subscriptions with room have been used.
+- **How many jobs run follows the room.** More room across your accounts means more jobs, up to what the machine, the checks and the reviews can take, so extra builders don't just wait in line.
+- **At a limit, nothing is lost.** If a job reaches an account's limit, it stops at a safe point. Its work is saved on its branch, its conversation is kept, and a short note says what is done and what is left. Another account picks it up right away from that note; it doesn't wait for the first account to refill. A build can move to another company's account, and the change of model is written on the task.
+- **Reviews stay with their company.** A review that is cut off starts again on another account of the same company. If none has room, the stand-in rules above apply.
 
 You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses). Billing stays with the AI company: Intakt keeps only whether an account bills past its plan, its own cap below the company's limit, and a link to the company's billing page.
 

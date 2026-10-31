@@ -11,11 +11,12 @@ use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Override;
+use Throwable;
 
 // Runs what a test chooses in the middle of the vendor call, because that forces the order "second delivery while the first is still reviewing" without any timing.
 final readonly class RedeliveredDuringTheCall implements Vendor
 {
-    public function __construct(private Closure $meanwhile)
+    public function __construct(private Closure $meanwhile, private ?Throwable $failure = null)
     {
     }
 
@@ -24,6 +25,6 @@ final readonly class RedeliveredDuringTheCall implements Vendor
     {
         ($this->meanwhile)();
 
-        return new Verdict(Decision::Approve, [], [], []);
+        return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
     }
 }
