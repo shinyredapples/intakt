@@ -22,7 +22,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
-| After the hackathon | branch cleanup, labels, GitHub webhooks, server metrics, a development setup with file watching; the demo runs on a local repository without them | T19, T30, T32, T34, T35 | after the deadline |
+| After the hackathon | branch cleanup, labels, GitHub webhooks, server metrics, a development setup with file watching, approving protected changes on the spot; the demo runs on a local repository without them | T19, T30, T32, T34, T35, T37 to T42 | after the deadline |
 
 ## M1 Review core
 
@@ -293,10 +293,50 @@ The demo works on a local repository, so these tasks wait until after the deadli
 - **Evidence:** the override's start output and one edit served without a restart.
 - **Waits for:** T22. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
+T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T42 switches a category on, every protected change still goes to the owner.
+
+### T37 Hard floors and the approval decision in shadow mode
+- **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, attacker test), each step a typed result. The hard floors are deterministic rules over the whole change: secrets and credentials handling, every workflow file, existing gate tests, the protected-path list, the approval rules, agent instructions, and a panel reviewer's loosening or missing class. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
+- **Acceptance:** each floor has a test that it sends a change to the owner and one that a neighboring change passes it; a request names its floor or check; no path approves by a timer, a veto window or a missing answer; a step that fails or cannot run sends the change to the owner; the replay reads recorded forge responses.
+- **Evidence:** the replay's report over a temporary repository with recorded approvals; the replay over this repository's 32 approvals (owner provides).
+- **PHP 8.5:** `#[NoDiscard]` on the decision.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T38 The `language` plugin kind and the comment-only check for PHP
+- **Description:** A `language` plugin kind ([Plugins](design/05-architecture/02-plugins.md)) and its PHP implementation: two versions of a file compare equal when their `PhpToken` streams match without comments and whitespace; docblocks, suppression and ignore markers and inline allow directives count as code. A file of a language without a plugin is not covered.
+- **Acceptance:** tests for an edited line comment (passes), an edited docblock type, an added ignore marker and a changed statement (each fails), a file that does not parse (fails), and a file of an unknown language (not covered, so the owner).
+- **Evidence:** the check's result for a comment-only edit of `bin/probe` and for an edit that changes a statement, from a running install.
+- **Waits for:** T37. **Size:** S. **Labels:** `class:process`, `priority:normal`.
+
+### T39 Dependency policy over Composer, OSV.dev and deps.dev
+- **Description:** A Composer adapter in the PHP `language` plugin turns the old and new manifest and lock file into neutral package changes; rules written once over them check allowed vendors, a clean OSV.dev audit of every new package including transitive ones, a minimum release age from deps.dev, and no change to scripts, plugins, repositories, Composer config, binaries or autoload files. The orchestrator makes the queries.
+- **Acceptance:** recorded OSV.dev and deps.dev responses drive the tests; each rule has a passing and a failing case; a new transitive package with an advisory fails; an unreachable source or an unknown answer sends the change to the owner.
+- **Evidence:** the policy's result for adding an official Symfony package and for a package from another vendor, against recorded responses; a run against the live sources (owner provides).
+- **Waits for:** T38. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T40 Gate code no weaker, the violation corpus and the harness from main
+- **Description:** A check job runs main's gate tests unchanged, and the violation corpus, against the head's gate code through the project's check command, in its own container and as its own user, with the result leaving through a channel the code under test cannot rewrite. Every violation a gate catches on a head becomes a corpus fixture. The boot gate runs main's `bin/instance` and `bin/probe` against the head, and main's isolation probes run through the head's harness.
+- **Acceptance:** a new gate with new tests passes; an edited existing gate that lets a corpus fixture through fails; a head that rewrites the result file is still judged by the job's own channel; a harness change is booted by main's harness; a harness change that lets an isolation probe reach the network, a credential or a folder outside its own fails.
+- **Evidence:** the check's output for an additive gate and for a weakened one on a temporary repository.
+- **Waits for:** T37. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T41 Independent security review and the attacker test
+- **Description:** Two reviewer roles in sessions of their own, apart from the panel: a security reviewer and an attacker. They read the diff, main's protected files and the check results, fenced, never the builder's pull request text. The attacker returns fixtures; plain code runs each against main's and the head's gate without network. Missing capacity sends the change to the owner; a second vendor is used when available. The threat model page lists both roles.
+- **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in replaces either role.
+- **Evidence:** a scripted attacker fixture that gets through a weakened gate, and the owner request it produces.
+- **Waits for:** T7, T40. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T42 Canaries, earned autonomy and containment
+- **Description:** Owner-known canary changes, each category with its own ([Merge](design/05-architecture/08-merge.md#earned-autonomy-per-category)), run through the decision on a schedule. Per category, the dashboard shows canary detection and agreement with the owner; the owner switches a category on in the owner's config once both meet the bar, and it falls back to shadow mode on its own when a canary is missed or the owner overrules it. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. A daily cap per project bounds automatic approvals, and each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
+- **Acceptance:** detection is counted per category over its own canaries; a category below 100% detection, or with fewer canaries than the minimum, cannot be switched on; a missed canary switches it off; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the cap holds under two concurrent approvals (forced order); the dashboard line names the head, the category and its checks.
+- **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
+- **PHP 8.5:** the pipe operator for the canary run's steps.
+- **Waits for:** T20, T39, T41. **Size:** L. **Labels:** `class:process`, `priority:normal`.
+
 ## Parallel paths
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
-- After the hackathon: T19, T30 and T32 after T18; T34 after T20; T35 after T22.
+- After the hackathon: T19, T30 and T32 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 last.
