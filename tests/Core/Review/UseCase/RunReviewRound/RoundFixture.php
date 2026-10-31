@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -32,19 +33,21 @@ use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
 
 // A round on the application's workflows and a SQLite database, with a bus that keeps the messages instead of queueing them, so a test delivers them in the order it chooses.
-final class RoundFixture
+final readonly class RoundFixture
 {
-    public readonly EntityManagerInterface $entities;
-    public readonly RecordingBus $bus;
-    private readonly Ledger $ledger;
+    public EntityManagerInterface $entities;
+    public RecordingBus $bus;
+    private Ledger $ledger;
 
-    public function __construct(private readonly ContainerInterface $container)
+    public function __construct(private ContainerInterface $container)
     {
         $entities = $container->get('doctrine.orm.entity_manager');
         assert($entities instanceof EntityManagerInterface);
         $this->entities = $entities;
         $this->bus = new RecordingBus();
-        $this->ledger = new DoctrineLedger($container->get('doctrine'), new MockClock('2026-10-30 12:00:00', 'UTC'));
+        $registry = $container->get('doctrine');
+        assert($registry instanceof ManagerRegistry);
+        $this->ledger = new DoctrineLedger($registry, new MockClock('2026-10-30 12:00:00', 'UTC'));
 
         $tool = new SchemaTool($entities);
         $tool->dropSchema($entities->getMetadataFactory()->getAllMetadata());
@@ -106,7 +109,7 @@ final class RoundFixture
      */
     public function ledgerKinds(): array
     {
-        return array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($this->ledger->readInOrder()));
+        return array_values(array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($this->ledger->readInOrder())));
     }
 
     private function panelOf(int $reviewers): Panel

@@ -23,7 +23,7 @@ final readonly class RunReviewRoundHandler
     ) {
     }
 
-    // Returns the id of the round, which names its rows and its ledger events.
+    // Returns the id of the round because it names the rows and ledger events a caller reads back.
     public function __invoke(RunReviewRound $command): string
     {
         $round = $this->open($command);
@@ -35,7 +35,7 @@ final readonly class RunReviewRoundHandler
 
     private function open(RunReviewRound $command): ReviewRound
     {
-        // Built once to refuse a path that is no directory before anything is stored.
+        // Built only to refuse a path that is no directory, because a round stored for one could never be reviewed.
         new Checkout($command->checkoutRoot);
 
         $round = new ReviewRound($this->newId(), $command->project, $command->checkoutRoot, $command->task);

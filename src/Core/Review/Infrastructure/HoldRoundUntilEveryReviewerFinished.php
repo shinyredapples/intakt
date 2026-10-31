@@ -12,6 +12,9 @@ use Symfony\Component\Workflow\Event\GuardEvent;
 #[AsEventListener(event: 'workflow.review_round.guard.complete')]
 final readonly class HoldRoundUntilEveryReviewerFinished
 {
+    /**
+     * @param GuardEvent<object> $event
+     */
     public function __invoke(GuardEvent $event): void
     {
         $round = $event->getSubject();

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use InvalidArgumentException;
 use Intakt\Core\Review\Domain\HasPlace;
+use InvalidArgumentException;
 use Override;
 use Symfony\Component\Workflow\Marking;
 use Symfony\Component\Workflow\MarkingStore\MarkingStoreInterface;
@@ -19,6 +19,9 @@ final readonly class StateMarkingStore implements MarkingStoreInterface
         return new Marking([$this->placed($subject)->place() => 1]);
     }
 
+    /**
+     * @param array<mixed> $context
+     */
     #[Override]
     public function setMarking(object $subject, Marking $marking, array $context = []): void
     {

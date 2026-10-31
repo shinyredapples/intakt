@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
 
-// Whichever reviewer finishes last completes the round; a reviewer that finishes earlier, or a message delivered twice, finds the guard closed or the round complete and does nothing.
+// Whichever reviewer finishes last completes the round, because an earlier finisher finds the guard closed and a message delivered twice finds the round complete.
 final readonly class RoundCompletion
 {
     public function __construct(

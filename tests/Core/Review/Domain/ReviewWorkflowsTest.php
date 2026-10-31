@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Domain;
 
-use InvalidArgumentException;
-use stdClass;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Domain\ReviewerState;
@@ -16,11 +14,13 @@ use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\HoldRoundUntilEveryReviewerFinished;
 use Intakt\Core\Review\Infrastructure\StateMarkingStore;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use stdClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Symfony\Component\Uid\UuidV7;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Uid\UuidV7;
 use Symfony\Component\Workflow\Exception\NotEnabledTransitionException;
 use Symfony\Component\Workflow\WorkflowInterface;
 

@@ -60,7 +60,7 @@ final readonly class ReviewWithReviewerHandler
 
     private function work(RoundReviewer $reviewer): void
     {
-        // Running means an earlier delivery began and never ended; trying again belongs to the retry of the failure handling.
+        // A running reviewer means an earlier delivery began and never ended, and trying it again waits for the retry of the failure handling because that decides how often to try.
         if (ReviewerState::Running === $reviewer->state()) {
             $this->fail($reviewer, self::WORKER_STOPPED);
 

@@ -128,7 +128,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $before = new ScriptedVendor();
         $this->fixture->deliver($this->fixture->bus->messages[1], $before);
 
-        // The queue redelivers every message after the restart, and nothing is left in memory.
+        // The queue redelivers every message after the restart because it cannot know which ones were handled.
         $after = new ScriptedVendor();
         foreach ($this->fixture->bus->messages as $message) {
             $this->fixture->deliver($message, $after);

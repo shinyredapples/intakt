@@ -69,7 +69,7 @@ final class ReviewRound implements HasPlace
      */
     public function reviewers(): array
     {
-        return $this->reviewers->toArray();
+        return array_values($this->reviewers->toArray());
     }
 
     public function everyReviewerFinished(): bool
