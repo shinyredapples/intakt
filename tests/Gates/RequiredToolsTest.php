@@ -11,11 +11,14 @@ use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(RequiredTools::class)]
 final class RequiredToolsTest extends TestCase
 {
     private string|false $path;
+
+    private string|false $scanner;
 
     private string $cwd;
 
@@ -28,6 +31,7 @@ final class RequiredToolsTest extends TestCase
     protected function setUp(): void
     {
         $this->path = getenv('PATH');
+        $this->scanner = getenv('INTAKT_GITLEAKS');
         $cwd = getcwd();
         $this->cwd = false === $cwd ? '.' : $cwd;
         putenv('INTAKT_GITLEAKS');
@@ -42,7 +46,7 @@ final class RequiredToolsTest extends TestCase
     {
         chdir($this->cwd);
         putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
-        putenv('INTAKT_GITLEAKS');
+        putenv(false === $this->scanner ? 'INTAKT_GITLEAKS' : 'INTAKT_GITLEAKS='.$this->scanner);
         $this->remove($this->base);
     }
 
@@ -155,9 +159,54 @@ final class RequiredToolsTest extends TestCase
         self::assertSame([], $this->tools()->missingFor(['cs']));
     }
 
+    public function testWithoutAPathAToolOnTheDefaultPathIsFound(): void
+    {
+        putenv('PATH');
+
+        self::assertSame([], $this->tools()->missingFor(['cs']));
+    }
+
+    public function testWithoutAPathOnlyToolsAGateProcessCannotStartAreListed(): void
+    {
+        putenv('PATH');
+        $unstartable = array_values(array_filter(['git', 'composer'], fn (string $tool): bool => !$this->gateStarts($tool)));
+
+        $missing = $this->tools()->missingFor(['audit']);
+
+        self::assertSame(array_map(RequiredTools::notFound(...), $unstartable), $missing);
+    }
+
+    public function testWithoutAPathAToolOffTheDefaultPathIsListed(): void
+    {
+        putenv('PATH');
+        putenv('INTAKT_GITLEAKS=intakt-no-such-tool');
+
+        self::assertSame([RequiredTools::notFound('intakt-no-such-tool')], $this->tools()->missingFor(['secrets']));
+    }
+
+    public function testWithoutAPathOrAWayToStartAProcessOnlyTheWorkspaceRootIsSearched(): void
+    {
+        $this->install($this->root.'/git');
+        $code = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; putenv("PATH");'
+            .'echo json_encode((new '.RequiredTools::class.'('.var_export($this->root, true).'))->missingFor(["audit"]));';
+        $child = new Process([PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $code]);
+
+        $child->run();
+
+        self::assertSame(json_encode([RequiredTools::notFound('composer')]), $child->getOutput(), $child->getErrorOutput());
+    }
+
     private function tools(): RequiredTools
     {
         return new RequiredTools($this->root);
+    }
+
+    private function gateStarts(string $tool): bool
+    {
+        $gate = new Process([$tool, '--version'], $this->root);
+        $gate->run();
+
+        return $gate->isSuccessful();
     }
 
     private function install(string $file): void
