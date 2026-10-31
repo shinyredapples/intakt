@@ -134,11 +134,11 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 ### T14 Provider limits and substitutes
 - **Description:** A rate-limited or failing provider puts its account in cooldown until the reset time; the reviewer moves to the next account of the same vendor and role by priority, and only when every such account is out does the panel substitute a reviewer from the same tier on another provider and record that a catch-up review is owed.
-- **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason; a merge with a substitute's verdict queues one catch-up per missing reviewer, run once that vendor has room (merges touching sensitive paths first, then oldest, never ahead of a live head waiting for that reviewer); a rejecting catch-up files one task that inherits no steering label and is not built until a person labels it; its follow-ups reach the inbox; each catch-up's state is on the dashboard.
-- **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up; and a round with one of two same-vendor accounts out, showing the move to the other account and no catch-up owed; and a substitute-reviewed merge whose catch-up runs after the vendor's reset and files a task that stays unbuilt until it is labelled.
+- **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason.
+- **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up; and a round with one of two same-vendor accounts out, showing the move to the other account and no catch-up owed.
 - **Symfony:** provider failover through `FailoverPlatform`, wrapped by Intakt's own class that records the switch and does not rely on it alone; per-account cooldowns as RateLimiter windows aligned to the vendor's reset; Scheduler ticks for usage probes and deadlines.
-- **Catch-up:** the catch-up review of [Reviews](design/05-architecture/07-reviews.md), with the cases in Acceptance.
-- **Waits for:** T9. **Size:** L. **Labels:** `class:core`, `priority:normal`.
+- **Catch-up:** the owed record only; the catch-up review itself is T66.
+- **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ## M3 Agents and memory
 
@@ -584,9 +584,9 @@ Conventions, in addition to the ones above:
 - **Waits for:** T64. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T66 Catch-up reviews
-- **Description:** When the T14 substitution replaced a reviewer whose vendor was out, the merge records an owed catch-up review; when that vendor has room again, catch-ups run one at a time, sensitive ones first, then oldest. The record is written before the publish, so a crash neither loses nor doubles a catch-up; a catch-up that rejects opens a follow-up task.
+- **Description:** When the T14 substitution replaced a reviewer whose vendor was out, the merge records an owed catch-up review; when that vendor has room again, catch-ups run one at a time, merges touching sensitive paths first, then oldest, never ahead of a live head waiting for that reviewer ([Reviews](design/05-architecture/07-reviews.md)). The record is written before the publish, so a crash neither loses nor doubles a catch-up. A rejecting catch-up files a task naming the merged pull request, with the review inside an external block, redacted and scanned like review text (a hit files nothing and is a failed catch-up); the task inherits no steering label and is built only once a person labels it. An approval's follow-ups go to the follow-up inbox. A catch-up that returns `blocked` or no valid verdict is retried once on another account of the same vendor, then handed to the maintainer agent, and given up after three attempts with one owner notice. Each catch-up's state is on the dashboard.
 - **Reference:** `test_gpt_substitute.py` (the substitute's verdict counts and the head merges; a rejection beside an out vendor goes to the builder without a substitute; a crash retry finds only its own issue), `test_reviewer_accounts.py`.
-- **Acceptance:** each case above.
+- **Acceptance:** each case above; a rejecting catch-up files one task that stays unbuilt until it is labelled; a secret-scan hit files nothing; a catch-up's follow-ups reach the inbox; the failed path ends in one notice.
 - **Evidence:** a catch-up run after a substituted merge on the test repository.
 - **Waits for:** T62. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
