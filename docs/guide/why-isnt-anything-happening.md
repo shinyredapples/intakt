@@ -33,6 +33,7 @@ flowchart TD
 | **CI was cancelled** | a newer push stopped the checks of the older version; that is not a failure | nothing: Intakt waits for the newer checks, starts them again once if nothing does, and otherwise hands it to the maintainer agent |
 | **on hold** | the task needs something outside it (another task, a change to Intakt) | nothing: it comes back by itself when the reason is gone |
 | **dependency** badge | it `Waits for` another task | finish or unblock that task |
+| An item labelled **hands-off** (planned) | a person is driving it, so Intakt neither builds nor reworks it ([details](../design/05-architecture/08-merge.md#hands-off-and-take-over)) | remove `hands-off` to hand it back |
 | A task stays in **Backlog** | it isn't ready: unclear, too big, or missing the `intakt` label | read Intakt's comment on the issue and add what it asks ([writing a good task](writing-a-good-task.md)) |
 | A task never appears | no `intakt` label, or written by someone without write access | add the label yourself; for an issue by someone without write access the `intakt` label is not enough, a person with write access must set `take-over` (planned) |
 | A project gets nothing built or reviewed | its share is 0, which pauses it, open pull requests included | raise its share above 0 |
