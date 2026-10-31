@@ -33,6 +33,20 @@ final readonly class CheckCommand
             return 2;
         }
 
+        return $this->runGatesWhenToolsExist($options);
+    }
+
+    private function runGatesWhenToolsExist(Options $options): int
+    {
+        $gates = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
+        $missing = new RequiredTools($options->root ?? $this->home)->missingFor($gates);
+
+        if ([] !== $missing) {
+            $this->print(['error' => 'missing tools', 'missing' => $missing]);
+
+            return 2;
+        }
+
         return $this->runGates($options);
     }
 

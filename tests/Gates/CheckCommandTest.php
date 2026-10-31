@@ -59,6 +59,23 @@ final class CheckCommandTest extends SandboxTestCase
         self::assertStringContainsString('/.git/info/attributes exists', $run->findingsOf('commits'));
     }
 
+    public function testMissingToolsAreListedBeforeAnyGateRuns(): void
+    {
+        $run = $this->emptySandbox()->checkWith(['INTAKT_GITLEAKS' => '/nonexistent/gitleaks'], '--only=cs,secrets,secrets-history');
+
+        self::assertSame(2, $run->exitCode(), $run->output());
+        self::assertStringContainsString('"error":"missing tools"', $run->output());
+        self::assertStringContainsString('"/nonexistent/gitleaks not found, see docs/architecture/requirements.md"', $run->output());
+        self::assertStringNotContainsString('"gate":', $run->output());
+    }
+
+    public function testAMissingToolOfAGateThatIsSkippedDoesNotStopTheRun(): void
+    {
+        $run = $this->sandboxWith('clean')->checkWith(['INTAKT_GITLEAKS' => '/nonexistent/gitleaks'], '--only=cs,secrets', '--skip=secrets');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+    }
+
     public function testSkipLeavesOutTheNamedGates(): void
     {
         $output = $this->emptySandbox()->check('--only=audit,secrets', '--skip=audit')->output();
