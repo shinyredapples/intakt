@@ -12,7 +12,7 @@ final readonly class RequiredTools
 
     private const string SCANNER = 'gitleaks';
 
-    // Every gate reads git, so git is not listed per gate.
+    // Every gate reads git, so git is not listed per gate, but a run that selects no gate reads nothing.
     private const array COMMON = ['git'];
 
     private const array BY_GATE = [
@@ -47,6 +47,10 @@ final readonly class RequiredTools
      */
     public function missingFor(array $gates): array
     {
+        if ([] === $gates) {
+            return [];
+        }
+
         $commands = [...self::COMMON];
 
         foreach ($gates as $gate) {
