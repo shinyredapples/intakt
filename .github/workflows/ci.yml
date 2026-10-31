@@ -99,59 +99,50 @@ jobs:
           fi
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
-  # The persistence group on each supported engine; bin/check keeps running it on SQLite. The tests run in the CI image
-  # as uid 1000 on the network the runner creates for the job's services, and reach the database by its service name;
-  # no port is published and there is no job container, so no Docker socket inside. The databases take no password
-  # (throwaway, never published).
-  # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database service instead:
+  # The persistence group on each supported engine; bin/check keeps running it on SQLite. One job runs all three engines
+  # (a service each, a step each): on an ephemeral self-hosted runner every job is a full machine reset, so a matrix of
+  # three jobs cost three resets per run for about a minute of tests. The tests run in the CI image as uid 1000 on the
+  # network the runner creates for the job's services, and reach each database by its service name; no port is published
+  # and there is no job container, so no Docker socket inside. The databases take no password (throwaway, never published).
+  # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database services instead:
   # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
-  # job that fails skips the engines and fails the run.
+  # job that fails skips the engines and fails the run. Each engine's step runs even when an earlier engine failed, so the
+  # run reports every engine.
   persistence:
-    name: persistence (${{ matrix.name }})
     needs: changes
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: mysql 8.4
-            image: mysql:8.4
-            scheme: mysql
-            port: '3306'
-            user: root
-            health: mysqladmin ping --silent
-            open_switch: MYSQL_ALLOW_EMPTY_PASSWORD
-            open_value: 'yes'
-          - name: mariadb 11.4
-            image: mariadb:11.4
-            scheme: mysql
-            port: '3306'
-            user: root
-            health: healthcheck.sh --connect --innodb_initialized
-            open_switch: MARIADB_ALLOW_EMPTY_ROOT_PASSWORD
-            open_value: 'yes'
-          - name: postgresql 17
-            image: postgres:17
-            scheme: postgresql
-            port: '5432'
-            user: postgres
-            health: pg_isready --username=postgres
-            open_switch: POSTGRES_HOST_AUTH_METHOD
-            open_value: trust
     env:
       ENGINES: ${{ needs.changes.outputs.persistence }}
     services:
-      database:
-        image: ${{ needs.changes.outputs.persistence == 'true' && matrix.image || '' }}
+      mysql:
+        image: ${{ needs.changes.outputs.persistence == 'true' && 'mysql:8.4' || '' }}
         env:
           MYSQL_DATABASE: intakt_test
-          MARIADB_DATABASE: intakt_test
-          POSTGRES_DB: intakt_test
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
         options: >-
-          --env ${{ matrix.open_switch }}=${{ matrix.open_value }}
-          --health-cmd "${{ matrix.health }}"
+          --health-cmd "mysqladmin ping --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: ${{ needs.changes.outputs.persistence == 'true' && 'mariadb:11.4' || '' }}
+        env:
+          MARIADB_DATABASE: intakt_test
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      postgresql:
+        image: ${{ needs.changes.outputs.persistence == 'true' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_DB: intakt_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd "pg_isready --username=postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -163,12 +154,30 @@ jobs:
       - name: Build the CI image
         if: env.ENGINES == 'true'
         run: .github/ci/build-image.sh
-      # The test environment appends _test to the database name of the URL, so the service creates intakt_test and the URL names intakt.
-      - name: Run the persistence group on ${{ matrix.name }}
-        if: env.ENGINES == 'true'
+      # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
+      - name: Run the persistence group on mysql 8.4
+        if: env.ENGINES == 'true' && !cancelled()
         env:
-          DATABASE_URL: ${{ matrix.scheme }}://${{ matrix.user }}@database:${{ matrix.port }}/intakt
-          SERVICE_NETWORK: ${{ job.services.database.network }}
+          DATABASE_URL: mysql://root@mysql:3306/intakt
+          SERVICE_NETWORK: ${{ job.services.mysql.network }}
+        run: |
+          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
+      - name: Run the persistence group on mariadb 11.4
+        if: env.ENGINES == 'true' && !cancelled()
+        env:
+          DATABASE_URL: mysql://root@mariadb:3306/intakt
+          SERVICE_NETWORK: ${{ job.services.mariadb.network }}
+        run: |
+          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
+      - name: Run the persistence group on postgresql 17
+        if: env.ENGINES == 'true' && !cancelled()
+        env:
+          DATABASE_URL: postgresql://postgres@postgresql:5432/intakt
+          SERVICE_NETWORK: ${{ job.services.postgresql.network }}
         run: |
           docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \

@@ -10,7 +10,7 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 ["self-hosted","linux","x64","intakt-ci"]
 ```
 
-Every job (`check`, `changes` and the `persistence` matrix) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
+Every job (`check`, `changes` and `persistence`) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
 ## The runner must be ephemeral
 
