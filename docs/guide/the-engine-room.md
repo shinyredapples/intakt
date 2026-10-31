@@ -96,7 +96,7 @@ flowchart LR
   pace -- "on track" --> keep[As planned]
   pace -- "ahead: spending fast" --> down[One slot,<br/>a cheaper model]
   read --> ceiling{Window nearly full?}
-  ceiling -- yes --> wait[No new jobs until it refills]
+  ceiling -- yes --> wait[Use another account with room,<br/>or wait until it refills]
 ```
 
 - **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 pauses the project: a running job finishes, then no builds and no reviews, open pull requests included. Its work resumes when the share is above 0.
