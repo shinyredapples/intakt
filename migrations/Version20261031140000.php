@@ -19,7 +19,7 @@ final class Version20261031140000 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        $identity = Column::editor()->setUnquotedName('verdict_identity')->setTypeName(Types::TEXT)->setNotNull(false)->create();
+        $identity = Column::editor()->setUnquotedName('verdict_identity')->setTypeName(Types::STRING)->setLength(512)->setDefaultValue('')->create();
 
         foreach ($this->platform->getAlterTableSQL(new TableDiff($schema->getTable('review_round'), addedColumns: [$identity])) as $sql) {
             $this->addSql($sql);

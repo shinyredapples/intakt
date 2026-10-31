@@ -30,9 +30,9 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(length: 16, enumType: RoundState::class)]
     private RoundState $state = RoundState::Collecting;
 
-    // Nullable because a round stored before migration Version20261031140000 has no identity.
-    #[ORM\Column(name: 'verdict_identity', type: 'text', nullable: true)]
-    private ?string $identity;
+    // Empty by default, because a round stored before migration Version20261031140000 has no identity.
+    #[ORM\Column(name: 'verdict_identity', length: 512, options: ['default' => ''])]
+    private string $identity;
 
     public function __construct(
         #[ORM\Id]
@@ -49,7 +49,7 @@ final class ReviewRound implements HasPlace
     // A round without an identity cannot show what its verdicts were given on, so every field counts as changed.
     public function standingAt(VerdictIdentity $current, HeadMove $move): VerdictStanding
     {
-        if (null === $this->identity) {
+        if ('' === $this->identity) {
             return VerdictStanding::stale(IdentityField::cases());
         }
 

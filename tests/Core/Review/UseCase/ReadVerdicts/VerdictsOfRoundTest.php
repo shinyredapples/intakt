@@ -99,7 +99,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     public function testARoundStoredWithoutAnIdentityIsStaleInEveryField(): void
     {
         $round = $this->reviewedRound();
-        $this->fixture->entities->getConnection()->executeStatement('UPDATE review_round SET verdict_identity = NULL');
+        $this->fixture->entities->getConnection()->executeStatement("UPDATE review_round SET verdict_identity = ''");
 
         $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
 
