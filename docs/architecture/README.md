@@ -116,6 +116,10 @@ Plan task T8, part 1 (design: [Reviews](../design/05-architecture/07-reviews.md)
 
 `tests/Core/Review/Contract/QuorumPolicyTest.php` covers passing and failing panels of one, two and three. The panel configuration (part 2) and the rules choosing a panel per change (part 3) are below.
 
+## Finding ledger
+
+Plan task T10, part 1 (design: [Reviews](../design/05-architecture/07-reviews.md)). `Core/Review/Domain/FindingLedger` is an in-memory ledger of the findings of one change. `recordRound(round, findings)` matches a finding to a tracked one by its id, but only to ids issued before that round, so a finding that returns keeps its id, gains the round and is open again even if it was resolved; several reports of one existing id in a round count once (the first one is kept as the latest `Finding`). Any other finding gets a new ledger id (`F1`, `F2`, ... in order of first sight), also when two new findings of one round share an id or one names an id issued earlier in the same round. `resolve(ids)` closes the named findings and ignores unknown ids; `open()` lists the findings not closed. A `TrackedFinding` holds the id, the latest `Finding`, its rounds and a `FindingStatus` (`open` or `resolved`); `firstRound()` and `latestRound()` use `array_first()` and `array_last()`. Nothing persists the ledger and no reviewer is shown it yet: passing open findings to reviewers and the `resolved` and `repeat` verdict fields are part 2. `tests/Core/Review/Domain/FindingLedgerTest.php` covers three stable rounds, closing, reopening, repeated reports in one round and unknown ids.
+
 ## Reviewer repository tools
 
 Plan task T7, part 1 (design: [Reviews](../design/05-architecture/07-reviews.md), [threat model](../design/05-architecture/14-threat-model.md)). `Core/Review` gives a reviewer agent three read-only tools over one checkout of the head under review: `read_file`, `list_directory` and `search_files` (`src/Core/Review/Infrastructure/Repository/`). Each is a Symfony AI `#[AsTool]` with the effect hints `readOnlyHint`, `destructiveHint: false`, `idempotentHint` and `openWorldHint: false`.

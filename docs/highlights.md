@@ -141,4 +141,5 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 - `#[NoDiscard]` on the parse result: `src/Core/Review/Contract/VerdictParser.php` (in progress, T1).
 - `clone()` with overrides in the verdict test builder: `tests/Core/Review/Contract/VerdictDocument.php` (in progress, T1).
 - Closures in constant expressions for the built-in quorum policies, and `#[NoDiscard]` on `QuorumPolicy::isMet()`: `src/Core/Review/Contract/QuorumPolicy.php` (in progress, T8 (#13, part #222)).
-- Planned: the pipe operator (T5, T28, T30), `array_first()` and `array_last()` (T10), `Uri\Rfc3986\Uri` (T18, T19).
+- `array_first()` and `array_last()` for the first and latest round of a finding: `src/Core/Review/Domain/TrackedFinding.php` (in progress, T10 (#15, part #410)).
+- Planned: the pipe operator (T5, T28, T30), `Uri\Rfc3986\Uri` (T18, T19).

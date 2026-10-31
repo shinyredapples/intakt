@@ -43,6 +43,8 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
 
+`bin/check` looks for the programs on `PATH`. When `PATH` is not set at all, it looks where the system shell `/bin/sh` then looks, since the gates start their programs through that shell (on Debian and Ubuntu: `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` and `/bin`); if the shell cannot run, it looks only in the project folder. A `PATH` that is set but empty (`PATH=`) is taken as it is: only the project folder is searched, so every other program is reported missing.
+
 ## When `bin/check` reports a stateful service
 
 Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class under `src/` with a property which is not `readonly`, including properties from a parent class or a trait under `src/`, and static ones, because the container registers every class under `src/` as a service. A property a vendor base class declares, such as those of Symfony's `Command` or `AbstractController`, is framework wiring rather than request state and is not reported. A virtual property, a hooked property without a backing store such as one with only a `get` hook that computes its value from other properties, keeps no value and is not reported either; a hooked property with a backing store is. The finding names the property. To resolve it, do one of:
@@ -174,6 +176,10 @@ Run `php bin/console intakt:vendor:probe` after you set or change a provider key
 ## What a reviewer can read
 
 A reviewer reads the change through three read-only tools: it can read a file, list a directory and search for text, all at the head under review and nothing else. A request for a file outside the repository (a `../` path, an absolute path, the `.git` folder, or a link pointing out of the checkout or into the `.git` folder) is refused with a message, and the file is never opened. A tool that fails, such as a file that does not exist or a binary file, gives the reviewer an error message and the review goes on. A search skips binary files and files over 1 MB, shortens very long matching lines and returns at most 100 matches; a listing of a very large directory is shortened too. The reviewer agent uses these tools; a request it makes that is refused or fails is answered with a message and the review goes on.
+
+## Finding ids across review rounds
+
+Intakt keeps a list of the findings of a change across its review rounds. Each new finding gets an id (`F1`, `F2`, ... in the order they first appear), and a finding reported again under that id in a later round keeps it, so the same problem has the same id in every round. When several reviewers report the same existing id in one round, it stays one finding. A finding marked resolved is closed and no longer open; if a reviewer reports it again later, it is open again. This list is not stored yet and reviewers are not shown it: showing reviewers the open findings and letting them mark findings resolved or repeated is planned.
 
 ## Releases
 

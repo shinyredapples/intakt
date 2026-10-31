@@ -38,8 +38,9 @@ final readonly class CheckCommand
 
     private function runGatesWhenToolsExist(Options $options): int
     {
-        $gates = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
-        $missing = new RequiredTools($options->root ?? $this->home)->missingFor($gates);
+        $gates = $this->selectedGates($options);
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $gates);
+        $missing = new RequiredTools($options->root ?? $this->home)->missingFor($names);
 
         if ([] !== $missing) {
             $this->print(['error' => 'missing tools', 'missing' => $missing]);
@@ -47,15 +48,18 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($options);
+        return $this->runGates($gates, $options);
     }
 
-    private function runGates(Options $options): int
+    /**
+     * @param list<Gate> $gates
+     */
+    private function runGates(array $gates, Options $options): int
     {
         $workspace = new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base);
         $failed = [];
 
-        foreach ($this->selectedGates($options) as $gate) {
+        foreach ($gates as $gate) {
             $result = $this->resultOf($gate, $workspace);
             fwrite(STDOUT, $result->toJson()."\n");
 
