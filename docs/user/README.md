@@ -41,7 +41,7 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 ## When `bin/check` reports a missing tool
 
-Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`.
+Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
 
 ## When `bin/check` reports a stateful service
 
