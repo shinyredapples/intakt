@@ -21,10 +21,9 @@ final class FindingLedger
      */
     public function recordRound(int $round, array $findings): void
     {
-        $seen = [];
+        $earlier = $this->tracked;
         foreach ($findings as $finding) {
-            $tracked = $this->track($round, $finding, $seen);
-            $seen[$tracked->id] = true;
+            $this->track($round, $finding, $earlier);
         }
     }
 
@@ -57,22 +56,23 @@ final class FindingLedger
     }
 
     /**
-     * @param array<string, true> $seen
+     * @param array<string, TrackedFinding> $earlier
      */
-    private function track(int $round, Finding $finding, array $seen): TrackedFinding
+    private function track(int $round, Finding $finding, array $earlier): void
     {
-        $known = $this->tracked[$finding->id] ?? null;
-        if (null === $known || isset($seen[$known->id])) {
-            return $this->start($round, $finding);
+        // Only ids issued before this round are repeats: a reviewer cannot know an id issued in the same round.
+        if (!isset($earlier[$finding->id])) {
+            $this->start($round, $finding);
+
+            return;
         }
 
-        return $this->tracked[$known->id] = $known->seenAgain($round, $finding);
+        $this->tracked[$finding->id] = $this->tracked[$finding->id]->seenAgain($round, $finding);
     }
 
-    private function start(int $round, Finding $finding): TrackedFinding
+    private function start(int $round, Finding $finding): void
     {
         $id = 'F'.++$this->issued;
-
-        return $this->tracked[$id] = new TrackedFinding($id, $finding, [$round], FindingStatus::Open);
+        $this->tracked[$id] = new TrackedFinding($id, $finding, [$round], FindingStatus::Open);
     }
 }

@@ -64,6 +64,38 @@ final class FindingLedgerTest extends TestCase
         self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $ledger->all()));
     }
 
+    public function testAResolvedFindingReportedAgainIsOpenAgain(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(1, [$this->finding('x')]);
+        $ledger->resolve(['F1']);
+
+        $ledger->recordRound(3, [$this->finding('F1')]);
+
+        self::assertSame(['F1'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $ledger->open()));
+    }
+
+    public function testTwoReviewersRepeatingAnExistingIdInOneRoundShareThatFinding(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(1, [$this->finding('x')]);
+        $ledger->recordRound(2, [$this->finding('F1'), $this->finding('F1')]);
+        $ledger->recordRound(3, [$this->finding('F1'), $this->finding('F1')]);
+
+        $ledger->resolve(['F1']);
+
+        self::assertSame([], $ledger->open());
+        self::assertSame([1, 2, 3], $ledger->all()[0]->rounds);
+    }
+
+    public function testAFindingThatReusesAnIdIssuedInTheSameRoundGetsItsOwnId(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(1, [$this->finding('x'), $this->finding('F1')]);
+
+        self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $ledger->all()));
+    }
+
     public function testAFindingsFirstAndLatestRoundAreItsFirstAndLastAppearance(): void
     {
         $ledger = new FindingLedger();

@@ -36,9 +36,15 @@ final readonly class TrackedFinding
 
     public function seenAgain(int $round, Finding $finding): self
     {
+        if ($this->latestRound() === $round) {
+            return $this;
+        }
+
+        // A finding reported again has come back, so it is open again even after it was resolved.
         return clone ($this, [
             'latest' => $finding,
             'rounds' => [...$this->rounds, $round],
+            'status' => FindingStatus::Open,
         ]);
     }
 

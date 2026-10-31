@@ -164,6 +164,10 @@ Run `php bin/console intakt:vendor:probe` after you set or change a provider key
 
 A reviewer reads the change through three read-only tools: it can read a file, list a directory and search for text, all at the head under review and nothing else. A request for a file outside the repository (a `../` path, an absolute path, the `.git` folder, or a link pointing out of the checkout or into the `.git` folder) is refused with a message, and the file is never opened. A tool that fails, such as a file that does not exist or a binary file, gives the reviewer an error message and the review goes on. A search skips binary files and files over 1 MB, shortens very long matching lines and returns at most 100 matches; a listing of a very large directory is shortened too. The reviewer agent uses these tools; a request it makes that is refused or fails is answered with a message and the review goes on.
 
+## Finding ids across review rounds
+
+Intakt keeps a list of the findings of a change across its review rounds. Each new finding gets an id (`F1`, `F2`, ... in the order they first appear), and a finding reported again under that id in a later round keeps it, so the same problem has the same id in every round. When several reviewers report the same existing id in one round, it stays one finding. A finding marked resolved is closed and no longer open; if a reviewer reports it again later, it is open again. This list is not stored yet and reviewers are not shown it: showing reviewers the open findings and letting them mark findings resolved or repeated is planned.
+
 ## Releases
 
 The owner cuts each release: a signed tag on a green `main`, then a GitHub release with generated notes, marked pre-release before `v1.0.0`. A pull request is labeled `feat`, `fix` or `docs` from the type in its title, so the notes list it under Features, Fixes or Docs; anything else lands under "Other changes". No CHANGELOG file is kept. See [Releasing](../releasing.md).
