@@ -27,10 +27,21 @@ flowchart LR
 | `review:full` | the full review panel on every round, even for small changes |
 | `review:<role>` | adds a specialist reviewer, for example `review:security` |
 | `keep` | on a closed pull request: don't delete its branch |
+| `hands-off` | you work on this issue or pull request yourself: Intakt stays off it |
+| `take-over` | Intakt works on an issue or pull request it did not create |
 
 To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add `intakt`.
 
 Intakt also writes `status:` labels (`queued`, `building`, `in-review`, `waiting-on-you`, ...) so the issue list shows where each task stands. Those are for reading only: changing one does nothing, and Intakt puts it back.
+
+## Taking an item over by hand and giving it back
+
+Every issue or pull request has one driver: Intakt or you. Two labels switch it (planned, like the rest of this page; only people with write access count, and Intakt never adds or removes them itself):
+- **To work on an item yourself,** add `hands-off`. This works on any issue or pull request, Intakt's own included, and beats every other label, even `urgent`. Intakt starts nothing on it. If a job is running, it stops at its next step, nothing it did after the label is published, and its unpushed work is saved rather than lost. Everything Intakt already knew about the item is kept. The rest of the project keeps going.
+- **To give it back,** remove `hands-off`. Intakt takes the item as it now stands, tells the builder what was committed by hand (to build on, not undo), and has every reviewer look at the whole thing once. Your hand-made commits do not use up a round of the review limit.
+- **To hand Intakt something it did not create,** add `take-over` to the issue or pull request. A pull request someone else opened gets its review findings fixed by the builder, then is reviewed and merged like Intakt's own. If it comes from a fork Intakt cannot push to, Intakt makes a new pull request that links the original, keeps each original author as a co-author, and leaves one comment on the original. A pull request that changes the protected rules is not taken over: Intakt says so once, naming the files, and leaves it to you. An issue written by someone without write access becomes a task the same way; its text is still treated as information, never as orders, and if it is edited afterwards you add the label again.
+
+Until a dashboard button exists, the labels are the control.
 
 ## Checking which reviewers a change would get
 
