@@ -77,11 +77,11 @@ Intakt asks you only when it cannot prove a rule change is harmless, and it alwa
 - **Only comments changed.** The file without its comments is the same as before. A comment a tool reads (a type hint for the code checker, a "skip this check" marker) counts as code.
 - **A safe new library.** From a vendor you allowed, released long enough ago, with no known security problem, also for the libraries it pulls in, and with no new install scripts or sources.
 - **A check got no weaker.** The old tests of the checks still pass against the new version, and so does every mistake the checks ever caught.
-- **The start-up scripts.** Main's trusted copy tests the new one, so a changed script cannot vouch for itself.
+- **The start-up scripts.** Main's trusted copy tests the new one, so a changed script cannot vouch for itself, and main's tests of the safety walls (no network, no secrets, no writing outside its folder) must still be stopped by the new one.
 
 On top, a separate **security reviewer**, which never sees what the builder wrote about its change, must agree, and an **attacker** tries to write an example that the old check stops and the new one lets through. If it finds one, you are asked.
 
-**Trust is earned, one kind of change at a time.** At first Intakt only works out its answer and writes it down, while you still approve; it starts with your past approvals. Known bad changes are fed in now and then on purpose (a weakened check, a leaked secret, a harmful library). Only when Intakt catches every one of them and agreed with you on enough real changes can you switch that kind on. It switches back by itself the moment it misses one. Even then: a change Intakt approved is undone at once if main's checks catch a problem afterwards, there is a daily limit, and every such approval stays on the dashboard for a week.
+**Trust is earned, one kind of change at a time.** At first Intakt only works out its answer and writes it down, while you still approve; it starts with your past approvals. Known bad changes are fed in now and then on purpose, each kind with its own (a weakened check, a leaked secret, a harmful library, a start-up script that drops a safety wall). Only when Intakt catches every one of that kind and agreed with you on enough real changes can you switch that kind on; a kind with too few known bad changes stays off. It switches back by itself the moment it misses one. Even then: a change Intakt approved is undone at once if main's checks catch a problem afterwards and it is clearly the one to blame (otherwise you are asked which to undo), there is a daily limit, and every such approval stays on the dashboard for a week.
 
 ## Layer 6: only you can approve what needs a person
 
