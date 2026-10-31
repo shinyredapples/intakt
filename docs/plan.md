@@ -22,7 +22,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
-| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T37 to T42, T32 (optional) | after the deadline |
+| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T37 to T42, T43, T32 (optional) | after the deadline |
 
 ## M1 Review core
 
@@ -333,10 +333,17 @@ T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.m
 - **PHP 8.5:** `#[NoDiscard]` on the signature check result.
 - **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
+### T43 Every account works at once, and a limit never loses work
+- **Description:** The account model of the design ([Budget and model planner](design/05-architecture/06-budget-and-model-planner.md#order-of-use)), as a new task because this plan holds no build or budget task to change. Every configured account of every vendor is in one pool for the roles the owner allows, unless the owner excludes it or a model; at each job start the planner ranks the allowed accounts by the room that resets soonest, then by the cheapest tier that fits; the number of jobs that start follows the total room, capped by the host, the CI runners and the review capacity. A job that hits a vendor limit stops cleanly: its commits are pushed to its work branch, its conversation stays in the message store (`symfony/ai-doctrine-message-store`), a hand-off note goes to the shared project memory, and the next ranked account continues at once through `MemoryInputProcessor`. A build may continue on another vendor within its role's tiers (the model change is recorded on the task); a review starts again on another account of the same vendor and is never continued by another vendor.
+- **Acceptance:** a hand-off at a limit loses no commit (every commit of the stopped job is on the work branch) and the next account continues from the note and the kept conversation without waiting for the first account's reset; two jobs run at the same time on two accounts, and a third waits when the pool has no room or a cap is reached; a window that resets in an hour with room ranks above one that resets in four days, an account at its ceiling ranks nowhere however soon it resets, and a paid account never ranks above a subscription with room; a build continued on another vendor records the model change; a review cut off by a limit starts again on an account of its own vendor and never on another vendor's, and with none left the stand-in and catch-up rules apply; the hand-off note reaches the next prompt fenced; an excluded account or model is never ranked. Races (two starts claiming the last room) are proven by forced order.
+- **Evidence:** a scripted run with `MockPlatformFactory` where the first account hits a limit mid-build and the second continues, with the ledger and the work branch's commits before and after; the ranking's output for three accounts with different reset times.
+- **PHP 8.5:** `#[NoDiscard]` on the ranking result.
+- **Waits for:** T14, T17. **Size:** L. **Labels:** `class:feature`, `priority:normal`.
+
 ## Parallel paths
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
-- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 after T39 and T41; the optional T32 last, after T18.
+- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 after T39 and T41; T43 after T14 and T17; the optional T32 last, after T18.

@@ -30,7 +30,8 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `ToolCallArgumentResolver` | the listener validates a call's arguments before it denies a path, so a malformed call never passes as a denial | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php` |
 | Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each reviewer in each round, kept in the `reviewer_conversation` table | in progress | T7 (#12), T29 (#29), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `config/packages/ai.php`, `migrations/Version20261029120000.php` |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
-| `MemoryInputProcessor` | the project memory briefing, with a size cap | planned | T17 (#22) |
+| `MemoryInputProcessor` | the project memory briefing, with a size cap; after a vendor limit also the hand-off note and the kept conversation for the next account | planned | T17 (#22), T43 (#384) |
+| Doctrine message store (`symfony/ai-doctrine-message-store`) | a build's conversation kept at a vendor limit, so the next account continues with the history | planned | T43 (#384) |
 | Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button | planned | T21 (#27) |
 
 ## Symfony AI Store
