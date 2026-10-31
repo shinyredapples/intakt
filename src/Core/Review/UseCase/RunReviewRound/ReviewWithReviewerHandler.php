@@ -14,6 +14,7 @@ use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
+use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Throwable;
 
 #[AsCommandHandler]
@@ -55,6 +56,10 @@ final readonly class ReviewWithReviewerHandler
             $this->leases->handBack($reviewer);
 
             throw ReviewerRateLimited::after(null);
+        } catch (VendorAccountOut) {
+            $this->leases->handBack($reviewer);
+
+            throw ReviewerMovesToAnotherAccount::now();
         } catch (Throwable $failure) {
             // Every failure, because one left uncaught would leave the reviewer running until its hold ends; the class only, because a provider's message can echo a key.
             $this->leases->recordFailure($reviewer, $failure::class);

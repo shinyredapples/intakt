@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -70,6 +71,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         return match (true) {
             $failure instanceof RateLimitExceededException => new ProviderRateLimited($failure->getRetryAfter(), $failure),
+            $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
             $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
             default => $failure,
         };

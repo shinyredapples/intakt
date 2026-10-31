@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -95,6 +96,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ConfiguredTierResolver::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
+#[UsesClass(EveryAccountCoolingDown::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(VerdictParser::class)]
 #[UsesClass(Verdict::class)]
@@ -258,6 +260,32 @@ final class SymfonyAiVendorTest extends KernelTestCase
         }
 
         self::assertSame(RateLimitExceededException::class, $ledger->payloads()[1]['failure']);
+    }
+
+    public function testAProviderWhoseEveryAccountCoolsDownIsARateLimitUntilTheFirstAccountIsFree(): void
+    {
+        $out = static fn (): never => throw new EveryAccountCoolingDown(Provider::Anthropic, 45);
+
+        try {
+            $this->vendor($out)->review('alpha', Tier::Strong, $this->request());
+            self::fail('A provider whose every account is out must be a typed rate limit.');
+        } catch (ProviderRateLimited $rateLimited) {
+            self::assertSame(45, $rateLimited->retryAfterSeconds);
+            self::assertInstanceOf(EveryAccountCoolingDown::class, $rateLimited->getPrevious());
+        }
+    }
+
+    public function testAUsageRowNamesTheAccountItsRoundRanOn(): void
+    {
+        $ledger = new InMemoryLedger();
+        $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json());
+
+        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        /** @var list<array<string, mixed>> $usages */
+        $usages = $ledger->payloads()[1]['usages'];
+        self::assertArrayHasKey('account', $usages[0]);
+        self::assertNull($usages[0]['account']);
     }
 
     public function testARateLimitWithoutAResetHasNone(): void

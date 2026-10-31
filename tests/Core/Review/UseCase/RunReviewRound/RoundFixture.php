@@ -173,6 +173,11 @@ final readonly class RoundFixture
         return $machine;
     }
 
+    public function ledger(): Ledger
+    {
+        return $this->ledger;
+    }
+
     /**
      * @return list<LedgerEventKind>
      */
