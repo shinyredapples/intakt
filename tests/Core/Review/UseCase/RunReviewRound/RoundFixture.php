@@ -27,6 +27,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Tests\Application\EmptyDatabase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -49,9 +50,8 @@ final readonly class RoundFixture
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, new MockClock('2026-10-30 12:00:00', 'UTC'));
 
-        $tool = new SchemaTool($entities);
-        $tool->dropSchema($entities->getMetadataFactory()->getAllMetadata());
-        $tool->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        EmptyDatabase::in($container);
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
     public function start(int $reviewers): ReviewRound

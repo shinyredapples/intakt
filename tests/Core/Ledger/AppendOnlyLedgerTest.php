@@ -45,7 +45,7 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
         $metadata = $manager->getMetadataFactory()->getAllMetadata();
         $tool = new SchemaTool($manager);
-        $tool->dropSchema($metadata);
+        $tool->dropDatabase();
         $tool->createSchema($metadata);
     }
 
