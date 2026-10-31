@@ -56,7 +56,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - **PHP 8.5 and Symfony 8.1**, with the latest stable tools, and Symfony AI used for every model call, agent and memory, on purpose, to find the beta's bugs early.
 - **FrankenPHP worker mode** (planned) for the dashboard, the local API and the MCP server, with Mercure built in for live updates; Messenger consumers and the Scheduler run beside it.
 - **Steering by labels** (planned) on your forge: `intakt` to take a task, then `priority:`, `class:`, `model:`, `plan:` and `review:`; Intakt mirrors progress in `status:`.
-- **No public resource API in v1.** The interfaces are the dashboard, the CLI, forge webhooks and the MCP server.
+- **No public resource API in v1.** The interfaces are the dashboard, the CLI, an optional forge webhook endpoint (forge changes are polled by default) and the MCP server.
 
 ## Documentation
 
