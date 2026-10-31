@@ -18,7 +18,8 @@ use Throwable;
 // Every decision about a reviewer is made on its locked row, because the same message can reach two workers: once more after a restart, or again while the first worker is still reviewing.
 final readonly class ReviewerLeases
 {
-    private const string WORKER_STOPPED = 'the worker stopped before the reviewer had a verdict';
+    private const string WORKER_STOPPED = 'the worker stopped twice before the reviewer had a verdict';
+    private const string MESSAGE_FAILED = 'the review message failed for good';
     private const string CEILING_PASSED = 'the reviewer had no result within the review ceiling';
 
     public function __construct(
@@ -54,6 +55,32 @@ final readonly class ReviewerLeases
         $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->fail($stored, $failure));
     }
 
+    // Called for a message that will not be tried again, so the reviewer is neither left waiting in the queue nor running for a worker that is gone.
+    public function recordBlocked(string $reviewerId): Uuid
+    {
+        return $this->inOneTransaction(function () use ($reviewerId): Uuid {
+            $reviewer = $this->lockedRow(Uuid::fromString($reviewerId));
+
+            if (!$reviewer->isFinished()) {
+                $this->moves->block($reviewer, self::MESSAGE_FAILED);
+            }
+
+            return $reviewer->round()->id();
+        });
+    }
+
+    // Not counted as a restart, because only a stopped worker may use the one retry.
+    public function handBack(RoundReviewer $reviewer): void
+    {
+        $this->inOneTransaction(function () use ($reviewer): void {
+            $stored = $this->lockedRow($reviewer->id());
+
+            if ($this->isStillHeldBy($reviewer, $stored)) {
+                $this->moves->requeue($stored);
+            }
+        });
+    }
+
     private function decide(RoundReviewer $reviewer, DateTimeImmutable $now): void
     {
         if ($reviewer->isFinished()) {
@@ -73,7 +100,8 @@ final readonly class ReviewerLeases
             throw ReviewerStillHeld::until($heldUntil, $now);
         }
 
-        $this->moves->fail($reviewer, self::WORKER_STOPPED);
+        // The worker counts as stopped, so its reviewer is started once more, because one stop may be a deploy; a second stop blocks it.
+        $reviewer->hasRestarted() ? $this->moves->block($reviewer, self::WORKER_STOPPED) : $this->moves->restart($reviewer, $now);
     }
 
     /**
@@ -87,8 +115,8 @@ final readonly class ReviewerLeases
             $this->inOneTransaction(function () use ($reviewer, $move, $now): void {
                 $stored = $this->lockedRow($reviewer->id());
 
-                // Still running means this worker's own hold, because the only other writer moves a reviewer whose hold ended to failed; anything else was decided while the vendor call ran and stands.
-                if (ReviewerState::Running !== $stored->state()) {
+                // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
+                if (!$this->isStillHeldBy($reviewer, $stored)) {
                     return;
                 }
 
@@ -101,24 +129,18 @@ final readonly class ReviewerLeases
         }
     }
 
+    // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
+    private function isStillHeldBy(RoundReviewer $taken, RoundReviewer $stored): bool
+    {
+        return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
+    }
+
     // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
     private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
     {
         $heldUntil = $reviewer->heldUntil();
 
         return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
-    }
-
-    // Back to the queue, so the retry of the message runs the reviewer again instead of finding a hold nobody will release.
-    private function handBack(RoundReviewer $reviewer): void
-    {
-        $this->inOneTransaction(function () use ($reviewer): void {
-            $stored = $this->lockedRow($reviewer->id());
-
-            if (ReviewerState::Running === $stored->state()) {
-                $this->moves->requeue($stored);
-            }
-        });
     }
 
     // Loaded fresh under the lock, because another worker may have changed the row since this worker loaded it; cleared first, since refreshing a loaded row would set its readonly columns again.

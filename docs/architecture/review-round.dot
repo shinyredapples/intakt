@@ -1,4 +1,4 @@
-// The state machines of a review round (plan task T9, part 2). Render with: dot -Tsvg review-round.dot
+// The state machines of a review round (plan task T9, parts 2 and 3). Render with: dot -Tsvg review-round.dot
 // The places and transitions are the cases of RoundState, ReviewerState and ReviewerTransition and the constant ReviewRound::COMPLETION in src/Core/Review/Domain/, which config/packages/workflow.php turns into the two workflows.
 digraph review_round {
     rankdir=LR;
@@ -11,7 +11,7 @@ digraph review_round {
         collecting;
         complete [shape=doublecircle];
         round_start -> collecting;
-        collecting -> complete [label="complete\n(guard: every reviewer is in verdict or failed)"];
+        collecting -> complete [label="complete\n(guard: every reviewer is in verdict, failed or blocked)"];
     }
 
     subgraph cluster_reviewer {
@@ -21,10 +21,13 @@ digraph review_round {
         running;
         verdict [shape=doublecircle];
         failed [shape=doublecircle];
+        blocked [shape=doublecircle];
         reviewer_start -> queued;
         queued -> running [label="start\n(started_at = now; held for one hour)"];
         running -> verdict [label="receive"];
-        running -> failed [label="fail\n(the call failed, or the hold ended)"];
-        running -> queued [label="requeue\n(the ledger refused the end event)"];
+        running -> failed [label="fail\n(the call failed)"];
+        running -> queued [label="requeue\n(the ledger refused the end event, a rate limit,\nor the first stopped worker before start)"];
+        running -> blocked [label="block\n(the worker stopped twice)"];
+        queued -> blocked [label="block\n(the message reached the failure transport)"];
     }
 }

@@ -7,6 +7,7 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    intakt.vendor_account_parallel_calls: 3
 
 services:
     # default configuration for services in *this* file
@@ -20,6 +21,15 @@ services:
         resource: '../src/'
         # Built per review with the checkout under review, so the container cannot wire them.
         exclude: '../src/Core/Review/Infrastructure/Repository/'
+
+    # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
+    Symfony\Component\Lock\Store\FlockStore:
+        arguments: ['%kernel.project_dir%/var/locks']
+    Symfony\Component\Lock\LockFactory:
+        arguments: ['@Symfony\Component\Lock\Store\FlockStore']
+    Symfony\Component\Semaphore\Store\LockStore: ~
+    Symfony\Component\Semaphore\SemaphoreFactory:
+        arguments: ['@Symfony\Component\Semaphore\Store\LockStore']
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

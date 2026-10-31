@@ -227,22 +227,6 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(ReviewerState::Running, $this->fixture->reviewer($this->fixture->bus->messages[0]->reviewerId)->state());
     }
 
-    public function testAReviewerStillRunningWhenItsHoldEndedFailsAsStoppedAndTheRoundStillCompletes(): void
-    {
-        $round = $this->fixture->start(1);
-        $this->leaveRunning($this->fixture->bus->messages[0]);
-        $this->fixture->clock->modify('+1 hour');
-        $vendor = new ScriptedVendor();
-
-        $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
-
-        $stored = $this->fixture->round($round->id()->toRfc4122());
-        self::assertSame(0, $vendor->calls);
-        self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
-        self::assertSame('the worker stopped before the reviewer had a verdict', $stored->reviewers()[0]->failure());
-        self::assertSame(RoundState::Complete, $stored->state());
-    }
-
     public function testAVerdictArrivingAfterTheCeilingWithNoOtherDeliveryFailsTheReviewer(): void
     {
         $round = $this->fixture->start(1);

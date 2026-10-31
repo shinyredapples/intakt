@@ -23,6 +23,7 @@ use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -36,6 +37,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -46,6 +48,7 @@ final readonly class RoundFixture
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public MockClock $clock;
+    public BufferingLogger $log;
     private Ledger $ledger;
 
     public function __construct(private ContainerInterface $container)
@@ -55,6 +58,7 @@ final readonly class RoundFixture
         $this->entities = $entities;
         $this->bus = new RecordingBus();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
+        $this->log = new BufferingLogger();
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
@@ -93,9 +97,18 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger));
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities));
+    }
 
-        return new ReviewWithReviewerHandler(new ReviewerLeases($entities, $moves, $this->clock), $vendor, $this->rounds($entities));
+    // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
+    public function takeAndStop(ReviewWithReviewer $message): RoundReviewer
+    {
+        return $this->leases($this->entities)->take($message->reviewerId);
+    }
+
+    public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
+    {
+        return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities), $this->log);
     }
 
     // Another worker: its own connection and entity manager, as another messenger:consume process has; its ledger is in memory because the Doctrine ledger writes through the first connection.
@@ -139,6 +152,13 @@ final readonly class RoundFixture
     public function ledgerKinds(): array
     {
         return array_values(array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($this->ledger->readInOrder())));
+    }
+
+    private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
+    {
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger));
+
+        return new ReviewerLeases($entities, $moves, $this->clock);
     }
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds

@@ -1,6 +1,7 @@
 framework:
     messenger:
         default_bus: command.bus
+        failure_transport: failed
         buses:
             command.bus: ~
             query.bus: ~
@@ -12,5 +13,18 @@ framework:
                 options:
                     auto_setup: false
                     redeliver_timeout: 5400
+                # max_retries counts only for exceptions that are not recoverable; a recoverable one (a held or rate-limited reviewer) always comes back, after the delay it names.
+                # max_delay caps the wait of a recoverable one that names no delay (a busy account, a limit without a reset), because it never runs out of retries and the doubling would otherwise stall a round for days.
+                retry_strategy:
+                    max_retries: 2
+                    delay: 1000
+                    multiplier: 2
+                    max_delay: 60000
+            # Shares the queue table, told apart by queue_name, so it needs no table of its own.
+            failed:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    auto_setup: false
+                    queue_name: failed
         routing:
             Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer: async

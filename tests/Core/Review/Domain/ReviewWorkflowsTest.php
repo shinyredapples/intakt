@@ -86,6 +86,30 @@ final class ReviewWorkflowsTest extends KernelTestCase
         self::assertFalse($this->reviewerMachine()->can($finished, ReviewerTransition::Requeue->value));
     }
 
+    public function testAQueuedOrRunningReviewerCanBeBlockedAndABlockedOneCannotMove(): void
+    {
+        $queued = $this->round(2)->reviewers()[0];
+        $running = $this->round(2)->reviewers()[1];
+        $this->reviewerMachine()->apply($running, ReviewerTransition::Start->value);
+
+        $this->reviewerMachine()->apply($queued, ReviewerTransition::Block->value);
+        $this->reviewerMachine()->apply($running, ReviewerTransition::Block->value);
+
+        self::assertSame([ReviewerState::Blocked, ReviewerState::Blocked], [$queued->state(), $running->state()]);
+        self::assertTrue($queued->isFinished());
+        foreach (ReviewerTransition::cases() as $step) {
+            self::assertFalse($this->reviewerMachine()->can($queued, $step->value));
+        }
+    }
+
+    public function testAReviewerThatFinishedCannotBeBlocked(): void
+    {
+        $reviewer = $this->round(1)->reviewers()[0];
+        $this->finish($reviewer);
+
+        self::assertFalse($this->reviewerMachine()->can($reviewer, ReviewerTransition::Block->value));
+    }
+
     public function testAReviewerThatFinishedCannotStartOrFailAgain(): void
     {
         $reviewer = $this->round(1)->reviewers()[0];
