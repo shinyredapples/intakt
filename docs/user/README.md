@@ -155,7 +155,7 @@ Pass a printed identity back with `--reviewed=<identity>` to see whether a verdi
 - `stale: head changed` (or any other changed parts): the verdict no longer counts. A new task text, check command or panel always makes it stale, and so does a new commit, unless one of the two cases below applies.
 - `kept-for-untouched-parts: ...`: the verdict still counts for everything the change left alone, and each `review again <path>` line names a file to review again. This happens when the base branch was merged into the branch and git merged it by itself (no conflict to resolve, no other edit in the merge commit), or when the new commits touch only files in the repository's `docs/` folder and the base did not move.
 
-A project without a review panel, a branch the repository does not have, or an identity that is not in the printed form prints an error and exits with 1. Review rounds do not use this check yet.
+A project without a review panel, a branch the repository does not have, or an identity that is not in the printed form prints an error and exits with 1. Every review round remembers the identity it was started on, and reading its verdicts applies the same rules: a stale round's verdicts no longer count. Nothing reads them that way from the command line or the loop yet.
 
 ## Checking a new Symfony AI release against the known bugs
 
