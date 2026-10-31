@@ -72,13 +72,7 @@ final readonly class RequiredTools
             return $this->isExecutable(str_starts_with($name, '/') ? $name : $this->root.'/'.$name);
         }
 
-        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $entry) {
-            if ($this->isExecutable($this->directoryOf($entry).'/'.$name)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn ($entry) => $this->isExecutable($this->directoryOf($entry).'/'.$name));
     }
 
     // Because a gate starts its command in the workspace root, a relative or empty PATH entry resolves there, as the shell does.
