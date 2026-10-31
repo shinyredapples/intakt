@@ -6,12 +6,15 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
@@ -23,6 +26,7 @@ final readonly class SymfonyAiVendor implements Vendor
 {
     public function __construct(
         private TierInvoker $tiers,
+        private TierResolver $resolver,
         private Reviewer $reviewer,
         private UsageLedger $usage,
     ) {
@@ -35,6 +39,11 @@ final readonly class SymfonyAiVendor implements Vendor
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $tier->value);
+        } catch (IncompleteStreamException $incomplete) {
+            // Left unsettled, never settled as well, so the call's usage is counted once.
+            $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
+
+            return Verdict::incompleteStream($incomplete->getMessage());
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 
@@ -43,7 +52,17 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $verdict;
+        return $this->readOrRefused($project, $tier, $verdict);
+    }
+
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
+    private function readOrRefused(string $project, Tier $tier, Verdict $verdict): Verdict
+    {
+        if (Decision::Approve !== $verdict->verdict || $this->resolver->resolve($project, $tier)->provider->readsTheCheckout()) {
+            return $verdict;
+        }
+
+        return Verdict::unreadApproval();
     }
 
     // Matched on the exception type because the provider's text can change and carries anything (plan T5).

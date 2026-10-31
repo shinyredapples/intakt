@@ -20,6 +20,7 @@ final class AiProvidersTest extends KernelTestCase
         'OPENAI_API_KEY',
         'OPENAI_COMPATIBLE_BASE_URL',
         'OPENAI_COMPATIBLE_API_KEY',
+        'CLAUDE_CODE_OAUTH_TOKEN',
     ];
 
     // A runtime environment of its own, so the test vault never mixes with a real one under config/secrets/.
@@ -65,7 +66,29 @@ final class AiProvidersTest extends KernelTestCase
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertTrue($container->has('ai.platform.openai'));
         self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
+        self::assertTrue($container->has('intakt.ai.platform.claude_code'));
         self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+    }
+
+    public function testTheSubscriptionPlatformIsBuiltWhenItsLoginTokenIsSet(): void
+    {
+        $container = $this->bootWith($this->allSet());
+
+        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.claude_code'));
+    }
+
+    public function testTheSubscriptionProviderIsDisabledUntilItsLoginTokenIsSet(): void
+    {
+        $values = $this->allSet();
+        unset($values['CLAUDE_CODE_OAUTH_TOKEN']);
+
+        $container = $this->bootWith($values);
+
+        self::assertFalse($container->has('intakt.ai.platform.claude_code'));
+        self::assertSame(
+            ['claude_code' => 'Provider "claude_code" is disabled: set CLAUDE_CODE_OAUTH_TOKEN to enable it.'],
+            $container->getParameter('intakt.ai.disabled_providers'),
+        );
     }
 
     public function testAProviderWithoutItsKeyIsDisabledWithAMessageAndTheKernelBoots(): void
@@ -115,7 +138,7 @@ final class AiProvidersTest extends KernelTestCase
         $disabled = $container->getParameter('intakt.ai.disabled_providers');
 
         self::assertIsArray($disabled);
-        self::assertSame(['anthropic', 'openai', 'openai_compatible'], array_keys($disabled));
+        self::assertSame(['anthropic', 'openai', 'openai_compatible', 'claude_code'], array_keys($disabled));
     }
 
     public function testAKeyInTheEnvironmentArrayWinsOverAnEmptyServerValue(): void
