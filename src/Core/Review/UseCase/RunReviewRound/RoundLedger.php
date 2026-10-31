@@ -38,6 +38,11 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerFailed, $this->identify($reviewer) + ['failure' => $failure]);
     }
 
+    public function reviewerBlocked(RoundReviewer $reviewer, string $reason): void
+    {
+        $this->append(LedgerEventKind::ReviewerBlocked, $this->identify($reviewer) + ['reason' => $reason]);
+    }
+
     /**
      * @return array<string, string>
      */

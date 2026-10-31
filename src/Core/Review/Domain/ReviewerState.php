@@ -10,11 +10,12 @@ enum ReviewerState: string
     case Running = 'running';
     case Verdict = 'verdict';
     case Failed = 'failed';
+    case Blocked = 'blocked';
 
     public function isFinished(): bool
     {
         return match ($this) {
-            self::Verdict, self::Failed => true,
+            self::Verdict, self::Failed, self::Blocked => true,
             self::Queued, self::Running => false,
         };
     }

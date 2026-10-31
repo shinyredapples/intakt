@@ -74,29 +74,32 @@ These Symfony components keep many jobs running in the right order, without anyo
 
 | Component | Everyday comparison | What it does in Intakt | Status |
 |---|---|---|---|
-| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, and a review round puts one message per reviewer into a queue that workers empty in parallel; a message that finds its reviewer still with another worker comes back when that worker's hour is over; the other retries are planned |
-| **Workflow** | a board game's rules | the steps of a review round and of each reviewer in it, and which moves are allowed, drawn as a diagram | partly built: a round (collecting, complete) and each reviewer (queued, running, verdict or failed, and back to queued when its result could not be written down) are built; the steps of the whole review loop below are planned |
+| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, and a review round puts one message per reviewer into a queue that workers empty in parallel; a message that finds its reviewer still with another worker comes back when that worker's hour is over, a rate-limited reviewer comes back after the provider's wait, and a message given up on marks its reviewer blocked |
+| **Workflow** | a board game's rules | the steps of a review round and of each reviewer in it, and which moves are allowed, drawn as a diagram | partly built: a round (collecting, complete) and each reviewer (queued, running, verdict, failed or blocked, and back to queued when its result could not be written down or the provider limited the call) are built; the steps of the whole review loop below are planned |
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
-| **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | planned |
+| **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | built: at most three calls run at once for one AI account, and a reviewer that finds no free place goes back to the queue and tries again shortly |
 | **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | planned |
 | **Console** | a remote control | commands such as running the bug reproductions or summarizing a change | in progress |
 | **Uid** | a ticket number | every event gets a unique id that also says when it happened | in progress |
 | **Process** | a helper that runs errands | runs git and test commands safely, with a time limit | in use |
 
-The part that is built, a round and its reviewers (the technical drawing is `docs/architecture/review-round.dot`). A round is complete as soon as every reviewer has either a verdict or has failed, whichever reviewer is last; the state is stored in the database, so a restarted worker carries on:
+The part that is built, a round and its reviewers (the technical drawing is `docs/architecture/review-round.dot`). A round is complete as soon as every reviewer has a verdict, has failed or is blocked, whichever reviewer is last; the state is stored in the database, so a restarted worker carries on:
 
 ```mermaid
 stateDiagram-v2
   state "A round" as Round {
     [*] --> Collecting
-    Collecting --> Complete: every reviewer has a verdict or failed
+    Collecting --> Complete: every reviewer has a verdict, failed or is blocked
   }
   state "Each reviewer" as Reviewer {
     [*] --> Queued
     Queued --> Running: a worker picks it up
     Running --> Verdict: the reviewer answers
-    Running --> Failed: the call fails, or the worker is gone for an hour
-    Running --> Queued: the result could not be written down
+    Running --> Failed: the call fails
+    Running --> Queued: the result could not be written down, or the provider limited the call
+    Running --> Queued: the worker is gone for an hour (once)
+    Running --> Blocked: the worker is gone a second time
+    Queued --> Blocked: the message was given up on
   }
 ```
 

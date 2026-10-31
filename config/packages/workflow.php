@@ -31,7 +31,7 @@ return static function (ContainerConfigurator $container): void {
             'places' => array_map(static fn (ReviewerState $state): string => $state->value, ReviewerState::cases()),
             'transitions' => array_combine(
                 array_map(static fn (ReviewerTransition $step): string => $step->value, ReviewerTransition::cases()),
-                array_map(static fn (ReviewerTransition $step): array => ['from' => $step->fromPlace()->value, 'to' => $step->toPlace()->value], ReviewerTransition::cases()),
+                array_map(static fn (ReviewerTransition $step): array => ['from' => array_map(static fn (ReviewerState $place): string => $place->value, $step->fromPlaces()), 'to' => $step->toPlace()->value], ReviewerTransition::cases()),
             ),
         ],
     ]]);

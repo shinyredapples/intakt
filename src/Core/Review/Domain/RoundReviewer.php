@@ -35,6 +35,14 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(type: 'utc_datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $startedAt = null;
 
+    // How often a stopped worker's reviewer was started again; a rate limit or a held hold never counts, so they cannot use up the one retry.
+    #[ORM\Column(options: ['default' => 0])]
+    private int $restarts = 0;
+
+    // New at every start, because the store refuses a conversation that was already started and a retried reviewer begins afresh; it also tells a worker whose reviewer another worker started again that the row is no longer its own.
+    #[ORM\Column(type: 'uuid', nullable: true)]
+    private ?UuidV7 $conversationId = null;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $verdict = null;
 
@@ -42,7 +50,6 @@ final class RoundReviewer implements HasPlace
     private ?string $failure = null;
 
     public function __construct(
-        // Also the id of the reviewer's conversation, so one reviewer in one round has one conversation.
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
         private readonly UuidV7 $id,
@@ -59,6 +66,12 @@ final class RoundReviewer implements HasPlace
     public function recordStart(DateTimeImmutable $now): void
     {
         $this->startedAt = $now;
+        $this->conversationId = new UuidV7(UuidV7::generate($now));
+    }
+
+    public function recordRestart(): void
+    {
+        ++$this->restarts;
     }
 
     public function recordVerdict(Verdict $verdict): void
@@ -110,6 +123,24 @@ final class RoundReviewer implements HasPlace
     public function heldUntil(): ?DateTimeImmutable
     {
         return ReviewerState::Running === $this->state ? $this->startedAt?->add(new DateInterval(self::REVIEW_CEILING)) : null;
+    }
+
+    public function hasRestarted(): bool
+    {
+        return $this->restarts > 0;
+    }
+
+    public function isSameAttemptAs(self $taken): bool
+    {
+        return $this->conversationId?->equals($taken->conversationId) ?? false;
+    }
+
+    /**
+     * @throws ReviewerNotStarted
+     */
+    public function conversationId(): UuidV7
+    {
+        return $this->conversationId ?? throw ReviewerNotStarted::for($this->id->toRfc4122());
     }
 
     public function verdictJson(): ?string
