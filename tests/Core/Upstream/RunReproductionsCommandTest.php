@@ -34,7 +34,7 @@ final class RunReproductionsCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        // The unreadable-folder test takes the mode away, and remove() cannot list a folder without it.
+        // The unreadable and unsearchable folder tests take the mode away, and remove() cannot list a folder without it.
         new Filesystem()->chmod($this->folder, 0o755);
         new Filesystem()->remove($this->folder);
     }
@@ -114,6 +114,38 @@ final class RunReproductionsCommandTest extends TestCase
 
         self::assertStringContainsString('No readable reproduction folder', $tester->getDisplay());
         self::assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
+    public function testAFolderThatCannotBeSearchedFailsTheRun(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('This user ignores file permissions (superuser).');
+        }
+        $this->givenReproduction('open-bug', '$this->assertSame(1, 2);');
+        new Filesystem()->chmod($this->folder, 0o444);
+
+        $tester = $this->whenTheCommandRuns();
+
+        self::assertStringContainsString('Could not list the reproductions', $tester->getDisplay());
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
+    public function testTheFailureOutputIsShownWithoutInterpretingStyleTags(): void
+    {
+        $this->givenScript('open-script', "echo '<error>boom</error>';");
+
+        $display = $this->whenTheCommandRuns(['verbosity' => OutputInterface::VERBOSITY_VERBOSE])->getDisplay();
+
+        self::assertStringContainsString('<error>boom</error>', $display);
+    }
+
+    public function testAFractionalTimeoutIsReportedUntruncated(): void
+    {
+        $this->givenScript('hanging-script', 'sleep(30);');
+
+        $display = $this->whenTheCommandRuns(['verbosity' => OutputInterface::VERBOSITY_VERBOSE], timeout: 0.5)->getDisplay();
+
+        self::assertStringContainsString('Timed out after 0.5 seconds.', $display);
     }
 
     public function testAFolderWithGlobCharactersInItsPathIsSearchedLiterally(): void

@@ -7,6 +7,7 @@ Each plugin is a PHP class behind a small interface, shipped in the image, and s
 | Forge | list work, read issue, open or update pull requests, read CI status, merge, comment | GitHub, Gitea |
 | Vendor | run build, run review, probe usage, price/limits | Claude Code (subscription or API key), Codex (subscription or API key), one API-only vendor (OpenAI-compatible endpoint) |
 | Gate | command plus protected paths | project command (`bin/check`, `make check`, ...) |
+| Language | compare two versions of a file without comments and whitespace, read a package manifest and lock file into the dependency policy's neutral form ([Merge](08-merge.md#mechanical-checks)) | PHP (`PhpToken`, Composer), planned |
 | Work source | which tasks are eligible, in what order | forge issues with a label, plus dependencies ("Waits for #n"); see "Choosing work" |
 | Notifier | deliver a notice (kind, item, link, urgency), report delivery, test | browser push (Web Push over HTTPS, from the dashboard as an installable app), Home Assistant (webhook or mobile app notify), ntfy, generic webhook, email |
 

@@ -11,7 +11,7 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 
 - **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review.
 - **Why it will be different:** a panel of reviewers from different providers will return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
-- **Why you will be able to trust it:** it is to spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
+- **Why you will be able to trust it:** it will spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
 [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
@@ -56,7 +56,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - **PHP 8.5 and Symfony 8.1**, with the latest stable tools, and Symfony AI used for every model call, agent and memory, on purpose, to find the beta's bugs early.
 - **FrankenPHP worker mode** (planned) for the dashboard, the local API and the MCP server, with Mercure built in for live updates; Messenger consumers and the Scheduler run beside it.
 - **Steering by labels** (planned) on your forge: `intakt` to take a task, then `priority:`, `class:`, `model:`, `plan:` and `review:`; Intakt mirrors progress in `status:`.
-- **No public resource API in v1.** The interfaces are the dashboard, the CLI, forge webhooks and the MCP server.
+- **No public resource API in v1.** The interfaces are the dashboard, the CLI, an optional forge webhook endpoint (forge changes are polled by default) and the MCP server.
 
 ## Documentation
 
@@ -65,6 +65,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - [User guide](docs/user/README.md): for owners running Intakt.
 - [Technical pages](docs/architecture/README.md): how it works, the gates, the module layout.
 - [Design](docs/design/README.md): what Intakt does and why.
+- [Releases](https://github.com/shinyredapples/intakt/releases): tagged versions and their notes; [how a release is cut](docs/releasing.md).
 - [Why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md): the safety design in plain words.
 - [Showcase](docs/showcase/README.md): this repository built by an AI loop, in figures and examples.
 - [Spec](docs/spec.md) and [plan](docs/plan.md) of the first release.

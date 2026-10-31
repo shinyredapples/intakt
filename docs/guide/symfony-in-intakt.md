@@ -21,7 +21,7 @@ flowchart TD
   agents --> a[Symfony AI Agent<br/>and MCP]
   memory --> s[Symfony AI Store]
   engine --> e[Messenger, Workflow,<br/>Scheduler, Lock, RateLimiter]
-  github --> g[HttpClient, Webhook]
+  github --> g[HttpClient, Webhook optional]
   live --> l[FrankenPHP, Mercure, Turbo]
   honest --> h[Validator, Serializer, Clock,<br/>Reset, and the quality gates]
 ```
@@ -74,7 +74,7 @@ These Symfony components keep many jobs running in the right order, without anyo
 
 | Component | Everyday comparison | What it does in Intakt | Status |
 |---|---|---|---|
-| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | planned |
+| **Messenger** | a to-do tray | builds, reviews and checks are messages handled in the background; a failed one is retried later | partly built: the two trays (commands and questions) exist, nothing is sent through them yet, and retries are planned |
 | **Workflow** | a board game's rules | the steps of a review round (waiting, reviewing, changes, approved) and which moves are allowed, drawn as a diagram | planned |
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
 | **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | planned |
@@ -98,7 +98,7 @@ stateDiagram-v2
 ## Talking to GitHub
 
 - **HttpClient** makes the calls to GitHub, retrying when GitHub hiccups. *(planned)*
-- **Webhook and RemoteEvent** receive GitHub's notifications ("a check finished", "someone commented"), check that they really come from GitHub, and turn them into events Intakt reacts to at once, instead of asking GitHub every few minutes. *(planned)*
+- **Webhook and RemoteEvent** are an optional extra for installs that GitHub can reach from outside. They receive GitHub's notifications ("a check finished", "someone commented"), check that they really come from GitHub, and turn them into events Intakt reacts to a little sooner. Without them, Intakt simply asks GitHub often enough, and more often while something is waiting. *(planned, optional)*
 
 ## The live dashboard
 

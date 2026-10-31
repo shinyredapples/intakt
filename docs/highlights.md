@@ -17,7 +17,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Streaming | reviewer text shown live | planned | T21 (#27) |
 | `MockPlatformFactory` with `ScriptedResponse` | offline tests of every model call | in progress | T4 (#9), T5 (#10, part #98), `tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php`; T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `RecordingProvider` with `HttpCassette` | real responses recorded once, replayed offline with redaction | planned | T25 (#32), T28 (#35) |
-| Claude Code and Codex platform bridges | a reviewer on a subscription account (its automation token where the vendor has one), `IncompleteStreamException` exercised | planned | T33 (#61) |
+| Claude Code and Codex platform bridges | a reviewer on a subscription account (its automation token where the vendor has one), `IncompleteStreamException` exercised | in progress | T33 (#61), `src/Core/Ai/Infrastructure/ClaudeCodePlatformFactory.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php` (Claude Code only; Codex is not used yet) |
 
 ## Symfony AI Agent
 
@@ -72,16 +72,16 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Messenger | command and query buses; a rate-limited reviewer retries after `getRetryAfter()` through `RecoverableExceptionInterface::getRetryDelay()`; the failure transport means `blocked` | planned | T9 (#14) |
+| Messenger | command and query buses; a rate-limited reviewer retries after `getRetryAfter()` through `RecoverableExceptionInterface::getRetryDelay()`; the failure transport means `blocked`. Built: the two buses `command.bus` and `query.bus` and the typed handler attributes `AsCommandHandler` and `AsQueryHandler` | in progress | T9 (#14, part #271), `config/packages/messenger.yaml`, `src/Core/Platform/Contract/AsCommandHandler.php`, `src/Core/Platform/Contract/AsQueryHandler.php`; T9 (#14) for the retry and the failure transport |
 | `ResetInterface` and `kernel.reset` | every stateful service resets between requests in worker mode and between messages in consumers; a PHPStan rule enforces it | in progress | T36 (#67), `config/gates/src/PhpStan/StatefulServiceResetRule.php`; T29 (#29) planned |
 | Scheduler | usage probes, deadlines and the weekly branch cleanup | planned | T14 (#19), T30 (#24) |
 | Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | planned | T9 (#14) |
 | Lock (Semaphore) | caps parallel calls per vendor account | planned | T9 (#14) |
 | RateLimiter | per-account cooldown windows aligned to the vendor's reset | planned | T14 (#19) |
-| Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned | T32 (#60) |
+| Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned (optional, last) | T32 (#60) |
 | HttpClient | `RetryableHttpClient` and scoped clients for GitHub | planned | T18 (#23) |
 | Mercure and Turbo (Symfony UX) | Turbo Streams over FrankenPHP's built-in hub | planned | T21 (#27) |
-| Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T26 (#33), T2 (#7, part #47), `src/Core/Upstream/UseCase/RunReproductions/RunReproductionsCommand.php`, `src/Core/Ledger/UseCase/ReadEvents/ReadEventsCommand.php`; T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php` |
+| Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T2 (#7, part #47), `src/Core/Ledger/UseCase/ReadEvents/ReadEventsCommand.php`; T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php` |
 | Uid | UUIDv7 ids for ledger events and findings | in progress | T2 (#7, part #46), `src/Core/Ledger/Infrastructure/DoctrineLedger.php` |
 | DependencyInjection `#[AutowireCallable]` | the reviewer gets its per-checkout toolbox as a closure over `ReviewerToolboxFactory::create()` | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerAgent.php` |
 | DependencyInjection env var processor | `postgresql_server_version` gives a PostgreSQL `DATABASE_URL` a server version and leaves other engines to detect theirs | in progress | T3 (#8), `src/Core/Platform/Infrastructure/PostgreSqlServerVersion.php` |

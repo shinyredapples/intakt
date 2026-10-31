@@ -227,6 +227,16 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertRejectedBy('phpstan', 'flag-parameter-in-service', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
     }
 
+    public function testABooleanParameterOfAClosureFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'flag-parameter-in-closure', 'src/Greeting.php:13 intakt.flagParameter Parameter $loud is a flag');
+    }
+
+    public function testABooleanParameterOfAFreeFunctionFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'flag-parameter-in-function', 'src/greet.php:7 intakt.flagParameter Parameter $loud is a flag');
+    }
+
     public function testANullableBooleanParameterOfAReadonlyServiceConstructorFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'flag-parameter-in-constructor', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
@@ -235,6 +245,21 @@ final class CodeGatesTest extends SandboxTestCase
     public function testABooleanPropertyOfAReadonlyValueObjectExcludedFromTheContainerPassesStaticAnalysis(): void
     {
         $this->assertAcceptedBy('phpstan', 'readonly-value-object-boolean');
+    }
+
+    public function testABooleanAReadonlyValueObjectStoresInAPropertyOfAUsedTraitPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'readonly-value-object-storing-trait-property');
+    }
+
+    public function testABooleanAReadonlyValueObjectAssignsToAnUndeclaredPropertyFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-storing-undeclared-property', 'src/Toggle.php:12 intakt.flagParameter Parameter $enabled is a flag');
+    }
+
+    public function testABooleanAReadonlyValueObjectAssignsToAPropertyOfItsParentFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'readonly-value-object-storing-parent-property', 'src/Toggle.php:12 intakt.flagParameter Parameter $enabled is a flag');
     }
 
     public function testABooleanAReadonlyValueObjectConsumesInItsConstructorFailsStaticAnalysis(): void

@@ -19,9 +19,10 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 |---|---|---|---|
 | M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31, T36 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
-| M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub with webhooks, branch cleanup, a subscription reviewer | T15 to T19, T30, T32, T33 | 2026-11-14 |
-| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live; server metrics | T20, T21, T34 | 2026-11-17 |
-| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening, a development setup with file watching | T22 to T29, T35 | 2026-11-21 |
+| M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
+| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
+| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
+| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T37 to T42, T32 (optional) | after the deadline |
 
 ## M1 Review core
 
@@ -170,27 +171,6 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **PHP 8.5:** `Uri\Rfc3986\Uri` instead of `parse_url` for pull-request and API URLs.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
-### T30 Branch cleanup with archive refs
-- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges, limited to branches with Intakt's prefix (other people's branches only when the project opts in), never the default, protected or release branches: delete a merged branch at once; a closed unmerged one after 30 days unless its pull request is labeled `keep`; a branch without a pull request after 60 days (stale at 30) unless claimed by a person's commit or the project file's `keep-branches` list. A weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
-- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; the default, protected and release branches and branches without Intakt's prefix are never deleted unless the project opts in; both kinds of claim keep a branch; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
-- **Evidence:** the warning list and the archive refs after a cleanup run on the GitHub test repository.
-- **PHP 8.5:** the pipe operator for the rule chain that picks the branches.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
-
-### T19 Labels on reviewed changes
-- **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
-- **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
-- **Evidence:** the GitHub test pull request with its labels before and after a round.
-- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[NoDiscard]` on minted round tokens.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
-
-### T32 GitHub webhooks through Webhook and RemoteEvent
-- **Description:** A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so Intakt reacts to events instead of polling.
-- **Acceptance:** recorded deliveries drive the tests; a valid delivery yields the matching RemoteEvent for a pushed head, a submitted review and a completed check; a missing or wrong signature is refused before any parsing; an unknown event type is acknowledged and ignored.
-- **Evidence:** a delivery from the GitHub test repository and the round it started, from the webhook log and the ledger.
-- **PHP 8.5:** `#[NoDiscard]` on the signature check result.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
-
 ### T33 A subscription reviewer through the Claude Code or Codex platform bridge
 - **Description:** One reviewer role runs through `symfony/ai-claude-code-platform` or `symfony/ai-codex-platform` (BETA1) on a subscription account (its automation token where the vendor has one), behind the same vendor contract as the API providers. Its stream parsing is exercised on purpose, including a stream that ends early (`IncompleteStreamException`). The package is a new dependency the owner approves.
 - **Acceptance:** recorded streams drive the tests; a complete stream yields a typed verdict; a truncated stream raises `IncompleteStreamException` and the reviewer ends as `blocked` with the reason, its usage counted once; the setup shows which plans the vendor's terms allow for this use.
@@ -211,12 +191,6 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Acceptance:** events published by a round reach a subscribed test client in order; a client that reconnects with `Last-Event-ID` receives the events it missed; the stop button cancels the reviewer's execution and the ledger records the stop; the page works, without live updates, when the hub is down.
 - **Evidence:** a short screen recording or a sequence of screenshots of a live round.
 - **Waits for:** T20. **Size:** M. **Labels:** `class:feature`, `priority:high`.
-
-### T34 Server metrics on the dashboard
-- **Description:** FrankenPHP's Prometheus metrics, the admin API's `/frankenphp/threads` and Mercure's `mercure_health` feed an infrastructure row on the dashboard (worker threads busy and idle, queue depth, worker restarts, hub health) and the container's health check. The admin API stays bound to localhost; the app reads it from inside the container.
-- **Acceptance:** recorded metrics and threads responses drive the tests; the row renders from them and shows a clear state when an endpoint is down; the health check fails when the hub reports unhealthy or no worker thread is ready; no admin endpoint is reachable from outside the container.
-- **Evidence:** a screenshot of the infrastructure row during a live round, and the health check output from the container.
-- **Waits for:** T20. **Size:** S. **Labels:** `class:feature`, `priority:normal`.
 
 ## M5 Demo
 
@@ -283,15 +257,87 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **PHP 8.5:** the pipe operator for the trimming steps.
 - **Waits for:** T7, T16. **Size:** M. **Labels:** `class:core`, `priority:normal`, `model:strong`.
 
+## After the hackathon
+
+The demo works on a local repository, so these tasks wait until after the deadline.
+
+### T30 Branch cleanup with archive refs
+- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges, limited to branches with Intakt's prefix (other people's branches only when the project opts in), never the default, protected or release branches: delete a merged branch at once; a closed unmerged one after 30 days unless its pull request is labeled `keep`; a branch without a pull request after 60 days (stale at 30) unless claimed by a person's commit or the project file's `keep-branches` list. A weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
+- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; the default, protected and release branches and branches without Intakt's prefix are never deleted unless the project opts in; both kinds of claim keep a branch; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
+- **Evidence:** the warning list and the archive refs after a cleanup run on the GitHub test repository.
+- **PHP 8.5:** the pipe operator for the rule chain that picks the branches.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
+### T19 Labels on reviewed changes
+- **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
+- **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
+- **Evidence:** the GitHub test pull request with its labels before and after a round.
+- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[NoDiscard]` on minted round tokens.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
+### T34 Server metrics on the dashboard
+- **Description:** FrankenPHP's Prometheus metrics, the admin API's `/frankenphp/threads` and Mercure's `mercure_health` feed an infrastructure row on the dashboard (worker threads busy and idle, queue depth, worker restarts, hub health) and the container's health check. The admin API stays bound to localhost; the app reads it from inside the container.
+- **Acceptance:** recorded metrics and threads responses drive the tests; the row renders from them and shows a clear state when an endpoint is down; the health check fails when the hub reports unhealthy or no worker thread is ready; no admin endpoint is reachable from outside the container.
+- **Evidence:** a screenshot of the infrastructure row during a live round, and the health check output from the container.
+- **Waits for:** T20. **Size:** S. **Labels:** `class:feature`, `priority:normal`.
+
 ### T35 Development setup with file watching
 - **Description:** A development compose override that runs the image with FrankenPHP's `watch` on the worker, so a changed PHP, Twig or config file restarts the workers, with hot reload in the browser. Nothing of it ships in the production image or the default `compose.yaml`.
 - **Acceptance:** with the override, a changed controller or template is served on the next request without a manual restart; without it, the image runs as T22 builds it; `docs/architecture/` says how to start it.
 - **Evidence:** the override's start output and one edit served without a restart.
 - **Waits for:** T22. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
+T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T42 switches a category on, every protected change still goes to the owner.
+
+### T37 Hard floors and the approval decision in shadow mode
+- **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, attacker test), each step a typed result. The hard floors are deterministic rules over the whole change: secrets and credentials handling, every workflow file, existing gate tests, the protected-path list, the approval rules, agent instructions, and a panel reviewer's loosening or missing class. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
+- **Acceptance:** each floor has a test that it sends a change to the owner and one that a neighboring change passes it; a request names its floor or check; no path approves by a timer, a veto window or a missing answer; a step that fails or cannot run sends the change to the owner; the replay reads recorded forge responses.
+- **Evidence:** the replay's report over a temporary repository with recorded approvals; the replay over this repository's 32 approvals (owner provides).
+- **PHP 8.5:** `#[NoDiscard]` on the decision.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T38 The `language` plugin kind and the comment-only check for PHP
+- **Description:** A `language` plugin kind ([Plugins](design/05-architecture/02-plugins.md)) and its PHP implementation: two versions of a file compare equal when their `PhpToken` streams match without comments and whitespace; docblocks, suppression and ignore markers and inline allow directives count as code. A file of a language without a plugin is not covered.
+- **Acceptance:** tests for an edited line comment (passes), an edited docblock type, an added ignore marker and a changed statement (each fails), a file that does not parse (fails), and a file of an unknown language (not covered, so the owner).
+- **Evidence:** the check's result for a comment-only edit of `bin/probe` and for an edit that changes a statement, from a running install.
+- **Waits for:** T37. **Size:** S. **Labels:** `class:process`, `priority:normal`.
+
+### T39 Dependency policy over Composer, OSV.dev and deps.dev
+- **Description:** A Composer adapter in the PHP `language` plugin turns the old and new manifest and lock file into neutral package changes; rules written once over them check allowed vendors, a clean OSV.dev audit of every new package including transitive ones, a minimum release age from deps.dev, and no change to scripts, plugins, repositories, Composer config, binaries or autoload files. The orchestrator makes the queries.
+- **Acceptance:** recorded OSV.dev and deps.dev responses drive the tests; each rule has a passing and a failing case; a new transitive package with an advisory fails; an unreachable source or an unknown answer sends the change to the owner.
+- **Evidence:** the policy's result for adding an official Symfony package and for a package from another vendor, against recorded responses; a run against the live sources (owner provides).
+- **Waits for:** T38. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T40 Gate code no weaker, the violation corpus and the harness from main
+- **Description:** A check job runs main's gate tests unchanged, and the violation corpus, against the head's gate code through the project's check command, in its own container and as its own user, with the result leaving through a channel the code under test cannot rewrite. Every violation a gate catches on a head becomes a corpus fixture. The boot gate runs main's `bin/instance` and `bin/probe` against the head, and main's isolation probes run through the head's harness.
+- **Acceptance:** a new gate with new tests passes; an edited existing gate that lets a corpus fixture through fails; a head that rewrites the result file is still judged by the job's own channel; a harness change is booted by main's harness; a harness change that lets an isolation probe reach the network, a credential or a folder outside its own fails.
+- **Evidence:** the check's output for an additive gate and for a weakened one on a temporary repository.
+- **Waits for:** T37. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T41 Independent security review and the attacker test
+- **Description:** Two reviewer roles in sessions of their own, apart from the panel: a security reviewer and an attacker. They read the diff, main's protected files and the check results, fenced, never the builder's pull request text. The attacker returns fixtures; plain code runs each against main's and the head's gate without network. Missing capacity sends the change to the owner; a second vendor is used when available. The threat model page lists both roles.
+- **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in replaces either role.
+- **Evidence:** a scripted attacker fixture that gets through a weakened gate, and the owner request it produces.
+- **Waits for:** T7, T40. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T42 Canaries, earned autonomy and containment
+- **Description:** Owner-known canary changes, each category with its own ([Merge](design/05-architecture/08-merge.md#earned-autonomy-per-category)), run through the decision on a schedule. Per category, the dashboard shows canary detection and agreement with the owner; the owner switches a category on in the owner's config once both meet the bar, and it falls back to shadow mode on its own when a canary is missed or the owner overrules it. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. A daily cap per project bounds automatic approvals, and each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
+- **Acceptance:** detection is counted per category over its own canaries; a category below 100% detection, or with fewer canaries than the minimum, cannot be switched on; a missed canary switches it off; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the cap holds under two concurrent approvals (forced order); the dashboard line names the head, the category and its checks.
+- **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
+- **PHP 8.5:** the pipe operator for the canary run's steps.
+- **Waits for:** T20, T39, T41. **Size:** L. **Labels:** `class:process`, `priority:normal`.
+
+### T32 GitHub webhooks through Webhook and RemoteEvent (optional, last)
+- **Description:** Optional, and only for installs that already have a public endpoint: polling stays the default and Intakt works fully without webhooks ([Merge](design/05-architecture/08-merge.md#waiting-for-ci)). A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so a change is seen sooner than the next poll.
+- **Acceptance:** recorded deliveries drive the tests; a valid delivery yields the matching RemoteEvent for a pushed head, a submitted review and a completed check; a missing or wrong signature is refused before any parsing; an unknown event type is acknowledged and ignored; with no endpoint configured, polling alone behaves as before.
+- **Evidence:** a delivery from the GitHub test repository and the round it started, from the webhook log and the ledger.
+- **PHP 8.5:** `#[NoDiscard]` on the signature check result.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
+
 ## Parallel paths
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
-- T15 to T19 and T20 to T21 in parallel after T13; T30 and T32 after T18; T33 after T7; T29 after T20 and T22; T34 after T20; T35 after T22.
+- T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
+- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 after T39 and T41; the optional T32 last, after T18.

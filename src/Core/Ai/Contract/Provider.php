@@ -9,6 +9,7 @@ enum Provider: string
     case Anthropic = 'anthropic';
     case OpenAi = 'openai';
     case OpenAiCompatible = 'openai_compatible';
+    case ClaudeCode = 'claude_code';
 
     /**
      * @return list<string>
@@ -19,7 +20,14 @@ enum Provider: string
             self::Anthropic => ['ANTHROPIC_API_KEY'],
             self::OpenAi => ['OPENAI_API_KEY'],
             self::OpenAiCompatible => ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'],
+            self::ClaudeCode => ['CLAUDE_CODE_OAUTH_TOKEN'],
         };
+    }
+
+    // The subscription CLI gets no tool until the per-review MCP server serves it the fenced ones (plan T15), so it never sees the change.
+    public function readsTheCheckout(): bool
+    {
+        return self::ClaudeCode !== $this;
     }
 
     /**

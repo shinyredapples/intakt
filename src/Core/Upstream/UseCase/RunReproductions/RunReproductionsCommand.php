@@ -11,6 +11,7 @@ use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Path;
@@ -69,15 +70,20 @@ final readonly class RunReproductionsCommand
      */
     private function discover(string $folder): ?array
     {
+        // Without search permission no child reads as a folder, so the run would pass as clean.
+        if (!is_executable($folder)) {
+            return null;
+        }
+
         // A glob pattern would read brackets or stars in the folder's own path as wildcards, and a listing error must not pass as an empty folder.
         try {
-            $entries = new FilesystemIterator($folder, FilesystemIterator::KEY_AS_PATHNAME | FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::SKIP_DOTS);
+            $paths = array_keys(iterator_to_array(new FilesystemIterator($folder, FilesystemIterator::KEY_AS_PATHNAME | FilesystemIterator::CURRENT_AS_FILEINFO | FilesystemIterator::SKIP_DOTS)));
         } catch (UnexpectedValueException) {
             return null;
         }
 
         $folders = array_filter(
-            array_keys(iterator_to_array($entries)),
+            $paths,
             static fn (string $path): bool => is_dir($path) && !str_starts_with(basename($path), '.'),
         );
         sort($folders);
@@ -94,7 +100,8 @@ final readonly class RunReproductionsCommand
             $io->writeln(sprintf('%-12s %s', $outcome->status->value, $outcome->slug));
 
             if ($outcome->stillFails() && $io->isVerbose()) {
-                $io->writeln($outcome->output);
+                // The output comes from the reproduction, so a tag in it must not restyle or hide the report.
+                $io->writeln($outcome->output, OutputInterface::OUTPUT_RAW);
             }
         }
 

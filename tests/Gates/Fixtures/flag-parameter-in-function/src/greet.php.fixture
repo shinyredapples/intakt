@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+function greet(string $text, bool $loud): string
+{
+    return $loud ? strtoupper($text) : $text;
+}
