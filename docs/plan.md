@@ -22,7 +22,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
-| After the hackathon | branch cleanup, labels, GitHub webhooks, server metrics, a development setup with file watching, approving protected changes on the spot; the demo runs on a local repository without them | T19, T30, T32, T34, T35, T37 to T42 | after the deadline |
+| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T37 to T42, T32 (optional) | after the deadline |
 
 ## M1 Review core
 
@@ -54,7 +54,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T3 Persistence tests on MySQL, MariaDB and PostgreSQL in CI
-- **Description:** A CI job matrix with service containers runs the `persistence` group on each engine. Protected path: the owner approves the merge of the workflow change; it is pushed without a separate approval only when the workflow scan finds it not risky (see Merge).
+- **Description:** A CI job with service containers runs the `persistence` group on each engine (built as a matrix; since merged into one job with a service and a step per engine, as each job costs an ephemeral runner a full reset). Protected path: the owner approves the merge of the workflow change; it is pushed without a separate approval only when the workflow scan finds it not risky (see Merge).
 - **Acceptance:** the matrix runs on the branch and is green on all three engines; the SQLite run in `bin/check` stays unchanged.
 - **Evidence:** the CI run link with the three jobs.
 - **Waits for:** T2. **Size:** S. **Labels:** `class:tooling`, `priority:normal`.
@@ -274,13 +274,6 @@ The demo works on a local repository, so these tasks wait until after the deadli
 - **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[NoDiscard]` on minted round tokens.
 - **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
 
-### T32 GitHub webhooks through Webhook and RemoteEvent
-- **Description:** A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so Intakt reacts to events instead of polling.
-- **Acceptance:** recorded deliveries drive the tests; a valid delivery yields the matching RemoteEvent for a pushed head, a submitted review and a completed check; a missing or wrong signature is refused before any parsing; an unknown event type is acknowledged and ignored.
-- **Evidence:** a delivery from the GitHub test repository and the round it started, from the webhook log and the ledger.
-- **PHP 8.5:** `#[NoDiscard]` on the signature check result.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
-
 ### T34 Server metrics on the dashboard
 - **Description:** FrankenPHP's Prometheus metrics, the admin API's `/frankenphp/threads` and Mercure's `mercure_health` feed an infrastructure row on the dashboard (worker threads busy and idle, queue depth, worker restarts, hub health) and the container's health check. The admin API stays bound to localhost; the app reads it from inside the container.
 - **Acceptance:** recorded metrics and threads responses drive the tests; the row renders from them and shows a clear state when an endpoint is down; the health check fails when the hub reports unhealthy or no worker thread is ready; no admin endpoint is reachable from outside the container.
@@ -333,10 +326,17 @@ T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.m
 - **PHP 8.5:** the pipe operator for the canary run's steps.
 - **Waits for:** T20, T39, T41. **Size:** L. **Labels:** `class:process`, `priority:normal`.
 
+### T32 GitHub webhooks through Webhook and RemoteEvent (optional, last)
+- **Description:** Optional, and only for installs that already have a public endpoint: polling stays the default and Intakt works fully without webhooks ([Merge](design/05-architecture/08-merge.md#waiting-for-ci)). A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so a change is seen sooner than the next poll.
+- **Acceptance:** recorded deliveries drive the tests; a valid delivery yields the matching RemoteEvent for a pushed head, a submitted review and a completed check; a missing or wrong signature is refused before any parsing; an unknown event type is acknowledged and ignored; with no endpoint configured, polling alone behaves as before.
+- **Evidence:** a delivery from the GitHub test repository and the round it started, from the webhook log and the ledger.
+- **PHP 8.5:** `#[NoDiscard]` on the signature check result.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
+
 ## Parallel paths
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
-- After the hackathon: T19, T30 and T32 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 last.
+- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 after T39 and T41; the optional T32 last, after T18.

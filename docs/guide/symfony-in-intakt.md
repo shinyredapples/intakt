@@ -21,7 +21,7 @@ flowchart TD
   agents --> a[Symfony AI Agent<br/>and MCP]
   memory --> s[Symfony AI Store]
   engine --> e[Messenger, Workflow,<br/>Scheduler, Lock, RateLimiter]
-  github --> g[HttpClient, Webhook]
+  github --> g[HttpClient, Webhook optional]
   live --> l[FrankenPHP, Mercure, Turbo]
   honest --> h[Validator, Serializer, Clock,<br/>Reset, and the quality gates]
 ```
@@ -98,7 +98,7 @@ stateDiagram-v2
 ## Talking to GitHub
 
 - **HttpClient** makes the calls to GitHub, retrying when GitHub hiccups. *(planned)*
-- **Webhook and RemoteEvent** receive GitHub's notifications ("a check finished", "someone commented"), check that they really come from GitHub, and turn them into events Intakt reacts to at once, instead of asking GitHub every few minutes. *(planned)*
+- **Webhook and RemoteEvent** are an optional extra for installs that GitHub can reach from outside. They receive GitHub's notifications ("a check finished", "someone commented"), check that they really come from GitHub, and turn them into events Intakt reacts to a little sooner. Without them, Intakt simply asks GitHub often enough, and more often while something is waiting. *(planned, optional)*
 
 ## The live dashboard
 

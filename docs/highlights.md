@@ -78,7 +78,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | planned | T9 (#14) |
 | Lock (Semaphore) | caps parallel calls per vendor account | planned | T9 (#14) |
 | RateLimiter | per-account cooldown windows aligned to the vendor's reset | planned | T14 (#19) |
-| Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned | T32 (#60) |
+| Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned (optional, last) | T32 (#60) |
 | HttpClient | `RetryableHttpClient` and scoped clients for GitHub | planned | T18 (#23) |
 | Mercure and Turbo (Symfony UX) | Turbo Streams over FrankenPHP's built-in hub | planned | T21 (#27) |
 | Console | 8.1 input mapping, `CommandTester` assertions | in progress | T13 (#18), T2 (#7, part #47), `src/Core/Ledger/UseCase/ReadEvents/ReadEventsCommand.php`; T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/SummarizeChangeCommand.php` |
