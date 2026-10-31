@@ -7,6 +7,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Running the demo with `docker compose up` (planned)
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), but nothing runs the panel yet.
 - Reviewing a pull request and reading the verdicts (planned)
+- Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Connecting an agent through MCP (planned)
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
@@ -143,6 +144,18 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 ## Summarizing a branch
 
 `php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A control character in a file name is shown in a visible form such as `\x1b`, and a backslash as `\\`. A branch the repository does not have, a repository git cannot read, or a repository whose `.git/info/attributes` file exists, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
+
+## Checking whether a verdict still counts
+
+A reviewer's verdict counts only for what it reviewed: the branch's latest commit, the commit it was compared with, the task, the check command and the project's review panel. `php bin/console intakt:verdict:identity <project> <branch> <task> <check-command> [--repository=.] [--base=main]` prints that identity as one line, `identity` followed by five parts separated by dots (the two commits, then fingerprints of the task text, the check command and the panel). The task text and the command are not shown, only their fingerprints.
+
+Pass a printed identity back with `--reviewed=<identity>` to see whether a verdict given on it still counts:
+
+- `current`: nothing changed.
+- `stale: head changed` (or any other changed parts): the verdict no longer counts. A new task text, check command or panel always makes it stale, and so does a new commit, unless one of the two cases below applies.
+- `kept-for-untouched-parts: ...`: the verdict still counts for everything the change left alone, and each `review again <path>` line names a file to review again. This happens when the base branch was merged into the branch and git merged it by itself (no conflict to resolve, no other edit in the merge commit), or when the new commits touch only files in the repository's `docs/` folder and the base did not move.
+
+A project without a review panel, a branch the repository does not have, or an identity that is not in the printed form prints an error and exits with 1. Review rounds do not use this check yet.
 
 ## Checking a new Symfony AI release against the known bugs
 

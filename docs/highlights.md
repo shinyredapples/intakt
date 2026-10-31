@@ -118,6 +118,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
 | `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | in progress | T26 (#33), `src/Core/Upstream/` |
 | `intakt:change:summarize` | prints the change summary of a branch of a local repository | in progress | T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/` |
+| `intakt:verdict:identity` | prints the verdict identity of a branch of a local repository and whether a recorded one still counts | done | T11 (#16), `src/Plugin/LocalGitForge/UseCase/CheckVerdictIdentity/` |
 | `bin/instance` and `bin/probe` | offline boot gate and reviewer probes | done | T31 (#6), `bin/instance`, `bin/probe` |
 
 ## Found in the beta
