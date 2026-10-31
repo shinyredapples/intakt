@@ -19,9 +19,10 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 |---|---|---|---|
 | M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31, T36 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
-| M3 Agents and memory | MCP server and client, the Store briefing, labels, GitHub with webhooks, branch cleanup, a subscription reviewer | T15 to T19, T30, T32, T33 | 2026-11-14 |
-| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live; server metrics | T20, T21, T34 | 2026-11-17 |
-| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening, a development setup with file watching | T22 to T29, T35 | 2026-11-21 |
+| M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
+| M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
+| M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
+| After the hackathon | branch cleanup, labels, GitHub webhooks, server metrics, a development setup with file watching; the demo runs on a local repository without them | T19, T30, T32, T34, T35 | after the deadline |
 
 ## M1 Review core
 
@@ -169,27 +170,6 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **PHP 8.5:** `Uri\Rfc3986\Uri` instead of `parse_url` for pull-request and API URLs.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
-### T30 Branch cleanup with archive refs
-- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges, limited to branches with Intakt's prefix (other people's branches only when the project opts in), never the default, protected or release branches: delete a merged branch at once; a closed unmerged one after 30 days unless its pull request is labeled `keep`; a branch without a pull request after 60 days (stale at 30) unless claimed by a person's commit or the project file's `keep-branches` list. A weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
-- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; the default, protected and release branches and branches without Intakt's prefix are never deleted unless the project opts in; both kinds of claim keep a branch; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
-- **Evidence:** the warning list and the archive refs after a cleanup run on the GitHub test repository.
-- **PHP 8.5:** the pipe operator for the rule chain that picks the branches.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
-
-### T19 Labels on reviewed changes
-- **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
-- **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
-- **Evidence:** the GitHub test pull request with its labels before and after a round.
-- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[NoDiscard]` on minted round tokens.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
-
-### T32 GitHub webhooks through Webhook and RemoteEvent
-- **Description:** A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so Intakt reacts to events instead of polling.
-- **Acceptance:** recorded deliveries drive the tests; a valid delivery yields the matching RemoteEvent for a pushed head, a submitted review and a completed check; a missing or wrong signature is refused before any parsing; an unknown event type is acknowledged and ignored.
-- **Evidence:** a delivery from the GitHub test repository and the round it started, from the webhook log and the ledger.
-- **PHP 8.5:** `#[NoDiscard]` on the signature check result.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
-
 ### T33 A subscription reviewer through the Claude Code or Codex platform bridge
 - **Description:** One reviewer role runs through `symfony/ai-claude-code-platform` or `symfony/ai-codex-platform` (BETA1) on a subscription account (its automation token where the vendor has one), behind the same vendor contract as the API providers. Its stream parsing is exercised on purpose, including a stream that ends early (`IncompleteStreamException`). The package is a new dependency the owner approves.
 - **Acceptance:** recorded streams drive the tests; a complete stream yields a typed verdict; a truncated stream raises `IncompleteStreamException` and the reviewer ends as `blocked` with the reason, its usage counted once; the setup shows which plans the vendor's terms allow for this use.
@@ -210,12 +190,6 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Acceptance:** events published by a round reach a subscribed test client in order; a client that reconnects with `Last-Event-ID` receives the events it missed; the stop button cancels the reviewer's execution and the ledger records the stop; the page works, without live updates, when the hub is down.
 - **Evidence:** a short screen recording or a sequence of screenshots of a live round.
 - **Waits for:** T20. **Size:** M. **Labels:** `class:feature`, `priority:high`.
-
-### T34 Server metrics on the dashboard
-- **Description:** FrankenPHP's Prometheus metrics, the admin API's `/frankenphp/threads` and Mercure's `mercure_health` feed an infrastructure row on the dashboard (worker threads busy and idle, queue depth, worker restarts, hub health) and the container's health check. The admin API stays bound to localhost; the app reads it from inside the container.
-- **Acceptance:** recorded metrics and threads responses drive the tests; the row renders from them and shows a clear state when an endpoint is down; the health check fails when the hub reports unhealthy or no worker thread is ready; no admin endpoint is reachable from outside the container.
-- **Evidence:** a screenshot of the infrastructure row during a live round, and the health check output from the container.
-- **Waits for:** T20. **Size:** S. **Labels:** `class:feature`, `priority:normal`.
 
 ## M5 Demo
 
@@ -282,6 +256,37 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **PHP 8.5:** the pipe operator for the trimming steps.
 - **Waits for:** T7, T16. **Size:** M. **Labels:** `class:core`, `priority:normal`, `model:strong`.
 
+## After the hackathon
+
+The demo works on a local repository, so these tasks wait until after the deadline.
+
+### T30 Branch cleanup with archive refs
+- **Description:** The cleanup rules of the design ([Merge](design/05-architecture/08-merge.md#branch-cleanup)) for the GitHub and local forges, limited to branches with Intakt's prefix (other people's branches only when the project opts in), never the default, protected or release branches: delete a merged branch at once; a closed unmerged one after 30 days unless its pull request is labeled `keep`; a branch without a pull request after 60 days (stale at 30) unless claimed by a person's commit or the project file's `keep-branches` list. A weekly Scheduler job warns a week ahead; every deleted head is kept as an archive ref in Intakt's own mirror and never pushed.
+- **Acceptance:** each rule has a test against a temporary repository and recorded forge responses, with a clock the test controls; the default, protected and release branches and branches without Intakt's prefix are never deleted unless the project opts in; both kinds of claim keep a branch; a deleted branch is restored from its archive ref; nothing is deleted without the warning a week before.
+- **Evidence:** the warning list and the archive refs after a cleanup run on the GitHub test repository.
+- **PHP 8.5:** the pipe operator for the rule chain that picks the branches.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
+### T19 Labels on reviewed changes
+- **Description:** On forges with labels, `review:full` picks the full panel and `model:<tier>` sets the start tier; Intakt writes one `status:` label (`in-review`, `waiting-on-you`) to mirror the round. Steering labels count only from accounts with write access.
+- **Acceptance:** each label's effect is tested; a status label changed by a person is restored with one comment; two values in one family resolve to the last applied.
+- **Evidence:** the GitHub test pull request with its labels before and after a round.
+- **PHP 8.5:** `Uri\Rfc3986\Uri` for webhook URLs; `#[NoDiscard]` on minted round tokens.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
+### T32 GitHub webhooks through Webhook and RemoteEvent
+- **Description:** A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so Intakt reacts to events instead of polling.
+- **Acceptance:** recorded deliveries drive the tests; a valid delivery yields the matching RemoteEvent for a pushed head, a submitted review and a completed check; a missing or wrong signature is refused before any parsing; an unknown event type is acknowledged and ignored.
+- **Evidence:** a delivery from the GitHub test repository and the round it started, from the webhook log and the ledger.
+- **PHP 8.5:** `#[NoDiscard]` on the signature check result.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
+
+### T34 Server metrics on the dashboard
+- **Description:** FrankenPHP's Prometheus metrics, the admin API's `/frankenphp/threads` and Mercure's `mercure_health` feed an infrastructure row on the dashboard (worker threads busy and idle, queue depth, worker restarts, hub health) and the container's health check. The admin API stays bound to localhost; the app reads it from inside the container.
+- **Acceptance:** recorded metrics and threads responses drive the tests; the row renders from them and shows a clear state when an endpoint is down; the health check fails when the hub reports unhealthy or no worker thread is ready; no admin endpoint is reachable from outside the container.
+- **Evidence:** a screenshot of the infrastructure row during a live round, and the health check output from the container.
+- **Waits for:** T20. **Size:** S. **Labels:** `class:feature`, `priority:normal`.
+
 ### T35 Development setup with file watching
 - **Description:** A development compose override that runs the image with FrankenPHP's `watch` on the worker, so a changed PHP, Twig or config file restarts the workers, with hot reload in the browser. Nothing of it ships in the production image or the default `compose.yaml`.
 - **Acceptance:** with the override, a changed controller or template is served on the next request without a manual restart; without it, the image runs as T22 builds it; `docs/architecture/` says how to start it.
@@ -292,5 +297,6 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 - From the start: T1, T2, T4, T6, T31, T26, T27.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
-- T15 to T19 and T20 to T21 in parallel after T13; T30 and T32 after T18; T33 after T7; T29 after T20 and T22; T34 after T20; T35 after T22.
+- T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
+- After the hackathon: T19, T30 and T32 after T18; T34 after T20; T35 after T22.

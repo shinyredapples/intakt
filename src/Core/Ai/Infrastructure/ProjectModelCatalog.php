@@ -6,6 +6,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
+use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
 use Symfony\AI\Platform\Bridge\Generic\CompletionsModel;
 use Symfony\AI\Platform\Bridge\Generic\FallbackModelCatalog;
 use Symfony\AI\Platform\Bridge\OpenAi\Gpt;
@@ -67,7 +68,8 @@ final readonly class ProjectModelCatalog
         return match ($provider) {
             Provider::Anthropic => new AnthropicBridgeCatalog()->catalog(),
             Provider::OpenAi => new OpenAiBridgeCatalog()->catalog(),
-            Provider::OpenAiCompatible => new FallbackModelCatalog(),
+            // Not the bridge's own catalog: its models lack structured output, which the verdict needs.
+            Provider::OpenAiCompatible, Provider::ClaudeCode => new FallbackModelCatalog(),
         };
     }
 
@@ -80,6 +82,7 @@ final readonly class ProjectModelCatalog
             Provider::Anthropic => Claude::class,
             Provider::OpenAi => Gpt::class,
             Provider::OpenAiCompatible => CompletionsModel::class,
+            Provider::ClaudeCode => ClaudeCode::class,
         };
     }
 }
