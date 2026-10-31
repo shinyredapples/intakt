@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(TestsGate::class)]
 final class TestsGateTest extends SandboxTestCase
 {
-    private const string FAILING_GATE_TEST = <<<'PHP'
+    private const string FAILING_GATE_TEST = <<<'FIXTURE'
         <?php
 
         declare(strict_types=1);
@@ -27,7 +27,7 @@ final class TestsGateTest extends SandboxTestCase
             }
         }
 
-        PHP;
+        FIXTURE;
 
     public function testPassingTestsPassTheGate(): void
     {

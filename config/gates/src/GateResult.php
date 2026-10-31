@@ -44,7 +44,7 @@ final readonly class GateResult
 
     public function noted(string $note): self
     {
-        return clone($this, ['note' => $note]);
+        return new self($this->gate, $this->findings, $note);
     }
 
     public function isPassing(): bool
