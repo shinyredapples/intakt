@@ -53,16 +53,35 @@ So this reviewer can ask for more work, but it can never pass a change on its ow
 
 ## Layer 5: the rules protect themselves
 
-The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions) are **protected files**. A change to them gets extra care:
+The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once:
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules, every reviewer agrees, and a mechanical check proves nothing existing was changed | Intakt, and it lists the change on the dashboard for a week (planned: until this is built, every rule change goes to you) |
-| edits or removes an existing check, its tests or its settings | you |
-| removes, relaxes or skips any check | you |
-| touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
+| passes every hard limit and every mechanical check, a separate security reviewer agrees, and an attempt to sneak something past the changed check fails | Intakt, at once, and it lists the change on the dashboard for a week (planned: until this is built, every rule change goes to you) |
+| anything else | you, with the reason |
 
 So a change can never quietly switch off the check that would have caught it, and Intakt can never widen its own powers.
+
+## When Intakt asks you and why
+
+Intakt asks you only when it cannot prove a rule change is harmless, and it always says why: the request names the limit or the check that sent it. A request to you **never answers itself**: no timer, no "approved unless you object", no one-tap shortcut.
+
+**Always you (hard limits).** Plain code checks these, and no AI can talk them down:
+- anything about how secrets and passwords are kept or checked;
+- the CI setup itself, for example more permissions, new triggers, other machines, or a workflow that reads a repository secret;
+- a deleted or changed test of an existing check;
+- the list of protected files and the rules for what Intakt may approve;
+- the agents' instructions, such as `AGENTS.md`.
+
+**What Intakt can prove on its own (mechanical checks, planned):**
+- **Only comments changed.** The file without its comments is the same as before. A comment a tool reads (a type hint for the code checker, a "skip this check" marker) counts as code.
+- **A safe new library.** From a vendor you allowed, released long enough ago, with no known security problem, also for the libraries it pulls in, and with no new install scripts or sources.
+- **A check got no weaker.** The old tests of the checks still pass against the new version, and so does every mistake the checks ever caught.
+- **The start-up scripts.** Main's trusted copy tests the new one, so a changed script cannot vouch for itself.
+
+On top, a separate **security reviewer**, which never sees what the builder wrote about its change, must agree, and an **attacker** tries to write an example that the old check stops and the new one lets through. If it finds one, you are asked.
+
+**Trust is earned, one kind of change at a time.** At first Intakt only works out its answer and writes it down, while you still approve; it starts with your past approvals. Known bad changes are fed in now and then on purpose (a weakened check, a leaked secret, a harmful library). Only when Intakt catches every one of them and agreed with you on enough real changes can you switch that kind on. It switches back by itself the moment it misses one. Even then: a change Intakt approved is undone at once if main's checks catch a problem afterwards, there is a daily limit, and every such approval stays on the dashboard for a week.
 
 ## Layer 6: only you can approve what needs a person
 
@@ -94,7 +113,7 @@ No system is perfect, and it is better to be clear about the limits:
 
 A model does what the text in front of it suggests, and it cannot reliably tell your instructions from instructions someone hid in an issue, a comment, a log or a library's source code. This is called prompt injection, and no one can rule it out. So Intakt does not rely on its models resisting it. Instead:
 
-- **Plain code makes the decisions that matter.** A model can suggest, write and review, but merging, approving a change to the project's rules, counting a review and picking the model for a job are done or checked by ordinary code that a clever sentence cannot talk around. Intakt approves a change that touches the rules by itself only when green CI and at least two reviewers from different vendors approve it and each says it tightens the rules or leaves them as they are; anything else needs your own approval. Some changes always need you, whatever the reviewers say: the CI definition (workflows, their permissions and credentials), the list of protected files, code ownership and the rules for what Intakt may approve by itself.
+- **Plain code makes the decisions that matter.** A model can suggest, write and review, but merging, approving a change to the project's rules, counting a review and picking the model for a job are done or checked by ordinary code that a clever sentence cannot talk around. Intakt will approve a change that touches the rules by itself only when plain code finds no hard limit touched and a mechanical check proves the change harmless, and a separate security review and an attack on the change find nothing; anything else needs your own approval (see [When Intakt asks you and why](#when-intakt-asks-you-and-why)). Some changes always need you, whatever the reviewers say: secrets handling, the CI workflows (their permissions, triggers, machines and secrets), the tests of existing checks, the list of protected files, code ownership, the agents' instructions and the rules for what Intakt may approve by itself.
 - **Each model has only the tools its job needs.** A reviewer can only read the code and run small tests without network. It does get the test credentials you give review jobs (by default it does; you can withhold them), so use low-privilege test credentials there. A builder works in a throwaway container without your forge account, signing key or API keys; it gets the login of its AI subscription, read-only, and your project's test credentials only if you allow it. Before Intakt pushes or posts anything a model wrote, it removes the credentials that job held and runs the secret scan, and it never skips that scan, whatever a model says. One thing runs before any check: if you connect jobs to an already running service (a staging backend, a shared dev server) instead of a fresh copy per job, the tests run model-written code against it, so give that service test-only credentials and its own data, never production. The helper that settles routine questions has its own narrow account that cannot merge or approve.
 - **Only people you trust steer.** Intakt builds only tasks written by people with write access to the project, and counts labels, answers and instructions only from them, checked with the forge on every event. Comments from anyone else are ignored.
 - **Copied text stays marked as foreign.** When you paste text from an outside source into a task (a bug report from a user, a forum post), put it between `<!-- external -->` and `<!-- /external -->`. Intakt then shows it to models as material to look at, not as instructions to follow.
