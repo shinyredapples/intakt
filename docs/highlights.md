@@ -28,9 +28,9 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `TraceableToolbox` | tests hand the reviewer a traced toolbox, so `assertToolCalled()` sees its tool calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `ToolCallRequested` event | a listener denies tool arguments that escape the checkout | in progress | T7 (#12), `src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php` |
 | `ToolCallArgumentResolver` | the listener validates a call's arguments before it denies a path, so a malformed call never passes as a denial | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php` |
-| Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each reviewer in each round, kept in the `reviewer_conversation` table | in progress | T7 (#12), T29 (#29), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `config/packages/ai.php`, `migrations/Version20261029120000.php` |
+| Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each reviewer in each round, kept in the `reviewer_conversation` table | in progress | T7 (#12), T29 (#29), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `config/packages/ai.php`, `migrations/Version20261029120000.php`; T43 (#384): a build's conversation kept at a vendor limit |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
-| `MemoryInputProcessor` | the project memory briefing, with a size cap | planned | T17 (#22) |
+| `MemoryInputProcessor` | the project memory briefing, with a size cap; after a vendor limit also the hand-off note and the kept conversation for the next account | planned | T17 (#22), T43 (#384) |
 | Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button | planned | T21 (#27) |
 
 ## Symfony AI Store
