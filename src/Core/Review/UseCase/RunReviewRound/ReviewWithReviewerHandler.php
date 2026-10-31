@@ -12,13 +12,11 @@ use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
-use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
-use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
-use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
+use Throwable;
 
 #[AsCommandHandler]
 final readonly class ReviewWithReviewerHandler
@@ -75,12 +73,12 @@ final readonly class ReviewWithReviewerHandler
     private function review(RoundReviewer $reviewer): void
     {
         $round = $reviewer->round();
-        $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $round->task(), new ReviewerConversation($reviewer->rolePrompt(), $reviewer->id()));
 
         try {
+            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $round->task(), new ReviewerConversation($reviewer->rolePrompt(), $reviewer->id()));
             $verdict = $this->vendor->review($round->project(), $reviewer->tier(), $request);
-        } catch (ProviderRateLimited|ProviderFailedTransiently|UsageNotRecorded $failure) {
-            // The class only, because a provider's message can echo a key.
+        } catch (Throwable $failure) {
+            // Every failure, because one left uncaught would leave the reviewer running and be recorded later as a stopped worker; the class only, because a provider's message can echo a key.
             $this->fail($reviewer, $failure::class);
 
             return;

@@ -25,7 +25,7 @@ A review round sends one message per reviewer to a queue, and workers take them 
 php bin/console messenger:consume async
 ```
 
-The state of a round and of each reviewer is stored in the database, and so are the waiting messages. If a worker stops, start it again: the reviewers still waiting run, and a round whose last reviewer has finished is completed. A reviewer that was in the middle of its review when its worker stopped is recorded as failed (`reviewer_failed` in the ledger, readable with `php bin/console intakt:ledger:events`) and the round goes on without it; trying it again, retrying a rate-limited reviewer and counting a failed one as blocked arrive later. Nothing starts a round for you yet, so there is nothing to run besides the workers.
+The state of a round and of each reviewer is stored in the database, and so are the waiting messages. If a worker stops, start it again: the reviewers still waiting run, and a round whose last reviewer has finished is completed. A reviewer that was in the middle of its review when its worker stopped is recorded as failed (`reviewer_failed` in the ledger, readable with `php bin/console intakt:ledger:events`) and the round goes on without it. A reviewer whose call to the model fails for any reason is recorded as failed too, with the kind of failure (for example a refused key), and the round goes on; trying it again, retrying a rate-limited reviewer and counting a failed one as blocked arrive later. Nothing starts a round for you yet, so there is nothing to run besides the workers.
 
 ## Checking that an install boots
 

@@ -121,6 +121,18 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[1]->state());
     }
 
+    public function testAVendorFailureOutsideTheContractIsRecordedAsThatFailureAndTheRoundStillCompletes(): void
+    {
+        $round = $this->fixture->start(1);
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new ScriptedVendor(new RuntimeException('401 invalid api key')));
+
+        $stored = $this->fixture->round($round->id()->toRfc4122());
+        self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
+        self::assertSame(RuntimeException::class, $stored->reviewers()[0]->failure());
+        self::assertSame(RoundState::Complete, $stored->state());
+    }
+
     public function testTheLedgerHoldsTheStartAndTheEndOfEveryReviewer(): void
     {
         $this->fixture->start(2);
