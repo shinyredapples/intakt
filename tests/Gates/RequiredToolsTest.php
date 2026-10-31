@@ -17,6 +17,8 @@ final class RequiredToolsTest extends TestCase
 {
     private string|false $path;
 
+    private string|false $scanner;
+
     private string $cwd;
 
     private string $base;
@@ -28,6 +30,7 @@ final class RequiredToolsTest extends TestCase
     protected function setUp(): void
     {
         $this->path = getenv('PATH');
+        $this->scanner = getenv('INTAKT_GITLEAKS');
         $cwd = getcwd();
         $this->cwd = false === $cwd ? '.' : $cwd;
         putenv('INTAKT_GITLEAKS');
@@ -42,7 +45,7 @@ final class RequiredToolsTest extends TestCase
     {
         chdir($this->cwd);
         putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
-        putenv('INTAKT_GITLEAKS');
+        putenv(false === $this->scanner ? 'INTAKT_GITLEAKS' : 'INTAKT_GITLEAKS='.$this->scanner);
         $this->remove($this->base);
     }
 
@@ -153,6 +156,21 @@ final class RequiredToolsTest extends TestCase
     public function testToolsOnThePathAreFound(): void
     {
         self::assertSame([], $this->tools()->missingFor(['cs']));
+    }
+
+    public function testWithoutAPathAToolOnTheShellsDefaultPathIsFound(): void
+    {
+        putenv('PATH');
+
+        self::assertSame([], $this->tools()->missingFor(['cs']));
+    }
+
+    public function testWithoutAPathAToolOffTheShellsDefaultPathIsListed(): void
+    {
+        putenv('PATH');
+        putenv('INTAKT_GITLEAKS=intakt-no-such-tool');
+
+        self::assertSame([RequiredTools::notFound('intakt-no-such-tool')], $this->tools()->missingFor(['secrets']));
     }
 
     private function tools(): RequiredTools

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Symfony\Component\Process\Process;
+
 final readonly class RequiredTools
 {
     public const string SCANNER_ENVIRONMENT = 'INTAKT_GITLEAKS';
@@ -22,7 +24,6 @@ final readonly class RequiredTools
         'secrets-history' => [self::SCANNER, 'env'],
     ];
 
-    // Because the gates run their commands in the workspace root, a relative path resolves there.
     public function __construct(
         private string $root,
     ) {
@@ -57,12 +58,30 @@ final readonly class RequiredTools
             array_push($commands, ...(self::BY_GATE[$gate] ?? []));
         }
 
+        $entries = explode(PATH_SEPARATOR, $this->searchPath());
+
         // Because the override may name a command another gate needs too, names are deduplicated after it applies.
         $missing = array_map($this->nameOf(...), $commands)
             |> array_unique(...)
-            |> (fn (array $names): array => array_filter($names, fn (string $name): bool => !$this->isAvailable($name)));
+            |> (fn (array $names): array => array_filter($names, fn (string $name): bool => !$this->isAvailable($name, $entries)));
 
         return array_map(self::notFound(...), array_values($missing));
+    }
+
+    private function searchPath(): string
+    {
+        $path = getenv('PATH');
+
+        return is_string($path) ? $path : $this->shellDefaultPath();
+    }
+
+    // Because the gates start their commands through the shell, which searches its built-in default path when PATH is unset.
+    private function shellDefaultPath(): string
+    {
+        $shell = Process::fromShellCommandline('printf %s "$PATH"', null, ['PATH' => false]);
+        $shell->run();
+
+        return $shell->isSuccessful() ? $shell->getOutput() : '';
     }
 
     private function nameOf(string $command): string
@@ -70,13 +89,16 @@ final readonly class RequiredTools
         return self::SCANNER === $command ? self::scanner() : $command;
     }
 
-    private function isAvailable(string $name): bool
+    /**
+     * @param list<string> $entries
+     */
+    private function isAvailable(string $name, array $entries): bool
     {
         if (str_contains($name, '/')) {
             return $this->isExecutable(str_starts_with($name, '/') ? $name : $this->root.'/'.$name);
         }
 
-        return array_any(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn ($entry) => $this->isExecutable($this->directoryOf($entry).'/'.$name));
+        return array_any($entries, fn (string $entry): bool => $this->isExecutable($this->directoryOf($entry).'/'.$name));
     }
 
     // Because a gate starts its command in the workspace root, a relative or empty PATH entry resolves there, as the shell does.
