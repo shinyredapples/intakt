@@ -130,11 +130,11 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 ### T14 Provider limits and substitutes
 - **Description:** A rate-limited or failing provider puts its account in cooldown until the reset time; the reviewer moves to the next account of the same vendor and role by priority, and only when every such account is out does the panel substitute a reviewer from the same tier on another provider and record that a catch-up review is owed.
-- **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason.
-- **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up; and a round with one of two same-vendor accounts out, showing the move to the other account and no catch-up owed.
+- **Acceptance:** cooldown is per account, shared by all reviewers on it; a same-vendor account is tried before another provider and owes no catch-up review; substitution follows config; an outage of every provider ends the round as `blocked` with the reason; a merge with a substitute's verdict queues one catch-up per missing reviewer, run once that vendor has room (merges touching sensitive paths first, then oldest, never ahead of a live head waiting for that reviewer); a rejecting catch-up files one task that inherits no steering label and is not built until a person labels it; its follow-ups reach the inbox; each catch-up's state is on the dashboard.
+- **Evidence:** a round with one provider's key revoked, showing the substitute and the owed catch-up; and a round with one of two same-vendor accounts out, showing the move to the other account and no catch-up owed; and a substitute-reviewed merge whose catch-up runs after the vendor's reset and files a task that stays unbuilt until it is labelled.
 - **Symfony:** provider failover through `FailoverPlatform`, wrapped by Intakt's own class that records the switch and does not rely on it alone; per-account cooldowns as RateLimiter windows aligned to the vendor's reset; Scheduler ticks for usage probes and deadlines.
-- **Catch-up:** a merge with a substitute's verdict queues the missing reviewer's catch-up of the merged change, run automatically once its vendor has room ([Reviews](design/05-architecture/07-reviews.md)); a rejection is filed as a new ready task naming the pull request, an approval's follow-ups as one task for triage.
-- **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:normal`.
+- **Catch-up:** a merge with a substitute's verdict queues the missing reviewer's catch-up of the merged change, run automatically once its vendor has room ([Reviews](design/05-architecture/07-reviews.md)); a rejection is filed as a new task naming the pull request, with the review fenced, and waits for a person's steering label; an approval's follow-ups go to the follow-up inbox.
+- **Waits for:** T9. **Size:** L. **Labels:** `class:core`, `priority:normal`.
 
 ## M3 Agents and memory
 
