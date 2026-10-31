@@ -153,10 +153,9 @@ final class FindingLedgerTest extends TestCase
         $ledger = new FindingLedger();
         $ledger->recordRound(4, []);
 
-        $this->expectException(RoundNotAfterLatest::class);
-        $this->expectExceptionMessage('Round 2 is not after the latest recorded round 4.');
+        $refusal = $this->refusalOf($ledger, 2);
 
-        $ledger->recordRound(2, []);
+        self::assertSame('Round 2 is not after the latest recorded round 4.', $refusal?->getMessage());
     }
 
     public function testTheFirstRoundMayBeAnyNumberAndLaterRoundsOnlyNeedToBeHigher(): void
@@ -171,13 +170,18 @@ final class FindingLedgerTest extends TestCase
 
     private function recordRefusedRound(FindingLedger $ledger, int $round): void
     {
+        self::assertInstanceOf(RoundNotAfterLatest::class, $this->refusalOf($ledger, $round), 'Round '.$round.' was recorded out of order.');
+    }
+
+    private function refusalOf(FindingLedger $ledger, int $round): ?RoundNotAfterLatest
+    {
         try {
             $ledger->recordRound($round, [$this->finding('F1'), $this->finding('new')]);
-        } catch (RoundNotAfterLatest) {
-            return;
+        } catch (RoundNotAfterLatest $refusal) {
+            return $refusal;
         }
 
-        self::fail('Round '.$round.' was recorded out of order.');
+        return null;
     }
 
     private function finding(string $id): Finding

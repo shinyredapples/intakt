@@ -61,7 +61,7 @@ final class FindingLedger
     // A repeat in an earlier or the same round would land out of order in a finding's rounds or not reopen it.
     private function advanceTo(int $round): void
     {
-        if ($this->latestRound !== null && $round <= $this->latestRound) {
+        if (null !== $this->latestRound && $round <= $this->latestRound) {
             throw RoundNotAfterLatest::for($round, $this->latestRound);
         }
 
