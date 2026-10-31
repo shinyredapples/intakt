@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class EmptyDatabase
 {
-    // The mapped tables go through the schema tool; the conversation table is outside the mapping (the schema filter hides it), so it is dropped by name.
+    // The mapped tables go through the schema tool; the conversation and queue tables are outside the mapping (the schema filter hides them), so they are dropped by name.
     public static function in(ContainerInterface $container): void
     {
         $registry = $container->get('doctrine');
@@ -24,5 +24,6 @@ final class EmptyDatabase
         $connection = $container->get('doctrine.dbal.default_connection');
         assert($connection instanceof Connection);
         $connection->executeStatement('DROP TABLE IF EXISTS reviewer_conversation');
+        $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
     }
 }
