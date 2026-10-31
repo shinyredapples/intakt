@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Order\Contract;
+
+use Intakt\Core\Order\UseCase\PlaceOrder\PlaceOrderHandler;
+
+final class OrderSummary
+{
+    public function __construct(public PlaceOrderHandler $handler)
+    {
+    }
+}

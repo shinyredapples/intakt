@@ -9,6 +9,7 @@ You steer Intakt from GitHub (labels and comments on issues and pull requests, f
 ```mermaid
 flowchart LR
   issue[An issue] -- intakt --> eligible[Intakt may build it]
+  issue -- idea --> discussion[For discussion only]
   eligible -- "priority:" --> order[Its place in the queue]
   eligible -- "model:" --> tier[Which AI model starts]
   eligible -- "review:" --> panel[Which reviewers]
@@ -67,4 +68,4 @@ An approval always names one exact version. If the change itself is pushed again
 ## Pausing and priorities across projects
 
 - **Pause** a project or the whole install from the dashboard's [admin area](a-tour-of-the-dashboard.md#pausing): running jobs finish, nothing new starts. Every pause ends at a time you choose, or when you resume.
-- **Shares:** with several projects, each gets a share of the week's AI allowance. Setting a project's share to 0 stops new builds for it; its open pull requests are still finished (fixed, updated and merged).
+- **Shares:** with several projects, each gets a share of the week's AI allowance. Setting a project's share to 0 pauses it like the Pause button: running jobs finish, then no builds and no reviews, open pull requests included, until you raise it again.

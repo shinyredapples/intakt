@@ -32,7 +32,7 @@ flowchart LR
 | **GitHub** | its own GitHub App, created by the setup wizard with one confirmation, installed only on the repositories you choose |
 | **Gitea** | a bot user of its own |
 
-Intakt always acts as **itself**, never as you, so its comments and your approvals can always be told apart. It reads the tasks, opens and updates pull requests, reads CI results, comments and merges. It learns about changes from the forge's notifications (webhooks) the moment they happen.
+Intakt always acts as **itself**, never as you, so its comments and your approvals can always be told apart. It reads the tasks, opens and updates pull requests, reads CI results, comments and merges. It learns about changes by checking the forge regularly, and checks more often while something is waiting. This needs no public address. Notifications from the forge (webhooks) are an optional extra for installs that have one. *(planned)*
 
 ## AI companies (vendors)
 

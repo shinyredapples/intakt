@@ -4,7 +4,7 @@
 
 1. **Anyone can run it.** One container image, one command, a first-run wizard. No host scripts, no hand-made users, no systemd units.
 2. **Modular.** Forges, AI vendors, gates and work sources are plugins behind small interfaces.
-3. **Efficient.** Idle costs nothing: no polling agents, no long-lived model sessions. Each job is one short-lived container.
+3. **Efficient.** Idle costs nothing: no polling model agents (the cheap forge poll is plain code), no long-lived model sessions. Each job is one short-lived container.
 4. **Uses the capacity it has.** It knows each vendor's limits (subscription windows or API spend), measures what is left, and plans model choice and pace to end each window near its ceiling, not far below it.
 5. **Safe by construction.** A builder can never push, sign, merge or read secrets. What it hands back is checked in a clean place before anyone trusts it.
 6. **Visible.** A dashboard shows what each lane is doing, what it costs, and what needs a human.
@@ -14,7 +14,7 @@
 - Multi-tenant hosting. One install serves one owner, possibly several projects later.
 - Its own model hosting. Vendors are reached through their own CLIs or APIs.
 - Replacing CI. The forge's CI stays the authority on whether a change is green.
-- No API Platform in v1 (open to correction). Intakt's interfaces are a server-rendered dashboard (Twig, Mercure, Live Components where needed), a few internal endpoints for the CLI, forge webhooks, and the MCP server (MCP Bundle). None of them is a public resource API for third-party clients. Revisit when one is needed, for example a documented read API over tasks, runs and reviews.
+- No API Platform in v1 (open to correction). Intakt's interfaces are a server-rendered dashboard (Twig, Mercure, Live Components where needed), a few internal endpoints for the CLI, an optional forge webhook endpoint (last, only for installs with a public endpoint; forge changes are polled by default), and the MCP server (MCP Bundle). None of them is a public resource API for third-party clients. Revisit when one is needed, for example a documented read API over tasks, runs and reviews.
 
 ## v1 scope
 
