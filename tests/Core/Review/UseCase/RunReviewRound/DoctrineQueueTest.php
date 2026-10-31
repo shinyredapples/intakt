@@ -33,7 +33,8 @@ final class DoctrineQueueTest extends KernelTestCase
 
     protected function setUp(): void
     {
-        $this->configuredDsn = (string) ($_ENV[self::TRANSPORT_DSN] ?? '');
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
+        $this->configuredDsn = is_string($configured) ? $configured : '';
         $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
 
         $container = self::getContainer();

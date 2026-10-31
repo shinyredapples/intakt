@@ -8,11 +8,11 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewEventNotRecorded;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerNotFound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStillHeld;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewEventNotRecorded;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
@@ -252,7 +252,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $this->fixture->deliver(new ReviewWithReviewer('019a2600-0000-7000-8000-000000000000'), new ScriptedVendor());
     }
 
-    // As a worker leaves a reviewer when it is killed between the start and the end of the review.
+    // Set by hand, because a worker killed between the start and the end of a review leaves exactly this row behind.
     private function leaveRunning(ReviewWithReviewer $message): void
     {
         $reviewer = $this->fixture->reviewer($message->reviewerId);

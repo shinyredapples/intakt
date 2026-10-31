@@ -12,7 +12,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Override;
 
-// Runs what a test chooses in the middle of the vendor call, which forces the order "second delivery while the first is still reviewing" without any timing.
+// Runs what a test chooses in the middle of the vendor call, because that forces the order "second delivery while the first is still reviewing" without any timing.
 final readonly class RedeliveredDuringTheCall implements Vendor
 {
     public function __construct(private Closure $meanwhile)

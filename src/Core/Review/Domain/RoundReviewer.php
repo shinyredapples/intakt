@@ -17,7 +17,7 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Index(name: 'round_reviewer_round', columns: ['round_id'])]
 final class RoundReviewer implements HasPlace
 {
-    // A worker holds a running reviewer this long; a redelivery inside the hold waits, one after it may treat the worker as stopped. The transport's redeliver_timeout stays above it.
+    // One hour, because a redelivery inside the hold must wait for the live worker while one after it may treat the worker as stopped; the transport's redeliver_timeout stays above it so a redelivery never arrives inside the hold.
     public const string REVIEW_CEILING = 'PT1H';
 
     #[ORM\Column(length: 255)]
@@ -106,7 +106,7 @@ final class RoundReviewer implements HasPlace
         return $this->state->isFinished();
     }
 
-    // The end of the worker's hold on a running reviewer; null when no worker holds it.
+    // Null unless running, because only a reviewer a worker is reviewing is held by one.
     public function heldUntil(): ?DateTimeImmutable
     {
         return ReviewerState::Running === $this->state ? $this->startedAt?->add(new DateInterval(self::REVIEW_CEILING)) : null;
