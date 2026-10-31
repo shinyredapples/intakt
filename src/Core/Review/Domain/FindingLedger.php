@@ -16,11 +16,14 @@ final class FindingLedger
 
     private int $issued = 0;
 
+    private ?int $latestRound = null;
+
     /**
      * @param list<Finding> $findings
      */
     public function recordRound(int $round, array $findings): void
     {
+        $this->advanceTo($round);
         $earlier = $this->tracked;
         foreach ($findings as $finding) {
             $this->track($round, $finding, $earlier);
@@ -53,6 +56,16 @@ final class FindingLedger
     public function all(): array
     {
         return array_values($this->tracked);
+    }
+
+    // A repeat in an earlier or the same round would land out of order in a finding's rounds or not reopen it.
+    private function advanceTo(int $round): void
+    {
+        if (null !== $this->latestRound && $round <= $this->latestRound) {
+            throw RoundNotAfterLatest::for($round, $this->latestRound);
+        }
+
+        $this->latestRound = $round;
     }
 
     /**
