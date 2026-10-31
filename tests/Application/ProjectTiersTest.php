@@ -195,14 +195,15 @@ final class ProjectTiersTest extends KernelTestCase
     }
 
     /**
-     * @param list<string> $variables
+     * @param list<string>     $variables
+     * @param non-empty-string $model
      */
     #[DataProvider('otherAccounts')]
     public function testAnotherAccountOfEachProviderGetsAPlatformThatKnowsTheProjectModels(Provider $provider, array $variables, string $model): void
     {
         file_put_contents($this->file, "projects:\n    gamma:\n        tiers:\n            strong: { provider: {$provider->value}, model: {$model} }\naccounts:\n    {$provider->value}: [team]\n");
         foreach ($variables as $variable) {
-            // The OpenAI bridge refuses a key without its prefix.
+            // Prefixed because the OpenAI bridge refuses a key without its prefix.
             $_SERVER[$variable] = str_contains($variable, 'BASE_URL') ? 'http://localhost:8080' : 'sk-test-value';
         }
 

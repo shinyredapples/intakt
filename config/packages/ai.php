@@ -158,7 +158,7 @@ return static function (ContainerConfigurator $container): void {
             $missingOf[$name] = $missing;
         }
 
-        // The provider is disabled only when none of its accounts is set, with the variables of the first one it lists.
+        // Disabled only when none of its accounts is set, so one missing key never switches off a provider that has another; the message names the first account's variables.
         if ([] === $enabled) {
             $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? []);
 

@@ -17,7 +17,7 @@ use Symfony\AI\Platform\Test\MockModelCatalog;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Throwable;
 
-// A provider that accepts the call and fails when its answer is read, as an HTTP provider reports a 429 (Symfony AI's own mock platform fails as the call is sent).
+// Fails when its answer is read, as an HTTP provider reports a 429, because Symfony AI's own mock platform can only fail as the call is sent.
 final class FailingWhenRead implements PlatformInterface, ResultConverterInterface
 {
     public int $calls = 0;

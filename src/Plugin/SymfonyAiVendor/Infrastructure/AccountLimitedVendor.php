@@ -32,18 +32,19 @@ final readonly class AccountLimitedVendor implements Vendor
 
     /**
      * @throws VendorAccountBusy
-     * @throws VendorAccountOut
      */
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
     {
         $provider = $this->resolver->resolve($project, $tier)->provider;
 
-        try {
-            // Around the whole call, so a call refused for a busy account reserves and counts no usage.
-            return $this->accounts->run($provider, fn (): Verdict => $this->vendor->review($project, $tier, $request));
-        } catch (ProviderRateLimited|ProviderFailedTransiently $out) {
-            throw $this->nextAccountOrWait($provider, $out);
-        }
+        // Around the whole call, so a call refused for a busy account reserves and counts no usage.
+        return $this->accounts->run($provider, function () use ($project, $tier, $request, $provider): Verdict {
+            try {
+                return $this->vendor->review($project, $tier, $request);
+            } catch (ProviderRateLimited|ProviderFailedTransiently $out) {
+                throw $this->nextAccountOrWait($provider, $out);
+            }
+        });
     }
 
     // The account that failed is cooling down by now, so the wait is until any account of the vendor is free, not until that account's own reset.

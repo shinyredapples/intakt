@@ -52,7 +52,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 
-// A round on two accounts of one vendor, from the reviewer's message through the real vendor stack down to two in-memory providers, the first of which answers with a 429.
+// Through the real vendor stack down to two in-memory providers, so the move is proven end to end and not only at one layer; the first account answers with a 429.
 #[Group('persistence')]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(ReviewerMovesToAnotherAccount::class)]

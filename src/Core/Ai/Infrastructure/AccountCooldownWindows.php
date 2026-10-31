@@ -89,13 +89,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return max(1, $window->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
     }
 
-    // Asking for no token reads the window without saving it.
+    // No token, so reading the window never starts or saves one.
     private function window(Account $account): RateLimit
     {
         return $this->windowsEndingAt($this->clock->now())->create($account->key())->consume(0);
     }
 
-    // A fixed window anchored at a moment ends there; one month is the shortest interval the RateLimiter anchors.
+    // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
     private function windowsEndingAt(DateTimeImmutable $end): RateLimiterFactory
     {
         $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];

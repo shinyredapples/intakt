@@ -42,7 +42,7 @@ final class ProjectsConfigurationTest extends TestCase
 
     public function testListedAccountsKeepTheOwnersOrder(): void
     {
-        $accounts = $this->process(['accounts' => ['anthropic' => ['team', 'default']]])['accounts'];
+        $accounts = (array) $this->process(['accounts' => ['anthropic' => ['team', 'default']]])['accounts'];
 
         self::assertSame(['team', 'default'], (array) $accounts['anthropic']);
         self::assertSame([Account::DEFAULT], (array) $accounts['openai']);

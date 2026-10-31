@@ -27,7 +27,7 @@ use Throwable;
 final readonly class AccountFailoverPlatform implements PlatformInterface
 {
     /**
-     * @param non-empty-array<string, PlatformInterface> $platforms the provider's accounts by name, in the owner's order
+     * @param non-empty-array<string, PlatformInterface> $platforms
      */
     public function __construct(
         private Provider $provider,

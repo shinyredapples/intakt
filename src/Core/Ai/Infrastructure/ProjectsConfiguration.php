@@ -31,7 +31,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
         return $tree;
     }
 
-    // A list per provider, in the order the accounts are tried; a provider not listed has its default account only.
+    // A list, not a map, because its order is the order the accounts are tried; a provider not listed keeps its default account so a single key needs no entry.
     private function addAccounts(TreeBuilder $tree): void
     {
         $accounts = $tree->getRootNode()->children()->arrayNode('accounts')->addDefaultsIfNotSet()->children();
@@ -39,7 +39,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
         foreach (Provider::cases() as $provider) {
             $accounts->arrayNode($provider->value)->defaultValue([Account::DEFAULT])->requiresAtLeastOneElement()->stringPrototype()->end()
                 ->validate()->ifTrue(static fn (array $names): bool => [] !== preg_grep(Account::NAME_PATTERN, $names, PREG_GREP_INVERT))->thenInvalid('An account name must start with a lowercase letter and hold only lowercase letters, digits and underscores.')->end()
-                ->validate()->ifTrue(static fn (array $names): bool => count($names) !== count(array_unique($names)))->thenInvalid('An account must be listed once.')->end();
+                ->validate()->ifTrue(static fn (array $names): bool => count($names) !== count(array_unique($names, SORT_REGULAR)))->thenInvalid('An account must be listed once.')->end();
         }
     }
 }
