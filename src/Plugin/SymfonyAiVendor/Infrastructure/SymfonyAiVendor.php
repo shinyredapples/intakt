@@ -29,10 +29,17 @@ final readonly class SymfonyAiVendor implements Vendor
         private TierResolver $resolver,
         private Reviewer $reviewer,
         private UsageLedger $usage,
+        private VendorAccountLimit $accounts,
     ) {
     }
 
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    {
+        // Before the usage is reserved, so a call refused for a busy account reserves and counts nothing.
+        return $this->accounts->run($this->resolver->resolve($project, $tier)->provider, fn (): Verdict => $this->call($project, $tier, $request));
+    }
+
+    private function call(string $project, Tier $tier, ReviewRequest $request): Verdict
     {
         $platform = new TierRoutedPlatform($this->tiers, $project);
         $reservation = $this->usage->reserve($project, $tier);

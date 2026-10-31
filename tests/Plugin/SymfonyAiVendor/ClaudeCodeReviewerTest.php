@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -240,6 +245,11 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), self::unlimited());
+    }
+
+    private static function unlimited(): VendorAccountLimit
+    {
+        return new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
     }
 }

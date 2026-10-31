@@ -10,6 +10,7 @@ enum LedgerEventKind: string
     case ReviewerStarted = 'reviewer_started';
     case VerdictReceived = 'verdict_received';
     case ReviewerFailed = 'reviewer_failed';
+    case ReviewerBlocked = 'reviewer_blocked';
     case JudgeDone = 'judge_done';
     case UsageRecorded = 'usage_recorded';
 }

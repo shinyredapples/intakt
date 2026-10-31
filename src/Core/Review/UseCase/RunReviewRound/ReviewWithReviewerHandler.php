@@ -10,7 +10,9 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Throwable;
 
 #[AsCommandHandler]
@@ -43,6 +45,14 @@ final readonly class ReviewWithReviewerHandler
         try {
             $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $round->task(), new ReviewerConversation($reviewer->rolePrompt(), $reviewer->id()));
             $verdict = $this->vendor->review($round->project(), $reviewer->tier(), $request);
+        } catch (ProviderRateLimited $limited) {
+            $this->leases->handBack($reviewer);
+
+            throw ReviewerRateLimited::after($limited->retryAfterSeconds);
+        } catch (VendorAccountBusy) {
+            $this->leases->handBack($reviewer);
+
+            throw ReviewerRateLimited::after(null);
         } catch (Throwable $failure) {
             // Every failure, because one left uncaught would leave the reviewer running until its hold ends; the class only, because a provider's message can echo a key.
             $this->leases->recordFailure($reviewer, $failure::class);

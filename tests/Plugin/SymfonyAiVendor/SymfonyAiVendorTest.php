@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -350,9 +355,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $converter->method('getTokenUsageExtractor')->willReturn($extractor);
         $tiers = self::createStub(TierInvoker::class);
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
+        $resolver = self::createStub(TierResolver::class);
+        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, self::createStub(TierResolver::class), $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger), self::unlimited());
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
@@ -508,6 +515,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), $usage, self::unlimited());
+    }
+
+    private static function unlimited(): VendorAccountLimit
+    {
+        return new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
     }
 }

@@ -35,6 +35,10 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(type: 'utc_datetime_immutable', nullable: true)]
     private ?DateTimeImmutable $startedAt = null;
 
+    // How often a stopped worker's reviewer was started again; a rate limit or a held hold never counts, so they cannot use up the one retry.
+    #[ORM\Column(options: ['default' => 0])]
+    private int $restarts = 0;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $verdict = null;
 
@@ -59,6 +63,11 @@ final class RoundReviewer implements HasPlace
     public function recordStart(DateTimeImmutable $now): void
     {
         $this->startedAt = $now;
+    }
+
+    public function recordRestart(): void
+    {
+        ++$this->restarts;
     }
 
     public function recordVerdict(Verdict $verdict): void
@@ -110,6 +119,11 @@ final class RoundReviewer implements HasPlace
     public function heldUntil(): ?DateTimeImmutable
     {
         return ReviewerState::Running === $this->state ? $this->startedAt?->add(new DateInterval(self::REVIEW_CEILING)) : null;
+    }
+
+    public function hasRestarted(): bool
+    {
+        return $this->restarts > 0;
     }
 
     public function verdictJson(): ?string

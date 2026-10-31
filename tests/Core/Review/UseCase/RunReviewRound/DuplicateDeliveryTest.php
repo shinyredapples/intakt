@@ -63,7 +63,7 @@ final class DuplicateDeliveryTest extends KernelTestCase
         self::assertSame([], $second->ledger->kinds());
     }
 
-    public function testAVerdictArrivingAfterTheHoldEndedAndAnotherWorkerFailedTheReviewerIsDropped(): void
+    public function testAVerdictArrivingAfterTheHoldEndedAndAnotherWorkerRestartedTheReviewerIsDropped(): void
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
@@ -76,12 +76,10 @@ final class DuplicateDeliveryTest extends KernelTestCase
             $seenMeanwhile = [$second->roundState($round->id()), $second->reviewerState($message->reviewerId)];
         }));
 
-        self::assertSame([RoundState::Complete, ReviewerState::Failed], $seenMeanwhile);
+        self::assertSame([RoundState::Complete, ReviewerState::Verdict], $seenMeanwhile);
         $stored = $this->fixture->round($round->id()->toRfc4122());
-        self::assertSame(RoundState::Complete, $stored->state());
-        self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
-        self::assertNull($stored->reviewers()[0]->verdictJson());
+        self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted], $this->fixture->ledgerKinds());
-        self::assertSame([LedgerEventKind::ReviewerFailed], $second->ledger->kinds());
+        self::assertSame([LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $second->ledger->kinds());
     }
 }
