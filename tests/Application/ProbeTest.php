@@ -267,7 +267,7 @@ final class ProbeTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $environment
+     * @param array<string, string|false> $environment
      */
     private function runProbe(string $file, array $environment = []): Process
     {
