@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Closure;
+
+final readonly class Greeting
+{
+    public function formatter(): Closure
+    {
+        return static function (string $text, bool $loud): string {
+            return $loud ? strtoupper($text) : $text;
+        };
+    }
+}
