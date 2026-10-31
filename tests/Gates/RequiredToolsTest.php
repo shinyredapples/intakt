@@ -11,6 +11,7 @@ use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(RequiredTools::class)]
 final class RequiredToolsTest extends TestCase
@@ -158,19 +159,31 @@ final class RequiredToolsTest extends TestCase
         self::assertSame([], $this->tools()->missingFor(['cs']));
     }
 
-    public function testWithoutAPathAToolOnTheShellsDefaultPathIsFound(): void
+    public function testWithoutAPathAToolOnTheDefaultPathIsFound(): void
     {
         putenv('PATH');
 
         self::assertSame([], $this->tools()->missingFor(['cs']));
     }
 
-    public function testWithoutAPathAToolOffTheShellsDefaultPathIsListed(): void
+    public function testWithoutAPathAToolOffTheDefaultPathIsListed(): void
     {
         putenv('PATH');
         putenv('INTAKT_GITLEAKS=intakt-no-such-tool');
 
         self::assertSame([RequiredTools::notFound('intakt-no-such-tool')], $this->tools()->missingFor(['secrets']));
+    }
+
+    public function testWithoutAPathOrAWayToStartAProcessOnlyTheWorkspaceRootIsSearched(): void
+    {
+        $this->install($this->root.'/git');
+        $code = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; putenv("PATH");'
+            .'echo json_encode((new '.RequiredTools::class.'('.var_export($this->root, true).'))->missingFor(["audit"]));';
+        $child = new Process([PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $code]);
+
+        $child->run();
+
+        self::assertSame(json_encode([RequiredTools::notFound('composer')]), $child->getOutput(), $child->getErrorOutput());
     }
 
     private function tools(): RequiredTools

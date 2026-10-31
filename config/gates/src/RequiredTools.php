@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
 final readonly class RequiredTools
@@ -72,16 +73,20 @@ final readonly class RequiredTools
     {
         $path = getenv('PATH');
 
-        return is_string($path) ? $path : $this->shellDefaultPath();
+        return is_string($path) ? $path : $this->defaultPath();
     }
 
-    // Because the gates start their commands through the shell, which searches its built-in default path when PATH is unset.
-    private function shellDefaultPath(): string
+    // Because the gates start their commands from an argument list, which the C library searches on its default path when PATH is unset.
+    private function defaultPath(): string
     {
-        $shell = Process::fromShellCommandline('printf %s "$PATH"', null, ['PATH' => false]);
-        $shell->run();
+        try {
+            $query = new Process(['getconf', 'PATH'], null, ['PATH' => false]);
+            $query->run();
+        } catch (ExceptionInterface) {
+            return '';
+        }
 
-        return $shell->isSuccessful() ? $shell->getOutput() : '';
+        return $query->isSuccessful() ? trim($query->getOutput()) : '';
     }
 
     private function nameOf(string $command): string
