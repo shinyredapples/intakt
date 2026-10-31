@@ -15,7 +15,11 @@ final readonly class HighlightsGate implements Gate
 
     private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
-    private const string BACKTICKED = '/`([^`]+)`/';
+    // A CommonMark code span closes only on a backtick run of its opening length, so ``a`b`` is one span.
+    private const string BACKTICKED = '/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/';
+
+    // CommonMark strips one space on each side, which lets a span start or end with a backtick.
+    private const string PADDED_SPAN = '/^ (.*[^ ].*) $/';
 
     private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
 
@@ -153,7 +157,9 @@ final readonly class HighlightsGate implements Gate
 
         preg_match_all(self::BACKTICKED, $where, $matches);
 
-        foreach ($matches[1] as $path) {
+        foreach ($matches[2] as $span) {
+            $path = (string) preg_replace(self::PADDED_SPAN, '$1', $span);
+
             if (1 === preg_match(self::PATH_LIKE, $path) && !$exists((string) preg_replace(self::LEADING_DOT_SLASH, '', $path))) {
                 $findings[] = 'Where names `'.$path.'`, which does not exist on the branch';
             }

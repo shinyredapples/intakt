@@ -315,6 +315,49 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringNotContainsString('cites a pull request', $run->findingsOf('highlights'));
     }
 
+    public function testATrackedPathInADoubleBacktickSpanHoldingABacktickPasses(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('upstream/`pr1-repro/README.md', "x\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | ``upstream/`pr1-repro/`` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testAnUntrackedPathInADoubleBacktickSpanIsCheckedWhole(): void
+    {
+        $run = $this->checkRows("| A | a | done | ``upstream/`pr1-repro/`` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`upstream/`pr1-repro/`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('cites a pull request', $run->findingsOf('highlights'));
+    }
+
+    public function testASpaceOnBothSidesOfACodeSpanIsNotPartOfThePath(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('upstream/pr1-repro/README.md', "x\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `` upstream/pr1-repro/ `` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testAPullRequestNumberAfterAnUnmatchedBacktickRunIsStillRefused(): void
+    {
+        $run = $this->checkRows("| A | a | done | ``a` PR #12 |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('cites a pull request ("PR #12")', $run->findingsOf('highlights'));
+    }
+
     public function testAMissingRootFileWithPunctuationInItsNameFails(): void
     {
         $sandbox = $this->sandboxWithKernel();
