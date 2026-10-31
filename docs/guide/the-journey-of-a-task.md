@@ -93,7 +93,7 @@ flowchart TD
 
 - **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: becomes a follow-up task, never blocks).
 - **Evidence beats opinion:** a reviewer can write a small test, run it against the change, and attach the result to its finding.
-- **Second chances, but not endless ones:** if the same serious problem comes back twice, a stronger model builds the fix; a third time, the maintainer agent decides.
+- **Second chances, but not endless ones:** if the same serious problem comes back twice, a stronger model builds the fix; a third time, the maintainer agent decides. If a task keeps getting sent back, it is re-planned rather than handed to you: split into smaller tasks, made clearer, or tried once more with a stronger model, and you are asked only when a product choice is needed (planned).
 - **No repeat work:** a review counts only for exactly what it saw. But if main moves on and merging it in leaves the change itself identical, the earlier review still counts and isn't paid for twice.
 - **Stuck for an outside reason?** The task goes on hold and comes back by itself when the reason is gone ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
@@ -130,8 +130,9 @@ flowchart TD
 | Situation | What Intakt does |
 |---|---|
 | The checks fail | the builder gets the failure and tries again |
-| A reviewer's account is over its limit | the same company's next account takes over; when all of them are out, a reviewer from another company stands in, and the usual one catches up later |
-| GitHub misses an update | Intakt notices that CI never started and nudges GitHub once, then alerts |
+| A reviewer's account is over its limit | the same company's next account takes over; when all of them are out, a reviewer from another company takes its place as a substitute, and the usual one catches up later |
+| GitHub misses an update | Intakt notices that CI never started and nudges GitHub once, then hands it to the maintainer agent |
+| CI was cancelled | a newer push stopped the checks of the older version, which is not a failure; Intakt waits for the newer checks, starts them again once if nothing does, and otherwise hands it to the maintainer agent |
 | The change conflicts with main | the builder merges main in and resolves it |
 | The same problem keeps coming back | a stronger model, then the maintainer agent |
 | Something needs a real decision | you get one message with the options and a recommendation |

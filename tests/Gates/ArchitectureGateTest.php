@@ -35,6 +35,11 @@ final class ArchitectureGateTest extends SandboxTestCase
         $this->assertRejectedBy('architecture', 'domain-uses-use-case', 'PlaceOrderHandler');
     }
 
+    public function testAContractClassDependingOnItsUseCasesFails(): void
+    {
+        $this->assertRejectedBy('architecture', 'contract-uses-use-case', 'OrderSummary');
+    }
+
     public function testAHandlerUsingAsMessageHandlerDirectlyFails(): void
     {
         $this->assertRejectedBy('architecture', 'handler-direct', 'use AsCommandHandler or AsQueryHandler');

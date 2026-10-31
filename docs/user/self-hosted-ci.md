@@ -21,13 +21,21 @@ A persistent self-hosted runner is not supported. The runner must start every jo
 
 Why: a pull request from a branch of the repository runs its own version of the workflow and of `.github/ci/` on the runner, with access to the host's Docker daemon, which is as good as root on that host. On a machine that persists, such a run could leave something behind for a later job, main's included: for example an image tagged with the hash of main's `.github/ci/Dockerfile`, which `.github/ci/build-image.sh` would then reuse instead of building, so main's `bin/check` would run in an image the pull request chose. On a clean state for every job nothing a job does reaches the next one, and an image that exists when a job starts can only be one you put into the clean state yourself. Baking the CI image into that state saves the build; leaving it out is also fine, since the script then builds it.
 
+## Keeping the runner usable
+
+The script that registers your ephemeral runner should do three things before each registration, so a runner that died mid-job does not block CI until someone cleans up by hand:
+
+- **Delete an offline registration of its own name.** GitHub refuses the new session while a stale one exists ("A session for this runner already exists"), so the runner never comes online again.
+- **Handle a registration that is still busy.** A busy registration of a runner that is gone means its job is orphaned on a dead runner and never finishes. Cancel that job's run, delete the registration, and re-run the cancelled jobs, unless a newer run of the same branch and event exists: the workflow's concurrency group (`ci-${{ github.ref }}`, with `cancel-in-progress`) would then let the re-run cancel the newer one.
+- **End a cycle whose runner stays offline.** When the registered runner still shows as offline on GitHub three minutes after it started, stop that cycle and start the next one, instead of waiting for a runner that will never take a job.
+
 ## What the host needs
 
 | Need | Why |
 |---|---|
 | Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | every job builds or reuses the CI image and runs the code in it; the `persistence` job starts a service container for each database engine |
 | `bash`, `git`, `grep`, `sh`, `sha256sum` and `cut` | the `changes` job reads the diff on the host; `build-image.sh` hashes the Dockerfile |
-| Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container |
+| Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them) |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; the workflow lifts AppArmor only on GitHub's runners, never on yours |
 
 The workflow does not change any of this on a self-hosted runner: it sets the sysctl and `apparmor=unconfined` only on GitHub's runners, which are thrown away after the job. Prepare the clean state so the host meets them.

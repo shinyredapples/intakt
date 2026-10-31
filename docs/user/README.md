@@ -39,6 +39,10 @@ The exit code is 0 only when the status is `ready`. The server log goes to stand
 
 Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
 
+## When `bin/check` reports a missing tool
+
+Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`.
+
 ## When `bin/check` reports a stateful service
 
 Intakt keeps one process alive across many requests and messages, so a service that keeps a value in a property would carry it into the next request. The `phpstan` gate of `bin/check` therefore reports a finding `intakt.statefulService` for every concrete class under `src/` with a property which is not `readonly`, including properties from a parent class or a trait under `src/`, and static ones, because the container registers every class under `src/` as a service. A property a vendor base class declares, such as those of Symfony's `Command` or `AbstractController`, is framework wiring rather than request state and is not reported. A virtual property, a hooked property without a backing store such as one with only a `get` hook that computes its value from other properties, keeps no value and is not reported either; a hooked property with a backing store is. The finding names the property. To resolve it, do one of:
