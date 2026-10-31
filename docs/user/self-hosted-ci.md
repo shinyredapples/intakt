@@ -27,7 +27,7 @@ Why: a pull request from a branch of the repository runs its own version of the 
 |---|---|
 | Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | every job builds or reuses the CI image and runs the code in it; the `persistence` job starts a service container for each database engine |
 | `bash`, `git`, `grep`, `sh`, `sha256sum` and `cut` | the `changes` job reads the diff on the host; `build-image.sh` hashes the Dockerfile |
-| Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container |
+| Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them) |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; the workflow lifts AppArmor only on GitHub's runners, never on yours |
 
 The workflow does not change any of this on a self-hosted runner: it sets the sysctl and `apparmor=unconfined` only on GitHub's runners, which are thrown away after the job. Prepare the clean state so the host meets them.
