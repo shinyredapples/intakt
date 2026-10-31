@@ -76,11 +76,11 @@ final readonly class RequiredTools
         return is_string($path) ? $path : $this->defaultPath();
     }
 
-    // Because the gates start their commands from an argument list, which the C library searches on its default path when PATH is unset.
+    // Because Symfony Process starts every gate command as `exec` in /bin/sh, which searches its own default path when PATH is unset.
     private function defaultPath(): string
     {
         try {
-            $query = new Process(['getconf', 'PATH'], null, ['PATH' => false]);
+            $query = new Process(['/bin/sh', '-c', 'printf %s "$PATH"'], null, ['PATH' => false]);
             $query->run();
         } catch (ExceptionInterface) {
             return '';

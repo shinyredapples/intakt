@@ -166,6 +166,16 @@ final class RequiredToolsTest extends TestCase
         self::assertSame([], $this->tools()->missingFor(['cs']));
     }
 
+    public function testWithoutAPathOnlyToolsAGateProcessCannotStartAreListed(): void
+    {
+        putenv('PATH');
+        $unstartable = array_values(array_filter(['git', 'composer'], fn (string $tool): bool => !$this->gateStarts($tool)));
+
+        $missing = $this->tools()->missingFor(['audit']);
+
+        self::assertSame(array_map(RequiredTools::notFound(...), $unstartable), $missing);
+    }
+
     public function testWithoutAPathAToolOffTheDefaultPathIsListed(): void
     {
         putenv('PATH');
@@ -189,6 +199,14 @@ final class RequiredToolsTest extends TestCase
     private function tools(): RequiredTools
     {
         return new RequiredTools($this->root);
+    }
+
+    private function gateStarts(string $tool): bool
+    {
+        $gate = new Process([$tool, '--version'], $this->root);
+        $gate->run();
+
+        return $gate->isSuccessful();
     }
 
     private function install(string $file): void

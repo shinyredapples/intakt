@@ -43,7 +43,7 @@ Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a
 
 Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`.
 
-`bin/check` looks for the programs on `PATH`. When `PATH` is not set at all, it looks where the system looks for a program without one (the default path that `getconf PATH` prints, `/bin:/usr/bin` on most Linux systems), since that is where the gates' programs are then found; if `getconf` cannot run, it looks only in the project folder. A `PATH` that is set but empty (`PATH=`) is taken as it is: only the project folder is searched, so every other program is reported missing.
+`bin/check` looks for the programs on `PATH`. When `PATH` is not set at all, it looks where the system shell `/bin/sh` then looks, since the gates start their programs through that shell (on Debian and Ubuntu: `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` and `/bin`); if the shell cannot run, it looks only in the project folder. A `PATH` that is set but empty (`PATH=`) is taken as it is: only the project folder is searched, so every other program is reported missing.
 
 ## When `bin/check` reports a stateful service
 
