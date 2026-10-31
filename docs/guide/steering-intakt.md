@@ -63,5 +63,5 @@ An approval always names one exact version. If the change itself is pushed again
 
 ## Pausing and priorities across projects
 
-- **Pause** a project or the whole install from the dashboard: running jobs finish, nothing new starts.
+- **Pause** a project or the whole install from the dashboard's [admin area](a-tour-of-the-dashboard.md#pausing): running jobs finish, nothing new starts. Every pause ends at a time you choose, or when you resume.
 - **Shares:** with several projects, each gets a share of the week's AI allowance. Setting a project's share to 0 stops new builds for it; its open pull requests are still finished (fixed, updated and merged).
