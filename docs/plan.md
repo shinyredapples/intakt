@@ -23,9 +23,9 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T75 to T80, T32 (optional) | after the deadline |
-| M6 Shadow | Intakt reviews the owner's projects beside the existing loop without counting; a report compares the verdicts | T37 to T43 | 2026-11-25; report 2026-12-03 |
-| M7 Builder half | Intakt builds, checks, pushes, reviews through CI, asks the owner and merges from its own job containers | T44 to T69 | 2026-12-15 |
-| M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over | T70 to T74 | 2027-01-08 |
+| M6 Shadow | see [Replacing the existing loop](#replacing-the-existing-loop) | T37 to T43 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T44 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
 
@@ -289,7 +289,7 @@ The demo works on a local repository, so these tasks wait until after the deadli
 - **Evidence:** the override's start output and one edit served without a restart.
 - **Waits for:** T22. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
-T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T42 switches a category on, every protected change still goes to the owner.
+T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T80 switches a category on, every protected change still goes to the owner.
 
 ### T75 Hard floors and the approval decision in shadow mode
 - **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, attacker test), each step a typed result. The hard floors are deterministic rules over the whole change: secrets and credentials handling, every workflow file, existing gate tests, the protected-path list, the approval rules, agent instructions, and a panel reviewer's loosening or missing class. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
@@ -496,7 +496,7 @@ Conventions, in addition to the ones above:
 - **Reference:** `test_gitops.py` (push refuses unsigned commits, conflicts with main), `test_lanes.py` (a crash after the push or after opening the pull request), `test_github.py` (pull request create and update).
 - **Acceptance:** each case above with a temporary repository and recorded forge responses.
 - **Evidence:** a pushed branch on the test repository with verified signatures.
-- **Waits for:** T50, T37, T52, T55 (nothing is pushed before the pre-push check, the dependency policy and the workflow approval exist). **Size:** M. **Labels:** `class:core`, `priority:high`.
+- **Waits for:** T50, T37, T51, T55 (nothing is pushed before the pre-push check and the workflow approval exist; the dependency policy decides at merge). **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T54 Protected paths from the whole change
 - **Description:** Whether a head touches a protected path is read from the full diff between the merge base and the head plus the per-commit lists (each commit against each parent, second parents included unless main has them); submodules and `.gitmodules` count. The protected list, the owner-only list and the approval rules are owner config, never repository files.
@@ -508,7 +508,7 @@ Conventions, in addition to the ones above:
 ### T55 Workflow risk scan and the push approval
 - **Description:** Behind the GitHub forge, a strict line scan of the workflows (the head's, main's and both merged) finds anything beyond a hosted runner with a read-only token and no secrets; any form it cannot read, and any `runs-on` from a variable or expression (even while the variable is unset: its value can change without a commit), is risky. The files the workflows run from the repository (scripts, the CI image's Dockerfile) are part of the CI definition: a change to one is a CI change. A build with a risky CI change stays local: the issue shows its complete diff, and only the owner's `approve <sha>` lets it push; the merge still needs the owner.
 - **Reference:** `test_workflow_risk.py` (hosted labels, any other label asks, an unreadable form asks, read-only permissions), `test_owner_approval.py` (approval before the push cases).
-- **Acceptance:** each case above; a failed variable read holds the push.
+- **Acceptance:** each case above; a failed variable read holds the push; a `runs-on` taken from a variable is risky even while the variable is unset; a change to a script a workflow runs, with no workflow file changed, is held for the owner's `approve <sha>`.
 - **Evidence:** the scan's findings on three sample workflows.
 - **Waits for:** T54. **Size:** M. **Labels:** `class:core`, `priority:high`, `model:strong`.
 
@@ -522,14 +522,14 @@ Conventions, in addition to the ones above:
 ### T57 Review lane through CI
 - **Description:** The review lane takes pushed heads: a head with pending CI goes back to its queue with a time to look again and holds nothing; heads with finished CI go first, one pending for 30 minutes is admitted by age. Red CI sends the head back before any reviewer, with a redacted, fenced CI log excerpt only when the workflow scan (T55) finds every job of the head's, main's and the merged workflows on a forge-hosted runner with a read-only token and no secrets; otherwise, or when the scan fails, with one line giving the number of failed jobs; two red-CI send-backs in a row free per cycle. A missed CI start is read once, nudged once and then handed over. A round runs at most the configured review cycles, then hands over.
 - **Reference:** `test_lanes_cap2.py` (finished CI first, nudges, an unreadable workflow fails closed), `test_ci_log.py`, `test_round.py` (red CI uses no review cycle), `test_lanes.py` (the third red-CI bounce counts), `test_causes.py` (cycles running out record their cause).
-- **Acceptance:** each case above with recorded CI responses and a controlled clock.
+- **Acceptance:** each case above with recorded CI responses and a controlled clock; a head whose workflow has a variable `runs-on`, a head whose workflow scan fails, and a head with a job on a non-hosted runner each get only the count of failed jobs, never an excerpt.
 - **Evidence:** a head sent back for red CI with its excerpt, on the test repository.
-- **Waits for:** T56, T38. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
+- **Waits for:** T56, T38, T55. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
 
 ### T58 Review jobs with boot gate and probes
 - **Description:** Reviewers run in review job containers with a read-only checkout of the exact head, reaching only their vendor through the job proxy (T44); the project's `bin/probe` runs in a separate no-network sandbox within a per-review budget. Before any reviewer, the head boots once with `bin/instance`; main's result is cached per main commit and tool fingerprint; a head that fails while main boots goes back like red CI; when main fails too, the gate is off for the head and the owner gets an infrastructure alert once. A canary probe checks the probe path after each boot; a broken path marks probes unavailable instead of producing findings.
 - **Reference:** `test_boot_gate.py` (booted before any review, a failed boot beats approvals, an approved head that does not boot is not merged, a crashing gate never stops the review), `test_probe.py`, `test_probe_alerts.py` (a Composer failure alerts only for main's lock), `test_merge_only.py` (a cached boot pass runs no canary).
-- **Acceptance:** each case above; nothing a probe writes reaches the branch.
+- **Acceptance:** each case above; nothing a probe writes reaches the branch; a probe cannot reach the vendor or any other host.
 - **Evidence:** a review whose finding carries a probe's output.
 - **Waits for:** T44, T45, T57. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
 
@@ -573,7 +573,7 @@ Conventions, in addition to the ones above:
 - **Reference:** `test_owner_approval.py` (only the owner's approval of exactly this head counts, the loop never submits a review, a waiting head holds no slot, a withdrawn approval parks without a second notice), `test_maintainer_ask_once.py` (the cap queue, a conflict after the approval parks it).
 - **Acceptance:** each case above with recorded forge responses.
 - **Evidence:** an approved protected merge on the test repository.
-- **Waits for:** T62, T55. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
+- **Waits for:** T62, T55, T52. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
 
 ### T65 Pull requests Intakt did not build
 - **Description:** A pull request opened by the owner's or the maintainer's identity is reviewed on every new head without a label; anyone else's only after a person with write access labels it. Findings go back as one comment and labels stay; Intakt never reworks it. Once CI and every review pass, an unprotected head merges and a protected one asks the owner once. An `urgent` or `high` label counts only from the owner or the maintainer.
@@ -653,5 +653,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
 - The shadow week (after T43) runs while M7 is built.
-- M7: T45 and T46 after T44; T47 and T54 in parallel; T48, then T49 to T52 in order; T55 after T54; T53 after T52 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order; T66 after T62; T67 to T69 after T56.
+- M7: T45 and T46 after T44; T47 and T54 in parallel; T48, then T49 to T52 in order; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56.
 - M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 alongside; T74 last.
