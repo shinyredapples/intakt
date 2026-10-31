@@ -19,6 +19,7 @@ use Throwable;
 final readonly class ReviewerLeases
 {
     private const string WORKER_STOPPED = 'the worker stopped before the reviewer had a verdict';
+    private const string CEILING_PASSED = 'the reviewer had no result within the review ceiling';
 
     public function __construct(
         private EntityManagerInterface $entities,
@@ -68,7 +69,7 @@ final readonly class ReviewerLeases
         $heldUntil = $reviewer->heldUntil();
 
         // Inside the hold the first worker is still reviewing, so the message comes back when the hold ends; after it, the worker counts as stopped.
-        if ($heldUntil instanceof DateTimeImmutable && $heldUntil > $now) {
+        if ($heldUntil instanceof DateTimeImmutable && $this->withinTheHold($reviewer, $now)) {
             throw ReviewerStillHeld::until($heldUntil, $now);
         }
 
@@ -80,20 +81,32 @@ final readonly class ReviewerLeases
      */
     private function record(RoundReviewer $reviewer, Closure $move): void
     {
+        $now = $this->clock->now();
+
         try {
-            $this->inOneTransaction(function () use ($reviewer, $move): void {
+            $this->inOneTransaction(function () use ($reviewer, $move, $now): void {
                 $stored = $this->lockedRow($reviewer->id());
 
                 // Still running means this worker's own hold, because the only other writer moves a reviewer whose hold ended to failed; anything else was decided while the vendor call ran and stands.
-                if (ReviewerState::Running === $stored->state()) {
-                    $move($stored);
+                if (ReviewerState::Running !== $stored->state()) {
+                    return;
                 }
+
+                $this->withinTheHold($stored, $now) ? $move($stored) : $this->moves->fail($stored, self::CEILING_PASSED);
             });
         } catch (ReviewEventNotRecorded $refused) {
             $this->handBack($reviewer);
 
             throw $refused;
         }
+    }
+
+    // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
+    private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
+    {
+        $heldUntil = $reviewer->heldUntil();
+
+        return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
     }
 
     // Back to the queue, so the retry of the message runs the reviewer again instead of finding a hold nobody will release.

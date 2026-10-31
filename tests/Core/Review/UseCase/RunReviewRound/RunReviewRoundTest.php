@@ -243,6 +243,33 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(RoundState::Complete, $stored->state());
     }
 
+    public function testAVerdictArrivingAfterTheCeilingWithNoOtherDeliveryFailsTheReviewer(): void
+    {
+        $round = $this->fixture->start(1);
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new RedeliveredDuringTheCall(function (): void {
+            $this->fixture->clock->modify('+61 minutes');
+        }));
+
+        $stored = $this->fixture->round($round->id()->toRfc4122());
+        self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
+        self::assertSame('the reviewer had no result within the review ceiling', $stored->reviewers()[0]->failure());
+        self::assertNull($stored->reviewers()[0]->verdictJson());
+        self::assertSame(RoundState::Complete, $stored->state());
+        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerFailed], $this->fixture->ledgerKinds());
+    }
+
+    public function testAVerdictArrivingJustInsideTheCeilingIsRecorded(): void
+    {
+        $round = $this->fixture->start(1);
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new RedeliveredDuringTheCall(function (): void {
+            $this->fixture->clock->modify('+59 minutes');
+        }));
+
+        self::assertSame(ReviewerState::Verdict, $this->fixture->round($round->id()->toRfc4122())->reviewers()[0]->state());
+    }
+
     public function testAMessageForAReviewerThatIsNotStoredIsRefused(): void
     {
         $this->fixture->start(1);
