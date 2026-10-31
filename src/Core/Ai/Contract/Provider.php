@@ -11,7 +11,7 @@ enum Provider: string
     case OpenAiCompatible = 'openai_compatible';
     case ClaudeCode = 'claude_code';
 
-    // The key of the deferred result's metadata that names the substitute provider which answered in place of the tier's own.
+    // The key of the deferred result's metadata that names the substitute provider which answered, so the vendor reads the switch from the result and never from text.
     public const string SUBSTITUTE_METADATA = 'intakt_substitute';
 
     /**

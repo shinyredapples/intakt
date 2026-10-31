@@ -16,8 +16,9 @@ interface TierResolver
      */
     public function resolve(string $project, Tier $tier): ResolvedModel;
 
+    // In the order they are tried; one on a disabled provider is left out, because it could never answer.
     /**
-     * @return list<ResolvedModel> the tier's configured substitutes in the order they are tried, those on a disabled provider left out
+     * @return list<ResolvedModel>
      *
      * @throws TierResolutionFailure
      */

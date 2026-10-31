@@ -38,7 +38,7 @@ final readonly class AccountLimitedVendor implements Vendor
         $provider = $this->resolver->resolve($project, $tier)->provider;
 
         // Around the whole call, so a call refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($provider, function () use ($project, $tier, $request, $provider): VendorReview {
+        return $this->accounts->run($provider, function () use ($project, $tier, $request): VendorReview {
             try {
                 return $this->vendor->review($project, $tier, $request);
             } catch (ProviderRateLimited|ProviderFailedTransiently $out) {

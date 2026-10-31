@@ -67,7 +67,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 
-// Through the real vendor stack down to in-memory providers: the tier's own provider answers with a revoked key, and the next provider is its configured substitute.
+// Through the real vendor stack down to in-memory providers, so the substitution is proven end to end: the tier's own provider answers with a revoked key and the next provider is its configured substitute.
 #[Group('persistence')]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(AccountLimitedVendor::class)]
@@ -162,7 +162,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertSame([(string) $reviewer->failure()], $this->payloadValues(LedgerEventKind::ReviewerBlocked, 'reason'));
     }
 
-    // Delivered again as Messenger does after each recoverable move, until the reviewer stays.
+    // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
     private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor, int $moves = 1): void
     {
         for ($move = 0; $move < $moves; ++$move) {

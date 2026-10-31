@@ -50,7 +50,7 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $failure = null;
 
-    // The provider that reviewed in this reviewer's place; set means a catch-up review is owed, and a move to another account of the same vendor never sets it.
+    // The provider that reviewed in this reviewer's place; set means a catch-up review is owed, because another vendor reviewed; a move to another account of the same vendor never sets it.
     #[ORM\Column(length: 32, nullable: true, enumType: Provider::class)]
     private ?Provider $substitute = null;
 

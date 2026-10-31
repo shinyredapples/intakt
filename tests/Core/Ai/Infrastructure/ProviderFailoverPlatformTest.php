@@ -183,10 +183,13 @@ final class ProviderFailoverPlatformTest extends TestCase
     }
 
     /**
-     * @return list<array{string, string, array<string, mixed>}>
+     * @return list<array{0: string, 1: string, 2: array<string, mixed>}>
      */
     private function logged(BufferingLogger $logger): array
     {
-        return array_map(static fn (array $entry): array => [$entry[0], $entry[1], $entry[2]], $logger->cleanLogs());
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+
+        return $logs;
     }
 }

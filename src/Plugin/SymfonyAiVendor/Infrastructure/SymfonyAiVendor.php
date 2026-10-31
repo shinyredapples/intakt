@@ -70,7 +70,8 @@ final readonly class SymfonyAiVendor implements Vendor
         $substitute = null;
 
         foreach ($platform->rounds() as $round) {
-            $substitute = Provider::tryFrom((string) $round->getMetadata()->get(Provider::SUBSTITUTE_METADATA)) ?? $substitute;
+            $marked = $round->getMetadata()->get(Provider::SUBSTITUTE_METADATA);
+            $substitute = (is_string($marked) ? Provider::tryFrom($marked) : null) ?? $substitute;
         }
 
         return $substitute;

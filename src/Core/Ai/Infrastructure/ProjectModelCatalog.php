@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Generator;
 use Intakt\Core\Ai\Contract\Provider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
@@ -52,17 +53,26 @@ final readonly class ProjectModelCatalog
     {
         $models = [];
 
-        foreach ($this->projects as $project) {
-            foreach ($project['tiers'] as $tier) {
-                foreach ([$tier, ...($tier['substitutes'] ?? [])] as $mapping) {
-                    if ($provider->value === $mapping['provider']) {
-                        $models[] = $mapping['model'];
-                    }
-                }
+        foreach ($this->mappings() as $mapping) {
+            if ($provider->value === $mapping['provider']) {
+                $models[] = $mapping['model'];
             }
         }
 
         return array_values(array_unique($models));
+    }
+
+    /**
+     * @return Generator<int, array{provider: string, model: non-empty-string}>
+     */
+    private function mappings(): Generator
+    {
+        foreach ($this->projects as $project) {
+            foreach ($project['tiers'] as $tier) {
+                yield $tier;
+                yield from $tier['substitutes'] ?? [];
+            }
+        }
     }
 
     private function bridgeCatalog(Provider $provider): ModelCatalogInterface

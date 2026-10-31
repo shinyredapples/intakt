@@ -23,7 +23,7 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 use Symfony\Contracts\Service\ServiceProviderInterface;
 
-// The tier's own provider first, then its configured substitutes in order; each provider already tries its own accounts before it counts as out (AccountFailoverPlatform).
+// The tier's own provider first, then its configured substitutes in order; a provider counts as out only when every one of its accounts is, because AccountFailoverPlatform tries them first.
 final readonly class ProviderFailoverPlatform
 {
     /**

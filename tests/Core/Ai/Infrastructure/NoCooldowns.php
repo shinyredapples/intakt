@@ -9,7 +9,7 @@ use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Override;
 
-// Stands in where a test is about something else than cooldowns: every account is free.
+// Stands in because a test about something else than cooldowns needs every account free.
 final readonly class NoCooldowns implements AccountCooldowns
 {
     #[Override]
