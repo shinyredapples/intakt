@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Order\Domain;
+
+use Intakt\Core\Cart\Contract\CartId;
+
+final readonly class Order
+{
+    public function __construct(public CartId $cart)
+    {
+    }
+}

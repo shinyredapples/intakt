@@ -38,7 +38,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 | CI | GitHub hasn't finished the checks yet |
 | on hold | it needs something outside the task; it comes back by itself |
 
-**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. Buttons let you **stop** the job, **continue** it, or **send it back with a note**.
+**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
 
 ## Waiting on you
 
@@ -77,8 +77,46 @@ flowchart TD
 ## Around the board
 
 - **Lanes and slots** (a strip above the board): each builder slot and the review lane, and what each is working on right now.
-- **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast at the next reset.
+- **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast for the rest of the window. When a window resets shows only in the admin area.
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
 - **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.
+
+## Steering budgets and pauses
+
+The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. Only you can change anything on the dashboard:
+- On the first start, you type the one-time setup code from `docker logs intakt`, and Intakt creates your **owner secret** (shown once, so keep it in your password manager) or registers a **passkey**. Every change asks for it: the admin area and the buttons on a card alike. Without it, the dashboard shows a login page and changes nothing.
+- The dashboard only answers on the computer it runs on, so there you can look at the board without logging in. If you turn on phone access, which needs HTTPS, everything asks for your secret or a passkey, even looking at the board: someone else on the network sees only the login page. A passkey only works on the address it was made on (on the computer itself, open the dashboard as `localhost` to use it), so when you turn on phone access the admin area shows a one-time pairing code, and typing it on your phone's login page makes a passkey for the phone address. Your secret works on both. The secret is one Intakt made up, long and random, and after a few wrong tries the secret login slows down and you get a card, so guessing gets nowhere. Someone guessing wrong on purpose can slow your secret login too, but never lock you out: a dashboard you are already logged into stays open, a passkey is never slowed down, and a command on the computer Intakt runs on lifts the slowdown at once. If you lose your secret or think someone else has it, the same command resets it: your secret, your passkeys and every open login stop working at once, and you set up a new one with a fresh setup code from `docker logs intakt`.
+- Another website open in your browser can't press a button or change a setting, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
+
+### Every change ends by itself
+
+Raising or lowering a ceiling, pausing and changing a share each ask **until when**: a date and time, or "until the window resets" (for example the next weekly reset of an AI account). Clearing a back-off asks nothing: the wait it lifts already had an end, and that end is when the change runs out. When that moment comes, the change lapses and the normal setting is back, so a forgotten change can't keep spending. The board and the status show every change in effect and when it ends (a cleared back-off only says it lasts until the old wait would have ended); your accounts' limits and reset times show only in the admin area. The history lists every change: who made it, what it was before and after, and until when.
+
+| You can | For example |
+|---|---|
+| **raise or lower a ceiling** | let an account use more, or less, of its five-hour or weekly allowance |
+| **pause and resume** | stop one project, or all of Intakt, for the evening |
+| **change a project's share** | give one project most of the week until Friday |
+| **clear a back-off** | try an account again at once when you know the problem is over |
+
+### Letting Intakt use the rest of the week
+
+Intakt normally leaves room in each AI account for your own use and spreads the week evenly. If the week is nearly over and you won't need the account yourself:
+1. Open the admin area and pick the account.
+2. Raise its **weekly ceiling** (up to all of the allowance).
+3. Choose **until the window resets**, so it ends with the week.
+
+Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. On an account that can bill past its plan, the ceiling stops at the plan's limit; anything past it counts against the spending cap you set.
+
+### Pausing
+
+1. Open the admin area and choose **pause**, for one project or the whole install.
+2. Choose until when: a time, or until a window resets.
+
+Running jobs finish, nothing new starts, and finished work that is fully approved still merges. **Resume** ends the pause early; otherwise it ends by itself at the time you chose.
+
+### Accounts
+
+You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription (its long-lived token, or a login where the company has no such token) or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Intakt spends prepaid credit that is about to expire first, then your subscriptions, then paid usage up to your cap ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
