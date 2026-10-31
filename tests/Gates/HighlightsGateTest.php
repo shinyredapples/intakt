@@ -227,6 +227,126 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringNotContainsString('does not exist', $run->findingsOf('highlights'));
     }
 
+    public function testAFenceLineWithTrailingTextDoesNotCloseTheBlock(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "```markdown\n```not-a-close\n| Status | Where |\n|---|---|\n| started | PR #77 |\n```\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testATableAfterAnIndentedClosingFenceWithTrailingSpacesIsLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "```\n| Status | Where |\n|---|---|\n| started | x |\n   ```  \t\n\n| Status | Where |\n|---|---|\n| open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md:9: status "open"', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('started', $run->findingsOf('highlights'));
+    }
+
+    public function testAFenceIndentedThreeSpacesOpensABlock(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "   ```markdown\n| Status | Where |\n|---|---|\n| started | PR #77 |\n```\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testATableAfterAFenceIndentedFourSpacesIsLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "    ```\n\n| Status | Where |\n|---|---|\n| open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md:5: status "open"', $run->findingsOf('highlights'));
+    }
+
+    public function testATableAfterAnInlineBacktickRunIsLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "```inline``` code here\n\n| Status | Where |\n|---|---|\n| open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md:5: status "open"', $run->findingsOf('highlights'));
+    }
+
+    public function testATildeFenceWithBackticksInItsInfoStringOpensABlock(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "~~~ a`b\n| Status | Where |\n|---|---|\n| started | PR #77 |\n~~~\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testABacktickedTrackedPathThatLooksLikeAPullRequestPasses(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('upstream/pr1-repro/README.md', "x\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | T1 (#5), `upstream/pr1-repro/` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testABacktickedUntrackedPathThatLooksLikeAPullRequestStillFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | `upstream/pr1-repro/` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`upstream/pr1-repro/`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('cites a pull request', $run->findingsOf('highlights'));
+    }
+
+    public function testAMissingRootFileWithPunctuationInItsNameFails(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `missing@2.php`, `c++.md` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`missing@2.php`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringContainsString('`c++.md`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testATrackedRootFileWithPunctuationInItsNamePasses(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('c++.md', "x\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `c++.md` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testABareBacktickedNameWithoutAnExtensionIsNotAPath(): void
+    {
+        $run = $this->checkRows("| A | a | done | `HighlightStatus`, `c++`, `a<b>.md` |\n");
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
     public function testAMissingHighlightsFilePasses(): void
     {
         $run = $this->sandboxWithKernel()->check('--only=highlights');

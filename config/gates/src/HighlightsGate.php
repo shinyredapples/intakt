@@ -13,13 +13,17 @@ final readonly class HighlightsGate implements Gate
     // Any non-word characters between the label and the number, so "PR: #12", "PR (#12)" and "PR12" count like "PR #12".
     private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\W*\d+/i';
 
-    private const string FENCE = '/^(`{3,}|~{3,})/';
+    // CommonMark: four spaces of indentation make an indented code line, and a backtick in the info string makes inline code.
+    private const string OPENING_FENCE = '/^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/';
+
+    // CommonMark: a closing fence carries no info string, so a fence line with trailing text stays inside the block.
+    private const string CLOSING_FENCE = '/^ {0,3}(`{3,}|~{3,})[ \t]*$/';
 
     private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
     private const string BACKTICKED = '/`([^`]+)`/';
 
-    private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[\w.\- ]*\.\w+)$#';
+    private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
@@ -113,12 +117,12 @@ final readonly class HighlightsGate implements Gate
 
     private function fenceAfter(string $line, ?string $fence): ?string
     {
-        if (1 !== preg_match(self::FENCE, trim($line), $marker)) {
-            return $fence;
+        if (null === $fence) {
+            return 1 === preg_match(self::OPENING_FENCE, $line, $marker) ? $marker[1] : null;
         }
 
-        if (null === $fence) {
-            return $marker[1];
+        if (1 !== preg_match(self::CLOSING_FENCE, $line, $marker)) {
+            return $fence;
         }
 
         return $this->closes($marker[1], $fence) ? null : $fence;
@@ -184,7 +188,8 @@ final readonly class HighlightsGate implements Gate
     {
         $findings = [];
 
-        if (1 === preg_match(self::PULL_REQUEST_NUMBER, $where, $match)) {
+        // A backticked span is a path or a name, checked below, so `upstream/pr1-repro/` is no pull request.
+        if (1 === preg_match(self::PULL_REQUEST_NUMBER, (string) preg_replace(self::BACKTICKED, '', $where), $match)) {
             $findings[] = 'Where cites a pull request ("'.$match[0].'"), cite the task and issue instead';
         }
 
