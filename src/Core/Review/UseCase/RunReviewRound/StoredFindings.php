@@ -13,7 +13,9 @@ use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Workflow\WorkflowInterface;
 
 // Writes run inside the caller's transaction on the change's locked row, because two rounds of one change must not interleave their updates of its ledger.
 final readonly class StoredFindings
@@ -21,6 +23,8 @@ final readonly class StoredFindings
     public function __construct(
         private EntityManagerInterface $entities,
         private SerializerInterface $serializer,
+        #[Target('review_round')]
+        private WorkflowInterface $machine,
     ) {
     }
 
@@ -39,17 +43,33 @@ final readonly class StoredFindings
         return $stored instanceof ChangeFindings ? $this->ledgerOf($stored)->openForReviewers() : [];
     }
 
+    // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed.
+    public function completeWhenEveryReviewerIsIn(ReviewRound $round): void
+    {
+        if (!$this->machine->can($round, ReviewRound::COMPLETION)) {
+            return;
+        }
+
+        $this->machine->apply($round, ReviewRound::COMPLETION);
+        $this->recordVerdictsOf($round);
+    }
+
     // Every verdict of the round at once, when it completes, so each reviewer of a round was shown the same open findings.
-    public function recordVerdictsOf(ReviewRound $round): void
+    private function recordVerdictsOf(ReviewRound $round): void
     {
         $stored = $this->locked($round->project(), $round->change());
+
+        if ($stored->hasRecordedAfter($round->number())) {
+            return;
+        }
+
         $ledger = $this->ledgerOf($stored);
 
         foreach ($this->verdictsOf($round) as $verdict) {
             $ledger->recordVerdict($round->number(), $verdict);
         }
 
-        $stored->recordFindings(json_encode($ledger->all(), JSON_THROW_ON_ERROR));
+        $stored->recordFindings($round->number(), json_encode($ledger->all(), JSON_THROW_ON_ERROR));
     }
 
     private function locked(string $project, string $change): ChangeFindings

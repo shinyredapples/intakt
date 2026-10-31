@@ -190,7 +190,7 @@ final readonly class RoundFixture
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->machine('state_machine.review_round'), $this->clock, new StoredFindings($entities, $this->serializer));
+        return new ReviewRounds($entities, $this->clock, new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round')));
     }
 
     private function panelOf(int $reviewers): Panel

@@ -11,10 +11,8 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
-use Symfony\Component\Workflow\WorkflowInterface;
 use Throwable;
 
 // The stored rounds: opened with their reviewers, and completed by whichever reviewer finishes last, because an earlier finisher finds the guard closed and a message delivered twice finds the round complete.
@@ -22,8 +20,6 @@ final readonly class ReviewRounds
 {
     public function __construct(
         private EntityManagerInterface $entities,
-        #[Target('review_round')]
-        private WorkflowInterface $machine,
         private ClockInterface $clock,
         private StoredFindings $findings,
     ) {
@@ -79,9 +75,8 @@ final readonly class ReviewRounds
         $this->inOneTransaction(function () use ($roundId): void {
             $round = $this->entities->find(ReviewRound::class, $roundId, LockMode::PESSIMISTIC_WRITE);
 
-            if ($round instanceof ReviewRound && $this->machine->can($round, ReviewRound::COMPLETION)) {
-                $this->machine->apply($round, ReviewRound::COMPLETION);
-                $this->findings->recordVerdictsOf($round);
+            if ($round instanceof ReviewRound) {
+                $this->findings->completeWhenEveryReviewerIsIn($round);
             }
         });
     }

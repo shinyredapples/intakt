@@ -13,6 +13,7 @@ use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -198,6 +199,37 @@ final class FindingLedgerTest extends TestCase
         $ledger->recordVerdict(3, $this->verdict(['F1'], []));
 
         self::assertSame(FindingStatus::Resolved, $ledger->all()[0]->status);
+    }
+
+    /**
+     * @return iterable<string, array{Verdict}>
+     */
+    public static function failedReviews(): iterable
+    {
+        yield 'invalid output' => [Verdict::invalidOutput('the reviewer made a malformed tool call.')];
+        yield 'incomplete stream' => [Verdict::incompleteStream('the stream ended.')];
+        yield 'unread approval' => [Verdict::unreadApproval()];
+    }
+
+    #[DataProvider('failedReviews')]
+    public function testAFailedReviewAddsNoFindingToTheChange(Verdict $failed): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(1, [$this->finding('x')]);
+
+        $ledger->recordVerdict(2, $failed);
+
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $ledger->openForReviewers()));
+        self::assertSame([1], $ledger->all()[0]->rounds);
+    }
+
+    public function testAFindingThatOnlySharesItsTextWithAFailedReviewIsRecorded(): void
+    {
+        $ledger = new FindingLedger();
+
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('The reviewer output is not a valid verdict')]));
+
+        self::assertCount(1, $ledger->openForReviewers());
     }
 
     public function testALedgerRebuiltFromItsTrackedFindingsKeepsThemAndIssuesTheNextId(): void

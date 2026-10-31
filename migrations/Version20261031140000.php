@@ -59,6 +59,7 @@ final class Version20261031140000 extends AbstractMigration
                 Column::editor()->setUnquotedName('change_ref')->setTypeName(Types::STRING)->setLength(255)->create(),
                 Column::editor()->setUnquotedName('rounds')->setTypeName(Types::INTEGER)->create(),
                 Column::editor()->setUnquotedName('findings')->setTypeName(Types::TEXT)->create(),
+                Column::editor()->setUnquotedName('recorded_round')->setTypeName(Types::INTEGER)->create(),
             )
             ->setPrimaryKeyConstraint(
                 PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('change_ref'))->create(),

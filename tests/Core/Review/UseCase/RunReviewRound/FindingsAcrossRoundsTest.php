@@ -128,14 +128,62 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([1, 2], $stored[0]->rounds);
     }
 
+    public function testAFailedReviewInARoundAddsNoFindingToTheChange(): void
+    {
+        $this->round(self::CHANGE, [self::FIRST => Verdict::invalidOutput('the reviewer made a malformed tool call.')]);
+
+        self::assertSame([], $this->fixture->storedFindings(self::CHANGE));
+    }
+
+    public function testAnOlderRoundThatCompletesAfterANewerOneCannotCloseAFindingTheNewerOneRepeated(): void
+    {
+        $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+        $older = $this->started(self::CHANGE);
+        $newer = $this->started(self::CHANGE);
+
+        $this->deliver($newer, [self::FIRST => $this->changes([], [$this->finding('F1', true)])]);
+        $this->deliver($older, [self::FIRST => $this->changes(['F1'], [$this->finding('b')])]);
+
+        $stored = $this->fixture->storedFindings(self::CHANGE);
+        self::assertCount(1, $stored);
+        self::assertSame(FindingStatus::Open, $stored[0]->status);
+        self::assertSame([1, 3], $stored[0]->rounds);
+    }
+
+    public function testANewerRoundThatCompletesAfterAnOlderOneIsRecorded(): void
+    {
+        $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+        $older = $this->started(self::CHANGE);
+        $newer = $this->started(self::CHANGE);
+
+        $this->deliver($older, [self::FIRST => $this->changes([], [$this->finding('F1', true)])]);
+        $this->deliver($newer, [self::FIRST => $this->changes(['F1'], [])]);
+
+        self::assertSame(FindingStatus::Resolved, $this->fixture->storedFindings(self::CHANGE)[0]->status);
+    }
+
     /**
      * @param array<string, Verdict> $verdicts
      */
     private function round(string $change, array $verdicts): VerdictPerRole
     {
-        $vendor = new VerdictPerRole($verdicts);
+        return $this->deliver($this->started($change), $verdicts);
+    }
+
+    private function started(string $change): RecordingBus
+    {
         $queue = new RecordingBus();
         $this->fixture->startFor($change, $queue, 2);
+
+        return $queue;
+    }
+
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function deliver(RecordingBus $queue, array $verdicts): VerdictPerRole
+    {
+        $vendor = new VerdictPerRole($verdicts);
 
         foreach ($queue->messages as $message) {
             $this->fixture->deliver($message, $vendor);

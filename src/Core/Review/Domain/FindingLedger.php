@@ -37,6 +37,11 @@ final class FindingLedger
     // Unlike recordRound, only a finding marked repeat keeps an id: the reviewer was shown the open ids and says which ones came back.
     public function recordVerdict(int $round, Verdict $verdict): void
     {
+        // A failed review is a fault of the reviewer, not of the change, so it adds nothing, the same as a reviewer that failed or was blocked.
+        if ($verdict->isFailedReview()) {
+            return;
+        }
+
         // A finding another reviewer already reported again in this round stays open, so the verdicts of one round count the same in any order.
         $this->resolve(array_values(array_filter($verdict->resolved, fn (string $id): bool => ($this->tracked[$id] ?? null)?->latestRound() !== $round)));
         $earlier = $this->tracked;
