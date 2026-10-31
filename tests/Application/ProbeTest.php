@@ -140,6 +140,25 @@ final class ProbeTest extends TestCase
         self::assertSame(2, $run->getExitCode());
     }
 
+    public function testWithoutAPathVariableAToolInTheDefaultSearchPathIsFound(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+
+        $run = $this->runProbe('tests/Probe/Ran.php', ['PATH' => false]);
+
+        self::assertStringNotContainsString('sh not found', $run->getErrorOutput(), $this->transcriptOf($run));
+    }
+
+    public function testAnEmptyPathVariableSearchesOnlyTheProjectRoot(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+
+        $run = $this->runProbe('tests/Probe/Ran.php', ['PATH' => '']);
+
+        self::assertStringContainsString("\nsh not found, see docs/architecture/requirements.md\n", $run->getErrorOutput(), $this->transcriptOf($run));
+        self::assertSame(2, $run->getExitCode());
+    }
+
     public function testAPathOutsideTheProbeFolderIsRefused(): void
     {
         $run = $this->runProbe('composer.json');

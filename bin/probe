@@ -94,6 +94,8 @@ final readonly class Probe
 {
     private const string PATTERN = '#^tests/Probe/[A-Za-z0-9_][A-Za-z0-9_.-]*\.php$#';
 
+    private const string DEFAULT_SEARCH_PATH = '/bin:/usr/bin';
+
     public function __construct(private string $root, private Isolation $isolation, private Network $network)
     {
     }
@@ -142,9 +144,17 @@ final readonly class Probe
     private function isOnPath(string $tool): bool
     {
         return array_any(
-            explode(PATH_SEPARATOR, (string) getenv('PATH')),
+            explode(PATH_SEPARATOR, $this->searchPath()),
             fn (string $entry): bool => is_file($this->folderOf($entry).'/'.$tool) && is_executable($this->folderOf($entry).'/'.$tool),
         );
+    }
+
+    // Because execvp searches the C library's default path when PATH is unset, while an empty PATH means only the current folder.
+    private function searchPath(): string
+    {
+        $path = getenv('PATH');
+
+        return false === $path ? self::DEFAULT_SEARCH_PATH : $path;
     }
 
     // Because the run starts in the project root, a relative or empty PATH entry resolves there, as execvp does.
