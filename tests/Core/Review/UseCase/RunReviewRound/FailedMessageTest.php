@@ -13,6 +13,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -52,6 +53,18 @@ final class FailedMessageTest extends KernelTestCase
         self::assertSame([ReviewerState::Verdict, ReviewerState::Blocked], array_map(static fn ($reviewer): ReviewerState => $reviewer->state(), $stored->reviewers()));
         self::assertSame(RoundState::Complete, $stored->state());
         self::assertContains(LedgerEventKind::ReviewerBlocked, $this->fixture->ledgerKinds());
+    }
+
+    public function testAFailedMessageWhoseBlockTheLedgerRefusesIsLoggedWithoutStoppingTheWorker(): void
+    {
+        $round = $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+
+        ($this->fixture->failedMessages(new InMemoryLedger(accepted: 0)))(new WorkerMessageFailedEvent(new Envelope($message), 'async', new RuntimeException('gave up')));
+
+        self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
+        self::assertSame(RoundState::Collecting, $this->fixture->round($round->id()->toRfc4122())->state());
+        self::assertSame([['error', $message->reviewerId]], array_map(static fn (array $entry): array => [$entry[0], $entry[2]['reviewer']], $this->fixture->log->cleanLogs()));
     }
 
     public function testAFailedMessageThatWillStillBeRetriedLeavesTheReviewerAsItWas(): void

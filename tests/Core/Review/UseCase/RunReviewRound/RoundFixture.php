@@ -37,6 +37,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -47,6 +48,7 @@ final readonly class RoundFixture
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public MockClock $clock;
+    public BufferingLogger $log;
     private Ledger $ledger;
 
     public function __construct(private ContainerInterface $container)
@@ -56,6 +58,7 @@ final readonly class RoundFixture
         $this->entities = $entities;
         $this->bus = new RecordingBus();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
+        $this->log = new BufferingLogger();
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
@@ -103,9 +106,9 @@ final readonly class RoundFixture
         $this->leases($this->entities)->take($message->reviewerId);
     }
 
-    public function failedMessages(): BlockReviewerOfFailedMessage
+    public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
     {
-        return new BlockReviewerOfFailedMessage($this->leases($this->entities), $this->rounds($this->entities));
+        return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities), $this->log);
     }
 
     // Another worker: its own connection and entity manager, as another messenger:consume process has; its ledger is in memory because the Doctrine ledger writes through the first connection.

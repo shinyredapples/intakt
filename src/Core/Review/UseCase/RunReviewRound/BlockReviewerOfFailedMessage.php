@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
+use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 
@@ -11,8 +12,11 @@ use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 #[AsEventListener]
 final readonly class BlockReviewerOfFailedMessage
 {
-    public function __construct(private ReviewerLeases $leases, private ReviewRounds $rounds)
-    {
+    public function __construct(
+        private ReviewerLeases $leases,
+        private ReviewRounds $rounds,
+        private LoggerInterface $logger,
+    ) {
     }
 
     public function __invoke(WorkerMessageFailedEvent $event): void
@@ -23,7 +27,15 @@ final readonly class BlockReviewerOfFailedMessage
             return;
         }
 
-        $roundId = $this->leases->recordBlocked($message->reviewerId);
+        // Logged instead of thrown, because the worker does not catch what a failure listener throws: it would stop before parking the message, and the message would come back again and again.
+        try {
+            $roundId = $this->leases->recordBlocked($message->reviewerId);
+        } catch (ReviewEventNotRecorded $refused) {
+            $this->logger->error('The reviewer of a failed message was not blocked; its message stays in the failure transport.', ['reviewer' => $message->reviewerId, 'exception' => $refused]);
+
+            return;
+        }
+
         $this->rounds->completeWhenEveryReviewerIsIn($roundId);
     }
 }
