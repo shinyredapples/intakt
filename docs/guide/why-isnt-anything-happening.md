@@ -34,7 +34,7 @@ flowchart TD
 | **on hold** | the task needs something outside it (another task, a change to Intakt) | nothing: it comes back by itself when the reason is gone |
 | **dependency** badge | it `Waits for` another task | finish or unblock that task |
 | A task stays in **Backlog** | it isn't ready: unclear, too big, or missing the `intakt` label | read Intakt's comment on the issue and add what it asks ([writing a good task](writing-a-good-task.md)) |
-| A task never appears | no `intakt` label, or written by someone without write access | add the label yourself |
+| A task never appears | no `intakt` label, or written by someone without write access | add the label yourself; for an issue by someone without write access the `intakt` label is not enough, a person with write access must set `take-over` (planned) |
 | A project gets nothing built or reviewed | its share is 0, which pauses it, open pull requests included | raise its share above 0 |
 | A project gets no new builds, but its reviews go on | another project has `urgent` work, which takes the next free build slot | nothing: it continues once the urgent task has its slot |
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the maintainer agent tries to fix it first | nothing, unless it also turns up in Waiting on you |

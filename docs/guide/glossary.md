@@ -27,6 +27,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Forge** | where your code lives: GitHub or Gitea | [connections](what-intakt-connects-to.md) |
 | **Generation** | a set of cycles with one kind of builder; the next one uses a stronger model | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
 | **Hand-over** | a task going to the maintainer agent for a decision | [engine room](the-engine-room.md#holds-hand-overs-and-caps) |
+| **Hands-off** | a label meaning you work on this item yourself and Intakt stays off it until you remove it (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Head** | the latest commit of a pull request | |
 | **Hold** | a pause that lifts by itself when its reason is gone | [how it works](how-intakt-works.md#when-something-gets-stuck) |
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
@@ -62,6 +63,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Stand-in** | a cheaper reviewer on an in-between version while the usual reviewer's allowance is tight; the usual reviewer still reviews the final version | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Substitute** | a reviewer from another company reviewing in place of one whose every account is over its limit; a catch-up review follows | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Subscription reviewer** | a reviewer that runs on a Claude subscription; for now it cannot read the project, so it can never pass a change on its own | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-subscription) |
+| **Take-over** | a label that hands Intakt an issue or pull request it did not create (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
 | **Verdict** | a reviewer's answer: approve, changes with findings, or blocked (held for a person) | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Waiting on you** | the dashboard column with only what needs a person | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |
