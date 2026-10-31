@@ -62,21 +62,11 @@ final readonly class HighlightsGate implements Gate
      */
     private function findingsOf(string $contents, Closure $exists): array
     {
-        $lines = explode("\n", $contents);
+        $lines = $this->withoutCodeBlocks(explode("\n", $contents));
         $findings = [];
         $columns = null;
-        $fence = null;
 
         foreach ($lines as $index => $line) {
-            $fence = $this->fenceAfter($line, $fence);
-
-            // A table inside a code block is an example, so the line that opens or closes the block also ends a table.
-            if (null !== $fence || 1 === preg_match(self::FENCE, trim($line))) {
-                $columns = null;
-
-                continue;
-            }
-
             $cells = $this->cellsOf($line);
 
             if (null === $cells) {
@@ -97,6 +87,28 @@ final readonly class HighlightsGate implements Gate
         }
 
         return $findings;
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function withoutCodeBlocks(array $lines): array
+    {
+        $fence = null;
+
+        foreach ($lines as $index => $line) {
+            $inside = null !== $fence;
+            $fence = $this->fenceAfter($line, $fence);
+
+            // A table in a code block is an example; blanking keeps line numbers and ends any table around the block.
+            if ($inside || null !== $fence) {
+                $lines[$index] = '';
+            }
+        }
+
+        return $lines;
     }
 
     private function fenceAfter(string $line, ?string $fence): ?string
