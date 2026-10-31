@@ -86,6 +86,31 @@ final class HeadMoveTest extends TestCase
         self::assertSame(['src/Main.php'], $move->paths);
     }
 
+    public function testAMergeOfTheBaseRunsNoMergeDriverTheRepositoryNamesAsDefault(): void
+    {
+        $this->givenBothSidesEditedTheReadme();
+        $this->repository->merge('main');
+        $this->repository->configure('merge.default', 'unsafe');
+        $this->repository->configure('merge.unsafe.driver', 'touch driver-ran; false');
+
+        $move = $this->moveSinceReview();
+
+        self::assertFileDoesNotExist($this->repository->path.'/driver-ran');
+        self::assertSame(HeadMoveKind::CleanMergeOfBase, $move->kind);
+    }
+
+    public function testAMergeOfTheBaseRunsNoMergeDriverTheRepositoryDefinesUnderTheBuiltInName(): void
+    {
+        $this->givenBothSidesEditedTheReadme();
+        $this->repository->merge('main');
+        $this->repository->configure('merge.text.driver', 'touch driver-ran; false');
+
+        $move = $this->moveSinceReview();
+
+        self::assertFileDoesNotExist($this->repository->path.'/driver-ran');
+        self::assertSame(HeadMoveKind::CleanMergeOfBase, $move->kind);
+    }
+
     public function testAMergeOfTheBaseWithAResolvedConflictIsNotClean(): void
     {
         $this->repository->commitFile('README.md', "feature\n");
@@ -155,6 +180,19 @@ final class HeadMoveTest extends TestCase
     {
         $this->repository->checkout('main');
         $this->repository->commitFile('src/Main.php', "<?php\n");
+        $this->repository->checkout('feature');
+    }
+
+    // Because git starts a merge driver only for a file both sides changed.
+    private function givenBothSidesEditedTheReadme(): void
+    {
+        $this->repository->checkout('main');
+        $this->repository->commitFile('README.md', "one\ntwo\nthree\n");
+        $this->repository->checkout('feature');
+        $this->repository->merge('main');
+        $this->reviewed = $this->repository->commitFile('README.md', "ONE\ntwo\nthree\n");
+        $this->repository->checkout('main');
+        $this->repository->commitFile('README.md', "one\ntwo\nTHREE\n");
         $this->repository->checkout('feature');
     }
 

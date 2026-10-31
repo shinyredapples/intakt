@@ -36,6 +36,9 @@ final readonly class LocalGitForge implements Forge
     // Every file is text, because a binary attribute would hide a change as "Binary files differ"; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
     private const array DIFF_OPTIONS = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
 
+    // Because a merge attribute that is set picks git's own text merge, while merge.default, even "text", picks a driver the repository's config defines and git would run it.
+    private const string BUILTIN_MERGE_ATTRIBUTES = __DIR__.'/builtin-merge.gitattributes';
+
     public function __construct(
         private LocalRepository $repository,
         private NameStatusParser $nameStatus,
@@ -160,7 +163,7 @@ final readonly class LocalGitForge implements Forge
         }
 
         // Clean means the head holds exactly what git merges by itself, so neither a conflict resolution nor an edit hidden in the merge keeps a verdict.
-        $merged = $this->git(['merge-tree', '--write-tree', '--no-messages', $earlier->hash, $parents[2]]);
+        $merged = $this->git(['-c', 'core.attributesFile='.self::BUILTIN_MERGE_ATTRIBUTES, 'merge-tree', '--write-tree', '--no-messages', $earlier->hash, $parents[2]]);
 
         return $merged->isSuccessful() && trim($merged->getOutput()) === trim($this->read(['rev-parse', $head->hash.'^{tree}']));
     }
