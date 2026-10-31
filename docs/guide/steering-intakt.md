@@ -9,6 +9,7 @@ You steer Intakt from GitHub (labels and comments on issues and pull requests, f
 ```mermaid
 flowchart LR
   issue[An issue] -- intakt --> eligible[Intakt may build it]
+  issue -- idea --> discussion[For discussion only]
   eligible -- "priority:" --> order[Its place in the queue]
   eligible -- "model:" --> tier[Which AI model starts]
   eligible -- "review:" --> panel[Which reviewers]
@@ -18,6 +19,7 @@ flowchart LR
 | Label | What it does |
 |---|---|
 | `intakt` | Intakt may build this task |
+| `idea` | for discussion only: Intakt never builds or plans it, even if `intakt` is also set |
 | `priority:urgent`, `high`, `normal`, `low` | its place in the queue; no label means `normal`. An urgent task may start even when the builders are paused for review |
 | `class:core`, `feature`, `tooling`, `process` | what kind of work it is; Intakt proposes one when it is missing |
 | `model:strong`, `standard`, `light` | the AI model it starts on; Intakt can still move it up if it struggles |
@@ -25,6 +27,8 @@ flowchart LR
 | `review:full` | the full review panel on every round, even for small changes |
 | `review:<role>` | adds a specialist reviewer, for example `review:security` |
 | `keep` | on a closed pull request: don't delete its branch |
+
+To park an idea, label the issue `idea`; to turn it into work, remove `idea` and add `intakt`.
 
 Intakt also writes `status:` labels (`queued`, `building`, `in-review`, `waiting-on-you`, ...) so the issue list shows where each task stands. Those are for reading only: changing one does nothing, and Intakt puts it back.
 
@@ -63,5 +67,5 @@ An approval always names one exact version. If the change itself is pushed again
 
 ## Pausing and priorities across projects
 
-- **Pause** a project or the whole install from the dashboard: running jobs finish, nothing new starts.
+- **Pause** a project or the whole install from the dashboard's [admin area](a-tour-of-the-dashboard.md#pausing): running jobs finish, nothing new starts. Every pause ends at a time you choose, or when you resume.
 - **Shares:** with several projects, each gets a share of the week's AI allowance. Setting a project's share to 0 stops new builds for it; its open pull requests are still finished (fixed, updated and merged).

@@ -9,6 +9,7 @@ Default families (names are configurable per project; one value per family, exce
 | Family | Values | Effect |
 |---|---|---|
 | eligibility | `intakt` | Intakt may build the task (step 1 of choosing work) |
+| idea | `idea` | the issue is for discussion only: Intakt never builds, sizes, triages, splits or schedules it, even with the eligibility label, and the maintainer agent leaves it to the owner |
 | `priority:` | `urgent`, `high`, `normal`, `low` | queue order; no label means `normal`; split parts and follow-ups inherit it |
 | `class:` | `core`, `feature`, `tooling`, `process` | slot allocation by class (step 5); the triage call proposes one when missing |
 | `model:` | a capability tier, for example `strong`, `standard`, `light` | the start tier for every build of the task; escalations can still raise it |
@@ -22,6 +23,7 @@ Rules:
 - **Intakt never applies a steering label itself**, except to copy an original's labels onto its split parts and follow-ups. A maintainer bot that added the owner's merge label to its own pull request had to be refused by hand; in Intakt a label can never stand in for an owner approval, which is always a review or a comment from the owner.
 - **Labels name tiers and intents, not vendors or models.** `model:strong` survives a change of vendor or model; the owner's routing maps it (see the planner).
 - **Safety rules beat labels, labels beat inference.** Sensitive paths start on the strong tier whatever `model:` says, and a protected-path change needs an approval by the merge rules (the orchestrator's by class, or the owner's) whatever `review:` says. Under the tightest weekly pacing, a task labeled for a higher tier waits instead of being built on a lower one: the owner asked for that tier explicitly.
+- **`idea` wins over the eligibility label.** An issue with both is not eligible; the owner turns an idea into work by removing `idea` and adding the eligibility label.
 - **Changes apply at the next decision.** A new priority reorders the queue at once; a new model tier or plan label applies to the task's next job, not the one running.
 - **Two values in one family** (for example `priority:high` and `priority:low`): the one applied last wins, and Intakt removes the other with a comment.
 - **Existing projects keep their labels.** A project file can map its own labels onto the families (`P1` to `priority:urgent`, `bug` to `class:core`), and a work-source plugin maps families to native fields where the forge has them (a Jira priority, a GitHub issue type or project field), so a team keeps working the way it does.

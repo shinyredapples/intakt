@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 use Arkitect\ClassSet;
 use Arkitect\CLI\Config;
-use Arkitect\Rules\Rule;
-use Intakt\Gates\Architecture\EveryClass;
-use Intakt\Gates\Architecture\InnerLayerStaysIndependent;
-use Intakt\Gates\Architecture\LivesInModuleLayout;
-use Intakt\Gates\Architecture\MessageHandlerOnlyThroughContractAttributes;
-use Intakt\Gates\Architecture\OtherModulesOnlyThroughContract;
+use Arkitect\Rules\DSL\ArchRule;
+use Intakt\Gates\Architecture\Rules\ContractStaysIndependent;
+use Intakt\Gates\Architecture\Rules\DomainStaysIndependent;
+use Intakt\Gates\Architecture\Rules\HandlersNameTheirBus;
+use Intakt\Gates\Architecture\Rules\ModuleKeepsItsLayout;
+use Intakt\Gates\Architecture\Rules\ModulesMeetOnlyThroughContract;
 
-return static function (Config $config): void {
+$rules = [
+    ModulesMeetOnlyThroughContract::class,
+    ModuleKeepsItsLayout::class,
+    DomainStaysIndependent::class,
+    ContractStaysIndependent::class,
+];
+
+return static function (Config $config) use ($rules): void {
     $root = (string) getcwd();
     if (!is_dir($root.'/src')) {
         return;
@@ -19,14 +26,11 @@ return static function (Config $config): void {
 
     $config->add(
         ClassSet::fromDir($root.'/src')->excludePath('Kernel.php'),
-        Rule::allClasses()->that(new EveryClass())->should(new OtherModulesOnlyThroughContract())->because('modules meet only through their Contract namespace'),
-        Rule::allClasses()->that(new EveryClass())->should(new LivesInModuleLayout())->because('a module keeps its public surface in Contract and its use cases in UseCase'),
-        Rule::allClasses()->that(new EveryClass())->should(new InnerLayerStaysIndependent('Domain'))->because('the domain does not know its callers'),
-        Rule::allClasses()->that(new EveryClass())->should(new InnerLayerStaysIndependent('Contract'))->because('the contract does not know its callers'),
+        ...array_map(static fn (string $rule): ArchRule => new $rule()->rule(), $rules),
     );
     // The kernel sits outside the module layout but must not declare a handler either.
     $config->add(
         ClassSet::fromDir($root.'/src'),
-        Rule::allClasses()->that(new EveryClass())->should(new MessageHandlerOnlyThroughContractAttributes())->because('handlers name their bus through the Platform attributes'),
+        new HandlersNameTheirBus()->rule(),
     );
 };

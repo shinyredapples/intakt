@@ -27,6 +27,10 @@ final class MateGeneratedFilesTest extends TestCase
     #[DataProvider('generatedPaths')]
     public function testGitIgnoresAFileThatMateDiscoverWrites(string $path): void
     {
+        if (!file_exists(self::ROOT.'/.git')) {
+            self::markTestSkipped('git check-ignore needs a git work tree.');
+        }
+
         $check = new Process(['git', 'check-ignore', '--no-index', '--quiet', $path], self::ROOT);
 
         $check->run();
