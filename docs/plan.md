@@ -316,7 +316,7 @@ T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.m
 
 ### T41 Independent security review and the attacker test
 - **Description:** Two reviewer roles in sessions of their own, apart from the panel: a security reviewer and an attacker. They read the diff, main's protected files and the check results, fenced, never the builder's pull request text. The attacker returns fixtures; plain code runs each against main's and the head's gate without network. Missing capacity sends the change to the owner; a second vendor is used when available. The threat model page lists both roles.
-- **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in replaces either role.
+- **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in or substitute replaces either role.
 - **Evidence:** a scripted attacker fixture that gets through a weakened gate, and the owner request it produces.
 - **Waits for:** T7, T40. **Size:** M. **Labels:** `class:process`, `priority:normal`.
 
