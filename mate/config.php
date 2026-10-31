@@ -9,9 +9,4 @@ return static function (ContainerConfigurator $container): void {
         // Mate refuses to start under another PHP major.minor, whose report would not match the app's runtime.
         ->set('mate.php_version', '8.5')
         ->set('mate.invocation', 'vendor/bin/mate');
-
-    $container->services()
-        ->defaults()
-        ->autowire()
-        ->autoconfigure();
 };
