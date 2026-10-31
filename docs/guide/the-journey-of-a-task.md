@@ -85,7 +85,7 @@ Once CI is green, the **review panel** reads the change: a fixed core panel for 
 flowchart TD
   pr[Pull request, CI green] --> panel[Each reviewer reads it,<br/>on its own]
   panel --> probes[Reviewers may run small tests<br/>in a sealed sandbox]
-  probes --> verdicts[Each returns a verdict:<br/>approve, or changes with findings]
+  probes --> verdicts[Each returns a verdict:<br/>approve, changes with findings,<br/>or blocked]
   verdicts --> judge[A quick judge step sorts each finding:<br/>fix now, later, or not needed]
   judge -- something to fix now --> build[Back to the builder]
   judge -- nothing to fix now --> pass[The panel approves]
