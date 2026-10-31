@@ -64,7 +64,10 @@ final class FailedMessageTest extends KernelTestCase
 
         self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
         self::assertSame(RoundState::Collecting, $this->fixture->round($round->id()->toRfc4122())->state());
-        self::assertSame([['error', $message->reviewerId]], array_map(static fn (array $entry): array => [$entry[0], $entry[2]['reviewer']], $this->fixture->log->cleanLogs()));
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $this->fixture->log->cleanLogs();
+        [[$level, , $context]] = $logs;
+        self::assertSame(['error', $message->reviewerId], [$level, $context['reviewer']]);
     }
 
     public function testAFailedMessageThatWillStillBeRetriedLeavesTheReviewerAsItWas(): void

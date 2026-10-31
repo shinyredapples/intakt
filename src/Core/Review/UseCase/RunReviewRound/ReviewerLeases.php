@@ -115,7 +115,7 @@ final readonly class ReviewerLeases
             $this->inOneTransaction(function () use ($reviewer, $move, $now): void {
                 $stored = $this->lockedRow($reviewer->id());
 
-                // Anything but this worker's own attempt was decided while the vendor call ran and stands.
+                // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
                 if (!$this->isStillHeldBy($reviewer, $stored)) {
                     return;
                 }
