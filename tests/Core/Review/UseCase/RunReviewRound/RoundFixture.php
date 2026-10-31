@@ -101,9 +101,9 @@ final readonly class RoundFixture
     }
 
     // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
-    public function takeAndStop(ReviewWithReviewer $message): void
+    public function takeAndStop(ReviewWithReviewer $message): RoundReviewer
     {
-        $this->leases($this->entities)->take($message->reviewerId);
+        return $this->leases($this->entities)->take($message->reviewerId);
     }
 
     public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage

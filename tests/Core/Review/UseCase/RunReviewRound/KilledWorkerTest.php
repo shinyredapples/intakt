@@ -54,6 +54,20 @@ final class KilledWorkerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
     }
 
+    public function testAReviewerStartedOnceMoreReviewsInANewConversation(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $stopped = $this->fixture->takeAndStop($message);
+        $this->fixture->clock->modify('+1 hour');
+        $vendor = new ScriptedVendor();
+
+        $this->fixture->deliver($message, $vendor);
+
+        self::assertCount(1, $vendor->conversations);
+        self::assertNotSame($stopped->conversationId()->toRfc4122(), $vendor->conversations[0]);
+    }
+
     public function testAReviewerWhoseWorkerStoppedTwiceCountsAsBlockedAndIsNotReviewed(): void
     {
         $round = $this->fixture->start(1);

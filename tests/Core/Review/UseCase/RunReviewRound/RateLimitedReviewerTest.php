@@ -68,6 +68,23 @@ final class RateLimitedReviewerTest extends KernelTestCase
         self::assertSame(RoundState::Complete, $stored->state());
     }
 
+    public function testARateLimitedReviewerStartsANewConversationWhenItsMessageIsRetried(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $limited = new ScriptedVendor(new ProviderRateLimited(30, new RuntimeException('429')));
+        $retried = new ScriptedVendor();
+
+        try {
+            $this->fixture->deliver($message, $limited);
+        } catch (ReviewerRateLimited) {
+        }
+        $this->fixture->deliver($message, $retried);
+
+        self::assertNotSame($limited->conversations, $retried->conversations);
+        self::assertNotContains($message->reviewerId, [...$limited->conversations, ...$retried->conversations]);
+    }
+
     public function testARateLimitWithoutAResetLeavesTheDelayToTheRetryStrategy(): void
     {
         $this->fixture->start(1);
