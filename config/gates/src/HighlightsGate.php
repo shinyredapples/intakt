@@ -15,8 +15,7 @@ final readonly class HighlightsGate implements Gate
 
     private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
-    // A CommonMark code span closes only on a backtick run of its opening length, so ``a`b`` is one span;
-    // a backslash escape outside a span is skipped, because \` is a literal backtick that opens nothing.
+    // Matches CommonMark, because ``a`b`` is one span and an escaped backtick opens none.
     private const string BACKTICKED = '/\\\\.(*SKIP)(*FAIL)|(`+)(?!`)(?:(.+?)(?<!`)\1(?!`)|(*SKIP)(*FAIL))/';
 
     // One space on each side is padding, so a span can start or end with a backtick (CommonMark).
