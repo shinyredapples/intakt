@@ -7,7 +7,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Acceptance** | the checkable results that say a task is done | [writing a good task](writing-a-good-task.md) |
 | **Advisory reviewer** | a specialist whose notes become follow-ups but never block | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Approval** | your OK, from your own account, naming one exact version | [steering](steering-intakt.md#approving) |
-| **Approval by class** | Intakt approving a change to the rules itself, when it only adds to them, every reviewer agrees and a mechanical check proves nothing existing changed (planned) | [safety](why-the-ai-cant-wreck-your-project.md) |
+| **Approval on the spot** | Intakt approving a change to the rules itself, at once, when no hard limit is touched, a mechanical check proves the change harmless, a separate security review agrees and an attack on the change fails; otherwise you are asked (planned) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
 | **Back-off** | a short wait after a failure before trying again | [engine room](the-engine-room.md#budgets-windows-and-pace) |
 | **Blocking reviewer** | a reviewer that must approve before a merge | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Boot check** | starting the changed application to see that it still runs | [journey](the-journey-of-a-task.md#3-checking) |
