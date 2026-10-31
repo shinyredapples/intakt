@@ -12,7 +12,10 @@ final class ReviewerStillHeld extends RecoverableMessageHandlingException
 {
     public static function until(DateTimeImmutable $heldUntil, DateTimeImmutable $now): self
     {
-        $seconds = max(0, $heldUntil->getTimestamp() - $now->getTimestamp());
+        $microseconds = ($heldUntil->getTimestamp() - $now->getTimestamp()) * 1_000_000
+            + (int) $heldUntil->format('u') - (int) $now->format('u');
+        // Rounded up: a delay of 0 would bring the message back at once, to be refused again.
+        $seconds = max(0, intdiv($microseconds + 999_999, 1_000_000));
 
         return new self(sprintf('Another worker holds the reviewer until %s', $heldUntil->format(DATE_ATOM)), retryDelay: $seconds * 1000);
     }
