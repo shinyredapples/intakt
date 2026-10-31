@@ -99,8 +99,44 @@ final class ProbeTest extends TestCase
 
         $run = $this->runProbe('tests/Probe/Ran.php', ['PATH' => $this->scratch.'/empty']);
 
+        self::assertStringContainsString("unshare not found, see docs/architecture/requirements.md\n", $run->getErrorOutput());
+        self::assertStringContainsString("\nsh not found, see docs/architecture/requirements.md\n", $run->getErrorOutput());
+        self::assertStringContainsString("\nip not found, see docs/architecture/requirements.md\n", $run->getErrorOutput());
+        self::assertStringNotContainsString('probe ran', $run->getOutput());
+        self::assertStringNotContainsString('the instance did not become ready', $run->getErrorOutput());
+        self::assertSame(2, $run->getExitCode());
+    }
+
+    public function testAToolUnderARelativePathEntryIsFoundInTheProjectRootWhereverTheProbeIsCalledFrom(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+        $this->failingTools($this->project.'/tools');
+
+        $run = $this->runProbeFromTheScratchFolder('tests/Probe/Ran.php', ['PATH' => 'tools']);
+
+        self::assertStringNotContainsString('not found', $run->getErrorOutput(), $this->transcriptOf($run));
+        self::assertStringContainsString('the instance did not become ready', $run->getErrorOutput());
+    }
+
+    public function testAToolInTheProjectRootIsFoundThroughAnEmptyPathEntry(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+        $this->failingTools($this->project);
+
+        $run = $this->runProbeFromTheScratchFolder('tests/Probe/Ran.php', ['PATH' => ':']);
+
+        self::assertStringNotContainsString('not found', $run->getErrorOutput(), $this->transcriptOf($run));
+        self::assertStringContainsString('the instance did not become ready', $run->getErrorOutput());
+    }
+
+    public function testAToolOnlyUnderARelativePathEntryOfTheCallersFolderIsNamed(): void
+    {
+        $this->probe('Ran.php', '<?php echo "probe ran\n";');
+        $this->failingTools($this->scratch.'/tools');
+
+        $run = $this->runProbeFromTheScratchFolder('tests/Probe/Ran.php', ['PATH' => 'tools']);
+
         self::assertStringContainsString('unshare not found, see docs/architecture/requirements.md', $run->getErrorOutput());
-        self::assertStringContainsString('ip not found, see docs/architecture/requirements.md', $run->getErrorOutput());
         self::assertSame(2, $run->getExitCode());
     }
 
@@ -220,6 +256,26 @@ final class ProbeTest extends TestCase
         $process->run();
 
         return $process;
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private function runProbeFromTheScratchFolder(string $file, array $environment): Process
+    {
+        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->scratch, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', ...$environment]);
+        $process->run();
+
+        return $process;
+    }
+
+    // Each tool fails at once, so a run that finds them stops before the probe instead of reaching the network.
+    private function failingTools(string $folder): void
+    {
+        foreach (['unshare', 'sh', 'ip'] as $tool) {
+            new Filesystem()->dumpFile($folder.'/'.$tool, "#!/bin/sh\nexit 1\n");
+            new Filesystem()->chmod($folder.'/'.$tool, 0o755);
+        }
     }
 
     /**

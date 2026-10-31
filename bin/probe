@@ -143,8 +143,18 @@ final readonly class Probe
     {
         return array_any(
             explode(PATH_SEPARATOR, (string) getenv('PATH')),
-            static fn (string $folder): bool => '' !== $folder && is_file($folder.'/'.$tool) && is_executable($folder.'/'.$tool),
+            fn (string $entry): bool => is_file($this->folderOf($entry).'/'.$tool) && is_executable($this->folderOf($entry).'/'.$tool),
         );
+    }
+
+    // Because the run starts in the project root, a relative or empty PATH entry resolves there, as execvp does.
+    private function folderOf(string $entry): string
+    {
+        if ('' === $entry) {
+            return $this->root;
+        }
+
+        return str_starts_with($entry, '/') ? $entry : $this->root.'/'.$entry;
     }
 
     /**
