@@ -30,6 +30,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
 
@@ -56,12 +57,25 @@ final readonly class RoundFixture
 
     public function start(int $reviewers): ReviewRound
     {
+        return $this->round($this->startOn($this->bus, $reviewers));
+    }
+
+    public function startOn(MessageBusInterface $queue, int $reviewers): string
+    {
         $clock = new MockClock('2026-10-30 12:00:00', 'UTC');
-        $handler = new RunReviewRoundHandler($this->entities, new RoundLedger($this->ledger), $this->bus, $clock);
+        $handler = new RunReviewRoundHandler($this->entities, new RoundLedger($this->ledger), $queue, $clock);
 
-        $id = $handler(new RunReviewRound('alpha', __DIR__, 'Add the thing.', $this->panelOf($reviewers)));
+        return $handler(new RunReviewRound('alpha', __DIR__, 'Add the thing.', $this->panelOf($reviewers)));
+    }
 
-        return $this->round($id);
+    /**
+     * @return list<ReviewRound>
+     */
+    public function storedRounds(): array
+    {
+        $this->entities->clear();
+
+        return $this->entities->getRepository(ReviewRound::class)->findAll();
     }
 
     // A new handler on every delivery, as a restarted worker has, so nothing is carried in memory between two messages.

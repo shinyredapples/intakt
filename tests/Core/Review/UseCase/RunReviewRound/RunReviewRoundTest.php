@@ -48,6 +48,19 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame([ReviewerState::Queued, ReviewerState::Queued, ReviewerState::Queued], array_map(static fn ($reviewer): ReviewerState => $reviewer->state(), $round->reviewers()));
     }
 
+    public function testARoundWhoseMessagesCannotAllBeQueuedLeavesNoRoundAndNoLedgerEventBehind(): void
+    {
+        try {
+            $this->fixture->startOn(new RefusingQueue(), 3);
+            self::fail('The refused dispatch was swallowed.');
+        } catch (RuntimeException $refused) {
+            self::assertSame('queue unavailable', $refused->getMessage());
+        }
+
+        self::assertSame([], $this->fixture->storedRounds());
+        self::assertSame([], $this->fixture->ledgerKinds());
+    }
+
     /**
      * @return iterable<string, array{list<int>}>
      */

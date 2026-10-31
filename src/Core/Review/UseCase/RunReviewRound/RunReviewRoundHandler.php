@@ -26,11 +26,14 @@ final readonly class RunReviewRoundHandler
     // Returns the id of the round because it names the rows and ledger events a caller reads back.
     public function __invoke(RunReviewRound $command): string
     {
-        $round = $this->open($command);
-        $this->ledger->reviewStarted($round);
-        $this->dispatchOneMessagePerReviewer($round);
+        // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
+        return $this->entities->wrapInTransaction(function () use ($command): string {
+            $round = $this->open($command);
+            $this->ledger->reviewStarted($round);
+            $this->dispatchOneMessagePerReviewer($round);
 
-        return $round->id()->toRfc4122();
+            return $round->id()->toRfc4122();
+        });
     }
 
     private function open(RunReviewRound $command): ReviewRound
