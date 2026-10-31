@@ -18,6 +18,8 @@ You can add more than one account of the same kind from the same company, for ex
 
 For a subscription, Intakt doesn't use the login you sign in with yourself. Where the AI company offers one, it uses a **long-lived token**: a key you create once for that account with the company's own tool (for Claude, `claude setup-token`) and paste into Intakt. It lets Intakt's agents use that subscription without your password or your personal session, and you can revoke it at any time. Where a company has no such token, Intakt keeps that account's login to itself and lends it to each job read-only.
 
+A reviewer can run on a Claude subscription too; what it can and cannot do is explained in [why the AI can't wreck your project](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-subscription).
+
 ## How it decides what to spend
 
 ```mermaid
@@ -43,7 +45,7 @@ You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the
 
 ## Several projects on one install
 
-Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 means no new builds for that project; its open pull requests are still fixed, updated and merged.
+Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 pauses the project: once a running job finishes, nothing is built or reviewed for it, not even its open pull requests. Its work waits and carries on when you raise the share again.
 
 ## Where the money goes, and how to spend less
 
