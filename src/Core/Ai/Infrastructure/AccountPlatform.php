@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Override;
+use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Model;
@@ -24,6 +25,7 @@ final readonly class AccountPlatform implements PlatformInterface
         private Account $account,
         private PlatformInterface $platform,
         private AccountCooldowns $cooldowns,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -51,9 +53,11 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
-    // Matched on the exception type because the provider's text can change and carries anything (plan T5).
+    // Matched and logged by the exception type only, because the provider's text can change and can echo a key (plan T5).
     private function coolDownAfter(Throwable $failure): void
     {
+        $this->logger->warning('Account {account} failed with {failure}.', ['account' => $this->account->key(), 'failure' => $failure::class]);
+
         match (true) {
             $failure instanceof RateLimitExceededException => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
             $failure instanceof RetryableExceptionInterface => $this->cooldowns->coolDown($this->account, null),

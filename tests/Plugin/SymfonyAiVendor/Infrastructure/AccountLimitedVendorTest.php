@@ -100,11 +100,15 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertInstanceOf(VendorAccountOut::class, $out);
     }
 
-    public function testATransientFailureWhileEveryAccountOfTheVendorCoolsDownStaysThatFailure(): void
+    public function testATransientFailureWhileEveryAccountOfTheVendorCoolsDownWaitsUntilTheFirstIsFree(): void
     {
         $failed = new ProviderFailedTransiently(new RuntimeException('503'));
 
-        self::assertSame($failed, $this->failureOf($this->vendor($this->failing($failed), $this->cooldowns(45))));
+        $out = $this->failureOf($this->vendor($this->failing($failed), $this->cooldowns(45)));
+
+        self::assertInstanceOf(ProviderRateLimited::class, $out);
+        self::assertSame(45, $out->retryAfterSeconds);
+        self::assertSame($failed, $out->getPrevious());
     }
 
     public function testAnotherFailureIsNeverAMoveToAnotherAccount(): void

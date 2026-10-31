@@ -47,15 +47,14 @@ final readonly class AccountLimitedVendor implements Vendor
         });
     }
 
-    // The account that failed is cooling down by now, so the wait is until any account of the vendor is free, not until that account's own reset.
-    private function nextAccountOrWait(Provider $provider, ProviderRateLimited|ProviderFailedTransiently $out): VendorAccountOut|ProviderRateLimited|ProviderFailedTransiently
+    // The account that failed is cooling down by now, so the wait is until any account of the vendor is free, not until that account's own reset; a transient failure waits too, because its account cools down like a limited one.
+    private function nextAccountOrWait(Provider $provider, ProviderRateLimited|ProviderFailedTransiently $out): VendorAccountOut|ProviderRateLimited
     {
         $wait = $this->cooldowns->secondsUntilAnAccountIsFree($provider);
+        if (0 === $wait) {
+            return new VendorAccountOut($out);
+        }
 
-        return match (true) {
-            0 === $wait => new VendorAccountOut($out),
-            $out instanceof ProviderRateLimited => new ProviderRateLimited($wait, $out),
-            default => $out,
-        };
+        return new ProviderRateLimited($wait, $out);
     }
 }

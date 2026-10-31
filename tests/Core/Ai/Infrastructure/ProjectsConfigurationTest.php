@@ -57,6 +57,7 @@ final class ProjectsConfigurationTest extends TestCase
         yield 'an uppercase name' => [['Team']];
         yield 'a name with a dot' => [['team.b']];
         yield 'a name starting with a digit' => [['2nd']];
+        yield 'a name ending in a newline' => [["team\n"]];
         yield 'an account listed twice' => [['team', 'team']];
     }
 

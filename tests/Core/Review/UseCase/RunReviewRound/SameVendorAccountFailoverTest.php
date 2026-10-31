@@ -21,12 +21,15 @@ use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMovesToAnotherAccount;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
@@ -39,6 +42,7 @@ use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -65,6 +69,9 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(TierPlatform::class)]
 #[UsesClass(VendorAccountOut::class)]
+#[UsesClass(ProviderFailedTransiently::class)]
+#[UsesClass(ProviderRateLimited::class)]
+#[UsesClass(ReviewerRateLimited::class)]
 #[UsesClass(Account::class)]
 final class SameVendorAccountFailoverTest extends KernelTestCase
 {
@@ -130,6 +137,26 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         ], $this->fixture->ledgerKinds());
         self::assertSame(['anthropic.default'], $this->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
         self::assertSame(['anthropic.team'], $this->usageAccounts());
+    }
+
+    public function testAReviewerWhoseLastFreeAccountFailsTransientlyWaitsForTheSharedCooldownInsteadOfFailing(): void
+    {
+        $this->cooldowns->coolDown(new Account(Provider::Anthropic, Account::DEFAULT), 60);
+        $this->cooldowns->coolDown(new Account(Provider::Anthropic, 'team'), 60);
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
+        $vendor = new AccountLimitedVendor(new ScriptedVendor(new ProviderFailedTransiently(new ServerException(503))), $resolver, $limit, $this->cooldowns);
+
+        try {
+            $this->fixture->deliver($message, $vendor);
+            self::fail('The transient failure was recorded as the reviewer\'s end.');
+        } catch (ReviewerRateLimited $wait) {
+            self::assertGreaterThan(0, $wait->getRetryDelay());
+        }
+
+        self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
     }
 
     public function testAnotherReviewerOnTheCooledAccountGoesStraightToTheOtherAccount(): void

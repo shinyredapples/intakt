@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Override;
 use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Failover\FailoverPlatform;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Model;
@@ -71,7 +72,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         foreach ($this->platforms as $name => $platform) {
             $account = new Account($this->provider, $name);
             if (!$this->cooldowns->isCoolingDown($account)) {
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns);
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->logger);
             }
         }
 
@@ -110,6 +111,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     {
         $neverLimits = new RateLimiterFactory(['id' => 'account-failover', 'policy' => 'no_limit'], new InMemoryStorage());
 
-        return new FailoverPlatform(array_values($free), $neverLimits, $this->clock, $this->logger);
+        // A silent logger, because FailoverPlatform logs the provider's message, which can echo a key; AccountPlatform logs each failure by class instead.
+        return new FailoverPlatform(array_values($free), $neverLimits, $this->clock, new NullLogger());
     }
 }

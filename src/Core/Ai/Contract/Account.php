@@ -8,7 +8,7 @@ namespace Intakt\Core\Ai\Contract;
 final readonly class Account
 {
     public const string DEFAULT = 'default';
-    public const string NAME_PATTERN = '/^[a-z][a-z0-9_]*$/';
+    public const string NAME_PATTERN = '/^[a-z][a-z0-9_]*$/D';
 
     // The key of the deferred result's metadata that names the account a round ran on, so its usage row says so.
     public const string METADATA = 'intakt_account';

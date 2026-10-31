@@ -69,6 +69,18 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertSame(['provider' => 'anthropic', 'first' => 'default', 'next' => 'team'], $logs[0][2]);
     }
 
+    public function testAFailedAccountIsLoggedWithItsKeyAndTheFailureClassButNeverTheProvidersMessage(): void
+    {
+        $logger = new BufferingLogger();
+
+        $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(300, 'invalid key SENTINEL')), $this->answering('second'), $logger)->invoke('big', 'Review.')->asText();
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertStringNotContainsString('SENTINEL', print_r($logs, true));
+        self::assertContains(['warning', 'Account {account} failed with {failure}.', ['account' => 'anthropic.default', 'failure' => RateLimitExceededException::class]], $logs);
+    }
+
     public function testACallWhileEveryAccountCoolsDownIsRefusedBeforeAnyAccountIsCalled(): void
     {
         $first = new FailingWhenRead(new RuntimeException('never read'));
