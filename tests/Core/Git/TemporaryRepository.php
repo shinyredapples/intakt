@@ -10,6 +10,9 @@ use Symfony\Component\Process\Process;
 
 final readonly class TemporaryRepository
 {
+    // CI runs as a user without a git identity, and git refuses a merge or a commit without one.
+    private const array IDENTITY = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false'];
+
     public string $path;
 
     public function __construct(string $objectFormat = 'sha1')
@@ -125,7 +128,7 @@ final readonly class TemporaryRepository
 
     public function merge(string $branch): string
     {
-        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'merge', '--quiet', '--no-ff', '--no-edit', $branch);
+        $this->git(...self::IDENTITY, ...['merge', '--quiet', '--no-ff', '--no-edit', $branch]);
 
         return $this->git('rev-parse', 'HEAD');
     }
@@ -133,7 +136,7 @@ final readonly class TemporaryRepository
     // Conflicts resolve to this side, so the same helper writes a resolved conflict and an edit hidden in a merge.
     public function mergeChanging(string $branch, string $path, string $content): string
     {
-        $this->git('merge', '--quiet', '--no-ff', '--no-commit', '--strategy-option=ours', $branch);
+        $this->git(...self::IDENTITY, ...['merge', '--quiet', '--no-ff', '--no-commit', '--strategy-option=ours', $branch]);
         file_put_contents($this->path.'/'.$path, $content);
         $this->git('add', '--all');
 
@@ -162,7 +165,7 @@ final readonly class TemporaryRepository
 
     private function commit(string $message): string
     {
-        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--allow-empty', '-m', $message);
+        $this->git(...self::IDENTITY, ...['commit', '--quiet', '--allow-empty', '-m', $message]);
 
         return $this->git('rev-parse', 'HEAD');
     }
