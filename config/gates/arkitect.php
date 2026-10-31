@@ -16,11 +16,13 @@ return static function (Config $config): void {
         return;
     }
 
-    $config->add(
-        ClassSet::fromDir($root.'/src')->excludePath('Kernel.php'),
+    // The rules are one list, so the build loop can approve a change that only adds a rule (an append-only gate registry).
+    $rules = [
         Rule::allClasses()->that(new EveryClass())->should(new OtherModulesOnlyThroughContract())->because('modules meet only through their Contract namespace'),
         Rule::allClasses()->that(new EveryClass())->should(new LivesInModuleLayout())->because('a module keeps its public surface in Contract and its use cases in UseCase'),
         Rule::allClasses()->that(new EveryClass())->should(new InnerLayerStaysIndependent('Domain'))->because('the domain does not know its callers'),
         Rule::allClasses()->that(new EveryClass())->should(new InnerLayerStaysIndependent('Contract'))->because('the contract does not know its callers'),
-    );
+    ];
+
+    $config->add(ClassSet::fromDir($root.'/src')->excludePath('Kernel.php'), ...$rules);
 };
