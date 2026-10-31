@@ -27,7 +27,10 @@ final class RequiredToolsTest extends TestCase
     {
         putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
         putenv('INTAKT_GITLEAKS');
-        array_map(unlink(...), glob($this->root.'/*') ?: []);
+        if (is_file($this->root.'/scanner')) {
+            unlink($this->root.'/scanner');
+        }
+
         rmdir($this->root);
     }
 
