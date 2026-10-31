@@ -13,12 +13,6 @@ final readonly class HighlightsGate implements Gate
     // Any non-word characters between the label and the number, so "PR: #12", "PR (#12)" and "PR12" count like "PR #12".
     private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\W*\d+/i';
 
-    // CommonMark: four spaces of indentation make an indented code line, and a backtick in the info string makes inline code.
-    private const string OPENING_FENCE = '/^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/';
-
-    // CommonMark: a closing fence carries no info string, so a fence line with trailing text stays inside the block.
-    private const string CLOSING_FENCE = '/^ {0,3}(`{3,}|~{3,})[ \t]*$/';
-
     private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
     private const string BACKTICKED = '/`([^`]+)`/';
@@ -28,6 +22,11 @@ final readonly class HighlightsGate implements Gate
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
     private const string OUTER_PIPES = '/^\||(?<!\\\\)\|$/';
+
+    public function __construct(
+        private FencedCodeBlocks $codeBlocks,
+    ) {
+    }
 
     public function name(): string
     {
@@ -66,7 +65,7 @@ final readonly class HighlightsGate implements Gate
      */
     private function findingsOf(string $contents, Closure $exists): array
     {
-        $lines = $this->withoutCodeBlocks(explode("\n", $contents));
+        $lines = $this->codeBlocks->blanked(explode("\n", $contents));
         $findings = [];
         $columns = null;
 
@@ -91,47 +90,6 @@ final readonly class HighlightsGate implements Gate
         }
 
         return $findings;
-    }
-
-    /**
-     * @param list<string> $lines
-     *
-     * @return list<string>
-     */
-    private function withoutCodeBlocks(array $lines): array
-    {
-        $fence = null;
-
-        foreach ($lines as $index => $line) {
-            $inside = null !== $fence;
-            $fence = $this->fenceAfter($line, $fence);
-
-            // A table in a code block is an example; blanking keeps line numbers and ends any table around the block.
-            if ($inside || null !== $fence) {
-                $lines[$index] = '';
-            }
-        }
-
-        return $lines;
-    }
-
-    private function fenceAfter(string $line, ?string $fence): ?string
-    {
-        if (null === $fence) {
-            return 1 === preg_match(self::OPENING_FENCE, $line, $marker) ? $marker[1] : null;
-        }
-
-        if (1 !== preg_match(self::CLOSING_FENCE, $line, $marker)) {
-            return $fence;
-        }
-
-        return $this->closes($marker[1], $fence) ? null : $fence;
-    }
-
-    private function closes(string $marker, string $fence): bool
-    {
-        // CommonMark: a fence closes only on its own character and at least its own length, so a longer block can show a shorter fence.
-        return $marker[0] === $fence[0] && strlen($marker) >= strlen($fence);
     }
 
     /**

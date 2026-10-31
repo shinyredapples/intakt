@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\HighlightsGate;
 use Intakt\Gates\HighlightStatus;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -11,6 +12,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
 #[UsesClass(HighlightStatus::class)]
+#[UsesClass(FencedCodeBlocks::class)]
 final class HighlightsGateTest extends SandboxTestCase
 {
     private const string HEADER = "| Feature | How Intakt uses it | Status | Where |\n|---|---|---|---|\n";
