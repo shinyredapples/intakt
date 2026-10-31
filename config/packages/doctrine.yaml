@@ -3,8 +3,8 @@ doctrine:
         url: '%env(resolve:DATABASE_URL)%'
         server_version: '%env(postgresql_server_version:resolve:DATABASE_URL)%'
 
-        # The Agent message store owns this table and keeps it in step; the migration only creates it.
-        schema_filter: '~^(?!reviewer_conversation$)~'
+        # The Agent message store owns the first table and keeps it in step; the Messenger transport owns the second. The migrations only create them.
+        schema_filter: '~^(?!reviewer_conversation$|messenger_messages$)~'
         profiling_collect_backtrace: '%kernel.debug%'
         types:
             utc_datetime_immutable: Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType
@@ -21,6 +21,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Core/Ledger/Domain'
                 prefix: 'Intakt\Core\Ledger\Domain'
                 alias: Ledger
+            Review:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Review/Domain'
+                prefix: 'Intakt\Core\Review\Domain'
+                alias: Review
 
 when@test:
     doctrine:

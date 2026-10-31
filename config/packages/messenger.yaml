@@ -4,3 +4,13 @@ framework:
         buses:
             command.bus: ~
             query.bus: ~
+        transports:
+            # One worker per reviewer message runs the reviewers of a round in parallel. The table comes from the migrations, never from a first send, because a first send inside a rolled-back transaction would take the table with it.
+            # redeliver_timeout stays above RoundReviewer::REVIEW_CEILING (one hour), so a message handed out again finds its reviewer's hold ended.
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                options:
+                    auto_setup: false
+                    redeliver_timeout: 5400
+        routing:
+            Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer: async
