@@ -149,7 +149,7 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 | **Main** | the official version of your project |
 | **Merge** | adding a pull request's change to main |
 | **Checks / CI** | the automatic tests that run on every change |
-| **Review** | a reviewer's verdict: approve, or changes needed with a list of findings |
+| **Review** | a reviewer's verdict: approve, changes needed with a list of findings, or blocked (held for a person) |
 | **Protected files** | the project's rules: the checks that judge the code, the CI setup, the agents' instructions |
 | **Hold** | a pause that lifts by itself when its reason is gone |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label on the task |

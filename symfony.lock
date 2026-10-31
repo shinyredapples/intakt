@@ -216,5 +216,17 @@
             "version": "7.0",
             "ref": "8c1c4e28d26a124b0bb273f537ca8ce443472bfd"
         }
+    },
+    "symfony/workflow": {
+        "version": "8.1",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "3.3",
+            "ref": "3b2f8ca32a07fcb00f899649053943fa3d8bbfb6"
+        },
+        "files": [
+            "config/packages/workflow.yaml"
+        ]
     }
 }

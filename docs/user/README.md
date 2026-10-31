@@ -17,7 +17,15 @@ Intakt can treat a branch of a local git repository as a pull request: the branc
 
 ## Background work
 
-Intakt has two internal message buses, one for commands and one for questions. A command handler cannot answer a question and the reverse. No feature sends messages through them yet, so there is nothing to set up or watch; retries and failed-message handling arrive with the review loop.
+Intakt has two internal message buses, one for commands and one for questions. A command handler cannot answer a question and the reverse.
+
+A review round sends one message per reviewer to a queue, and workers take them from it, so the reviewers of a round run at the same time. The queue is a table in your database (`MESSENGER_TRANSPORT_DSN`, `doctrine://default` unless you change it in `.env.local`), created by `php bin/console doctrine:migrations:migrate` together with the other tables. Start as many workers as you want reviewers to run at once:
+
+```
+php bin/console messenger:consume async
+```
+
+The state of a round and of each reviewer is stored in the database, and so are the waiting messages. If a worker stops, start it again: the reviewers still waiting run, and a round whose last reviewer has finished is completed. A reviewer that was in the middle of its review when its worker stopped keeps its place for one hour from its start, so a message that reaches another worker in that hour (the same message is handed out again after ninety minutes) waits until the hour is over; then the reviewer is recorded as failed (`reviewer_failed` in the ledger, readable with `php bin/console intakt:ledger:events`) and the round goes on without it. A review that takes longer than that hour counts as failed too: an answer that arrives after the hour is dropped and the reviewer is recorded as failed, even when no other worker got the message. A reviewer whose call to the model fails for any reason is recorded as failed too, with the kind of failure (for example a refused key), and the round goes on. A reviewer whose result could not be written to the ledger goes back to the queue and is reviewed again. Trying a failed reviewer again, retrying a rate-limited reviewer and counting a failed one as blocked arrive later. Nothing starts a round for you yet, so there is nothing to run besides the workers.
 
 ## Checking that an install boots
 
