@@ -35,6 +35,23 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringContainsString('cites a pull request ("PR #77")', $run->findingsOf('highlights'));
     }
 
+    public function testAPullRequestNumberAfterPunctuationFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | T1 (#5), PR: #77 |\n| B | b | done | PR (#78) |\n| C | c | done | pull request: 79 |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('cites a pull request ("PR: #77")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("PR (#78")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("pull request: 79")', $run->findingsOf('highlights'));
+    }
+
+    public function testAWordBetweenAPullRequestLabelAndANumberIsAllowed(): void
+    {
+        $run = $this->checkRows("| A | a | done | pull the lever, see #77 |\n");
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
     public function testAnIssueNumberInWhereIsAllowed(): void
     {
         $run = $this->checkRows("| A | a | done | T1 (#77, part #78) |\n");
@@ -56,6 +73,46 @@ final class HighlightsGateTest extends SandboxTestCase
 
         self::assertStringContainsString('`missing.lock`, which does not exist', $run->findingsOf('highlights'));
         self::assertStringContainsString('`missing.txt`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testAMissingPathWithASpaceFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | `src/definitely missing.php`, `definitely missing.txt` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`src/definitely missing.php`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringContainsString('`definitely missing.txt`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testAnIgnoredFileCountsAsMissingFromTheBranch(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('.gitignore', "var/\n");
+        $sandbox->write('var/cache.txt', "x\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `var/cache.txt`, `src/Kernel.php`, `src/` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`var/cache.txt`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('Kernel.php', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('`src/`', $run->findingsOf('highlights'));
+    }
+
+    public function testAnUntrackedFileCountsAsMissingFromTheBranch(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+        $sandbox->write('src/Untracked.php', "<?php\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `src/Untracked.php` |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`src/Untracked.php`, which does not exist', $run->findingsOf('highlights'));
     }
 
     public function testATableWithoutOuterPipesIsCheckedByEveryRule(): void

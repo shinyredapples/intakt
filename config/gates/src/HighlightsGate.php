@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Closure;
+
 final readonly class HighlightsGate implements Gate
 {
     private const string FILE = 'docs/highlights.md';
 
     private const array STATUSES = ['planned', 'in progress', 'done'];
 
-    private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\b[\s\/]*#?\d+/i';
+    // Any non-word characters between the label and the number, so "PR: #12" and "PR (#12)" count like "PR #12".
+    private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\b\W*\d+/i';
 
     private const string BACKTICKED = '/`([^`]+)`/';
 
-    private const string PATH_LIKE = '#^(?:[^\s*<>{}]+/[^\s*<>{}]*|[\w.-]*\.\w+)$#';
+    private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[\w.\- ]*\.\w+)$#';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
@@ -39,15 +42,23 @@ final readonly class HighlightsGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot read '.self::FILE);
         }
 
-        $findings = $this->findingsOf($contents, $workspace->root);
+        $tracked = $workspace->hasGit() ? $workspace->git(['ls-files', '-z', '--cached']) : null;
+
+        if ($tracked instanceof ProcessResult && !$tracked->succeeded()) {
+            return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
+        }
+
+        $findings = $this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked));
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
 
     /**
+     * @param Closure(string): bool $exists
+     *
      * @return list<string>
      */
-    private function findingsOf(string $contents, string $root): array
+    private function findingsOf(string $contents, Closure $exists): array
     {
         $lines = explode("\n", $contents);
         $findings = [];
@@ -68,7 +79,7 @@ final readonly class HighlightsGate implements Gate
                 continue;
             }
 
-            foreach ($this->rowFindings($cells, $columns, $root) as $finding) {
+            foreach ($this->rowFindings($cells, $columns, $exists) as $finding) {
                 $findings[] = self::FILE.':'.($index + 1).': '.$finding;
             }
         }
@@ -96,10 +107,11 @@ final readonly class HighlightsGate implements Gate
     /**
      * @param list<string>                               $cells
      * @param array{status: int|false, where: int|false} $columns
+     * @param Closure(string): bool                      $exists
      *
      * @return list<string>
      */
-    private function rowFindings(array $cells, array $columns, string $root): array
+    private function rowFindings(array $cells, array $columns, Closure $exists): array
     {
         if ($this->isSeparator($cells)) {
             return [];
@@ -113,16 +125,18 @@ final readonly class HighlightsGate implements Gate
         }
 
         if (false !== $columns['where']) {
-            $findings = [...$findings, ...$this->whereFindings($cells[$columns['where']] ?? '', $root)];
+            $findings = [...$findings, ...$this->whereFindings($cells[$columns['where']] ?? '', $exists)];
         }
 
         return $findings;
     }
 
     /**
+     * @param Closure(string): bool $exists
+     *
      * @return list<string>
      */
-    private function whereFindings(string $where, string $root): array
+    private function whereFindings(string $where, Closure $exists): array
     {
         $findings = [];
 
@@ -133,12 +147,33 @@ final readonly class HighlightsGate implements Gate
         preg_match_all(self::BACKTICKED, $where, $matches);
 
         foreach ($matches[1] as $path) {
-            if (1 === preg_match(self::PATH_LIKE, $path) && !file_exists($root.'/'.$path)) {
-                $findings[] = 'Where names `'.$path.'`, which does not exist';
+            if (1 === preg_match(self::PATH_LIKE, $path) && !$exists($path)) {
+                $findings[] = 'Where names `'.$path.'`, which does not exist on the branch';
             }
         }
 
         return $findings;
+    }
+
+    /**
+     * @return Closure(string): bool
+     */
+    private function existenceOn(string $root, ?ProcessResult $tracked): Closure
+    {
+        // Without git there is no branch, so the working tree stands in for it.
+        if (!$tracked instanceof ProcessResult) {
+            return static fn (string $path): bool => file_exists($root.'/'.$path);
+        }
+
+        $known = [];
+
+        foreach (explode("\0", $tracked->output) as $file) {
+            for ($path = $file; '' !== $path && '.' !== $path; $path = dirname($path)) {
+                $known[$path] = true;
+            }
+        }
+
+        return static fn (string $path): bool => isset($known[rtrim($path, '/')]);
     }
 
     /**
