@@ -70,12 +70,34 @@ final readonly class RequiredTools
 
     private function isAvailable(string $name): bool
     {
-        if (!str_contains($name, '/')) {
-            return null !== new ExecutableFinder()->find($name);
+        if (str_contains($name, '/')) {
+            return $this->isExecutable(str_starts_with($name, '/') ? $name : $this->root.'/'.$name);
         }
 
-        $path = str_starts_with($name, '/') ? $name : $this->root.'/'.$name;
+        $found = new ExecutableFinder()->find($name, null, $this->relativePathEntriesUnderTheRoot());
 
+        if (null === $found) {
+            return false;
+        }
+
+        // Because the finder resolves a relative PATH entry from the caller's directory, such a find counts only when the root holds it too.
+        return str_starts_with($found, '/') || $this->isExecutable($this->root.'/'.$found);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function relativePathEntriesUnderTheRoot(): array
+    {
+        $root = str_starts_with($this->root, '/') ? $this->root : (getcwd() ?: '.').'/'.$this->root;
+        $entries = explode(PATH_SEPARATOR, (string) getenv('PATH'));
+        $relative = array_filter($entries, static fn (string $entry): bool => !str_starts_with($entry, '/'));
+
+        return array_values(array_map(static fn (string $entry): string => rtrim($root.'/'.$entry, '/'), $relative));
+    }
+
+    private function isExecutable(string $path): bool
+    {
         return is_file($path) && is_executable($path);
     }
 }
