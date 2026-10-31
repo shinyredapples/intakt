@@ -33,6 +33,12 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Core\Review\Contract\RoundVerdicts;
+use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
+use Intakt\Tests\Core\Review\SampleIdentity;
+use Symfony\Component\Serializer\SerializerInterface;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
@@ -45,6 +51,8 @@ use Symfony\Component\Workflow\WorkflowInterface;
 // A round on the application's workflows and a SQLite database, with a bus that keeps the messages instead of queueing them, so a test delivers them in the order it chooses.
 final readonly class RoundFixture
 {
+    public const string TASK = 'Add the thing.';
+
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public MockClock $clock;
@@ -74,9 +82,26 @@ final readonly class RoundFixture
 
     public function startOn(MessageBusInterface $queue, int $reviewers): string
     {
-        $handler = new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue);
+        return $this->startWith($queue, $reviewers, $this->identityAt(SampleIdentity::HEAD, $reviewers));
+    }
 
-        return $handler(new RunReviewRound(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), $this->panelOf($reviewers)));
+    // The identity names its own task and panel size, so a test can hand in one that does not describe the round.
+    public function startWithIdentityOf(string $task, int $panelSize, int $reviewers): string
+    {
+        return $this->startWith($this->bus, $reviewers, SampleIdentity::of($task, $this->panelOf($panelSize)));
+    }
+
+    public function identityAt(string $head, int $reviewers): VerdictIdentity
+    {
+        return SampleIdentity::of(self::TASK, $this->panelOf($reviewers), $head);
+    }
+
+    public function verdictsOf(VerdictsOfRound $query): RoundVerdicts
+    {
+        $serializer = $this->container->get('serializer');
+        assert($serializer instanceof SerializerInterface);
+
+        return new VerdictsOfRoundHandler($this->entities, $serializer)($query);
     }
 
     /**
@@ -159,6 +184,13 @@ final readonly class RoundFixture
         $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
+    }
+
+    private function startWith(MessageBusInterface $queue, int $reviewers, VerdictIdentity $identity): string
+    {
+        $handler = new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue);
+
+        return $handler(new RunReviewRound(new ReviewSubject('alpha', __DIR__, self::TASK), $this->panelOf($reviewers), $identity));
     }
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
