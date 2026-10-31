@@ -32,9 +32,19 @@ final class RequiredToolsTest extends TestCase
         $missing = new RequiredTools()->missingFor(['audit', 'tests', 'secrets', 'secrets-history']);
 
         self::assertSame(
-            array_map(RequiredTools::notFound(...), ['git', 'composer', 'sh', 'unshare', 'setsid', 'true', 'gitleaks', 'env']),
+            array_map(RequiredTools::notFound(...), ['git', 'composer', 'sh', 'unshare', 'setsid', 'true', 'bash', 'jq', 'gitleaks', 'env']),
             $missing,
         );
+    }
+
+    public function testTheTestsGateNeedsBashAndJqForTheShowcaseAndReleaseLabelsScripts(): void
+    {
+        putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
+
+        $missing = new RequiredTools()->missingFor(['tests']);
+
+        self::assertContains(RequiredTools::notFound('bash'), $missing);
+        self::assertContains(RequiredTools::notFound('jq'), $missing);
     }
 
     public function testAToolOfAGateThatIsNotSelectedIsNotRequired(): void

@@ -55,6 +55,23 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 | the AI companies' command-line tools (Claude Code, Codex) | every job image | running builders and reviewers on a subscription |
 | the Docker or Podman API | the orchestrator | starting job containers and sidecars, through the socket (an API, not a command) |
 
+## When a tool is missing
+
+Before it runs any gate, `bin/check` looks up the commands of the selected gates by name on `PATH` (Symfony's `ExecutableFinder`), as `config/gates/src/RequiredTools.php` lists them:
+
+| Gates | Commands looked up |
+|---|---|
+| every gate | `git` |
+| `audit` | `composer` |
+| `tests` | `sh`, `unshare`, `setsid`, `true`, `bash`, `jq` |
+| `secrets`, `secrets-history` | `gitleaks`, `env` |
+
+Only the gates that `--only` and `--skip` leave selected count: a command only a skipped gate needs is not looked up. When `INTAKT_GITLEAKS` is set, its value replaces `gitleaks` in the lookup and in the message; a value with a `/` is checked as a path to an executable file.
+
+When any command is missing, no gate runs: `bin/check` prints one JSON line naming every missing command once, `{"error":"missing tools","missing":["<command> not found, see docs/architecture/requirements.md", ...]}`, and exits with 2. A `gitleaks` that is found but is not version 8.30.1 still fails the secrets gates with their own message (`gitleaks 8.30.1 is required, set INTAKT_GITLEAKS to it or put it first on the path, an override is checked too, see docs/architecture/requirements.md`).
+
+Tests: `tests/Gates/RequiredToolsTest.php` (every missing command listed once, a gate not selected requires nothing, the `tests` gate needs `bash` and `jq`, the override is looked up instead of `gitleaks`, the message) and `CheckCommandTest::testMissingToolsAreListedBeforeAnyGateRuns` and `testAMissingToolOfAGateThatIsSkippedDoesNotStopTheRun`.
+
 ## How Intakt calls them
 
 - **Through Symfony Process with an argument list, never a shell string:** the local git forge, the gates (through their runner) and the upstream reproduction runner. `bin/instance` and `bin/probe` start their processes with PHP's `proc_open` and an argument list; where they use `sh`, the command after it is passed as separate arguments.
