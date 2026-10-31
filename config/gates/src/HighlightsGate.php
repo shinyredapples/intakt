@@ -18,7 +18,7 @@ final readonly class HighlightsGate implements Gate
     // A CommonMark code span closes only on a backtick run of its opening length, so ``a`b`` is one span.
     private const string BACKTICKED = '/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/';
 
-    // CommonMark strips one space on each side, which lets a span start or end with a backtick.
+    // One space on each side is padding, so a span can start or end with a backtick (CommonMark).
     private const string PADDED_SPAN = '/^ (.*[^ ].*) $/';
 
     private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
