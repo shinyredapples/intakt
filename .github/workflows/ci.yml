@@ -106,8 +106,8 @@ jobs:
   # and there is no job container, so no Docker socket inside. The databases take no password (throwaway, never published).
   # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database services instead:
   # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
-  # job that fails skips the engines and fails the run. Each engine's step runs even when an earlier engine failed, so the
-  # run reports every engine.
+  # job that fails skips the engines and fails the run. Each engine's step runs once the CI image was built, even when an
+  # earlier engine failed, so the run reports every engine.
   persistence:
     needs: changes
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
@@ -152,11 +152,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Build the CI image
+        id: image
         if: env.ENGINES == 'true'
         run: .github/ci/build-image.sh
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
       - name: Run the persistence group on mysql 8.4
-        if: env.ENGINES == 'true' && !cancelled()
+        if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
         env:
           DATABASE_URL: mysql://root@mysql:3306/intakt
           SERVICE_NETWORK: ${{ job.services.mysql.network }}
@@ -165,7 +166,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
       - name: Run the persistence group on mariadb 11.4
-        if: env.ENGINES == 'true' && !cancelled()
+        if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
         env:
           DATABASE_URL: mysql://root@mariadb:3306/intakt
           SERVICE_NETWORK: ${{ job.services.mariadb.network }}
@@ -174,7 +175,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
       - name: Run the persistence group on postgresql 17
-        if: env.ENGINES == 'true' && !cancelled()
+        if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
         env:
           DATABASE_URL: postgresql://postgres@postgresql:5432/intakt
           SERVICE_NETWORK: ${{ job.services.postgresql.network }}
