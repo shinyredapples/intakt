@@ -10,7 +10,7 @@ use Symfony\Component\Process\Process;
 
 final readonly class TemporaryRepository
 {
-    // CI runs as a user without a git identity, and git refuses a merge or a commit without one.
+    // Because CI runs as a user without a git identity, and git refuses a merge or a commit without one.
     private const array IDENTITY = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false'];
 
     public string $path;
