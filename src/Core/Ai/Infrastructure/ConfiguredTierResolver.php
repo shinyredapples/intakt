@@ -17,7 +17,7 @@ final readonly class ConfiguredTierResolver implements TierResolver
 {
     /**
      * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}>}> $projects
-     * @param array<string, string>                                                                        $disabledProviders
+     * @param array<string, string>                                                                                                                                              $disabledProviders
      */
     public function __construct(
         #[Autowire('%intakt.projects%')]

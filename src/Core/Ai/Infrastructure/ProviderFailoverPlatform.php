@@ -54,7 +54,7 @@ final readonly class ProviderFailoverPlatform
 
         try {
             $result = $this->failover($candidates)->invoke($own->model, $request->input, $request->options);
-        } catch (RuntimeException $everyCandidateFailed) {
+        } catch (RuntimeException) {
             throw $trail->hardFailure() ?? $this->outage($own, $substitutes, $trail);
         }
 

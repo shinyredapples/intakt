@@ -97,7 +97,7 @@ final class ProviderFailoverPlatformTest extends TestCase
 
         $this->expectException(EveryAccountCoolingDown::class);
 
-        $_ = $this->failover()->invoke($this->own(), [], new TierRequest('Review.'));
+        $this->failover()->invoke($this->own(), [], new TierRequest('Review.'));
     }
 
     public function testASubstituteWhoseEveryAccountIsCoolingDownIsSkippedForTheNextOne(): void
