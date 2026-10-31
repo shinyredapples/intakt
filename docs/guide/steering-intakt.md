@@ -8,7 +8,7 @@ You steer Intakt from GitHub (labels and comments on issues and pull requests, f
 
 ```mermaid
 flowchart LR
-  issue[An issue] -- intakt --> eligible[Intakt may build it]
+  issue[An issue] -- "intakt (and no idea)" --> eligible[Intakt may build it]
   issue -- idea --> discussion[For discussion only]
   eligible -- "priority:" --> order[Its place in the queue]
   eligible -- "model:" --> tier[Which AI model starts]
