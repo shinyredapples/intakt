@@ -22,7 +22,10 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
-| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T37 to T42, T32 (optional) | after the deadline |
+| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T75 to T80, T32 (optional) | after the deadline |
+| M6 Shadow | see [Replacing the existing loop](#replacing-the-existing-loop) | T37 to T43 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T44 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
 
@@ -286,45 +289,45 @@ The demo works on a local repository, so these tasks wait until after the deadli
 - **Evidence:** the override's start output and one edit served without a restart.
 - **Waits for:** T22. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
-T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T42 switches a category on, every protected change still goes to the owner.
+T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T80 switches a category on, every protected change still goes to the owner.
 
-### T37 Hard floors and the approval decision in shadow mode
+### T75 Hard floors and the approval decision in shadow mode
 - **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, attacker test), each step a typed result. The hard floors are deterministic rules over the whole change: secrets and credentials handling, every workflow file, existing gate tests, the protected-path list, the approval rules, agent instructions, and a panel reviewer's loosening or missing class. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
 - **Acceptance:** each floor has a test that it sends a change to the owner and one that a neighboring change passes it; a request names its floor or check; no path approves by a timer, a veto window or a missing answer; a step that fails or cannot run sends the change to the owner; the replay reads recorded forge responses.
 - **Evidence:** the replay's report over a temporary repository with recorded approvals; the replay over this repository's 32 approvals (owner provides).
 - **PHP 8.5:** `#[NoDiscard]` on the decision.
 - **Waits for:** T18. **Size:** M. **Labels:** `class:process`, `priority:normal`.
 
-### T38 The `language` plugin kind and the comment-only check for PHP
+### T76 The `language` plugin kind and the comment-only check for PHP
 - **Description:** A `language` plugin kind ([Plugins](design/05-architecture/02-plugins.md)) and its PHP implementation: two versions of a file compare equal when their `PhpToken` streams match without comments and whitespace; docblocks, suppression and ignore markers and inline allow directives count as code. A file of a language without a plugin is not covered.
 - **Acceptance:** tests for an edited line comment (passes), an edited docblock type, an added ignore marker and a changed statement (each fails), a file that does not parse (fails), and a file of an unknown language (not covered, so the owner).
 - **Evidence:** the check's result for a comment-only edit of `bin/probe` and for an edit that changes a statement, from a running install.
-- **Waits for:** T37. **Size:** S. **Labels:** `class:process`, `priority:normal`.
+- **Waits for:** T75. **Size:** S. **Labels:** `class:process`, `priority:normal`.
 
-### T39 Dependency policy over Composer, OSV.dev and deps.dev
+### T77 Dependency policy over Composer, OSV.dev and deps.dev
 - **Description:** A Composer adapter in the PHP `language` plugin turns the old and new manifest and lock file into neutral package changes; rules written once over them check allowed vendors, a clean OSV.dev audit of every new package including transitive ones, a minimum release age from deps.dev, and no change to scripts, plugins, repositories, Composer config, binaries or autoload files. The orchestrator makes the queries.
 - **Acceptance:** recorded OSV.dev and deps.dev responses drive the tests; each rule has a passing and a failing case; a new transitive package with an advisory fails; an unreachable source or an unknown answer sends the change to the owner.
 - **Evidence:** the policy's result for adding an official Symfony package and for a package from another vendor, against recorded responses; a run against the live sources (owner provides).
-- **Waits for:** T38. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+- **Waits for:** T76. **Size:** M. **Labels:** `class:process`, `priority:normal`.
 
-### T40 Gate code no weaker, the violation corpus and the harness from main
+### T78 Gate code no weaker, the violation corpus and the harness from main
 - **Description:** A check job runs main's gate tests unchanged, and the violation corpus, against the head's gate code through the project's check command, in its own container and as its own user, with the result leaving through a channel the code under test cannot rewrite. Every violation a gate catches on a head becomes a corpus fixture. The boot gate runs main's `bin/instance` and `bin/probe` against the head, and main's isolation probes run through the head's harness.
 - **Acceptance:** a new gate with new tests passes; an edited existing gate that lets a corpus fixture through fails; a head that rewrites the result file is still judged by the job's own channel; a harness change is booted by main's harness; a harness change that lets an isolation probe reach the network, a credential or a folder outside its own fails.
 - **Evidence:** the check's output for an additive gate and for a weakened one on a temporary repository.
-- **Waits for:** T37. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+- **Waits for:** T75. **Size:** M. **Labels:** `class:process`, `priority:normal`.
 
-### T41 Independent security review and the attacker test
+### T79 Independent security review and the attacker test
 - **Description:** Two reviewer roles in sessions of their own, apart from the panel: a security reviewer and an attacker. They read the diff, main's protected files and the check results, fenced, never the builder's pull request text. The attacker returns fixtures; plain code runs each against main's and the head's gate without network. Missing capacity sends the change to the owner; a second vendor is used when available. The threat model page lists both roles.
 - **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in replaces either role.
 - **Evidence:** a scripted attacker fixture that gets through a weakened gate, and the owner request it produces.
-- **Waits for:** T7, T40. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+- **Waits for:** T7, T78. **Size:** M. **Labels:** `class:process`, `priority:normal`.
 
-### T42 Canaries, earned autonomy and containment
+### T80 Canaries, earned autonomy and containment
 - **Description:** Owner-known canary changes, each category with its own ([Merge](design/05-architecture/08-merge.md#earned-autonomy-per-category)), run through the decision on a schedule. Per category, the dashboard shows canary detection and agreement with the owner; the owner switches a category on in the owner's config once both meet the bar, and it falls back to shadow mode on its own when a canary is missed or the owner overrules it. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. A daily cap per project bounds automatic approvals, and each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
 - **Acceptance:** detection is counted per category over its own canaries; a category below 100% detection, or with fewer canaries than the minimum, cannot be switched on; a missed canary switches it off; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the cap holds under two concurrent approvals (forced order); the dashboard line names the head, the category and its checks.
 - **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
 - **PHP 8.5:** the pipe operator for the canary run's steps.
-- **Waits for:** T20, T39, T41. **Size:** L. **Labels:** `class:process`, `priority:normal`.
+- **Waits for:** T20, T77, T79. **Size:** L. **Labels:** `class:process`, `priority:normal`, `plan:required`.
 
 ### T32 GitHub webhooks through Webhook and RemoteEvent (optional, last)
 - **Description:** Optional, and only for installs that already have a public endpoint: polling stays the default and Intakt works fully without webhooks ([Merge](design/05-architecture/08-merge.md#waiting-for-ci)). A GitHub `RequestParser` for the Webhook component verifies the delivery's signature and turns pull request, review and check events into RemoteEvents that the loop consumes, so a change is seen sooner than the next poll.
@@ -339,4 +342,316 @@ T37 to T42 build [Approving protected changes](design/05-architecture/08-merge.m
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
-- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T37 after T18, then T38 and T40 in parallel, T39 after T38, T41 after T40, and T42 after T39 and T41; the optional T32 last, after T18.
+- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; the optional T32 last, after T18.
+
+## Replacing the existing loop
+
+Status: approved by the owner on 2026-10-31. The tasks are issues #319 to #356, without the eligibility label until 2026-11-23. Goal: replace the existing loop for the owner's own use (GitHub only, Claude Code and Codex subscriptions, PHP only, the owner's two projects); other forges, languages and vendors come after the switch.
+
+Conventions, in addition to the ones above:
+
+- **The existing loop is a reference, not a source.** Its tests and docs show which behaviors and edge cases matter (bugs hit, races, security fixes). Every task here is an Intakt feature shaped by the design; its **Reference** line names the loop behaviors and test files whose cases become its acceptance cases, rewritten as Intakt tests. Nothing is translated module by module, and nothing that only worked around the loop's own constraints is carried over (see **Not in the switch** below).
+- **Built by human-steered sessions**, reviewed by the existing loop. A task may be larger than a loop issue but stays one mergeable pull request with its own tests.
+- **Deliberate differences** from the loop are listed in `docs/architecture/differences-from-the-existing-loop.md` (created by T44, extended by each task that adds one): typed verdicts instead of parsed review text, job containers instead of system users and sandboxes, database state and Messenger instead of state files and timer locks, the judge instead of end-of-cycle triage, polling with conditional requests before webhooks.
+- **Decided constraints:** an approval is decided by the orchestrator on the spot or goes to the owner, never by a timed default; no decision needs a second AI vendor to be available (a missing vendor sends the decision to the owner); webhooks come last and stay optional; every mechanical check is a plugin per language; merges are signed fast-forwards of main; nothing public without the owner.
+- **Owner decisions (2026-10-31):**
+  1. Intakt runs on the owner's host in its own container with nesting, Docker inside and fenced from the local network like the CI runners; not a virtual machine.
+  2. While both run, Intakt opens its pull requests under its own GitHub App identity; the existing loop leaves every pull request that identity opened and handles only its own.
+  3. New GitHub Apps serve Intakt while both run; at takeover Intakt switches to the loop's Apps and the new ones are removed.
+  4. The two watchdogs trust each other's signed merges by a peer signing key in each one's settings, with no push notice per merge.
+  5. Shadow work stays below 70% of the five-hour window and on weekly pace; the shadow exits after at least seven days and 40 compared heads with fewer than 5% failed reviews and at most one head in ten where the loop raised a P1 the builder then fixed and Intakt approved.
+  6. A project at weekly share 0 is paused (no builds, no reviews); the switch needs no work on it.
+  7. Design decision 9 changes to signed fast-forwards of main by a non-force ref update (T62).
+  8. The owner's dashboard reads Intakt's status JSON (T68) until Intakt's own dashboard replaces it.
+  9. The dependency policy is the ecosystem adapter of the language plugin (Composer for PHP), not a new plugin kind (T52).
+- Targets assume about three merged tasks a day from 2026-11-23, an L counting as two, and that M1 to M5 are merged by 2026-11-22 (T9 to T14, T18 and T33 are prerequisites here).
+
+| Milestone | Outcome | Tasks | Target |
+|---|---|---|---|
+| M6 Shadow | Intakt reviews every new green head of the owner's two projects alongside the existing loop, posts nothing that counts, and a report compares the verdicts | T37 to T43 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T44 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
+
+## M6 Shadow
+
+### T37 GitHub App identity
+- **Description:** `Plugin/GitHubForge` authenticates as Intakt's own GitHub App: a short-lived installation token per forge call and per git fetch or push, minted from the App's private key; a failed exchange stops the call and never falls back to another credential. At start the installation is read back and its repositories and permissions are compared with the configured ones. Trust checks (write access through the permission API, bot accounts never steer except Intakt's own identity and its maintainer's) use this identity.
+- **Reference:** the existing loop's App authentication: `test_app_auth.py` (token minting and caching, no fallback, bot trust rules; the personal-token cases are not carried over).
+- **Acceptance:** recorded responses drive the tests; an expired token is minted again; a failed exchange fails the call; a permission mismatch refuses the boot with the difference named; the private key never appears in logs or the ledger.
+- **Evidence:** `(owner provides)` a token minted for the test repository and the installation read back.
+- **PHP 8.5:** `#[NoDiscard]` on the minted token.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T38 Pull request watcher by polling
+- **Description:** A Scheduler tick lists each project's open pull requests with conditional requests (an unchanged list costs no rate limit), skips a pull request whose head and update time did not change, reads the CI state of the exact head (workflow runs and check suites), and starts a review round when CI on a new head has finished green. A head whose CI runs is looked at again later and holds nothing; red CI is recorded, not reviewed. Webhooks (T32) can later replace the tick; the tick stays as the fallback.
+- **Reference:** `test_decision.py` (pending CI waits, red CI before any reviewer), `test_lanes_cap2.py` (heads with finished CI first, a running head keeps its place).
+- **Acceptance:** an unchanged pull request causes no further reads; a new head with pending CI starts no round and is read again after the interval; a green head starts exactly one round; a head that moves during the round makes its verdicts stale (T11).
+- **Evidence:** the ledger of a tick over two recorded pull requests, one pending and one green.
+- **Waits for:** T37, T9. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T39 A Codex subscription reviewer
+- **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
+- **Reference:** `test_reviewer_accounts.py` (only a closed set of codes is an account error; a reviewer's own text never is), `test_gpt_probes.py` (the usage line), `test_agents.py` (any other reviewer failure is a failed review).
+- **Acceptance:** recorded streams drive the tests; a complete stream yields a typed verdict; each structured error maps to its outcome; text that only mentions a limit is a failed review; usage is counted once.
+- **Evidence:** a real review of the sample branch with its usage line `(owner provides)`.
+- **Waits for:** T33, T14. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
+### T40 Measured use and the start ceiling
+- **Description:** `Core/Budget` keeps per account the measured use of each window (Claude's five-hour and weekly windows from its rate-limit events, Codex's from its token counts) with the reading's age and the reset time. A call starts only while the measured use is below the window's ceiling (five-hour default 90%, the weekly one paced over the week); a second parallel start needs a fresher reading and a margin; without a trusted reading only one call runs at a time, and after a long outage the owner is told once. A structured usage-limit answer puts the account in cooldown until its reset; a shared back-off still lets approved heads merge. Ceilings are owner config.
+- **Reference:** `test_limits.py`, `test_guard.py` (back-off, pause and drain blocks, merge-only refusal), `test_admission.py`, `test_claude_account.py` (back-off per account, a crash back-off blocks all), `test_budget_174.py` (probe outage notice once, measured use decides, never the estimate).
+- **Acceptance:** each rule has a test with a controlled clock; an estimate never refuses a start that measured use allows; a reading is never applied to another account; the owner notice for an outage is sent once.
+- **Evidence:** the guard's decisions over a scripted day of readings, printed by a console command.
+- **PHP 8.5:** the pipe operator for the ceiling chain.
+- **Waits for:** T14. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
+
+### T41 Shadow mode per project
+- **Description:** A project in `shadow` mode runs its panel on every head T38 admits, records the verdicts in the ledger marked as shadow, posts nothing to the forge and never counts a verdict for a merge. Shadow work starts only below a lower ceiling the owner sets (default 70% of the five-hour window and on weekly pace), so it never takes capacity the existing loop needs on the same accounts.
+- **Reference:** the design's adoption stages ([Goals](design/03-goals-and-non-goals.md), milestone 5).
+- **Acceptance:** a shadow project makes no forge write (a test forge refuses every write); its verdicts are marked shadow; above the shadow ceiling no round starts and the reason is recorded.
+- **Evidence:** a shadow round on the GitHub test repository and the forge's empty write log.
+- **Waits for:** T38, T40. **Size:** S. **Labels:** `class:core`, `priority:high`.
+
+### T42 Comparison with the existing loop's reviews
+- **Description:** For each shadow head, Intakt reads the existing loop's reviews of the same head from the pull request (comments by the loop's identity: its final JSON verdict and its tagged finding lines, read with the loop's documented rules, only for this report) and compares: approve or changes per reviewer, findings matched by file and a line window, findings only one side raised, severity disagreements, Intakt failed reviews, and tokens per review. `intakt:shadow:report` prints the period's summary and per-head table, or JSON.
+- **Reference:** the loop's verdict reading rules in `test_agents.py` (an unparsable verdict is no approval; fenced and quoted lines are not findings).
+- **Acceptance:** recorded pull requests with known loop reviews give the expected matches; a loop review that cannot be read is counted as such, never as agreement; the report holds no limits or reset times.
+- **Evidence:** the report over the recorded set.
+- **Waits for:** T41. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
+### T43 The owner's shadow install
+- **Description:** The image runs in its own container with nesting on the owner's host (Docker inside, fenced from the local network) with both projects in shadow mode, the Claude automation tokens and the Codex login, the shadow ceiling, and Home Assistant as the notifier for owner actions only. `docs/user/` gets the shadow setup page.
+- **Acceptance:** the install answers, both projects list their panels, a tick runs without error.
+- **Evidence:** `(owner provides)` the first day's shadow report.
+- **Waits for:** T42. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
+
+**Exit (owner's go):** at least seven days and 40 compared heads, fewer than 5% failed reviews, and no more than one in ten heads where the loop raised a P1 the builder then fixed and Intakt approved.
+
+## M7 Builder half
+
+### T44 Job containers through the Docker Engine API
+- **Description:** A new `Core/Job` module starts each job in a fresh container: read-only root, a tmpfs work area, inputs mounted read-only, one output directory read after exit, memory and CPU limits, no forge credential or signing key, and an egress allowlist through a per-job proxy (vendor API and package registries only; `none` for check and probe jobs). Each job checks at start that what it was told it can do works (a probe file written and read back, the vendor reachable through the proxy) and runs in a reduced mode that says so otherwise. Creates `docs/architecture/differences-from-the-existing-loop.md`.
+- **Reference:** `test_build_slot_ops.py` (a wiped home and own caches per session), `test_step_memory.py` (one runaway killed alone, the cause recorded), `test_review_gpt_egress.py` (deny by default, the login unreadable by commands the model runs).
+- **Acceptance:** a job cannot reach a host outside its allowlist, read another job's output, or write outside its output directory; a memory kill is recorded as the job's cause; the start check reports a broken mount; containers are removed after exit, also after an orchestrator crash.
+- **Evidence:** a job's start check and an egress refusal from its log.
+- **Waits for:** none. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
+
+### T45 Job image for a PHP project
+- **Description:** The job image of a project comes from its Dockerfile or devcontainer, or is generated: PHP from `composer.json` (`config.platform`, `require.php`), Composer, the project's extensions, and the Claude Code and Codex CLIs at pinned versions. A job never falls back to another PHP.
+- **Reference:** `test_entry_harness.py` (a project without its PHP record gets no probes rather than the system's PHP).
+- **Acceptance:** both of the owner's projects get an image whose `php -v` matches their constraint; a missing extension fails the image build with its name.
+- **Evidence:** the image build output for the sample repository.
+- **Waits for:** T44. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T46 Bare mirror, build clone and the Source line
+- **Description:** The orchestrator keeps a bare mirror per project; a build job clones main and its branch only. A `Source: <branch>@<sha>` line from a trusted author adds that one commit as a read-only ref, after the orchestrator verified the commit is on that branch. Read-only network git calls are retried after 10 and 30 seconds.
+- **Reference:** `test_source.py` (prose is not a source line, an unsafe branch is an error, the clone resolves the ref at the verified SHA only), `test_network_git.py`.
+- **Acceptance:** each case above; an untrusted source line is ignored with one comment.
+- **Evidence:** a build clone's refs for a task with a source line.
+- **Waits for:** T44, T37. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T47 Work intake from GitHub issues
+- **Description:** `Plugin/WorkSource` for GitHub issues: eligible when open, carrying the project's eligibility label and not `idea`, written and last edited by an account with write access (checked when it becomes eligible and before each build), and not blocked. `Waits for #n` holds a task until every named issue is closed; a task that failed for good holds its dependents with the reason. Order: open pull requests first (only `urgent` before them), then priority, milestone due date and number. Queue state lives in the database; status labels mirror it (T19).
+- **Reference:** `test_github.py` (idea issues skipped), `test_unblock.py` (trusted notes only, every referenced issue closed), `test_priority.py`, `test_queue.py`, `test_projects.py` (share order; a project at share 0 is paused for builds and reviews).
+- **Acceptance:** each rule above has a case on recorded responses; an edit by an untrusted account makes the task ineligible until a trusted account confirms it.
+- **Evidence:** the queue order printed for the GitHub test repository.
+- **Waits for:** T19, T37. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T48 Readiness, sizing and the split that happens once
+- **Description:** One tool-less call per new task checks readiness (an observable result, an acceptance condition, one outcome; otherwise parked with one comment) and estimates its size against the size contract. An oversize task is split into two to four parts: the plan is recorded before any part exists, each part carries a part marker and its original's labels, a crash resumes from the record and finds a part whose create answer was lost, and the original stays as an umbrella that closes when every part is closed. A task is never split twice.
+- **Reference:** `test_sizing.py` (parts in order with `Waits for` lines, never split again, tokens charged to the task), `test_lanes.py` (a split interrupted anywhere ends on the first part once), `test_unblock.py` (umbrella close).
+- **Acceptance:** each case above; the call's output is a typed object through structured output, and an invalid one parks nothing and splits nothing.
+- **Evidence:** a split of a sample task on the test repository and its record.
+- **Waits for:** T47. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
+
+### T49 Build job with Claude Code
+- **Description:** A build job runs the Claude Code CLI in the job image with the task fenced, the decisions, the act list and CI excerpt of a rework, and the published pull request text to edit; it returns a git bundle and the pull request text. The planner's tier picks the model; a turn limit and the allowance (T60) bound it. A build that needs a decision ends with a structured question and the task is parked. Usage is read from the session log after the job (untrusted, parsed in a separate process under limits). The builder's own check tool is mounted, so a refusal the hand-back would give is fixed in the same session.
+- **Reference:** `test_agents.py` (builder command and model cases), `test_injection_canary.py` (issue quotes, CI logs and findings fenced in the builder prompt), `test_prompt_fencing.py`, `test_external_text.py`, `test_precheck.py`.
+- **Acceptance:** a scripted CLI returns a bundle and text; every untrusted input reaches the prompt only through the fence (a gate test fails on an unfenced interpolation); a cut session keeps its commits.
+- **Evidence:** a real build of a sample task in the job container `(owner provides the token)`.
+- **Waits for:** T45, T46. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
+
+### T50 Hand-back checks
+- **Description:** A new `Core/HandBack` checks what a build returns before anything is trusted: the bundle builds on the branch, never touches main, is a fast-forward of the pushed branch, and holds no merge commit unless a merge of main was asked; attribution trailers and generated-by lines are stripped; the secret scan runs over every new commit, blob and message and over the pull request text, with no allow-list and failing closed when the scanner is missing; credentials mounted into the job are redacted. A failure goes back to the builder once with the reason and hands the task over the second time.
+- **Reference:** `test_secret_scan.py` (a token in a commit message, a key deleted by a later commit, scanner settings committed by the builder ignored), `test_redact.py`, `test_attribution.py`, `test_no_force.py`, `test_round.py` (a token in the pull request body is sent back without its value).
+- **Acceptance:** each case above; no rejected value appears in the ledger, a comment or the builder's feedback.
+- **Evidence:** the refusal of a seeded bundle with a fake key, as recorded.
+- **Waits for:** T49. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
+
+### T51 Pre-push check job and the Evidence list
+- **Description:** A check job applies the bundle in a fresh clone with a fresh dependency cache and runs the project's check command through `Plugin/Gate` (the PHP gate runs `bin/check --fast` or the configured command). The pull request text must reference every top-level Evidence item of the task (E1..EN) and stay under the body cap; a miss goes back once on its own count, with the commits kept. A file that loses most of its content fails unless the plan names it.
+- **Reference:** `test_evidence.py`, `test_round.py` (a second Evidence miss goes to the reviewers; a body over the cap goes back once), `test_fixpass_logic.py`.
+- **Acceptance:** each case above; the check's result leaves the container through the output directory only.
+- **Evidence:** a red and a green check job on the sample repository.
+- **Waits for:** T50. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T52 Composer dependency policy
+- **Description:** The Composer ecosystem adapter of the `language` plugin kind (the PHP plugin, the shape the protected-change approval design gives it; not a plugin kind of its own) decides a change to `composer.json` and `composer.lock`: a new package from a trusted vendor (owner config; `symfony/` and `doctrine/` by default, and the official Symfony AI component package types) from its own repository at its upstream tag, with no binaries, Composer plugin or autoload files, is routine; version constraint updates, a trusted package moved unchanged between `require` and `require-dev`, and a beta or RC stability flag for a package the same change adds are routine; any other package, a removed package, and any change to Composer's own settings needs the owner, listing the packages. The rules are owner config.
+- **Reference:** `test_policy.py` (constraints pass, a commit that is not the upstream tag waits, removed and moved packages and lock settings go to the owner), `test_owner_approval.py` (changes beyond routine name the new packages).
+- **Acceptance:** each case above; an unreadable lock file needs the owner.
+- **Evidence:** the policy's decision on three sample lock diffs.
+- **Waits for:** T51. **Size:** M. **Labels:** `class:core`, `priority:normal`.
+
+### T53 Signed push and the pull request
+- **Description:** The orchestrator signs the branch commits with its own key, pushes the branch without force, and opens or updates the pull request as its App with the builder's text. Before the push, main is test-merged: a real conflict goes back to the builder as a merge-main rework. Each push records its phase and the SHA it intends to produce first, so a crash never pushes twice or opens a second pull request.
+- **Reference:** `test_gitops.py` (push refuses unsigned commits, conflicts with main), `test_lanes.py` (a crash after the push or after opening the pull request), `test_github.py` (pull request create and update).
+- **Acceptance:** each case above with a temporary repository and recorded forge responses.
+- **Evidence:** a pushed branch on the test repository with verified signatures.
+- **Waits for:** T50, T37, T51, T55 (nothing is pushed before the pre-push check and the workflow approval exist; the dependency policy decides at merge). **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T54 Protected paths from the whole change
+- **Description:** Whether a head touches a protected path is read from the full diff between the merge base and the head plus the per-commit lists (each commit against each parent, second parents included unless main has them); submodules and `.gitmodules` count. The protected list, the owner-only list and the approval rules are owner config, never repository files.
+- **Reference:** `test_crafted_merge.py` (a revert and a deletion a crafted merge hides), `test_policy.py` (exact files, workflows, main never pushed).
+- **Acceptance:** each case above; a path the check cannot read counts as protected.
+- **Evidence:** the protected list of a crafted-merge sample.
+- **Waits for:** T46. **Size:** M. **Labels:** `class:core`, `priority:high`, `model:strong`.
+
+### T55 Workflow risk scan and the push approval
+- **Description:** Behind the GitHub forge, a strict line scan of the workflows (the head's, main's and both merged) finds anything beyond a hosted runner with a read-only token and no secrets; any form it cannot read, and any `runs-on` from a variable or expression (even while the variable is unset: its value can change without a commit), is risky. The files the workflows run from the repository (scripts, the CI image's Dockerfile) are part of the CI definition: a change to one is a CI change. A build with a risky CI change stays local: the issue shows its complete diff, and only the owner's `approve <sha>` lets it push; the merge still needs the owner.
+- **Reference:** `test_workflow_risk.py` (hosted labels, any other label asks, an unreadable form asks, read-only permissions), `test_owner_approval.py` (approval before the push cases).
+- **Acceptance:** each case above; a failed variable read holds the push; a `runs-on` taken from a variable is risky even while the variable is unset; a change to a script a workflow runs, with no workflow file changed, is held for the owner's `approve <sha>`.
+- **Evidence:** the scan's findings on three sample workflows.
+- **Waits for:** T54. **Size:** M. **Labels:** `class:core`, `priority:high`, `model:strong`.
+
+### T56 Build lane
+- **Description:** A new `Core/Lanes` module runs the build lane on Messenger, with the Workflow component as each task's state machine: a free slot takes the task T47 orders, across projects by their weekly share (a project with nothing to build leaves its share to the others); a configured number of build slots, never two on one branch; the lane waits while the review cap of heads with finished CI is full, except for one `urgent` build at a time; pause stops admission, drain stops new builds while the review lane runs. A job that cannot start for its own reason never idles the slot.
+- **Reference:** `test_lanes.py` (drain stops build admission on both slots while the review lane runs), `test_build_slots.py` (a crash in one slot recovered without touching the other), `test_priority.py` (urgent work gets the free slot before the share order), `test_projects.py`, `test_guard.py` (pause wins over drain).
+- **Acceptance:** forced-order tests for two slots and two projects; a killed consumer resumes from the database.
+- **Evidence:** the ledger of two parallel builds on the test repository.
+- **Waits for:** T47, T49, T53. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
+
+### T57 Review lane through CI
+- **Description:** The review lane takes pushed heads, never one of a project at weekly share 0 (owner decision 6: such a project gets no reviews, open pull requests included, until its share is raised): a head with pending CI goes back to its queue with a time to look again and holds nothing; heads with finished CI go first, one pending for 30 minutes is admitted by age. Red CI sends the head back before any reviewer, with a redacted, fenced CI log excerpt only when the workflow scan (T55) finds every job of the head's, main's and the merged workflows on a forge-hosted runner with a read-only token and no secrets; otherwise, or when the scan fails, with one line giving the number of failed jobs; two red-CI send-backs in a row free per cycle. A missed CI start is read once, nudged once and then handed over. A round runs at most the configured review cycles, then hands over.
+- **Reference:** `test_lanes_cap2.py` (finished CI first, nudges, an unreadable workflow fails closed), `test_ci_log.py`, `test_round.py` (red CI uses no review cycle), `test_lanes.py` (the third red-CI bounce counts), `test_causes.py` (cycles running out record their cause).
+- **Acceptance:** each case above with recorded CI responses and a controlled clock; a head of a project at share 0 is not admitted, and is once the share is raised; a head whose workflow has a variable `runs-on`, a head whose workflow scan fails, and a head with a job on a non-hosted runner each get only the count of failed jobs, never an excerpt.
+- **Evidence:** a head sent back for red CI with its excerpt, on the test repository.
+- **Waits for:** T56, T38, T55. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
+
+### T58 Review jobs with boot gate and probes
+- **Description:** Reviewers run in review job containers with a read-only checkout of the exact head, reaching only their vendor through the job proxy (T44); the project's `bin/probe` runs in a separate no-network sandbox within a per-review budget. Before any reviewer, the head boots once with `bin/instance`; main's result is cached per main commit and tool fingerprint; a head that fails while main boots goes back like red CI; when main fails too, the gate is off for the head and the owner gets an infrastructure alert once. A canary probe checks the probe path after each boot; a broken path marks probes unavailable instead of producing findings.
+- **Reference:** `test_boot_gate.py` (booted before any review, a failed boot beats approvals, an approved head that does not boot is not merged, a crashing gate never stops the review), `test_probe.py`, `test_probe_alerts.py` (a Composer failure alerts only for main's lock), `test_merge_only.py` (a cached boot pass runs no canary).
+- **Acceptance:** each case above; nothing a probe writes reaches the branch; a probe cannot reach the vendor or any other host.
+- **Evidence:** a review whose finding carries a probe's output.
+- **Waits for:** T44, T45, T57. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
+
+### T59 Rework feedback, scoped re-reviews and holds
+- **Description:** A send-back gives the builder the judge's act list (open findings merged across reviewers, P1 first, one per place) and the published pull request text. A reviewer's later review is scoped to the delta from the head it last reviewed, with the fallbacks of the design; an approval counts only for the exact head and pull request text. A build that leaves the head unchanged while a finding needs something outside the change goes on hold and is released by an event that could change the outcome. A `Needs the owner:` evidence item becomes a Needs-you card instead of a send-back.
+- **Reference:** `test_review_history.py`, `test_holds.py` (an outside requirement holds without a review; a real code change is reviewed), `test_round.py` (open findings merged across reviewers; an approval does not survive a rewritten pull request text), `test_review_process.py` (a needs-the-owner line reaches status).
+- **Acceptance:** each case above.
+- **Evidence:** a two-round rework on the test repository with the scoped second review.
+- **Waits for:** T57, T12. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T60 Model choice and the progress stop
+- **Description:** Routing rules in config pick the build tier: the cheaper tier by default; the strong tier for a `model:` label, a sensitive path or an earlier failed attempt; a blocking finding or a stall raises the next rework. A build over its allowance continues while it makes progress (a content-changing commit, or a change in which tests fail); no progress for a set time ends it with its commits kept; a runaway ceiling and a per-task total stop it regardless. Every stop records its cause.
+- **Reference:** `test_model_choice.py`, `test_escalation.py` (a rework after a round without a P1 stays on the cheaper tier; `model:` label from cycle 1), `test_budget_174.py` (no progress for n minutes, progress resets the idle time, the runaway cap).
+- **Acceptance:** each case above; a job never picks its own model.
+- **Evidence:** the model events of three builds of differing risk.
+- **Waits for:** T56, T40. **Size:** M. **Labels:** `class:core`, `priority:normal`.
+
+### T61 Escalation of a recurring P1
+- **Description:** A P1 flagged in the same place on two heads goes to an escalation review on the strong tier for that finding alone; its verdict is kept per finding (hash of its text and of every file it names) and reused on unchanged files. Confirmed: the next build runs on the strong tier and the raising reviewer re-reviews. Rejected: the holder re-reviews with the reasons. A third time hands the task over.
+- **Reference:** `test_escalation.py`.
+- **Acceptance:** each case above; a finding naming no regular file gets no key and is judged again.
+- **Evidence:** an escalation record from a scripted three-round task.
+- **Waits for:** T59, T60. **Size:** M. **Labels:** `class:core`, `priority:normal`.
+
+### T62 Merge: signed fast-forward of the exact head
+- **Description:** A new `Core/Merge` module: right before merging it re-reads the task and pull request, requires green CI on exactly the head, merges main into the branch only now (a clean merge keeps verdicts and approvals; CI runs once more), signs, records the merge, then moves main to the head by a non-force ref update, so a push in between fails the merge; it reads the result back, closes the issues and deletes the merged branch. A budget back-off still merges approved heads. A head that touches protected paths (T54) is parked and never merged until T64 adds the owner's approval, so no increment between T62 and T64 merges a protected change. Updates design decision 9 (merges are signed fast-forwards of main, not forge merge commits), as the owner decided.
+- **Reference:** `test_fixpass_git.py` (refuses a non-fast-forward, rejected when main moves after the checks, a push whose response was lost stays covered), `test_merge_only.py`, `test_lanes.py` (a crash after publishing never publishes twice).
+- **Acceptance:** each case above with a temporary repository and recorded forge responses; a head touching a protected path with green CI and every verdict stays parked.
+- **Evidence:** a merged test pull request with main's verified signature.
+- **Waits for:** T57, T54. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
+
+### T63 Watchdog over main
+- **Description:** A new `Core/Watchdog` checks main's new commits before every step and merge: a merge Intakt recorded, or a commit signed by a key the owner registered, passes (the owner's own push is an info event); an unsigned commit, an unknown key or a rewrite of main's history halts the project with an owner card that only the owner clears.
+- **Reference:** `test_watchdog.py` (a recorded merge is clean, unsigned halts, a foreign key, a force push, an owner-signed commit is a notice given once across clones).
+- **Acceptance:** each case above.
+- **Evidence:** a halt and its card after a seeded unsigned commit on a temporary repository.
+- **Waits for:** T62. **Size:** M. **Labels:** `class:core`, `priority:high`, `model:strong`.
+
+### T64 Owner approval of protected heads
+- **Description:** A head with protected changes goes through the normal flow and, with CI green, every review approved and a clean merge with main, waits for the owner and notifies once; it holds no build slot. Only the owner's account approves: a review approving the head commit or a comment `approve <sha>` written after the push; Intakt never submits a review or writes such a comment (the forge client refuses it). An early approval counts once its head passes; a new push voids it except a clean merge of main that keeps the protected change identical; `changes <sha>` sends the head back. At most three heads wait (cap is config); a ready head beyond the cap is queued by priority then age and asked when a place frees, reserved under a lock. With a missing reviewer vendor the decision stays the owner's; nothing defaults on a timer.
+- **Reference:** `test_owner_approval.py` (only the owner's approval of exactly this head counts, the loop never submits a review, a waiting head holds no slot, a withdrawn approval parks without a second notice), `test_maintainer_ask_once.py` (the cap queue, a conflict after the approval parks it).
+- **Acceptance:** each case above with recorded forge responses.
+- **Evidence:** an approved protected merge on the test repository.
+- **Waits for:** T62, T55, T52. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
+
+### T65 Pull requests Intakt did not build
+- **Description:** A pull request opened by the owner's or the maintainer's identity is reviewed on every new head without a label; anyone else's only after a person with write access labels it. Findings go back as one comment and labels stay; Intakt never reworks it. Once CI and every review pass, an unprotected head merges and a protected one asks the owner once. An `urgent` or `high` label counts only from the owner or the maintainer.
+- **Reference:** `test_maintainer_merge.py` (a labelled pull request merges like a loop merge, a branch behind main gets main merged in, a crashing pull request is held and handed back the third time), `test_maintainer_unprotected.py`, `test_maintainer_priority.py`, `test_crafted_merge.py` (a maintainer pull request with a crafted merge needs the owner).
+- **Acceptance:** each case above.
+- **Evidence:** an owner-opened test pull request reviewed and merged.
+- **Waits for:** T64. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T66 Catch-up reviews
+- **Description:** When the T14 substitution replaced a reviewer whose vendor was out, the merge records an owed catch-up review; when that vendor has room again, catch-ups run one at a time, sensitive ones first, then oldest. The record is written before the publish, so a crash neither loses nor doubles a catch-up; a catch-up that rejects opens a follow-up task.
+- **Reference:** `test_gpt_substitute.py` (the substitute's verdict counts and the head merges; a rejection beside an out vendor goes to the builder without a substitute; a crash retry finds only its own issue), `test_reviewer_accounts.py`.
+- **Acceptance:** each case above.
+- **Evidence:** a catch-up run after a substituted merge on the test repository.
+- **Waits for:** T62. **Size:** M. **Labels:** `class:core`, `priority:normal`.
+
+### T67 Hand-overs, causes and notices
+- **Description:** Every outcome that is not a merge records a cause (no progress, ceiling, failed checks, protected paths, review cycles, conflict, question); a hand-over labels the issue, comments once and adds a Needs-you item. Notices go through `Plugin/Notifier` (Home Assistant mobile push first), pushed only for owner actions, once per item and state, with their delivery result recorded.
+- **Reference:** `test_causes.py`, `test_notify.py` (every notice has a kind; a failed push is reported, not raised), `test_lanes.py` (a crash between the end and the hand-over only completes the hand-over).
+- **Acceptance:** each case above.
+- **Evidence:** a test notice and a hand-over card.
+- **Waits for:** T56. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
+### T68 Status for the owner's dashboard
+- **Description:** `intakt:status --format=json` and a local endpoint report per project the lanes, queues, steps, guard decisions, heads waiting for the owner, Needs-you items and the last outcomes, with no secrets. A documented schema covers the fields the owner's dashboard reads today; that dashboard reads this JSON until Intakt's own dashboard replaces it.
+- **Reference:** `test_cli.py` (status reports pause, drain, parked issues).
+- **Acceptance:** the JSON validates against the schema; a stopped consumer still yields a status.
+- **Evidence:** the status of the running install.
+- **Waits for:** T67. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
+### T69 Owner controls
+- **Description:** Console commands for pause and resume, drain and undrain, `drain --wait -- <command>` for deploys (waits until idle, runs the command, undrains), and a ceiling override with an expiry; a drain older than two hours is an owner notice.
+- **Reference:** `test_lanes.py` (drain cases), `test_override.py` (an override ends the budget back-off it lifts and keeps a crash back-off).
+- **Acceptance:** each case above.
+- **Evidence:** a drained deploy of a new image.
+- **Waits for:** T56, T40. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
+
+## M8 Switch
+
+Each stage starts with the owner's go and can be rolled back to the previous one by config.
+
+### T70 Living beside the existing loop
+- **Description:** A project names its own eligibility label (default `intakt`), distinct from the existing loop's; Intakt's watchdog accepts the loop's signing key as a peer (its merges are info events); Intakt leaves pull requests the loop owns and opens its own under its App identity. The loop side needs the matching settings (Intakt's signing key as a peer, without a push notice, and skipping pull requests opened by Intakt's App), outside this repository.
+- **Acceptance:** a loop merge on main passes Intakt's watchdog as an info event; a task with the loop's label only is not eligible.
+- **Evidence:** both watchdogs clean after one merge by each, `(owner provides)` the loop side.
+- **Waits for:** T63, T47. **Size:** S. **Labels:** `class:core`, `priority:high`.
+
+### T71 Stage 2: Intakt's verdicts count
+- **Description:** For the pull requests handed to Intakt (those opened under Intakt's App identity, which the loop leaves), Intakt reviews, posts its review with the round's one-time token, asks the owner for protected heads and merges. The shadow report keeps running on the loop's own heads.
+- **Acceptance:** a handed-over pull request merges through Intakt alone; the loop makes no review or merge on it.
+- **Evidence:** `(owner provides)` one week of counted reviews and merges.
+- **Waits for:** T70, T65, M6 exit. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T72 Stage 3: a labeled share
+- **Description:** Intakt builds the tasks carrying its eligibility label, end to end; a weekly report compares Intakt's and the loop's outcomes per task: builds and send-backs per task, hand-overs by cause, cycles to merge, tokens per merged task.
+- **Acceptance:** the report reads only the ledger and the forge; it shows no limits or reset times.
+- **Evidence:** `(owner provides)` the first week's report.
+- **Waits for:** T71 and M7. **Size:** M. **Labels:** `class:feature`, `priority:high`.
+
+### T73 The parity record
+- **Description:** Each item in `docs/architecture/parity.md` gets the Intakt test that shows the behavior beside the existing loop's test; a gate test fails when an item names no Intakt test that exists.
+- **Acceptance:** every item names a test that exists and passes.
+- **Evidence:** the gate test run.
+- **Waits for:** T69. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
+
+### T74 Takeover
+- **Description:** A runbook in `docs/user/`: the eligibility label becomes the loop's, Intakt switches to the loop's GitHub Apps and the co-existence Apps are removed, the loop is drained and stopped with its state kept, and the rollback (restart the loop, return the label) is tested once.
+- **Acceptance:** the rollback was run once and both directions are written down.
+- **Evidence:** `(owner provides)` the takeover and a first merged task after it.
+- **Waits for:** T72, T73. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
+
+## Not in the switch
+
+- **Later:** approval by class and the additive gate proof; pacing and stand-ins for a second reviewer vendor; cross-checks; the plan trial arm, holdout and quality report; cost reports from CLI logs; webhooks (T32); branch cleanup beyond merged branches (T30); conflict resolution for generated files; deploy hooks after a merge; database sidecars for builds; the maintainer agent; a dashboard beyond the status JSON; the setup wizard; other forges, languages and vendors.
+- **Dropped** (the existing loop's own constraints, replaced by the design): its round mode, tick and shared host locks, acknowledgment ranges and ledger branch seeding, its pre-App token history, its install scripts and resource slices, its CI slot wrappers, review verdicts parsed from Markdown, and its old config shims.
+
+## Parallel paths (M6 to M8)
+
+- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
+- The shadow week (after T43) runs while M7 is built.
+- M7: T45 and T46 after T44; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56.
+- M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 after T69; T74 last.
