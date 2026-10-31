@@ -80,7 +80,7 @@ final class VerdictIdentityTest extends TestCase
 
     public function testANewTaskRevisionMakesTheVerdictStale(): void
     {
-        $current = $this->identity(task: 'Add the thing, and the other thing.');
+        $current = $this->identity(terms: $this->terms(task: 'Add the thing, and the other thing.'));
 
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::Unmoved));
 
@@ -90,7 +90,7 @@ final class VerdictIdentityTest extends TestCase
 
     public function testANewCheckCommandMakesTheVerdictStale(): void
     {
-        $current = $this->identity(checkCommand: 'bin/check --fast');
+        $current = $this->identity(terms: $this->terms(checkCommand: 'bin/check --fast'));
 
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::Unmoved));
 
@@ -98,12 +98,15 @@ final class VerdictIdentityTest extends TestCase
         self::assertSame([IdentityField::CheckCommand], $standing->changed);
     }
 
+    /**
+     * @param non-empty-string $prompt
+     */
     #[TestWith([QuorumPolicy::Majority, Tier::Strong, 'Review the change.'], 'another quorum')]
     #[TestWith([QuorumPolicy::All, Tier::Light, 'Review the change.'], 'another tier')]
     #[TestWith([QuorumPolicy::All, Tier::Strong, 'Review the change for security.'], 'another prompt')]
     public function testANewPanelPolicyMakesTheVerdictStale(QuorumPolicy $quorum, Tier $tier, string $prompt): void
     {
-        $current = $this->identity(panel: $this->panel($quorum, $tier, $prompt));
+        $current = $this->identity(terms: $this->terms(panel: $this->panel($quorum, $tier, $prompt)));
 
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::Unmoved));
 
@@ -165,7 +168,7 @@ final class VerdictIdentityTest extends TestCase
     #[TestWith([HeadMoveKind::Commits, 'docs/user/README.md'], 'a documentation-only change')]
     public function testNeitherExceptionKeepsAVerdictWhenTheTaskAlsoChanged(HeadMoveKind $kind, string $path): void
     {
-        $current = $this->identity(head: self::NEW_HEAD, base: self::NEW_BASE, task: 'Add another thing.');
+        $current = $this->identity(self::NEW_HEAD, self::NEW_BASE, $this->terms(task: 'Add another thing.'));
 
         $standing = $this->reviewed()->standingAt($current, $this->move($kind, $path));
 
@@ -198,13 +201,19 @@ final class VerdictIdentityTest extends TestCase
         return $this->identity();
     }
 
-    private function identity(string $head = self::REVIEWED_HEAD, string $base = self::BASE, string $task = 'Add the thing.', string $checkCommand = 'bin/check', ?Panel $panel = null): VerdictIdentity
+    private function identity(string $head = self::REVIEWED_HEAD, string $base = self::BASE, ?ReviewTerms $terms = null): VerdictIdentity
     {
-        $terms = ReviewTerms::of($task, $checkCommand, $panel ?? $this->panel(QuorumPolicy::All, Tier::Strong, 'Review the change.'));
-
-        return new VerdictIdentity(new CommitRange(new CommitId($base), new CommitId($head)), $terms);
+        return new VerdictIdentity(new CommitRange(new CommitId($base), new CommitId($head)), $terms ?? $this->terms());
     }
 
+    private function terms(string $task = 'Add the thing.', string $checkCommand = 'bin/check', ?Panel $panel = null): ReviewTerms
+    {
+        return ReviewTerms::of($task, $checkCommand, $panel ?? $this->panel(QuorumPolicy::All, Tier::Strong, 'Review the change.'));
+    }
+
+    /**
+     * @param non-empty-string $prompt
+     */
     private function panel(QuorumPolicy $quorum, Tier $tier, string $prompt): Panel
     {
         $reviewer = new PanelReviewer(new ReviewerRole('core', $prompt), new ReviewerModel($tier, Provider::Anthropic), 10);

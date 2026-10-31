@@ -161,7 +161,7 @@ final class CheckVerdictIdentityCommandTest extends TestCase
 
     public function testAProjectWithoutAPanelFailsTheCommand(): void
     {
-        $panels = $this->createStub(Panels::class);
+        $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willThrowException(new PanelNotConfigured('beta'));
 
         $tester = $this->whenTheCommandRuns(['project' => 'beta'], $panels);
@@ -200,7 +200,7 @@ final class CheckVerdictIdentityCommandTest extends TestCase
     private function onePanel(): Panels
     {
         $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = $this->createStub(Panels::class);
+        $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
         return $panels;

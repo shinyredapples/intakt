@@ -136,7 +136,7 @@ final readonly class LocalGitForge implements Forge
 
     private function exists(CommitId $commit): bool
     {
-        // A head rewritten and collected away leaves no object behind, which makes the move a rewrite rather than a failed read.
+        // Checked first, because a head rewritten and collected away leaves no object behind, and that is a rewrite rather than a failed read.
         return $this->git(['cat-file', '-e', $commit->hash.'^{commit}'])->isSuccessful();
     }
 

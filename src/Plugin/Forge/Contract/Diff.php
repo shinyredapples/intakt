@@ -12,16 +12,25 @@ final readonly class Diff
     ) {
     }
 
+    /**
+     * @return non-negative-int
+     */
     public function addedLines(): int
     {
         return $this->countLinesStartingWith('+');
     }
 
+    /**
+     * @return non-negative-int
+     */
     public function removedLines(): int
     {
         return $this->countLinesStartingWith('-');
     }
 
+    /**
+     * @return non-negative-int
+     */
     private function countLinesStartingWith(string $marker): int
     {
         // Only lines inside a hunk are counted, because the "+++" and "---" file headers look like a changed line "++x" or "--x".
