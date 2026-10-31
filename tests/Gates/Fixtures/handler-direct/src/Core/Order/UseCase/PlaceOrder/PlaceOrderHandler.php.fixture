@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Order\UseCase\PlaceOrder;
+
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+
+#[AsMessageHandler]
+final class PlaceOrderHandler
+{
+    public function __invoke(): void
+    {
+    }
+}

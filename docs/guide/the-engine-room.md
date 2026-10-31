@@ -60,12 +60,13 @@ A **lock** is a "one at a time" sign on something that must not be used by two j
 
 Locks are short-lived: a job that waits for something outside (CI, you) gives its lock back and comes back later.
 
-## Reviewers, stand-ins and catch-ups
+## Reviewers, substitutes and catch-ups
 
 - The **review panel** is the set of reviewers for a change: a fixed core panel plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 - When a reviewer's account is over its limit, the same company's next account takes over, if you added one. That is just a move to another account: the same reviewer, no catch-up owed.
-- A **stand-in** steps in only when every account of that company is out: another company's reviewer reviews in its place, so work doesn't stall.
-- A **catch-up review** is the missing reviewer's review, done later once its company is available again. It never blocks a merge; if it finds a real problem, that becomes a new task.
+- A **substitute** steps in only when every account of that company is out: another company's reviewer reviews in its place, so work doesn't stall.
+- A **stand-in** is something else: a cheaper reviewer on an in-between version while a company's allowance is tight. The usual reviewer still reviews the final version, so a stand-in never has the last word.
+- A **catch-up review** is the missing reviewer's review, done later once its company is available again. Intakt runs it by itself and checks the change as it was merged. It never blocks a merge; if it finds a real problem, that becomes a new task, which waits for you to label it before the builders pick it up; smaller suggestions go to the [follow-up inbox](the-journey-of-a-task.md#7-afterwards) like any review's.
 
 ## Cycles and generations: second chances
 
@@ -98,7 +99,7 @@ flowchart LR
   ceiling -- yes --> wait[No new jobs until it refills]
 ```
 
-- **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 means "start no new builds for this project"; its open pull requests are still finished.
+- **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 pauses the project: a running job finishes, then no builds and no reviews, open pull requests included. Its work resumes when the share is above 0.
 - **Ceilings:** near the top of a window, new jobs wait for it to refill. A job already running is never stopped just because the window is nearly full or its estimate was too low. It is stopped when it makes no progress for a set number of steps, when it reaches its own ceiling (a few times its allowance), or when the task reaches its total across attempts, and it keeps its commits. On an account that bills overage, a missing usage reading or a call running past the ceiling stops work instead of being let through, and your spending cap applies ([costs](accounts-and-costs.md)).
 - **Back-off:** after a failure (an AI company error, a broken environment), a bench waits a little before trying again (a minute for a quick internal hiccup, longer for real failures) instead of hammering. Four failures in a row stop it and call the maintainer agent.
 

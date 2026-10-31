@@ -55,6 +55,23 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 | the AI companies' command-line tools (Claude Code, Codex) | every job image | running builders and reviewers on a subscription |
 | the Docker or Podman API | the orchestrator | starting job containers and sidecars, through the socket (an API, not a command) |
 
+## When a tool is missing
+
+Before it runs any gate, `bin/check` looks up the commands of the selected gates by name on `PATH`, as `config/gates/src/RequiredTools.php` lists them:
+
+| Gates | Commands looked up |
+|---|---|
+| every gate | `git` |
+| `audit` | `composer` |
+| `tests` | `sh`, `unshare`, `setsid`, `true`, `bash`, `jq` |
+| `secrets`, `secrets-history` | `gitleaks`, `env` |
+
+Only the gates that `--only` and `--skip` leave selected count: a command only a skipped gate needs is not looked up. When `INTAKT_GITLEAKS` is set, its value replaces `gitleaks` in the lookup and in the message; a value with a `/` is checked as a path to an executable file, a relative one from the workspace root (`--root`, else the repository) where the secrets gates run it. A value that names a command another selected gate needs (such as `env`) is still listed once. A name without a `/` is looked up as starting it in the workspace root does: the `PATH` entries are walked in order, an absolute entry as it is and a relative or empty entry (such as `tools` or `.`) from the workspace root, an empty entry being the root itself; the first entry that holds an executable file of that name makes the command present, and none makes it missing. A command only under a relative entry of the directory `bin/check` was started in therefore counts as missing, unless a later entry holds it.
+
+When any command is missing, no gate runs: `bin/check` prints one JSON line naming every missing command once, `{"error":"missing tools","missing":["<command> not found, see docs/architecture/requirements.md", ...]}`, and exits with 2. A `gitleaks` that is found but is not version 8.30.1 still fails the secrets gates with their own message (`gitleaks 8.30.1 is required, set INTAKT_GITLEAKS to it or put it first on the path, an override is checked too, see docs/architecture/requirements.md`).
+
+Tests: `tests/Gates/RequiredToolsTest.php` (every missing command listed once, a gate not selected requires nothing, the `tests` gate needs `bash` and `jq`, the override is looked up instead of `gitleaks`, a relative override is found in the workspace root, an override naming another required command is listed once, a command under a relative `PATH` entry of the workspace root is found and one only under such an entry of the caller's directory is listed, one under such an entry of the caller's directory and a later absolute entry is found, the message) and `CheckCommandTest::testMissingToolsAreListedBeforeAnyGateRuns` and `testAMissingToolOfAGateThatIsSkippedDoesNotStopTheRun`.
+
 ## How Intakt calls them
 
 - **Through Symfony Process with an argument list, never a shell string:** the local git forge, the gates (through their runner) and the upstream reproduction runner. `bin/instance` and `bin/probe` start their processes with PHP's `proc_open` and an argument list; where they use `sh`, the command after it is passed as separate arguments.

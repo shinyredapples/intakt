@@ -8,6 +8,8 @@ final readonly class Workspace
 {
     private const array DEFAULT_BASES = ['origin/main', 'main'];
     private const array GATE_DEFINITIONS = ['config/gates/', 'bin/check', 'composer.json', 'composer.lock', 'phpunit.dist.xml', 'phpunit.gates.xml'];
+    // Because the gate tests also read these: the CI image and workflows, the showcase script, the executables and the forge's copy of the hardened git call.
+    private const array GATE_TEST_INPUTS = ['tests/Gates/', '.github/', 'docs/showcase/', 'bin/', 'src/Core/Git/'];
 
     private Scope $scope;
 
@@ -69,6 +71,18 @@ final readonly class Workspace
     public function isFast(): bool
     {
         return Mode::ChangedFilesOnly === $this->mode;
+    }
+
+    public function changesGateTests(): bool
+    {
+        $mergeBase = $this->mergeBase();
+
+        // Because without a base, or on the base itself (a push to main), the change is the whole tree.
+        if (null === $mergeBase || $this->isHead($mergeBase)) {
+            return true;
+        }
+
+        return $this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::GATE_TEST_INPUTS]);
     }
 
     public function baseTip(): ?string
@@ -145,7 +159,7 @@ final readonly class Workspace
             throw new ScopeFailure('no base branch found, pass --base=<ref>');
         }
 
-        if ($this->changesGateDefinitions($mergeBase)) {
+        if ($this->changesAnyOf($mergeBase, self::GATE_DEFINITIONS)) {
             return $this->allPhpFilesOrFail();
         }
 
@@ -166,17 +180,27 @@ final readonly class Workspace
         return $files;
     }
 
-    private function changesGateDefinitions(string $mergeBase): bool
+    /**
+     * @param list<string> $prefixes
+     */
+    private function changesAnyOf(string $mergeBase, array $prefixes): bool
     {
         foreach ($this->scope->changedPaths($mergeBase) as $path) {
-            foreach (self::GATE_DEFINITIONS as $definition) {
-                if (str_starts_with($path, $definition)) {
+            foreach ($prefixes as $prefix) {
+                if (str_starts_with($path, $prefix)) {
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+    private function isHead(string $commit): bool
+    {
+        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+
+        return $head->succeeded() && trim($head->output) === $commit;
     }
 
     /**

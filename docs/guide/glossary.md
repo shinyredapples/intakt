@@ -7,7 +7,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Acceptance** | the checkable results that say a task is done | [writing a good task](writing-a-good-task.md) |
 | **Advisory reviewer** | a specialist whose notes become follow-ups but never block | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Approval** | your OK, from your own account, naming one exact version | [steering](steering-intakt.md#approving) |
-| **Approval by class** | Intakt approving a change to the rules itself, when it only adds to them, every reviewer agrees and a mechanical check proves nothing existing changed (planned) | [safety](why-the-ai-cant-wreck-your-project.md) |
+| **Approval on the spot** | Intakt approving a change to the rules itself, at once, when no hard limit is touched, a mechanical check proves the change harmless, a separate security review agrees and an attack on the change fails; otherwise you are asked (planned) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
 | **Back-off** | a short wait after a failure before trying again | [engine room](the-engine-room.md#budgets-windows-and-pace) |
 | **Blocking reviewer** | a reviewer that must approve before a merge | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Boot check** | starting the changed application to see that it still runs | [journey](the-journey-of-a-task.md#3-checking) |
@@ -15,7 +15,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Build slot** | a bench where one builder works on one task | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Builder** | the AI agent that writes the change | [how it works](how-intakt-works.md) |
 | **Bundle** | the sealed package of commits a builder hands back | [journey](the-journey-of-a-task.md#2-building) |
-| **Catch-up review** | a reviewer's review done later, after a stand-in took its place | [engine room](the-engine-room.md#reviewers-stand-ins-and-catch-ups) |
+| **Catch-up review** | a reviewer's review done later, after a substitute took its place | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Checks / gates** | the project's automatic tests and rules (`bin/check`) | [journey](the-journey-of-a-task.md#3-checking) |
 | **CI** | GitHub running the checks again on its own machines | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
@@ -59,7 +59,8 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Skill (reviewer)** | a reviewer role's own checklist and test recipes | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Specialist reviewer** | a reviewer that joins only when the change calls for it | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Stale (note)** | a memory note whose code changed since it was written | [project memory](project-memory.md) |
-| **Stand-in** | a reviewer from another company standing in when every account of the usual reviewer's company is over its limit | [engine room](the-engine-room.md#reviewers-stand-ins-and-catch-ups) |
+| **Stand-in** | a cheaper reviewer on an in-between version while the usual reviewer's allowance is tight; the usual reviewer still reviews the final version | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
+| **Substitute** | a reviewer from another company reviewing in place of one whose every account is over its limit; a catch-up review follows | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Subscription reviewer** | a reviewer that runs on a Claude subscription; for now it cannot read the project, so it can never pass a change on its own | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-subscription) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
 | **Verdict** | a reviewer's answer: approve, changes with findings, or blocked (held for a person) | [journey](the-journey-of-a-task.md#5-reviewing) |
