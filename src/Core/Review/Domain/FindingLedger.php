@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
+// A value built per change, not a service, so the container must not wire it.
+#[Exclude]
 final class FindingLedger
 {
     /** @var array<string, TrackedFinding> */

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Domain;
 
-use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
@@ -23,9 +23,9 @@ final class FindingLedgerTest extends TestCase
     public function testFindingIdsStayStableOverThreeRounds(): void
     {
         $ledger = new FindingLedger();
-        $ledger->recordRound(1, [self::finding('x'), self::finding('y')]);
-        $ledger->recordRound(2, [self::finding('F1'), self::finding('F2')]);
-        $ledger->recordRound(3, [self::finding('F1'), self::finding('F2')]);
+        $ledger->recordRound(1, [$this->finding('x'), $this->finding('y')]);
+        $ledger->recordRound(2, [$this->finding('F1'), $this->finding('F2')]);
+        $ledger->recordRound(3, [$this->finding('F1'), $this->finding('F2')]);
 
         $all = $ledger->all();
         self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $all));
@@ -36,7 +36,7 @@ final class FindingLedgerTest extends TestCase
     public function testAResolvedFindingClosesAndIsNoLongerOpen(): void
     {
         $ledger = new FindingLedger();
-        $ledger->recordRound(1, [self::finding('x'), self::finding('y')]);
+        $ledger->recordRound(1, [$this->finding('x'), $this->finding('y')]);
 
         $ledger->resolve(['F1']);
 
@@ -47,8 +47,8 @@ final class FindingLedgerTest extends TestCase
     public function testANewFindingInALaterRoundGetsAFreshIdWithoutChangingExistingOnes(): void
     {
         $ledger = new FindingLedger();
-        $ledger->recordRound(1, [self::finding('x')]);
-        $ledger->recordRound(2, [self::finding('F1'), self::finding('new')]);
+        $ledger->recordRound(1, [$this->finding('x')]);
+        $ledger->recordRound(2, [$this->finding('F1'), $this->finding('new')]);
 
         $all = $ledger->all();
         self::assertSame('F1', $all[0]->id);
@@ -59,7 +59,7 @@ final class FindingLedgerTest extends TestCase
     public function testTwoReviewersReusingTheSameNewIdInOneRoundGetTwoLedgerIds(): void
     {
         $ledger = new FindingLedger();
-        $ledger->recordRound(1, [self::finding('F1'), self::finding('F1')]);
+        $ledger->recordRound(1, [$this->finding('F1'), $this->finding('F1')]);
 
         self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $ledger->all()));
     }
@@ -67,9 +67,9 @@ final class FindingLedgerTest extends TestCase
     public function testAFindingsFirstAndLatestRoundAreItsFirstAndLastAppearance(): void
     {
         $ledger = new FindingLedger();
-        $ledger->recordRound(1, [self::finding('x')]);
+        $ledger->recordRound(1, [$this->finding('x')]);
         $ledger->recordRound(2, []);
-        $ledger->recordRound(3, [self::finding('F1')]);
+        $ledger->recordRound(3, [$this->finding('F1')]);
 
         $tracked = $ledger->all()[0];
         self::assertSame(1, $tracked->firstRound());
@@ -79,14 +79,14 @@ final class FindingLedgerTest extends TestCase
     public function testResolvingAnUnknownIdLeavesOpenFindingsUnchanged(): void
     {
         $ledger = new FindingLedger();
-        $ledger->recordRound(1, [self::finding('x')]);
+        $ledger->recordRound(1, [$this->finding('x')]);
 
         $ledger->resolve(['F9']);
 
         self::assertCount(1, $ledger->open());
     }
 
-    private static function finding(string $id): Finding
+    private function finding(string $id): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
     }

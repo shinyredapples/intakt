@@ -36,7 +36,7 @@ final readonly class TrackedFinding
 
     public function seenAgain(int $round, Finding $finding): self
     {
-        return clone($this, [
+        return clone ($this, [
             'latest' => $finding,
             'rounds' => [...$this->rounds, $round],
         ]);
@@ -44,6 +44,6 @@ final readonly class TrackedFinding
 
     public function resolved(): self
     {
-        return clone($this, ['status' => FindingStatus::Resolved]);
+        return clone ($this, ['status' => FindingStatus::Resolved]);
     }
 }
