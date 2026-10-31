@@ -247,6 +247,11 @@ final class CodeGatesTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'readonly-value-object-boolean');
     }
 
+    public function testABooleanAReadonlyValueObjectStoresInAPropertyOfAUsedTraitPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'readonly-value-object-storing-trait-property');
+    }
+
     public function testABooleanAReadonlyValueObjectAssignsToAnUndeclaredPropertyFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'readonly-value-object-storing-undeclared-property', 'src/Toggle.php:12 intakt.flagParameter Parameter $enabled is a flag');
