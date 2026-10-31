@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
+final readonly class Toggle extends Setting
+{
+    public function __construct(bool $enabled)
+    {
+        $this->enabled = $enabled;
+    }
+}
