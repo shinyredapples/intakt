@@ -43,7 +43,7 @@ final readonly class StoredFindings
     {
         $json = $round->openFindingsJson();
 
-        // A round stored before the ledger existed kept no open findings, and had none to tell.
+        // None, because a round stored before the ledger existed kept no open findings and had none to tell.
         if (null === $json) {
             return [];
         }
