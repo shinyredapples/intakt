@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\HighlightsGate;
+use Intakt\Gates\HighlightStatus;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
+#[UsesClass(HighlightStatus::class)]
 final class HighlightsGateTest extends SandboxTestCase
 {
     private const string HEADER = "| Feature | How Intakt uses it | Status | Where |\n|---|---|---|---|\n";
@@ -43,6 +46,16 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringContainsString('cites a pull request ("PR: #77")', $run->findingsOf('highlights'));
         self::assertStringContainsString('cites a pull request ("PR (#78")', $run->findingsOf('highlights'));
         self::assertStringContainsString('cites a pull request ("pull request: 79")', $run->findingsOf('highlights'));
+    }
+
+    public function testAPullRequestNumberRightAfterTheLabelFails(): void
+    {
+        $run = $this->checkRows("| A | a | done | PR12 |\n| B | b | done | pr13 |\n| C | c | done | PRs14 |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('cites a pull request ("PR12")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("pr13")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("PRs14")', $run->findingsOf('highlights'));
     }
 
     public function testAWordBetweenAPullRequestLabelAndANumberIsAllowed(): void
@@ -113,6 +126,52 @@ final class HighlightsGateTest extends SandboxTestCase
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('`src/Untracked.php`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testATrackedPathWithALeadingDotSlashPasses(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `./src/Kernel.php` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testAPathWithAParentSegmentFails(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `src/../src/Kernel.php` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertStringContainsString('`src/../src/Kernel.php`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testATableInsideAFencedCodeBlockIsNotLinted(): void
+    {
+        $example = "| Status | Where |\n|---|---|\n| started | PR #77 |\n";
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "```markdown\n".$example."```\n\n~~~\n".$example."~~~\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testATableAfterAClosedFenceIsLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "```\n| Status | Where |\n|---|---|\n| started | x |\n```\n\n| Status | Where |\n|---|---|\n| open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertStringContainsString('docs/highlights.md:9: status "open"', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('started', $run->findingsOf('highlights'));
     }
 
     public function testATableWithoutOuterPipesIsCheckedByEveryRule(): void

@@ -10,10 +10,12 @@ final readonly class HighlightsGate implements Gate
 {
     private const string FILE = 'docs/highlights.md';
 
-    private const array STATUSES = ['planned', 'in progress', 'done'];
+    // Any non-word characters between the label and the number, so "PR: #12", "PR (#12)" and "PR12" count like "PR #12".
+    private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\W*\d+/i';
 
-    // Any non-word characters between the label and the number, so "PR: #12" and "PR (#12)" count like "PR #12".
-    private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\b\W*\d+/i';
+    private const string FENCE = '/^(```|~~~)/';
+
+    private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
     private const string BACKTICKED = '/`([^`]+)`/';
 
@@ -63,8 +65,18 @@ final readonly class HighlightsGate implements Gate
         $lines = explode("\n", $contents);
         $findings = [];
         $columns = null;
+        $fence = null;
 
         foreach ($lines as $index => $line) {
+            $fence = $this->fenceAfter($line, $fence);
+
+            // A table inside a code block is an example, so the line that opens or closes the block also ends a table.
+            if (null !== $fence || 1 === preg_match(self::FENCE, trim($line))) {
+                $columns = null;
+
+                continue;
+            }
+
             $cells = $this->cellsOf($line);
 
             if (null === $cells) {
@@ -85,6 +97,19 @@ final readonly class HighlightsGate implements Gate
         }
 
         return $findings;
+    }
+
+    private function fenceAfter(string $line, ?string $fence): ?string
+    {
+        if (1 !== preg_match(self::FENCE, trim($line), $marker)) {
+            return $fence;
+        }
+
+        if (null === $fence) {
+            return $marker[1];
+        }
+
+        return $fence === $marker[1] ? null : $fence;
     }
 
     /**
@@ -120,8 +145,9 @@ final readonly class HighlightsGate implements Gate
         $findings = [];
         $status = false === $columns['status'] ? null : ($cells[$columns['status']] ?? '');
 
-        if (null !== $status && !in_array($status, self::STATUSES, true)) {
-            $findings[] = 'status "'.$status.'" is not one of '.implode(', ', self::STATUSES);
+        if (null !== $status && null === HighlightStatus::tryFrom($status)) {
+            $known = array_map(static fn (HighlightStatus $known): string => $known->value, HighlightStatus::cases());
+            $findings[] = 'status "'.$status.'" is not one of '.implode(', ', $known);
         }
 
         if (false !== $columns['where']) {
@@ -147,7 +173,7 @@ final readonly class HighlightsGate implements Gate
         preg_match_all(self::BACKTICKED, $where, $matches);
 
         foreach ($matches[1] as $path) {
-            if (1 === preg_match(self::PATH_LIKE, $path) && !$exists($path)) {
+            if (1 === preg_match(self::PATH_LIKE, $path) && !$exists((string) preg_replace(self::LEADING_DOT_SLASH, '', $path))) {
                 $findings[] = 'Where names `'.$path.'`, which does not exist on the branch';
             }
         }
