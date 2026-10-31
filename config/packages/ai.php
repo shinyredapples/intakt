@@ -82,7 +82,7 @@ return static function (ContainerConfigurator $container): void {
         $contents['projects'] = $contentProjects;
     }
 
-    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}>, accounts: array<string, list<string>>} $configuration */
+    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
     $projects = $configuration['projects'];
     $tierProviders = array_map(static fn (array $project): array => array_map(static fn (array $tier): string => $tier['provider'], $project['tiers']), $projects);

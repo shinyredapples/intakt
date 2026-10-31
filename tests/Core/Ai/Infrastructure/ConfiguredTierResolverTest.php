@@ -75,6 +75,24 @@ final class ConfiguredTierResolverTest extends TestCase
         $this->resolver()->resolve('gamma', Tier::Strong);
     }
 
+    public function testATiersSubstitutesAreResolvedInConfiguredOrderAndDisabledProvidersAreLeftOut(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => [
+            ['provider' => 'openai', 'model' => 'one'],
+            ['provider' => 'claude_code', 'model' => 'two'],
+            ['provider' => 'openai_compatible', 'model' => 'three'],
+        ]]]]], ['claude_code' => 'Provider "claude_code" is disabled.']);
+
+        $substitutes = $resolver->substitutes('alpha', Tier::Strong);
+
+        self::assertEquals([new ResolvedModel(Provider::OpenAi, 'one'), new ResolvedModel(Provider::OpenAiCompatible, 'three')], $substitutes);
+    }
+
+    public function testATierWithoutConfiguredSubstitutesHasNone(): void
+    {
+        self::assertSame([], $this->resolver()->substitutes('alpha', Tier::Strong));
+    }
+
     /**
      * @param array<string, string> $disabled
      */

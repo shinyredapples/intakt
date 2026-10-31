@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
@@ -45,7 +46,7 @@ final readonly class ReviewWithReviewerHandler
 
         try {
             $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $round->task(), new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId()));
-            $verdict = $this->vendor->review($round->project(), $reviewer->tier(), $request);
+            $review = $this->vendor->review($round->project(), $reviewer->tier(), $request);
         } catch (ProviderRateLimited $limited) {
             $this->leases->handBack($reviewer);
 
@@ -54,6 +55,10 @@ final readonly class ReviewWithReviewerHandler
             $this->leases->handBack($reviewer);
 
             throw ReviewerRateLimited::after(null);
+        } catch (NoProviderLeft $outage) {
+            $this->leases->recordOutage($reviewer, $outage->getMessage());
+
+            return;
         } catch (VendorAccountOut) {
             $this->leases->handBack($reviewer);
 
@@ -65,6 +70,6 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $this->leases->recordVerdict($reviewer, $verdict);
+        $this->leases->recordVerdict($reviewer, $review->verdict, $review->substitute);
     }
 }

@@ -17,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RuntimeException as PlatformRuntimeException;
 use Symfony\AI\Platform\Exception\ServerException;
@@ -111,6 +112,13 @@ final class AccountFailoverPlatformTest extends TestCase
     public function testATransientFailureReadFromTheAnswerCoolsTheAccountDown(): void
     {
         $this->read($this->accounts(new FailingWhenRead(new ServerException(503)), $this->answering('second'))->invoke('big', 'Review.'));
+
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
+    public function testARevokedKeyReadFromTheAnswerCoolsTheAccountDown(): void
+    {
+        $this->read($this->accounts(new FailingWhenRead(new AuthenticationException('revoked')), $this->answering('second'))->invoke('big', 'Review.'));
 
         self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
     }

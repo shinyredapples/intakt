@@ -11,17 +11,21 @@ use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ProviderFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
+use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 
 #[CoversClass(TierPlatform::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
+#[UsesClass(ProviderFailoverPlatform::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
@@ -58,10 +62,12 @@ final class TierPlatformTest extends TestCase
             'beta' => ['tiers' => ['strong' => ['provider' => 'openai', 'model' => 'other']]],
         ], $disabled);
 
-        return new TierPlatform($resolver, new ServiceLocator([
+        $platforms = new ServiceLocator([
             Provider::Anthropic->value => fn (): PlatformInterface => $this->platform(Provider::Anthropic),
             Provider::OpenAi->value => fn (): PlatformInterface => $this->platform(Provider::OpenAi),
-        ]));
+        ]);
+
+        return new TierPlatform($resolver, new ProviderFailoverPlatform($platforms, new NoCooldowns(), new NativeClock(), new NullLogger()));
     }
 
     private function platform(Provider $provider): PlatformInterface

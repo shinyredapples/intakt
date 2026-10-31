@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Intakt\Core\Ai\Contract\EveryProviderOut;
+use Intakt\Core\Ai\Contract\ProviderWait;
+use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -13,6 +18,9 @@ use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ProviderFailoverPlatform;
+use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Symfony\Component\Clock\NativeClock;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -94,6 +102,10 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(EveryAccountCoolingDown::class)]
+#[UsesClass(EveryProviderOut::class)]
+#[UsesClass(ProviderWait::class)]
+#[UsesClass(NoProviderLeft::class)]
+#[UsesClass(ProviderRejectedTheKey::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(VerdictParser::class)]
 #[UsesClass(Verdict::class)]
@@ -120,7 +132,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->json());
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
@@ -131,7 +143,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
 
-        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(['big'], $verdict->follow_ups);
     }
@@ -140,7 +152,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->json());
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Approve, $verdict->verdict);
     }
@@ -149,7 +161,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering('not a verdict');
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
@@ -271,6 +283,31 @@ final class SymfonyAiVendorTest extends KernelTestCase
         }
     }
 
+    public function testEveryProviderOutIsATypedErrorWithTheReasonNamingThem(): void
+    {
+        $out = static fn (): never => throw new EveryProviderOut([new ProviderWait(Provider::Anthropic, 45), new ProviderWait(Provider::OpenAi, 60)]);
+
+        try {
+            $this->vendor($out)->review('alpha', Tier::Strong, $this->request());
+            self::fail('A tier with no provider left must be a typed error.');
+        } catch (NoProviderLeft $left) {
+            self::assertSame('Every provider of the tier is out: anthropic for 45 s, openai for 60 s.', $left->getMessage());
+        }
+    }
+
+    public function testARejectedKeyIsATypedErrorWithoutTheProvidersText(): void
+    {
+        $revoked = static fn (): never => throw new AuthenticationException('invalid x-api-key: sk-secret');
+
+        try {
+            $this->vendor($revoked)->review('alpha', Tier::Strong, $this->request());
+            self::fail('A rejected key must be a typed error.');
+        } catch (ProviderRejectedTheKey $rejected) {
+            self::assertStringNotContainsString('sk-secret', $rejected->getMessage());
+            self::assertInstanceOf(AuthenticationException::class, $rejected->getPrevious());
+        }
+    }
+
     public function testAUsageRowNamesTheAccountItsRoundRanOn(): void
     {
         $ledger = new InMemoryLedger();
@@ -344,7 +381,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         /** @var list<array<string, int>> $usages */
@@ -384,7 +421,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $logger = new BufferingLogger();
         $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         [$started, $unsettled] = $ledger->payloads();
@@ -492,7 +529,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $conversations->setup();
         $request = $this->request();
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $request);
+        $verdict = $vendor->review('alpha', Tier::Strong, $request)->verdict;
 
         self::assertCount(3, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
@@ -538,6 +575,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, new ProviderFailoverPlatform($platforms, new NoCooldowns(), new NativeClock(), new NullLogger())), $resolver, $this->reviewer(), $usage);
     }
 }

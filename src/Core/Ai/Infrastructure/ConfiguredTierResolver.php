@@ -16,7 +16,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final readonly class ConfiguredTierResolver implements TierResolver
 {
     /**
-     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects
+     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}>}> $projects
      * @param array<string, string>                                                                        $disabledProviders
      */
     public function __construct(
@@ -34,7 +34,7 @@ final readonly class ConfiguredTierResolver implements TierResolver
 
     public function resolve(string $project, Tier $tier): ResolvedModel
     {
-        $mapping = ($this->projects[$project] ?? throw new ProjectNotConfigured($project))['tiers'][$tier->value] ?? throw new TierNotMapped($project, $tier);
+        $mapping = $this->mapping($project, $tier);
         $provider = Provider::from($mapping['provider']);
 
         if (isset($this->disabledProviders[$provider->value])) {
@@ -42,5 +42,28 @@ final readonly class ConfiguredTierResolver implements TierResolver
         }
 
         return new ResolvedModel($provider, $mapping['model']);
+    }
+
+    public function substitutes(string $project, Tier $tier): array
+    {
+        $substitutes = [];
+
+        foreach ($this->mapping($project, $tier)['substitutes'] ?? [] as $substitute) {
+            $provider = Provider::from($substitute['provider']);
+
+            if (!isset($this->disabledProviders[$provider->value])) {
+                $substitutes[] = new ResolvedModel($provider, $substitute['model']);
+            }
+        }
+
+        return $substitutes;
+    }
+
+    /**
+     * @return array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}
+     */
+    private function mapping(string $project, Tier $tier): array
+    {
+        return ($this->projects[$project] ?? throw new ProjectNotConfigured($project))['tiers'][$tier->value] ?? throw new TierNotMapped($project, $tier);
     }
 }

@@ -6,7 +6,6 @@ namespace Intakt\Plugin\Vendor\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ReviewRequest;
-use Intakt\Core\Review\Contract\Verdict;
 use NoDiscard;
 
 interface Vendor
@@ -16,7 +15,9 @@ interface Vendor
      * @throws ProviderRateLimited
      * @throws ProviderFailedTransiently
      * @throws VendorAccountOut
+     * @throws NoProviderLeft
+     * @throws ProviderRejectedTheKey
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict;
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview;
 }

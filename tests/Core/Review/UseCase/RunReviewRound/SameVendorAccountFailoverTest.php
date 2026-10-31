@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\ProviderFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
@@ -68,6 +69,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(SymfonyAiVendor::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(TierPlatform::class)]
+#[UsesClass(ProviderFailoverPlatform::class)]
 #[UsesClass(VendorAccountOut::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRateLimited::class)]
@@ -137,6 +139,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         ], $this->fixture->ledgerKinds());
         self::assertSame(['anthropic.default'], $this->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
         self::assertSame(['anthropic.team'], $this->usageAccounts());
+        self::assertFalse($stored->reviewers()[0]->owesCatchUp());
     }
 
     public function testAReviewerWhoseLastFreeAccountFailsTransientlyWaitsForTheSharedCooldownInsteadOfFailing(): void
@@ -196,7 +199,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(300)), 'team' => $team];
         $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger());
-        $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]));
+        $tiers = new TierPlatform($resolver, new ProviderFailoverPlatform(new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), $this->cooldowns, new NativeClock(), new NullLogger()));
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);

@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Override;
 use Psr\Log\LoggerInterface;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Model;
@@ -60,7 +61,8 @@ final readonly class AccountPlatform implements PlatformInterface
 
         match (true) {
             $failure instanceof RateLimitExceededException => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
-            $failure instanceof RetryableExceptionInterface => $this->cooldowns->coolDown($this->account, null),
+            // A revoked or wrong key will not work on the next call either, so the account is out like a limited one and the call goes elsewhere.
+            $failure instanceof RetryableExceptionInterface, $failure instanceof AuthenticationException => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
     }

@@ -21,7 +21,7 @@ final readonly class ProjectModelCatalog
     private const array CAPABILITIES = [Capability::INPUT_MESSAGES, Capability::OUTPUT_TEXT, Capability::OUTPUT_STRUCTURED, Capability::TOOL_CALLING];
 
     /**
-     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects
+     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}>}> $projects
      */
     public function __construct(
         private array $projects,
@@ -53,9 +53,11 @@ final readonly class ProjectModelCatalog
         $models = [];
 
         foreach ($this->projects as $project) {
-            foreach ($project['tiers'] as $mapping) {
-                if ($provider->value === $mapping['provider']) {
-                    $models[] = $mapping['model'];
+            foreach ($project['tiers'] as $tier) {
+                foreach ([$tier, ...($tier['substitutes'] ?? [])] as $mapping) {
+                    if ($provider->value === $mapping['provider']) {
+                        $models[] = $mapping['model'];
+                    }
                 }
             }
         }

@@ -25,7 +25,22 @@ final class ProjectsConfigurationTest extends TestCase
     {
         $config = $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini']]]]]);
 
-        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini']]]], $config['projects']);
+        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini', 'substitutes' => []]]]], $config['projects']);
+    }
+
+    public function testATierKeepsItsSubstitutesInOrder(): void
+    {
+        $substitutes = [['provider' => 'openai', 'model' => 'mini'], ['provider' => 'anthropic', 'model' => 'small']];
+        $config = $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'sonnet', 'substitutes' => $substitutes]]]]]);
+
+        self::assertSame($substitutes, $config['projects']['alpha']['tiers']['light']['substitutes']);
+    }
+
+    public function testASubstituteNeedsAKnownProviderAndAModel(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini', 'substitutes' => [['provider' => 'nowhere', 'model' => 'x']]]]]]]);
     }
 
     public function testNoProjectsIsValid(): void

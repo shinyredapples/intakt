@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryProviderOut;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -12,9 +14,13 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
@@ -33,7 +39,7 @@ final readonly class SymfonyAiVendor implements Vendor
     ) {
     }
 
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         $platform = new TierRoutedPlatform($this->tiers, $project);
         $reservation = $this->usage->reserve($project, $tier);
@@ -44,7 +50,7 @@ final readonly class SymfonyAiVendor implements Vendor
             // Left unsettled, never settled as well, so the call's usage is counted once.
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
 
-            return Verdict::incompleteStream($incomplete->getMessage());
+            return new VendorReview(Verdict::incompleteStream($incomplete->getMessage()), $this->substituteOf($platform));
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 
@@ -53,13 +59,27 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $this->readOrRefused($project, $tier, $verdict);
+        $substitute = $this->substituteOf($platform);
+
+        return new VendorReview($this->readOrRefused($substitute ?? $this->resolver->resolve($project, $tier)->provider, $verdict), $substitute);
+    }
+
+    // Read from what the platform marked on each round, never from text, so a reviewer cannot claim to be a substitute.
+    private function substituteOf(TierRoutedPlatform $platform): ?Provider
+    {
+        $substitute = null;
+
+        foreach ($platform->rounds() as $round) {
+            $substitute = Provider::tryFrom((string) $round->getMetadata()->get(Provider::SUBSTITUTE_METADATA)) ?? $substitute;
+        }
+
+        return $substitute;
     }
 
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
-    private function readOrRefused(string $project, Tier $tier, Verdict $verdict): Verdict
+    private function readOrRefused(Provider $answeredBy, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $this->resolver->resolve($project, $tier)->provider->readsTheCheckout()) {
+        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout()) {
             return $verdict;
         }
 
@@ -71,6 +91,8 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         return match (true) {
             $failure instanceof RateLimitExceededException => new ProviderRateLimited($failure->getRetryAfter(), $failure),
+            $failure instanceof EveryProviderOut => new NoProviderLeft($failure->getMessage(), $failure),
+            $failure instanceof AuthenticationException => new ProviderRejectedTheKey($failure),
             $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
             $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
             default => $failure,

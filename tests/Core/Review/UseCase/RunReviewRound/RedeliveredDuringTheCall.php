@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 use Throwable;
 
@@ -21,10 +22,10 @@ final readonly class RedeliveredDuringTheCall implements Vendor
     }
 
     #[Override]
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         ($this->meanwhile)();
 
-        return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
+        return $this->failure instanceof Throwable ? throw $this->failure : new VendorReview(new Verdict(Decision::Approve, [], [], []));
     }
 }

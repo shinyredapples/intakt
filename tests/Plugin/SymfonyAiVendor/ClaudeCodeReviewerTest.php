@@ -13,6 +13,9 @@ use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
+use Intakt\Core\Ai\Infrastructure\ProviderFailoverPlatform;
+use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Symfony\Component\Clock\NativeClock;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -92,7 +95,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
@@ -125,14 +128,14 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testAStreamInWhichTheCliUsedOneOfItsOwnToolsStillYieldsItsVerdict(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
     public function testTheSubscriptionReviewerCannotApproveAChangeItNeverRead(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('could not read', $verdict->findings[0]->text);
@@ -140,7 +143,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliThatExitsMidStreamEndsTheReviewerAsBlocked(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('exit code 143', $verdict->findings[0]->text);
@@ -148,7 +151,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliKilledMidStreamEndsTheReviewerAsBlocked(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::killedAfter('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::killedAfter('truncated'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('stopped by signal 15', $verdict->findings[0]->text);
@@ -156,7 +159,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliThatTimesOutMidStreamEndsTheReviewerAsBlocked(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::stalledAfter('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::stalledAfter('truncated'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('the CLI timed out', $verdict->findings[0]->text);
@@ -204,7 +207,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testATruncatedStreamEndsTheReviewerAsBlockedWithTheReason(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('truncated'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
@@ -240,6 +243,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        return new SymfonyAiVendor(new TierPlatform($resolver, new ProviderFailoverPlatform($platforms, new NoCooldowns(), new NativeClock(), new NullLogger())), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
     }
 }
