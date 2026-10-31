@@ -38,7 +38,7 @@ final class AccountLimitedVendorTest extends TestCase
     public function testAReviewOnAnAccountWithAFreePlaceReturnsTheVendorsVerdict(): void
     {
         $verdict = Verdict::unreadApproval();
-        $vendor = $this->createStub(Vendor::class);
+        $vendor = self::createStub(Vendor::class);
         $vendor->method('review')->willReturn($verdict);
 
         $result = new AccountLimitedVendor($vendor, $this->resolver(), $this->limit())->review('intakt', Tier::Standard, $this->request());
@@ -50,7 +50,7 @@ final class AccountLimitedVendorTest extends TestCase
     {
         $limit = $this->limit();
         $called = false;
-        $vendor = $this->createStub(Vendor::class);
+        $vendor = self::createStub(Vendor::class);
         $vendor->method('review')->willReturnCallback(static function () use (&$called): Verdict {
             $called = true;
 
@@ -73,7 +73,7 @@ final class AccountLimitedVendorTest extends TestCase
 
     private function resolver(): TierResolver
     {
-        $resolver = $this->createStub(TierResolver::class);
+        $resolver = self::createStub(TierResolver::class);
         $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
 
         return $resolver;
