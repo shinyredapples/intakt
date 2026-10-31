@@ -306,7 +306,7 @@ The demo works on a local repository, so these tasks wait until after the deadli
 
 ## Replacing the existing loop
 
-Status: approved by the owner on 2026-10-31; the tasks become issues without the eligibility label, labeled from 2026-11-23. Goal: replace the existing loop for the owner's own use (GitHub only, Claude Code and Codex subscriptions, PHP only, the owner's two projects); other forges, languages and vendors come after the switch.
+Status: approved by the owner on 2026-10-31. The tasks are issues #319 to #356, without the eligibility label until 2026-11-23. Goal: replace the existing loop for the owner's own use (GitHub only, Claude Code and Codex subscriptions, PHP only, the owner's two projects); other forges, languages and vendors come after the switch.
 
 Conventions, in addition to the ones above:
 
