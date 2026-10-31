@@ -7,6 +7,8 @@ namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
+use Intakt\Plugin\Forge\Contract\ChangedFile;
+use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -16,6 +18,8 @@ use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\Forge;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\HeadMove;
+use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use InvalidArgumentException;
 use NoDiscard;
@@ -27,6 +31,10 @@ final readonly class LocalGitForge implements Forge
     private const int TIMEOUT_SECONDS = 60;
     private const int REFERENCE_MISSING = 2;
     private const int REFERENCE_INVALID = 1;
+    private const int NOT_AN_ANCESTOR = 1;
+
+    // Every file is text, because a binary attribute would hide a change as "Binary files differ"; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
+    private const array DIFF_OPTIONS = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
 
     public function __construct(
         private LocalRepository $repository,
@@ -47,6 +55,23 @@ final readonly class LocalGitForge implements Forge
     public function hasHeadMoved(Change $change): bool
     {
         return !$this->headOf($change->id)->equals($change->commits->head);
+    }
+
+    public function headMoveSince(CommitId $earlier, Change $change): HeadMove
+    {
+        $head = $change->commits->head;
+
+        if ($earlier->equals($head)) {
+            return new HeadMove(HeadMoveKind::Unmoved, []);
+        }
+
+        if (!$this->exists($earlier) || !$this->isAncestor($earlier->hash, $head->hash)) {
+            return new HeadMove(HeadMoveKind::Rewritten, []);
+        }
+
+        $kind = $this->isCleanMergeOfBase($earlier, $head) ? HeadMoveKind::CleanMergeOfBase : HeadMoveKind::Commits;
+
+        return new HeadMove($kind, $this->pathsBetween(new CommitRange($earlier, $head)));
     }
 
     public function fileAtHead(Change $change, string $path): FileContent
@@ -85,14 +110,59 @@ final readonly class LocalGitForge implements Forge
 
     private function diff(CommitRange $commits): Diff
     {
-        // Every file is text, because a binary attribute would hide a change as "Binary files differ"; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
-        $options = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
-        $range = [$commits->base->hash, $commits->head->hash];
+        return new Diff($this->read(['diff', ...self::DIFF_OPTIONS, ...$this->range($commits)]), $this->changedFiles($commits));
+    }
 
-        return new Diff(
-            $this->read(['diff', ...$options, ...$range]),
-            $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...$options, ...$range])),
-        );
+    private function changedFiles(CommitRange $commits): ChangedFiles
+    {
+        return $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function range(CommitRange $commits): array
+    {
+        return [$commits->base->hash, $commits->head->hash];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function pathsBetween(CommitRange $commits): array
+    {
+        return array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]);
+    }
+
+    private function exists(CommitId $commit): bool
+    {
+        // A head rewritten and collected away leaves no object behind, which makes the move a rewrite rather than a failed read.
+        return $this->git(['cat-file', '-e', $commit->hash.'^{commit}'])->isSuccessful();
+    }
+
+    private function isAncestor(string $ancestor, string $descendant): bool
+    {
+        $process = $this->git(['merge-base', '--is-ancestor', $ancestor, $descendant]);
+
+        return match ($process->getExitCode()) {
+            0 => true,
+            self::NOT_AN_ANCESTOR => false,
+            default => throw new ForgeReadFailed(sprintf('git merge-base failed: %s', trim($process->getErrorOutput()))),
+        };
+    }
+
+    private function isCleanMergeOfBase(CommitId $earlier, CommitId $head): bool
+    {
+        $parents = explode(' ', trim($this->read(['rev-list', '--parents', '--max-count=1', $head->hash])));
+
+        if (3 !== count($parents) || $parents[1] !== $earlier->hash || !$this->isAncestor($parents[2], 'refs/heads/'.$this->repository->baseBranch)) {
+            return false;
+        }
+
+        // Clean means the head holds exactly what git merges by itself, so neither a conflict resolution nor an edit hidden in the merge keeps a verdict.
+        $merged = $this->git(['merge-tree', '--write-tree', '--no-messages', $earlier->hash, $parents[2]]);
+
+        return $merged->isSuccessful() && trim($merged->getOutput()) === trim($this->read(['rev-parse', $head->hash.'^{tree}']));
     }
 
     private function blobAt(CommitId $head, string $path): string

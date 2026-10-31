@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\Infrastructure;
+namespace Intakt\Core\Review\Contract;
 
 use RuntimeException;
 

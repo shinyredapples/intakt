@@ -9,7 +9,7 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
-use Intakt\Core\Review\Infrastructure\GlobCannotBeEvaluated;
+use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;

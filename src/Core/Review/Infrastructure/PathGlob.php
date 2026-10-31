@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
+
 final readonly class PathGlob
 {
     public function __construct(private string $glob)

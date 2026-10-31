@@ -17,7 +17,7 @@ use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
-use Intakt\Core\Review\Infrastructure\GlobCannotBeEvaluated;
+use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Infrastructure\PathGlob;
 use Intakt\Core\Review\UseCase\ChoosePanel\ChoosePanelCommand;
 use Intakt\Core\Review\UseCase\ChoosePanel\ChoosePanelInput;

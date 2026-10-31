@@ -123,6 +123,23 @@ final readonly class TemporaryRepository
         $this->git('checkout', '--quiet', $name);
     }
 
+    public function merge(string $branch): string
+    {
+        $this->git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false', 'merge', '--quiet', '--no-ff', '--no-edit', $branch);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
+    // Conflicts resolve to this side, so the same helper writes a resolved conflict and an edit hidden in a merge.
+    public function mergeChanging(string $branch, string $path, string $content): string
+    {
+        $this->git('merge', '--quiet', '--no-ff', '--no-commit', '--strategy-option=ours', $branch);
+        file_put_contents($this->path.'/'.$path, $content);
+        $this->git('add', '--all');
+
+        return $this->commit('Merge '.$branch);
+    }
+
     public function tag(string $name): void
     {
         $this->git('tag', $name);
