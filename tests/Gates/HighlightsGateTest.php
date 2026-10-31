@@ -409,6 +409,27 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('highlights'), $run->output());
     }
 
+    public function testATrackedPathWithAnEscapedTablePipePasses(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('a|b.md', "x\n");
+        $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `a\\|b.md` |\n");
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testAnUntrackedPathWithAnEscapedTablePipeFailsUnderItsDecodedName(): void
+    {
+        $run = $this->checkRows("| A | a | done | `missing\\|b.md` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`missing|b.md`, which does not exist', $run->findingsOf('highlights'));
+    }
+
     public function testABareBacktickedNameWithoutAnExtensionIsNotAPath(): void
     {
         $run = $this->checkRows("| A | a | done | `HighlightStatus`, `c++`, `a<b>.md` |\n");

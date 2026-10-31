@@ -216,6 +216,7 @@ final readonly class HighlightsGate implements Gate
 
         $cells = preg_split(self::CELL_BORDER, (string) preg_replace(self::OUTER_PIPES, '', $line));
 
-        return false === $cells ? null : array_map(trim(...), $cells);
+        // A table decodes an escaped pipe before inline parsing, also inside a code span (GFM), so `a\|b.md` names a|b.md.
+        return false === $cells ? null : array_map(static fn (string $cell): string => str_replace('\|', '|', trim($cell)), $cells);
     }
 }
