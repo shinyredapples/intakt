@@ -2,20 +2,31 @@
 
 declare(strict_types=1);
 
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
+use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
+use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
+use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
+use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Container;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
+use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
 
@@ -71,54 +82,104 @@ return static function (ContainerConfigurator $container): void {
         $contents['projects'] = $contentProjects;
     }
 
-    /** @var array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects */
-    $projects = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents])['projects'];
+    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}>, accounts: array<string, list<string>>} $configuration */
+    $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
+    $projects = $configuration['projects'];
     $tierProviders = array_map(static fn (array $project): array => array_map(static fn (array $tier): string => $tier['provider'], $project['tiers']), $projects);
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
+    $env = static fn (string $variable): string => '%env('.$variable.')%';
 
-    $configs = [
-        Provider::Anthropic->value => ['anthropic' => ['api_key' => '%env(ANTHROPIC_API_KEY)%', 'cache_retention' => 'short', 'model_catalog' => $modelCatalog(Provider::Anthropic)]],
-        Provider::OpenAi->value => ['openai' => ['api_key' => '%env(OPENAI_API_KEY)%', 'model_catalog' => $modelCatalog(Provider::OpenAi)]],
-        Provider::OpenAiCompatible->value => ['generic' => ['openai_compatible' => [
-            'base_url' => '%env(OPENAI_COMPATIBLE_BASE_URL)%',
-            'api_key' => '%env(OPENAI_COMPATIBLE_API_KEY)%',
-            'model_catalog' => $modelCatalog(Provider::OpenAiCompatible),
-        ]]],
-    ];
+    // The bundle configures one anthropic and one openai platform, so another account of theirs is built with the bridge factory and the arguments the bundle passes.
+    $bridgePlatform = static function (Provider $provider, array $arguments) use ($catalog): Definition {
+        [$factory, $name] = Provider::Anthropic === $provider ? [AnthropicFactory::class, 'anthropic'] : [OpenAiFactory::class, 'openai'];
+        $models = new Definition(CompositeModelCatalog::class, [[new Definition(InMemoryModelCatalog::class, [$catalog->models($provider)]), new Reference('ai.platform.model_catalog.'.$name)]]);
+        $http = new Reference('http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE);
 
-    // Ids as the AI Bundle registers them, because a tier call reaches its provider through the bundle's own platform.
-    $bundlePlatforms = [
-        Provider::Anthropic->value => 'ai.platform.anthropic',
-        Provider::OpenAi->value => 'ai.platform.openai',
-        Provider::OpenAiCompatible->value => 'ai.platform.generic.openai_compatible',
-        Provider::ClaudeCode->value => 'intakt.ai.platform.claude_code',
-    ];
+        return new Definition(PlatformInterface::class, [array_shift($arguments), $http, $models, new Reference('ai.platform.contract.'.$name), ...$arguments])->setFactory([$factory, 'createPlatform']);
+    };
+
+    // The bundle has no configuration for this bridge, so each account gets its own CLI with its own configuration directory and token.
+    $claudeCodePlatform = static function (Account $account, string $token) use ($container, $catalog): array {
+        $default = Account::DEFAULT === $account->name;
+        $suffix = $default ? '' : '.'.$account->name;
+        $container->services()->set('intakt.ai.claude_code.cli'.$suffix, IsolatedClaudeCodeCli::class)
+            ->args(['%kernel.project_dir%/var/claude-code'.($default ? '' : '-'.$account->name), $token]);
+        $container->services()->set('intakt.ai.platform.claude_code'.$suffix, PlatformInterface::class)
+            ->factory([new ReferenceConfigurator(ClaudeCodePlatformFactory::class), 'create'])
+            ->args([new ReferenceConfigurator('intakt.ai.claude_code.cli'.$suffix), $catalog->models(Provider::ClaudeCode)]);
+
+        return [[], new Reference('intakt.ai.platform.claude_code'.$suffix)];
+    };
+
+    // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
+    $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform): array {
+        $variables = array_map($env, $account->variables());
+        $default = Account::DEFAULT === $account->name;
+        $generic = 'openai_compatible'.($default ? '' : '_'.$account->name);
+        $events = new Reference('event_dispatcher');
+
+        return match ($account->provider) {
+            Provider::Anthropic => $default
+                ? [['anthropic' => ['api_key' => $variables[0], 'cache_retention' => 'short', 'model_catalog' => $modelCatalog(Provider::Anthropic)]], new Reference('ai.platform.anthropic')]
+                : [[], $bridgePlatform(Provider::Anthropic, [$variables[0], $events, 'short'])],
+            Provider::OpenAi => $default
+                ? [['openai' => ['api_key' => $variables[0], 'model_catalog' => $modelCatalog(Provider::OpenAi)]], new Reference('ai.platform.openai')]
+                : [[], $bridgePlatform(Provider::OpenAi, [$variables[0], null, $events])],
+            Provider::OpenAiCompatible => [
+                ['generic' => [$generic => ['base_url' => $variables[0], 'api_key' => $variables[1], 'model_catalog' => $modelCatalog(Provider::OpenAiCompatible)]]],
+                new Reference('ai.platform.generic.'.$generic),
+            ],
+            Provider::ClaudeCode => $claudeCodePlatform($account, $variables[0]),
+        };
+    };
 
     $platform = [];
     $disabled = [];
+    $disabledAccounts = [];
+    $enabledAccounts = [];
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
-        $missing = array_values(array_filter($provider->variables(), static fn (string $variable): bool => !$isSet($variable)));
+        $enabled = [];
+        $missingOf = [];
 
-        if ([] !== $missing) {
-            $disabled[$provider->value] = $provider->disabledMessage($missing);
+        foreach ($configuration['accounts'][$provider->value] as $name) {
+            $account = new Account($provider, $name);
+            $missing = array_values(array_filter($account->variables(), static fn (string $variable): bool => !$isSet($variable)));
+
+            if ([] === $missing) {
+                $enabled[$name] = $account;
+
+                continue;
+            }
+
+            $missingOf[$name] = $missing;
+        }
+
+        // The provider is disabled only when none of its accounts is set, with the variables of the first one it lists.
+        if ([] === $enabled) {
+            $disabled[$provider->value] = $provider->disabledMessage(array_first($missingOf) ?? []);
 
             continue;
         }
 
-        $platform = array_replace_recursive($platform, $configs[$provider->value] ?? []);
-        $tierPlatforms[$provider->value] = new ReferenceConfigurator($bundlePlatforms[$provider->value]);
-    }
+        foreach ($missingOf as $name => $missing) {
+            $disabledAccounts[] = new Account($provider, $name)->disabledMessage($missing);
+        }
 
-    if (!array_key_exists(Provider::ClaudeCode->value, $disabled)) {
-        $container->services()->set('intakt.ai.claude_code.cli', IsolatedClaudeCodeCli::class)
-            ->args(['%kernel.project_dir%/var/claude-code', '%env(CLAUDE_CODE_OAUTH_TOKEN)%']);
-        $container->services()->set('intakt.ai.platform.claude_code', PlatformInterface::class)
-            ->factory([new ReferenceConfigurator(ClaudeCodePlatformFactory::class), 'create'])
-            ->args([new ReferenceConfigurator('intakt.ai.claude_code.cli'), $catalog->models(Provider::ClaudeCode)]);
+        $platforms = [];
+
+        foreach ($enabled as $name => $account) {
+            [$bundleConfig, $platforms[$name]] = $accountPlatform($account);
+            $platform = array_replace_recursive($platform, $bundleConfig);
+        }
+
+        $container->services()->set('intakt.ai.accounts.'.$provider->value, AccountFailoverPlatform::class)
+            ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger')]);
+        $enabledAccounts[$provider->value] = array_keys($enabled);
+        $tierPlatforms[$provider->value] = new ReferenceConfigurator('intakt.ai.accounts.'.$provider->value);
     }
 
     // The reviewer's rounds each keep a conversation, in the table the migration creates for the DBAL store.
@@ -126,6 +187,8 @@ return static function (ContainerConfigurator $container): void {
 
     $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
+    $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
+    $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
     $container->parameters()->set('intakt.projects', $projects);
     $container->parameters()->set('intakt.review.panels', $panels);
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)

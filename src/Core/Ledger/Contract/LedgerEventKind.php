@@ -13,4 +13,5 @@ enum LedgerEventKind: string
     case ReviewerBlocked = 'reviewer_blocked';
     case JudgeDone = 'judge_done';
     case UsageRecorded = 'usage_recorded';
+    case AccountCooledDown = 'account_cooled_down';
 }
