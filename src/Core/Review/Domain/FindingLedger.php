@@ -39,23 +39,23 @@ final class FindingLedger
     }
 
     /**
-     * @return list<Finding> the open findings under their ledger ids, as a reviewer is shown them
+     * @return list<Finding>
      */
     public function openForReviewers(): array
     {
         return array_map(static fn (TrackedFinding $tracked): Finding => new Finding(
-                $tracked->id,
-                $tracked->latest->severity,
-                $tracked->latest->file,
-                $tracked->latest->line,
-                $tracked->latest->symbol,
-                $tracked->latest->text,
-                $tracked->latest->fixable_by,
-                $tracked->latest->repeat,
-                $tracked->latest->requirement,
-                $tracked->latest->evidence,
-            ),
-            $this->open(),);
+            $tracked->id,
+            $tracked->latest->severity,
+            $tracked->latest->file,
+            $tracked->latest->line,
+            $tracked->latest->symbol,
+            $tracked->latest->text,
+            $tracked->latest->fixable_by,
+            $tracked->latest->repeat,
+            $tracked->latest->requirement,
+            $tracked->latest->evidence,
+        ),
+            $this->open(), );
     }
 
     /**

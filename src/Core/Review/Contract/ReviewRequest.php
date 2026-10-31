@@ -7,7 +7,7 @@ namespace Intakt\Core\Review\Contract;
 final readonly class ReviewRequest
 {
     /**
-     * @param list<Finding> $open the findings still open, each under its persistent ledger id; empty in the first round
+     * @param list<Finding> $open
      */
     public function __construct(
         public Checkout $checkout,
