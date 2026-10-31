@@ -59,7 +59,7 @@ Each category (comment-only, dependency, gate code, harness) starts in **shadow 
 - *dependency:* a malicious dependency, a package from another vendor, a new install script;
 - *gate code:* a weakened gate, a gate that skips a file it used to read;
 - *harness:* a harness edit that drops the isolation of `bin/probe` (network, folder, credentials or user), one that skips a boot step;
-- *hard floors:* a workflow that reads a repository secret, an edited gate test, an edited agent instruction.
+- *hard floors:* a workflow that reads a repository secret, an edited gate test, an edited agent instruction. Hard-floor canaries are checked as owner requests, because a hard floor must always reach the owner; hard floors are not a category that can be switched on for automatic approval.
 
 A category with fewer canaries than a set minimum (for example 3) stays in shadow mode. A category qualifies for automatic approval only at 100% detection of its own canaries and agreement with the owner over a set number of real cases (for example 20); the owner then switches it on in the owner's config, since turning it on widens the approval rules. It switches back to shadow mode on its own when a canary is missed or the owner overrules a computed decision.
 
