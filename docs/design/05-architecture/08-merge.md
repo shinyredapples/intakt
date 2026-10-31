@@ -46,7 +46,7 @@ Every protected file the change touches must be covered by a mechanical check th
 
 ### Independent security review
 
-Separate reviewer sessions judge the protected part: a **security reviewer** and an **attacker**, each with its own role and prompt ([Threat model](14-threat-model.md#security-reviewer-and-attacker)). They get the diff, main's version of every protected file and the floor and check results, never the builder's pull request text or reasoning, and their verdicts are typed objects checked like any other. The security reviewer must agree that the change keeps or tightens the rules. A second AI vendor adds confidence when one is available and is never required. Missing reviewer capacity (no account free, a failed review, a stand-in) sends the request to the owner, never waits it out.
+Separate reviewer sessions judge the protected part: a **security reviewer** and an **attacker**, each with its own role and prompt ([Threat model](14-threat-model.md#security-reviewer-and-attacker)). They get the diff, main's version of every protected file and the floor and check results, never the builder's pull request text or reasoning, and their verdicts are typed objects checked like any other. The security reviewer must agree that the change keeps or tightens the rules. A second AI vendor adds confidence when one is available and is never required. Missing reviewer capacity (no account free, a failed review, a stand-in or a substitute) sends the request to the owner, never waits it out.
 
 ### Attacker test
 
