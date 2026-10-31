@@ -13,7 +13,7 @@ final readonly class HighlightsGate implements Gate
     // Any non-word characters between the label and the number, so "PR: #12", "PR (#12)" and "PR12" count like "PR #12".
     private const string PULL_REQUEST_NUMBER = '/\b(?:PRs?|pull requests?|pulls?)\W*\d+/i';
 
-    private const string FENCE = '/^(```|~~~)/';
+    private const string FENCE = '/^(`{3,}|~{3,})/';
 
     private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
@@ -121,7 +121,13 @@ final readonly class HighlightsGate implements Gate
             return $marker[1];
         }
 
-        return $fence === $marker[1] ? null : $fence;
+        return $this->closes($marker[1], $fence) ? null : $fence;
+    }
+
+    private function closes(string $marker, string $fence): bool
+    {
+        // CommonMark: a fence closes only on its own character and at least its own length, so a longer block can show a shorter fence.
+        return $marker[0] === $fence[0] && strlen($marker) >= strlen($fence);
     }
 
     /**

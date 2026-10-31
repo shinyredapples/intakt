@@ -174,6 +174,26 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringNotContainsString('started', $run->findingsOf('highlights'));
     }
 
+    public function testAShorterFenceInsideALongerOneDoesNotCloseIt(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "````markdown\n```\n| Status | Where |\n|---|---|\n| invalid | PR12 |\n```\n````\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testATableAfterALongerFenceWithAnInnerFenceIsLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "````markdown\n```php\necho 1;\n```\n````\n\n| Status | Where |\n|---|---|\n| open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertStringContainsString('docs/highlights.md:9: status "open"', $run->findingsOf('highlights'));
+    }
+
     public function testATableWithoutOuterPipesIsCheckedByEveryRule(): void
     {
         $sandbox = $this->sandboxWithKernel();
