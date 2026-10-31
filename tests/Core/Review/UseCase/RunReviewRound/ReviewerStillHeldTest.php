@@ -14,34 +14,29 @@ final class ReviewerStillHeldTest extends TestCase
 {
     public function testAHoldThatEndsInLessThanASecondGivesARetryDelayOfOneSecond(): void
     {
-        $exception = ReviewerStillHeld::until($this->at('12:00:01.000000'), $this->at('12:00:00.600000'));
+        $exception = ReviewerStillHeld::until(new DateTimeImmutable('2026-10-31T12:00:01.000000+00:00'), new DateTimeImmutable('2026-10-31T12:00:00.600000+00:00'));
 
         self::assertSame(1000, $exception->getRetryDelay());
     }
 
     public function testAHoldWithAFractionOfASecondOverWholeSecondsIsRoundedUp(): void
     {
-        $exception = ReviewerStillHeld::until($this->at('12:00:02.500000'), $this->at('12:00:00.200000'));
+        $exception = ReviewerStillHeld::until(new DateTimeImmutable('2026-10-31T12:00:02.500000+00:00'), new DateTimeImmutable('2026-10-31T12:00:00.200000+00:00'));
 
         self::assertSame(3000, $exception->getRetryDelay());
     }
 
     public function testAHoldWithAnExactNumberOfSecondsLeftKeepsThatDelay(): void
     {
-        $exception = ReviewerStillHeld::until($this->at('12:45:00.250000'), $this->at('12:00:00.250000'));
+        $exception = ReviewerStillHeld::until(new DateTimeImmutable('2026-10-31T12:45:00.250000+00:00'), new DateTimeImmutable('2026-10-31T12:00:00.250000+00:00'));
 
         self::assertSame(45 * 60 * 1000, $exception->getRetryDelay());
     }
 
     public function testAHoldThatHasAlreadyEndedGivesNoRetryDelay(): void
     {
-        $exception = ReviewerStillHeld::until($this->at('12:00:00.000000'), $this->at('12:00:05.000000'));
+        $exception = ReviewerStillHeld::until(new DateTimeImmutable('2026-10-31T12:00:00.000000+00:00'), new DateTimeImmutable('2026-10-31T12:00:05.000000+00:00'));
 
         self::assertSame(0, $exception->getRetryDelay());
-    }
-
-    private function at(string $time): DateTimeImmutable
-    {
-        return new DateTimeImmutable('2026-10-31T'.$time.'+00:00');
     }
 }
