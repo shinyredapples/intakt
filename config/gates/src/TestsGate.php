@@ -34,7 +34,7 @@ final class TestsGate implements Gate
         }
 
         try {
-            $gateTests = $workspace->changesGateTests();
+            $passes = $this->passes($workspace);
         } catch (ScopeFailure $failure) {
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
@@ -46,7 +46,7 @@ final class TestsGate implements Gate
         }
 
         try {
-            return $this->resultOf($workspace, $scratch, $gateTests);
+            return $this->resultOf($workspace, $scratch, $passes);
         } finally {
             $this->remove($scratch);
         }
@@ -67,16 +67,27 @@ final class TestsGate implements Gate
         return null;
     }
 
-    private function resultOf(Workspace $workspace, string $scratch, bool $gateTests): GateResult
+    /**
+     * @return array<string, string>
+     */
+    private function passes(Workspace $workspace): array
     {
-        $passes = ['sqlite' => self::CONFIGURATION];
-
         // Because unchanged gate code with an unchanged lock file gives the same result, and every push to main runs both passes.
-        if (!$gateTests) {
-            return GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes))->noted(self::SKIPPED_GATES_PASS);
+        if (!$workspace->changesGateTests()) {
+            return ['sqlite' => self::CONFIGURATION];
         }
 
-        return GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, [...$passes, 'gates' => self::GATES_CONFIGURATION]));
+        return ['sqlite' => self::CONFIGURATION, 'gates' => self::GATES_CONFIGURATION];
+    }
+
+    /**
+     * @param array<string, string> $passes
+     */
+    private function resultOf(Workspace $workspace, string $scratch, array $passes): GateResult
+    {
+        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes));
+
+        return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
     }
 
     /**
