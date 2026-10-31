@@ -1,4 +1,8 @@
 # Copy to config/intakt.yaml (git-ignored) and run `php bin/console cache:clear`.
+# Optional accounts per provider, tried in this order; "default" reads the provider's own variables (ANTHROPIC_API_KEY),
+# any other name reads them with its name appended (ANTHROPIC_API_KEY_TEAM). A provider not listed has its default account only.
+accounts:
+    anthropic: [default, team]
 # Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible) and a model name.
 projects:
     alpha:
