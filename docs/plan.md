@@ -456,7 +456,7 @@ Conventions, in addition to the ones above:
 - **Reference:** `test_gitops.py` (push refuses unsigned commits, conflicts with main), `test_lanes.py` (a crash after the push or after opening the pull request), `test_github.py` (pull request create and update).
 - **Acceptance:** each case above with a temporary repository and recorded forge responses.
 - **Evidence:** a pushed branch on the test repository with verified signatures.
-- **Waits for:** T50, T37. **Size:** M. **Labels:** `class:core`, `priority:high`.
+- **Waits for:** T50, T37, T52, T55 (nothing is pushed before the pre-push check, the dependency policy and the workflow approval exist). **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T54 Protected paths from the whole change
 - **Description:** Whether a head touches a protected path is read from the full diff between the merge base and the head plus the per-commit lists (each commit against each parent, second parents included unless main has them); submodules and `.gitmodules` count. The protected list, the owner-only list and the approval rules are owner config, never repository files.
@@ -466,7 +466,7 @@ Conventions, in addition to the ones above:
 - **Waits for:** T46. **Size:** M. **Labels:** `class:core`, `priority:high`, `model:strong`.
 
 ### T55 Workflow risk scan and the push approval
-- **Description:** Behind the GitHub forge, a strict line scan of the workflows (the head's, main's and both merged) finds anything beyond a hosted runner with a read-only token and no secrets; any form it cannot read, and a `runs-on` from a variable or expression not in the owner's trusted runner list, is risky. A build with a risky CI change stays local: the issue shows its complete diff, and only the owner's `approve <sha>` lets it push; the merge still needs the owner.
+- **Description:** Behind the GitHub forge, a strict line scan of the workflows (the head's, main's and both merged) finds anything beyond a hosted runner with a read-only token and no secrets; any form it cannot read, and any `runs-on` from a variable or expression (even while the variable is unset: its value can change without a commit), is risky. The files the workflows run from the repository (scripts, the CI image's Dockerfile) are part of the CI definition: a change to one is a CI change. A build with a risky CI change stays local: the issue shows its complete diff, and only the owner's `approve <sha>` lets it push; the merge still needs the owner.
 - **Reference:** `test_workflow_risk.py` (hosted labels, any other label asks, an unreadable form asks, read-only permissions), `test_owner_approval.py` (approval before the push cases).
 - **Acceptance:** each case above; a failed variable read holds the push.
 - **Evidence:** the scan's findings on three sample workflows.
@@ -480,14 +480,14 @@ Conventions, in addition to the ones above:
 - **Waits for:** T47, T49, T53. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
 
 ### T57 Review lane through CI
-- **Description:** The review lane takes pushed heads: a head with pending CI goes back to its queue with a time to look again and holds nothing; heads with finished CI go first, one pending for 30 minutes is admitted by age. Red CI sends the head back with a redacted, fenced CI log excerpt (job count only for self-hosted runners) before any reviewer, two red-CI send-backs in a row free per cycle. A missed CI start is read once, nudged once and then handed over. A round runs at most the configured review cycles, then hands over.
+- **Description:** The review lane takes pushed heads: a head with pending CI goes back to its queue with a time to look again and holds nothing; heads with finished CI go first, one pending for 30 minutes is admitted by age. Red CI sends the head back before any reviewer, with a redacted, fenced CI log excerpt only when the workflow scan (T55) finds every job of the head's, main's and the merged workflows on a forge-hosted runner with a read-only token and no secrets; otherwise, or when the scan fails, with one line giving the number of failed jobs; two red-CI send-backs in a row free per cycle. A missed CI start is read once, nudged once and then handed over. A round runs at most the configured review cycles, then hands over.
 - **Reference:** `test_lanes_cap2.py` (finished CI first, nudges, an unreadable workflow fails closed), `test_ci_log.py`, `test_round.py` (red CI uses no review cycle), `test_lanes.py` (the third red-CI bounce counts), `test_causes.py` (cycles running out record their cause).
 - **Acceptance:** each case above with recorded CI responses and a controlled clock.
 - **Evidence:** a head sent back for red CI with its excerpt, on the test repository.
 - **Waits for:** T56, T38. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
 
 ### T58 Review jobs with boot gate and probes
-- **Description:** Reviewers run in review job containers with a read-only checkout of the exact head and no network, running the project's `bin/probe` within a per-review budget. Before any reviewer, the head boots once with `bin/instance`; main's result is cached per main commit and tool fingerprint; a head that fails while main boots goes back like red CI; when main fails too, the gate is off for the head and the owner gets an infrastructure alert once. A canary probe checks the probe path after each boot; a broken path marks probes unavailable instead of producing findings.
+- **Description:** Reviewers run in review job containers with a read-only checkout of the exact head, reaching only their vendor through the job proxy (T44); the project's `bin/probe` runs in a separate no-network sandbox within a per-review budget. Before any reviewer, the head boots once with `bin/instance`; main's result is cached per main commit and tool fingerprint; a head that fails while main boots goes back like red CI; when main fails too, the gate is off for the head and the owner gets an infrastructure alert once. A canary probe checks the probe path after each boot; a broken path marks probes unavailable instead of producing findings.
 - **Reference:** `test_boot_gate.py` (booted before any review, a failed boot beats approvals, an approved head that does not boot is not merged, a crashing gate never stops the review), `test_probe.py`, `test_probe_alerts.py` (a Composer failure alerts only for main's lock), `test_merge_only.py` (a cached boot pass runs no canary).
 - **Acceptance:** each case above; nothing a probe writes reaches the branch.
 - **Evidence:** a review whose finding carries a probe's output.
@@ -613,5 +613,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
 - The shadow week (after T43) runs while M7 is built.
-- M7: T45 and T46 after T44; T47 and T54 in parallel; T48, T49 to T53 in order; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order; T66 after T62; T67 to T69 after T56.
+- M7: T45 and T46 after T44; T47 and T54 in parallel; T48, then T49 to T52 in order; T55 after T54; T53 after T52 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order; T66 after T62; T67 to T69 after T56.
 - M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 alongside; T74 last.
