@@ -75,7 +75,7 @@ final readonly class ReviewerLeases
         $this->inOneTransaction(function () use ($reviewer): void {
             $stored = $this->lockedRow($reviewer->id());
 
-            if (ReviewerState::Running === $stored->state()) {
+            if ($this->isStillHeldBy($reviewer, $stored)) {
                 $this->moves->requeue($stored);
             }
         });
@@ -115,8 +115,8 @@ final readonly class ReviewerLeases
             $this->inOneTransaction(function () use ($reviewer, $move, $now): void {
                 $stored = $this->lockedRow($reviewer->id());
 
-                // Still running means this worker's own hold, because the only other writer moves a reviewer whose hold ended to failed; anything else was decided while the vendor call ran and stands.
-                if (ReviewerState::Running !== $stored->state()) {
+                // Anything but this worker's own attempt was decided while the vendor call ran and stands.
+                if (!$this->isStillHeldBy($reviewer, $stored)) {
                     return;
                 }
 
@@ -127,6 +127,12 @@ final readonly class ReviewerLeases
 
             throw $refused;
         }
+    }
+
+    // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
+    private function isStillHeldBy(RoundReviewer $taken, RoundReviewer $stored): bool
+    {
+        return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
     }
 
     // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.

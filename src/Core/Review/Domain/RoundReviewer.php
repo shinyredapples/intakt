@@ -39,6 +39,10 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(options: ['default' => 0])]
     private int $restarts = 0;
 
+    // Counts every start, so a worker whose reviewer another worker started again can tell that the row is no longer its own.
+    #[ORM\Column(options: ['default' => 0])]
+    private int $attempts = 0;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $verdict = null;
 
@@ -63,6 +67,7 @@ final class RoundReviewer implements HasPlace
     public function recordStart(DateTimeImmutable $now): void
     {
         $this->startedAt = $now;
+        ++$this->attempts;
     }
 
     public function recordRestart(): void
@@ -124,6 +129,11 @@ final class RoundReviewer implements HasPlace
     public function hasRestarted(): bool
     {
         return $this->restarts > 0;
+    }
+
+    public function isSameAttemptAs(self $taken): bool
+    {
+        return $this->attempts === $taken->attempts;
     }
 
     public function verdictJson(): ?string
