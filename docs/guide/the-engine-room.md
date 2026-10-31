@@ -60,11 +60,12 @@ A **lock** is a "one at a time" sign on something that must not be used by two j
 
 Locks are short-lived: a job that waits for something outside (CI, you) gives its lock back and comes back later.
 
-## Reviewers, stand-ins and catch-ups
+## Reviewers, substitutes and catch-ups
 
 - The **review panel** is the set of reviewers for a change: a fixed core panel plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 - When a reviewer's account is over its limit, the same company's next account takes over, if you added one. That is just a move to another account: the same reviewer, no catch-up owed.
-- A **stand-in** steps in only when every account of that company is out: another company's reviewer reviews in its place, so work doesn't stall.
+- A **substitute** steps in only when every account of that company is out: another company's reviewer reviews in its place, so work doesn't stall.
+- A **stand-in** is something else: a cheaper reviewer on an in-between version while a company's allowance is tight. The usual reviewer still reviews the final version, so a stand-in never has the last word.
 - A **catch-up review** is the missing reviewer's review, done later once its company is available again. Intakt runs it by itself and checks the change as it was merged. It never blocks a merge; if it finds a real problem, that becomes a new task, which waits for you to label it before the builders pick it up; smaller suggestions go to the [follow-up inbox](the-journey-of-a-task.md#7-afterwards) like any review's.
 
 ## Cycles and generations: second chances
