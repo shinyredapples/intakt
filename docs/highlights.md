@@ -13,7 +13,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | in progress | T5 (#10, part #99), `src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php` |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | in progress | T5 (#10, part #100), `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T9 (#14), T14 (#19) |
 | Anthropic prompt caching (`cache_retention`) | the system prompt, the tools and the latest message are cached, so round two of a review reads the tokens round one cached | in progress | T7 (#12), `config/packages/ai.php`, `tests/Core/Review/Infrastructure/ReviewerPromptCachingTest.php` |
-| `FailoverPlatform` | provider failover inside Intakt's own wrapper | planned | T14 (#19) |
+| `FailoverPlatform` | failover between the accounts of one provider inside Intakt's own wrapper, which skips cooling accounts, cools down the account a limit came from and builds a new `FailoverPlatform` per call (it keys its limiter by platform class and calls a failed platform again, `upstream/ai-failover-platform-retries-a-failed-platform/`); failover to another provider is planned | in progress | T14 (#19, part #414), `src/Core/Ai/Infrastructure/AccountFailoverPlatform.php`, `src/Core/Ai/Infrastructure/AccountPlatform.php` |
 | Streaming | reviewer text shown live | planned | T21 (#27) |
 | `MockPlatformFactory` with `ScriptedResponse` | offline tests of every model call | in progress | T4 (#9), T5 (#10, part #98), `tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php`; T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `RecordingProvider` with `HttpCassette` | real responses recorded once, replayed offline with redaction | planned | T25 (#32), T28 (#35) |
@@ -77,7 +77,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Scheduler | usage probes, deadlines and the weekly branch cleanup | planned | T14 (#19), T30 (#24) |
 | Workflow | state machine of a review round and of each reviewer, with its Graphviz diagram | in progress | T9 (#14, part #240), `config/packages/workflow.php`, `src/Core/Review/Domain/`, `docs/architecture/review-round.dot` |
 | Lock (Semaphore) | caps parallel calls per vendor account (file locks, since the other store needs Redis) | in progress | T9 (#14, part #241), `src/Plugin/SymfonyAiVendor/Infrastructure/VendorAccountLimit.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/AccountLimitedVendor.php` |
-| RateLimiter | per-account cooldown windows aligned to the vendor's reset | planned | T14 (#19) |
+| RateLimiter | per-account cooldown windows aligned to the vendor's reset: a `fixed_window` of one call anchored (`anchor_at`) at the reset, in a cache pool every worker shares, with Lock around each window | in progress | T14 (#19, part #414), `src/Core/Ai/Infrastructure/AccountCooldownWindows.php`, `config/packages/cache.yaml` |
 | Webhook and RemoteEvent | a GitHub `RequestParser` that checks the signature and turns events into RemoteEvents | planned (optional, last) | T32 (#60) |
 | HttpClient | `RetryableHttpClient` and scoped clients for GitHub | planned | T18 (#23) |
 | Mercure and Turbo (Symfony UX) | Turbo Streams over FrankenPHP's built-in hub | planned | T21 (#27) |
