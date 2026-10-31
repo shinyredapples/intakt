@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt;
+
+use Symfony\Component\Messenger\Attribute\AsMessageHandler as Handler;
+
+#[Handler(handles: 'Message')]
+final class Kernel
+{
+    public function __invoke(): void
+    {
+    }
+}

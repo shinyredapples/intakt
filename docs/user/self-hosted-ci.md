@@ -10,7 +10,7 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 ["self-hosted","linux","x64","intakt-ci"]
 ```
 
-Every job (`check`, `changes` and the `persistence` matrix) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
+Every job (`check`, `changes` and `persistence`) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
 ## The runner must be ephemeral
 
@@ -25,7 +25,7 @@ Why: a pull request from a branch of the repository runs its own version of the 
 
 | Need | Why |
 |---|---|
-| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | every job builds or reuses the CI image and runs the code in it; the `persistence` jobs start their database as a service container |
+| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | every job builds or reuses the CI image and runs the code in it; the `persistence` job starts a service container for each database engine |
 | `bash`, `git`, `grep`, `sh`, `sha256sum` and `cut` | the `changes` job reads the diff on the host; `build-image.sh` hashes the Dockerfile |
 | Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; the workflow lifts AppArmor only on GitHub's runners, never on yours |
