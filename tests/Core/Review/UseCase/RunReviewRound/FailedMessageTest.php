@@ -91,7 +91,8 @@ final class FailedMessageTest extends KernelTestCase
         /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
         $logs = $this->fixture->log->cleanLogs();
         [[$level, , $context]] = $logs;
-        self::assertSame(['error', $message->reviewerId, ReviewerNotFound::class], [$level, $context['reviewer'], $context['exception']::class]);
+        self::assertSame(['error', $message->reviewerId], [$level, $context['reviewer']]);
+        self::assertInstanceOf(ReviewerNotFound::class, $context['exception']);
     }
 
     public function testARealWorkerParksAFailedMessageWhoseReviewerIsGoneAndKeepsRunning(): void
