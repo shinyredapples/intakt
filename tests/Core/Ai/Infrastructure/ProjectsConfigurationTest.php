@@ -33,8 +33,7 @@ final class ProjectsConfigurationTest extends TestCase
         $substitutes = [['provider' => 'openai', 'model' => 'mini'], ['provider' => 'anthropic', 'model' => 'small']];
         $config = $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'sonnet', 'substitutes' => $substitutes]]]]]);
 
-        /* @var array{projects: array<string, array{tiers: array<string, array{substitutes: list<mixed>}>}>} $config */
-        self::assertSame($substitutes, $config['projects']['alpha']['tiers']['light']['substitutes']);
+        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'sonnet', 'substitutes' => $substitutes]]]], $config['projects']);
     }
 
     public function testASubstituteNeedsAKnownProviderAndAModel(): void
