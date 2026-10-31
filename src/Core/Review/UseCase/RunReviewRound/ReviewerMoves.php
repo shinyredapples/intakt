@@ -49,7 +49,7 @@ final readonly class ReviewerMoves
         $this->ledger->reviewerBlocked($reviewer, $reason);
     }
 
-    // A stopped worker's reviewer goes round once more, the start being reported again.
+    // The start is reported again, because the ledger then shows every attempt a stopped worker cost.
     public function restart(RoundReviewer $reviewer, DateTimeImmutable $now): void
     {
         $reviewer->recordRestart();

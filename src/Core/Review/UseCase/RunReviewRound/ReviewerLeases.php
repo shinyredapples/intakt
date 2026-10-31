@@ -69,7 +69,7 @@ final readonly class ReviewerLeases
         });
     }
 
-    // Back to the queue without using the one retry of a stopped worker.
+    // Not counted as a restart, because only a stopped worker may use the one retry.
     public function handBack(RoundReviewer $reviewer): void
     {
         $this->inOneTransaction(function () use ($reviewer): void {
@@ -100,7 +100,7 @@ final readonly class ReviewerLeases
             throw ReviewerStillHeld::until($heldUntil, $now);
         }
 
-        // The worker counts as stopped: its reviewer is started once more, and blocked when that worker stops as well.
+        // The worker counts as stopped, so its reviewer is started once more, because one stop may be a deploy; a second stop blocks it.
         $reviewer->hasRestarted() ? $this->moves->block($reviewer, self::WORKER_STOPPED) : $this->moves->restart($reviewer, $now);
     }
 

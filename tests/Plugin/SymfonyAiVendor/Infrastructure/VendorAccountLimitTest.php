@@ -22,7 +22,7 @@ final class VendorAccountLimitTest extends TestCase
 {
     public function testACallBeyondAnAccountsParallelLimitIsRefusedWhileTheOtherCallsHoldTheSemaphore(): void
     {
-        $limit = self::limit(2);
+        $limit = $this->limit(2);
         $ran = [];
 
         $limit->run(Provider::Anthropic, function () use ($limit, &$ran): void {
@@ -42,7 +42,7 @@ final class VendorAccountLimitTest extends TestCase
 
     public function testAnotherAccountIsNotCappedByAFullOne(): void
     {
-        $limit = self::limit(1);
+        $limit = $this->limit(1);
 
         $result = $limit->run(Provider::Anthropic, static fn (): string => $limit->run(Provider::OpenAi, static fn (): string => 'ran'));
 
@@ -51,7 +51,7 @@ final class VendorAccountLimitTest extends TestCase
 
     public function testThePlaceIsFreeAgainWhenTheCallEnds(): void
     {
-        $limit = self::limit(1);
+        $limit = $this->limit(1);
         $limit->run(Provider::Anthropic, static fn (): null => null);
 
         self::assertSame('again', $limit->run(Provider::Anthropic, static fn (): string => 'again'));
@@ -59,18 +59,21 @@ final class VendorAccountLimitTest extends TestCase
 
     public function testThePlaceIsFreeAgainWhenTheCallFails(): void
     {
-        $limit = self::limit(1);
+        $limit = $this->limit(1);
+
+        $failure = null;
 
         try {
             $limit->run(Provider::Anthropic, static fn () => throw new RuntimeException('provider down'));
-            self::fail('The failure was swallowed.');
-        } catch (RuntimeException) {
+        } catch (RuntimeException $caught) {
+            $failure = $caught;
         }
 
+        self::assertInstanceOf(RuntimeException::class, $failure);
         self::assertSame('again', $limit->run(Provider::Anthropic, static fn (): string => 'again'));
     }
 
-    private static function limit(int $parallelCalls): VendorAccountLimit
+    private function limit(int $parallelCalls): VendorAccountLimit
     {
         return new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), $parallelCalls);
     }

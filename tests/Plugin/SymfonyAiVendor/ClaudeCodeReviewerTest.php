@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
-use Symfony\Component\Semaphore\SemaphoreFactory;
-use Symfony\Component\Semaphore\Store\LockStore;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -43,6 +38,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -56,6 +52,10 @@ use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ConfinedClaudeCodeClient::class)]
@@ -245,10 +245,10 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), self::unlimited());
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->unlimited());
     }
 
-    private static function unlimited(): VendorAccountLimit
+    private function unlimited(): VendorAccountLimit
     {
         return new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
     }

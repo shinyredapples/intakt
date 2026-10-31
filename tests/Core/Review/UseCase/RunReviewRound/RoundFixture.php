@@ -97,7 +97,7 @@ final readonly class RoundFixture
         return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities));
     }
 
-    // What a worker does first with a message; a test that stops here has a worker killed right after it took the reviewer.
+    // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
     public function takeAndStop(ReviewWithReviewer $message): void
     {
         $this->leases($this->entities)->take($message->reviewerId);

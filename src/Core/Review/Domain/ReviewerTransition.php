@@ -21,7 +21,7 @@ enum ReviewerTransition: string
         return match ($this) {
             self::Start => [ReviewerState::Queued],
             self::Receive, self::Fail, self::Requeue => [ReviewerState::Running],
-            // A message can reach the failure transport while its reviewer waits in the queue (handed back) or still looks running.
+            // Both places, because a message can reach the failure transport while its reviewer waits in the queue (handed back) or still looks running.
             self::Block => [ReviewerState::Queued, ReviewerState::Running],
         };
     }
