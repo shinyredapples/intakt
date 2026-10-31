@@ -30,6 +30,11 @@ final class ArchitectureGateTest extends SandboxTestCase
         $this->assertRejectedBy('architecture', 'domain-uses-use-case', 'PlaceOrderHandler');
     }
 
+    public function testAContractClassDependingOnItsUseCasesFails(): void
+    {
+        $this->assertRejectedBy('architecture', 'contract-uses-use-case', 'OrderSummary');
+    }
+
     public function testAClassWhoseFolderDoesNotMatchItsNamespaceFails(): void
     {
         $this->assertRejectedBy('architecture', 'class-in-wrong-folder', 'is not in src/Core/Order/Domain/Placed.php');
