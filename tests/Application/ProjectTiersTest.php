@@ -8,10 +8,12 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -24,7 +26,10 @@ use Symfony\Contracts\Service\ServiceProviderInterface;
 #[CoversNothing]
 final class ProjectTiersTest extends KernelTestCase
 {
-    private const array KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'INTAKT_CONFIG'];
+    private const array KEYS = [
+        'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'INTAKT_CONFIG',
+        'ANTHROPIC_API_KEY_TEAM', 'OPENAI_API_KEY_TEAM', 'OPENAI_COMPATIBLE_BASE_URL_TEAM', 'OPENAI_COMPATIBLE_API_KEY_TEAM', 'CLAUDE_CODE_OAUTH_TOKEN_TEAM',
+    ];
 
     private string $file = '';
 
@@ -142,6 +147,87 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame([Provider::Anthropic->value], array_keys($platforms->getProvidedServices()));
         self::assertInstanceOf(Claude::class, $anthropic->getModelCatalog()->getModel('big'));
         self::assertInstanceOf(TierPlatform::class, self::getContainer()->get(TierPlatform::class));
+    }
+
+    public function testTheAccountsOfAProviderAreTriedInTheListedOrderEachOnItsOwnPlatform(): void
+    {
+        $this->listAccounts('anthropic: [team, default]');
+        $_SERVER['ANTHROPIC_API_KEY_TEAM'] = 'test-value';
+
+        $container = $this->bootedContainer();
+        $platforms = $container->get(TierPlatform::PLATFORMS);
+        self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
+        $anthropic = $platforms->get(Provider::Anthropic->value);
+
+        self::assertSame(['team', 'default'], $this->accountsOf($container)[Provider::Anthropic->value]);
+        self::assertInstanceOf(AccountFailoverPlatform::class, $anthropic);
+        self::assertInstanceOf(Claude::class, $anthropic->getModelCatalog()->getModel('big'));
+    }
+
+    public function testAnAccountWithoutItsKeyIsLeftOutWithAMessageWhileItsProviderStaysEnabled(): void
+    {
+        $this->listAccounts('anthropic: [default, team]');
+
+        $container = $this->bootedContainer();
+
+        self::assertSame(['default'], $this->accountsOf($container)[Provider::Anthropic->value]);
+        self::assertSame(['Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.'], $container->getParameter('intakt.ai.disabled_accounts'));
+        self::assertArrayNotHasKey(Provider::Anthropic->value, (array) $container->getParameter('intakt.ai.disabled_providers'));
+    }
+
+    public function testAProviderWhoseEveryListedAccountLacksItsKeyIsDisabled(): void
+    {
+        $this->listAccounts('anthropic: [team]');
+
+        $disabled = (array) $this->bootedContainer()->getParameter('intakt.ai.disabled_providers');
+
+        self::assertSame('Provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.', $disabled[Provider::Anthropic->value]);
+    }
+
+    /**
+     * @return iterable<string, array{Provider, list<string>, string}>
+     */
+    public static function otherAccounts(): iterable
+    {
+        yield 'openai' => [Provider::OpenAi, ['OPENAI_API_KEY_TEAM'], 'other'];
+        yield 'openai_compatible' => [Provider::OpenAiCompatible, ['OPENAI_COMPATIBLE_BASE_URL_TEAM', 'OPENAI_COMPATIBLE_API_KEY_TEAM'], 'local'];
+        yield 'claude_code' => [Provider::ClaudeCode, ['CLAUDE_CODE_OAUTH_TOKEN_TEAM'], 'sonnet'];
+    }
+
+    /**
+     * @param list<string> $variables
+     */
+    #[DataProvider('otherAccounts')]
+    public function testAnotherAccountOfEachProviderGetsAPlatformThatKnowsTheProjectModels(Provider $provider, array $variables, string $model): void
+    {
+        file_put_contents($this->file, "projects:\n    gamma:\n        tiers:\n            strong: { provider: {$provider->value}, model: {$model} }\naccounts:\n    {$provider->value}: [team]\n");
+        foreach ($variables as $variable) {
+            // The OpenAI bridge refuses a key without its prefix.
+            $_SERVER[$variable] = str_contains($variable, 'BASE_URL') ? 'http://localhost:8080' : 'sk-test-value';
+        }
+
+        $platforms = $this->bootedContainer()->get(TierPlatform::PLATFORMS);
+        self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
+        $platform = $platforms->get($provider->value);
+
+        self::assertInstanceOf(AccountFailoverPlatform::class, $platform);
+        self::assertSame($model, $platform->getModelCatalog()->getModel($model)->getName());
+    }
+
+    private function listAccounts(string $line): void
+    {
+        file_put_contents($this->file, "\naccounts:\n    {$line}\n", FILE_APPEND);
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function accountsOf(ContainerInterface $container): array
+    {
+        /** @var array<string, list<string>> $accounts */
+        $accounts = $container->getParameter('intakt.ai.accounts');
+
+        return $accounts;
     }
 
     private function bootedPanels(): ConfiguredPanels
