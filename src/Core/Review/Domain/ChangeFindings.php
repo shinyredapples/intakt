@@ -21,7 +21,7 @@ final class ChangeFindings
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]
-        private readonly string $project,
+        public readonly string $project,
         // Named change_ref, because CHANGE is a reserved word in MySQL and MariaDB.
         #[ORM\Id]
         #[ORM\Column(name: 'change_ref', length: 255)]

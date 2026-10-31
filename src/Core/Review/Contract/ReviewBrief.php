@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-// What a reviewer is told about the change: its task and, from round two on, the findings earlier rounds left open.
+// Its own value, because a reviewer is always told the task and the open findings together and the request stays at three parts.
 final readonly class ReviewBrief
 {
     /**

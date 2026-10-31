@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Domain;
 
 use Doctrine\ORM\Mapping as ORM;
 
-// The defaults only fill the rounds stored before rounds were counted per change.
+// Defaults, because rounds stored before rounds were counted per change need a value in the new columns.
 #[ORM\Embeddable]
 final readonly class ChangeRound
 {

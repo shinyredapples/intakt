@@ -15,7 +15,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Symfony\Component\Serializer\SerializerInterface;
 
-// The finding ledger of each change, kept between its rounds; the writes run inside the caller's transaction, on the change's locked row.
+// Writes run inside the caller's transaction on the change's locked row, because two rounds of one change must not interleave their updates of its ledger.
 final readonly class StoredFindings
 {
     public function __construct(
@@ -79,7 +79,7 @@ final readonly class StoredFindings
      */
     private function verdictsOf(ReviewRound $round): array
     {
-        $stored = array_filter(array_map(static fn ($reviewer): ?string => $reviewer->verdictJson(), $round->reviewers()));
+        $stored = array_filter(array_map(static fn ($reviewer): ?string => $reviewer->verdictJson(), $round->reviewers()), static fn (?string $json): bool => null !== $json);
 
         return array_values(array_map(fn (string $json): Verdict => $this->serializer->deserialize($json, Verdict::class, 'json'), $stored));
     }
