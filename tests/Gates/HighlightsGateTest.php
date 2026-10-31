@@ -358,6 +358,30 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringContainsString('cites a pull request ("PR #12")', $run->findingsOf('highlights'));
     }
 
+    public function testAPullRequestNumberBetweenEscapedBackticksIsRefused(): void
+    {
+        $run = $this->checkRows("| A | a | done | \\`PR12\\` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('cites a pull request ("PR12")', $run->findingsOf('highlights'));
+    }
+
+    public function testACodeSpanAfterAnEscapedBackslashHidesAPullRequestNumber(): void
+    {
+        $run = $this->checkRows("| A | a | done | \\\\`PR12` |\n");
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testACodeSpanRightAfterAnEscapedBacktickIsCheckedAsAPath(): void
+    {
+        $run = $this->checkRows("| A | a | done | \\``upstream/pr1-repro/` |\n");
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('`upstream/pr1-repro/`, which does not exist', $run->findingsOf('highlights'));
+        self::assertStringNotContainsString('cites a pull request', $run->findingsOf('highlights'));
+    }
+
     public function testAMissingRootFileWithPunctuationInItsNameFails(): void
     {
         $sandbox = $this->sandboxWithKernel();
