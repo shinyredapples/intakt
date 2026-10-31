@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SplFileInfo;
 
 #[CoversClass(RequiredTools::class)]
 final class RequiredToolsTest extends TestCase
@@ -27,7 +28,8 @@ final class RequiredToolsTest extends TestCase
     protected function setUp(): void
     {
         $this->path = getenv('PATH');
-        $this->cwd = getcwd() ?: '.';
+        $cwd = getcwd();
+        $this->cwd = false === $cwd ? '.' : $cwd;
         putenv('INTAKT_GITLEAKS');
         $this->base = sys_get_temp_dir().'/intakt-required-tools-'.bin2hex(random_bytes(6));
         $this->root = $this->base.'/workspace';
@@ -160,7 +162,11 @@ final class RequiredToolsTest extends TestCase
         $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
 
         foreach ($files as $file) {
-            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+            if ($file instanceof SplFileInfo && $file->isDir()) {
+                rmdir($file->getPathname());
+            } elseif ($file instanceof SplFileInfo) {
+                unlink($file->getPathname());
+            }
         }
 
         rmdir($directory);

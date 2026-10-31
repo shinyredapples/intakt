@@ -89,7 +89,8 @@ final readonly class RequiredTools
      */
     private function relativePathEntriesUnderTheRoot(): array
     {
-        $root = str_starts_with($this->root, '/') ? $this->root : (getcwd() ?: '.').'/'.$this->root;
+        $cwd = getcwd();
+        $root = str_starts_with($this->root, '/') ? $this->root : (false === $cwd ? '.' : $cwd).'/'.$this->root;
         $entries = explode(PATH_SEPARATOR, (string) getenv('PATH'));
         $relative = array_filter($entries, static fn (string $entry): bool => !str_starts_with($entry, '/'));
 
