@@ -132,6 +132,17 @@ final class RequiredToolsTest extends TestCase
         self::assertSame([RequiredTools::notFound('caller-tool')], $this->tools()->missingFor(['secrets']));
     }
 
+    public function testAToolUnderTheCallersRelativePathEntryAndALaterAbsoluteEntryIsFound(): void
+    {
+        $this->install($this->caller.'/tools/shared-tool');
+        $this->install($this->base.'/absolute/shared-tool');
+        chdir($this->caller);
+        putenv('PATH=tools'.PATH_SEPARATOR.$this->base.'/absolute'.PATH_SEPARATOR.(false === $this->path ? '' : $this->path));
+        putenv('INTAKT_GITLEAKS=shared-tool');
+
+        self::assertSame([], $this->tools()->missingFor(['secrets']));
+    }
+
     public function testToolsOnThePathAreFound(): void
     {
         self::assertSame([], $this->tools()->missingFor(['cs']));

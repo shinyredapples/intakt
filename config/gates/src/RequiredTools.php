@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use Symfony\Component\Process\ExecutableFinder;
-
 final readonly class RequiredTools
 {
     public const string SCANNER_ENVIRONMENT = 'INTAKT_GITLEAKS';
@@ -74,27 +72,23 @@ final readonly class RequiredTools
             return $this->isExecutable(str_starts_with($name, '/') ? $name : $this->root.'/'.$name);
         }
 
-        $found = new ExecutableFinder()->find($name, null, $this->relativePathEntriesUnderTheRoot());
-
-        if (null === $found) {
-            return false;
+        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $entry) {
+            if ($this->isExecutable($this->directoryOf($entry).'/'.$name)) {
+                return true;
+            }
         }
 
-        // Because the finder resolves a relative PATH entry from the caller's directory, such a find counts only when the root holds it too.
-        return str_starts_with($found, '/') || $this->isExecutable($this->root.'/'.$found);
+        return false;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function relativePathEntriesUnderTheRoot(): array
+    // Because a gate starts its command in the workspace root, a relative or empty PATH entry resolves there, as the shell does.
+    private function directoryOf(string $entry): string
     {
-        $cwd = getcwd();
-        $root = str_starts_with($this->root, '/') ? $this->root : (false === $cwd ? '.' : $cwd).'/'.$this->root;
-        $entries = explode(PATH_SEPARATOR, (string) getenv('PATH'));
-        $relative = array_filter($entries, static fn (string $entry): bool => !str_starts_with($entry, '/'));
+        if ('' === $entry) {
+            return $this->root;
+        }
 
-        return array_values(array_map(static fn (string $entry): string => rtrim($root.'/'.$entry, '/'), $relative));
+        return str_starts_with($entry, '/') ? $entry : $this->root.'/'.$entry;
     }
 
     private function isExecutable(string $path): bool
