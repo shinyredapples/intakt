@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // A value built per change, not a service, so the container must not wire it.
@@ -25,6 +26,36 @@ final class FindingLedger
         foreach ($findings as $finding) {
             $this->track($round, $finding, $earlier);
         }
+    }
+
+    // Unlike recordRound, only a finding marked repeat keeps an id: the reviewer was shown the open ids and says which ones came back.
+    public function recordVerdict(int $round, Verdict $verdict): void
+    {
+        $this->resolve($verdict->resolved);
+        $earlier = $this->tracked;
+        foreach ($verdict->findings as $finding) {
+            $this->trackRepeat($round, $finding, $earlier);
+        }
+    }
+
+    /**
+     * @return list<Finding> the open findings under their ledger ids, as a reviewer is shown them
+     */
+    public function openForReviewers(): array
+    {
+        return array_map(static fn (TrackedFinding $tracked): Finding => new Finding(
+                $tracked->id,
+                $tracked->latest->severity,
+                $tracked->latest->file,
+                $tracked->latest->line,
+                $tracked->latest->symbol,
+                $tracked->latest->text,
+                $tracked->latest->fixable_by,
+                $tracked->latest->repeat,
+                $tracked->latest->requirement,
+                $tracked->latest->evidence,
+            ),
+            $this->open(),);
     }
 
     /**
@@ -68,6 +99,20 @@ final class FindingLedger
         }
 
         $this->tracked[$finding->id] = $this->tracked[$finding->id]->seenAgain($round, $finding);
+    }
+
+    /**
+     * @param array<string, TrackedFinding> $earlier
+     */
+    private function trackRepeat(int $round, Finding $finding, array $earlier): void
+    {
+        if ($finding->repeat && isset($earlier[$finding->id])) {
+            $this->tracked[$finding->id] = $this->tracked[$finding->id]->seenAgain($round, $finding);
+
+            return;
+        }
+
+        $this->start($round, $finding);
     }
 
     private function start(int $round, Finding $finding): void

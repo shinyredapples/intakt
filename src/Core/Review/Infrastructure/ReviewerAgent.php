@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Infrastructure;
 use Closure;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
@@ -42,12 +43,26 @@ final readonly class ReviewerAgent implements Reviewer
     #[Override]
     public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
     {
-        $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->task));
+        $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->task, $request->open));
         $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
 
         $verdict = $this->answerOf($this->agent($tools, $platform, $model)->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]));
 
-        return $tools->seen() ? Verdict::invalidOutput('the reviewer made a malformed tool call.') : $verdict;
+        if ($tools->seen()) {
+            return Verdict::invalidOutput('the reviewer made a malformed tool call.');
+        }
+
+        return $this->checkedAgainst($request, $verdict);
+    }
+
+    // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
+    private function checkedAgainst(ReviewRequest $request, Verdict $verdict): Verdict
+    {
+        $open = array_map(static fn (Finding $finding): string => $finding->id, $request->open);
+        $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
+        $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
+
+        return [] === $unknown ? $verdict : Verdict::invalidOutput(sprintf('the verdict names ids that were not open: %s.', implode(', ', array_map(strval(...), $unknown))));
     }
 
     // Saved before the agent runs because the store refuses them when another review stored its own under the same id, also when both started at once, so no reviewer continues another's conversation.

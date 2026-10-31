@@ -8,6 +8,11 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Domain\FindingLedger;
+use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -54,6 +59,9 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(FindingLedger::class)]
+#[UsesClass(TrackedFinding::class)]
 #[UsesClass(VerdictParser::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReadFile::class)]
@@ -71,6 +79,11 @@ final class ReviewerVerdictTest extends WebTestCase
     private MessageStoreInterface $conversations;
 
     private UuidV7 $conversation;
+
+    /**
+     * @var list<Finding>
+     */
+    private array $open = [];
 
     /**
      * @var list<string>
@@ -92,6 +105,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testTheAgentReadsAFileAtTheHeadAndReturnsTheVerdictTheModelAnswered(): void
     {
+        $this->open = [$this->openFinding('F1'), $this->openFinding('F2')];
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], VerdictDocument::fromTheDesign()->json());
 
         self::assertSame(Decision::Changes, $verdict->verdict);
@@ -100,6 +114,67 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);
         self::assertStringContainsString('final class Cart', $this->sent[1]);
+    }
+
+    public function testTheFirstRoundPromptHasNoOpenFindingsMessage(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertStringNotContainsString('UNTRUSTED earlier findings', $this->sent[0]);
+    }
+
+    public function testTheRoundTwoPromptCarriesEveryOpenFindingFencedAfterTheTask(): void
+    {
+        $this->open = [$this->openFinding('F1'), $this->openFinding('F2')];
+
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertStringContainsString('<<<UNTRUSTED earlier findings fence-', $this->sent[0]);
+        self::assertStringContainsString('F1 [P2] src\/A.php:3', $this->sent[0]);
+        self::assertStringContainsString('F2 [P2] src\/A.php:3', $this->sent[0]);
+        self::assertGreaterThan(strpos($this->sent[0], 'The task of the change'), strpos($this->sent[0], 'The open findings of earlier rounds'));
+    }
+
+    public function testAVerdictThatResolvesAnIdThatIsNotOpenIsRejectedAsInvalidOutput(): void
+    {
+        $this->open = [$this->openFinding('F1')];
+
+        $verdict = $this->review('Add a cart.', [], '{"verdict":"approve","findings":[],"resolved":["F9"],"follow_ups":[]}');
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testARepeatWithAnIdThatIsNotOpenIsRejectedAsInvalidOutput(): void
+    {
+        $this->open = [$this->openFinding('F1')];
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('id', 'F7')->withFinding('repeat', true)->json());
+
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testARepeatWithAnOpenIdIsAccepted(): void
+    {
+        $this->open = [$this->openFinding('F3')];
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('repeat', true)->json());
+
+        self::assertSame('F3', $verdict->findings[0]->id);
+    }
+
+    public function testAScriptedTwoRoundReviewShowsTheOpenFindingsAndClosesTheResolvedOne(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, new Verdict(Decision::Changes, [$this->openFinding('a'), $this->openFinding('b')], [], []));
+        $this->open = $ledger->openForReviewers();
+
+        $verdict = $this->review('Add a cart.', [], '{"verdict":"changes","findings":[{"id":"F2","severity":"P2","file":"src/A.php","line":3,"symbol":null,"text":"Still there","fixable_by":"builder","repeat":true,"requirement":null,"evidence":null}],"resolved":["F1"],"follow_ups":[]}');
+        $ledger->recordVerdict(2, $verdict);
+
+        self::assertStringContainsString('F1 [P2] src\/A.php:3', $this->sent[0]);
+        self::assertSame(['F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $ledger->open()));
+        self::assertSame([1, 2], $ledger->all()[1]->rounds);
     }
 
     public function testTheConversationOfTheRoundIsKeptInTheMessageStore(): void
@@ -334,13 +409,18 @@ final class ReviewerVerdictTest extends WebTestCase
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), static fn (): TraceableToolbox => $toolbox, $this->conversations);
 
-        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, $task, new ReviewerConversation('You review for correctness.', $this->conversation)), $platform, 'reviewer-model');
+        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, $task, new ReviewerConversation('You review for correctness.', $this->conversation), $this->open), $platform, 'reviewer-model');
 
         $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 
     /**

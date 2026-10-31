@@ -8,4 +8,5 @@ enum UntrustedSource: string
 {
     case Task = 'task';
     case ToolResult = 'tool result';
+    case EarlierFindings = 'earlier findings';
 }
