@@ -12,7 +12,6 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
@@ -186,7 +185,6 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $values = [];
 
         foreach ($this->fixture->ledger()->readInOrder() as $recorded) {
-            assert($recorded instanceof RecordedEvent);
             if ($kind === $recorded->event->kind) {
                 /** @var array<string, mixed> $payload */
                 $payload = json_decode($recorded->event->payload, true, flags: JSON_THROW_ON_ERROR);

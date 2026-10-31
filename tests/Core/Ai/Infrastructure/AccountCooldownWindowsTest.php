@@ -49,7 +49,7 @@ final class AccountCooldownWindowsTest extends TestCase
         $cooldowns->coolDown($this->default(), 300);
 
         self::assertTrue($cooldowns->isCoolingDown($this->default()));
-        self::assertEqualsWithDelta(300, $this->secondsUntilFree($cooldowns, $this->default()), 1);
+        self::assertEqualsWithDelta(300, $this->secondsUntilFree($this->default()), 1);
     }
 
     public function testTheCooldownOfOneAccountLeavesTheOtherAccountOfItsVendorFree(): void
@@ -94,7 +94,7 @@ final class AccountCooldownWindowsTest extends TestCase
 
         $cooldowns->coolDown($this->default(), null);
 
-        self::assertEqualsWithDelta(60, $this->secondsUntilFree($cooldowns, $this->default()), 1);
+        self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
     }
 
     public function testAResetThatIsNowOrPastLeavesTheAccountFreeAndRecordsNothing(): void
@@ -114,7 +114,7 @@ final class AccountCooldownWindowsTest extends TestCase
 
         $cooldowns->coolDown($this->default(), PHP_INT_MAX);
 
-        self::assertEqualsWithDelta(86400, $this->secondsUntilFree($cooldowns, $this->default()), 1);
+        self::assertEqualsWithDelta(86400, $this->secondsUntilFree($this->default()), 1);
     }
 
     public function testACooldownIsRecordedInTheLedgerWithItsAccountAndEnd(): void
@@ -134,7 +134,7 @@ final class AccountCooldownWindowsTest extends TestCase
         $cooldowns->coolDown($this->default(), 120);
         $cooldowns->coolDown($this->default(), 600);
 
-        self::assertEqualsWithDelta(120, $this->secondsUntilFree($cooldowns, $this->default()), 1);
+        self::assertEqualsWithDelta(120, $this->secondsUntilFree($this->default()), 1);
         self::assertCount(1, $this->ledger->kinds());
     }
 
@@ -157,7 +157,7 @@ final class AccountCooldownWindowsTest extends TestCase
     }
 
     // Alone on its provider, so the provider's wait is the account's own.
-    private function secondsUntilFree(AccountCooldownWindows $cooldowns, Account $account): int
+    private function secondsUntilFree(Account $account): int
     {
         return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), [Provider::Anthropic->value => [$account->name]])
             ->secondsUntilAnAccountIsFree(Provider::Anthropic);

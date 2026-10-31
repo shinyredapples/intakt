@@ -124,7 +124,7 @@ final class AccountFailoverPlatformTest extends TestCase
 
         $this->expectException(EveryAccountCoolingDown::class);
 
-        $_ = $this->accounts($this->answering($limited), $this->answering($limited))->invoke('big', 'Review.');
+        $this->accounts($this->answering($limited), $this->answering($limited))->invoke('big', 'Review.');
     }
 
     public function testACallWhoseEveryAccountFailsWithoutALimitKeepsTheFailoverError(): void
