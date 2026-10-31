@@ -33,9 +33,9 @@ final class ChangeFindings
     ) {
     }
 
-    public function openRound(): ChangeRound
+    public function openRound(string $openFindingsJson): ChangeRound
     {
-        return new ChangeRound($this->change, ++$this->rounds);
+        return new ChangeRound($this->change, ++$this->rounds, $openFindingsJson);
     }
 
     public function findingsJson(): string

@@ -14,6 +14,8 @@ use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
+use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
@@ -24,6 +26,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(StoredFindings::class)]
@@ -32,6 +35,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[UsesClass(RunReviewRound::class)]
+#[UsesClass(ReviewRound::class)]
+#[UsesClass(ReviewSubject::class)]
 #[UsesClass(FindingLedger::class)]
 #[UsesClass(TrackedFinding::class)]
 #[UsesClass(FindingStatus::class)]
@@ -160,6 +165,45 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         $this->deliver($newer, [self::FIRST => $this->changes(['F1'], [])]);
 
         self::assertSame(FindingStatus::Resolved, $this->fixture->storedFindings(self::CHANGE)[0]->status);
+    }
+
+    public function testTheReviewersOfAnOlderRoundAreToldTheSameOpenFindingsWhenANewerRoundCompletesBetweenThem(): void
+    {
+        $older = $this->started(self::CHANGE);
+        $newer = $this->started(self::CHANGE);
+        $vendor = new VerdictPerRole([]);
+
+        $this->fixture->deliver($older->messages[0], $vendor);
+        $this->deliver($newer, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+        $this->fixture->deliver($older->messages[1], $vendor);
+
+        self::assertSame([], $this->openIds($vendor->briefs[self::FIRST]));
+        self::assertSame([], $this->openIds($vendor->briefs[self::SECOND]));
+    }
+
+    public function testTheReviewersOfANewerRoundAreToldTheSameOpenFindingsWhenAnOlderRoundResolvesOneBetweenThem(): void
+    {
+        $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+        $older = $this->started(self::CHANGE);
+        $newer = $this->started(self::CHANGE);
+        $vendor = new VerdictPerRole([self::FIRST => $this->changes([], [$this->finding('F1', true)])]);
+
+        $this->fixture->deliver($newer->messages[0], $vendor);
+        $this->deliver($older, [self::FIRST => $this->changes(['F1'], [])]);
+        $this->fixture->deliver($newer->messages[1], $vendor);
+
+        self::assertSame(['F1'], $this->openIds($vendor->briefs[self::FIRST]));
+        self::assertSame(['F1'], $this->openIds($vendor->briefs[self::SECOND]));
+        $stored = $this->fixture->storedFindings(self::CHANGE);
+        self::assertSame(FindingStatus::Open, $stored[0]->status);
+        self::assertSame([1, 3], $stored[0]->rounds);
+    }
+
+    public function testARoundStoredBeforeTheOpenFindingsWereKeptWithItIsToldNone(): void
+    {
+        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'), new ChangeRound(self::CHANGE, 2, null));
+
+        self::assertSame([], $this->fixture->openFindingsOf($round));
     }
 
     /**

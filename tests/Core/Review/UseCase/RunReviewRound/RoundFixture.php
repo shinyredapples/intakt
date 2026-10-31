@@ -15,6 +15,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -104,6 +105,14 @@ final readonly class RoundFixture
         assert(is_array($tracked));
 
         return array_values(array_filter($tracked, static fn (mixed $finding): bool => $finding instanceof TrackedFinding));
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    public function openFindingsOf(ReviewRound $round): array
+    {
+        return $this->rounds($this->entities)->openFindingsOf($round);
     }
 
     /**

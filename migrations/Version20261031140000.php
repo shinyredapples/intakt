@@ -15,11 +15,11 @@ use Doctrine\Migrations\AbstractMigration;
 
 final class Version20261031140000 extends AbstractMigration
 {
-    private const array COLUMNS = ['change_ref', 'round_number'];
+    private const array COLUMNS = ['change_ref', 'round_number', 'open_findings'];
 
     public function getDescription(): string
     {
-        return 'Create the change_findings table of the finding ledger and add the change and round number to review_round';
+        return 'Create the change_findings table of the finding ledger and add the change, round number and open findings to review_round';
     }
 
     public function up(Schema $schema): void
@@ -31,6 +31,8 @@ final class Version20261031140000 extends AbstractMigration
         $columns = [
             Column::editor()->setUnquotedName('change_ref')->setTypeName(Types::STRING)->setLength(255)->setDefaultValue('')->create(),
             Column::editor()->setUnquotedName('round_number')->setTypeName(Types::INTEGER)->setDefaultValue(1)->create(),
+            // Nullable rather than defaulted, because MySQL refuses a default on a text column.
+            Column::editor()->setUnquotedName('open_findings')->setTypeName(Types::TEXT)->setNotNull(false)->create(),
         ];
 
         foreach ($this->platform->getAlterTableSQL(new TableDiff($schema->getTable('review_round'), addedColumns: $columns)) as $sql) {

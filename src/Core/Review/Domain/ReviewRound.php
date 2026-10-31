@@ -73,6 +73,11 @@ final class ReviewRound implements HasPlace
         return $this->change->number;
     }
 
+    public function openFindingsJson(): ?string
+    {
+        return $this->change->openFindings;
+    }
+
     /**
      * @return list<RoundReviewer>
      */

@@ -28,9 +28,12 @@ final readonly class StoredFindings
     ) {
     }
 
+    // The open findings are taken once here, under the change's lock, and stored with the round, because a reviewer that read the ledger at its own start could be told what another round of the change recorded meanwhile.
     public function openRound(string $project, string $change): ChangeRound
     {
-        return $this->locked($project, $change)->openRound();
+        $stored = $this->locked($project, $change);
+
+        return $stored->openRound(json_encode($this->ledgerOf($stored)->openForReviewers(), JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -38,9 +41,17 @@ final readonly class StoredFindings
      */
     public function openFor(ReviewRound $round): array
     {
-        $stored = $this->entities->find(ChangeFindings::class, ['project' => $round->project(), 'change' => $round->change()]);
+        $json = $round->openFindingsJson();
 
-        return $stored instanceof ChangeFindings ? $this->ledgerOf($stored)->openForReviewers() : [];
+        // A round stored before the ledger existed kept no open findings, and had none to tell.
+        if (null === $json) {
+            return [];
+        }
+
+        /** @var list<Finding> $open */
+        $open = $this->serializer->deserialize($json, Finding::class.'[]', 'json');
+
+        return $open;
     }
 
     // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed.
@@ -54,7 +65,7 @@ final readonly class StoredFindings
         $this->recordVerdictsOf($round);
     }
 
-    // Every verdict of the round at once, when it completes, so each reviewer of a round was shown the same open findings.
+    // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.
     private function recordVerdictsOf(ReviewRound $round): void
     {
         $stored = $this->locked($round->project(), $round->change());
