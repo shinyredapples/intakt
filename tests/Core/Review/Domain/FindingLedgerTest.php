@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
+use Intakt\Core\Review\Domain\RoundNotAfterLatest;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FindingLedger::class)]
 #[CoversClass(TrackedFinding::class)]
+#[CoversClass(RoundNotAfterLatest::class)]
 #[UsesClass(FindingStatus::class)]
 #[UsesClass(Finding::class)]
 final class FindingLedgerTest extends TestCase
@@ -116,6 +118,66 @@ final class FindingLedgerTest extends TestCase
         $ledger->resolve(['F9']);
 
         self::assertCount(1, $ledger->open());
+    }
+
+    public function testRecordingTheSameRoundAgainIsRefusedAndLeavesTheLedgerUnchanged(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(1, [$this->finding('x'), $this->finding('y')]);
+        $ledger->resolve(['F1']);
+        $all = $ledger->all();
+        $open = $ledger->open();
+
+        $this->recordRefusedRound($ledger, 1);
+
+        self::assertEquals($all, $ledger->all());
+        self::assertEquals($open, $ledger->open());
+    }
+
+    public function testRecordingAnEarlierRoundIsRefusedAndLeavesTheLedgerUnchanged(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(3, [$this->finding('x'), $this->finding('y')]);
+        $ledger->resolve(['F1']);
+        $all = $ledger->all();
+        $open = $ledger->open();
+
+        $this->recordRefusedRound($ledger, 2);
+
+        self::assertEquals($all, $ledger->all());
+        self::assertEquals($open, $ledger->open());
+    }
+
+    public function testTheRefusalNamesTheRefusedAndTheLatestRound(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(4, []);
+
+        $this->expectException(RoundNotAfterLatest::class);
+        $this->expectExceptionMessage('Round 2 is not after the latest recorded round 4.');
+
+        $ledger->recordRound(2, []);
+    }
+
+    public function testTheFirstRoundMayBeAnyNumberAndLaterRoundsOnlyNeedToBeHigher(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordRound(5, [$this->finding('x')]);
+        $ledger->recordRound(6, []);
+        $ledger->recordRound(9, [$this->finding('F1')]);
+
+        self::assertSame([5, 9], $ledger->all()[0]->rounds);
+    }
+
+    private function recordRefusedRound(FindingLedger $ledger, int $round): void
+    {
+        try {
+            $ledger->recordRound($round, [$this->finding('F1'), $this->finding('new')]);
+        } catch (RoundNotAfterLatest) {
+            return;
+        }
+
+        self::fail('Round '.$round.' was recorded out of order.');
     }
 
     private function finding(string $id): Finding
