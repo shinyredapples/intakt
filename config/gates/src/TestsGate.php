@@ -33,6 +33,12 @@ final class TestsGate implements Gate
             return GateResult::failedBecause($this->name(), $unready);
         }
 
+        try {
+            $gateTests = $workspace->changesGateTests();
+        } catch (ScopeFailure $failure) {
+            return GateResult::failedBecause($this->name(), $failure->getMessage());
+        }
+
         $scratch = $this->scratchDirectory();
 
         if (null === $scratch) {
@@ -40,7 +46,7 @@ final class TestsGate implements Gate
         }
 
         try {
-            return $this->resultOf($workspace, $scratch);
+            return $this->resultOf($workspace, $scratch, $gateTests);
         } finally {
             $this->remove($scratch);
         }
@@ -61,12 +67,12 @@ final class TestsGate implements Gate
         return null;
     }
 
-    private function resultOf(Workspace $workspace, string $scratch): GateResult
+    private function resultOf(Workspace $workspace, string $scratch, bool $gateTests): GateResult
     {
         $passes = ['sqlite' => self::CONFIGURATION];
 
         // Because unchanged gate code with an unchanged lock file gives the same result, and every push to main runs both passes.
-        if (!$workspace->changesGateTests()) {
+        if (!$gateTests) {
             return GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes))->noted(self::SKIPPED_GATES_PASS);
         }
 

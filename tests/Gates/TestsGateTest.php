@@ -64,6 +64,23 @@ final class TestsGateTest extends SandboxTestCase
         self::assertSame('', $run->noteOf('tests'));
     }
 
+    public function testAGitFailureWhileReadingTheChangeFailsTheGateWithItsReason(): void
+    {
+        $sandbox = $this->branchOffABaseWithAFailingGateTest();
+        $sandbox->write('src/Report.php', "<?php\n\ndeclare(strict_types=1);\n");
+        $sandbox->commitAll('feat: add a report');
+        chmod($sandbox->root.'/src/Report.php', 0o000);
+
+        try {
+            $run = $sandbox->check('--only=tests', '--base=main');
+        } finally {
+            chmod($sandbox->root.'/src/Report.php', 0o644);
+        }
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('git', $run->findingsOf('tests'));
+    }
+
     private function branchOffABaseWithAFailingGateTest(): Sandbox
     {
         $sandbox = $this->sandboxWith('tests-clean');
