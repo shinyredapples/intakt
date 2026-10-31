@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
+use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
 use Symfony\AI\Platform\Bridge\Generic\CompletionsModel;
 use Symfony\AI\Platform\Bridge\OpenAi\Gpt;
 use Symfony\AI\Platform\Capability;
@@ -49,6 +50,16 @@ final class ProjectModelCatalogTest extends TestCase
         $catalog = new ProjectModelCatalog(['gamma' => ['tiers' => ['light' => ['provider' => 'openai_compatible', 'model' => 'local']]]]);
 
         self::assertSame(CompletionsModel::class, $catalog->models(Provider::OpenAiCompatible)['local']['class']);
+    }
+
+    public function testASubscriptionModelIsAddedEvenWhenTheBridgeKnowsItSoItSupportsStructuredOutput(): void
+    {
+        $catalog = new ProjectModelCatalog(['gamma' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]]);
+
+        $models = $catalog->models(Provider::ClaudeCode);
+
+        self::assertSame(ClaudeCode::class, $models['sonnet']['class']);
+        self::assertContains(Capability::OUTPUT_STRUCTURED, $models['sonnet']['capabilities']);
     }
 
     public function testAProviderNoProjectMapsGetsNoModels(): void
