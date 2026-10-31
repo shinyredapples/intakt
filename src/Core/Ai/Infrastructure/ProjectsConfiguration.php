@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
@@ -15,6 +16,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
     public function getConfigTreeBuilder(): TreeBuilder
     {
         $tree = new TreeBuilder('intakt');
+        $this->addAccounts($tree);
         $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false)->arrayPrototype()->children();
         $tiers = $projects->arrayNode('tiers')->addDefaultsIfNotSet()->children();
 
@@ -27,5 +29,17 @@ final class ProjectsConfiguration implements ConfigurationInterface
         }
 
         return $tree;
+    }
+
+    // A list, not a map, because its order is the order the accounts are tried; a provider not listed keeps its default account so a single key needs no entry.
+    private function addAccounts(TreeBuilder $tree): void
+    {
+        $accounts = $tree->getRootNode()->children()->arrayNode('accounts')->addDefaultsIfNotSet()->children();
+
+        foreach (Provider::cases() as $provider) {
+            $accounts->arrayNode($provider->value)->defaultValue([Account::DEFAULT])->requiresAtLeastOneElement()->stringPrototype()->end()
+                ->validate()->ifTrue(static fn (array $names): bool => [] !== preg_grep(Account::NAME_PATTERN, $names, PREG_GREP_INVERT))->thenInvalid('An account name must start with a lowercase letter and hold only lowercase letters, digits and underscores.')->end()
+                ->validate()->ifTrue(static fn (array $names): bool => count($names) !== count(array_unique($names, SORT_REGULAR)))->thenInvalid('An account must be listed once.')->end();
+        }
     }
 }

@@ -78,7 +78,7 @@ These Symfony components keep many jobs running in the right order, without anyo
 | **Workflow** | a board game's rules | the steps of a review round and of each reviewer in it, and which moves are allowed, drawn as a diagram | partly built: a round (collecting, complete) and each reviewer (queued, running, verdict, failed or blocked, and back to queued when its result could not be written down or the provider limited the call) are built; the steps of the whole review loop below are planned |
 | **Scheduler** | an alarm clock | checks usage, wakes up waiting tasks at their deadline, cleans up old branches weekly | planned |
 | **Lock** | a "one at a time" sign | stops too many calls to the same AI account at once | built: at most three calls run at once for one AI account, and a reviewer that finds no free place goes back to the queue and tries again shortly |
-| **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | planned |
+| **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | partly built: an AI account that hit its limit rests until the company's reset time, and its reviewers move to the next account of the same company meanwhile; spacing calls out before a limit is planned |
 | **Console** | a remote control | commands such as running the bug reproductions or summarizing a change | in progress |
 | **Uid** | a ticket number | every event gets a unique id that also says when it happened | in progress |
 | **Process** | a helper that runs errands | runs git and test commands safely, with a time limit | in use |

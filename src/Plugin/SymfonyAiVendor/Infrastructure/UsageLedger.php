@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -118,8 +119,17 @@ final readonly class UsageLedger
         }
 
         $usages = $usage instanceof TokenUsageAggregation ? $usage->getTokenUsages() : [$usage];
+        $account = $this->accountOf($result);
 
-        return array_values(array_map($this->asRow(...), $usages));
+        return array_values(array_map(fn (TokenUsageInterface $part): array => ['account' => $account] + $this->asRow($part), $usages));
+    }
+
+    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
+    private function accountOf(DeferredResult $result): ?string
+    {
+        $account = $result->getMetadata()->get(Account::METADATA);
+
+        return is_string($account) ? $account : null;
     }
 
     // An answer that fails to map leaves no metadata on the deferred result, yet its tokens were spent, so they are read from the raw answer.

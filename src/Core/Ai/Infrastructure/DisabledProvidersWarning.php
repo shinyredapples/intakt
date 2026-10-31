@@ -14,10 +14,13 @@ final readonly class DisabledProvidersWarning
 {
     /**
      * @param array<string, string> $disabledProviders
+     * @param list<string>          $disabledAccounts
      */
     public function __construct(
         #[Autowire('%intakt.ai.disabled_providers%')]
         private array $disabledProviders,
+        #[Autowire('%intakt.ai.disabled_accounts%')]
+        private array $disabledAccounts,
     ) {
     }
 
@@ -27,7 +30,7 @@ final readonly class DisabledProvidersWarning
         $output = $event->getOutput();
         $errors = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
 
-        foreach ($this->disabledProviders as $message) {
+        foreach ([...array_values($this->disabledProviders), ...$this->disabledAccounts] as $message) {
             $errors->writeln('<comment>'.$message.'</comment>');
         }
     }

@@ -17,3 +17,15 @@ framework:
         # Namespaced pools use the above "app" backend by default
         #pools:
             #my.dedicated.cache: null
+        pools:
+            # On this host's filesystem, so every worker sees an account's cooldown; a cleared cache ends the cooldowns, and the next limit starts them again.
+            intakt.ai.account_cooldowns:
+                adapter: cache.app
+
+when@test:
+    framework:
+        cache:
+            pools:
+                # In memory, so no cooldown outlives the test that started it.
+                intakt.ai.account_cooldowns:
+                    adapter: cache.adapter.array

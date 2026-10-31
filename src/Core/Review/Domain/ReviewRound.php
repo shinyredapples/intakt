@@ -7,7 +7,11 @@ namespace Intakt\Core\Review\Domain;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\Contract\VerdictStanding;
+use Intakt\Plugin\Forge\Contract\HeadMove;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
@@ -26,14 +30,30 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(length: 16, enumType: RoundState::class)]
     private RoundState $state = RoundState::Collecting;
 
+    // Empty by default, because a round stored before migration Version20261031140000 has no identity.
+    #[ORM\Column(name: 'verdict_identity', length: 512, options: ['default' => ''])]
+    private string $identity;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
         private Uuid $id,
         #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
         private ReviewSubject $subject,
+        VerdictIdentity $identity,
     ) {
         $this->reviewers = new ArrayCollection();
+        $this->identity = $identity->recorded();
+    }
+
+    // A round without an identity cannot show what its verdicts were given on, so every field counts as changed.
+    public function standingAt(VerdictIdentity $current, HeadMove $move): VerdictStanding
+    {
+        if ('' === $this->identity) {
+            return VerdictStanding::stale(IdentityField::cases());
+        }
+
+        return VerdictIdentity::fromRecorded($this->identity)->standingAt($current, $move);
     }
 
     public function addReviewer(UuidV7 $id, PanelReviewer $member): void

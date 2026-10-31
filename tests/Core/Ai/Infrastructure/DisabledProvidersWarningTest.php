@@ -21,16 +21,25 @@ final class DisabledProvidersWarningTest extends TestCase
     {
         $output = new BufferedOutput();
 
-        new DisabledProvidersWarning(['a' => 'first message', 'b' => 'second message'])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning(['a' => 'first message', 'b' => 'second message'], [])->onConsoleCommand($this->eventWith($output));
 
         self::assertSame("first message\nsecond message\n", $output->fetch());
+    }
+
+    public function testEachDisabledAccountIsWrittenAfterTheDisabledProviders(): void
+    {
+        $output = new BufferedOutput();
+
+        new DisabledProvidersWarning(['a' => 'provider message'], ['account message'])->onConsoleCommand($this->eventWith($output));
+
+        self::assertSame("provider message\naccount message\n", $output->fetch());
     }
 
     public function testNothingIsWrittenWhenEveryProviderIsEnabled(): void
     {
         $output = new BufferedOutput();
 
-        new DisabledProvidersWarning([])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning([], [])->onConsoleCommand($this->eventWith($output));
 
         self::assertSame('', $output->fetch());
     }
@@ -43,7 +52,7 @@ final class DisabledProvidersWarningTest extends TestCase
         $output->expects(self::never())->method('write');
         $output->expects(self::never())->method('writeln');
 
-        new DisabledProvidersWarning(['a' => 'first message'])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning(['a' => 'first message'], [])->onConsoleCommand($this->eventWith($output));
 
         self::assertSame("first message\n", $errors->fetch());
     }
