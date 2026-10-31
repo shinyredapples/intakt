@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
+use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -29,6 +30,7 @@ use Symfony\Component\Workflow\WorkflowInterface;
 
 #[CoversClass(ReviewRound::class)]
 #[CoversClass(ReviewSubject::class)]
+#[UsesClass(ChangeRound::class)]
 #[CoversClass(RoundReviewer::class)]
 #[CoversClass(ReviewerState::class)]
 #[CoversClass(ReviewerTransition::class)]
@@ -157,7 +159,7 @@ final class ReviewWorkflowsTest extends KernelTestCase
 
     private function round(int $reviewers): ReviewRound
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'));
+        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'), new ChangeRound('feat/thing', 1));
 
         foreach (range(1, $reviewers) as $number) {
             $round->addReviewer(new UuidV7(), new PanelReviewer(new ReviewerRole('role-'.$number, 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1));

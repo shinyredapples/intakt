@@ -13,9 +13,15 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final class FindingLedger
 {
     /** @var array<string, TrackedFinding> */
-    private array $tracked = [];
+    private array $tracked;
 
-    private int $issued = 0;
+    /**
+     * @param list<TrackedFinding> $tracked
+     */
+    public function __construct(array $tracked = [])
+    {
+        $this->tracked = array_column($tracked, null, 'id');
+    }
 
     /**
      * @param list<Finding> $findings
@@ -31,7 +37,8 @@ final class FindingLedger
     // Unlike recordRound, only a finding marked repeat keeps an id: the reviewer was shown the open ids and says which ones came back.
     public function recordVerdict(int $round, Verdict $verdict): void
     {
-        $this->resolve($verdict->resolved);
+        // A finding another reviewer already reported again in this round stays open, so the verdicts of one round count the same in any order.
+        $this->resolve(array_values(array_filter($verdict->resolved, fn (string $id): bool => ($this->tracked[$id] ?? null)?->latestRound() !== $round)));
         $earlier = $this->tracked;
         foreach ($verdict->findings as $finding) {
             $this->trackRepeat($round, $finding, $earlier);
@@ -117,7 +124,7 @@ final class FindingLedger
 
     private function start(int $round, Finding $finding): void
     {
-        $id = 'F'.++$this->issued;
+        $id = 'F'.(count($this->tracked) + 1);
         $this->tracked[$id] = new TrackedFinding($id, $finding, [$round], FindingStatus::Open);
     }
 }

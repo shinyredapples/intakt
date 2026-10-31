@@ -20,9 +20,11 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
@@ -32,6 +34,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -39,6 +42,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
 
@@ -50,12 +54,16 @@ final readonly class RoundFixture
     public MockClock $clock;
     public BufferingLogger $log;
     private Ledger $ledger;
+    private SerializerInterface $serializer;
 
     public function __construct(private ContainerInterface $container)
     {
         $entities = $container->get('doctrine.orm.entity_manager');
         assert($entities instanceof EntityManagerInterface);
         $this->entities = $entities;
+        $serializer = $container->get(SerializerInterface::class);
+        assert($serializer instanceof SerializerInterface);
+        $this->serializer = $serializer;
         $this->bus = new RecordingBus();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
@@ -74,9 +82,28 @@ final readonly class RoundFixture
 
     public function startOn(MessageBusInterface $queue, int $reviewers): string
     {
+        return $this->startFor('feat/thing', $queue, $reviewers);
+    }
+
+    public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
+    {
         $handler = new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue);
 
-        return $handler(new RunReviewRound(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), $this->panelOf($reviewers)));
+        return $handler(new RunReviewRound(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), $this->panelOf($reviewers), $change));
+    }
+
+    /**
+     * @return list<TrackedFinding>
+     */
+    public function storedFindings(string $change): array
+    {
+        $this->entities->clear();
+        $stored = $this->entities->find(ChangeFindings::class, ['project' => 'alpha', 'change' => $change]);
+        assert($stored instanceof ChangeFindings);
+        $tracked = $this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json');
+        assert(is_array($tracked));
+
+        return array_values(array_filter($tracked, static fn (mixed $finding): bool => $finding instanceof TrackedFinding));
     }
 
     /**
@@ -163,7 +190,7 @@ final readonly class RoundFixture
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->machine('state_machine.review_round'), $this->clock);
+        return new ReviewRounds($entities, $this->machine('state_machine.review_round'), $this->clock, new StoredFindings($entities, $this->serializer));
     }
 
     private function panelOf(int $reviewers): Panel

@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
@@ -29,6 +30,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(ReviewerConversation::class)]
+#[UsesClass(ReviewBrief::class)]
 #[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(VendorAccountBusy::class)]
 #[UsesClass(ResolvedModel::class)]
@@ -81,6 +83,6 @@ final class AccountLimitedVendorTest extends TestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'Review the change.', new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', []), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

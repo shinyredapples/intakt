@@ -6,14 +6,10 @@ namespace Intakt\Core\Review\Contract;
 
 final readonly class ReviewRequest
 {
-    /**
-     * @param list<Finding> $open
-     */
     public function __construct(
         public Checkout $checkout,
-        public string $task,
+        public ReviewBrief $brief,
         public ReviewerConversation $conversation,
-        public array $open = [],
     ) {
     }
 }

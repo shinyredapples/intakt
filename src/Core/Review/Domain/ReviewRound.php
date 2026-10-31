@@ -32,6 +32,8 @@ final class ReviewRound implements HasPlace
         private Uuid $id,
         #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
         private ReviewSubject $subject,
+        #[ORM\Embedded(class: ChangeRound::class, columnPrefix: false)]
+        private ChangeRound $change,
     ) {
         $this->reviewers = new ArrayCollection();
     }
@@ -59,6 +61,16 @@ final class ReviewRound implements HasPlace
     public function task(): string
     {
         return $this->subject->task;
+    }
+
+    public function change(): string
+    {
+        return $this->change->change;
+    }
+
+    public function number(): int
+    {
+        return $this->change->number;
     }
 
     /**

@@ -9,9 +9,11 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 
 final readonly class RunReviewRound
 {
+    // Named by the caller, for example by the branch under review, because rounds of the same change share one finding ledger.
     public function __construct(
         public ReviewSubject $subject,
         public Panel $panel,
+        public string $change,
     ) {
     }
 }

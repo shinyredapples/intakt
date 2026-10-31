@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Domain\ReviewerNotStarted;
+use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -24,6 +25,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ReviewerNotStarted::class)]
 #[UsesClass(ReviewRound::class)]
 #[UsesClass(ReviewSubject::class)]
+#[UsesClass(ChangeRound::class)]
 #[UsesClass(ReviewerRole::class)]
 #[UsesClass(ReviewerModel::class)]
 #[UsesClass(PanelReviewer::class)]
@@ -75,7 +77,7 @@ final class RoundReviewerAttemptTest extends TestCase
 
     private function reviewer(): RoundReviewer
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'));
+        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'), new ChangeRound('feat/thing', 1));
         $round->addReviewer(new UuidV7(), new PanelReviewer(new ReviewerRole('role', 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1));
 
         return $round->reviewers()[0];

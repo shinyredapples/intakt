@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
@@ -57,6 +58,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ConversationAlreadyStarted::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
+#[UsesClass(ReviewBrief::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Finding::class)]
@@ -152,6 +154,17 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('id', 'F7')->withFinding('repeat', true)->json());
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAVerdictThatMarksTheSameIdResolvedAndRepeatIsRejectedAsInvalidOutput(): void
+    {
+        $this->open = [$this->openFinding('F3')];
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', ['F3'])->withFinding('repeat', true)->json());
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        self::assertStringContainsString('both resolved and repeat: F3', $verdict->findings[0]->text);
     }
 
     public function testARepeatWithAnOpenIdIsAccepted(): void
@@ -409,7 +422,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), static fn (): TraceableToolbox => $toolbox, $this->conversations);
 
-        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, $task, new ReviewerConversation('You review for correctness.', $this->conversation), $this->open), $platform, 'reviewer-model');
+        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief($task, $this->open), new ReviewerConversation('You review for correctness.', $this->conversation)), $platform, 'reviewer-model');
 
         $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();

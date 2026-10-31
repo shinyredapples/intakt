@@ -92,6 +92,7 @@ flowchart TD
 ```
 
 - **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: becomes a follow-up task, never blocks).
+- **A finding keeps its name:** each finding gets a short id (F1, F2, ...). On the next round, every reviewer is shown the findings still open, says which ones are fixed, and a problem that is still there keeps its id, so one problem can be followed from round to round.
 - **Evidence beats opinion:** a reviewer can write a small test, run it against the change, and attach the result to its finding.
 - **Second chances, but not endless ones:** if the same serious problem comes back twice, a stronger model builds the fix; a third time, the maintainer agent decides. If a task keeps getting sent back, it is re-planned rather than handed to you: split into smaller tasks, made clearer, or tried once more with a stronger model, and you are asked only in four cases: a product choice is needed, the reviewers disagree about what the task asks for, a serious problem touches security, secrets or data integrity, or the task still fails after its last try with a stronger model and cannot be split (planned).
 - **No repeat work:** a review counts only for exactly what it saw. But if main moves on and merging it in leaves the change itself identical, the earlier review still counts and isn't paid for twice.

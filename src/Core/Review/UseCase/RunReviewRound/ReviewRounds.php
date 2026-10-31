@@ -8,6 +8,7 @@ use Closure;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Target;
@@ -24,6 +25,7 @@ final readonly class ReviewRounds
         #[Target('review_round')]
         private WorkflowInterface $machine,
         private ClockInterface $clock,
+        private StoredFindings $findings,
     ) {
     }
 
@@ -57,7 +59,7 @@ final readonly class ReviewRounds
         // Built only to refuse a path that is no directory, because a round stored for one could never be reviewed.
         new Checkout($command->subject->checkoutRoot);
 
-        $round = new ReviewRound($this->newId(), $command->subject);
+        $round = new ReviewRound($this->newId(), $command->subject, $this->findings->openRound($command->subject->project, $command->change));
 
         foreach ($command->panel->reviewers as $member) {
             $round->addReviewer($this->newId(), $member);
@@ -79,8 +81,17 @@ final readonly class ReviewRounds
 
             if ($round instanceof ReviewRound && $this->machine->can($round, ReviewRound::COMPLETION)) {
                 $this->machine->apply($round, ReviewRound::COMPLETION);
+                $this->findings->recordVerdictsOf($round);
             }
         });
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    public function openFindingsOf(ReviewRound $round): array
+    {
+        return $this->findings->openFor($round);
     }
 
     private function newId(): UuidV7

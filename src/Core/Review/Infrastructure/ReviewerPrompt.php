@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
@@ -44,19 +45,16 @@ final readonly class ReviewerPrompt
     ) {
     }
 
-    /**
-     * @param list<Finding> $open
-     */
-    public function messagesFor(ReviewerConversation $conversation, string $task, array $open = []): MessageBag
+    public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
     {
         $messages = [
             Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
-            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $task)),
+            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->task)),
         ];
 
         // After the task, so the cached prefix of the first round stays the same.
-        if ([] !== $open) {
-            $messages[] = Message::ofUser("The open findings of earlier rounds:\n\n".$this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($open)));
+        if ([] !== $brief->open) {
+            $messages[] = Message::ofUser("The open findings of earlier rounds:\n\n".$this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($brief->open)));
         }
 
         return MessageBag::forId($conversation->id, ...$messages);
