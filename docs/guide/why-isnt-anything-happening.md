@@ -29,7 +29,7 @@ flowchart TD
 | Builders paused, reviews waiting | finished work is piling up for review, so building more would only go stale | nothing: building resumes as reviews finish. An `urgent` task can still start |
 | Builders paused, **waiting for CI** | finished work is waiting for its checks and the CI runners are busy | nothing: building resumes as CI catches up. If it happens often, add a runner |
 | **CI** badge for a long time | GitHub hasn't finished, or never started, the checks | Intakt nudges GitHub after a few minutes and, if that didn't help, hands it to the maintainer agent |
-| A task went **back in line** after waiting too long | it waited past the time limit for its checks or a reviewer, so Intakt freed the place for other work and kept the task's spot | nothing: it is picked up again in turn. You hear about it only if it happens three times in a row |
+| A task went **back in line** after waiting too long | it waited past the time limit for its checks, a reviewer or the latest changes from main, so Intakt freed the place for other work and kept the task's spot | nothing: it is picked up again in turn. You hear about it only if it happens three times in a row |
 | **CI was cancelled** | a newer push stopped the checks of the older version; that is not a failure | nothing: Intakt waits for the newer checks, starts them again once if nothing does, and otherwise hands it to the maintainer agent |
 | **on hold** | the task needs something outside it (another task, a change to Intakt) | nothing: it comes back by itself when the reason is gone |
 | **dependency** badge | it `Waits for` another task | finish or unblock that task |

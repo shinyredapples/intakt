@@ -42,6 +42,11 @@ final readonly class GateResult
         return new self($gate, [$reason]);
     }
 
+    public function noted(string $note): self
+    {
+        return new self($this->gate, $this->findings, $note);
+    }
+
     public function isPassing(): bool
     {
         return [] === $this->findings;

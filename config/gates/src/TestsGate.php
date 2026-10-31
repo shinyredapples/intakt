@@ -14,6 +14,7 @@ final class TestsGate implements Gate
     private const string GATES_CACHE_VARIABLE = 'INTAKT_GATES_CACHE';
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
+    private const string SKIPPED_GATES_PASS = 'gates pass skipped, the change leaves the gate code, the gate tests and their inputs unchanged';
     private const array FAIL_CLOSED = [
         '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky',
         '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation',
@@ -32,6 +33,12 @@ final class TestsGate implements Gate
             return GateResult::failedBecause($this->name(), $unready);
         }
 
+        try {
+            $passes = $this->passes($workspace);
+        } catch (ScopeFailure $failure) {
+            return GateResult::failedBecause($this->name(), $failure->getMessage());
+        }
+
         $scratch = $this->scratchDirectory();
 
         if (null === $scratch) {
@@ -39,7 +46,7 @@ final class TestsGate implements Gate
         }
 
         try {
-            return GateResult::withFindings($this->name(), $this->findings($workspace, $scratch));
+            return $this->resultOf($workspace, $scratch, $passes);
         } finally {
             $this->remove($scratch);
         }
@@ -61,25 +68,52 @@ final class TestsGate implements Gate
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function passes(Workspace $workspace): array
+    {
+        // Because unchanged gate code with an unchanged lock file gives the same result, and every push to main runs both passes.
+        if (!$workspace->changesGateTests()) {
+            return ['sqlite' => self::CONFIGURATION];
+        }
+
+        return ['sqlite' => self::CONFIGURATION, 'gates' => self::GATES_CONFIGURATION];
+    }
+
+    /**
+     * @param array<string, string> $passes
+     */
+    private function resultOf(Workspace $workspace, string $scratch, array $passes): GateResult
+    {
+        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes));
+
+        return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
+    }
+
+    /**
+     * @param array<string, string> $passes
+     *
      * @return list<string>
      */
-    private function findings(Workspace $workspace, string $scratch): array
+    private function findings(Workspace $workspace, string $scratch, array $passes): array
     {
-        foreach (['sqlite', 'gates'] as $pass) {
+        $commands = [];
+
+        foreach ($passes as $pass => $configuration) {
             if (!mkdir($scratch.'/'.$pass, 0o700)) {
                 return [$pass.': cannot create the scratch directory of the pass in '.$scratch];
             }
+
+            $commands[$pass] = [$this->phpunit($workspace, $configuration), $this->isolated($scratch, $pass)];
         }
 
-        $results = $workspace->commandsConcurrently([
-            'sqlite' => [$this->phpunit($workspace, self::CONFIGURATION), $this->isolated($scratch, 'sqlite')],
-            'gates' => [$this->phpunit($workspace, self::GATES_CONFIGURATION), $this->isolated($scratch, 'gates')],
-        ]);
+        $findings = [];
 
-        return [
-            ...PhpunitReport::findings('sqlite', $results['sqlite']),
-            ...PhpunitReport::findings('gates', $results['gates']),
-        ];
+        foreach ($workspace->commandsConcurrently($commands) as $pass => $result) {
+            $findings = [...$findings, ...PhpunitReport::findings($pass, $result)];
+        }
+
+        return $findings;
     }
 
     /**
