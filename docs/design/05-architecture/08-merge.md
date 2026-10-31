@@ -84,6 +84,14 @@ A category with fewer canaries than a set minimum (for example 3) stays in shado
 - **A cancelled run is waited on, not judged.** A new push cancels the run of the head it replaces (the workflow's concurrency group), so a cancelled run says nothing about the head; read as red CI, it once handed a pull request over although nothing had failed. A cancelled run is ignored when a newer run of the same event and the same pull request exists on the same head. A remaining cancelled run counts as unfinished CI: the head waits, is never sent back for it and never merges on it. When nothing restarts it within the missed-start time, it takes the missed-CI path above: one re-trigger, then the head goes to the maintainer agent once ([Reviews](07-reviews.md), [Principles](../02-principles.md)).
 - **No runner is not a wait.** A run that cannot start because the plan's CI minutes are spent or no runner takes it is recorded with that cause and shown on the board, never as an endless "pending" (see [Budget and model planner](06-budget-and-model-planner.md#ci-design-for-later)).
 
+## Hands-off and take-over
+
+The labels are defined in [Labels](04-labels.md#who-drives-an-item); this is what they mean for the merge flow.
+- **A `hands-off` item does not merge.** The first step of the list above also re-reads the label, right before publishing, so a label set while the merge was about to run stops it. A push or a post a job produced after the label is not published; its unpushed work is kept as a saved bundle.
+- **A taken-over pull request merges like Intakt's own.** After `take-over`, the builder reworks the open findings, the panel reviews the head and the rules above apply unchanged, protected-path rules included.
+- **A fork Intakt cannot push to is carried over.** Intakt applies the change on an Intakt branch and opens a new pull request that links the original. Every original author is kept as a `Co-authored-by` trailer on Intakt's signed commits, so credit survives. The original gets one comment pointing to the new pull request, and nothing else is written to it.
+- **A pull request that touches protected paths is not taken over.** The builder may not change protected paths, so Intakt says so once, naming the files, and leaves the pull request to people. The reason is that a taken-over pull request would otherwise be a way to push a protected change through the builder.
+
 ## Branch cleanup
 
 Branch cleanup is Intakt's job, so a busy loop does not leave hundreds of branches behind. It is limited on purpose:

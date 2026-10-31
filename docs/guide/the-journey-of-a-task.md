@@ -19,7 +19,7 @@ Several cheap checks come first, so no money is spent building a task that isn't
 
 ```mermaid
 flowchart TD
-  t[An open task] --> e{Labeled for Intakt,<br/>written by someone trusted,<br/>not waiting on another task?}
+  t[An open task] --> e{"Labeled for Intakt,<br/>written by someone trusted (or handed over with take-over, planned),<br/>not waiting on another task?"}
   e -- no --> skip[Skipped for now]
   e -- yes --> r{Clear? It says what should happen<br/>and how to tell it is done}
   r -- no --> ask[One comment listing what is missing]
