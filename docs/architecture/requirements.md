@@ -12,7 +12,7 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 |---|---|---|---|---|---|
 | `php` | everything; the upstream reproduction runner, `bin/instance` and `bin/probe` run it as `PHP_BINARY` | the application, reproductions, booting an instance, probes | yes | 8.5.12 or later (CI refuses older: PHP2Shell) | yes |
 | `composer` | `composer install`; the `composer audit` gate | installing dependencies, the security advisory check | yes | 2.x | development only |
-| `git` | the local git forge (`src/Plugin/LocalGitForge/`); the commit-subject, history-secrets, long-dashes and scope gates | reading changes and history | yes | 2.45 or later (`--no-lazy-fetch`) | yes |
+| `git` | the local git forge (`src/Plugin/LocalGitForge/`); the commit-subject, history-secrets, long-dashes and scope gates; the highlights gate, which lists tracked files with `git ls-files --cached` | reading changes and history | yes | 2.45 or later (`--no-lazy-fetch`) | yes |
 | `sh` | `bin/instance`, `bin/probe`, the gate runner | closing an inherited file descriptor before handing over; bringing up loopback | yes (POSIX) | any | yes |
 | `gitleaks` | the secrets gates (files and history) | secret scanning | for `bin/check` | exactly 8.30.1, or point `INTAKT_GITLEAKS` at that version | development only |
 | `unshare` (util-linux) | the gate runner (contained test runs), `bin/probe` | running tests and probes in their own namespaces | for `bin/check` and probes | with user namespaces enabled | development only |

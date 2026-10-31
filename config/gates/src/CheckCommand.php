@@ -101,6 +101,7 @@ final readonly class CheckCommand
             new HistorySecretsGate(),
             new CommitSubjectsGate($testMerge),
             new LongDashesGate(),
+            new HighlightsGate(),
         ];
     }
 
