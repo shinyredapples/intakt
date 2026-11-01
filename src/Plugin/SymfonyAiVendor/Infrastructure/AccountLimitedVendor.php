@@ -6,6 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Judgement;
@@ -74,15 +75,13 @@ final readonly class AccountLimitedVendor implements Vendor
         return 0 === $wait ? new VendorAccountOut($out) : new ProviderRateLimited($wait, $out);
     }
 
-    // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes; substitutes are asked first, because resolving a disabled own provider fails.
+    // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes. Another account is known only from KeyRejected, which the account failover throws while one is free; a free cooldown says nothing here, because a provider without an accounts list reports zero and its one key would be called again forever.
     private function nextAccountOrSubstituteOrFailure(string $project, Tier $tier, ProviderRejectedTheKey $rejected): VendorAccountOut|ProviderRejectedTheKey
     {
-        if ($this->resolver->hasSubstitutes($project, $tier)) {
+        if ($this->resolver->hasSubstitutes($project, $tier) || $rejected->getPrevious() instanceof KeyRejected) {
             return new VendorAccountOut($rejected);
         }
 
-        $free = 0 === $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
-
-        return $free ? new VendorAccountOut($rejected) : $rejected;
+        return $rejected;
     }
 }

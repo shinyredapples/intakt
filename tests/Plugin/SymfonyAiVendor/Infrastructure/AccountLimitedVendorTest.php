@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
+use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -47,6 +50,9 @@ use Throwable;
 #[UsesClass(ProviderRejectedTheKey::class)]
 #[UsesClass(TierProviderDisabled::class)]
 #[UsesClass(TierResolutionFailure::class)]
+#[UsesClass(Account::class)]
+#[UsesClass(KeyRejected::class)]
+#[UsesClass(EveryKeyRejected::class)]
 final class AccountLimitedVendorTest extends TestCase
 {
     public function testAReviewOnAnAccountWithAFreePlaceReturnsTheVendorsVerdict(): void
@@ -142,9 +148,25 @@ final class AccountLimitedVendorTest extends TestCase
 
     public function testARejectedKeyWhileAnotherAccountIsFreeMovesTheReviewThereAtOnce(): void
     {
-        $out = $this->failureOf($this->vendor($this->failing(new ProviderRejectedTheKey(new RuntimeException('401'))), $this->cooldowns(0)));
+        $rejected = new ProviderRejectedTheKey(new KeyRejected(new Account(Provider::Anthropic, 'first')));
+
+        $out = $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(0)));
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
+    }
+
+    public function testARejectedKeyOnAProviderWithoutAnAccountsListEndsTheReviewer(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new RuntimeException('401'));
+
+        self::assertSame($rejected, $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(0))));
+    }
+
+    public function testARejectedKeyOnEveryAccountEndsTheReviewerEvenWhileTheCooldownsReportAFreeOne(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new EveryKeyRejected(Provider::Anthropic));
+
+        self::assertSame($rejected, $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(0))));
     }
 
     public function testARejectedKeyWithASubstituteStartsAgainAtOnce(): void
