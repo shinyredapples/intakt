@@ -192,7 +192,8 @@ final class AccountFailoverPlatformTest extends TestCase
         try {
             $answer->asText();
             self::fail('The only free account rejected its key, yet the answer was read.');
-        } catch (EveryAccountCoolingDown $out) {
+        } catch (Throwable $out) {
+            self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
             self::assertGreaterThan(0, $out->secondsUntilAnAccountIsFree);
         }
     }
