@@ -6,7 +6,7 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use Closure;
 
-// Runs another worker's step between this worker's insert and its cleanup, the order two workers recording one window can meet in.
+// A race is proven by a forced order, never by repetition, so another worker's step runs between this worker's insert and its cleanup.
 final class OnceFlushed
 {
     private bool $ran = false;

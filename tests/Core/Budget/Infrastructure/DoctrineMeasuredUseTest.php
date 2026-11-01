@@ -203,7 +203,7 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
     }
 
-    // Another worker: its own connection and entity manager, as another messenger:consume process has.
+    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
     private function worker(EventManager $events): DoctrineMeasuredUse
     {
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
