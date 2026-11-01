@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
-#[CoversClass(FencedCodeBlocks::class)]
+#[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(HighlightStatus::class)]
 final class HighlightsGateTest extends SandboxTestCase
 {

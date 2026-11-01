@@ -35,6 +35,8 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\JudgeAgent;
+use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -330,7 +332,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn(45);
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform('never sent')]);
-        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())),new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
 
         try {
             $vendor->review('alpha', Tier::Strong, $this->request());
@@ -361,7 +363,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
         $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
-        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())),new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
 
         $review = $vendor->review('alpha', Tier::Strong, $this->request());
 
@@ -375,7 +377,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $cooldowns->method('isEveryAccountRejected')->willReturn(true);
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform('never sent')]);
-        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())),new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
 
         try {
             $vendor->review('alpha', Tier::Strong, $this->request());
@@ -570,7 +572,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resolver->method('configured')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger), $this->limit);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())),new UsageLedger($ledger, new MockClock(self::NOW), $logger), $this->limit);
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
@@ -731,7 +733,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), $usage, $this->limit);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())),$usage, $this->limit);
     }
 
     // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
@@ -746,6 +748,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
             Provider::OpenAi->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($substitute, eventDispatcher: $dispatcher),
         ]);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())),new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
     }
 }

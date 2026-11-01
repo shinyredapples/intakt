@@ -9,7 +9,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
 | Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.php` |
-| Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Core/Review/Infrastructure/StrictVerdictSubscriber.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98), T12 (#17) |
+| Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Core/Review/Infrastructure/StrictVerdictSubscriber.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98), T12 (#17, part #445), `src/Core/Review/Contract/Judgement.php`, `src/Core/Review/Infrastructure/JudgeAgent.php` |
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | in progress | T5 (#10, part #99), `src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php` |
 | Typed errors (`RateLimitExceededException::getRetryAfter()`, `RetryableExceptionInterface`) | cooldowns and retries without parsing text | in progress | T5 (#10, part #100), `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T9 (#14), T14 (#19) |
 | Anthropic prompt caching (`cache_retention`) | the system prompt, the tools and the latest message are cached, so round two of a review reads the tokens round one cached | in progress | T7 (#12), `config/packages/ai.php`, `tests/Core/Review/Infrastructure/ReviewerPromptCachingTest.php` |
@@ -23,7 +23,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | in progress | T7 (#12), T12 (#17), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `src/Core/Review/Infrastructure/Repository/` |
+| Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | in progress | T7 (#12), T12 (#17, part #445), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `src/Core/Review/Infrastructure/JudgeAgent.php`, `src/Core/Review/Infrastructure/Repository/` |
 | `FaultTolerantToolbox` | a failing tool answers the model with an error instead of ending the run | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerAgent.php` |
 | `TraceableToolbox` | tests hand the reviewer a traced toolbox, so `assertToolCalled()` sees its tool calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `ToolCallRequested` event | a listener denies tool arguments that escape the checkout | in progress | T7 (#12), `src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php` |

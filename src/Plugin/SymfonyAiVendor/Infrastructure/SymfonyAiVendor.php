@@ -13,6 +13,9 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Judge;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
@@ -38,6 +41,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private TierInvoker $tiers,
         private TierResolver $resolver,
         private Reviewer $reviewer,
+        private Judge $judge,
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
     ) {
@@ -93,6 +97,38 @@ final readonly class SymfonyAiVendor implements Vendor
         $this->usage->settle($reservation, ...$platform->rounds());
 
         return $verdict;
+    }
+
+    /**
+     * @throws VendorAccountBusy
+     */
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        $answering = $this->answering($project, Tier::Light);
+
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, Tier::Light), $request));
+    }
+
+    private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
+    {
+        $platform = new TierRoutedPlatform($this->tiers, $answering);
+
+        try {
+            $judgement = $this->judge->judge($request, $platform, $answering->model);
+        } catch (IncompleteStreamException $incomplete) {
+            // A cut-off stream is an answer that cannot be read, so every blocking finding acts.
+            $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
+
+            return Judgement::everyBlockingFindingActs($request->findings);
+        } catch (Throwable $failure) {
+            $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
+
+            throw $this->typed($failure);
+        }
+
+        $this->usage->settle($reservation, ...$platform->rounds());
+
+        return $judgement;
     }
 
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve.

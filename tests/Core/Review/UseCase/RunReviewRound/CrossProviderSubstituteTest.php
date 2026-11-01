@@ -20,6 +20,8 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\JudgeAgent;
+use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
@@ -229,7 +231,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         ]);
         $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $this->limit);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $this->limit);
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
     }

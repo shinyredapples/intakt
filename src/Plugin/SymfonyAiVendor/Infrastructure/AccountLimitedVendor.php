@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -14,6 +17,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -28,10 +32,29 @@ final readonly class AccountLimitedVendor implements Vendor
     ) {
     }
 
+    #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
+        return $this->onTheNextAccount($project, $tier, fn (): VendorReview => $this->vendor->review($project, $tier, $request));
+    }
+
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        return $this->onTheNextAccount($project, Tier::Light, fn (): Judgement => $this->vendor->judge($project, $request));
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param Closure(): T $call
+     *
+     * @return T
+     */
+    private function onTheNextAccount(string $project, Tier $tier, Closure $call): object
+    {
         try {
-            return $this->vendor->review($project, $tier, $request);
+            return $call();
         } catch (ProviderRateLimited|ProviderFailedTransiently $out) {
             throw $this->nextAccountOrWait($project, $tier, $out);
         } catch (ProviderRejectedTheKey $rejected) {

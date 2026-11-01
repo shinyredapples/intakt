@@ -12,6 +12,8 @@ use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -38,6 +40,8 @@ use Throwable;
 #[UsesClass(ReviewBrief::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(Judgement::class)]
+#[UsesClass(JudgeRequest::class)]
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
@@ -56,6 +60,17 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertSame($verdict, $result);
     }
 
+    public function testAJudgementOnAnAccountWithAFreePlaceReturnsTheVendorsJudgement(): void
+    {
+        $judgement = new Judgement([]);
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('judge')->willReturn($judgement);
+
+        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', []));
+
+        self::assertSame($judgement, $result);
+    }
+
     public function testARateLimitWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
     {
         $limited = new ProviderRateLimited(300, new RuntimeException('429'));
@@ -64,6 +79,16 @@ final class AccountLimitedVendorTest extends TestCase
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
         self::assertSame($limited, $out->getPrevious());
+    }
+
+    public function testARateLimitedJudgementWhileAnotherAccountOfTheVendorIsFreeMovesThereAtOnce(): void
+    {
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('judge')->willThrowException(new ProviderRateLimited(300, new RuntimeException('429')));
+
+        $this->expectException(VendorAccountOut::class);
+
+        $_ = $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', []));
     }
 
     public function testARateLimitWhileEveryAccountOfTheVendorCoolsDownWaitsUntilTheFirstIsFree(): void
