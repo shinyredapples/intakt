@@ -242,8 +242,7 @@ final readonly class GitHubForge implements Forge
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            // Not chained, because the trace of the client's exception holds the request options with the bearer token.
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if (self::NOT_FOUND === $status) {
@@ -251,6 +250,12 @@ final readonly class GitHubForge implements Forge
         }
 
         return $status >= 200 && $status < 300 ? $body : throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status));
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 
     private function bearer(): string
