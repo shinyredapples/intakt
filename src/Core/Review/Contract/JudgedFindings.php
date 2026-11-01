@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id, never by text; a finding with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a finding with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {

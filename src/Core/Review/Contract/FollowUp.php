@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// A finding the judge deferred: real, but not part of this task.
+// Wraps the finding because the follow-up inbox, a later task, adds what it needs here, and a caller must not take a bare finding for an open one.
 #[Exclude]
 final readonly class FollowUp
 {

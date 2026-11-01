@@ -71,7 +71,7 @@ final class JudgedFindingsTest extends TestCase
         $judged = [];
 
         foreach ($marks as $id => $mark) {
-            $judged[] = new JudgedFinding((string) $id, $mark);
+            $judged[] = new JudgedFinding($id, $mark);
         }
 
         return new Judgement($judged);

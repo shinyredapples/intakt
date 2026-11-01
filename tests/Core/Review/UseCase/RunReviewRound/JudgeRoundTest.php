@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -86,8 +87,10 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge($vendor)(new JudgeRound($round->id()->toRfc4122()));
 
-        self::assertSame(RoundFixture::TASK, $vendor->asked?->task);
-        self::assertSame(['A', 'B', 'C'], array_map(static fn (Finding $finding): string => $finding->id, $vendor->asked->findings ?? []));
+        $asked = $vendor->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame(RoundFixture::TASK, $asked->task);
+        self::assertSame(['A', 'B', 'C'], array_map(static fn (Finding $finding): string => $finding->id, $asked->findings));
     }
 
     public function testAnInvalidJudgeAnswerLeavesEveryBlockingFindingOnTheActListAndMakesNoFollowUp(): void
