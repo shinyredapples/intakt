@@ -40,6 +40,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
+use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(StoredFindings::class)]
@@ -113,6 +114,27 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         }
 
         self::assertSame(3, $tries);
+    }
+
+    public function testARetryableFailureAfterTheEntityManagerClosedSurfacesAsTheOriginalFailureTriedOnce(): void
+    {
+        $tries = 0;
+        $entities = $this->fixture->entities;
+        $surfaced = null;
+
+        try {
+            $this->fixture->transactions()->inOneTransaction(static function () use (&$tries, $entities): never {
+                ++$tries;
+                $entities->close();
+
+                throw self::databaseLocked();
+            });
+        } catch (Throwable $failure) {
+            $surfaced = $failure;
+        }
+
+        self::assertInstanceOf(LockWaitTimeoutException::class, $surfaced);
+        self::assertSame(1, $tries);
     }
 
     public function testATransactionThatFailsForAnotherReasonIsTriedOnce(): void

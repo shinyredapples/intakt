@@ -9,11 +9,12 @@ use Intakt\Gates\DocblockRule;
 use Intakt\Gates\TypeText;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(CommentRule::class)]
-#[CoversClass(DocblockRule::class)]
-#[CoversClass(TypeText::class)]
+#[UsesClass(DocblockRule::class)]
+#[UsesClass(TypeText::class)]
 final class CommentRuleTest extends TestCase
 {
     /**
