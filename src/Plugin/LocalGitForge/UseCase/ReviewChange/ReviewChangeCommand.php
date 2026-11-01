@@ -34,6 +34,10 @@ final readonly class ReviewChangeCommand implements SignalableCommandInterface
     // The shell's convention for a process ended by a signal, so a caller sees 130 for Ctrl-C and 143 for SIGTERM.
     private const int SIGNAL_EXIT_BASE = 128;
 
+    // POSIX numbers rather than SIGINT and SIGTERM, because those constants exist only with pcntl and the command must load without it.
+    public const int INTERRUPT = 2;
+    public const int TERMINATE = 15;
+
     public function __construct(
         private Panels $panels,
         private ChangeReviews $reviews,
@@ -69,7 +73,7 @@ final readonly class ReviewChangeCommand implements SignalableCommandInterface
      */
     public function getSubscribedSignals(): array
     {
-        return SignalRegistry::isSupported() ? [SIGINT, SIGTERM] : [];
+        return SignalRegistry::isSupported() ? [self::INTERRUPT, self::TERMINATE] : [];
     }
 
     // The previous exit code is widened to mixed because the interface requires the parameter and the command ignores it: a stop always ends with the signal's code.

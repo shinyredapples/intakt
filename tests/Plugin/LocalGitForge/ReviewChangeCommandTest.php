@@ -43,6 +43,7 @@ use InvalidArgumentException;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -203,8 +204,8 @@ final class ReviewChangeCommandTest extends TestCase
      */
     public static function stopSignals(): iterable
     {
-        yield 'SIGINT' => [SIGINT, 130];
-        yield 'SIGTERM' => [SIGTERM, 143];
+        yield 'SIGINT' => [ReviewChangeCommand::INTERRUPT, 130];
+        yield 'SIGTERM' => [ReviewChangeCommand::TERMINATE, 143];
     }
 
     #[DataProvider('stopSignals')]
@@ -228,11 +229,12 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertCount(1, $this->repository->worktrees());
     }
 
+    #[RequiresPhpExtension('pcntl')]
     public function testItListensForTheStopSignals(): void
     {
         $command = new ReviewChangeCommand($this->onePanel(), $this->reviewing(Decision::Approve), new NameStatusParser());
 
-        self::assertSame([SIGINT, SIGTERM], $command->getSubscribedSignals());
+        self::assertSame([constant('SIGINT'), constant('SIGTERM')], $command->getSubscribedSignals());
     }
 
     public function testARoundBelowOneFailsBeforeAnyReview(): void
