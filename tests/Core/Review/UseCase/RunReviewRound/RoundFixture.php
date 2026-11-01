@@ -238,6 +238,11 @@ final readonly class RoundFixture
         return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger()), $this->bus)($command);
     }
 
+    public function findingStore(): StoredFindings
+    {
+        return $this->storedFindingsOn($this->entities);
+    }
+
     public function transactions(): ReviewRounds
     {
         return $this->rounds($this->entities);
