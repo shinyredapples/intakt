@@ -52,14 +52,17 @@ final readonly class TierPlatform implements TierInvoker
 
         foreach ([$own, ...$this->resolver->substitutes($project, $tier)] as $model) {
             $outages[$model->provider->value] ??= $this->outageOf($model->provider);
-            if (null === $outages[$model->provider->value]) {
+            if (!$outages[$model->provider->value] instanceof ProviderOutage) {
                 $this->recordSwitch($own, $model);
 
                 return $model;
             }
         }
 
-        throw new EveryProviderOut(array_values(array_filter($outages)));
+        /** @var non-empty-list<ProviderOutage> $out */
+        $out = array_values(array_filter($outages));
+
+        throw new EveryProviderOut($out);
     }
 
     // Invoked on the provider's own bundle platform because its catalog-based model router and model_catalog already know the configured model.

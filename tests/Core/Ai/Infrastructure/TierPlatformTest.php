@@ -164,12 +164,13 @@ final class TierPlatformTest extends TestCase
 
     public function testTheReasonKeepsTheWaitReadWhileChoosingEvenWhenTheCooldownEndsAfterwards(): void
     {
+        /** @var ArrayObject<string, int> $reads */
         $reads = new ArrayObject();
         $cooldowns = self::createStub(AccountCooldowns::class);
         $cooldowns->method('secondsUntilAnAccountIsFree')->willReturnCallback(static function (Provider $provider) use ($reads): int {
-            $reads->append($provider);
+            $reads[$provider->value] = ($reads[$provider->value] ?? 0) + 1;
 
-            return 1 === count(array_filter($reads->getArrayCopy(), static fn (Provider $read): bool => $read === $provider)) ? 60 : 0;
+            return 1 === $reads[$provider->value] ? 60 : 0;
         });
 
         try {
