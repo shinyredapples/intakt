@@ -42,7 +42,7 @@ final class ScriptedJudgement implements Vendor
         $this->asked = $request;
         ++$this->calls;
 
-        if (null !== $this->meanwhile) {
+        if ($this->meanwhile instanceof Closure) {
             ($this->meanwhile)();
         }
 

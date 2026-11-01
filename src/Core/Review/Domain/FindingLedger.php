@@ -61,7 +61,7 @@ final class FindingLedger
      */
     public function openForReviewers(): array
     {
-        return array_map(self::underItsId(...), $this->open());
+        return array_map($this->underItsId(...), $this->open());
     }
 
     // The open findings a round reported last, under the ledger's ids, because two reviewers can give different findings the same id of their own.
@@ -72,7 +72,7 @@ final class FindingLedger
     {
         $reported = array_filter($this->open(), static fn (TrackedFinding $tracked): bool => $tracked->latestRound() === $round);
 
-        return array_values(array_map(self::underItsId(...), $reported));
+        return array_values(array_map($this->underItsId(...), $reported));
     }
 
     /**
@@ -142,7 +142,7 @@ final class FindingLedger
         $this->start($round, $this->goalposts->applyTo($round, $finding));
     }
 
-    private static function underItsId(TrackedFinding $tracked): Finding
+    private function underItsId(TrackedFinding $tracked): Finding
     {
         return new Finding(
             $tracked->id,

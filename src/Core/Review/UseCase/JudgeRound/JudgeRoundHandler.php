@@ -30,7 +30,7 @@ final readonly class JudgeRoundHandler
     {
         $round = $this->rounds->toJudge($command->roundId);
 
-        if (null === $round) {
+        if (!$round instanceof ReviewRound) {
             return;
         }
 
