@@ -122,7 +122,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             $rejection = $rejected ?? $rejection;
         }
 
-        // The last rejection of this call, which on the read path is the one the reader just met.
+        // The last rejection of this call, because on the read path that is the one the reader just met and expects back.
         return $rejection;
     }
 
