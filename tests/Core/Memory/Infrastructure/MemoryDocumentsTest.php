@@ -32,7 +32,7 @@ final class MemoryDocumentsTest extends TestCase
 
     public function testAWellFormedDocumentBecomesItsEntry(): void
     {
-        $entry = (new MemoryDocuments())->toEntry($this->document(['entry' => 'A note.', 'files' => ['a.php', 'b.php']]));
+        $entry = new MemoryDocuments()->toEntry($this->document(['entry' => 'A note.', 'files' => ['a.php', 'b.php']]));
 
         self::assertEquals(new MemoryEntry('A note.', ['a.php', 'b.php']), $entry);
     }
@@ -44,9 +44,9 @@ final class MemoryDocumentsTest extends TestCase
     public function testAMalformedDocumentIsRefusedNamingItsIdAndTheOffendingKey(array $metadata, string $key): void
     {
         $this->expectException(StoredMemoryIsMalformed::class);
-        $this->expectExceptionMessage(sprintf('"doc-1" has a missing or malformed "%s"', $key));
+        $this->expectExceptionMessageMatches(sprintf('/"doc-1" has a missing or malformed "%s"/', $key));
 
-        (new MemoryDocuments())->toEntry($this->document($metadata));
+        new MemoryDocuments()->toEntry($this->document($metadata));
     }
 
     /**

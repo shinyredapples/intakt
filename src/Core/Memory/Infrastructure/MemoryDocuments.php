@@ -45,10 +45,13 @@ final readonly class MemoryDocuments
     {
         $files = $document->getMetadata()[self::FILES] ?? null;
 
-        if (!is_array($files) || !array_is_list($files) || !array_all($files, static fn (mixed $file): bool => is_string($file))) {
+        if (!is_array($files) || !array_is_list($files)) {
             throw new StoredMemoryIsMalformed($document->getId(), self::FILES);
         }
 
-        return $files;
+        return array_map(
+            fn (mixed $file): string => is_string($file) ? $file : throw new StoredMemoryIsMalformed($document->getId(), self::FILES),
+            $files,
+        );
     }
 }
