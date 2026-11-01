@@ -32,34 +32,42 @@ final class FinishedProcessResultTest extends TestCase
 
     public function testAStreamThatEndsWithoutItsFinalResultIsCutOff(): void
     {
-        $this->expectException(IncompleteStreamException::class);
-        $this->expectExceptionMessage('ended before its final result: the stream ended.');
-
-        $this->finished(RecordedClaudeCodeCli::replaying('truncated'))->getData();
+        try {
+            $this->finished(RecordedClaudeCodeCli::replaying('truncated'))->getData();
+            self::fail('A stream cut off before its final result must not pass as complete.');
+        } catch (IncompleteStreamException $cutOff) {
+            self::assertStringContainsString('ended before its final result: the stream ended.', $cutOff->getMessage());
+        }
     }
 
     public function testACliThatExitsMidStreamIsCutOff(): void
     {
-        $this->expectException(IncompleteStreamException::class);
-        $this->expectExceptionMessage('exit code 143');
-
-        $this->finished(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->getData();
+        try {
+            $this->finished(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->getData();
+            self::fail('A stream cut off before its final result must not pass as complete.');
+        } catch (IncompleteStreamException $cutOff) {
+            self::assertStringContainsString('exit code 143', $cutOff->getMessage());
+        }
     }
 
     public function testACliKilledMidStreamIsCutOff(): void
     {
-        $this->expectException(IncompleteStreamException::class);
-        $this->expectExceptionMessage('the CLI was stopped by signal 15');
-
-        $this->finished(RecordedClaudeCodeCli::killedAfter('truncated'))->getData();
+        try {
+            $this->finished(RecordedClaudeCodeCli::killedAfter('truncated'))->getData();
+            self::fail('A stream cut off before its final result must not pass as complete.');
+        } catch (IncompleteStreamException $cutOff) {
+            self::assertStringContainsString('the CLI was stopped by signal 15', $cutOff->getMessage());
+        }
     }
 
     public function testACliThatTimesOutMidStreamIsCutOff(): void
     {
-        $this->expectException(IncompleteStreamException::class);
-        $this->expectExceptionMessage('the CLI timed out');
-
-        $this->finished(RecordedClaudeCodeCli::stalledAfter('truncated'))->getData();
+        try {
+            $this->finished(RecordedClaudeCodeCli::stalledAfter('truncated'))->getData();
+            self::fail('A stream cut off before its final result must not pass as complete.');
+        } catch (IncompleteStreamException $cutOff) {
+            self::assertStringContainsString('the CLI timed out', $cutOff->getMessage());
+        }
     }
 
     public function testACliThatFailsAfterItsFinalResultStaysAFailure(): void

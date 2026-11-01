@@ -105,7 +105,9 @@ final class UsageLedgerTest extends TestCase
         $this->usage()->settle(new UsageReservation('a call'), $this->unreadableRound());
 
         self::assertSame(['unsettled', JsonException::class], [$this->ledger->payloads()[0]['phase'], $this->ledger->payloads()[0]['failure']]);
-        self::assertSame('warning', $this->logger->cleanLogs()[0][0]);
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $this->logger->cleanLogs();
+        self::assertSame('warning', $logs[0][0]);
     }
 
     public function testAFailedCallIsLeftUnsettledWithItsFailureAndTheTokensOfTheRoundsBefore(): void
@@ -129,7 +131,9 @@ final class UsageLedgerTest extends TestCase
             self::assertStringContainsString('the ledger is down', $refused->getMessage());
         }
 
-        self::assertSame('error', $this->logger->cleanLogs()[0][0]);
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $this->logger->cleanLogs();
+        self::assertSame('error', $logs[0][0]);
     }
 
     public function testARoundWhoseUsageCannotBeReadBeforeAFailureIsLoggedAndTheFailureStillRecorded(): void
@@ -175,7 +179,7 @@ final class UsageLedgerTest extends TestCase
     private function round(?TokenUsageInterface $usage): DeferredResult
     {
         $round = new DeferredResult(self::createStub(ResultConverterInterface::class), new InMemoryRawResult());
-        if (null !== $usage) {
+        if ($usage instanceof TokenUsageInterface) {
             $round->getMetadata()->add('token_usage', $usage);
         }
 
