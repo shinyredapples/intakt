@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "895e0e0f6c04aecdecdc646b31b1c831",
+    "content-hash": "7ea62d5ba3443a6307d39e7060b396ee",
     "packages": [
         {
             "name": "doctrine/collections",
@@ -3288,6 +3288,96 @@
             ],
             "support": {
                 "source": "https://github.com/symfony/ai-platform/tree/v1.0.0-BETA1"
+            },
+            "funding": [
+                {
+                    "url": "https://symfony.com/sponsor",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/fabpot",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2026-10-26T14:03:07+00:00"
+        },
+        {
+            "name": "symfony/ai-sqlite-store",
+            "version": "v1.0.0-BETA1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/ai-sqlite-store.git",
+                "reference": "295e2b27233c2a63fbdf1a01daa8a404d050b8d4"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/ai-sqlite-store/zipball/295e2b27233c2a63fbdf1a01daa8a404d050b8d4",
+                "reference": "295e2b27233c2a63fbdf1a01daa8a404d050b8d4",
+                "shasum": ""
+            },
+            "require": {
+                "ext-pdo": "*",
+                "ext-pdo_sqlite": "*",
+                "oskarstark/enum-helper": "^1.5",
+                "php": ">=8.2",
+                "symfony/ai-platform": "^1.0",
+                "symfony/ai-store": "^1.0"
+            },
+            "require-dev": {
+                "doctrine/dbal": "^3.3|^4.0",
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpstan/phpstan-strict-rules": "^2.0",
+                "phpunit/phpunit": "^11.5.53"
+            },
+            "type": "symfony-ai-store",
+            "extra": {
+                "thanks": {
+                    "url": "https://github.com/symfony/ai",
+                    "name": "symfony/ai"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\AI\\Store\\Bridge\\Sqlite\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christopher Hertel",
+                    "email": "mail@christopher-hertel.de"
+                },
+                {
+                    "name": "Oskar Stark",
+                    "email": "oskarstark@googlemail.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "SQLite vector store bridge for Symfony AI",
+            "keywords": [
+                "Bridge",
+                "ai",
+                "sqlite",
+                "store",
+                "vector"
+            ],
+            "support": {
+                "source": "https://github.com/symfony/ai-sqlite-store/tree/v1.0.0-BETA1"
             },
             "funding": [
                 {
@@ -12206,6 +12296,7 @@
         "symfony/ai-mate": 10,
         "symfony/ai-open-ai-platform": 10,
         "symfony/ai-platform": 10,
+        "symfony/ai-sqlite-store": 10,
         "symfony/ai-store": 10,
         "symfony/ai-symfony-mate-extension": 10,
         "symfony/mcp-bundle": 10

@@ -147,6 +147,10 @@ If Mate stops with a PHP version mismatch, it was started with a PHP other than 
 
 `vendor/bin/mate discover` writes files for coding agents: skill copies in `.agents/skills/` and `.claude/skills/`, and a `CLAUDE.md` in the project root; Git ignores all three. It also rewrites the committed `mate/extensions.php` and `mate/AGENT_INSTRUCTIONS.md`; do not commit those changes, and restore the files with `git checkout -- mate/extensions.php mate/AGENT_INSTRUCTIONS.md`.
 
+## Project memory
+
+Intakt can keep short notes about a project, each tied to the files it explains, and look up the notes for the files a change touches within a size limit (in bytes). Nothing in the loop writes or reads these notes yet: the notes after a review and the briefing a reviewer reads come in later changes. Reviewers can only read the notes, never change them.
+
 ## The ledger
 
 Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Only the model calls of the vendor write to it so far (their token usage). Create the table with:
