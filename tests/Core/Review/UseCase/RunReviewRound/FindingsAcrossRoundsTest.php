@@ -324,7 +324,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     public function testARoundStoredBeforeTheOpenFindingsWereKeptWithItIsToldNone(): void
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), SampleIdentity::any()), new ChangeRound(self::CHANGE, 2, null));
+        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.', 'diff --git a/a b/a'), SampleIdentity::any()), new ChangeRound(self::CHANGE, 2, null));
 
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }

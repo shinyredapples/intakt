@@ -10,6 +10,7 @@ final readonly class ChangeReviewRequest
         public string $project,
         public string $checkoutRoot,
         public string $task,
+        public string $diff,
         public RequestedRound $round,
         public VerdictIdentity $identity,
         public Panel $panel,

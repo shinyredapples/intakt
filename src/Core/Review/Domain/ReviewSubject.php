@@ -17,6 +17,9 @@ final readonly class ReviewSubject
         public string $checkoutRoot,
         #[ORM\Column(type: 'text')]
         public string $task,
+        // Stored with the round, because a worker that restarts rebuilds the briefing from the row; empty by default for rounds stored before it, and not nullable because MySQL refuses a default on a text column otherwise.
+        #[ORM\Column(type: 'text', options: ['default' => ''])]
+        public string $diff,
     ) {
     }
 }

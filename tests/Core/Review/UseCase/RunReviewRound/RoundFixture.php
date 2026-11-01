@@ -70,6 +70,7 @@ use Symfony\Component\Workflow\WorkflowInterface;
 final readonly class RoundFixture
 {
     public const string TASK = 'Add the thing.';
+    public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
 
     public EntityManagerInterface $entities;
@@ -305,7 +306,7 @@ final readonly class RoundFixture
 
     private function subject(): ReviewSubject
     {
-        return new ReviewSubject('alpha', __DIR__, self::TASK);
+        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
     }
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
