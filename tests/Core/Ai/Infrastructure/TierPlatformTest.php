@@ -92,10 +92,12 @@ final class TierPlatformTest extends TestCase
 
     public function testATierWhoseEveryProviderIsOutNamesEachProviderAndItsWait(): void
     {
-        $this->expectException(EveryProviderOut::class);
-        $this->expectExceptionMessage('Every provider of the tier is out: anthropic for 60 s, openai for 60 s, openai_compatible for 60 s.');
-
-        $this->tierPlatform($this->out(Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible))->answering('gamma', Tier::Strong);
+        try {
+            $this->tierPlatform($this->out(Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible))->answering('gamma', Tier::Strong);
+            self::fail('A tier whose every provider is out was answered.');
+        } catch (EveryProviderOut $out) {
+            self::assertSame('Every provider of the tier is out: anthropic for 60 s, openai for 60 s, openai_compatible for 60 s.', $out->getMessage());
+        }
     }
 
     public function testACallGoesToTheProviderOfTheModelItIsGiven(): void

@@ -63,6 +63,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
+use Throwable;
 
 // Through the real vendor stack down to in-memory providers, so the substitution is proven end to end: the tier's own provider fails with a revoked key or a limit and the next provider is its configured substitute.
 #[Group('persistence')]
@@ -195,12 +196,15 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         $this->cooldowns->coolDown(new Account(Provider::Anthropic, Account::DEFAULT), 300);
         $vendor = $this->vendor($this->answering(), $this->answering());
 
+        $refused = null;
+
         try {
             $this->limit->run(Provider::OpenAi, fn () => $this->fixture->deliver($message, $vendor));
-            self::fail('The substitute was called while its only place was taken.');
-        } catch (ReviewerRateLimited) {
+        } catch (Throwable $thrown) {
+            $refused = $thrown;
         }
 
+        self::assertInstanceOf(ReviewerRateLimited::class, $refused);
         self::assertSame([], $this->sent);
         self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
     }
@@ -244,7 +248,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         $this->fixture->deliver($message, $vendor);
     }
 
-    // A null substitute provider maps the tier without substitutes.
+    // Null maps the tier without substitutes, so the same stack shows what part 1's single provider does when nothing may take over.
     private function vendor(PlatformInterface $own, PlatformInterface $substitute, ?Provider $substituteProvider = Provider::OpenAi): Vendor
     {
         $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => 'other']] : [];
