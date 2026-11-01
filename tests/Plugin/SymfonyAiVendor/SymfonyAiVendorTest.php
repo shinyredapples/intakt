@@ -358,10 +358,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     public function testAReviewOnATierWhoseOwnProviderIsDisabledIsAnsweredByTheSubstituteAndMarkedAsOne(): void
     {
-        $never = static fn (): never => throw new RuntimeException('never sent');
-        $answer = static fn (): string => VerdictDocument::fromTheDesign()->json();
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
+        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
 
-        $review = $this->substitutedVendor($never, $answer, new NoCooldowns(), ['claude_code' => 'disabled'])->review('alpha', Tier::Strong, $this->request());
+        $review = $vendor->review('alpha', Tier::Strong, $this->request());
 
         self::assertSame(Provider::OpenAi, $review->substitute);
     }
@@ -733,14 +735,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
     }
 
     // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
-    /**
-     * @param array<string, string> $disabled
-     */
-    private function substitutedVendor(Closure $own, Closure $substitute, AccountCooldowns $cooldowns, array $disabled = []): SymfonyAiVendor
+    private function substitutedVendor(Closure $own, Closure $substitute, AccountCooldowns $cooldowns): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]],
-        ], $disabled);
+        ], []);
         $dispatcher = ScriptedReviewer::in(self::getContainer())->dispatcher;
         $platforms = new ServiceLocator([
             Provider::ClaudeCode->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($own, eventDispatcher: $dispatcher),

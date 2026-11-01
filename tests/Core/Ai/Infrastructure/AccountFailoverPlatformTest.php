@@ -210,7 +210,7 @@ final class AccountFailoverPlatformTest extends TestCase
         }
     }
 
-    // The reviewer's probe: the first call met the rejection, the second finds the only account cooling down from it.
+    // The reviewer's probe, because the second call meets no rejection itself and finds the only account cooling down from the first one's.
     public function testASecondCallOnAProviderWhoseOnlyKeyWasRejectedIsTheRejectionAndNotAWait(): void
     {
         $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('revoked'))], $this->cooldowns, new NativeClock(), new NullLogger());
