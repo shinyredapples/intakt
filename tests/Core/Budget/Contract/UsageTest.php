@@ -4,20 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Budget\Contract;
 
-use Intakt\Core\Ai\Contract\Account;
-use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Budget\Contract\UsageWindow;
+use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsedPercentOutOfRange;
-use Intakt\Core\Budget\Contract\WindowReading;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(WindowReading::class)]
+#[CoversClass(Usage::class)]
 #[CoversClass(UsedPercentOutOfRange::class)]
-#[UsesClass(Account::class)]
-final class WindowReadingTest extends TestCase
+final class UsageTest extends TestCase
 {
     /**
      * @return iterable<string, array{float}>
@@ -44,14 +39,14 @@ final class WindowReadingTest extends TestCase
     {
         $this->expectException(UsedPercentOutOfRange::class);
 
-        new WindowReading(new Account(Provider::ClaudeCode, 'main'), UsageWindow::FiveHour, $usedPercent, null);
+        new Usage($usedPercent, null);
     }
 
     #[DataProvider('usablePercents')]
     public function testAUsedPercentFromZeroUpIsKeptAsReported(float $usedPercent): void
     {
-        $reading = new WindowReading(new Account(Provider::ClaudeCode, 'main'), UsageWindow::FiveHour, $usedPercent, null);
+        $usage = new Usage($usedPercent, null);
 
-        self::assertSame($usedPercent, $reading->usedPercent);
+        self::assertSame($usedPercent, $usage->usedPercent);
     }
 }

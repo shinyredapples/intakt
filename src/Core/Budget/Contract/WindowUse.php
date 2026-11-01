@@ -11,8 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class WindowUse
 {
     public function __construct(
-        public float $usedPercent,
-        public ?DateTimeImmutable $resetsAt,
+        public Usage $usage,
         public DateTimeImmutable $takenAt,
         public int $ageInSeconds,
     ) {

@@ -36,7 +36,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             return $refusal;
         }
 
-        $record = new WindowReadingRecord($reading->account->provider, $reading->account->name, $reading->window, $reading->usedPercent, $reading->resetsAt, $now);
+        $record = new WindowReadingRecord($reading, $now);
         $this->entities->persist($record);
         $this->entities->flush();
         $this->forgetReadingsBefore($record);
@@ -57,17 +57,18 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
 
         $age = $this->clock->now()->getTimestamp() - $latest->takenAt->getTimestamp();
 
-        return new WindowUse($latest->usedPercent, $latest->resetsAt, $latest->takenAt, max(0, $age));
+        return new WindowUse($latest->usage(), $latest->takenAt, max(0, $age));
     }
 
     // A reset in the past or further ahead than the window is long is a frozen or wrong reading, so the last good one stays.
     private function refusalOf(WindowReading $reading, DateTimeImmutable $now): ?ReadingOutcome
     {
-        if (!$reading->resetsAt instanceof DateTimeImmutable) {
+        $resetsAt = $reading->usage->resetsAt;
+        if (!$resetsAt instanceof DateTimeImmutable) {
             return null;
         }
 
-        $secondsToReset = $reading->resetsAt->getTimestamp() - $now->getTimestamp();
+        $secondsToReset = $resetsAt->getTimestamp() - $now->getTimestamp();
 
         return match (true) {
             $secondsToReset <= 0 => ReadingOutcome::ResetAlreadyPassed,
