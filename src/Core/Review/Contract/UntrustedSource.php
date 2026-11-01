@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Contract;
 enum UntrustedSource: string
 {
     case Task = 'task';
+    case Diff = 'diff';
     case ToolResult = 'tool result';
     case EarlierFindings = 'earlier findings';
     case FindingsToJudge = 'findings to judge';

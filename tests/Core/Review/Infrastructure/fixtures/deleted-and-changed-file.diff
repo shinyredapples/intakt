@@ -1,0 +1,16 @@
+diff --git a/src/Cart.php b/src/Cart.php
+index 857b067..13af3e5 100644
+--- a/src/Cart.php
++++ b/src/Cart.php
+@@ -1,2 +1,2 @@
+ <?php
+-final class Cart {}
++final readonly class Cart {}
+diff --git a/src/Old.php b/src/Old.php
+deleted file mode 100644
+index 623d970..0000000
+--- a/src/Old.php
++++ /dev/null
+@@ -1,2 +0,0 @@
+-<?php
+-final class Old {}

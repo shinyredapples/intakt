@@ -19,8 +19,16 @@ services:
     # this creates a service per class whose id is the fully-qualified class name
     Intakt\:
         resource: '../src/'
-        # Built per review with the checkout under review, so the container cannot wire them.
-        exclude: '../src/Core/Review/Infrastructure/Repository/'
+        exclude:
+            # Built per review with the checkout under review, so the container cannot wire them.
+            - '../src/Core/Review/Infrastructure/Repository/'
+            # Defined below, because the scan would alias the forge writes to the guard itself while it is their only class.
+            - '../src/Core/Shadow/Infrastructure/ShadowGuardedForgeWrites.php'
+
+    # Decorates whichever forge writes, so a forge plugin cannot forget the shadow rule; dropped while no forge writes (plan task T18).
+    Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites:
+        decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
+        decoration_on_invalid: ignore
 
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
     Symfony\Component\Lock\Store\FlockStore:
@@ -30,6 +38,15 @@ services:
     Symfony\Component\Semaphore\Store\LockStore: ~
     Symfony\Component\Semaphore\SemaphoreFactory:
         arguments: ['@Symfony\Component\Semaphore\Store\LockStore']
+
+    # The App's identity: nothing else is read as a forge credential.
+    Intakt\Plugin\GitHubForge\Infrastructure\AppJwt:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
+    Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
+        arguments:
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
 
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
@@ -42,3 +59,5 @@ when@test:
     imports:
         # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
         - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }
+        # No forge writes yet (plan task T18), so the tests give the container one that refuses every write.
+        - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }

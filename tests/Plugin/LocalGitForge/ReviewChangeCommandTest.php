@@ -333,6 +333,16 @@ final class ReviewChangeCommandTest extends TestCase
         $this->whenTheCommandRuns($reviews, ['--round' => '2']);
     }
 
+    public function testTheReviewIsGivenTheBranchesDiff(): void
+    {
+        $reviews = $this->createMock(ChangeReviews::class);
+        $reviews->expects(self::once())->method('review')->with(self::callback(
+            static fn (ChangeReviewRequest $request): bool => str_contains($request->diff, 'diff --git a/') && str_contains($request->diff, "\n+") && str_contains($request->diff, "\n-"),
+        ))->willReturn($this->outcome(Decision::Approve));
+
+        $this->whenTheCommandRuns($reviews);
+    }
+
     /**
      * @param Closure(string): void $look
      */

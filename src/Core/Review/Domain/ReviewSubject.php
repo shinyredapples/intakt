@@ -17,6 +17,9 @@ final readonly class ReviewSubject
         public string $checkoutRoot,
         #[ORM\Column(type: 'text')]
         public string $task,
+        // Stored with the round, because a worker that restarts rebuilds the briefing from the row; not nullable, because a missing diff means the same as an empty one; defaulted to '', because SQLite refuses to add a not-null column without a default and PostgreSQL fills the rows stored before it only from one (MySQL, where DBAL leaves the default out, fills them with its implicit '').
+        #[ORM\Column(type: 'text', options: ['default' => ''])]
+        public string $diff,
     ) {
     }
 }
