@@ -47,7 +47,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 ## Status
 
-**Works today:** the foundation. A Symfony 8.1 app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max, Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects and long dashes.
+**Works today:** the foundation. A Symfony 8.1 app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max, Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects, long dashes and the `docs/highlights.md` table lint.
 
 **Planned:** everything in the list above, in the order of [the plan](docs/plan.md).
 
