@@ -88,7 +88,7 @@ final class AccountLimitedVendorTest extends TestCase
 
         $this->expectException(VendorAccountOut::class);
 
-        $_ = $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', []));
+        $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', []));
     }
 
     public function testARateLimitWhileEveryAccountOfTheVendorCoolsDownWaitsUntilTheFirstIsFree(): void
