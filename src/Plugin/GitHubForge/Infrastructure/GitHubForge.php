@@ -298,7 +298,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 
-    // Not chained either, for the same reason as a read.
+    // Not chained either, because the trace of a failed post holds the bearer token too.
     private function unreachableForWrite(string $failure): ForgeWriteFailed
     {
         return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
