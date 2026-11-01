@@ -16,7 +16,7 @@ abstract class DashboardPageTestCase extends WebTestCase
 
     protected function setUp(): void
     {
-        $this->browser = self::createClient();
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         $this->ledger = new DashboardLedger();
         self::getContainer()->set(Ledger::class, $this->ledger);
     }

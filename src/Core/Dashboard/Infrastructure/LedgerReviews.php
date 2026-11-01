@@ -37,7 +37,7 @@ final readonly class LedgerReviews
 
             match ($recorded->event->kind) {
                 LedgerEventKind::JudgeDone => $judged[$round] = true,
-                LedgerEventKind::ReviewStarted => $started[$round] = $this->summarize($round, $payload, $recorded->recordedAt),
+                LedgerEventKind::ReviewStarted => $started[$round] ??= $this->summarize($round, $payload, $recorded->recordedAt),
                 default => null,
             };
         }

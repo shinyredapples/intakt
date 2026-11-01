@@ -9,7 +9,7 @@ Two plain pages are built. They list what Intakt has written down about its revi
 - **Projects** (`/projects`): one row per project that has had a review, with how many review rounds it has had and how many of them reached the judge.
 - **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only.
 
-A change that is reviewed twice shows as two rows of the same project. The page for a single review (rounds, verdicts, findings) and the board below are still planned.
+Both pages only answer when you open them on the computer Intakt runs on (`localhost` and the dashboard's port, 7780 unless you changed it); any other address gets an error page and none of your data. A change that is reviewed twice shows as two rows of the same project. The page for a single review (rounds, verdicts, findings) and the board below are still planned.
 
 ## The board (planned)
 

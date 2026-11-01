@@ -60,6 +60,36 @@ final class LedgerReviewsTest extends TestCase
         self::assertSame([], $reviews);
     }
 
+    public function testARepeatedStartWithAnUnreadablePayloadKeepsTheRound(): void
+    {
+        $reviews = $this->reviewsOf(
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2}'),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha"}'),
+        );
+
+        self::assertSame([['r1', 'alpha', 2]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers], $reviews));
+    }
+
+    public function testARepeatedStartDoesNotReplaceTheFirstReadableOne(): void
+    {
+        $reviews = $this->reviewsOf(
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2}'),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"beta","reviewers":5}'),
+        );
+
+        self::assertSame([['r1', 'alpha', 2]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers], $reviews));
+    }
+
+    public function testAReadableStartAfterAnUnreadableOneListsTheRound(): void
+    {
+        $reviews = $this->reviewsOf(
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha"}'),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":3}'),
+        );
+
+        self::assertSame([['r1', 'alpha', 3]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers], $reviews));
+    }
+
     public function testAJudgeDecisionMarksOnlyItsOwnRound(): void
     {
         $reviews = $this->reviewsOf(
