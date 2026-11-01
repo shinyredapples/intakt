@@ -108,29 +108,27 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->outOfAccounts($failures);
     }
 
-    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so the rejection itself is thrown.
+    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets.
     private function outOfAccounts(SendFailures $failures): Throwable
     {
-        return $this->rejectionOfEveryAccount($failures) ?? new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+        if ($this->isEveryKeyRejected($failures)) {
+            return new EveryKeyRejected($this->provider);
+        }
+
+        return new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
     }
 
     // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
-    private function rejectionOfEveryAccount(SendFailures $failures): ?AuthenticationException
+    private function isEveryKeyRejected(SendFailures $failures): bool
     {
-        $rejection = null;
-
         foreach (array_keys($this->platforms) as $name) {
             $account = new Account($this->provider, $name);
-            $rejected = $failures->rejectionOf($account);
-            if (!$rejected instanceof AuthenticationException && !$this->cooldowns->isRejected($account)) {
-                return null;
+            if (!$failures->wasRejected($account) && !$this->cooldowns->isRejected($account)) {
+                return false;
             }
-
-            $rejection = $rejected ?? $rejection;
         }
 
-        // The last rejection of this call, because on the read path that is the one the reader just met and expects back; none when every rejection came before this call.
-        return $rejection ?? new EveryKeyRejected($this->provider);
+        return true;
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.

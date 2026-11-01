@@ -93,6 +93,35 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertContains(['warning', 'Account {account} failed with {failure}.', ['account' => 'anthropic.default', 'failure' => RateLimitExceededException::class]], $logs);
     }
 
+    // The reviewer's probe, because the judging's failure listener logs the exception it gets with its message and its chain.
+    public function testARejectionThatEndsTheCallCarriesNoTextOfTheProvider(): void
+    {
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('invalid key SENTINEL'))], $this->cooldowns, new NativeClock(), new NullLogger());
+
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+            self::fail('The only key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
+            self::assertStringNotContainsString('SENTINEL', $failure->getMessage());
+            self::assertNull($failure->getPrevious());
+        }
+    }
+
+    public function testARejectionReadFromTheAnswerThatEndsTheCallCarriesNoTextOfTheProvider(): void
+    {
+        $answer = $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('revoked')), new FailingWhenRead(new AuthenticationException('invalid key SENTINEL')))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('Every account rejected its key, yet the answer was read.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
+            self::assertStringNotContainsString('SENTINEL', $failure->getMessage());
+            self::assertNull($failure->getPrevious());
+        }
+    }
+
     public function testACallWhileEveryAccountCoolsDownIsRefusedBeforeAnyAccountIsCalled(): void
     {
         $first = new FailingWhenRead(new RuntimeException('never read'));
@@ -166,7 +195,7 @@ final class AccountFailoverPlatformTest extends TestCase
             $_ = $this->accounts($this->answering(static fn (): never => throw $revoked), $this->answering(static fn (): never => throw $revoked))->invoke('big', 'Review.');
             self::fail('Every account rejected its key, yet the call answered.');
         } catch (Throwable $failure) {
-            self::assertSame($revoked, $failure);
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
         }
 
         self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
@@ -264,7 +293,7 @@ final class AccountFailoverPlatformTest extends TestCase
             $_ = $this->accounts($this->answering('first'), $this->answering(static fn (): never => throw $revoked))->invoke('big', 'Review.');
             self::fail('Every key of the provider is revoked, yet the call answered.');
         } catch (Throwable $failure) {
-            self::assertSame($revoked, $failure);
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
         }
     }
 
@@ -278,7 +307,7 @@ final class AccountFailoverPlatformTest extends TestCase
             $answer->asText();
             self::fail('Every key of the provider is revoked, yet the answer was read.');
         } catch (Throwable $failure) {
-            self::assertSame($revoked, $failure);
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
         }
     }
 
@@ -305,7 +334,7 @@ final class AccountFailoverPlatformTest extends TestCase
             $answer->asText();
             self::fail('Every account rejected its key, yet the answer was read.');
         } catch (Throwable $failure) {
-            self::assertSame($revoked, $failure);
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
         }
     }
 
