@@ -5,40 +5,41 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Closure;
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
-use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
-use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewTerms;
-use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
-use Intakt\Plugin\Forge\Contract\ChangeNotFound;
-use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\SignalableCommandInterface;
+use Symfony\Component\Console\SignalRegistry\SignalRegistry;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 // Lives in the forge plugin because it reads the change from a local repository, which the core review module may not reach.
 #[AsCommand(name: 'intakt:review', description: 'Review a branch of a local repository with the project\'s panel and print the outcome, the act list and the tokens used')]
-final readonly class ReviewChangeCommand
+final readonly class ReviewChangeCommand implements SignalableCommandInterface
 {
+    // The shell's convention for a process ended by a signal, so a caller sees 130 for Ctrl-C and 143 for SIGTERM.
+    private const int SIGNAL_EXIT_BASE = 128;
+
     public function __construct(
         private Panels $panels,
         private ChangeReviews $reviews,
         private NameStatusParser $nameStatus,
         private ReviewReport $report = new ReviewReport(),
+        private CleanupOnStop $onStop = new CleanupOnStop(),
     ) {
     }
 
@@ -52,7 +53,7 @@ final readonly class ReviewChangeCommand
 
         try {
             $review = $this->reviewed($input);
-        } catch (ChangeNotFound|ForgeReadFailed|PanelNotConfigured|GlobCannotBeEvaluated|RoundNotNext|InvalidArgumentException $failure) {
+        } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -63,6 +64,21 @@ final readonly class ReviewChangeCommand
         return ReviewExit::of($review->decision)->value;
     }
 
+    /**
+     * @return list<int>
+     */
+    public function getSubscribedSignals(): array
+    {
+        return SignalRegistry::isSupported() ? [SIGINT, SIGTERM] : [];
+    }
+
+    public function handleSignal(int $signal, int|false $previousExitCode = 0): int
+    {
+        $this->onStop->stop();
+
+        return self::SIGNAL_EXIT_BASE + $signal;
+    }
+
     private function lacksRequired(ReviewChangeInput $input): bool
     {
         return '' === $input->project || '' === $input->task || (null !== $input->round && $input->round < 1);
@@ -71,11 +87,14 @@ final readonly class ReviewChangeCommand
     // Reviewed in a snapshot of the head rather than in the checkout, because the checkout may be switched or edited while the round runs, and a verdict counts only for what it reviewed.
     private function reviewed(ReviewChangeInput $input): ChangeReview
     {
-        $forge = new LocalGitForge(new LocalRepository($input->repository, $input->base), $this->nameStatus);
+        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), $this->nameStatus);
         $change = $forge->change(new ChangeId($input->change));
         $request = $this->requestFor($input, $change);
 
-        return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->reviews->review($request($snapshot)));
+        return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->onStop->during(
+            static fn () => $forge->removeSnapshot($snapshot),
+            fn (): ChangeReview => $this->reviews->review($request($snapshot)),
+        ));
     }
 
     /**

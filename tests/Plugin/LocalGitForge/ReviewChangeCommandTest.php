@@ -25,14 +25,21 @@ use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeNotFound;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\CleanupOnStop;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\OutputFormat;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewExit;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -46,6 +53,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(ReviewReport::class)]
 #[CoversClass(ReviewExit::class)]
 #[UsesClass(LocalGitForge::class)]
+#[UsesClass(LocalRepository::class)]
+#[UsesClass(RepositoryNotFound::class)]
+#[UsesClass(CleanupOnStop::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(OutputFormat::class)]
 final class ReviewChangeCommandTest extends TestCase
@@ -84,6 +94,13 @@ final class ReviewChangeCommandTest extends TestCase
 
         self::assertSame($code, $tester->getStatusCode());
         self::assertNotSame(Command::FAILURE, $tester->getStatusCode());
+    }
+
+    public function testAnApprovalIsASuccessfulRun(): void
+    {
+        $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve));
+
+        $tester->assertCommandIsSuccessful();
     }
 
     public function testTheTextOutputPrintsTheOutcomeTheActListAndTheTokens(): void
@@ -144,6 +161,78 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertStringContainsString('Round 3 was asked for', $tester->getDisplay());
     }
 
+    public function testAReportableFailureFromTheRoundPrintsItsMessageAndTheFailureCode(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willThrowException(new ForgeReadFailed('git cat-file failed: broken object.'));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('git cat-file failed: broken object.', $tester->getDisplay());
+    }
+
+    public function testAnInvalidArgumentFromInsideTheRoundIsNotCaught(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willThrowException(new InvalidArgumentException('a programming error'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('a programming error'));
+
+        $this->whenTheCommandRuns($reviews);
+    }
+
+    public function testAMissingRepositoryFailsNamingThePath(): void
+    {
+        $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['--repository' => 'no-such-repository']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString(RepositoryNotFound::at('no-such-repository')->getMessage(), $tester->getDisplay());
+    }
+
+    public function testAnUnknownBranchFailsNamingTheBranch(): void
+    {
+        $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['change' => 'nowhere']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString(ChangeNotFound::named(new ChangeId('nowhere'))->getMessage(), $tester->getDisplay());
+    }
+
+    /**
+     * @return iterable<string, array{int, int}>
+     */
+    public static function stopSignals(): iterable
+    {
+        yield 'SIGINT' => [SIGINT, 130];
+        yield 'SIGTERM' => [SIGTERM, 143];
+    }
+
+    #[DataProvider('stopSignals')]
+    public function testAStopSignalDuringTheRoundRemovesTheSnapshotAndGivesTheSignalsExitCode(int $signal, int $code): void
+    {
+        $seen = [];
+        $reviews = self::createStub(ChangeReviews::class);
+        $command = new ReviewChangeCommand($this->onePanel(), $reviews, new NameStatusParser());
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($command, $signal, &$seen): ChangeReview {
+            $seen = [$request->checkoutRoot, $command->handleSignal($signal)];
+
+            return $this->outcome(Decision::Approve);
+        });
+
+        $this->whenTheCommandIsRun($command);
+
+        self::assertSame($code, $seen[1]);
+        self::assertDirectoryDoesNotExist($seen[0]);
+        self::assertCount(1, $this->repository->worktrees());
+    }
+
+    public function testItListensForTheStopSignals(): void
+    {
+        $command = new ReviewChangeCommand($this->onePanel(), $this->reviewing(Decision::Approve), new NameStatusParser());
+
+        self::assertSame([SIGINT, SIGTERM], $command->getSubscribedSignals());
+    }
+
     public function testARoundBelowOneFailsBeforeAnyReview(): void
     {
         $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['--round' => '0']);
@@ -168,7 +257,7 @@ final class ReviewChangeCommandTest extends TestCase
             self::assertFileExists($snapshot.'/README.md');
         }));
 
-        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        $tester->assertCommandIsSuccessful($tester->getDisplay());
         self::assertFileDoesNotExist($this->repository->path.'/src/Feature.php');
         self::assertSame($this->repository->objectAt('main'), $this->repository->objectAt('HEAD'));
     }
@@ -183,7 +272,7 @@ final class ReviewChangeCommandTest extends TestCase
             $this->repository->checkout('sample');
         }));
 
-        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        $tester->assertCommandIsSuccessful($tester->getDisplay());
     }
 
     public function testAnEditInTheCheckoutDoesNotReachTheSnapshot(): void
@@ -196,7 +285,7 @@ final class ReviewChangeCommandTest extends TestCase
             self::assertFileDoesNotExist($snapshot.'/notes.txt');
         }));
 
-        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        $tester->assertCommandIsSuccessful($tester->getDisplay());
     }
 
     public function testTheSnapshotIsRemovedAfterTheRound(): void
@@ -206,7 +295,7 @@ final class ReviewChangeCommandTest extends TestCase
             $snapshot = $directory;
         }));
 
-        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        $tester->assertCommandIsSuccessful($tester->getDisplay());
         self::assertDirectoryDoesNotExist($snapshot);
         self::assertCount(1, $this->repository->worktrees());
     }
@@ -277,8 +366,16 @@ final class ReviewChangeCommandTest extends TestCase
      */
     private function whenTheCommandRuns(ChangeReviews $reviews, array $input = [], ?Panels $panels = null): CommandTester
     {
+        return $this->whenTheCommandIsRun(new ReviewChangeCommand($panels ?? $this->onePanel(), $reviews, new NameStatusParser()), $input);
+    }
+
+    /**
+     * @param array<string, string> $input
+     */
+    private function whenTheCommandIsRun(ReviewChangeCommand $command, array $input = []): CommandTester
+    {
         $application = new Application();
-        $application->addCommand(new ReviewChangeCommand($panels ?? $this->onePanel(), $reviews, new NameStatusParser()));
+        $application->addCommand($command);
         $tester = new CommandTester($application->find('intakt:review'));
         $tester->execute(['change' => 'sample', '--project' => 'alpha', '--task' => 'Add the thing.', '--repository' => $this->repository->path, ...$input]);
 

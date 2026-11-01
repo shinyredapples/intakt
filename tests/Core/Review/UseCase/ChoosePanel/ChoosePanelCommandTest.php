@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
@@ -21,6 +22,7 @@ use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\Infrastructure\PathGlob;
 use Intakt\Core\Review\UseCase\ChoosePanel\ChoosePanelCommand;
 use Intakt\Core\Review\UseCase\ChoosePanel\ChoosePanelInput;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -126,6 +128,18 @@ final class ChoosePanelCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $status);
         self::assertStringContainsString('**/a/**/a/**/c.php', $tester->getDisplay());
         self::assertStringNotContainsString('quorum', $tester->getDisplay());
+    }
+
+    public function testAnInvalidArgumentFromChoosingThePanelIsNotCaught(): void
+    {
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willThrowException(new InvalidArgumentException('a programming error'));
+        $application = new Application();
+        $application->addCommand(new ChoosePanelCommand($panels));
+
+        $this->expectExceptionObject(new InvalidArgumentException('a programming error'));
+
+        new CommandTester($application->find('intakt:review:panel'))->execute(['project' => 'alpha']);
     }
 
     private function tester(string $glob = 'src/**'): CommandTester

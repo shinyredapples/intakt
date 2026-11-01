@@ -80,6 +80,14 @@ final readonly class LocalGitForge implements Forge
         try {
             return $work($snapshot);
         } finally {
+            $this->removeSnapshot($snapshot);
+        }
+    }
+
+    // Skips a snapshot already gone, because a stopped command removes it before the work returns.
+    public function removeSnapshot(string $snapshot): void
+    {
+        if (is_dir($snapshot)) {
             $this->read(['worktree', 'remove', '--force', $snapshot]);
         }
     }

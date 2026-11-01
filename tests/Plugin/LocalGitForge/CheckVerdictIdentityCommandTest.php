@@ -32,12 +32,15 @@ use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\CheckVerdictIdentityCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\CheckVerdictIdentityInput;
+use Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity\RecordedIdentityUnreadable;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -51,6 +54,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(NameStatusParser::class)]
 #[UsesClass(VisiblePath::class)]
 #[UsesClass(LocalRepository::class)]
+#[UsesClass(RepositoryNotFound::class)]
+#[UsesClass(RecordedIdentityUnreadable::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(Change::class)]
@@ -168,6 +173,24 @@ final class CheckVerdictIdentityCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('Project "beta" has no review panel configured.', $tester->getDisplay());
+    }
+
+    public function testAnInvalidArgumentFromInsideTheCheckIsNotCaught(): void
+    {
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willThrowException(new InvalidArgumentException('a programming error'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('a programming error'));
+
+        $this->whenTheCommandRuns([], $panels);
+    }
+
+    public function testAMissingRepositoryFailsNamingThePath(): void
+    {
+        $tester = $this->whenTheCommandRuns(['--repository' => 'no-such-repository']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString(RepositoryNotFound::at('no-such-repository')->getMessage(), $tester->getDisplay());
     }
 
     private function recordedIdentity(): string

@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity;
 
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeDescription;
-use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Contract\IdentityField;
-use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
@@ -15,8 +14,6 @@ use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
-use Intakt\Plugin\Forge\Contract\ChangeNotFound;
-use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
@@ -41,7 +38,7 @@ final readonly class CheckVerdictIdentityCommand
     {
         try {
             $this->check($io, $input);
-        } catch (ChangeNotFound|ForgeReadFailed|PanelNotConfigured|GlobCannotBeEvaluated|InvalidArgumentException $failure) {
+        } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -52,7 +49,7 @@ final readonly class CheckVerdictIdentityCommand
 
     private function check(SymfonyStyle $io, CheckVerdictIdentityInput $input): void
     {
-        $forge = new LocalGitForge(new LocalRepository($input->repository, $input->base), $this->nameStatus);
+        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), $this->nameStatus);
         $change = $forge->change(new ChangeId($input->branch));
         $current = new VerdictIdentity($change->commits, $this->termsOf($change, $input));
         $io->writeln('identity '.$current->recorded());
@@ -61,8 +58,18 @@ final readonly class CheckVerdictIdentityCommand
             return;
         }
 
-        $reviewed = VerdictIdentity::fromRecorded($input->reviewed);
+        $reviewed = $this->readReviewed($input->reviewed);
         $this->printStanding($io, $reviewed->standingAt($current, $forge->headMoveSince($reviewed->commits->head, $change)));
+    }
+
+    // Only here is a recorded identity typed by a person; one read from storage stays a programming error.
+    private function readReviewed(string $recorded): VerdictIdentity
+    {
+        try {
+            return VerdictIdentity::fromRecorded($recorded);
+        } catch (InvalidArgumentException $invalid) {
+            throw new RecordedIdentityUnreadable('--reviewed is not a recorded verdict identity: '.$invalid->getMessage(), $invalid->getCode(), $invalid);
+        }
     }
 
     private function termsOf(Change $change, CheckVerdictIdentityInput $input): ReviewTerms
