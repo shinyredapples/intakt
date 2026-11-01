@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\ReviewBrief;
+use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -31,5 +33,11 @@ final class VerdictPerRole implements Vendor
         $this->briefs[$request->conversation->rolePrompt] = $request->brief;
 
         return $this->verdicts[$request->conversation->rolePrompt] ?? new Verdict(Decision::Approve, [], [], []);
+    }
+
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        return Judgement::everyBlockingFindingActs($request->findings);
     }
 }

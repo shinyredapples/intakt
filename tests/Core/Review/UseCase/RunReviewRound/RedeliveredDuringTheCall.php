@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 use Closure;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -26,5 +28,11 @@ final readonly class RedeliveredDuringTheCall implements Vendor
         ($this->meanwhile)();
 
         return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
+    }
+
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        return Judgement::everyBlockingFindingActs($request->findings);
     }
 }

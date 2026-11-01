@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -31,5 +33,11 @@ final class ScriptedVendor implements Vendor
         $this->conversations[] = $request->conversation->id->toRfc4122();
 
         return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
+    }
+
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        return Judgement::everyBlockingFindingActs($request->findings);
     }
 }

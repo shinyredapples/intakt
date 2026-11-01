@@ -10,6 +10,8 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -42,6 +44,8 @@ use Throwable;
 #[UsesClass(VendorAccountBusy::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(Judgement::class)]
+#[UsesClass(JudgeRequest::class)]
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 final class AccountLimitedVendorTest extends TestCase
@@ -55,6 +59,17 @@ final class AccountLimitedVendorTest extends TestCase
         $result = $this->vendor($vendor)->review('intakt', Tier::Standard, $this->request());
 
         self::assertSame($verdict, $result);
+    }
+
+    public function testAJudgementOnAnAccountWithAFreePlaceReturnsTheVendorsJudgement(): void
+    {
+        $judgement = new Judgement([]);
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('judge')->willReturn($judgement);
+
+        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', []));
+
+        self::assertSame($judgement, $result);
     }
 
     public function testAReviewOnAFullAccountIsRefusedWithoutCallingTheVendor(): void
