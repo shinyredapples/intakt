@@ -52,10 +52,14 @@ services:
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
 
-    # Read only, because no tool writes yet; the start-review tool of plan T15 part 3 is the first caller that can raise it.
+    # Read only until the owner sets MCP_OWNER_ACCESS to mcp_tool_write; a write also needs the owner's bearer token.
     Intakt\Core\Mcp\Infrastructure\ToolAccessVoter:
         arguments:
-            $highestAllowed: !php/enum Intakt\Core\Mcp\Contract\ToolAccess::Read
+            $highestAllowed: '%env(enum:Intakt\Core\Mcp\Contract\ToolAccess:MCP_OWNER_ACCESS)%'
+
+    Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler:
+        arguments:
+            $configuredToken: '%env(MCP_OWNER_TOKEN)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

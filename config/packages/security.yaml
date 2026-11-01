@@ -1,5 +1,12 @@
 security:
-    # MCP tools are authorized by a voter on Intakt's own config (ToolAccessVoter); no users or firewalls yet.
+    # MCP tools are authorized by a voter on Intakt's own config (ToolAccessVoter); the only firewall reads the owner's bearer token.
     firewalls:
+        mcp_owner:
+            pattern: ^/mcp/owner
+            stateless: true
+            # Without access_control, a call with no header still reaches the read tools; only a write needs the token.
+            access_token:
+                token_handler:
+                    id: Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler
         main:
             security: false

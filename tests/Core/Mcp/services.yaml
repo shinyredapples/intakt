@@ -5,3 +5,9 @@ services:
 
     Intakt\Tests\Core\Mcp\Contract\Tool\:
         resource: 'Contract/Tool/'
+
+    # The start tool is proved without workers or a configured panel: a scripted round and a panel of one.
+    Intakt\Core\Review\Contract\ChangeReviews:
+        alias: Intakt\Tests\Core\Mcp\Contract\Tool\ScriptedChangeReviews
+    Intakt\Core\Review\Contract\Panels:
+        alias: Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel

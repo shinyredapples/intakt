@@ -9,5 +9,5 @@ interface ChangeReviews
     /**
      * @throws RoundNotNext
      */
-    public function review(ChangeReviewRequest $request): ChangeReview;
+    public function review(ChangeReviewRequest $request, ReviewProgress $progress = new IgnoredProgress()): ChangeReview;
 }

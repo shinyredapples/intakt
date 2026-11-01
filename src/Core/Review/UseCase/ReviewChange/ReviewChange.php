@@ -9,8 +9,11 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
@@ -47,9 +50,9 @@ final readonly class ReviewChange implements ChangeReviews
     ) {
     }
 
-    public function review(ChangeReviewRequest $request): ChangeReview
+    public function review(ChangeReviewRequest $request, ReviewProgress $progress = new IgnoredProgress()): ChangeReview
     {
-        $round = $this->awaitJudged($this->start($request));
+        $round = $this->awaitJudged($this->start($request), $progress);
 
         return $this->conclude($request, $round);
     }
@@ -75,17 +78,26 @@ final readonly class ReviewChange implements ChangeReviews
     }
 
     // The last state seen is returned at the ceiling, so what the reviewers did finish is still reported.
-    private function awaitJudged(string $roundId): ReviewRound
+    private function awaitJudged(string $roundId, ReviewProgress $progress): ReviewRound
     {
         $deadline = $this->clock->now()->modify('+'.$this->waitCeilingSeconds.' seconds');
         $round = $this->rounds->stored($roundId);
+        $progress->reached($this->progressOf($round));
 
         while (RoundState::Judged !== $round->state() && $this->clock->now() < $deadline) {
             $this->clock->sleep(self::POLL_SECONDS);
             $round = $this->rounds->stored($roundId);
+            $progress->reached($this->progressOf($round));
         }
 
         return $round;
+    }
+
+    private function progressOf(ReviewRound $round): RoundProgress
+    {
+        $finished = count(array_filter($round->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished()));
+
+        return new RoundProgress($finished, count($round->reviewers()), RoundState::Judged === $round->state());
     }
 
     private function conclude(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
