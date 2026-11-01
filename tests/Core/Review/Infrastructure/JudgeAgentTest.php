@@ -118,6 +118,6 @@ final class JudgeAgentTest extends KernelTestCase
             $given[] = new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
         }
 
-        return new JudgeAgent(new JudgePrompt(new Fence()))->judge(new JudgeRequest($task, $given, new UuidV7()),$platform, 'judge-model');
+        return new JudgeAgent(new JudgePrompt(new Fence()))->judge(new JudgeRequest($task, $given, new UuidV7()), $platform, 'judge-model');
     }
 }

@@ -160,7 +160,7 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(2, $second->round);
     }
 
-    private function reviewWith(Vendor $vendor,?int $round = null, ?Closure $duringTheRound = null): ChangeReview
+    private function reviewWith(Vendor $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
         $work = function () use ($vendor, &$delivered, $duringTheRound): void {
