@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\TokenCount;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id, wherever it sits in the ledger.
+// Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id, wherever it sits in the ledger; excluded from the container because LedgerRounds builds one per read.
+#[Exclude]
 final class LedgerTokens
 {
     /** @var array<string, string> */

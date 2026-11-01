@@ -312,7 +312,12 @@ final class JudgeRoundTest extends KernelTestCase
     {
         $events = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder()), static fn (RecordedEvent $event): bool => LedgerEventKind::JudgeDone === $event->event->kind);
 
-        return array_values(array_map(static fn (RecordedEvent $event): array => json_decode($event->event->payload, true, 8, JSON_THROW_ON_ERROR), $events));
+        return array_values(array_map(static function (RecordedEvent $event): array {
+            /** @var array<string, mixed> $payload */
+            $payload = json_decode($event->event->payload, true, 8, JSON_THROW_ON_ERROR);
+
+            return $payload;
+        }, $events));
     }
 
     /**

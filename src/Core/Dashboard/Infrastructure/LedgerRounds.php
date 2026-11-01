@@ -14,8 +14,10 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Collected per round and joined at the end, because a reviewer's, the judge's or a call's event says nothing about where its round's start sits in the ledger.
+// Collected per round and joined at the end, because a reviewer's, the judge's or a call's event says nothing about where its round's start sits in the ledger; excluded from the container because LedgerReviewPages builds one per read.
+#[Exclude]
 final class LedgerRounds
 {
     private const array REVIEWER_KINDS = [
@@ -67,7 +69,8 @@ final class LedgerRounds
             return null;
         }
 
-        $rounds = array_values(array_filter($this->started, $chosen->isOfTheSameReviewAs(...)));
+        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
+        $rounds = [$chosen, ...array_values($others)];
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
         return new Review(array_map($this->completed(...), $rounds));
