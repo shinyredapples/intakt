@@ -1,0 +1,69 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Review {{ review.change ?: round }} - Intakt{% endblock %}
+
+{% block body %}
+<h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+{% set total = review.tokens %}
+<p class="summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: no price, because Intakt has no price table yet.</p>
+{% for reviewed in review.rounds %}
+<section class="round" id="round-{{ reviewed.round }}">
+    <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+    <p>Round <code>{{ reviewed.round }}</code>, started {{ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') }} UTC, <span class="{{ reviewed.state.name == 'Judged' ? 'state-judged' : 'state-running' }}">{{ reviewed.state.value }}</span>.</p>
+
+    <h3>Reviewers</h3>
+    <p>{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
+    {% if reviewed.outcomes is not empty %}
+    <table class="reviewers">
+        <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th>Findings</th><th>Note</th></tr></thead>
+        <tbody>
+        {% for outcome in reviewed.outcomes %}
+            <tr>
+                <td>{{ outcome.role }}</td>
+                <td>{{ outcome.tier }}</td>
+                <td>{{ outcome.progress.value }}</td>
+                <td>{{ outcome.decision ?? '' }}</td>
+                <td>{{ outcome.findings ?? '' }}</td>
+                <td>{{ outcome.note ?? '' }}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h3>Findings and the judge's call</h3>
+    {% if reviewed.state.name != 'Judged' %}
+    <p>The judge has not judged this round yet.</p>
+    {% elseif reviewed.findings is empty %}
+    <p>The reviewers reported no findings, so the judge had nothing to mark.</p>
+    {% else %}
+    <table class="findings">
+        <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
+        <tbody>
+        {% for finding in reviewed.findings %}
+            <tr>
+                <td>{{ finding.id }}</td>
+                <td>{{ finding.severity }}</td>
+                <td>{{ finding.text }}</td>
+                <td>{{ finding.call.value }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h3>Tokens and cost</h3>
+    <table class="tokens">
+        <thead><tr><th>Prompt</th><th>Completion</th><th>Total</th><th>Cost</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>{{ reviewed.tokens.prompt }}</td>
+                <td>{{ reviewed.tokens.completion }}</td>
+                <td>{{ reviewed.tokens.total }}</td>
+                <td>no price</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+{% endfor %}
+{% endblock %}
