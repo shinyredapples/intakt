@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Closure;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -11,6 +12,7 @@ use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\VerdictIdentity;
@@ -32,8 +34,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'intakt:review', description: 'Review a branch of a local repository with the project\'s panel and print the outcome, the act list and the tokens used')]
 final readonly class ReviewChangeCommand
 {
-    private const string CHECKOUT_CHANGED = 'The branch was moved, switched or edited in the checkout during the round, so the reviewers may have read files its commits do not hold: review again.';
-
     public function __construct(
         private Panels $panels,
         private ChangeReviews $reviews,
@@ -52,7 +52,7 @@ final readonly class ReviewChangeCommand
 
         try {
             $review = $this->reviewed($input);
-        } catch (ChangeNotFound|ForgeReadFailed|PanelNotConfigured|GlobCannotBeEvaluated|RoundNotNext|BranchNotCheckedOut|InvalidArgumentException $failure) {
+        } catch (ChangeNotFound|ForgeReadFailed|PanelNotConfigured|GlobCannotBeEvaluated|RoundNotNext|InvalidArgumentException $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -68,27 +68,26 @@ final readonly class ReviewChangeCommand
         return '' === $input->project || '' === $input->task || (null !== $input->round && $input->round < 1);
     }
 
-    // The reviewers read the files of the checkout, not the branch's commits, so the checkout must hold exactly those commits before and after the round.
+    // Reviewed in a snapshot of the head rather than in the checkout, because the checkout may be switched or edited while the round runs, and a verdict counts only for what it reviewed.
     private function reviewed(ReviewChangeInput $input): ChangeReview
     {
         $forge = new LocalGitForge(new LocalRepository($input->repository, $input->base), $this->nameStatus);
         $change = $forge->change(new ChangeId($input->change));
+        $request = $this->requestFor($input, $change);
 
-        if (!$forge->isCheckedOutUnchanged($change)) {
-            throw BranchNotCheckedOut::named($input->change);
-        }
-
-        $review = $this->reviews->review($this->requestFor($input, $change));
-
-        return $forge->isCheckedOutUnchanged($change) ? $review : $review->blockedFor(self::CHECKOUT_CHANGED);
+        return $forge->withSnapshotOf($change->commits->head, fn (string $snapshot): ChangeReview => $this->reviews->review($request($snapshot)));
     }
 
-    private function requestFor(ReviewChangeInput $input, Change $change): ChangeReviewRequest
+    /**
+     * @return Closure(string): ChangeReviewRequest
+     */
+    private function requestFor(ReviewChangeInput $input, Change $change): Closure
     {
         $panel = $this->panels->panelForChange($input->project, $this->describe($change));
         $identity = new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
+        $round = new RequestedRound($input->change, $input->round);
 
-        return new ChangeReviewRequest($input->project, $this->checkoutOf($input), $input->task, $input->change, $identity, $panel, $input->round);
+        return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $round, $identity, $panel);
     }
 
     private function describe(Change $change): ChangeDescription
@@ -96,14 +95,6 @@ final readonly class ReviewChangeCommand
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
 
         return new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), $paths, []);
-    }
-
-    // Resolved because a worker started elsewhere reads the stored path from its own working directory.
-    private function checkoutOf(ReviewChangeInput $input): string
-    {
-        $real = realpath($input->repository);
-
-        return false === $real ? throw new InvalidArgumentException('The repository '.$input->repository.' does not exist.') : $real;
     }
 
     private function print(SymfonyStyle $io, ReviewChangeInput $input, ChangeReview $review): void

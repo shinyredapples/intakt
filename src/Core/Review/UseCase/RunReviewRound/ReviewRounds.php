@@ -55,7 +55,7 @@ final readonly class ReviewRounds
             throw IdentityNotOfRound::forTaskOrPanel();
         }
 
-        $opened = $this->findings->openRound($subject->project, $command->change);
+        $opened = $this->findings->openRound($subject->project, $command->round->change);
         $this->refuseAnotherNumber($command, $opened);
         $round = new ReviewRound($this->newId(), $command->target, $opened);
 
@@ -166,8 +166,10 @@ final readonly class ReviewRounds
     // Thrown inside the transaction, so the number taken is rolled back with it.
     private function refuseAnotherNumber(RunReviewRound $command, ChangeRound $opened): void
     {
-        if (null !== $command->round && $command->round !== $opened->number) {
-            throw RoundNotNext::for($command->round, $opened->number);
+        $expected = $command->round->number;
+
+        if (null !== $expected && $expected !== $opened->number) {
+            throw RoundNotNext::for($expected, $opened->number);
         }
     }
 

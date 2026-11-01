@@ -10,11 +10,9 @@ final readonly class ChangeReviewRequest
         public string $project,
         public string $checkoutRoot,
         public string $task,
-        // Names the change across its rounds, because they share one finding ledger.
-        public string $change,
+        public RequestedRound $round,
         public VerdictIdentity $identity,
         public Panel $panel,
-        public ?int $round = null,
     ) {
     }
 }

@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundNotNext;
@@ -205,7 +206,7 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $panel = $this->panel();
 
-        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::CHANGE, SampleIdentity::of(RoundFixture::TASK, $panel), $panel, $round);
+        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, new RequestedRound(RoundFixture::CHANGE, $round), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
     }
 
     // The roles and prompts RoundFixture's workers answer by, so a scripted verdict reaches the reviewer it names.

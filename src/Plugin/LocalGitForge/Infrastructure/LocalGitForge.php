@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Closure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
@@ -61,18 +62,23 @@ final readonly class LocalGitForge implements Forge
     }
 
     /**
-     * @phpstan-impure
+     * @template T
+     *
+     * @param Closure(string): T $work
+     *
+     * @return T
      */
-    // Untracked files are left out, because a build's own scratch folders would refuse every checkout; optional locks are off, so the read never rewrites the index.
+    // A detached worktree in a scratch directory, removed after the work, because what is read there must be the head's files whatever happens in the checkout meanwhile.
     #[NoDiscard]
-    public function isCheckedOutUnchanged(Change $change): bool
+    public function withSnapshotOf(CommitId $head, Closure $work): mixed
     {
-        $branch = $this->git(['symbolic-ref', '--quiet', 'HEAD']);
+        $snapshot = $this->addWorktree($head);
 
-        return $branch->isSuccessful()
-            && 'refs/heads/'.$change->id->value === trim($branch->getOutput())
-            && $this->commitFrom($this->read(['rev-parse', '--verify', 'HEAD^{commit}']))->equals($change->commits->head)
-            && '' === $this->read(['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no']);
+        try {
+            return $work($snapshot);
+        } finally {
+            $this->read(['worktree', 'remove', '--force', $snapshot]);
+        }
     }
 
     public function headMoveSince(CommitId $earlier, Change $change): HeadMove
@@ -97,6 +103,17 @@ final readonly class LocalGitForge implements Forge
         $head = $change->commits->head;
 
         return new FileContent($path, $head, $this->read(['cat-file', 'blob', $this->blobAt($head, $path)]));
+    }
+
+    private function addWorktree(CommitId $head): string
+    {
+        $directory = sys_get_temp_dir().'/intakt-review-'.bin2hex(random_bytes(8));
+        $this->read(['worktree', 'add', '--detach', '--quiet', $directory, $head->hash]);
+
+        // Resolved because a worker started elsewhere reads the stored path from its own working directory.
+        $snapshot = realpath($directory);
+
+        return false === $snapshot ? throw new ForgeReadFailed('git worktree add left no directory at '.$directory.'.') : $snapshot;
     }
 
     private function headOf(ChangeId $id): CommitId

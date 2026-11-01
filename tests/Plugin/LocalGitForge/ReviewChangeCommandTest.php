@@ -24,9 +24,9 @@ use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Closure;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
-use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\BranchNotCheckedOut;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\OutputFormat;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
@@ -45,7 +45,6 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(ReviewChangeCommand::class)]
 #[CoversClass(ReviewReport::class)]
 #[CoversClass(ReviewExit::class)]
-#[CoversClass(BranchNotCheckedOut::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(OutputFormat::class)]
@@ -160,80 +159,104 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
     }
 
-    public function testABranchThatIsNotCheckedOutIsRefusedBeforeAnyReview(): void
+    public function testTheReviewersReadASnapshotOfTheHeadWhileTheCheckoutStaysWhereItIs(): void
     {
         $this->repository->checkout('main');
 
-        $tester = $this->whenTheCommandRuns($this->neverReviewing());
+        $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(static function (string $snapshot): void {
+            self::assertStringEqualsFile($snapshot.'/src/Feature.php', "<?php\n");
+            self::assertFileExists($snapshot.'/README.md');
+        }));
 
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('Check out the branch "sample"', $tester->getDisplay());
+        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertFileDoesNotExist($this->repository->path.'/src/Feature.php');
+        self::assertSame($this->repository->objectAt('main'), $this->repository->objectAt('HEAD'));
     }
 
-    public function testABranchWhoseCommitIsCheckedOutDetachedIsRefused(): void
+    // The reviewer's probe: a checkout switched away and back while the reviewers read must not change what they read.
+    public function testABranchSwitchedAndRestoredDuringTheRoundDoesNotChangeWhatTheReviewersRead(): void
     {
-        $this->repository->checkout(trim($this->repository->log('-1', '--format=%H')));
+        $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(function (string $snapshot): void {
+            $this->repository->checkout('main');
+            self::assertFileDoesNotExist($this->repository->path.'/src/Feature.php');
+            self::assertStringEqualsFile($snapshot.'/src/Feature.php', "<?php\n");
+            $this->repository->checkout('sample');
+        }));
 
-        $tester = $this->whenTheCommandRuns($this->neverReviewing());
-
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
     }
 
-    public function testACheckoutWithAnUncommittedChangeToATrackedFileIsRefused(): void
+    public function testAnEditInTheCheckoutDoesNotReachTheSnapshot(): void
     {
         file_put_contents($this->repository->path.'/src/Feature.php', "<?php\n// edited\n");
-
-        $tester = $this->whenTheCommandRuns($this->neverReviewing());
-
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
-    }
-
-    public function testAnUntrackedFileInTheCheckoutDoesNotRefuseTheReview(): void
-    {
         file_put_contents($this->repository->path.'/notes.txt', "scratch\n");
 
-        $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve));
+        $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(static function (string $snapshot): void {
+            self::assertStringEqualsFile($snapshot.'/src/Feature.php', "<?php\n");
+            self::assertFileDoesNotExist($snapshot.'/notes.txt');
+        }));
 
-        self::assertSame(0, $tester->getStatusCode());
+        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
     }
 
-    public function testABranchThatMovesDuringTheRoundIsBlockedWithTheReason(): void
+    public function testTheSnapshotIsRemovedAfterTheRound(): void
+    {
+        $snapshot = '';
+        $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(static function (string $directory) use (&$snapshot): void {
+            $snapshot = $directory;
+        }));
+
+        self::assertSame(0, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertDirectoryDoesNotExist($snapshot);
+        self::assertCount(1, $this->repository->worktrees());
+    }
+
+    public function testTheSnapshotIsRemovedWhenTheReviewIsRefused(): void
+    {
+        $snapshot = '';
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$snapshot): never {
+            $snapshot = $request->checkoutRoot;
+
+            throw RoundNotNext::for(3, 1);
+        });
+
+        $tester = $this->whenTheCommandRuns($reviews, ['--round' => '3']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertDirectoryDoesNotExist($snapshot);
+        self::assertCount(1, $this->repository->worktrees());
+    }
+
+    public function testTheReviewIsAskedForTheBranchesChangeUnderTheProjectInASnapshot(): void
+    {
+        $reviews = $this->createMock(ChangeReviews::class);
+        $reviews->expects(self::once())->method('review')->with(self::callback(
+            fn (ChangeReviewRequest $request): bool => 'alpha' === $request->project && 'sample' === $request->round->change && 2 === $request->round->number && 'Add the thing.' === $request->task && is_dir($request->checkoutRoot) && realpath($this->repository->path) !== $request->checkoutRoot,
+        ))->willReturn($this->outcome(Decision::Approve));
+
+        $this->whenTheCommandRuns($reviews, ['--round' => '2']);
+    }
+
+    /**
+     * @param Closure(string): void $look
+     */
+    private function reviewingTheSnapshot(Closure $look): ChangeReviews
     {
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturnCallback(function (): ChangeReview {
-            $this->repository->commitFile('src/Other.php', "<?php\n");
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($look): ChangeReview {
+            $look($request->checkoutRoot);
 
             return $this->outcome(Decision::Approve);
         });
 
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertSame(11, $tester->getStatusCode());
-        self::assertStringContainsString('moved, switched or edited in the checkout during the round', $tester->getDisplay());
-    }
-
-    public function testTheReviewIsAskedForTheBranchesChangeUnderTheProject(): void
-    {
-        $reviews = $this->createMock(ChangeReviews::class);
-        $reviews->expects(self::once())->method('review')->with(self::callback(
-            fn (ChangeReviewRequest $request): bool => 'alpha' === $request->project && 'sample' === $request->change && 2 === $request->round && 'Add the thing.' === $request->task && realpath($this->repository->path) === $request->checkoutRoot,
-        ))->willReturn($this->outcome(Decision::Approve));
-
-        $this->whenTheCommandRuns($reviews, ['--round' => '2']);
+        return $reviews;
     }
 
     private function reviewing(Decision $decision): ChangeReviews
     {
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($this->outcome($decision));
-
-        return $reviews;
-    }
-
-    private function neverReviewing(): ChangeReviews
-    {
-        $reviews = $this->createMock(ChangeReviews::class);
-        $reviews->expects(self::never())->method('review');
 
         return $reviews;
     }

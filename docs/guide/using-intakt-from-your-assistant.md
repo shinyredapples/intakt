@@ -38,7 +38,7 @@ The review command runs one review and prints the outcome:
 bin/console intakt:review <branch> --project=intakt --task="<what the branch builds>" --format=json
 ```
 
-- It prints the verdict, the list of things to fix, and the tokens used (not yet a price), or JSON for scripts. It needs the review workers running and the branch checked out with no unsaved edits, because the reviewers read the files you have checked out; reviewing a pull request instead of a branch is planned.
+- It prints the verdict, the list of things to fix, and the tokens used (not yet a price), or JSON for scripts. It needs the review workers running on the same machine. The reviewers read a copy of the branch's last commit that Intakt makes for the round and removes afterwards, not the files you have checked out, so you can keep working while they read; reviewing a pull request instead of a branch is planned.
 - Its exit code says the outcome: 0 approved, 10 changes needed, 11 blocked (and 1 when you gave it something wrong), so a script or CI job can act on it.
 
 Other commands come with the parts they belong to, for example re-running the Symfony AI bug reproductions (`intakt:upstream:run`) or summarizing a branch's change.
