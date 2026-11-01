@@ -25,6 +25,8 @@ final class DocblockRuleTest extends TestCase
         yield 'a parameter and a return type' => ["/**\n * @param list<string> \$names\n * @return array<int, string>\n */"];
         yield 'an array shape over several lines' => ["/**\n * @param array{\n *     id: int,\n *     name: string\n * } \$row\n */"];
         yield 'a variadic parameter' => ["/**\n * @param int ...\$counts\n */"];
+        yield 'a by-reference parameter' => ["/**\n * @param int &\$count\n */"];
+        yield 'a by-reference variadic parameter' => ["/**\n * @param int &...\$counts\n */"];
         yield 'a variable type without a name' => ['/** @var list<int> */'];
         yield 'a template with a bound and a default' => ["/**\n * @template T of object = stdClass\n */"];
         yield 'a type alias' => ["/**\n * @phpstan-type Row array{id: int}\n */"];
@@ -47,6 +49,7 @@ final class DocblockRuleTest extends TestCase
         yield 'prose after a parameter' => ["/**\n * @param int \$count the number of items\n */", '@param carries prose or lacks its type'];
         yield 'a parameter without its name' => ["/**\n * @param int\n */", '@param carries prose or lacks its type'];
         yield 'prose on a continuation line' => ["/**\n * @return int\n *     the total\n */", '@return carries prose or lacks its type'];
+        yield 'a space between the by-reference marker and the name' => ["/**\n * @param int & \$count\n */", '@param carries prose or lacks its type'];
         yield 'an import without its source' => ["/**\n * @phpstan-import-type Row\n */", '@phpstan-import-type carries prose or lacks its type'];
         yield 'a marker with a body' => ["/**\n * @pure always\n */", '@pure carries prose or lacks its type'];
         yield 'a deprecation without a reason' => ["/**\n * @deprecated\n */", '@deprecated carries prose or lacks its type'];
