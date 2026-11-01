@@ -30,9 +30,11 @@ final readonly class MemoryDocuments
     {
         $metadata = $document->getMetadata();
 
+        /** @var string $text */
+        $text = $metadata[self::ENTRY];
         /** @var list<string> $files */
         $files = $metadata[self::FILES];
 
-        return new MemoryEntry((string) $metadata[self::ENTRY], $files);
+        return new MemoryEntry($text, $files);
     }
 }
