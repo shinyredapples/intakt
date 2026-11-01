@@ -6,12 +6,14 @@ namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\LogFailedJudging;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\FailingBus;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use stdClass;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Envelope;
@@ -20,8 +22,6 @@ use Symfony\Component\Messenger\EventListener\SendFailedMessageToFailureTranspor
 use Symfony\Component\Messenger\EventListener\StopWorkerOnMessageLimitListener;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Worker;
-use Symfony\Component\DependencyInjection\ServiceLocator;
-use Intakt\Tests\Core\Review\UseCase\RunReviewRound\FailingBus;
 
 #[CoversClass(LogFailedJudging::class)]
 #[UsesClass(JudgeRound::class)]
