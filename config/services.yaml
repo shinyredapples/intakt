@@ -52,6 +52,11 @@ services:
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
 
+    # Read only, because no tool writes yet; the start-review tool of plan T15 part 3 is the first caller that can raise it.
+    Intakt\Core\Mcp\Infrastructure\ToolAccessVoter:
+        arguments:
+            $highestAllowed: !php/enum Intakt\Core\Mcp\Contract\ToolAccess::Read
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
@@ -59,5 +64,7 @@ when@test:
     imports:
         # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
         - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }
+        # A write tool that proves, through the whole server, that a tool the voter refuses does not run.
+        - { resource: '../tests/Core/Mcp/services.yaml', ignore_errors: not_found }
         # No forge writes yet (plan task T18), so the tests give the container one that refuses every write.
         - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }

@@ -7,6 +7,7 @@ use Doctrine\Bundle\MigrationsBundle\DoctrineMigrationsBundle;
 use Symfony\AI\AiBundle\AiBundle;
 use Symfony\AI\McpBundle\McpBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
+use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
 
 return [
@@ -15,5 +16,6 @@ return [
     DoctrineMigrationsBundle::class => ['all' => true],
     AiBundle::class => ['all' => true],
     McpBundle::class => ['all' => true],
+    SecurityBundle::class => ['all' => true],
     TwigBundle::class => ['all' => true],
 ];
