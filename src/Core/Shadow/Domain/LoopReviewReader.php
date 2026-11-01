@@ -152,7 +152,7 @@ final readonly class LoopReviewReader
         return LoopVerdict::Approve === $declared && $this->hasBlockingFinding($lines) ? LoopVerdict::Changes : $declared;
     }
 
-    // The loop files a P2 of a re-review under a line "Follow-ups:" and still approves; a P1 blocks wherever it stands.
+    // A P2 after a "Follow-ups:" line does not block, because the loop files a re-review's P2 there and still approves.
     /**
      * @param list<array{text: string, json: bool}> $lines
      */
