@@ -10,7 +10,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
 
-// Runs after the bundle's own pass, which is the one that gives each server builder its handler locator.
+// Runs after the bundle's own pass, because that pass is what gives each server builder its handler locator.
 final class AuthorizeToolCallsPass implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container): void

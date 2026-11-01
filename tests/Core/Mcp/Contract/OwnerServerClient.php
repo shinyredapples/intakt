@@ -8,9 +8,6 @@ use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
-/**
- * Speaks JSON-RPC over HTTP to the owner's server through the kernel, the way an agent does.
- */
 final class OwnerServerClient
 {
     private ?string $session = null;
@@ -64,7 +61,7 @@ final class OwnerServerClient
      */
     private function decode(string $content): array
     {
-        // An answer arrives as plain JSON or as one server-sent event.
+        // An answer arrives as plain JSON or as one server-sent event, because the server picks per request.
         if (str_starts_with($content, 'event:') || str_contains($content, "\ndata:") || str_starts_with($content, 'data:')) {
             preg_match('/^data: (.*)$/m', $content, $matches);
             $content = $matches[1];

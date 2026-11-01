@@ -12,7 +12,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversNothing]
 final class ProtocolVersionContractTest extends KernelTestCase
 {
-    // The revision Claude Code sends in its initialize request.
+    // The revision Claude Code sends in its initialize request, because the server must echo it.
     private const string CLAUDE_CODE_VERSION = '2025-11-25';
 
     public function testInitializeWithTheVersionOfClaudeCodeGetsThatVersionBack(): void

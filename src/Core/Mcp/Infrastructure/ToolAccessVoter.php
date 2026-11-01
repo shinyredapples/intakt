@@ -9,9 +9,7 @@ use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 
-/**
- * Decides from Intakt's own config only: it never sees the arguments of a call, so a model cannot argue its way to a write.
- */
+// The voter never sees the arguments of a call, because a model could otherwise argue its way to a write.
 final readonly class ToolAccessVoter implements VoterInterface
 {
     public function __construct(

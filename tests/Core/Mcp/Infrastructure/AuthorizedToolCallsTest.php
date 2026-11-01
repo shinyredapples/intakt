@@ -87,18 +87,3 @@ final class AuthorizedToolCallsTest extends TestCase
         };
     }
 }
-
-#[IsGrantedTool(ToolAccess::Write)]
-final class WriteTool
-{
-    public function __invoke(): void
-    {
-    }
-}
-
-final class UndeclaredTool
-{
-    public function __invoke(): void
-    {
-    }
-}

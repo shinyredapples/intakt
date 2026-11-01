@@ -12,10 +12,7 @@ use Mcp\Exception\ToolCallException;
 use ReflectionMethod;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
-/**
- * Runs a tool only when its #[IsGrantedTool] access passes the voter; a tool without the attribute never runs.
- * A ToolCallException reaches the client as an MCP error result, not as a stack trace.
- */
+// A ToolCallException reaches the client as an MCP error result, because the SDK never sends its trace.
 final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
 {
     public function __construct(
@@ -26,6 +23,7 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
 
     public function handle(ElementReference $reference, array $arguments): mixed
     {
+        // A tool that declares no access never runs, because an unlabeled tool could write.
         $declared = $this->declaredAccess($reference);
 
         if (!$declared instanceof IsGrantedTool) {
