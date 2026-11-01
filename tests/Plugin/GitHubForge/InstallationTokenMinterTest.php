@@ -13,8 +13,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\AbstractLogger;
-use Stringable;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -99,15 +98,7 @@ final class InstallationTokenMinterTest extends TestCase
     {
         $key = AppKey::generate();
         $sent = [];
-        $logger = new class extends AbstractLogger {
-            /** @var list<string> */
-            public array $lines = [];
-
-            public function log(mixed $level, string|Stringable $message, array $context = []): void
-            {
-                $this->lines[] = $message.json_encode($context);
-            }
-        };
+        $logger = new RecordingLogger();
         $minter = $this->minter(
             static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
                 $sent[] = $options['normalized_headers']['authorization'][0];
@@ -130,11 +121,11 @@ final class InstallationTokenMinterTest extends TestCase
         self::assertStringNotContainsString(substr($sent[0], strlen('Authorization: Bearer ')), $everything);
     }
 
-    private function minter(callable $respond, ?AppKey $key = null, ?AbstractLogger $logger = null): InstallationTokenMinter
+    private function minter(callable $respond, ?AppKey $key = null, ?LoggerInterface $logger = null): InstallationTokenMinter
     {
         $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock(new DateTimeImmutable('2026-11-25 10:00:00 UTC')));
 
-        return new InstallationTokenMinter('678', $jwt, new MockHttpClient($respond), $logger ?? $this->createStub(AbstractLogger::class));
+        return new InstallationTokenMinter('678', $jwt, new MockHttpClient($respond), $logger ?? $this->createStub(LoggerInterface::class));
     }
 
     private static function answer(string $token, string $expiresAt): string

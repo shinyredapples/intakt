@@ -14,7 +14,7 @@ use Symfony\Contracts\Service\ResetInterface;
 // Every call asks here, because a token held by the caller could outlive its expiry.
 final class InstallationTokens implements ResetInterface
 {
-    // A token this close to its expiry could lapse mid-call.
+    // A token this close to its expiry is replaced because it could lapse mid-call.
     private const string MARGIN = 'PT60S';
 
     private ?InstallationToken $cached = null;

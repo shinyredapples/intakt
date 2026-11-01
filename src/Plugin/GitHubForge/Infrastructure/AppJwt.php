@@ -12,7 +12,7 @@ use Symfony\Component\Clock\ClockInterface;
 // Short-lived on purpose, because it only exists to be exchanged for an installation token.
 final readonly class AppJwt
 {
-    // GitHub refuses a lifetime over ten minutes, and a start set back absorbs clock drift.
+    // GitHub refuses a lifetime over ten minutes because it wants short-lived proofs; the start is set back because clocks drift.
     private const int LIFETIME_SECONDS = 540;
     private const int DRIFT_SECONDS = 60;
 
