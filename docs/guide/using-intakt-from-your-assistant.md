@@ -24,6 +24,8 @@ flowchart LR
 | read the act list | what the builder must fix, after the judge step (built) | no, read only |
 | list projects | the projects this install runs (built) | no, read only |
 
+Your assistant can also read one thing that is not a tool: the **round findings** (`round_findings`, built), every finding the reviewers of a round reported. It only reads and changes nothing.
+
 How it stays safe:
 - **Every tool is labeled** with what it does ("only reads", "changes something"), so your assistant knows before it calls.
 - **Starting a review will need a token** you set in Intakt's config (planned, with starting a review).
