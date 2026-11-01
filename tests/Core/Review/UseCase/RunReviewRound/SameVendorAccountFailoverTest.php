@@ -58,12 +58,12 @@ use Symfony\Component\Semaphore\Store\LockStore;
 
 // Through the real vendor stack down to two in-memory providers, so the move is proven end to end and not only at one layer; the first account answers with a 429.
 #[Group('persistence')]
-#[CoversClass(ReviewWithReviewerHandler::class)]
+#[UsesClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(ReviewerMovesToAnotherAccount::class)]
-#[CoversClass(AccountLimitedVendor::class)]
-#[CoversClass(AccountFailoverPlatform::class)]
+#[UsesClass(AccountLimitedVendor::class)]
+#[UsesClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
-#[CoversClass(AccountCooldownWindows::class)]
+#[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(ReviewerLeases::class)]
 #[UsesClass(SymfonyAiVendor::class)]
 #[UsesClass(UsageLedger::class)]

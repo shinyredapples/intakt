@@ -9,6 +9,7 @@ use Intakt\Core\Upstream\Contract\ReproductionStatus;
 use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
 use Intakt\Core\Upstream\UseCase\RunReproductions\RunReproductionsCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -17,9 +18,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RunReproductionsCommand::class)]
-#[CoversClass(ReproductionRunner::class)]
-#[CoversClass(ReproductionOutcome::class)]
-#[CoversClass(ReproductionStatus::class)]
+#[UsesClass(ReproductionRunner::class)]
+#[UsesClass(ReproductionOutcome::class)]
+#[UsesClass(ReproductionStatus::class)]
 final class RunReproductionsCommandTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';

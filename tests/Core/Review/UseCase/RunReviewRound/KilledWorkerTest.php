@@ -20,9 +20,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // A killed worker leaves its reviewer running; the test stops a worker right after it took the reviewer and moves the clock past the hold, so the order is forced and nothing repeats.
 #[Group('persistence')]
-#[CoversClass(ReviewWithReviewerHandler::class)]
-#[CoversClass(ReviewerLeases::class)]
-#[CoversClass(ReviewerMoves::class)]
+#[UsesClass(ReviewWithReviewerHandler::class)]
+#[UsesClass(ReviewerLeases::class)]
+#[UsesClass(ReviewerMoves::class)]
 #[UsesClass(ReviewRounds::class)]
 #[UsesClass(RoundLedger::class)]
 #[UsesClass(RoundState::class)]

@@ -29,9 +29,9 @@ use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(VerdictParser::class)]
-#[CoversClass(Verdict::class)]
-#[CoversClass(StrictVerdictSubscriber::class)]
-#[CoversClass(StrictVerdictConverter::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(StrictVerdictSubscriber::class)]
+#[UsesClass(StrictVerdictConverter::class)]
 #[UsesClass(Kernel::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]

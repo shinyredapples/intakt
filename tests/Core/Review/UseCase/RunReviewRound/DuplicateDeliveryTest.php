@@ -24,11 +24,11 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Two workers on two connections, the second one delivering the same message while the first is inside its vendor call, because that is the interleaving a duplicate delivery produces; the vendor double forces the order, so no timing is involved.
 #[Group('persistence')]
-#[CoversClass(ReviewWithReviewerHandler::class)]
-#[CoversClass(ReviewerLeases::class)]
-#[CoversClass(ReviewerMoves::class)]
-#[CoversClass(ReviewerStillHeld::class)]
-#[CoversClass(ReviewRounds::class)]
+#[UsesClass(ReviewWithReviewerHandler::class)]
+#[UsesClass(ReviewerLeases::class)]
+#[UsesClass(ReviewerMoves::class)]
+#[UsesClass(ReviewerStillHeld::class)]
+#[UsesClass(ReviewRounds::class)]
 #[UsesClass(RoundLedger::class)]
 #[UsesClass(RoundState::class)]
 #[UsesClass(ReviewerState::class)]

@@ -57,9 +57,9 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ConfinedClaudeCodeClient::class)]
-#[CoversClass(FinishedProcessResult::class)]
-#[CoversClass(ClaudeCodePlatformFactory::class)]
-#[CoversClass(SymfonyAiVendor::class)]
+#[UsesClass(FinishedProcessResult::class)]
+#[UsesClass(ClaudeCodePlatformFactory::class)]
+#[UsesClass(SymfonyAiVendor::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
@@ -90,7 +90,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
 #[UsesClass(Kernel::class)]
-final class ClaudeCodeReviewerTest extends KernelTestCase
+final class ConfinedClaudeCodeClientTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
 

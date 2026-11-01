@@ -24,7 +24,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(LocalGitForge::class)]
+#[UsesClass(LocalGitForge::class)]
 #[UsesClass(Change::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangedFile::class)]

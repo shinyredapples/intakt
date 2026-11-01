@@ -83,11 +83,11 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(SymfonyAiVendor::class)]
-#[CoversClass(UsageLedger::class)]
-#[CoversClass(ProviderRateLimited::class)]
-#[CoversClass(ProviderFailedTransiently::class)]
-#[CoversClass(UsageReservation::class)]
-#[CoversClass(UsageNotRecorded::class)]
+#[UsesClass(UsageLedger::class)]
+#[UsesClass(ProviderRateLimited::class)]
+#[UsesClass(ProviderFailedTransiently::class)]
+#[UsesClass(UsageReservation::class)]
+#[UsesClass(UsageNotRecorded::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(AppendResult::class)]

@@ -30,8 +30,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(VerdictIdentity::class)]
-#[CoversClass(VerdictStanding::class)]
-#[CoversClass(ReviewTerms::class)]
+#[UsesClass(VerdictStanding::class)]
+#[UsesClass(ReviewTerms::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(HeadMove::class)]

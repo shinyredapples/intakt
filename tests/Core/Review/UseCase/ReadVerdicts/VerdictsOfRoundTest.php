@@ -37,7 +37,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(RoundNotFound::class)]
 #[CoversClass(IdentityNotOfRound::class)]
 #[CoversClass(ReviewRound::class)]
-#[CoversClass(ReviewRounds::class)]
+#[UsesClass(ReviewRounds::class)]
 #[UsesClass(VerdictIdentity::class)]
 #[UsesClass(VerdictStanding::class)]
 #[UsesClass(ReviewTerms::class)]

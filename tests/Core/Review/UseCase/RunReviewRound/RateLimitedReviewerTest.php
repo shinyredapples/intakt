@@ -24,10 +24,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Exception\RecoverableExceptionInterface;
 
 #[Group('persistence')]
-#[CoversClass(ReviewWithReviewerHandler::class)]
+#[UsesClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(ReviewerRateLimited::class)]
-#[CoversClass(ReviewerLeases::class)]
-#[CoversClass(ReviewerMoves::class)]
+#[UsesClass(ReviewerLeases::class)]
+#[UsesClass(ReviewerMoves::class)]
 #[UsesClass(ReviewRounds::class)]
 #[UsesClass(RoundLedger::class)]
 #[UsesClass(RoundState::class)]

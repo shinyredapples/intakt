@@ -19,8 +19,8 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 // On the application's Doctrine transport, which the test environment otherwise replaces with the in-memory one; the queue table is made as messenger:setup-transports makes it.
 #[Group('persistence')]
-#[CoversClass(RunReviewRoundHandler::class)]
-#[CoversClass(ReviewRounds::class)]
+#[UsesClass(RunReviewRoundHandler::class)]
+#[UsesClass(ReviewRounds::class)]
 #[UsesClass(RoundLedger::class)]
 final class DoctrineQueueTest extends KernelTestCase
 {

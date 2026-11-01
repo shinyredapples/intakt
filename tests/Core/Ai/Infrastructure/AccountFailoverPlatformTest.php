@@ -32,8 +32,8 @@ use Throwable;
 
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
 #[CoversClass(AccountFailoverPlatform::class)]
-#[CoversClass(AccountPlatform::class)]
-#[CoversClass(EveryAccountCoolingDown::class)]
+#[UsesClass(AccountPlatform::class)]
+#[UsesClass(EveryAccountCoolingDown::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]

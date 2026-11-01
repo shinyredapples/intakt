@@ -28,9 +28,9 @@ use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(DoctrineLedger::class)]
-#[CoversClass(AppendResult::class)]
-#[CoversClass(RecordedEvents::class)]
-#[CoversClass(RefuseChangesToStoredEvents::class)]
+#[UsesClass(AppendResult::class)]
+#[UsesClass(RecordedEvents::class)]
+#[UsesClass(RefuseChangesToStoredEvents::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]

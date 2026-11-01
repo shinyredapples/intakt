@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
-use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
@@ -14,24 +13,17 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
-use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\TrackedFinding;
-use Intakt\Core\Review\Infrastructure\FencedToolbox;
-use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
-use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
-use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
-use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
@@ -48,26 +40,8 @@ use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Uid\UuidV7;
 
-#[CoversClass(ReviewerAgent::class)]
-#[CoversClass(ReviewerPrompt::class)]
-#[CoversClass(FencedToolbox::class)]
-#[CoversClass(StrictVerdictConverter::class)]
-#[CoversClass(MalformedToolCalls::class)]
-#[UsesClass(Fence::class)]
-#[UsesClass(UntrustedSource::class)]
-#[CoversClass(ConversationAlreadyStarted::class)]
-#[UsesClass(ReviewRequest::class)]
-#[UsesClass(ReviewerConversation::class)]
-#[UsesClass(ReviewBrief::class)]
-#[UsesClass(Checkout::class)]
-#[UsesClass(Verdict::class)]
-#[UsesClass(Finding::class)]
-#[UsesClass(FindingLedger::class)]
-#[UsesClass(TrackedFinding::class)]
-#[UsesClass(VerdictParser::class)]
-#[UsesClass(ReviewerToolboxFactory::class)]
-#[UsesClass(ReadFile::class)]
-#[UsesClass(StrictVerdictSubscriber::class)]
+// The reviewer agent is covered by ReviewerPromptCachingTest; this class proves the verdict flow through the whole stack.
+#[CoversNothing]
 final class ReviewerVerdictTest extends WebTestCase
 {
     use AiAssertionsTrait;

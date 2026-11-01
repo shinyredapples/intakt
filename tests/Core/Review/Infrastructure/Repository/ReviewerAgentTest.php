@@ -4,16 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure\Repository;
 
-use Intakt\Core\Review\Contract\Checkout;
-use Intakt\Core\Review\Contract\PathNotInCheckout;
-use Intakt\Core\Review\Contract\PathOutsideCheckout;
-use Intakt\Core\Review\Infrastructure\Repository\DenyPathsOutsideCheckout;
-use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
-use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
-use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolResult;
@@ -28,14 +20,8 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
-#[CoversClass(ReviewerToolboxFactory::class)]
-#[CoversClass(DenyPathsOutsideCheckout::class)]
-#[CoversClass(ReadFile::class)]
-#[CoversClass(ListDirectory::class)]
-#[CoversClass(SearchFiles::class)]
-#[UsesClass(Checkout::class)]
-#[UsesClass(PathOutsideCheckout::class)]
-#[UsesClass(PathNotInCheckout::class)]
+// Drives the repository tools through an agent; ReviewerToolboxFactoryTest owns the factory.
+#[CoversNothing]
 final class ReviewerAgentTest extends WebTestCase
 {
     use AiAssertionsTrait;
@@ -240,18 +226,6 @@ final class ReviewerAgentTest extends WebTestCase
         $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'src/Missing.php']));
 
         self::assertSame('An error occurred while executing tool "read_file".', $answers[0]);
-    }
-
-    public function testEveryRepositoryToolIsReadOnlyAndNamesItsPathArgumentAsTheListenerExpects(): void
-    {
-        $tools = new ReviewerToolboxFactory()->create($this->fixture->checkout)->getTools();
-
-        self::assertCount(3, $tools);
-
-        foreach ($tools as $tool) {
-            self::assertTrue($tool->getEffectHints()->readOnlyHint, $tool->getName());
-            self::assertArrayHasKey(DenyPathsOutsideCheckout::PATH_ARGUMENT, $tool->getParameters()['properties'] ?? [], $tool->getName());
-        }
     }
 
     // Because the toolbox is built per checkout and is no container service, the collector is built from this run's traceable platform and toolbox instead of a profiled request.

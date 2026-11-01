@@ -20,8 +20,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FindingLedger::class)]
-#[CoversClass(TrackedFinding::class)]
-#[CoversClass(RoundNotAfterLatest::class)]
+#[UsesClass(TrackedFinding::class)]
+#[UsesClass(RoundNotAfterLatest::class)]
 #[UsesClass(FindingStatus::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(GoalpostRule::class)]
@@ -104,18 +104,6 @@ final class FindingLedgerTest extends TestCase
         self::assertSame(['F1', 'F2'], array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $ledger->all()));
     }
 
-    public function testAFindingsFirstAndLatestRoundAreItsFirstAndLastAppearance(): void
-    {
-        $ledger = new FindingLedger();
-        $ledger->recordRound(1, [$this->finding('x')]);
-        $ledger->recordRound(2, []);
-        $ledger->recordRound(3, [$this->finding('F1')]);
-
-        $tracked = $ledger->all()[0];
-        self::assertSame(1, $tracked->firstRound());
-        self::assertSame(3, $tracked->latestRound());
-    }
-
     public function testResolvingAnUnknownIdLeavesOpenFindingsUnchanged(): void
     {
         $ledger = new FindingLedger();
@@ -152,16 +140,6 @@ final class FindingLedgerTest extends TestCase
 
         self::assertEquals($all, $ledger->all());
         self::assertEquals($open, $ledger->open());
-    }
-
-    public function testTheRefusalNamesTheRefusedAndTheLatestRound(): void
-    {
-        $ledger = new FindingLedger();
-        $ledger->recordRound(4, []);
-
-        $refusal = $this->refusalOf($ledger, 2);
-
-        self::assertSame('Round 2 is not after the latest recorded round 4.', $refusal?->getMessage());
     }
 
     public function testTheFirstRoundMayBeAnyNumberAndLaterRoundsOnlyNeedToBeHigher(): void

@@ -33,7 +33,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(ReviewerLeases::class)]
 #[CoversClass(ReviewerMoves::class)]
-#[CoversClass(ReviewerStillHeld::class)]
+#[UsesClass(ReviewerStillHeld::class)]
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(RoundState::class)]
 #[UsesClass(ReviewerState::class)]

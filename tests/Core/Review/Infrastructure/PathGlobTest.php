@@ -7,10 +7,11 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Infrastructure\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(PathGlob::class)]
-#[CoversClass(GlobCannotBeEvaluated::class)]
+#[UsesClass(GlobCannotBeEvaluated::class)]
 final class PathGlobTest extends TestCase
 {
     private string|false $backtrackLimit;

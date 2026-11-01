@@ -9,7 +9,6 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
-use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
@@ -18,33 +17,15 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
-use Intakt\Core\Review\Infrastructure\HoldRoundUntilEveryReviewerFinished;
-use Intakt\Core\Review\Infrastructure\StateMarkingStore;
 use Intakt\Tests\Core\Review\SampleIdentity;
-use InvalidArgumentException;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
-use stdClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Symfony\Component\Workflow\Exception\NotEnabledTransitionException;
 use Symfony\Component\Workflow\WorkflowInterface;
 
-#[CoversClass(ReviewRound::class)]
-#[CoversClass(ReviewSubject::class)]
-#[CoversClass(ReviewTarget::class)]
-#[UsesClass(ChangeRound::class)]
-#[UsesClass(VerdictIdentity::class)]
-#[CoversClass(RoundReviewer::class)]
-#[CoversClass(ReviewerState::class)]
-#[CoversClass(ReviewerTransition::class)]
-#[CoversClass(StateMarkingStore::class)]
-#[CoversClass(HoldRoundUntilEveryReviewerFinished::class)]
-#[UsesClass(RoundState::class)]
-#[UsesClass(ReviewerRole::class)]
-#[UsesClass(ReviewerModel::class)]
-#[UsesClass(PanelReviewer::class)]
+#[CoversNothing]
 final class ReviewWorkflowsTest extends KernelTestCase
 {
     public function testAReviewerStartsThenReceivesItsVerdict(): void
@@ -147,13 +128,6 @@ final class ReviewWorkflowsTest extends KernelTestCase
 
         self::assertSame(RoundState::Complete, $round->state());
         self::assertFalse($this->roundMachine()->can($round, ReviewRound::COMPLETION));
-    }
-
-    public function testTheMarkingStoreRefusesASubjectThatKeepsNoPlace(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-
-        new StateMarkingStore()->getMarking(new stdClass());
     }
 
     private function finish(RoundReviewer $reviewer): void

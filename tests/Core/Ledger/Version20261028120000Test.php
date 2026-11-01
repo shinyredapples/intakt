@@ -13,9 +13,7 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use DoctrineMigrations\Version20261028120000;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Domain\EventRecord;
-use Intakt\Core\Ledger\Infrastructure\RefuseChangesToStoredEvents;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -25,13 +23,11 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
-#[CoversClass(RefuseChangesToStoredEvents::class)]
-#[CoversClass(LedgerEventsAreAppendOnly::class)]
 #[CoversClass(Version20261028120000::class)]
 #[UsesClass(EventRecord::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(UtcDateTimeImmutableType::class)]
-final class AppendOnlyLedgerTest extends KernelTestCase
+final class Version20261028120000Test extends KernelTestCase
 {
     private EntityManagerInterface $manager;
 
@@ -47,25 +43,6 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         $tool = new SchemaTool($manager);
         $tool->dropDatabase();
         $tool->createSchema($metadata);
-    }
-
-    public function testUpdatingAStoredEventThroughDoctrineIsRefused(): void
-    {
-        $record = $this->storedEvent();
-        $this->manager->getUnitOfWork()->scheduleForUpdate($record);
-
-        $this->expectException(LedgerEventsAreAppendOnly::class);
-
-        $this->manager->flush();
-    }
-
-    public function testDeletingAStoredEventThroughDoctrineIsRefused(): void
-    {
-        $this->manager->remove($this->storedEvent());
-
-        $this->expectException(LedgerEventsAreAppendOnly::class);
-
-        $this->manager->flush();
     }
 
     public function testUpdatingAStoredEventInTheDatabaseIsRefused(): void

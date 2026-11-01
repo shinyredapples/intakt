@@ -33,7 +33,7 @@ use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
 #[CoversClass(AccountLimitedVendor::class)]
-#[CoversClass(VendorAccountOut::class)]
+#[UsesClass(VendorAccountOut::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(ReviewerConversation::class)]

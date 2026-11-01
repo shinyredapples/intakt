@@ -34,8 +34,8 @@ use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(BlockReviewerOfFailedMessage::class)]
-#[CoversClass(ReviewerLeases::class)]
-#[CoversClass(ReviewerMoves::class)]
+#[UsesClass(ReviewerLeases::class)]
+#[UsesClass(ReviewerMoves::class)]
 #[UsesClass(ReviewRounds::class)]
 #[UsesClass(RoundLedger::class)]
 #[UsesClass(RoundState::class)]

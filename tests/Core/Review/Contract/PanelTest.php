@@ -21,7 +21,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Panel::class)]
-#[CoversClass(PanelCannotReachQuorum::class)]
+#[UsesClass(PanelCannotReachQuorum::class)]
 #[UsesClass(PanelWithoutReviewers::class)]
 #[UsesClass(QuorumPolicy::class)]
 #[UsesClass(PanelReviewer::class)]

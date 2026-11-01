@@ -12,7 +12,7 @@ use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeRound;
-use Intakt\Core\Review\Domain\ReviewerNotStarted;
+use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
@@ -25,7 +25,7 @@ use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(RoundReviewer::class)]
-#[CoversClass(ReviewerNotStarted::class)]
+#[UsesClass(ReviewerState::class)]
 #[UsesClass(ReviewRound::class)]
 #[UsesClass(ReviewSubject::class)]
 #[UsesClass(ReviewTarget::class)]
@@ -34,7 +34,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerRole::class)]
 #[UsesClass(ReviewerModel::class)]
 #[UsesClass(PanelReviewer::class)]
-final class RoundReviewerAttemptTest extends TestCase
+final class RoundReviewerTest extends TestCase
 {
     public function testEveryStartGivesTheReviewerANewConversation(): void
     {
@@ -45,13 +45,6 @@ final class RoundReviewerAttemptTest extends TestCase
         $reviewer->recordStart(new DateTimeImmutable('2026-10-30 12:00:00Z'));
 
         self::assertFalse($first->equals($reviewer->conversationId()));
-    }
-
-    public function testAReviewerThatWasNeverStartedHasNoConversation(): void
-    {
-        $this->expectException(ReviewerNotStarted::class);
-
-        $this->reviewer()->conversationId();
     }
 
     public function testTheSameStartIsTheSameAttempt(): void
@@ -78,6 +71,32 @@ final class RoundReviewerAttemptTest extends TestCase
         $reviewer = $this->reviewer();
 
         self::assertFalse($reviewer->isSameAttemptAs(clone $reviewer));
+    }
+
+    public function testARunningReviewerIsHeldForOneHourFromItsStart(): void
+    {
+        $reviewer = $this->reviewer();
+        $reviewer->recordStart(new DateTimeImmutable('2026-10-30 12:00:00Z'));
+        $reviewer->moveTo(ReviewerState::Running->value);
+
+        self::assertEquals(new DateTimeImmutable('2026-10-30 13:00:00Z'), $reviewer->heldUntil());
+    }
+
+    public function testAReviewerThatIsNotRunningIsNotHeld(): void
+    {
+        $reviewer = $this->reviewer();
+        $reviewer->recordStart(new DateTimeImmutable('2026-10-30 12:00:00Z'));
+        $reviewer->moveTo(ReviewerState::Failed->value);
+
+        self::assertNull($reviewer->heldUntil());
+    }
+
+    public function testARunningReviewerWithoutARecordedStartIsNotHeld(): void
+    {
+        $reviewer = $this->reviewer();
+        $reviewer->moveTo(ReviewerState::Running->value);
+
+        self::assertNull($reviewer->heldUntil());
     }
 
     private function reviewer(): RoundReviewer
