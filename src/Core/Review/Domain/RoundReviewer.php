@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Domain;
 use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Verdict;
@@ -49,6 +50,10 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $failure = null;
 
+    // The provider that reviewed in this reviewer's place; set means a catch-up review is owed, because another vendor reviewed; a move to another account of the same vendor never sets it.
+    #[ORM\Column(length: 32, nullable: true, enumType: Provider::class)]
+    private ?Provider $substitute = null;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
@@ -74,9 +79,10 @@ final class RoundReviewer implements HasPlace
         ++$this->restarts;
     }
 
-    public function recordVerdict(Verdict $verdict): void
+    public function recordVerdict(Verdict $verdict, ?Provider $substitute): void
     {
         $this->verdict = json_encode($verdict, JSON_THROW_ON_ERROR);
+        $this->substitute = $substitute;
     }
 
     public function recordFailure(string $failure): void
@@ -146,6 +152,16 @@ final class RoundReviewer implements HasPlace
     public function verdictJson(): ?string
     {
         return $this->verdict;
+    }
+
+    public function substitute(): ?Provider
+    {
+        return $this->substitute;
+    }
+
+    public function owesCatchUp(): bool
+    {
+        return $this->substitute instanceof Provider;
     }
 
     public function failure(): ?string

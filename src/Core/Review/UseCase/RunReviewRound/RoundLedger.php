@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -34,6 +35,12 @@ final readonly class RoundLedger
     public function verdictReceived(RoundReviewer $reviewer, Verdict $verdict): void
     {
         $this->append(LedgerEventKind::VerdictReceived, $this->identify($reviewer) + ['decision' => $verdict->verdict->value, 'findings' => count($verdict->findings)]);
+    }
+
+    // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up.
+    public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
+    {
+        $this->append(LedgerEventKind::CatchUpOwed, $this->identify($reviewer) + ['substitute' => $substitute->value]);
     }
 
     public function reviewerFailed(RoundReviewer $reviewer, string $failure): void
