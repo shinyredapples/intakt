@@ -52,7 +52,7 @@ final readonly class LoopReviewReader
         foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $body)) as $line) {
             if (null === $fence) {
                 $fence = $this->fenceOpenedBy($line);
-                $lines[] = ['text' => null === $fence && !str_starts_with(ltrim($line), '>') ? $line : '', 'json' => false];
+                $lines[] = $this->unfenced($line, $fence);
                 continue;
             }
             if ($this->closes($fence['marker'], $line)) {
@@ -76,6 +76,18 @@ final readonly class LoopReviewReader
         }
 
         return ['marker' => $match[1], 'json' => 'json' === strtolower($match[2]), 'body' => []];
+    }
+
+    /**
+     * @param array{marker: string, json: bool, body: list<string>}|null $openedFence
+     *
+     * @return array{text: string, json: bool}
+     */
+    private function unfenced(string $line, ?array $openedFence): array
+    {
+        $readable = null === $openedFence && !str_starts_with(ltrim($line), '>');
+
+        return ['text' => $readable ? $line : '', 'json' => false];
     }
 
     private function closes(string $marker, string $line): bool
@@ -133,7 +145,7 @@ final readonly class LoopReviewReader
         $declared = $this->declaredVerdict($lines);
         $blocking = array_any($findings, static fn (LoopFinding $finding): bool => Severity::P3 !== $finding->severity);
 
-        // The loop's rules: an open P1 or P2 finding means changes whatever the JSON says.
+        // An open P1 or P2 finding means changes whatever the JSON says, because the loop's rules count it so.
         return LoopVerdict::Approve === $declared && $blocking ? LoopVerdict::Changes : $declared;
     }
 
