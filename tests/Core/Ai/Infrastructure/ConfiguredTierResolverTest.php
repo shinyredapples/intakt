@@ -61,6 +61,19 @@ final class ConfiguredTierResolverTest extends TestCase
         self::assertSame(Provider::Anthropic, $resolved->provider);
     }
 
+    public function testTheConfiguredModelOfATierOnADisabledProviderIsStillNamed(): void
+    {
+        $resolver = $this->resolver(['openai' => 'off']);
+
+        self::assertEquals(new ResolvedModel(Provider::OpenAi, 'other'), $resolver->configured('beta', Tier::Strong));
+        self::assertTrue($resolver->isDisabled(Provider::OpenAi));
+    }
+
+    public function testAProviderThatIsNotDisabledIsEnabled(): void
+    {
+        self::assertFalse($this->resolver(['openai' => 'off'])->isDisabled(Provider::Anthropic));
+    }
+
     public function testAnUnmappedTierIsReported(): void
     {
         $this->expectException(TierNotMapped::class);

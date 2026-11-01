@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
@@ -44,6 +45,7 @@ use Throwable;
 #[CoversClass(SendFailures::class)]
 #[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
+#[CoversClass(EveryKeyRejected::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
@@ -206,6 +208,51 @@ final class AccountFailoverPlatformTest extends TestCase
         } catch (Throwable $failure) {
             self::assertInstanceOf(AuthenticationException::class, $failure, 'Every key of the provider is revoked, yet the call waits for an account cooling down from a rejection.');
         }
+    }
+
+    // The reviewer's probe: the first call met the rejection, the second finds the only account cooling down from it.
+    public function testASecondCallOnAProviderWhoseOnlyKeyWasRejectedIsTheRejectionAndNotAWait(): void
+    {
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('revoked'))], $this->cooldowns, new NativeClock(), new NullLogger());
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+        } catch (AuthenticationException) {
+        }
+
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+            self::fail('The only key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $second) {
+            self::assertInstanceOf(EveryKeyRejected::class, $second, 'The only key of the provider is revoked, yet the second call waits.');
+        }
+    }
+
+    public function testACallOnAProviderWhoseEveryAccountCoolsDownFromARejectionIsTheRejectionWithoutSendingAnything(): void
+    {
+        $first = new FailingWhenRead(new RuntimeException('never read'));
+        $second = new FailingWhenRead(new RuntimeException('never read'));
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+        $this->cooldowns->coolDownRejected($this->account('team'));
+
+        try {
+            $_ = $this->accounts($first, $second)->invoke('big', 'Review.');
+            self::fail('Every key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
+            self::assertSame('Every key of provider "anthropic" was rejected.', $failure->getMessage());
+        }
+
+        self::assertSame(0, $first->calls + $second->calls);
+    }
+
+    public function testACallWhileOneAccountCoolsDownFromARejectionAndTheOtherFromALimitIsAWait(): void
+    {
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+        $this->cooldowns->coolDown($this->account('team'), 120);
+
+        $this->expectException(EveryAccountCoolingDown::class);
+
+        $_ = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
     }
 
     public function testACallWhoseOnlyFreeAccountRejectsItsKeyBesideAnAccountCoolingDownFromItsOwnRejectionIsTheRejection(): void

@@ -35,6 +35,12 @@ final readonly class NoCooldowns implements AccountCooldowns
     }
 
     #[Override]
+    public function isEveryAccountRejected(Provider $provider): bool
+    {
+        return false;
+    }
+
+    #[Override]
     public function secondsUntilAnAccountIsFree(Provider $provider): int
     {
         return 0;

@@ -6,8 +6,10 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
-use Intakt\Core\Ai\Contract\ProviderWait;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
@@ -37,14 +39,18 @@ final readonly class TierPlatform implements TierInvoker
     ) {
     }
 
-    // Decided by the cooldowns alone, never by a failed call, because a request that fails on purpose would otherwise let its sender pick the reviewer.
+    // Decided by the configuration and the cooldowns alone, never by a failed call, because a request that fails on purpose would otherwise let its sender pick the reviewer.
     #[Override]
     public function answering(string $project, Tier $tier): ResolvedModel
     {
-        $own = $this->resolver->resolve($project, $tier);
-        $substitutes = $this->resolver->substitutes($project, $tier);
+        if (!$this->resolver->hasSubstitutes($project, $tier)) {
+            return $this->ownWithoutSubstitutes($project, $tier);
+        }
 
-        $answering = array_find([$own, ...$substitutes], $this->hasAFreeAccount(...)) ?? throw $this->outage($project, $tier, [$own, ...$substitutes]);
+        $own = $this->resolver->configured($project, $tier);
+        $tried = [$own, ...$this->resolver->substitutes($project, $tier)];
+
+        $answering = array_find($tried, $this->canAnswer(...)) ?? throw $this->outage($tried);
         $this->recordSwitch($own, $answering);
 
         return $answering;
@@ -58,30 +64,51 @@ final readonly class TierPlatform implements TierInvoker
         return $this->platforms->get($model->provider->value)->invoke($model->model, $request->input, $request->options);
     }
 
-    private function hasAFreeAccount(ResolvedModel $model): bool
+    // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked, but not for keys that were all rejected, because no wait brings them back.
+    private function ownWithoutSubstitutes(string $project, Tier $tier): ResolvedModel
     {
-        return 0 === $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
+        $own = $this->resolver->resolve($project, $tier);
+        if ($this->cooldowns->isEveryAccountRejected($own->provider)) {
+            throw new EveryKeyRejected($own->provider);
+        }
+
+        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($own->provider);
+        if (0 < $wait) {
+            throw new EveryAccountCoolingDown($own->provider, $wait);
+        }
+
+        return $own;
+    }
+
+    private function canAnswer(ResolvedModel $model): bool
+    {
+        return !$this->resolver->isDisabled($model->provider)
+            && !$this->cooldowns->isEveryAccountRejected($model->provider)
+            && 0 === $this->cooldowns->secondsUntilAnAccountIsFree($model->provider);
     }
 
     /**
-     * @param non-empty-list<ResolvedModel> $usable
+     * @param non-empty-list<ResolvedModel> $tried
      */
-    // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked; one whose substitutes are all disabled still ends blocked, because the owner named a way around the outage.
-    private function outage(string $project, Tier $tier, array $usable): EveryAccountCoolingDown|EveryProviderOut
+    // Ends blocked even when every substitute is disabled, because the owner named a way around the outage.
+    private function outage(array $tried): EveryProviderOut
     {
-        $own = $usable[0];
+        $outages = [];
 
-        if (!$this->resolver->hasSubstitutes($project, $tier)) {
-            return new EveryAccountCoolingDown($own->provider, $this->cooldowns->secondsUntilAnAccountIsFree($own->provider));
+        foreach ($tried as $model) {
+            $outages[$model->provider->value] ??= $this->outageOf($model->provider);
         }
 
-        $waits = [];
+        return new EveryProviderOut(array_values($outages));
+    }
 
-        foreach ($usable as $model) {
-            $waits[$model->provider->value] ??= new ProviderWait($model->provider, $this->cooldowns->secondsUntilAnAccountIsFree($model->provider));
-        }
-
-        return new EveryProviderOut(array_values($waits));
+    private function outageOf(Provider $provider): ProviderOutage
+    {
+        return match (true) {
+            $this->resolver->isDisabled($provider) => ProviderOutage::disabled($provider),
+            $this->cooldowns->isEveryAccountRejected($provider) => ProviderOutage::keysRejected($provider),
+            default => ProviderOutage::coolingDown($provider, $this->cooldowns->secondsUntilAnAccountIsFree($provider)),
+        };
     }
 
     private function recordSwitch(ResolvedModel $own, ResolvedModel $answering): void

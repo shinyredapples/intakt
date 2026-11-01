@@ -138,6 +138,31 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertEqualsWithDelta(300, $this->secondsUntilFree($this->default()), 1);
     }
 
+    public function testAProviderWhoseEveryAccountRejectedItsKeyHasEveryAccountRejected(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownRejected($this->default());
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertTrue($cooldowns->isEveryAccountRejected(Provider::Anthropic));
+    }
+
+    public function testAProviderWithOneAccountNotRejectedHasNotEveryAccountRejected(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownRejected($this->default());
+        $cooldowns->coolDown($this->team(), 300);
+
+        self::assertFalse($cooldowns->isEveryAccountRejected(Provider::Anthropic));
+    }
+
+    public function testAProviderWithoutAccountsHasNotEveryAccountRejected(): void
+    {
+        self::assertFalse($this->cooldowns()->isEveryAccountRejected(Provider::ClaudeCode));
+    }
+
     public function testEveryWorkerOnTheSharedCacheSeesTheRejection(): void
     {
         $this->cooldowns()->coolDownRejected($this->default());

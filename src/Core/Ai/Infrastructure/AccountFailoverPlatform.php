@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Override;
 use Psr\Log\LoggerInterface;
@@ -46,7 +47,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $failures = new SendFailures();
         $free = $this->freeAccounts($failures);
         if ([] === $free) {
-            throw new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+            throw $this->outOfAccounts($failures);
         }
 
         $this->recordSwitch($free);
@@ -97,13 +98,19 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
-    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so with its wait; when every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so the rejection itself is thrown.
+    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it.
     private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
     {
         if ([] !== $this->freeAccounts($failures)) {
             return $everyAccountFailed;
         }
 
+        return $this->outOfAccounts($failures);
+    }
+
+    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so the rejection itself is thrown.
+    private function outOfAccounts(SendFailures $failures): Throwable
+    {
         return $this->rejectionOfEveryAccount($failures) ?? new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
     }
 
@@ -122,8 +129,8 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             $rejection = $rejected ?? $rejection;
         }
 
-        // The last rejection of this call, because on the read path that is the one the reader just met and expects back.
-        return $rejection;
+        // The last rejection of this call, because on the read path that is the one the reader just met and expects back; none when every rejection came before this call.
+        return $rejection ?? new EveryKeyRejected($this->provider);
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.

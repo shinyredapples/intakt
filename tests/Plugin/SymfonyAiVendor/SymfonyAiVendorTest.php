@@ -7,9 +7,10 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Closure;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Ai\Contract\ProviderWait;
+use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
@@ -112,8 +113,9 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(EveryAccountCoolingDown::class)]
+#[UsesClass(EveryKeyRejected::class)]
 #[UsesClass(EveryProviderOut::class)]
-#[UsesClass(ProviderWait::class)]
+#[UsesClass(ProviderOutage::class)]
 #[UsesClass(NoProviderLeft::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
 #[UsesClass(Tier::class)]
@@ -354,6 +356,35 @@ final class SymfonyAiVendorTest extends KernelTestCase
         }
     }
 
+    public function testAReviewOnATierWhoseOwnProviderIsDisabledIsAnsweredByTheSubstituteAndMarkedAsOne(): void
+    {
+        $never = static fn (): never => throw new RuntimeException('never sent');
+        $answer = static fn (): string => VerdictDocument::fromTheDesign()->json();
+
+        $review = $this->substitutedVendor($never, $answer, new NoCooldowns(), ['claude_code' => 'disabled'])->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Provider::OpenAi, $review->substitute);
+    }
+
+    public function testATierWithoutSubstitutesWhoseEveryKeyWasRejectedIsARejectedKeyWithoutReservingUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('isEveryAccountRejected')->willReturn(true);
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
+        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform('never sent')]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
+
+        try {
+            $vendor->review('alpha', Tier::Strong, $this->request());
+            self::fail('A provider whose every key was rejected was called.');
+        } catch (ProviderRejectedTheKey $rejected) {
+            self::assertInstanceOf(EveryKeyRejected::class, $rejected->getPrevious());
+        }
+
+        self::assertSame(0, $ledger->count());
+    }
+
     public function testABlindOwnProviderThatAnswersEveryRoundCannotApprove(): void
     {
         $approve = static fn (): string => VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->json();
@@ -534,7 +565,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $tiers->method('answering')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
+        $resolver->method('configured')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
         $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger), $this->limit);
@@ -702,11 +733,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
     }
 
     // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
-    private function substitutedVendor(Closure $own, Closure $substitute, AccountCooldowns $cooldowns): SymfonyAiVendor
+    /**
+     * @param array<string, string> $disabled
+     */
+    private function substitutedVendor(Closure $own, Closure $substitute, AccountCooldowns $cooldowns, array $disabled = []): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]],
-        ], []);
+        ], $disabled);
         $dispatcher = ScriptedReviewer::in(self::getContainer())->dispatcher;
         $platforms = new ServiceLocator([
             Provider::ClaudeCode->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($own, eventDispatcher: $dispatcher),

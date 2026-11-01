@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -61,15 +62,15 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         try {
             return $this->tiers->answering($project, $tier);
-        } catch (EveryAccountCoolingDown|EveryProviderOut $out) {
+        } catch (EveryAccountCoolingDown|EveryProviderOut|EveryKeyRejected $out) {
             throw $this->typed($out);
         }
     }
 
-    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute.
+    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute; against the configured model, because a disabled one is substituted too.
     private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?Provider
     {
-        return $this->resolver->resolve($project, $tier)->provider === $answering->provider ? null : $answering->provider;
+        return $this->resolver->configured($project, $tier)->provider === $answering->provider ? null : $answering->provider;
     }
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict

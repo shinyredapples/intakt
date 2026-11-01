@@ -8,6 +8,8 @@ use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierProviderDisabled;
+use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -39,6 +41,8 @@ use Throwable;
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
+#[UsesClass(TierProviderDisabled::class)]
+#[UsesClass(TierResolutionFailure::class)]
 final class AccountLimitedVendorTest extends TestCase
 {
     public function testAReviewOnAnAccountWithAFreePlaceReturnsTheVendorsVerdict(): void
@@ -125,6 +129,19 @@ final class AccountLimitedVendorTest extends TestCase
         $out = $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(45), $this->tierWithSubstitutes()));
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
+    }
+
+    public function testAFailureOfASubstituteWhileTheTiersOwnProviderIsDisabledStartsAgainAtOnce(): void
+    {
+        $resolver = self::createStub(TierResolver::class);
+        $resolver->method('resolve')->willThrowException(new TierProviderDisabled('intakt', Tier::Standard, 'disabled'));
+        $resolver->method('hasSubstitutes')->willReturn(true);
+
+        $limited = $this->failureOf($this->vendor($this->failing(new ProviderRateLimited(300, new RuntimeException('429'))), $this->cooldowns(45), $resolver));
+        $rejected = $this->failureOf($this->vendor($this->failing(new ProviderRejectedTheKey(new RuntimeException('401'))), $this->cooldowns(45), $resolver));
+
+        self::assertInstanceOf(VendorAccountOut::class, $limited);
+        self::assertInstanceOf(VendorAccountOut::class, $rejected);
     }
 
     private function failureOf(AccountLimitedVendor $vendor): Throwable

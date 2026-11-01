@@ -85,6 +85,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return $this->pool->getItem($this->rejectionKey($account))->isHit();
     }
 
+    public function isEveryAccountRejected(Provider $provider): bool
+    {
+        $names = $this->accounts[$provider->value] ?? [];
+
+        return [] !== $names && array_all($names, fn (string $name): bool => $this->isRejected(new Account($provider, $name)));
+    }
+
     public function secondsUntilAnAccountIsFree(Provider $provider): int
     {
         $waits = array_map(fn (string $name): int => $this->secondsUntilFree(new Account($provider, $name)), $this->accounts[$provider->value] ?? []);

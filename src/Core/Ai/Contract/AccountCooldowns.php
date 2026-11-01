@@ -15,6 +15,9 @@ interface AccountCooldowns
 
     public function isRejected(Account $account): bool;
 
+    // False for a provider without accounts, because then nothing was rejected.
+    public function isEveryAccountRejected(Provider $provider): bool;
+
     // Zero while an account of the provider is free, so a reviewer moves to it at once.
     public function secondsUntilAnAccountIsFree(Provider $provider): int;
 }

@@ -16,6 +16,14 @@ interface TierResolver
      */
     public function resolve(string $project, Tier $tier): ResolvedModel;
 
+    // The tier's own model also on a disabled provider, because a tier with substitutes counts a disabled provider as one with no free account.
+    /**
+     * @throws TierResolutionFailure
+     */
+    public function configured(string $project, Tier $tier): ResolvedModel;
+
+    public function isDisabled(Provider $provider): bool;
+
     // In the order they are tried; one on a disabled provider is left out, because it could never answer.
     /**
      * @return list<ResolvedModel>

@@ -34,14 +34,25 @@ final readonly class ConfiguredTierResolver implements TierResolver
 
     public function resolve(string $project, Tier $tier): ResolvedModel
     {
-        $mapping = $this->mapping($project, $tier);
-        $provider = Provider::from($mapping['provider']);
+        $own = $this->configured($project, $tier);
 
-        if (isset($this->disabledProviders[$provider->value])) {
-            throw new TierProviderDisabled($project, $tier, $this->disabledProviders[$provider->value]);
+        if ($this->isDisabled($own->provider)) {
+            throw new TierProviderDisabled($project, $tier, $this->disabledProviders[$own->provider->value]);
         }
 
-        return new ResolvedModel($provider, $mapping['model']);
+        return $own;
+    }
+
+    public function configured(string $project, Tier $tier): ResolvedModel
+    {
+        $mapping = $this->mapping($project, $tier);
+
+        return new ResolvedModel(Provider::from($mapping['provider']), $mapping['model']);
+    }
+
+    public function isDisabled(Provider $provider): bool
+    {
+        return isset($this->disabledProviders[$provider->value]);
     }
 
     public function substitutes(string $project, Tier $tier): array
@@ -51,7 +62,7 @@ final readonly class ConfiguredTierResolver implements TierResolver
         foreach ($this->mapping($project, $tier)['substitutes'] ?? [] as $substitute) {
             $provider = Provider::from($substitute['provider']);
 
-            if (!isset($this->disabledProviders[$provider->value])) {
+            if (!$this->isDisabled($provider)) {
                 $substitutes[] = new ResolvedModel($provider, $substitute['model']);
             }
         }

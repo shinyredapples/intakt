@@ -42,19 +42,24 @@ final readonly class AccountLimitedVendor implements Vendor
     // The account that failed is cooling down by now, so the wait is until any account of the vendor is free, not until that account's own reset; a transient failure waits too, because its account cools down like a limited one. A tier with substitutes starts again at once instead, in a new conversation on whichever provider is free then, or ends blocked when none is.
     private function nextAccountOrWait(string $project, Tier $tier, ProviderRateLimited|ProviderFailedTransiently $out): VendorAccountOut|ProviderRateLimited
     {
-        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
-        if (0 === $wait || $this->resolver->hasSubstitutes($project, $tier)) {
+        if ($this->resolver->hasSubstitutes($project, $tier)) {
             return new VendorAccountOut($out);
         }
 
-        return new ProviderRateLimited($wait, $out);
+        $wait = $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
+
+        return 0 === $wait ? new VendorAccountOut($out) : new ProviderRateLimited($wait, $out);
     }
 
-    // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes.
+    // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes; substitutes are asked first, because resolving a disabled own provider fails.
     private function nextAccountOrSubstituteOrFailure(string $project, Tier $tier, ProviderRejectedTheKey $rejected): VendorAccountOut|ProviderRejectedTheKey
     {
+        if ($this->resolver->hasSubstitutes($project, $tier)) {
+            return new VendorAccountOut($rejected);
+        }
+
         $free = 0 === $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
 
-        return $free || $this->resolver->hasSubstitutes($project, $tier) ? new VendorAccountOut($rejected) : $rejected;
+        return $free ? new VendorAccountOut($rejected) : $rejected;
     }
 }

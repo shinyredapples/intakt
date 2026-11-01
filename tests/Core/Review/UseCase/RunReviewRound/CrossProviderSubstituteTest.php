@@ -162,8 +162,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         $reviewer = $stored->reviewers()[0];
         self::assertSame(RoundState::Complete, $stored->state());
         self::assertSame(ReviewerState::Blocked, $reviewer->state());
-        self::assertStringStartsWith('Every provider of the tier is out: anthropic for ', (string) $reviewer->failure());
-        self::assertStringContainsString(', openai for ', (string) $reviewer->failure());
+        self::assertSame('Every provider of the tier is out: anthropic keys rejected, openai keys rejected.', $reviewer->failure());
         self::assertFalse($reviewer->owesCatchUp());
         self::assertSame([(string) $reviewer->failure()], $this->payloadValues(LedgerEventKind::ReviewerBlocked, 'reason'));
     }
