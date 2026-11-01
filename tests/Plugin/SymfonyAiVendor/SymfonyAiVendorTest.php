@@ -162,6 +162,24 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
 
+    public function testAReviewOnAnOutProviderIsNotAnsweredByASubstituteThatNeverReadsTheCheckout(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => [
+            'provider' => 'anthropic', 'model' => 'big',
+            'substitutes' => [['provider' => 'claude_code', 'model' => 'sub']],
+        ]]]], []);
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturnCallback(static fn (Provider $provider): int => Provider::Anthropic === $provider ? 60 : 0);
+        $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->with('follow_ups', [$model->getName()])->json();
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platforms = new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform, 'claude_code' => static fn (): PlatformInterface => $platform]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()));
+
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['big'], $verdict->follow_ups);
+    }
+
     private function vendorAnswering(string $output): SymfonyAiVendor
     {
         return $this->vendor(static fn (): string => $output);

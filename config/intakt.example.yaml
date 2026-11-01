@@ -8,8 +8,9 @@ projects:
     alpha:
         tiers:
             strong: { provider: anthropic, model: claude-opus-5-5 }
-            # Optional substitutes, tried in this order when every account of the tier's provider is out; a tier without any is never moved to another provider.
-            standard: { provider: anthropic, model: claude-sonnet-5-5, substitutes: [{ provider: openai, model: gpt-5-mini }] }
+            # A tier may list substitutes, in order, for when every account of its provider is out; reviews do not use them yet, so none is set here:
+            # standard: { provider: anthropic, model: claude-sonnet-5-5, substitutes: [{ provider: openai, model: gpt-5-mini }] }
+            standard: { provider: anthropic, model: claude-sonnet-5-5 }
             light: { provider: anthropic, model: claude-haiku-5-5 }
         # An optional review section sets the panel: quorum is all, majority or one-strong-plus-one;
         # each reviewer needs a role, a tier, a provider (the one the project maps that tier to), a prompt and a budget (a whole number of at least 1).

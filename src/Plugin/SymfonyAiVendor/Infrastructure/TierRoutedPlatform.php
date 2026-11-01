@@ -7,6 +7,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Override;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\FallbackModelCatalog;
@@ -26,6 +27,7 @@ final class TierRoutedPlatform implements PlatformInterface
 
     public function __construct(
         private readonly TierInvoker $tiers,
+        private readonly TierResolver $resolver,
         private readonly string $project,
     ) {
     }
@@ -43,7 +45,8 @@ final class TierRoutedPlatform implements PlatformInterface
     {
         $name = $model instanceof Model ? $model->getName() : $model;
 
-        $round = $this->tiers->invoke($this->tiers->answering($this->project, Tier::from($name)), new TierRequest($input, $options));
+        // The tier's own model, never answering(), because the vendor still judges the tier's own provider (unread approvals, account limits) and a review is never continued by another vendor.
+        $round = $this->tiers->invoke($this->resolver->resolve($this->project, Tier::from($name)), new TierRequest($input, $options));
         $this->rounds[] = $round;
 
         return $round;

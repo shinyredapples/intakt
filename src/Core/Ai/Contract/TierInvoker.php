@@ -9,7 +9,7 @@ use Symfony\AI\Platform\Result\DeferredResult;
 
 interface TierInvoker
 {
-    // Chosen once before a review starts and kept for every call of it, because a review is never continued by another vendor: the tier's own model while its provider is enabled and has a free account, else its first substitute that does.
+    // The tier's own model while its provider is enabled and has a free account, else its first substitute that does; no review asks it yet, because the vendor still judges the tier's own provider.
     /**
      * @throws TierResolutionFailure
      * @throws EveryKeyRejected
