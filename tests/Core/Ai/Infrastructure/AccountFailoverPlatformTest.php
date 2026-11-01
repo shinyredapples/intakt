@@ -25,7 +25,12 @@ use Symfony\AI\Platform\Exception\RuntimeException as PlatformRuntimeException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
+use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -268,6 +273,26 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertSame('anthropic.team', $answer->getMetadata()->get(Account::METADATA));
     }
 
+    public function testAnAnswerReadFromAnAccountCarriesItsTokenUsageOnce(): void
+    {
+        $usage = new TokenUsage(promptTokens: 10, totalTokens: 10);
+
+        $answer = $this->accounts($this->extracting($usage, static fn (): TextResult => new TextResult('ok')), $this->answering('second'))->invoke('big', 'Review.');
+
+        self::assertSame($usage, $answer->getResult()->getMetadata()->get('token_usage'));
+        self::assertSame($usage, $answer->getMetadata()->get('token_usage'));
+    }
+
+    public function testAnAnswerThatFailsToMapStillHasItsTokenUsageReadByTheAccountsExtractor(): void
+    {
+        $usage = new TokenUsage(promptTokens: 9);
+        $answer = $this->accounts($this->extracting($usage, static fn (): never => throw new RuntimeException('not a verdict')), $this->answering('second'))->invoke('big', 'Review.');
+
+        $this->read($answer);
+
+        self::assertSame($usage, $answer->getResultConverter()->getTokenUsageExtractor()?->extract($answer->getRawResult()));
+    }
+
     public function testACallWhoseEveryAccountFailsWithoutALimitKeepsTheFailoverError(): void
     {
         $broken = static fn (): never => throw new RuntimeException('bad request');
@@ -300,6 +325,21 @@ final class AccountFailoverPlatformTest extends TestCase
     private function answering(string|Closure $answer): PlatformInterface
     {
         return MockPlatformFactory::createPlatform($answer);
+    }
+
+    // Builds what a provider's bridge hands back: the usage is read from the raw answer by the converter's extractor, not carried by the converted result.
+    private function extracting(TokenUsage $usage, Closure $convert): PlatformInterface
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willReturn($usage);
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('supports')->willReturn(true);
+        $converter->method('convert')->willReturnCallback($convert);
+        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
+        $platform = self::createStub(PlatformInterface::class);
+        $platform->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult($converter, new InMemoryRawResult()));
+
+        return $platform;
     }
 
     private function accounts(PlatformInterface $default, PlatformInterface $team, ?BufferingLogger $logger = null): AccountFailoverPlatform

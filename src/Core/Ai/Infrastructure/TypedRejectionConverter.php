@@ -20,6 +20,8 @@ use Throwable;
 #[Exclude]
 final readonly class TypedRejectionConverter implements ResultConverterInterface
 {
+    private const string TOKEN_USAGE = 'token_usage';
+
     /**
      * @param Closure(AuthenticationException): Throwable $typed
      */
@@ -45,9 +47,14 @@ final readonly class TypedRejectionConverter implements ResultConverterInterface
         }
     }
 
+    // None once the account's answer carries its usage, because the result read above already holds it and DeferredResult would add it a second time; an answer that failed to map carries none, so its usage is still read from the raw answer.
     #[Override]
     public function getTokenUsageExtractor(): ?TokenUsageExtractorInterface
     {
+        if ($this->answer->getMetadata()->has(self::TOKEN_USAGE)) {
+            return null;
+        }
+
         return $this->answer->getResultConverter()->getTokenUsageExtractor();
     }
 }
