@@ -19,7 +19,7 @@ final class Version20261101120000 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // Nullable rather than defaulted, because MySQL refuses a default on a text column.
+        // Nullable rather than defaulted, because DBAL's MySQL platform leaves a default on a text column out of the column declaration, so a declared default would not reach the MySQL schema.
         $column = Column::editor()->setUnquotedName('reported_findings')->setTypeName(Types::TEXT)->setNotNull(false)->create();
 
         foreach ($this->platform->getAlterTableSQL(new TableDiff($schema->getTable('review_round'), addedColumns: [$column])) as $sql) {
