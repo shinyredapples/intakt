@@ -1,0 +1,5 @@
+security:
+    # MCP tools are authorized by a voter on Intakt's own config (ToolAccessVoter); no users or firewalls yet.
+    firewalls:
+        main:
+            security: false

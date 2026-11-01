@@ -1,0 +1,7 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    Intakt\Tests\Core\Mcp\Contract\Tool\:
+        resource: 'Contract/Tool/'
