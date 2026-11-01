@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -15,6 +18,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -33,14 +37,36 @@ final readonly class AccountLimitedVendor implements Vendor
     /**
      * @throws VendorAccountBusy
      */
+    #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    {
+        return $this->withinTheAccountLimit($project, $tier, fn (): Verdict => $this->vendor->review($project, $tier, $request));
+    }
+
+    /**
+     * @throws VendorAccountBusy
+     */
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        return $this->withinTheAccountLimit($project, Tier::Light, fn (): Judgement => $this->vendor->judge($project, $request));
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param Closure(): T $call
+     *
+     * @return T
+     */
+    private function withinTheAccountLimit(string $project, Tier $tier, Closure $call): object
     {
         $provider = $this->resolver->resolve($project, $tier)->provider;
 
         // Around the whole call, so a call refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($provider, function () use ($project, $tier, $request, $provider): Verdict {
+        return $this->accounts->run($provider, function () use ($call, $provider): object {
             try {
-                return $this->vendor->review($project, $tier, $request);
+                return $call();
             } catch (ProviderRateLimited|ProviderFailedTransiently $out) {
                 throw $this->nextAccountOrWait($provider, $out);
             }
