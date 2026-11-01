@@ -7,22 +7,31 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\SendFailures;
+use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RuntimeException as PlatformRuntimeException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
+use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -33,7 +42,10 @@ use Throwable;
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
+#[CoversClass(SendFailures::class)]
+#[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
+#[CoversClass(EveryKeyRejected::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
@@ -115,6 +127,13 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
     }
 
+    public function testARevokedKeyReadFromTheAnswerCoolsTheAccountDown(): void
+    {
+        $this->read($this->accounts(new FailingWhenRead(new AuthenticationException('revoked')), $this->answering('second'))->invoke('big', 'Review.'));
+
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
     public function testAnAnswerThatFailsForAnotherReasonLeavesTheAccountFree(): void
     {
         $this->read($this->accounts(new FailingWhenRead(new RuntimeException('not a verdict')), $this->answering('second'))->invoke('big', 'Review.'));
@@ -137,6 +156,188 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->expectException(EveryAccountCoolingDown::class);
 
         $this->accounts($this->answering($limited), $this->answering($limited))->invoke('big', 'Review.');
+    }
+
+    public function testACallWhoseEveryAccountRejectsItsKeyAsItIsSentIsTheRejectionAndNotAWait(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+
+        try {
+            $_ = $this->accounts($this->answering(static fn (): never => throw $revoked), $this->answering(static fn (): never => throw $revoked))->invoke('big', 'Review.');
+            self::fail('Every account rejected its key, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
+    public function testACallWithOneAccountRejectingItsKeyAndTheOtherLimitedWaitsForTheLimitedOne(): void
+    {
+        $this->expectException(EveryAccountCoolingDown::class);
+
+        $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('revoked')), $this->answering(static fn (): never => throw new RateLimitExceededException(300)))->invoke('big', 'Review.');
+    }
+
+    public function testACallWhoseOnlyFreeAccountRejectsItsKeyWhileAnotherCoolsDownWaitsForTheCoolingOne(): void
+    {
+        $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);
+
+        try {
+            $_ = $this->accounts($this->answering('first'), $this->answering(static fn (): never => throw new AuthenticationException('revoked')))->invoke('big', 'Review.');
+            self::fail('The only free account rejected its key, yet the call answered.');
+        } catch (EveryAccountCoolingDown $out) {
+            self::assertGreaterThan(0, $out->secondsUntilAnAccountIsFree);
+        }
+    }
+
+    // The reviewer's probe: worker A, a moment earlier, saw only the default account free and its key was rejected, so B finds it cooling down from that rejection and the team account rejects too.
+    public function testTwoRevokedAccountsWhoseRejectionsAreOffsetEndTheCallAsARejection(): void
+    {
+        $revoked = static fn (): never => throw new AuthenticationException('revoked');
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($revoked)], $this->cooldowns, new NativeClock(), new NullLogger());
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+        } catch (AuthenticationException) {
+        }
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+
+        try {
+            $_ = $this->accounts($this->answering($revoked), $this->answering($revoked))->invoke('big', 'Review.');
+            self::fail('Every key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(AuthenticationException::class, $failure, 'Every key of the provider is revoked, yet the call waits for an account cooling down from a rejection.');
+        }
+    }
+
+    // The reviewer's probe, because the second call meets no rejection itself and finds the only account cooling down from the first one's.
+    public function testASecondCallOnAProviderWhoseOnlyKeyWasRejectedIsTheRejectionAndNotAWait(): void
+    {
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering(static fn (): never => throw new AuthenticationException('revoked'))], $this->cooldowns, new NativeClock(), new NullLogger());
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+        } catch (AuthenticationException) {
+        }
+
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+            self::fail('The only key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $second) {
+            self::assertInstanceOf(EveryKeyRejected::class, $second, 'The only key of the provider is revoked, yet the second call waits.');
+        }
+    }
+
+    public function testACallOnAProviderWhoseEveryAccountCoolsDownFromARejectionIsTheRejectionWithoutSendingAnything(): void
+    {
+        $first = new FailingWhenRead(new RuntimeException('never read'));
+        $second = new FailingWhenRead(new RuntimeException('never read'));
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+        $this->cooldowns->coolDownRejected($this->account('team'));
+
+        try {
+            $_ = $this->accounts($first, $second)->invoke('big', 'Review.');
+            self::fail('Every key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(EveryKeyRejected::class, $failure);
+            self::assertSame('Every key of provider "anthropic" was rejected.', $failure->getMessage());
+        }
+
+        self::assertSame(0, $first->calls + $second->calls);
+    }
+
+    public function testACallWhileOneAccountCoolsDownFromARejectionAndTheOtherFromALimitIsAWait(): void
+    {
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+        $this->cooldowns->coolDown($this->account('team'), 120);
+
+        $this->expectException(EveryAccountCoolingDown::class);
+
+        $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
+    }
+
+    public function testACallWhoseOnlyFreeAccountRejectsItsKeyBesideAnAccountCoolingDownFromItsOwnRejectionIsTheRejection(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+
+        try {
+            $_ = $this->accounts($this->answering('first'), $this->answering(static fn (): never => throw $revoked))->invoke('big', 'Review.');
+            self::fail('Every key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+    }
+
+    public function testAnAnswerWhoseKeyIsRejectedWhenReadBesideAnAccountCoolingDownFromItsOwnRejectionIsTheRejection(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+        $answer = $this->accounts($this->answering('first'), new FailingWhenRead($revoked))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('Every key of the provider is revoked, yet the answer was read.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+    }
+
+    public function testAnAnswerWhoseKeyIsRejectedWhenReadWhileAnotherAccountCoolsDownWaitsForTheCoolingOne(): void
+    {
+        $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);
+        $answer = $this->accounts($this->answering('first'), new FailingWhenRead(new AuthenticationException('revoked')))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('The only free account rejected its key, yet the answer was read.');
+        } catch (Throwable $out) {
+            self::assertInstanceOf(EveryAccountCoolingDown::class, $out);
+            self::assertGreaterThan(0, $out->secondsUntilAnAccountIsFree);
+        }
+    }
+
+    public function testAnAnswerWhoseKeyIsRejectedWhenReadAfterTheOtherAccountRejectedItsKeyIsTheRejection(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+        $answer = $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('revoked')), new FailingWhenRead($revoked))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('Every account rejected its key, yet the answer was read.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+    }
+
+    public function testAnAnswerReadFromAnAccountThatAnswersKeepsItsTextAndItsAccount(): void
+    {
+        $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);
+
+        $answer = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
+
+        self::assertSame('anthropic.team', $answer->getMetadata()->get(Account::METADATA));
+        self::assertSame('second', $answer->asText());
+        self::assertSame('anthropic.team', $answer->getMetadata()->get(Account::METADATA));
+    }
+
+    public function testAnAnswerReadFromAnAccountCarriesItsTokenUsageOnce(): void
+    {
+        $usage = new TokenUsage(promptTokens: 10, totalTokens: 10);
+
+        $answer = $this->accounts($this->extracting($usage, static fn (): TextResult => new TextResult('ok')), $this->answering('second'))->invoke('big', 'Review.');
+
+        self::assertSame($usage, $answer->getResult()->getMetadata()->get('token_usage'));
+        self::assertSame($usage, $answer->getMetadata()->get('token_usage'));
+    }
+
+    public function testAnAnswerThatFailsToMapStillHasItsTokenUsageReadByTheAccountsExtractor(): void
+    {
+        $usage = new TokenUsage(promptTokens: 9);
+        $answer = $this->accounts($this->extracting($usage, static fn (): never => throw new RuntimeException('not a verdict')), $this->answering('second'))->invoke('big', 'Review.');
+
+        $this->read($answer);
+
+        self::assertSame($usage, $answer->getResultConverter()->getTokenUsageExtractor()?->extract($answer->getRawResult()));
     }
 
     public function testACallWhoseEveryAccountFailsWithoutALimitKeepsTheFailoverError(): void
@@ -171,6 +372,21 @@ final class AccountFailoverPlatformTest extends TestCase
     private function answering(string|Closure $answer): PlatformInterface
     {
         return MockPlatformFactory::createPlatform($answer);
+    }
+
+    // Not MockPlatformFactory, because a provider's bridge reads the usage from the raw answer with its converter's extractor instead of carrying it on the converted result.
+    private function extracting(TokenUsage $usage, Closure $convert): PlatformInterface
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willReturn($usage);
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('supports')->willReturn(true);
+        $converter->method('convert')->willReturnCallback($convert);
+        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
+        $platform = self::createStub(PlatformInterface::class);
+        $platform->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult($converter, new InMemoryRawResult()));
+
+        return $platform;
     }
 
     private function accounts(PlatformInterface $default, PlatformInterface $team, ?BufferingLogger $logger = null): AccountFailoverPlatform

@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Override;
 use Psr\Log\LoggerInterface;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Model;
@@ -26,6 +27,7 @@ final readonly class AccountPlatform implements PlatformInterface
         private PlatformInterface $platform,
         private AccountCooldowns $cooldowns,
         private LoggerInterface $logger,
+        private SendFailures $failures,
     ) {
     }
 
@@ -35,6 +37,7 @@ final readonly class AccountPlatform implements PlatformInterface
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
+            $this->record($failure);
             $this->coolDownAfter($failure);
 
             throw $failure;
@@ -42,6 +45,7 @@ final readonly class AccountPlatform implements PlatformInterface
 
         $result->getMetadata()->add(Account::METADATA, $this->account->key());
         // A provider's limit arrives when the answer is read, not when the call is sent, so the cooldown hangs on the result.
+        $result->onError($this->record(...));
         $result->onError($this->coolDownAfter(...));
 
         return $result;
@@ -53,6 +57,11 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
+    private function record(Throwable $failure): void
+    {
+        $this->failures->record($this->account, $failure);
+    }
+
     // Matched and logged by the exception type only, because the provider's text can change and can echo a key (plan T5).
     private function coolDownAfter(Throwable $failure): void
     {
@@ -60,6 +69,8 @@ final readonly class AccountPlatform implements PlatformInterface
 
         match (true) {
             $failure instanceof RateLimitExceededException => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
+            // A revoked or wrong key will not work on the next call either, so the account is out like a limited one and the call goes elsewhere; remembered as a rejection so no call waits for it.
+            $failure instanceof AuthenticationException => $this->cooldowns->coolDownRejected($this->account),
             $failure instanceof RetryableExceptionInterface => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
