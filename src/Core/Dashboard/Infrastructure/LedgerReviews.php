@@ -35,16 +35,23 @@ final readonly class LedgerReviews
                 continue;
             }
 
-            match ($recorded->event->kind) {
-                LedgerEventKind::JudgeDone => $judged[$round] = true,
-                LedgerEventKind::ReviewStarted => $started[$round] ??= $this->summarize($round, $payload, $recorded->recordedAt),
-                default => null,
-            };
+            if (LedgerEventKind::JudgeDone === $recorded->event->kind) {
+                $judged[$round] = true;
+
+                continue;
+            }
+
+            // Only a readable start takes a place in the order, so an unreadable one cannot move its round ahead.
+            $summary = isset($started[$round]) ? null : $this->summarize($round, $payload, $recorded->recordedAt);
+
+            if ($summary instanceof ReviewSummary) {
+                $started[$round] = $summary;
+            }
         }
 
         $reviews = [];
 
-        foreach (array_filter($started) as $round => $review) {
+        foreach ($started as $round => $review) {
             $reviews[] = isset($judged[$round]) ? $review->judged() : $review;
         }
 

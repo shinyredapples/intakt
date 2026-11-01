@@ -90,6 +90,17 @@ final class LedgerReviewsTest extends TestCase
         self::assertSame([['r1', 'alpha', 3]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers], $reviews));
     }
 
+    public function testRoundsAreOrderedByTheirFirstReadableStart(): void
+    {
+        $reviews = $this->reviewsOf(
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha"}'),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2}'),
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2}'),
+        );
+
+        self::assertSame(['r1', 'r2'], array_map(static fn (ReviewSummary $review): string => $review->round, $reviews));
+    }
+
     public function testAJudgeDecisionMarksOnlyItsOwnRound(): void
     {
         $reviews = $this->reviewsOf(
