@@ -9,8 +9,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
-use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 
 // Records the judge's model call the way the real vendor does, with the round the judge request names, so a round's token count can be shown to include it.
@@ -26,7 +26,7 @@ final readonly class JudgeCallingVendor implements Vendor
     }
 
     #[Override]
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         return $this->reviewers->review($project, $tier, $request);
     }
