@@ -100,7 +100,7 @@ final class ShadowRoundTest extends KernelTestCase
         self::assertSame(['post review on beta '.RoundFixture::CHANGE], $this->forge()->writeLog);
     }
 
-    // Posts the decision the way a forge plugin will once one writes (plan task T18), so the only write a round leads to goes through the container's forge writes.
+    // Posts the decision the way a round will once it posts its outcome, so the only write a round leads to goes through the container's forge writes.
     private function reviewAndPost(string $project): ChangeReview
     {
         $review = $this->reviewChange()->review($this->request($project));

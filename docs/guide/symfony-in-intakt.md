@@ -117,7 +117,7 @@ stateDiagram-v2
 
 ## Talking to GitHub
 
-- **HttpClient** makes the calls to GitHub, retrying when GitHub hiccups. *(planned)*
+- **HttpClient** makes the calls to GitHub (reading a pull request, posting a review), retrying when GitHub hiccups.
 - **Webhook and RemoteEvent** are an optional extra for installs that GitHub can reach from outside. They receive GitHub's notifications ("a check finished", "someone commented"), check that they really come from GitHub, and turn them into events Intakt reacts to a little sooner. Without them, Intakt simply asks GitHub often enough, and more often while something is waiting. *(planned, optional)*
 
 ## The live dashboard

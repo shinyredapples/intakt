@@ -8,7 +8,7 @@ framework:
     #esi: true
     #fragments: true
 
-    # Reads of the GitHub API only; retry_failed wraps the client in RetryableHttpClient, so a 5xx or a dropped connection is tried again.
+    # Reads and review posts of the GitHub API; retry_failed wraps the client in RetryableHttpClient, so a 5xx or a dropped connection is tried again.
     http_client:
         scoped_clients:
             github.client:
