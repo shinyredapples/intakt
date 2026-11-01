@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use Intakt\Plugin\GitHubForge\Domain\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use NoDiscard;
 use SensitiveParameter;
 use Symfony\Component\Clock\ClockInterface;
 
-// The App proves itself to GitHub with this short-lived RS256 token, only to exchange it for an installation token.
+// Short-lived on purpose, because it only exists to be exchanged for an installation token.
 final readonly class AppJwt
 {
-    // GitHub accepts at most ten minutes; the start is set back to absorb clock drift.
+    // GitHub refuses a lifetime over ten minutes, and a start set back absorbs clock drift.
     private const int LIFETIME_SECONDS = 540;
     private const int DRIFT_SECONDS = 60;
 
@@ -44,7 +44,7 @@ final readonly class AppJwt
     {
         $key = openssl_pkey_get_private($this->privateKey);
         $signature = '';
-        if ($key === false || !openssl_sign($payload, $signature, $key, OPENSSL_ALGO_SHA256)) {
+        if (false === $key || !openssl_sign($payload, $signature, $key, OPENSSL_ALGO_SHA256)) {
             throw InstallationTokenNotMinted::becauseTheKeyCannotSign();
         }
 

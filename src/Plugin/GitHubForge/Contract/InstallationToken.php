@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\GitHubForge\Domain;
+namespace Intakt\Plugin\GitHubForge\Contract;
 
 use DateTimeImmutable;
 use SensitiveParameter;

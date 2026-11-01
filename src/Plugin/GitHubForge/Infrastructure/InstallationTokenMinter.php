@@ -6,14 +6,14 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use Intakt\Plugin\GitHubForge\Domain\InstallationToken;
-use Intakt\Plugin\GitHubForge\Domain\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use NoDiscard;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-// No other credential is ever tried: a failed exchange stops the call.
+// A failed exchange stops the call, because falling back to another credential would hide a broken identity.
 final readonly class InstallationTokenMinter
 {
     private const string API = 'https://api.github.com';
@@ -48,14 +48,14 @@ final readonly class InstallationTokenMinter
                 'headers' => ['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'],
             ]);
             $status = $response->getStatusCode();
-            $body = $status === 201 ? $response->toArray(false) : [];
+            $body = 201 === $status ? $response->toArray(false) : [];
         } catch (ExceptionInterface $failure) {
             $this->logger->warning('The GitHub installation token exchange did not complete.', ['installation' => $this->installationId, 'error' => $failure::class]);
 
             throw InstallationTokenNotMinted::becauseGitHubWasUnreachable($failure);
         }
 
-        if ($status !== 201) {
+        if (201 !== $status) {
             $this->logger->warning('GitHub refused the installation token exchange.', ['installation' => $this->installationId, 'status' => $status]);
 
             throw InstallationTokenNotMinted::becauseGitHubRefused($status);
@@ -71,7 +71,7 @@ final readonly class InstallationTokenMinter
     {
         $token = $answer['token'] ?? null;
         $expiresAt = is_string($answer['expires_at'] ?? null) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $answer['expires_at']) : false;
-        if (!is_string($token) || $token === '' || $expiresAt === false) {
+        if (!is_string($token) || '' === $token || false === $expiresAt) {
             throw InstallationTokenNotMinted::becauseTheAnswerIsInvalid();
         }
 

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\GitHubForge\Domain;
+namespace Intakt\Plugin\GitHubForge\Contract;
 
 use RuntimeException;
 use Throwable;
 
-// The message never holds the key, the signed JWT or a token: it is logged and shown.
+// Messages carry the status or the exception class only, because they are logged and shown and must not leak the key or a token.
 final class InstallationTokenNotMinted extends RuntimeException
 {
     public static function becauseTheKeyCannotSign(): self

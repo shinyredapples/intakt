@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeImmutable;
-use Intakt\Plugin\GitHubForge\Domain\InstallationToken;
-use Intakt\Plugin\GitHubForge\Domain\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;

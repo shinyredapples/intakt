@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeImmutable;
-use Intakt\Plugin\GitHubForge\Domain\InstallationToken;
-use Intakt\Plugin\GitHubForge\Domain\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,12 +14,12 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
+use Stringable;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
-use Stringable;
 
 #[CoversClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationToken::class)]
