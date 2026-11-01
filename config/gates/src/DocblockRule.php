@@ -21,7 +21,7 @@ final readonly class DocblockRule
     private const array REMAINDERS = [
         'type' => '/^$/',
         'variable' => '/^(\$\w+)?$/',
-        'parameter' => '/^(&\s*)?(\.\.\.)?\$\w+$/',
+        'parameter' => '/^&?(\.\.\.)?\$\w+$/',
         'property' => '/^\$\w+$/',
         'assertion' => '/^\$[\w>-]+$/',
     ];
