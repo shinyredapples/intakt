@@ -32,6 +32,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
@@ -92,15 +93,37 @@ final class GitHubForgeTest extends TestCase
         );
     }
 
-    public function testItReadsEveryPageOfChangedFiles(): void
+    public function testItTakesTheChangedFilesFromTheComparisonThatNamedTheMergeBase(): void
     {
-        $page = json_encode(array_map(static fn (int $number): array => ['filename' => 'src/F'.$number.'.php', 'status' => 'added'], range(1, 100)), JSON_THROW_ON_ERROR);
-        $last = json_encode([['filename' => 'src/Last.php', 'status' => 'added']], JSON_THROW_ON_ERROR);
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_contains($url, '/files?') ? new MockResponse(str_contains($url, 'page=2') ? $last : $page) : null);
+        $this->forge()->change(new ChangeId(self::PULL));
 
-        $change = $forge->change(new ChangeId(self::PULL));
+        self::assertSame([], array_filter($this->requested, static fn (string $request): bool => str_contains($request, '/files')));
+    }
 
-        self::assertCount(101, $change->diff->files);
+    public function testItFailsTheReadWhenTheComparisonListsThreeHundredFiles(): void
+    {
+        $forge = $this->forge(fn (string $url, array $options): ?ResponseInterface => $this->isBranchComparison($url, $options) ? new MockResponse(self::comparison(self::MERGE_BASE, 300)) : null);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $forge->change(new ChangeId(self::PULL));
+    }
+
+    public function testItReadsAComparisonOfTwoHundredNinetyNineFiles(): void
+    {
+        $forge = $this->forge(fn (string $url, array $options): ?ResponseInterface => $this->isBranchComparison($url, $options) ? new MockResponse(self::comparison(self::MERGE_BASE, 299)) : null);
+
+        self::assertCount(299, $forge->change(new ChangeId(self::PULL))->diff->files);
+    }
+
+    public function testItFailsTheReadWhenTheComparisonHasNoFileList(): void
+    {
+        $answer = json_encode(['status' => 'ahead', 'merge_base_commit' => ['sha' => self::MERGE_BASE]], JSON_THROW_ON_ERROR);
+        $forge = $this->forge(fn (string $url, array $options): ?ResponseInterface => $this->isBranchComparison($url, $options) ? new MockResponse($answer) : null);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $forge->change(new ChangeId(self::PULL));
     }
 
     public function testItDetectsAHeadThatMovedDuringReview(): void
@@ -131,6 +154,47 @@ final class GitHubForgeTest extends TestCase
 
         self::assertSame(HeadMoveKind::Commits, $move->kind);
         self::assertSame(['src/Added.php', 'docs/read me.md'], $move->paths);
+    }
+
+    public function testItReportsBothPathsOfAFileRenamedByTheNewCommits(): void
+    {
+        $forge = $this->forge();
+        $change = $this->movedChange($forge);
+        $this->compareFixture = 'compare_ahead_rename.json';
+
+        $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
+
+        self::assertSame(['src/Guard.php', 'docs/Guard.php'], $move->paths);
+    }
+
+    public function testItReportsARewriteWhenTheNewCommitsListThreeHundredFiles(): void
+    {
+        $forge = $this->forge();
+        $change = $this->movedChange($forge);
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_contains($url, '/compare/'.self::HEAD.'...') ? new MockResponse(self::comparison(self::HEAD, 300)) : null);
+
+        self::assertSame(HeadMoveKind::Rewritten, $forge->headMoveSince(new CommitId(self::HEAD), $change)->kind);
+    }
+
+    public function testItReportsNewCommitsWhenTheyListTwoHundredNinetyNineFiles(): void
+    {
+        $forge = $this->forge();
+        $change = $this->movedChange($forge);
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_contains($url, '/compare/'.self::HEAD.'...') ? new MockResponse(self::comparison(self::HEAD, 299)) : null);
+
+        $move = $forge->headMoveSince(new CommitId(self::HEAD), $change);
+
+        self::assertSame(HeadMoveKind::Commits, $move->kind);
+        self::assertCount(299, $move->paths);
+    }
+
+    public function testItReportsARewriteWhenTheNewCommitsHaveNoFileList(): void
+    {
+        $forge = $this->forge();
+        $change = $this->movedChange($forge);
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_contains($url, '/compare/'.self::HEAD.'...') ? new MockResponse('{"status":"ahead"}') : null);
+
+        self::assertSame(HeadMoveKind::Rewritten, $forge->headMoveSince(new CommitId(self::HEAD), $change)->kind);
     }
 
     public function testItReportsARewriteWhenTheEarlierHeadIsNoLongerAnAncestor(): void
@@ -182,6 +246,29 @@ final class GitHubForgeTest extends TestCase
         yield 'credentials' => ['https://user:pass@github.com/acme/widgets/pull/7'];
         yield 'an issue' => ['https://github.com/acme/widgets/issues/7'];
         yield 'a branch name' => ['feature/read'];
+        yield 'dot segments for owner and repository' => ['https://github.com/../../pull/7'];
+        yield 'a dot repository' => ['https://github.com/acme/./pull/7'];
+        yield 'a dotted owner' => ['https://github.com/ac.me/widgets/pull/7'];
+    }
+
+    public function testItAcceptsARepositoryNameWithDots(): void
+    {
+        $this->forge()->change(new ChangeId('https://github.com/acme/widgets.js/pull/7'));
+
+        self::assertContains('GET https://api.github.com/repos/acme/widgets.js/pulls/7', $this->requested);
+    }
+
+    public function testItDoesNotChainTheTransportFailureWhoseTraceHoldsTheToken(): void
+    {
+        $forge = $this->forgeOver(new MockHttpClient(static fn (): never => throw new TransportException('connection dropped'), 'https://api.github.com'));
+
+        try {
+            $forge->change(new ChangeId(self::PULL));
+            self::fail('A transport failure must fail the read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertNull($failure->getPrevious());
+            self::assertStringContainsString(TransportException::class, $failure->getMessage());
+        }
     }
 
     #[DataProvider('malformedAddresses')]
@@ -310,11 +397,27 @@ final class GitHubForgeTest extends TestCase
 
         return match (true) {
             str_contains($url, '/contents/') => new MockResponse(self::fixture('contents_widget.txt')),
-            str_contains($path, '/pulls/7/files') => new MockResponse(self::fixture('pull_files.json')),
             str_contains($path, '/pulls/7') => new MockResponse(self::fixture($this->pullFixture)),
             str_ends_with($accept, 'github.diff') => new MockResponse(self::fixture('pull.diff')),
             default => new MockResponse(self::fixture($this->compareFixture)),
         };
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function isBranchComparison(string $url, array $options): bool
+    {
+        return str_contains($url, '/compare/main...') && !str_ends_with(self::header($options, 'accept'), 'github.diff');
+    }
+
+    private static function comparison(string $mergeBase, int $files): string
+    {
+        return json_encode([
+            'status' => 'ahead',
+            'merge_base_commit' => ['sha' => $mergeBase],
+            'files' => array_map(static fn (int $number): array => ['filename' => 'docs/F'.$number.'.md', 'status' => 'added'], range(1, $files)),
+        ], JSON_THROW_ON_ERROR);
     }
 
     private static function fixture(string $name): string

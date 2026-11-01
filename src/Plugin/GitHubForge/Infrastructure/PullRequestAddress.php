@@ -10,7 +10,8 @@ use Uri\Rfc3986\Uri;
 
 final readonly class PullRequestAddress
 {
-    private const string PATH = '#^/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/pull/([1-9][0-9]*)/?$#';
+    // An owner has no dots and a repository is not only dots, so `.` or `..` cannot lead the token outside the repository's API path.
+    private const string PATH = '#^/([A-Za-z0-9-]+)/(?!\.+/)([A-Za-z0-9_.-]+)/pull/([1-9][0-9]*)/?$#';
 
     private function __construct(
         public string $owner,

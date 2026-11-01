@@ -32,7 +32,7 @@ final readonly class GitHubForge implements Forge
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
     private const string RAW = 'application/vnd.github.raw+json';
-    private const int PAGE_SIZE = 100;
+    private const int COMPARED_FILES_CAP = 300;
     private const int NOT_FOUND = 404;
 
     public function __construct(
@@ -47,10 +47,10 @@ final readonly class GitHubForge implements Forge
         $address = PullRequestAddress::of($id);
         $pull = $this->pullRequest($address, $id);
         $head = $this->commitAt($pull, 'head', 'sha');
-        $base = $this->mergeBase($address, $this->textAt($pull, 'base', 'ref'), $head);
-        $commits = new CommitRange($base, $head);
+        $comparison = $this->branchComparison($address, $this->textAt($pull, 'base', 'ref'), $head);
+        $commits = new CommitRange($this->commitAt($comparison, 'merge_base_commit', 'sha'), $head);
 
-        return new Change($id, $commits, $this->diff($address, $commits));
+        return new Change($id, $commits, new Diff($this->patch($address, $commits), $this->changedFiles($comparison)));
     }
 
     #[NoDiscard]
@@ -77,7 +77,12 @@ final readonly class GitHubForge implements Forge
             return new HeadMove(HeadMoveKind::Rewritten, []);
         }
 
-        return new HeadMove(HeadMoveKind::Commits, $this->pathsOf($comparison));
+        $entries = $this->completeFilesOf($comparison);
+
+        // An incomplete list cannot prove which paths the new commits touched, so the verdict must not survive on it.
+        return null === $entries
+            ? new HeadMove(HeadMoveKind::Rewritten, [])
+            : new HeadMove(HeadMoveKind::Commits, array_map(static fn (ChangedFile $file): string => $file->path, $this->filesIn($entries)));
     }
 
     public function fileAtHead(Change $change, string $path): FileContent
@@ -100,33 +105,57 @@ final readonly class GitHubForge implements Forge
         return null === $body ? throw ChangeNotFound::named($id) : $this->decode($body);
     }
 
-    private function mergeBase(PullRequestAddress $address, string $baseReference, CommitId $head): CommitId
+    /**
+     * @return array<mixed>
+     */
+    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
     {
-        $comparison = $this->compare($address, $this->encodeReference($baseReference), $head->hash);
-
-        return null === $comparison ? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.') : $this->commitAt($comparison, 'merge_base_commit', 'sha');
+        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
     }
 
-    private function diff(PullRequestAddress $address, CommitRange $commits): Diff
+    private function patch(PullRequestAddress $address, CommitRange $commits): string
     {
         // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
         $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
 
-        return new Diff($patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.'), $this->changedFiles($address));
+        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
     }
 
-    private function changedFiles(PullRequestAddress $address): ChangedFiles
+    /**
+     * @param array<mixed> $comparison
+     */
+    private function changedFiles(array $comparison): ChangedFiles
     {
-        $files = [];
-        for ($page = 1;; ++$page) {
-            $body = $this->get($address->pullRequestPath().'/files', self::JSON, ['per_page' => self::PAGE_SIZE, 'page' => $page]);
-            $entries = $this->decode($body ?? throw new ForgeReadFailed('GitHub has no file list for the pull request.'));
-            $files = [...$files, ...array_merge(...array_map($this->filesOf(...), $entries))];
+        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
+        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
 
-            if (count($entries) < self::PAGE_SIZE) {
-                return new ChangedFiles(...$files);
-            }
+        return new ChangedFiles(...$this->filesIn($entries));
+    }
+
+    /**
+     * @param array<mixed> $comparison
+     *
+     * @return ?array<mixed>
+     */
+    private function completeFilesOf(array $comparison): ?array
+    {
+        $entries = $comparison['files'] ?? null;
+        if (null !== $entries && !is_array($entries)) {
+            throw new ForgeReadFailed('GitHub answered a comparison without a list of files.');
         }
+
+        // GitHub lists at most 300 files of a comparison, so a list that long may be cut off.
+        return null === $entries || count($entries) >= self::COMPARED_FILES_CAP ? null : $entries;
+    }
+
+    /**
+     * @param array<mixed> $entries
+     *
+     * @return list<ChangedFile>
+     */
+    private function filesIn(array $entries): array
+    {
+        return array_merge([], ...array_map($this->filesOf(...), array_values($entries)));
     }
 
     /**
@@ -155,21 +184,6 @@ final readonly class GitHubForge implements Forge
         $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
 
         return null === $body ? null : $this->decode($body);
-    }
-
-    /**
-     * @param array<mixed> $comparison
-     *
-     * @return list<string>
-     */
-    private function pathsOf(array $comparison): array
-    {
-        $files = $comparison['files'] ?? [];
-        if (!is_array($files)) {
-            throw new ForgeReadFailed('GitHub answered a comparison without a list of files.');
-        }
-
-        return array_values(array_map(fn (mixed $file): string => $this->textAt(is_array($file) ? $file : [], 'filename'), $files));
     }
 
     private function encodeReference(string $reference): string
@@ -228,7 +242,8 @@ final readonly class GitHubForge implements Forge
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), previous: $failure);
+            // Not chained, because the trace of the client's exception holds the request options with the bearer token.
+            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
         }
 
         if (self::NOT_FOUND === $status) {
