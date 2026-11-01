@@ -105,7 +105,7 @@ final readonly class ReviewChange implements ChangeReviews
             $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers())),
             $this->verdicts->of($round),
             $this->actListOf($round),
-            $this->ledger->tokensSince($roundId, $request->project),
+            $this->ledger->tokensOf($roundId),
             $this->reasonsOf($round),
         );
     }

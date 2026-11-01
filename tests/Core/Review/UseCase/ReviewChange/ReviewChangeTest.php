@@ -103,17 +103,17 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
     }
 
-    public function testTheTokensOfCallsRecordedAfterTheRoundStartedAreAdded(): void
+    public function testTheTokensOfTheCallsMadeForTheRoundAreAddedAndNoOthers(): void
     {
         $this->recordUsage('before', 1000);
-        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120));
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, $this->openRoundId()));
 
         self::assertSame([1, 100, 20, 120], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
     }
 
-    public function testTheTokensOfAnotherProjectsCallsAreLeftOut(): void
+    public function testTheTokensOfACallMadeForAnotherRoundAreLeftOut(): void
     {
-        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, 'beta'));
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, '0192a000-0000-7000-8000-0000000000ff'));
 
         self::assertSame([0, 0], [$review->tokens->calls, $review->tokens->total]);
     }
@@ -220,10 +220,16 @@ final class ReviewChangeTest extends KernelTestCase
         return new Panel($members, QuorumPolicy::All);
     }
 
-    // Both rows UsageLedger writes, because only the started one names the project and only the settled one carries the tokens.
-    private function recordUsage(string $call, int $total, string $project = 'alpha'): void
+    private function openRoundId(): string
     {
-        $this->append(['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard']);
+        return array_first($this->fixture->storedRounds())->id()->toRfc4122();
+    }
+
+    // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
+    private function recordUsage(string $call, int $total, ?string $round = null): void
+    {
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
+        $this->append(null === $round ? $started : $started + ['round' => $round]);
         $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
     }
 
