@@ -16,11 +16,7 @@
             <td>{{ review.project }}</td>
             <td>{{ review.reviewers }}</td>
             <td>{{ review.startedAt|date('Y-m-d H:i:s', 'UTC') }}</td>
-            {% if review.judged %}
-            <td class="state-judged">judged</td>
-            {% else %}
-            <td class="state-running">in progress</td>
-            {% endif %}
+            <td class="{{ review.state.name == 'Judged' ? 'state-judged' : 'state-running' }}">{{ review.state.value }}</td>
         </tr>
     {% endfor %}
     </tbody>

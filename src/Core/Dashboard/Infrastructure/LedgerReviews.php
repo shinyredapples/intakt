@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use JsonException;
 
-// The dashboard reads the ledger alone; this class is the one place that knows the shape of the payloads it reads.
+// Payloads are decoded only here, so the pages need nothing from the Review module that writes them.
 final readonly class LedgerReviews
 {
     public function __construct(private Ledger $ledger)
@@ -18,7 +19,7 @@ final readonly class LedgerReviews
     }
 
     /**
-     * @return list<ReviewSummary> newest round first
+     * @return list<ReviewSummary>
      */
     public function newestFirst(): array
     {
@@ -33,23 +34,17 @@ final readonly class LedgerReviews
                 continue;
             }
 
-            if ($recorded->event->kind === LedgerEventKind::JudgeDone) {
-                $judged[$round] = true;
-            }
-
-            if ($recorded->event->kind === LedgerEventKind::ReviewStarted) {
-                $started[$round] = [$payload, $recorded];
-            }
+            match ($recorded->event->kind) {
+                LedgerEventKind::JudgeDone => $judged[$round] = true,
+                LedgerEventKind::ReviewStarted => $started[$round] = $this->summarize($round, $payload, $recorded->recordedAt),
+                default => null,
+            };
         }
 
         $reviews = [];
 
-        foreach ($started as $round => [$payload, $recorded]) {
-            $review = $this->summarize((string) $round, $payload, $recorded, isset($judged[$round]));
-
-            if ($review instanceof ReviewSummary) {
-                $reviews[] = $review;
-            }
+        foreach (array_filter($started) as $round => $review) {
+            $reviews[] = isset($judged[$round]) ? $review->judged() : $review;
         }
 
         return array_reverse($reviews);
@@ -58,7 +53,7 @@ final readonly class LedgerReviews
     /**
      * @param array<string, mixed> $payload
      */
-    private function summarize(string $round, array $payload, RecordedEvent $recorded, bool $judged): ?ReviewSummary
+    private function summarize(string $round, array $payload, DateTimeImmutable $startedAt): ?ReviewSummary
     {
         $project = $payload['project'] ?? null;
         $reviewers = $payload['reviewers'] ?? null;
@@ -67,7 +62,7 @@ final readonly class LedgerReviews
             return null;
         }
 
-        return new ReviewSummary($round, $project, $reviewers, $recorded->recordedAt, $judged);
+        return new ReviewSummary($round, $project, $reviewers, $startedAt);
     }
 
     /**
@@ -85,6 +80,6 @@ final readonly class LedgerReviews
             return [];
         }
 
-        return is_array($payload) ? $payload : [];
+        return is_array($payload) ? array_filter($payload, is_string(...), ARRAY_FILTER_USE_KEY) : [];
     }
 }

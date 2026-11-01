@@ -4,11 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use Intakt\Core\Dashboard\Domain\ProjectSummary;
-use Intakt\Core\Dashboard\Domain\ReviewSummary;
-use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
-use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
-use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 

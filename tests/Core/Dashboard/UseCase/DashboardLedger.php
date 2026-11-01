@@ -20,7 +20,7 @@ final class DashboardLedger implements Ledger
 
     public function append(LedgerEvent $event): AppendResult
     {
-        $this->recorded[] = new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-10-28 12:00:00 UTC'));
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         return AppendResult::appended(Uuid::v7());
     }
@@ -45,6 +45,6 @@ final class DashboardLedger implements Ledger
      */
     private function add(LedgerEventKind $kind, array $payload): void
     {
-        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28 12:00:00 UTC'));
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }

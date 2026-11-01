@@ -25,15 +25,18 @@ final readonly class ProjectSummary
 
         foreach ($reviews as $review) {
             $rounds[$review->project] = ($rounds[$review->project] ?? 0) + 1;
-            $judged[$review->project] = ($judged[$review->project] ?? 0) + ($review->judged ? 1 : 0);
+            $judged[$review->project] = ($judged[$review->project] ?? 0) + ($review->state === ReviewState::Judged ? 1 : 0);
         }
 
         ksort($rounds, SORT_STRING);
 
-        return array_values(array_map(
-            static fn (string|int $name, int $count): self => new self((string) $name, $count, $judged[$name]),
-            array_keys($rounds),
-            $rounds,
-        ));
+        $projects = [];
+
+        foreach ($rounds as $name => $count) {
+            // PHP turns a numeric project name into an integer key.
+            $projects[] = new self(strval($name), $count, $judged[$name]);
+        }
+
+        return $projects;
     }
 }

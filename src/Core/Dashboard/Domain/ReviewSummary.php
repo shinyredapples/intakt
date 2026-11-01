@@ -13,7 +13,12 @@ final readonly class ReviewSummary
         public string $project,
         public int $reviewers,
         public DateTimeImmutable $startedAt,
-        public bool $judged,
+        public ReviewState $state = ReviewState::InProgress,
     ) {
+    }
+
+    public function judged(): self
+    {
+        return clone($this, ['state' => ReviewState::Judged]);
     }
 }

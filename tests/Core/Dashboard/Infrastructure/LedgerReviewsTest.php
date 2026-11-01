@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -33,7 +34,7 @@ final class LedgerReviewsTest extends TestCase
         );
 
         self::assertCount(1, $reviews);
-        self::assertFalse($reviews[0]->judged);
+        self::assertSame(ReviewState::InProgress, $reviews[0]->state);
     }
 
     public function testAPayloadThatIsNotValidJsonIsSkipped(): void
@@ -65,7 +66,7 @@ final class LedgerReviewsTest extends TestCase
             $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":[],"follow_ups":[]}'),
         );
 
-        self::assertSame(['r2' => false, 'r1' => true], array_column(array_map(static fn (ReviewSummary $review): array => [$review->round, $review->judged], $reviews), 1, 0));
+        self::assertSame(['r2' => ReviewState::InProgress, 'r1' => ReviewState::Judged], array_column(array_map(static fn (ReviewSummary $review): array => [$review->round, $review->state], $reviews), 1, 0));
     }
 
     /**
@@ -81,6 +82,6 @@ final class LedgerReviewsTest extends TestCase
 
     private function event(LedgerEventKind $kind, string $payload): RecordedEvent
     {
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28 12:00:00 UTC'));
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 }
