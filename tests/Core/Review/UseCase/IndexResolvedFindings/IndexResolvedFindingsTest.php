@@ -95,8 +95,18 @@ final class IndexResolvedFindingsTest extends KernelTestCase
 
         $this->fixture->indexing($this->index)(new IndexResolvedFindings($second));
 
-        $expected = new MemoryEntry('Resolved finding: Text a'.PHP_EOL.'Cause: The rule a.'.PHP_EOL.'Evidence: probe a: output a', ['src/A.php']);
+        $expected = new MemoryEntry('alpha', 'Resolved finding: Text a'.PHP_EOL.'Cause: The rule a.'.PHP_EOL.'Evidence: probe a: output a', ['src/A.php']);
         self::assertEquals([$expected], $this->remembered(['src/A.php']));
+    }
+
+    public function testAResolvedFindingIsRememberedForTheProjectOfItsRoundOnly(): void
+    {
+        $this->roundReporting([$this->finding('a')]);
+        $second = $this->roundResolving(['F1']);
+
+        $this->fixture->indexing($this->index)(new IndexResolvedFindings($second));
+
+        self::assertSame([], $this->memory->relevantTo(new MemoryQuery('beta', ['src/A.php'], 100000))->entries);
     }
 
     public function testAFindingStillOpenAfterTheRoundIsNotIndexed(): void
@@ -246,7 +256,7 @@ final class IndexResolvedFindingsTest extends KernelTestCase
      */
     private function remembered(array $files): array
     {
-        return $this->memory->relevantTo(new MemoryQuery($files, 100000))->entries;
+        return $this->memory->relevantTo(new MemoryQuery('alpha', $files, 100000))->entries;
     }
 
     private function finding(string $id, bool $repeat = false): Finding

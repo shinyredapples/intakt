@@ -24,9 +24,9 @@ final class OptionalProjectMemoryTest extends TestCase
     public function testAReadableMemoryIsPassedThrough(): void
     {
         $inner = self::createStub(ProjectMemory::class);
-        $inner->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('Note.', ['a.php'])], 100));
+        $inner->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Note.', ['a.php'])], 100));
 
-        $found = new OptionalProjectMemory($inner, self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery(['a.php'], 100));
+        $found = new OptionalProjectMemory($inner, self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
 
         self::assertCount(1, $found->entries);
     }
@@ -38,7 +38,7 @@ final class OptionalProjectMemoryTest extends TestCase
         $logger = self::createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('warning')->with(self::anything(), ['failure' => LogicException::class]);
 
-        $found = new OptionalProjectMemory($inner, $logger)->relevantTo(new MemoryQuery(['a.php'], 100));
+        $found = new OptionalProjectMemory($inner, $logger)->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
 
         self::assertSame([], $found->entries);
     }

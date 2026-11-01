@@ -8,6 +8,7 @@ use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\UntrustedSource;
 
 final readonly class ReviewerMemory
@@ -18,12 +19,13 @@ final readonly class ReviewerMemory
     public function __construct(
         private ProjectMemory $memory,
         private Fence $fence,
+        private DiffPaths $paths,
     ) {
     }
 
-    public function briefingOn(string $diff): ?string
+    public function briefingOn(ReviewBrief $brief): ?string
     {
-        $entries = $this->memory->relevantTo(new MemoryQuery(new DiffPaths()->in($diff), self::MAX_BYTES))->entries;
+        $entries = $this->memory->relevantTo(new MemoryQuery($brief->project, $this->paths->in($brief->diff), self::MAX_BYTES))->entries;
 
         return $this->briefingWithin($entries);
     }

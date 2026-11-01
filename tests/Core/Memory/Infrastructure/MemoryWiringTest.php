@@ -38,6 +38,6 @@ final class MemoryWiringTest extends KernelTestCase
         $this->expectException(LogicException::class);
         $this->expectExceptionMessageMatches('/needs an embedding model/');
 
-        $index->index(new MemoryEntry('Text.', ['src/A.php']));
+        $index->index(new MemoryEntry('alpha', 'Text.', ['src/A.php']));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Memory\Infrastructure;
 
+use Closure;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Symfony\AI\Store\Document\Metadata;
 use Symfony\AI\Store\Document\TextDocument;
@@ -11,6 +12,7 @@ use Symfony\AI\Store\Document\VectorDocumentInterface;
 
 final readonly class MemoryDocuments
 {
+    private const string PROJECT = 'project';
     private const string FILES = 'files';
     private const string ENTRY = 'entry';
 
@@ -18,17 +20,34 @@ final readonly class MemoryDocuments
     {
         $content = implode(' ', $entry->files).PHP_EOL.$entry->text;
 
-        // The same entry gets the same id, so indexing it twice replaces it; JSON keeps file lists that join alike apart.
-        return new TextDocument(hash('sha256', json_encode([$entry->files, $entry->text], JSON_THROW_ON_ERROR)), $content, new Metadata([
+        // The same entry gets the same id, so indexing it twice replaces it; JSON keeps file lists that join alike apart, and the project keeps two projects' equal notes apart.
+        return new TextDocument(hash('sha256', json_encode([$entry->project, $entry->files, $entry->text], JSON_THROW_ON_ERROR)), $content, new Metadata([
             Metadata::KEY_TEXT => $content,
+            self::PROJECT => $entry->project,
             self::FILES => $entry->files,
             self::ENTRY => $entry->text,
         ]));
     }
 
+    // A store filter, so one install's single store never hands a project another project's notes; a document without a project is nobody's.
+    /**
+     * @return Closure(VectorDocumentInterface): bool
+     */
+    public function ofProject(string $project): Closure
+    {
+        return static fn (VectorDocumentInterface $document): bool => ($document->getMetadata()[self::PROJECT] ?? null) === $project;
+    }
+
     public function toEntry(VectorDocumentInterface $document): MemoryEntry
     {
-        return new MemoryEntry($this->entryText($document), $this->entryFiles($document));
+        return new MemoryEntry($this->entryProject($document), $this->entryText($document), $this->entryFiles($document));
+    }
+
+    private function entryProject(VectorDocumentInterface $document): string
+    {
+        $project = $document->getMetadata()[self::PROJECT] ?? null;
+
+        return is_string($project) ? $project : throw new StoredMemoryIsMalformed($document->getId(), self::PROJECT);
     }
 
     private function entryText(VectorDocumentInterface $document): string

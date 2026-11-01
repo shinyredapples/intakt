@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -45,7 +44,7 @@ final readonly class ReviewerPrompt
     public function __construct(
         private Fence $fence,
         private VerdictParser $parser,
-        private ProjectMemory $memory,
+        private ReviewerMemory $memory,
     ) {
     }
 
@@ -58,7 +57,7 @@ final readonly class ReviewerPrompt
         ];
 
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
-        $briefing = new ReviewerMemory($this->memory, $this->fence)->briefingOn($brief->diff);
+        $briefing = $this->memory->briefingOn($brief);
 
         if (null !== $briefing) {
             $messages[] = Message::ofUser($briefing);

@@ -50,64 +50,83 @@ final class StoreProjectMemoryTest extends TestCase
 
     public function testAnIndexedEntryIsRetrievedForAFileItDescribes(): void
     {
-        $this->index->index(new MemoryEntry('Run the migration first.', ['src/Db.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Run the migration first.', ['src/Db.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['src/Db.php', 'src/Other.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['src/Db.php', 'src/Other.php'], 1000));
 
-        self::assertEquals([new MemoryEntry('Run the migration first.', ['src/Db.php'])], $found->entries);
+        self::assertEquals([new MemoryEntry('alpha', 'Run the migration first.', ['src/Db.php'])], $found->entries);
     }
 
     public function testAnEntryAboutOtherFilesIsNotReturned(): void
     {
-        $this->index->index(new MemoryEntry('About the router.', ['src/Router.php']));
+        $this->index->index(new MemoryEntry('alpha', 'About the router.', ['src/Router.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['src/Db.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['src/Db.php'], 1000));
 
         self::assertSame([], $found->entries);
     }
 
+    public function testAnEntryOfAnotherProjectIsNotReturnedForTheSameFile(): void
+    {
+        $this->index->index(new MemoryEntry('beta', 'Beta keeps its billing here.', ['composer.json']));
+
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['composer.json'], 1000));
+
+        self::assertSame([], $found->entries);
+    }
+
+    public function testTheSameNoteInTwoProjectsIsKeptForEach(): void
+    {
+        $this->index->index(new MemoryEntry('alpha', 'Same note.', ['a.php']));
+        $this->index->index(new MemoryEntry('beta', 'Same note.', ['a.php']));
+
+        $found = $this->memory->relevantTo(new MemoryQuery('beta', ['a.php'], 1000));
+
+        self::assertEquals([new MemoryEntry('beta', 'Same note.', ['a.php'])], $found->entries);
+    }
+
     public function testRetrievalStopsBeforeTheEntryThatWouldExceedTheCap(): void
     {
-        $this->index->index(new MemoryEntry('aaaa', ['a.php']));
-        $this->index->index(new MemoryEntry('bbbb', ['a.php']));
-        $this->index->index(new MemoryEntry('cccc', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'aaaa', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'bbbb', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'cccc', ['a.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['a.php'], 9));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 9));
 
         self::assertCount(2, $found->entries);
     }
 
     public function testAnEntryLargerThanTheWholeCapIsNeverReturned(): void
     {
-        $this->index->index(new MemoryEntry('far too long for the cap', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'far too long for the cap', ['a.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['a.php'], 5));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 5));
 
         self::assertSame([], $found->entries);
     }
 
     public function testRetrievalFromAnEmptyMemoryReturnsNoEntries(): void
     {
-        $found = $this->memory->relevantTo(new MemoryQuery(['a.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 1000));
 
         self::assertSame([], $found->entries);
     }
 
     public function testNoFilesUnderReviewReturnNoEntries(): void
     {
-        $this->index->index(new MemoryEntry('Anything.', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Anything.', ['a.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery([], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', [], 1000));
 
         self::assertSame([], $found->entries);
     }
 
     public function testIndexingTheSameEntryTwiceKeepsOneCopy(): void
     {
-        $this->index->index(new MemoryEntry('Once.', ['a.php']));
-        $this->index->index(new MemoryEntry('Once.', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Once.', ['a.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Once.', ['a.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['a.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 1000));
 
         self::assertCount(1, $found->entries);
     }

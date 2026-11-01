@@ -25,21 +25,21 @@ final readonly class StoreProjectMemory implements ProjectMemory
             return RelevantMemory::within([], $query->maxBytes);
         }
 
-        return RelevantMemory::within($this->describing($query->files), $query->maxBytes);
+        return RelevantMemory::within($this->describing($query), $query->maxBytes);
     }
 
     /**
-     * @param list<string> $files
-     *
      * @return Generator<MemoryEntry>
      */
-    private function describing(array $files): Generator
+    private function describing(MemoryQuery $query): Generator
     {
+        $documents = $this->retriever->retrieve($this->searchText($query->files), ['filter' => $this->documents->ofProject($query->project)]);
+
         // Decided here because the store ranks every entry by similarity and would return those about other files too.
-        foreach ($this->retriever->retrieve($this->searchText($files)) as $document) {
+        foreach ($documents as $document) {
             $entry = $this->documents->toEntry($document);
 
-            if ($entry->describesAnyOf($files)) {
+            if ($entry->describesAnyOf($query->files)) {
                 yield $entry;
             }
         }
