@@ -104,6 +104,7 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
 
         self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame('light', $ledger->payloads()[0]['tier']);
+        self::assertArrayNotHasKey('round', $ledger->payloads()[0]);
     }
 
     public function testACutOffStreamMakesEveryBlockingFindingActAndLeavesTheCallUnsettled(): void

@@ -101,6 +101,16 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(3, $vendor->calls);
     }
 
+    public function testAReviewerAsksTheVendorWithTheIdOfItsRound(): void
+    {
+        $round = $this->fixture->start(1);
+        $vendor = new ScriptedVendor();
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], $vendor);
+
+        self::assertSame([$round->id()->toRfc4122()], $vendor->rounds);
+    }
+
     public function testAMessageDeliveredAgainAfterTheRoundIsCompleteChangesNothing(): void
     {
         $round = $this->fixture->start(1);

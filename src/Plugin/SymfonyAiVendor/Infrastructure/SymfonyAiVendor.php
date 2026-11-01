@@ -59,7 +59,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->verdictOn($answering, $this->usage->reserve($project, $tier), $request)),
+            $this->readOrRefused($answering->provider, $this->verdictOn($answering, $this->usage->reserve($project, $tier, $request->conversation->round), $request)),
             $substitute,
         ));
     }

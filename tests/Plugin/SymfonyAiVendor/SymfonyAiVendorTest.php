@@ -98,6 +98,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(SymfonyAiVendor::class)]
@@ -690,9 +691,32 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertCount(1, $verdict->findings);
     }
 
-    private function request(): ReviewRequest
+    public function testAReviewerCallMadeForARoundWritesItsRoundIdOnTheStartedRow(): void
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', 'diff --git a/a b/a', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        $ledger = new InMemoryLedger();
+        $round = new UuidV7();
+        $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json());
+
+        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request($round));
+
+        [$started, $settled] = $ledger->payloads();
+        self::assertSame($round->toString(), $started['round']);
+        self::assertArrayNotHasKey('round', $settled);
+    }
+
+    public function testAReviewerCallMadeOutsideARoundWritesNoRoundOnTheStartedRow(): void
+    {
+        $ledger = new InMemoryLedger();
+        $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json());
+
+        $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertArrayNotHasKey('round', $ledger->payloads()[0]);
+    }
+
+    private function request(?Uuid $round = null): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', 'diff --git a/a b/a', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
     }
 
     private function openFinding(string $id): Finding
