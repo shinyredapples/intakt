@@ -66,9 +66,30 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->record($account, $until);
     }
 
+    // The marker ends with the window that runs, the rejection's minute or a limit set before it, so the account is retried when its cooldown ends like any other.
+    public function coolDownRejected(Account $account): void
+    {
+        $this->coolDown($account, null);
+
+        $marker = $this->pool->getItem($this->rejectionKey($account))->set(true)->expiresAt($this->window($account)->getRetryAfter());
+        $this->pool->save($marker);
+    }
+
     public function isCoolingDown(Account $account): bool
     {
         return 0 === $this->window($account)->getRemainingTokens();
+    }
+
+    public function isRejected(Account $account): bool
+    {
+        return $this->pool->getItem($this->rejectionKey($account))->isHit();
+    }
+
+    public function isEveryAccountRejected(Provider $provider): bool
+    {
+        $names = $this->accounts[$provider->value] ?? [];
+
+        return [] !== $names && array_all($names, fn (string $name): bool => $this->isRejected(new Account($provider, $name)));
     }
 
     public function secondsUntilAnAccountIsFree(Provider $provider): int
@@ -101,6 +122,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
 
         return new RateLimiterFactory($config, new CacheStorage($this->pool), $this->locks);
+    }
+
+    // Beside the window in the same pool, so every worker sees why the account cools down; the account key holds a provider name and an account name the owner configured, never outside input.
+    private function rejectionKey(Account $account): string
+    {
+        return self::LIMITER.'-rejected-'.$account->key();
     }
 
     private function record(Account $account, DateTimeImmutable $until): void

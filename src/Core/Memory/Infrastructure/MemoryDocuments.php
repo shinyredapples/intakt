@@ -28,13 +28,30 @@ final readonly class MemoryDocuments
 
     public function toEntry(VectorDocumentInterface $document): MemoryEntry
     {
-        $metadata = $document->getMetadata();
+        return new MemoryEntry($this->entryText($document), $this->entryFiles($document));
+    }
 
-        /** @var string $text */
-        $text = $metadata[self::ENTRY];
-        /** @var list<string> $files */
-        $files = $metadata[self::FILES];
+    private function entryText(VectorDocumentInterface $document): string
+    {
+        $text = $document->getMetadata()[self::ENTRY] ?? null;
 
-        return new MemoryEntry($text, $files);
+        return is_string($text) ? $text : throw new StoredMemoryIsMalformed($document->getId(), self::ENTRY);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function entryFiles(VectorDocumentInterface $document): array
+    {
+        $files = $document->getMetadata()[self::FILES] ?? null;
+
+        if (!is_array($files) || !array_is_list($files)) {
+            throw new StoredMemoryIsMalformed($document->getId(), self::FILES);
+        }
+
+        return array_map(
+            fn (mixed $file): string => is_string($file) ? $file : throw new StoredMemoryIsMalformed($document->getId(), self::FILES),
+            $files,
+        );
     }
 }
