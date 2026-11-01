@@ -17,7 +17,6 @@ parameters:
         function: 8
 
 rules:
-    - Intakt\Gates\PhpStan\ParameterLimitRule
     - Intakt\Gates\PhpStan\NoNestedTryRule
     - Intakt\Gates\PhpStan\ClockOnlyRule
     - Intakt\Gates\PhpStan\NoMockOptOutRule
@@ -28,6 +27,12 @@ services:
         class: Intakt\Gates\PhpStan\ContainerRegistration
         arguments:
             root: %currentWorkingDirectory%
+    -
+        class: Intakt\Gates\PhpStan\ParameterLimitRule
+        arguments:
+            root: %currentWorkingDirectory%
+        tags:
+            - phpstan.rules.rule
     -
         class: Intakt\Gates\PhpStan\FlagParameterRule
         arguments:
