@@ -42,7 +42,7 @@ final readonly class SymfonyAiVendor implements Vendor
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
     {
         $platform = new TierRoutedPlatform($this->tiers, $project);
-        $reservation = $this->usage->reserve($project, $tier);
+        $reservation = $this->usage->reserve($project, $tier, $request->round);
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $tier->value);
