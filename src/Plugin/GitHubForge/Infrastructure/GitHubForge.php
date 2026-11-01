@@ -284,7 +284,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             $status = $response->getStatusCode();
             $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class), $failure->getCode(), $failure);
         }
 
         if ($status < 200 || $status >= 300) {
