@@ -17,7 +17,7 @@ final class TestsGate implements Gate
     private const string SKIPPED_GATES_PASS = 'gates pass skipped, the change leaves the gate code, the gate tests and their inputs unchanged';
     private const array FAIL_CLOSED = [
         '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky',
-        '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation',
+        '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation', '--fail-on-phpunit-deprecation',
     ];
 
     public function name(): string
@@ -162,7 +162,7 @@ final class TestsGate implements Gate
             $workspace->tool('phpunit'),
             '--configuration='.$workspace->root.'/'.$configuration,
             ...self::FAIL_CLOSED,
-            '--display-phpunit-notices', '--do-not-cache-result', '--colors=never', '--no-progress',
+            '--display-phpunit-notices', '--display-phpunit-deprecations', '--do-not-record-test-run-history', '--colors=never', '--no-progress',
         ];
     }
 }

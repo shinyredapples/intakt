@@ -5,25 +5,27 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Closure;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
-use Symfony\Component\Workflow\WorkflowInterface;
 use Throwable;
 
 // The stored rounds: opened with their reviewers, and completed by whichever reviewer finishes last, because an earlier finisher finds the guard closed and a message delivered twice finds the round complete.
 final readonly class ReviewRounds
 {
+    // Three, because each retry follows a commit of another round of the change, and more rounds than that rarely start at once.
+    private const int ATTEMPTS = 3;
+
     public function __construct(
         private EntityManagerInterface $entities,
-        #[Target('review_round')]
-        private WorkflowInterface $machine,
         private ClockInterface $clock,
+        private StoredFindings $findings,
     ) {
     }
 
@@ -36,28 +38,21 @@ final readonly class ReviewRounds
      */
     public function inOneTransaction(Closure $work): mixed
     {
-        // The connection's transaction rather than wrapInTransaction, because that closes the entity manager when the work fails, and a worker handles its next message with the same one.
-        try {
-            return $this->entities->getConnection()->transactional(function () use ($work): mixed {
-                $result = $work();
-                $this->entities->flush();
-
-                return $result;
-            });
-        } catch (Throwable $failure) {
-            // Cleared because the rolled-back changes, and the ids the database gave them, are still in memory and would collide with the next transaction.
-            $this->entities->clear();
-
-            throw $failure;
-        }
+        return $this->attempt($work, self::ATTEMPTS);
     }
 
     public function open(RunReviewRound $command): ReviewRound
     {
         // Built only to refuse a path that is no directory, because a round stored for one could never be reviewed.
-        new Checkout($command->subject->checkoutRoot);
+        $subject = $command->target->subject;
+        new Checkout($subject->checkoutRoot);
 
-        $round = new ReviewRound($this->newId(), $command->subject);
+        // Refused because verdicts recorded under another task or panel would read as current for a question the reviewers were never asked.
+        if (!$command->target->identity->terms->describes($subject->task, $command->panel)) {
+            throw IdentityNotOfRound::forTaskOrPanel();
+        }
+
+        $round = new ReviewRound($this->newId(), $command->target, $this->findings->openRound($subject->project, $command->change));
 
         foreach ($command->panel->reviewers as $member) {
             $round->addReviewer($this->newId(), $member);
@@ -77,10 +72,65 @@ final readonly class ReviewRounds
         $this->inOneTransaction(function () use ($roundId): void {
             $round = $this->entities->find(ReviewRound::class, $roundId, LockMode::PESSIMISTIC_WRITE);
 
-            if ($round instanceof ReviewRound && $this->machine->can($round, ReviewRound::COMPLETION)) {
-                $this->machine->apply($round, ReviewRound::COMPLETION);
+            if ($round instanceof ReviewRound) {
+                $this->findings->completeWhenEveryReviewerIsIn($round);
             }
         });
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    public function openFindingsOf(ReviewRound $round): array
+    {
+        return $this->findings->openFor($round);
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $work
+     *
+     * @return T
+     */
+    private function attempt(Closure $work, int $attemptsLeft): mixed
+    {
+        try {
+            return $this->once($work);
+        } catch (RetryableException $failure) {
+            // Not retried inside a caller's transaction, because only the outermost one can start over from a fresh snapshot.
+            if (1 === $attemptsLeft || $this->entities->getConnection()->isTransactionActive()) {
+                throw $failure;
+            }
+
+            // The whole transaction again, because on SQLite a transaction that read before another writer committed cannot write at all, and only a new one sees that commit.
+            return $this->attempt($work, $attemptsLeft - 1);
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $work
+     *
+     * @return T
+     */
+    private function once(Closure $work): mixed
+    {
+        // The connection's transaction rather than wrapInTransaction, because that closes the entity manager when the work fails, and a worker handles its next message with the same one.
+        try {
+            return $this->entities->getConnection()->transactional(function () use ($work): mixed {
+                $result = $work();
+                $this->entities->flush();
+
+                return $result;
+            });
+        } catch (Throwable $failure) {
+            // Cleared because the rolled-back changes, and the ids the database gave them, are still in memory and would collide with the next transaction.
+            $this->entities->clear();
+
+            throw $failure;
+        }
     }
 
     private function newId(): UuidV7

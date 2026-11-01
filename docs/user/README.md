@@ -7,6 +7,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Running the demo with `docker compose up` (planned)
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), but nothing runs the panel yet.
 - Reviewing a pull request and reading the verdicts (planned)
+- Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Connecting an agent through MCP (planned)
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
@@ -62,6 +63,17 @@ A boolean parameter that switches what a function does hides two behaviors behin
 - replace the boolean with a backed enum whose cases name the modes;
 - split the method in two, one per behavior;
 - if the boolean is data of a value object, make the class `readonly`, mark it with Symfony's `#[Exclude]` attribute (Doctrine entities, embeddables and mapped superclasses count as excluded too) and keep the boolean as it is, as a promoted constructor property or assigned unchanged to a property in the constructor body. Only such a constructor parameter passes, and only when the constructor body does nothing but assign variables to properties the class itself declares (as a property, a promoted constructor parameter or a property of a trait the class uses, since PHP counts a trait's property as declared by the class that uses the trait), one plain `$this->name = $variable;` per statement. An assignment to any other property (one the class never names, or one a parent class declares) is reported, since PHP hands an undeclared property or a parent's private one to `__set()`, which could read the boolean. A promoted boolean must appear nowhere in the body, and a stored one exactly once, as the variable of one of those assignments. Any other statement in the body (a condition, a call, `new`, `eval`, `include`, a `parent::__construct()` call) could read the boolean, so every boolean of that constructor is reported then, even in a value object, while the class's other methods may read the stored property, and the exemption follows the attribute, not the folder, so an unmarked `readonly` class under `bin/` or `config/gates/src/` is reported too.
+
+## When `bin/check` reports a highlights finding
+
+`docs/highlights.md` lists the Symfony and Symfony AI features Intakt uses, and the `highlights` gate of `bin/check` checks its tables. Each finding names the line. To resolve it:
+
+- **status is not one of planned, in progress, done:** write exactly one of those three words in the Status column, and move any remark (such as "optional") to another column;
+- **Where cites a pull request:** name the task and its issue instead (`T9 (#14)`); a pull request number counts in every form (`PR #12`, `PR: #12`, `PR (#12)`, `PR12`, `pull request 12`, `pull/12`), while text inside backticks, such as a path `upstream/pr1-repro/`, does not (a span opened with two backticks ends only at the next two, so it may hold a single backtick, and a backtick written with a backslash before it, `` \` ``, is plain text that starts no span);
+- **Where names a path which does not exist on the branch:** fix the path, add the file to git, or remove the backticks when the text is no path. Anything in backticks with a `/`, or ending in an extension like `.php` or `.md`, counts as a path and must be tracked by git; package names and commands with a `/` therefore go without backticks. A `|` in a path is written `\|` inside the table, and the gate checks it as `|`;
+- **Where cannot be checked, shorten the cell:** the cell is too long for the gate to read (usually a stray backtick before a very long text); close or remove the backtick, or split the text.
+
+Tables inside a fenced code block (three or more backticks or tildes, indented at most three spaces) are examples and are skipped. The block ends at a line holding only a fence of the same character, at least as long as the opening one; a fence line with text after it stays inside the block. A block that is never closed runs to the end of the file.
 
 ## GitHub's test merge and the `commits` gate
 
@@ -161,6 +173,18 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 
 `php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A control character in a file name is shown in a visible form such as `\x1b`, and a backslash as `\\`. A branch the repository does not have, a repository git cannot read, or a repository whose `.git/info/attributes` file exists, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
 
+## Checking whether a verdict still counts
+
+A reviewer's verdict counts only for what it reviewed: the branch's latest commit, the commit it was compared with, the task, the check command and the project's review panel. `php bin/console intakt:verdict:identity <project> <branch> <task> <check-command> [--repository=.] [--base=main]` prints that identity as one line, `identity` followed by five parts separated by dots (the two commits, then fingerprints of the task text, the check command and the panel). The task text and the command are not shown, only their fingerprints.
+
+Pass a printed identity back with `--reviewed=<identity>` to see whether a verdict given on it still counts:
+
+- `current`: nothing changed.
+- `stale: head changed` (or any other changed parts): the verdict no longer counts. A new task text, check command or panel always makes it stale, and so does a new commit, unless one of the two cases below applies.
+- `kept-for-untouched-parts: ...`: the verdict still counts for everything the change left alone, and each `review again <path>` line names a file to review again. This happens when the base branch was merged into the branch and git merged it by itself (no conflict to resolve, no other edit in the merge commit), or when the new commits touch only files in the repository's `docs/` folder and the base did not move.
+
+A project without a review panel, a branch the repository does not have, or an identity that is not in the printed form prints an error and exits with 1. Every review round remembers the identity it was started on, and reading its verdicts applies the same rules: a stale round's verdicts no longer count. Nothing reads them that way from the command line or the loop yet.
+
 ## Checking a new Symfony AI release against the known bugs
 
 `php bin/console intakt:upstream:run` runs every reproduction in `upstream/` and prints the installed Symfony AI versions, then `passes` (the bug seems fixed) or `still fails` for each reproduction, and a count. Add `-v` to see why a reproduction fails. The exit code is 1 while any reproduction still fails. A reproduction counts as `passes` only when its PHPUnit tests ran and asserted something, or when its `reproduce.php` script exits with 0 and prints `REPRODUCTION PASSES` as its last line. One without tests or script, with a skipped or incomplete test, or that runs longer than 5 minutes is reported as `still fails`, and the other reproductions still run. A folder that does not exist, cannot be read or cannot be opened (no execute permission) is an error (exit code 2).
@@ -183,7 +207,7 @@ A reviewer reads the change through three read-only tools: it can read a file, l
 
 ## Finding ids across review rounds
 
-Intakt keeps a list of the findings of a change across its review rounds. Each new finding gets an id (`F1`, `F2`, ... in the order they first appear), and a finding reported again under that id in a later round keeps it, so the same problem has the same id in every round. When several reviewers report the same existing id in one round, it stays one finding. A finding marked resolved is closed and no longer open; if a reviewer reports it again later, it is open again. This list is not stored yet and reviewers are not shown it: showing reviewers the open findings and letting them mark findings resolved or repeated is planned.
+Intakt keeps a list of the findings of a change across its review rounds. Each new finding gets an id (`F1`, `F2`, ... in the order they first appear), and a finding reported again under that id in a later round keeps it, so the same problem has the same id in every round. When several reviewers report the same existing id in one round, it stays one finding. A finding marked resolved is closed: later rounds are not shown it, cannot mark it as a repeat, and the same problem reported again gets a new id. From round two on, every reviewer of a round is shown the open findings as they were when the round started, with their ids (marked as untrusted text in the prompt), lists the ids it finds fixed as resolved, and marks a finding that is still there as a repeat under the same id; any other finding gets a new id. A verdict that resolves or repeats an id that was not open, or marks the same id both resolved and repeat, counts as changes, like any answer that is not a valid verdict. The list is kept in the database for each change and updated once every reviewer of a round is in; when one reviewer finds a finding fixed and another reports it again in the same round, it stays open. A review that failed (an answer that was not a valid verdict, a cut-off answer, or an approval from a reviewer that could not read the change) adds nothing to the list: it is the reviewer's fault, not the change's. When two rounds of one change run at the same time, the reviewers of a round still all see the list from their round's start, even when the other round finishes between them; a round that was shown a finding as open can still mark it as a repeat after the other round resolved it, and then it is open again. When the older round finishes last, its verdicts are left out of the list, so they cannot reopen or close what the newer round decided.
 
 ## Releases
 

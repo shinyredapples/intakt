@@ -6,6 +6,10 @@ Only the orchestrator merges. Right before merging it:
 3. merges only that head: the forge call names the head commit, so a push in between makes the merge fail instead of riding the earlier approval;
 4. reads the result back (the merge commit and its tree) and only then closes the issues and records the merge.
 
+Landing order:
+- **A head ready to land goes before new reviews.** On each tick the review worker first lands any head that needs no model call: every required verdict exists for its exact patch, CI is green on it, the owner's approval is there where the change needs one, and it merges cleanly with main. Only then does it start a review. Priority orders reviews and builds, never finished work. Reason: a low-priority head with green CI, two approving reviews and the owner's approval waited behind several normal-priority reviews of 20 to 40 minutes each. The merge costs no tokens and takes a few minutes, while every hour of waiting lets main move on, which adds merges of main, CI runs, conflict risk and a new head that needs the owner's approval again.
+- **One path for landing.** The same no-model landing step serves this rule and the [budget back-off](06-budget-and-model-planner.md) (where only merges run). A head that turns out to need more than a merge goes back to its place in the review queue and is not tried again for a short while. Reason: two landing paths would drift apart, and a head that cannot land must not block the queue or be retried on every tick.
+
 Protected paths (gates, CI config, agent instructions, dependency policy, the boot harness) need an approval, and a protected change gets one of exactly two outcomes, decided at once when its head has green CI and its panel's verdicts ([Approving protected changes](#approving-protected-changes)):
 - **Intakt approves on the spot** when no hard floor is hit, every mechanical check passes, the independent security review agrees and the attacker test finds no way around the change.
 - **Otherwise the owner reviews.** The request names the floor or the check that sent it. It never resolves itself: no timer, no veto window, no "approve unless stopped", no one-tap shortcut.
