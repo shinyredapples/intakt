@@ -40,6 +40,7 @@ use Symfony\AI\AiBundle\Profiler\DataCollector;
 use Symfony\AI\AiBundle\Test\AiAssertionsTrait;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\MessageInterface;
+use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
@@ -314,6 +315,19 @@ final class ReviewerVerdictTest extends WebTestCase
 
         self::assertMatchesRegularExpression('/<<<UNTRUSTED diff (fence-[0-9a-f]{16})>>>\\\\n'.preg_quote(substr(json_encode($diff, JSON_THROW_ON_ERROR), 1, -1), '/').'\\\\n<<<END \1>>>/', $this->sent[0]);
         self::assertLessThan(strpos($this->sent[0], 'UNTRUSTED diff'), strpos($this->sent[0], 'UNTRUSTED task'));
+    }
+
+    public function testTheDiffOfABranchWithADeletedAndAChangedFileIsTheSecondUserMessageWholeInsideItsFence(): void
+    {
+        $diff = (string) file_get_contents(__DIR__.'/fixtures/deleted-and-changed-file.diff');
+
+        $this->diff = $diff;
+
+        $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->json());
+
+        $messages = $this->conversations->load($this->conversation)->getMessages();
+        self::assertInstanceOf(UserMessage::class, $messages[2]);
+        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff), $messages[2]->asText());
     }
 
     public function testAnEndMarkerInsideTheDiffCannotCloseItsFence(): void
