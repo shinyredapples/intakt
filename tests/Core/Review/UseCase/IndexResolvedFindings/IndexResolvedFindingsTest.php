@@ -143,6 +143,17 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         self::assertSame([], $this->remembered(['src/A.php']));
     }
 
+    public function testALaterRoundReopeningAFindingDoesNotEraseTheResolutionAnEarlierRoundIndexesLate(): void
+    {
+        $this->roundReporting([$this->finding('a')]);
+        $resolving = $this->roundResolving(['F1']);
+        $this->roundReporting([$this->finding('F1', true)]);
+
+        $this->fixture->indexing($this->index)(new IndexResolvedFindings($resolving));
+
+        self::assertCount(1, $this->remembered(['src/A.php']));
+    }
+
     public function testACompletedRoundQueuesItsIndexingOnce(): void
     {
         $id = $this->roundReporting([$this->finding('a')]);

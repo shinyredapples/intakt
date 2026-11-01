@@ -8,7 +8,7 @@ use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\Evidence;
-use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 
@@ -27,14 +27,13 @@ final readonly class IndexResolvedFindingsHandler
     {
         $round = $this->rounds->stored($command->roundId);
 
-        foreach ($this->findings->resolvedBy($round) as $tracked) {
-            $this->memory->index($this->entryOf($tracked));
+        foreach ($this->findings->resolvedBy($round) as $finding) {
+            $this->memory->index($this->entryOf($finding));
         }
     }
 
-    private function entryOf(TrackedFinding $tracked): MemoryEntry
+    private function entryOf(Finding $finding): MemoryEntry
     {
-        $finding = $tracked->latest;
         $lines = ['Resolved finding: '.$finding->text];
 
         if (null !== $finding->requirement) {
