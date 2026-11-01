@@ -95,6 +95,34 @@ final class InstallationTokenMinterTest extends TestCase
         (void) $minter->mint('678');
     }
 
+    public function testAnAnswerWithAnImpossibleExpiryDateFailsTheCall(): void
+    {
+        // PHP rolls November 31 over to December 1 and only warns; a credential must not be cached on a guessed expiry.
+        $minter = $this->minter(static fn (): ResponseInterface => new MockResponse(self::answer('opaque-value', '2026-11-31T11:00:00Z'), ['http_code' => 201]));
+
+        $this->expectException(InstallationTokenNotMinted::class);
+
+        (void) $minter->mint('678');
+    }
+
+    public function testTheInstallationTokenIsNotAnArgumentInTheTraceOfAnInvalidAnswer(): void
+    {
+        $minter = $this->minter(static fn (): ResponseInterface => new MockResponse(self::answer('minted-value-that-must-stay-secret', 'tomorrow'), ['http_code' => 201]));
+        $ignoreArguments = ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            (void) $minter->mint('678');
+            self::fail('An unreadable expiry must fail.');
+        } catch (InstallationTokenNotMinted $failure) {
+            $arguments = $this->scalarArguments($failure);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignoreArguments);
+        }
+
+        self::assertNotSame([], $arguments);
+        self::assertNotContains('minted-value-that-must-stay-secret', $arguments);
+    }
+
     public function testNeitherTheKeyNorTheJwtReachesTheLogsOrTheFailure(): void
     {
         $key = AppKey::generate();

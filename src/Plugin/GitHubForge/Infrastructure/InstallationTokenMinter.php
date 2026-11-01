@@ -67,14 +67,31 @@ final readonly class InstallationTokenMinter
     /**
      * @param array<mixed> $answer
      */
-    private function tokenFrom(array $answer): InstallationToken
+    private function tokenFrom(#[SensitiveParameter] array $answer): InstallationToken
     {
+        // Sensitive because the answer holds the minted token, which must not land in a trace's arguments.
         $token = $answer['token'] ?? null;
-        $expiresAt = is_string($answer['expires_at'] ?? null) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $answer['expires_at'], new DateTimeZone('UTC')) : false;
-        if (!is_string($token) || '' === $token || false === $expiresAt) {
+        $expiresAt = $this->expiryFrom($answer['expires_at'] ?? null);
+        if (!is_string($token) || '' === $token || null === $expiresAt) {
             throw InstallationTokenNotMinted::becauseTheAnswerIsInvalid();
         }
 
         return new InstallationToken($token, $expiresAt->setTimezone(new DateTimeZone('UTC')));
+    }
+
+    private function expiryFrom(mixed $value): ?DateTimeImmutable
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $expiresAt = DateTimeImmutable::createFromFormat(DATE_ATOM, $value, new DateTimeZone('UTC'));
+
+        // Checks the warnings too, because PHP rolls a date that does not exist over into another moment and only warns.
+        if (false === $expiresAt || false !== DateTimeImmutable::getLastErrors()) {
+            return null;
+        }
+
+        return $expiresAt;
     }
 }
