@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 
 // Answers by the reviewer's role prompt, so a verdict belongs to one reviewer whatever order the messages arrive in; the briefs show what each reviewer was told.
@@ -28,11 +29,11 @@ final class VerdictPerRole implements Vendor
     }
 
     #[Override]
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         $this->briefs[$request->conversation->rolePrompt] = $request->brief;
 
-        return $this->verdicts[$request->conversation->rolePrompt] ?? new Verdict(Decision::Approve, [], [], []);
+        return new VendorReview($this->verdicts[$request->conversation->rolePrompt] ?? new Verdict(Decision::Approve, [], [], []));
     }
 
     #[Override]

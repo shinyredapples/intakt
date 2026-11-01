@@ -7,7 +7,10 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Closure;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
+use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderOutage;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
@@ -45,13 +48,20 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use JsonException;
+use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -61,6 +71,7 @@ use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
@@ -83,6 +94,10 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 
@@ -101,6 +116,11 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(EveryAccountCoolingDown::class)]
+#[UsesClass(EveryKeyRejected::class)]
+#[UsesClass(EveryProviderOut::class)]
+#[UsesClass(ProviderOutage::class)]
+#[UsesClass(NoProviderLeft::class)]
+#[UsesClass(ProviderRejectedTheKey::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(VerdictParser::class)]
 #[UsesClass(Verdict::class)]
@@ -119,16 +139,27 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
+#[UsesClass(VendorAccountLimit::class)]
+#[UsesClass(VendorAccountBusy::class)]
+#[UsesClass(VendorReview::class)]
 #[UsesClass(Kernel::class)]
 final class SymfonyAiVendorTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
 
+    private VendorAccountLimit $limit;
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+    }
+
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->json());
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
@@ -139,7 +170,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
 
-        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(['big'], $verdict->follow_ups);
     }
@@ -148,7 +179,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->json());
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Approve, $verdict->verdict);
     }
@@ -157,28 +188,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $vendor = $this->vendorAnswering('not a verdict');
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-    }
-
-    public function testAReviewOnAnOutProviderIsNotAnsweredByASubstituteThatNeverReadsTheCheckout(): void
-    {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => [
-            'provider' => 'anthropic', 'model' => 'big',
-            'substitutes' => [['provider' => 'claude_code', 'model' => 'sub']],
-        ]]]], []);
-        $cooldowns = self::createStub(AccountCooldowns::class);
-        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturnCallback(static fn (Provider $provider): int => Provider::Anthropic === $provider ? 60 : 0);
-        $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->with('follow_ups', [$model->getName()])->json();
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $platforms = new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform, 'claude_code' => static fn (): PlatformInterface => $platform]);
-        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()));
-
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
-
-        self::assertSame(['big'], $verdict->follow_ups);
     }
 
     private function vendorAnswering(string $output): SymfonyAiVendor
@@ -249,6 +262,144 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([100], array_column($usages, 'prompt'));
     }
 
+    // The own provider cannot read the checkout and is out for the first round only, so a review that picked its provider per round would end on it with its approval judged as the substitute's.
+    public function testEveryRoundOfAReviewStaysOnTheSubstituteItBeganOnSoTheBlindOwnProviderNeverAnswersIt(): void
+    {
+        $sent = [];
+        $checks = 0;
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturnCallback(static function (Provider $provider) use (&$checks): int {
+            return Provider::ClaudeCode === $provider && 0 === $checks++ ? 60 : 0;
+        });
+        $approve = VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->json();
+        $round = 0;
+        $reads = static function () use (&$sent, &$round, $approve): ToolCallResult|string {
+            $sent[] = 'openai';
+
+            return 0 === $round++ ? new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]) : $approve;
+        };
+        $blind = static function () use (&$sent, $approve): string {
+            $sent[] = 'claude_code';
+
+            return $approve;
+        };
+
+        $review = $this->substitutedVendor($blind, $reads, $cooldowns)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['openai', 'openai'], $sent);
+        self::assertSame(Provider::OpenAi, $review->substitute);
+        self::assertSame(Decision::Approve, $review->verdict->verdict);
+    }
+
+    public function testAReviewOnAProviderWhosePlacesAreAllTakenIsRefusedBeforeAnyUsageOrCall(): void
+    {
+        $ledger = new InMemoryLedger();
+        $sent = false;
+        $answer = static function () use (&$sent): string {
+            $sent = true;
+
+            return VerdictDocument::fromTheDesign()->json();
+        };
+
+        try {
+            $this->limit->run(Provider::Anthropic, fn (): VendorReview => $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request()));
+            self::fail('A review on a full account must be refused.');
+        } catch (VendorAccountBusy) {
+            // Expected, because the only place of the account is taken.
+        }
+
+        self::assertFalse($sent);
+        self::assertSame(0, $ledger->count());
+    }
+
+    public function testASubstituteHoldsAPlaceOfItsOwnProviderAndNotOfTheTiersProvider(): void
+    {
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturnCallback(static fn (Provider $provider): int => Provider::ClaudeCode === $provider ? 60 : 0);
+        $answer = static fn (): string => VerdictDocument::fromTheDesign()->json();
+        $vendor = $this->substitutedVendor($answer, $answer, $cooldowns);
+
+        $review = $this->limit->run(Provider::ClaudeCode, fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertSame(Provider::OpenAi, $review->substitute);
+        $this->expectException(VendorAccountBusy::class);
+        $this->limit->run(Provider::OpenAi, fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+    }
+
+    public function testATierWhoseOwnProviderIsOutWithoutSubstitutesWaitsWithoutReservingUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn(45);
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
+        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform('never sent')]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
+
+        try {
+            $vendor->review('alpha', Tier::Strong, $this->request());
+            self::fail('A provider whose every account is out was called.');
+        } catch (ProviderRateLimited $limited) {
+            self::assertSame(45, $limited->retryAfterSeconds);
+        }
+
+        self::assertSame(0, $ledger->count());
+    }
+
+    public function testATierWhoseEveryProviderIsOutIsNoProviderLeftBeforeAnyCall(): void
+    {
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn(30);
+        $never = static fn (): never => throw new RuntimeException('never sent');
+
+        try {
+            $this->substitutedVendor($never, $never, $cooldowns)->review('alpha', Tier::Strong, $this->request());
+            self::fail('A tier whose every provider is out was called.');
+        } catch (NoProviderLeft $none) {
+            self::assertSame('Every provider of the tier is out: claude_code for 30 s, openai for 30 s.', $none->getMessage());
+        }
+    }
+
+    public function testAReviewOnATierWhoseOwnProviderIsDisabledIsAnsweredByTheSubstituteAndMarkedAsOne(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
+        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
+
+        $review = $vendor->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Provider::OpenAi, $review->substitute);
+    }
+
+    public function testATierWithoutSubstitutesWhoseEveryKeyWasRejectedIsARejectedKeyWithoutReservingUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('isEveryAccountRejected')->willReturn(true);
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
+        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform('never sent')]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $this->limit);
+
+        try {
+            $vendor->review('alpha', Tier::Strong, $this->request());
+            self::fail('A provider whose every key was rejected was called.');
+        } catch (ProviderRejectedTheKey $rejected) {
+            self::assertInstanceOf(EveryKeyRejected::class, $rejected->getPrevious());
+        }
+
+        self::assertSame(0, $ledger->count());
+    }
+
+    public function testABlindOwnProviderThatAnswersEveryRoundCannotApprove(): void
+    {
+        $approve = static fn (): string => VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->json();
+
+        $review = $this->substitutedVendor($approve, $approve, new NoCooldowns())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertNull($review->substitute);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $review->verdict->findings[0]->id);
+    }
+
     public function testARoundWhoseUsageCannotBeReadBeforeAFailureIsLoggedAndTheFailureStillRecorded(): void
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
@@ -294,6 +445,19 @@ final class SymfonyAiVendorTest extends KernelTestCase
         } catch (ProviderRateLimited $rateLimited) {
             self::assertSame(45, $rateLimited->retryAfterSeconds);
             self::assertInstanceOf(EveryAccountCoolingDown::class, $rateLimited->getPrevious());
+        }
+    }
+
+    public function testARejectedKeyIsATypedErrorWithoutTheProvidersText(): void
+    {
+        $revoked = static fn (): never => throw new AuthenticationException('invalid x-api-key: sk-secret');
+
+        try {
+            $this->vendor($revoked)->review('alpha', Tier::Strong, $this->request());
+            self::fail('A rejected key must be a typed error.');
+        } catch (ProviderRejectedTheKey $rejected) {
+            self::assertStringNotContainsString('sk-secret', $rejected->getMessage());
+            self::assertInstanceOf(AuthenticationException::class, $rejected->getPrevious());
         }
     }
 
@@ -370,7 +534,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         /** @var list<array<string, int>> $usages */
@@ -406,12 +570,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $tiers->method('answering')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $resolver = self::createStub(TierResolver::class);
-        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
+        $resolver->method('configured')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), $logger), $this->limit);
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         [$started, $unsettled] = $ledger->payloads();
@@ -519,7 +683,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $conversations->setup();
         $request = $this->request();
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $request);
+        $verdict = $vendor->review('alpha', Tier::Strong, $request)->verdict;
 
         self::assertCount(5, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
@@ -593,6 +757,21 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, self::createStub(AccountCooldowns::class), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit);
+    }
+
+    // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
+    private function substitutedVendor(Closure $own, Closure $substitute, AccountCooldowns $cooldowns): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver([
+            'alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]],
+        ], []);
+        $dispatcher = ScriptedReviewer::in(self::getContainer())->dispatcher;
+        $platforms = new ServiceLocator([
+            Provider::ClaudeCode->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($own, eventDispatcher: $dispatcher),
+            Provider::OpenAi->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($substitute, eventDispatcher: $dispatcher),
+        ]);
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()), $this->limit);
     }
 }
