@@ -150,7 +150,33 @@ final class JudgeRoundTest extends KernelTestCase
 
         $asked = $judge->asked;
         self::assertInstanceOf(JudgeRequest::class, $asked);
-        self::assertSame([['F1', 'Text of A.']], $this->idsAndTexts($asked));
+        self::assertSame([['R1-F1', 'Text of A.']], $this->idsAndTexts($asked));
+    }
+
+    public function testANewFindingOfAnOlderRoundCompletingAfterANewerOneKeepsAnIdNoLaterRoundIsGiven(): void
+    {
+        $older = $this->fixture->start(1);
+        $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('B', Severity::P1)], [], [])]));
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]));
+        $later = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[2], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('C', Severity::P1)], [], [])]));
+
+        self::assertSame([['F2', 'Text of C.']], $this->askedAbout($later));
+        self::assertSame([['R1-F2', 'Text of A.']], $this->askedAbout($older));
+    }
+
+    public function testARoundThatReportedNoFindingsIsJudgedWithoutAskingTheJudge(): void
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
+        $vendor = new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)]));
+
+        $this->fixture->judge($vendor)($this->judgingOf($round));
+
+        self::assertSame(0, $vendor->calls);
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => [], 'follow_ups' => []]], $this->judgeDonePayloads());
+        self::assertSame(RoundState::Judged, $this->fixture->round($round->id()->toRfc4122())->state());
     }
 
     public function testAFindingALaterRoundReportsAgainStillReachesTheJudgeOfTheRoundThatReportedItFirst(): void
@@ -267,6 +293,19 @@ final class JudgeRoundTest extends KernelTestCase
         $events = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder()), static fn (RecordedEvent $event): bool => LedgerEventKind::JudgeDone === $event->event->kind);
 
         return array_values(array_map(static fn (RecordedEvent $event): mixed => json_decode($event->event->payload, true), $events));
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
+    private function askedAbout(ReviewRound $round): array
+    {
+        $judge = new ScriptedJudgement(new Judgement([]));
+        $this->fixture->judge($judge)($this->judgingOf($round));
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+
+        return $this->idsAndTexts($asked);
     }
 
     /**
