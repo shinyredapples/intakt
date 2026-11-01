@@ -57,14 +57,16 @@ final readonly class StoredFindings
     }
 
     // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed.
-    public function completeWhenEveryReviewerIsIn(ReviewRound $round): void
+    public function completeWhenEveryReviewerIsIn(ReviewRound $round): bool
     {
         if (!$this->machine->can($round, ReviewRound::COMPLETION)) {
-            return;
+            return false;
         }
 
         $this->machine->apply($round, ReviewRound::COMPLETION);
         $this->recordVerdictsOf($round);
+
+        return true;
     }
 
     // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.

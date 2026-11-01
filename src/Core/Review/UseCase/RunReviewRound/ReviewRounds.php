@@ -11,7 +11,9 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
@@ -26,6 +28,7 @@ final readonly class ReviewRounds
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
         private StoredFindings $findings,
+        private MessageBusInterface $commands,
     ) {
     }
 
@@ -73,7 +76,7 @@ final readonly class ReviewRounds
             $round = $this->entities->find(ReviewRound::class, $roundId, LockMode::PESSIMISTIC_WRITE);
 
             if ($round instanceof ReviewRound) {
-                $this->findings->completeWhenEveryReviewerIsIn($round);
+                $this->judgeWhenCompleted($round);
             }
         });
     }
@@ -84,6 +87,14 @@ final readonly class ReviewRounds
     public function openFindingsOf(ReviewRound $round): array
     {
         return $this->findings->openFor($round);
+    }
+
+    // The judge is queued in the completing transaction, because the Doctrine queue shares it: the round and its judging are stored together, and the call itself runs later in a worker, outside the round's lock.
+    private function judgeWhenCompleted(ReviewRound $round): void
+    {
+        if ($this->findings->completeWhenEveryReviewerIsIn($round)) {
+            $this->commands->dispatch(new JudgeRound($round->id()->toRfc4122()));
+        }
     }
 
     /**

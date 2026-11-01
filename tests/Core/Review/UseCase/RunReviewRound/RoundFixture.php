@@ -32,6 +32,7 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -168,6 +169,11 @@ final readonly class RoundFixture
         return $this->leases($this->entities)->take($message->reviewerId);
     }
 
+    public function judge(Vendor $vendor): JudgeRoundHandler
+    {
+        return new JudgeRoundHandler($this->entities, $this->serializer, $vendor, new RoundLedger($this->ledger));
+    }
+
     public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
     {
         return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities), $this->log);
@@ -267,7 +273,7 @@ final readonly class RoundFixture
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->clock, new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round')));
+        return new ReviewRounds($entities, $this->clock, new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round')), $this->bus);
     }
 
     private function panelOf(int $reviewers): Panel
