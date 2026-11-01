@@ -23,8 +23,8 @@ final readonly class ChangeReview
     ) {
     }
 
-    // Blocked whatever the verdicts so far say, because a reviewer still out could change the quorum.
-    public function unfinished(string $reason): self
+    // Blocked whatever the verdicts say, because they do not stand for the change: a reviewer still out could change the quorum, or the checkout changed under the reviewers.
+    public function blockedFor(string $reason): self
     {
         return clone ($this, ['decision' => Decision::Blocked, 'actList' => [], 'reasons' => [$reason, ...$this->reasons]]);
     }

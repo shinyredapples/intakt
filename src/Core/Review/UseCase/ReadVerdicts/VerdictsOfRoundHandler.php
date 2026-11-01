@@ -6,12 +6,9 @@ namespace Intakt\Core\Review\UseCase\ReadVerdicts;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
-use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
-use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
-use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[AsQueryHandler]
@@ -19,7 +16,7 @@ final readonly class VerdictsOfRoundHandler
 {
     public function __construct(
         private EntityManagerInterface $entities,
-        private SerializerInterface $serializer,
+        private StoredVerdicts $verdicts,
     ) {
     }
 
@@ -32,7 +29,7 @@ final readonly class VerdictsOfRoundHandler
             return new RoundVerdicts($standing, []);
         }
 
-        return new RoundVerdicts($standing, $this->verdictsOf($round));
+        return new RoundVerdicts($standing, $this->verdicts->of($round));
     }
 
     private function storedRound(string $roundId): ReviewRound
@@ -45,23 +42,5 @@ final readonly class VerdictsOfRoundHandler
         $this->entities->clear();
 
         return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
-    }
-
-    /**
-     * @return list<PanelVerdict>
-     */
-    private function verdictsOf(ReviewRound $round): array
-    {
-        $verdicts = [];
-
-        foreach ($round->reviewers() as $reviewer) {
-            $json = $reviewer->verdictJson();
-
-            if (null !== $json) {
-                $verdicts[] = new PanelVerdict($reviewer->tier(), $this->serializer->deserialize($json, Verdict::class, 'json'));
-            }
-        }
-
-        return $verdicts;
     }
 }

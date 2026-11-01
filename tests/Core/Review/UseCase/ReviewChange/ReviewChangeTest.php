@@ -24,8 +24,11 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\ReviewChange\ChangeDecision;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
+use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -35,6 +38,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Messenger\Handler\HandlersLocator;
+use Symfony\Component\Messenger\MessageBus;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[Group('persistence')]
@@ -42,6 +49,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(ChangeReview::class)]
 #[CoversClass(RoundNotNext::class)]
+#[CoversClass(StoredVerdicts::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 final class ReviewChangeTest extends KernelTestCase
@@ -102,11 +110,32 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame([1, 100, 20, 120], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
     }
 
+    public function testTheTokensOfAnotherProjectsCallsAreLeftOut(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole([]), usageOfCall: 120, project: 'beta');
+
+        self::assertSame([0, 0], [$review->tokens->calls, $review->tokens->total]);
+    }
+
     public function testARoundNumberThatIsNotTheNextOneIsRefusedBeforeAnythingStarts(): void
     {
+        try {
+            $this->reviewChange(static function (): void {})->review($this->request(round: 2));
+            self::fail('Round 2 of a change without rounds was started.');
+        } catch (RoundNotNext $refused) {
+            self::assertStringContainsString('the next round of this change is round 1', $refused->getMessage());
+        }
+
+        self::assertSame([], $this->fixture->storedRounds());
+    }
+
+    public function testARoundAnotherCallerOpensFirstIsRefusedThoughItWasNextWhenAskedFor(): void
+    {
+        $bus = new InterveningRoundBus(fn (): ReviewRound => $this->fixture->start(1), $this->commandBus());
+
         $this->expectException(RoundNotNext::class);
 
-        $this->reviewChange(static function (): void {})->review($this->request(round: 2));
+        $this->reviewChange(static function (): void {}, bus: $bus)->review($this->request(round: 1));
     }
 
     public function testTheNextRoundNumberIsAccepted(): void
@@ -118,12 +147,12 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(2, $second->round);
     }
 
-    private function reviewWith(VerdictPerRole $vendor, ?int $round = null, int $usageOfCall = 0): ChangeReview
+    private function reviewWith(VerdictPerRole $vendor, ?int $round = null, int $usageOfCall = 0, string $project = 'alpha'): ChangeReview
     {
         $delivered = 0;
-        $work = function () use ($vendor, &$delivered, $usageOfCall): void {
+        $work = function () use ($vendor, &$delivered, $usageOfCall, $project): void {
             if (0 < $usageOfCall && 0 === $delivered) {
-                $this->recordUsage('during', $usageOfCall);
+                $this->recordUsage('during', $usageOfCall, $project);
             }
 
             foreach (array_slice($this->fixture->bus->messages, $delivered) as $message) {
@@ -139,23 +168,37 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS): ReviewChange
+    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null): ReviewChange
     {
-        $serializer = self::getContainer()->get(SerializerInterface::class);
-        assert($serializer instanceof SerializerInterface);
-        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger()), $this->fixture->bus);
+        $serializer = $this->serializer();
         $findings = new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round'));
 
         return new ReviewChange(
-            new HandlingBus($handler),
+            $bus ?? $this->commandBus(),
             $this->fixture->transactions(),
             $findings,
             new RoundLedgerReading($this->fixture->ledger()),
             new ChangeDecision(),
-            $serializer,
+            new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
             $ceiling,
         );
+    }
+
+    // Messenger's own handling, so a refusal reaches the caller wrapped as the application's command bus wraps it; the reviewers' messages go to the test's workers.
+    private function commandBus(): MessageBusInterface
+    {
+        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger()), $this->fixture->bus);
+
+        return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]);
+    }
+
+    private function serializer(): SerializerInterface
+    {
+        $serializer = self::getContainer()->get(SerializerInterface::class);
+        assert($serializer instanceof SerializerInterface);
+
+        return $serializer;
     }
 
     private function request(?int $round = null): ChangeReviewRequest
@@ -176,10 +219,19 @@ final class ReviewChangeTest extends KernelTestCase
         return new Panel($members, QuorumPolicy::All);
     }
 
-    private function recordUsage(string $call, int $total): void
+    // The two rows UsageLedger writes: only the started one names the project, only the settled one carries the tokens.
+    private function recordUsage(string $call, int $total, string $project = 'alpha'): void
     {
-        $usage = ['call' => $call, 'phase' => 'settled', 'project' => 'alpha', 'usages' => [['prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]];
-        $appended = $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($usage, JSON_THROW_ON_ERROR)));
+        $this->append(['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard']);
+        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function append(array $payload): void
+    {
+        $appended = $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($payload, JSON_THROW_ON_ERROR)));
         self::assertTrue($appended->succeeded());
     }
 

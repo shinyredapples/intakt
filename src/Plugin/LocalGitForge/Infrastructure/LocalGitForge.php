@@ -60,6 +60,18 @@ final readonly class LocalGitForge implements Forge
         return !$this->headOf($change->id)->equals($change->commits->head);
     }
 
+    // Untracked files are left out, because a build's own scratch folders would refuse every checkout; optional locks are off, so the read never rewrites the index.
+    #[NoDiscard]
+    public function isCheckedOutUnchanged(Change $change): bool
+    {
+        $branch = $this->git(['symbolic-ref', '--quiet', 'HEAD']);
+
+        return $branch->isSuccessful()
+            && 'refs/heads/'.$change->id->value === trim($branch->getOutput())
+            && $this->commitFrom($this->read(['rev-parse', '--verify', 'HEAD^{commit}']))->equals($change->commits->head)
+            && '' === $this->read(['--no-optional-locks', 'status', '--porcelain', '--untracked-files=no']);
+    }
+
     public function headMoveSince(CommitId $earlier, Change $change): HeadMove
     {
         $head = $change->commits->head;

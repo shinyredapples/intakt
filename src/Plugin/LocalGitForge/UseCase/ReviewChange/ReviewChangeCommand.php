@@ -32,6 +32,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'intakt:review', description: 'Review a branch of a local repository with the project\'s panel and print the outcome, the act list and the tokens used')]
 final readonly class ReviewChangeCommand
 {
+    private const string CHECKOUT_CHANGED = 'The branch was moved, switched or edited in the checkout during the round, so the reviewers may have read files its commits do not hold: review again.';
+
     public function __construct(
         private Panels $panels,
         private ChangeReviews $reviews,
@@ -49,8 +51,8 @@ final readonly class ReviewChangeCommand
         }
 
         try {
-            $review = $this->reviews->review($this->requestFor($input));
-        } catch (ChangeNotFound|ForgeReadFailed|PanelNotConfigured|GlobCannotBeEvaluated|RoundNotNext|InvalidArgumentException $failure) {
+            $review = $this->reviewed($input);
+        } catch (ChangeNotFound|ForgeReadFailed|PanelNotConfigured|GlobCannotBeEvaluated|RoundNotNext|BranchNotCheckedOut|InvalidArgumentException $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
@@ -66,10 +68,23 @@ final readonly class ReviewChangeCommand
         return '' === $input->project || '' === $input->task || (null !== $input->round && $input->round < 1);
     }
 
-    private function requestFor(ReviewChangeInput $input): ChangeReviewRequest
+    // The reviewers read the files of the checkout, not the branch's commits, so the checkout must hold exactly those commits before and after the round.
+    private function reviewed(ReviewChangeInput $input): ChangeReview
     {
         $forge = new LocalGitForge(new LocalRepository($input->repository, $input->base), $this->nameStatus);
         $change = $forge->change(new ChangeId($input->change));
+
+        if (!$forge->isCheckedOutUnchanged($change)) {
+            throw BranchNotCheckedOut::named($input->change);
+        }
+
+        $review = $this->reviews->review($this->requestFor($input, $change));
+
+        return $forge->isCheckedOutUnchanged($change) ? $review : $review->blockedFor(self::CHECKOUT_CHANGED);
+    }
+
+    private function requestFor(ReviewChangeInput $input, Change $change): ChangeReviewRequest
+    {
         $panel = $this->panels->panelForChange($input->project, $this->describe($change));
         $identity = new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
 

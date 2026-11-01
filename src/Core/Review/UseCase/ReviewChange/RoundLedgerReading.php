@@ -30,14 +30,34 @@ final readonly class RoundLedgerReading
         return [];
     }
 
-    // Counted from the round's start in ledger order, because a usage row names its project but not its round; another round of the project running at once is counted too.
+    // Counted from the round's start in ledger order, because a usage row names no round; another round of the project running at once is counted too.
     public function tokensSince(string $roundId, string $project): RoundTokens
     {
-        $payloads = array_values(array_filter($this->payloadsAfterStartOf($roundId), static fn (array $payload): bool => ($payload['project'] ?? null) === $project && is_array($payload['usages'] ?? null)));
-        $rows = array_merge([], ...array_map($this->rowsOf(...), $payloads));
-        $calls = array_unique(array_map(static fn (array $payload): string => is_string($payload['call'] ?? null) ? $payload['call'] : '', $payloads));
+        $payloads = $this->payloadsAfterStartOf($roundId);
+        $calls = $this->callsStartedFor($project, $payloads);
+        $ended = array_values(array_filter($payloads, static fn (array $payload): bool => in_array($payload['call'] ?? null, $calls, true) && is_array($payload['usages'] ?? null)));
+        $rows = array_merge([], ...array_map($this->rowsOf(...), $ended));
 
         return new RoundTokens(count($calls), $this->sum($rows, 'prompt'), $this->sum($rows, 'completion'), $this->sum($rows, 'total'));
+    }
+
+    /**
+     * @param list<array<array-key, mixed>> $payloads
+     *
+     * @return list<string>
+     */
+    // Only the started row names the project, so the settled or unsettled row that carries the tokens is tied to it by its call id.
+    private function callsStartedFor(string $project, array $payloads): array
+    {
+        $calls = [];
+
+        foreach ($payloads as $payload) {
+            if ('started' === ($payload['phase'] ?? null) && $project === ($payload['project'] ?? null) && is_string($payload['call'] ?? null)) {
+                $calls[] = $payload['call'];
+            }
+        }
+
+        return array_values(array_unique($calls));
     }
 
     /**

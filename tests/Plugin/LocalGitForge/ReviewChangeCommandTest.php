@@ -24,7 +24,9 @@ use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\BranchNotCheckedOut;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\OutputFormat;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
@@ -43,6 +45,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(ReviewChangeCommand::class)]
 #[CoversClass(ReviewReport::class)]
 #[CoversClass(ReviewExit::class)]
+#[CoversClass(BranchNotCheckedOut::class)]
+#[UsesClass(LocalGitForge::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(OutputFormat::class)]
 final class ReviewChangeCommandTest extends TestCase
@@ -156,6 +160,58 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
     }
 
+    public function testABranchThatIsNotCheckedOutIsRefusedBeforeAnyReview(): void
+    {
+        $this->repository->checkout('main');
+
+        $tester = $this->whenTheCommandRuns($this->neverReviewing());
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('Check out the branch "sample"', $tester->getDisplay());
+    }
+
+    public function testABranchWhoseCommitIsCheckedOutDetachedIsRefused(): void
+    {
+        $this->repository->checkout(trim($this->repository->log('-1', '--format=%H')));
+
+        $tester = $this->whenTheCommandRuns($this->neverReviewing());
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+    }
+
+    public function testACheckoutWithAnUncommittedChangeToATrackedFileIsRefused(): void
+    {
+        file_put_contents($this->repository->path.'/src/Feature.php', "<?php\n// edited\n");
+
+        $tester = $this->whenTheCommandRuns($this->neverReviewing());
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+    }
+
+    public function testAnUntrackedFileInTheCheckoutDoesNotRefuseTheReview(): void
+    {
+        file_put_contents($this->repository->path.'/notes.txt', "scratch\n");
+
+        $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve));
+
+        self::assertSame(0, $tester->getStatusCode());
+    }
+
+    public function testABranchThatMovesDuringTheRoundIsBlockedWithTheReason(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function (): ChangeReview {
+            $this->repository->commitFile('src/Other.php', "<?php\n");
+
+            return $this->outcome(Decision::Approve);
+        });
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertSame(11, $tester->getStatusCode());
+        self::assertStringContainsString('moved, switched or edited in the checkout during the round', $tester->getDisplay());
+    }
+
     public function testTheReviewIsAskedForTheBranchesChangeUnderTheProject(): void
     {
         $reviews = $this->createMock(ChangeReviews::class);
@@ -170,6 +226,14 @@ final class ReviewChangeCommandTest extends TestCase
     {
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($this->outcome($decision));
+
+        return $reviews;
+    }
+
+    private function neverReviewing(): ChangeReviews
+    {
+        $reviews = $this->createMock(ChangeReviews::class);
+        $reviews->expects(self::never())->method('review');
 
         return $reviews;
     }

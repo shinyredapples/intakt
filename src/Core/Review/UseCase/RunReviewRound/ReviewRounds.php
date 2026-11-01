@@ -10,6 +10,8 @@ use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Symfony\Component\Clock\ClockInterface;
@@ -53,7 +55,9 @@ final readonly class ReviewRounds
             throw IdentityNotOfRound::forTaskOrPanel();
         }
 
-        $round = new ReviewRound($this->newId(), $command->target, $this->findings->openRound($subject->project, $command->change));
+        $opened = $this->findings->openRound($subject->project, $command->change);
+        $this->refuseAnotherNumber($command, $opened);
+        $round = new ReviewRound($this->newId(), $command->target, $opened);
 
         foreach ($command->panel->reviewers as $member) {
             $round->addReviewer($this->newId(), $member);
@@ -68,17 +72,6 @@ final readonly class ReviewRounds
     public function completeWhenEveryReviewerIsIn(Uuid $roundId): void
     {
         $this->withLockedRound($roundId, $this->findings->completeWhenEveryReviewerIsIn(...));
-    }
-
-    // Zero for a change that has no round yet, because the next number is this one plus one.
-    public function latestNumber(string $project, string $change): int
-    {
-        $latest = $this->entities->createQuery('SELECT MAX(r.change.number) FROM '.ReviewRound::class.' r WHERE r.subject.project = :project AND r.change.change = :change')
-            ->setParameter('project', $project)
-            ->setParameter('change', $change)
-            ->getSingleScalarResult();
-
-        return (int) $latest;
     }
 
     public function stored(string $roundId): ReviewRound
@@ -167,6 +160,14 @@ final readonly class ReviewRounds
             $this->entities->clear();
 
             throw $failure;
+        }
+    }
+
+    // Thrown inside the transaction, so the number taken is rolled back with it.
+    private function refuseAnotherNumber(RunReviewRound $command, ChangeRound $opened): void
+    {
+        if (null !== $command->round && $command->round !== $opened->number) {
+            throw RoundNotNext::for($command->round, $opened->number);
         }
     }
 

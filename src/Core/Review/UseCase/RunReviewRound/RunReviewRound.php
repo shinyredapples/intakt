@@ -14,6 +14,8 @@ final readonly class RunReviewRound
         public Panel $panel,
         // Named by the caller, for example by the branch under review, because rounds of the same change share one finding ledger.
         public string $change,
+        // The number the caller expects the round to get, checked once the number is taken under the change's lock, because a round another caller opened first would otherwise take it unnoticed.
+        public ?int $round = null,
     ) {
     }
 }
