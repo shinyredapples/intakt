@@ -35,42 +35,48 @@ final readonly class LedgerReviews
                 continue;
             }
 
-            if (LedgerEventKind::JudgeDone === $recorded->event->kind) {
-                $judged[$round] = true;
-
-                continue;
-            }
-
-            // Only a readable start takes a place in the order, so an unreadable one cannot move its round ahead.
-            $summary = isset($started[$round]) ? null : $this->summarize($round, $payload, $recorded->recordedAt);
-
-            if ($summary instanceof ReviewSummary) {
-                $started[$round] = $summary;
-            }
+            // Array union keeps the first entry, and an unreadable start adds none, so it cannot take its round's place in the order.
+            match ($recorded->event->kind) {
+                LedgerEventKind::JudgeDone => $judged[$round] = true,
+                default => $started += $this->readableStart($round, $payload, $recorded->recordedAt),
+            };
         }
 
+        return array_reverse($this->markJudged($started, $judged));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     *
+     * @return array<string, ReviewSummary>
+     */
+    private function readableStart(string $round, array $payload, DateTimeImmutable $startedAt): array
+    {
+        $project = $payload['project'] ?? null;
+        $reviewers = $payload['reviewers'] ?? null;
+
+        if (!is_string($project) || !is_int($reviewers)) {
+            return [];
+        }
+
+        return [$round => new ReviewSummary(new RoundStart($round, $project, $reviewers), $startedAt)];
+    }
+
+    /**
+     * @param array<string, ReviewSummary> $started
+     * @param array<string, true>          $judged
+     *
+     * @return list<ReviewSummary>
+     */
+    private function markJudged(array $started, array $judged): array
+    {
         $reviews = [];
 
         foreach ($started as $round => $review) {
             $reviews[] = isset($judged[$round]) ? $review->judged() : $review;
         }
 
-        return array_reverse($reviews);
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function summarize(string $round, array $payload, DateTimeImmutable $startedAt): ?ReviewSummary
-    {
-        $project = $payload['project'] ?? null;
-        $reviewers = $payload['reviewers'] ?? null;
-
-        if (!is_string($project) || !is_int($reviewers)) {
-            return null;
-        }
-
-        return new ReviewSummary(new RoundStart($round, $project, $reviewers), $startedAt);
+        return $reviews;
     }
 
     /**
