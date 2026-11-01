@@ -10,6 +10,7 @@ use Intakt\Tests\Core\Review\UseCase\RunReviewRound\FailingBus;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 use stdClass;
 use Symfony\Component\Clock\MockClock;
@@ -77,5 +78,22 @@ final class LogFailedJudgingTest extends TestCase
 
         self::assertCount(1, $failed->getSent());
         self::assertCount(1, $log->cleanLogs());
+    }
+
+    public function testAJudgingThatFailedForGoodIsStillParkedWhenTheLogCannotBeWritten(): void
+    {
+        $log = self::createStub(LoggerInterface::class);
+        $log->method('error')->willThrowException(new RuntimeException('log storage unavailable'));
+        $incoming = new InMemoryTransport();
+        $incoming->send(new Envelope(new JudgeRound(self::ROUND)));
+        $failed = new InMemoryTransport();
+        $dispatcher = new EventDispatcher();
+        $dispatcher->addListener(WorkerMessageFailedEvent::class, new LogFailedJudging($log));
+        $dispatcher->addSubscriber(new SendFailedMessageToFailureTransportListener(new ServiceLocator(['async' => static fn (): InMemoryTransport => $failed])));
+        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
+
+        new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: new MockClock('2026-10-30 12:00:00', 'UTC'))->run(['sleep' => 0]);
+
+        self::assertCount(1, $failed->getSent());
     }
 }
