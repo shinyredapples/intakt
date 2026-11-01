@@ -22,6 +22,7 @@ use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Override;
 use Throwable;
 
 // Public because no service injects it before the panel (plan T8), and an unused private service is removed.
@@ -37,6 +38,7 @@ final readonly class SymfonyAiVendor implements Vendor
     ) {
     }
 
+    #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
     {
         $platform = new TierRoutedPlatform($this->tiers, $project);
@@ -60,6 +62,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->readOrRefused($project, $tier, $verdict);
     }
 
+    #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
         $tier = Tier::Light;
