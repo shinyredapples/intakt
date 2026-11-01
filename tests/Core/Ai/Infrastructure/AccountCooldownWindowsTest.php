@@ -97,6 +97,54 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
     }
 
+    public function testARejectedKeyCoolsTheAccountDownForOneMinuteAndIsRememberedAsARejection(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownRejected($this->default());
+
+        self::assertTrue($cooldowns->isRejected($this->default()));
+        self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
+        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+    }
+
+    public function testALimitedAccountIsNotRememberedAsARejection(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDown($this->default(), 300);
+
+        self::assertFalse($cooldowns->isRejected($this->default()));
+    }
+
+    public function testARejectionIsRememberedOnlyForItsOwnAccount(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownRejected($this->default());
+
+        self::assertFalse($cooldowns->isRejected($this->team()));
+        self::assertFalse($cooldowns->isRejected(new Account(Provider::OpenAi, Account::DEFAULT)));
+    }
+
+    public function testARejectedKeyWhileALimitRunsKeepsTheLimitsEndAndIsStillRememberedAsARejection(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDown($this->default(), 300);
+
+        $cooldowns->coolDownRejected($this->default());
+
+        self::assertTrue($cooldowns->isRejected($this->default()));
+        self::assertEqualsWithDelta(300, $this->secondsUntilFree($this->default()), 1);
+    }
+
+    public function testEveryWorkerOnTheSharedCacheSeesTheRejection(): void
+    {
+        $this->cooldowns()->coolDownRejected($this->default());
+
+        self::assertTrue($this->cooldowns()->isRejected($this->default()));
+    }
+
     public function testAResetThatIsNowOrPastLeavesTheAccountFreeAndRecordsNothing(): void
     {
         $cooldowns = $this->cooldowns();

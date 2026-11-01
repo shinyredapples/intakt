@@ -4,31 +4,29 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 
-// What the accounts of one call failed with as it was sent or as its answer was read, kept by the call because FailoverPlatform's own error names no cause; excluded from the container because AccountFailoverPlatform builds one per call.
+// What each account of one call failed with as it was sent or as its answer was read, kept by the call because FailoverPlatform's own error names no cause; excluded from the container because AccountFailoverPlatform builds one per call.
 #[Exclude]
 final class SendFailures
 {
     /**
-     * @var list<Throwable>
+     * @var array<string, Throwable>
      */
     private array $failures = [];
 
-    public function record(Throwable $failure): void
+    public function record(Account $account, Throwable $failure): void
     {
-        $this->failures[] = $failure;
+        $this->failures[$account->key()] = $failure;
     }
 
-    // Only when every account of the provider was tried and rejected its key, because an account cooling down from before the call, or limited during it, is free again after its wait and a rejected key never is.
-    public function rejectionOfEveryAccount(int $accounts): ?AuthenticationException
+    public function rejectionOf(Account $account): ?AuthenticationException
     {
-        $last = array_last($this->failures);
+        $failure = $this->failures[$account->key()] ?? null;
 
-        return $last instanceof AuthenticationException
-            && $accounts === count($this->failures)
-            && array_all($this->failures, static fn (Throwable $failure): bool => $failure instanceof AuthenticationException) ? $last : null;
+        return $failure instanceof AuthenticationException ? $failure : null;
     }
 }

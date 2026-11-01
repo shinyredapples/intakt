@@ -184,6 +184,52 @@ final class AccountFailoverPlatformTest extends TestCase
         }
     }
 
+    // The reviewer's probe: worker A, a moment earlier, saw only the default account free and its key was rejected, so B finds it cooling down from that rejection and the team account rejects too.
+    public function testTwoRevokedAccountsWhoseRejectionsAreOffsetEndTheCallAsARejection(): void
+    {
+        $revoked = static fn (): never => throw new AuthenticationException('revoked');
+        $onlyDefault = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($revoked)], $this->cooldowns, new NativeClock(), new NullLogger());
+        try {
+            $_ = $onlyDefault->invoke('big', 'Review.');
+        } catch (AuthenticationException) {
+        }
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+
+        try {
+            $_ = $this->accounts($this->answering($revoked), $this->answering($revoked))->invoke('big', 'Review.');
+            self::fail('Every key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(AuthenticationException::class, $failure, 'Every key of the provider is revoked, yet the call waits for an account cooling down from a rejection.');
+        }
+    }
+
+    public function testACallWhoseOnlyFreeAccountRejectsItsKeyBesideAnAccountCoolingDownFromItsOwnRejectionIsTheRejection(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+
+        try {
+            $_ = $this->accounts($this->answering('first'), $this->answering(static fn (): never => throw $revoked))->invoke('big', 'Review.');
+            self::fail('Every key of the provider is revoked, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+    }
+
+    public function testAnAnswerWhoseKeyIsRejectedWhenReadBesideAnAccountCoolingDownFromItsOwnRejectionIsTheRejection(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+        $this->cooldowns->coolDownRejected($this->account(Account::DEFAULT));
+        $answer = $this->accounts($this->answering('first'), new FailingWhenRead($revoked))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('Every key of the provider is revoked, yet the answer was read.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+    }
+
     public function testAnAnswerWhoseKeyIsRejectedWhenReadWhileAnotherAccountCoolsDownWaitsForTheCoolingOne(): void
     {
         $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);

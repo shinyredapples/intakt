@@ -18,7 +18,18 @@ final readonly class NoCooldowns implements AccountCooldowns
     }
 
     #[Override]
+    public function coolDownRejected(Account $account): void
+    {
+    }
+
+    #[Override]
     public function isCoolingDown(Account $account): bool
+    {
+        return false;
+    }
+
+    #[Override]
+    public function isRejected(Account $account): bool
     {
         return false;
     }

@@ -8,7 +8,12 @@ interface AccountCooldowns
 {
     public function coolDown(Account $account, ?int $resetInSeconds): void;
 
+    // A rejected key is remembered with its cooldown, because a wait for an account that rejected its key brings nothing back.
+    public function coolDownRejected(Account $account): void;
+
     public function isCoolingDown(Account $account): bool;
+
+    public function isRejected(Account $account): bool;
 
     // Zero while an account of the provider is free, so a reviewer moves to it at once.
     public function secondsUntilAnAccountIsFree(Provider $provider): int;

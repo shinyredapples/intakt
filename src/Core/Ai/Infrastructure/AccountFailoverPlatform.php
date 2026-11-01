@@ -97,14 +97,33 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
-    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so with its wait; when every account of the provider was tried in this call and rejected its key there is nothing to wait for, so the rejection itself is thrown.
+    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so with its wait; when every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so the rejection itself is thrown.
     private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
     {
         if ([] !== $this->freeAccounts($failures)) {
             return $everyAccountFailed;
         }
 
-        return $failures->rejectionOfEveryAccount(count($this->platforms)) ?? new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+        return $this->rejectionOfEveryAccount($failures) ?? new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+    }
+
+    // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
+    private function rejectionOfEveryAccount(SendFailures $failures): ?AuthenticationException
+    {
+        $rejection = null;
+
+        foreach (array_keys($this->platforms) as $name) {
+            $account = new Account($this->provider, $name);
+            $rejected = $failures->rejectionOf($account);
+            if (null === $rejected && !$this->cooldowns->isRejected($account)) {
+                return null;
+            }
+
+            $rejection = $rejected ?? $rejection;
+        }
+
+        // The last rejection of this call, which on the read path is the one the reader just met.
+        return $rejection;
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
