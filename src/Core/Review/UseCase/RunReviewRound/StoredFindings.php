@@ -107,7 +107,7 @@ final readonly class StoredFindings
             // In a savepoint, because PostgreSQL refuses every further statement of a transaction in which one failed.
             $connection->transactional(static fn (Connection $inner): int|string => $inner->insert('change_findings', ['project' => $project, 'change_ref' => $change, 'rounds' => 0, 'findings' => '[]', 'recorded_round' => 0]));
         } catch (UniqueConstraintViolationException) {
-            // Another round of the change created it meanwhile; the lock that follows waits for that round.
+            // Ignored, because then another round of the change created the row meanwhile, and the lock that follows waits for that round.
         }
     }
 
