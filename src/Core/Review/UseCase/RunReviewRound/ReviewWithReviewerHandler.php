@@ -26,6 +26,7 @@ final readonly class ReviewWithReviewerHandler
         private ReviewerLeases $leases,
         private Vendor $vendor,
         private ReviewRounds $rounds,
+        private GoalpostRule $goalposts,
     ) {
     }
 
@@ -73,6 +74,6 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $this->leases->recordVerdict($reviewer, new GoalpostRule()->applyToVerdict($round->number(), $review->verdict, $brief->open), $review->substitute);
+        $this->leases->recordVerdict($reviewer, $this->goalposts->applyToVerdict($round->number(), $review->verdict, $brief->open), $review->substitute);
     }
 }
