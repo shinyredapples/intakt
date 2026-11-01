@@ -17,6 +17,7 @@ use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
+use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
@@ -39,6 +40,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RunReviewRound::class)]
 #[UsesClass(ReviewRound::class)]
 #[UsesClass(ReviewSubject::class)]
+#[UsesClass(ReviewTarget::class)]
 #[UsesClass(FindingLedger::class)]
 #[UsesClass(TrackedFinding::class)]
 #[UsesClass(FindingStatus::class)]
@@ -204,7 +206,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     public function testARoundStoredBeforeTheOpenFindingsWereKeptWithItIsToldNone(): void
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'), new ChangeRound(self::CHANGE, 2, null), SampleIdentity::any());
+        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), SampleIdentity::any()), new ChangeRound(self::CHANGE, 2, null));
 
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }

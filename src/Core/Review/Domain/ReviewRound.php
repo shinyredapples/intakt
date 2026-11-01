@@ -34,18 +34,20 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(name: 'verdict_identity', length: 512, options: ['default' => ''])]
     private string $identity;
 
+    #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
+    private ReviewSubject $subject;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
         private Uuid $id,
-        #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
-        private ReviewSubject $subject,
+        ReviewTarget $target,
         #[ORM\Embedded(class: ChangeRound::class, columnPrefix: false)]
         private ChangeRound $change,
-        VerdictIdentity $identity,
     ) {
         $this->reviewers = new ArrayCollection();
-        $this->identity = $identity->recorded();
+        $this->subject = $target->subject;
+        $this->identity = $target->identity->recorded();
     }
 
     // A round without an identity cannot show what its verdicts were given on, so every field counts as changed.

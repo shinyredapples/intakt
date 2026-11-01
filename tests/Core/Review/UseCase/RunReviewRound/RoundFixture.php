@@ -26,6 +26,7 @@ use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
+use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
@@ -96,13 +97,13 @@ final readonly class RoundFixture
 
     public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
     {
-        return $this->startWith(new RunReviewRound($this->subject(), $this->panelOf($reviewers), $change, $this->identityAt(SampleIdentity::HEAD, $reviewers)), $queue);
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), $change), $queue);
     }
 
     // The identity names its own task and panel size, so a test can hand in one that does not describe the round.
     public function startWithIdentityOf(string $task, int $panelSize, int $reviewers): string
     {
-        return $this->startWith(new RunReviewRound($this->subject(), $this->panelOf($reviewers), self::CHANGE, SampleIdentity::of($task, $this->panelOf($panelSize))), $this->bus);
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of($task, $this->panelOf($panelSize))), $this->panelOf($reviewers), self::CHANGE), $this->bus);
     }
 
     public function identityAt(string $head, int $reviewers): VerdictIdentity

@@ -137,6 +137,15 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertGreaterThan(strpos($this->sent[0], 'The task of the change'), strpos($this->sent[0], 'The open findings of earlier rounds'));
     }
 
+    public function testThePromptLimitsTheGivenIdsToResolvedAndRepeatSoANewFindingMayTakeANewId(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertStringContainsString('A new problem gets a new id', $this->sent[0]);
+        self::assertStringContainsString('Under \"resolved\" and in a finding with \"repeat\" true, use only ids you were given.', $this->sent[0]);
+        self::assertStringNotContainsString('Use only ids you were given', $this->sent[0]);
+    }
+
     public function testAVerdictThatResolvesAnIdThatIsNotOpenIsRejectedAsInvalidOutput(): void
     {
         $this->open = [$this->openFinding('F1')];

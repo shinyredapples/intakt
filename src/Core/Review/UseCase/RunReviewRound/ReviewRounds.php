@@ -53,14 +53,15 @@ final readonly class ReviewRounds
     public function open(RunReviewRound $command): ReviewRound
     {
         // Built only to refuse a path that is no directory, because a round stored for one could never be reviewed.
-        new Checkout($command->subject->checkoutRoot);
+        $subject = $command->target->subject;
+        new Checkout($subject->checkoutRoot);
 
         // Refused because verdicts recorded under another task or panel would read as current for a question the reviewers were never asked.
-        if (!$command->identity->terms->describe($command->subject->task, $command->panel)) {
+        if (!$command->target->identity->terms->describe($subject->task, $command->panel)) {
             throw IdentityNotOfRound::forTaskOrPanel();
         }
 
-        $round = new ReviewRound($this->newId(), $command->subject, $this->findings->openRound($command->subject->project, $command->change), $command->identity);
+        $round = new ReviewRound($this->newId(), $command->target, $this->findings->openRound($subject->project, $command->change));
 
         foreach ($command->panel->reviewers as $member) {
             $round->addReviewer($this->newId(), $member);
