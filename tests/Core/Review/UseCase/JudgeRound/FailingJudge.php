@@ -8,7 +8,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
-use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use LogicException;
 use Override;
@@ -22,7 +22,7 @@ final readonly class FailingJudge implements Vendor
     }
 
     #[Override]
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         throw new LogicException('This vendor only judges.');
     }

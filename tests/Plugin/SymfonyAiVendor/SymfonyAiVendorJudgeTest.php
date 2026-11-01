@@ -33,7 +33,9 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -47,6 +49,10 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 
 #[CoversClass(SymfonyAiVendor::class)]
 #[UsesClass(JudgeAgent::class)]
@@ -70,6 +76,7 @@ use Symfony\Component\DependencyInjection\ServiceLocator;
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(ProviderRateLimited::class)]
+#[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(AppendResult::class)]
@@ -147,6 +154,8 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
         $usage = new UsageLedger($ledger, new MockClock('2026-10-27 12:00:00 UTC'), new NullLogger());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, self::createStub(AccountCooldowns::class), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), $usage);
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit);
     }
 }

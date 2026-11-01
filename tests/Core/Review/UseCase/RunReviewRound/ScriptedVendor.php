@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 use Throwable;
 
@@ -27,12 +28,12 @@ final class ScriptedVendor implements Vendor
     }
 
     #[Override]
-    public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
+    public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         ++$this->calls;
         $this->conversations[] = $request->conversation->id->toRfc4122();
 
-        return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
+        return $this->failure instanceof Throwable ? throw $this->failure : new VendorReview(new Verdict(Decision::Approve, [], [], []));
     }
 
     #[Override]
