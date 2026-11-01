@@ -154,6 +154,20 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         self::assertCount(1, $this->remembered(['src/A.php']));
     }
 
+    public function testARoundOvertakenByANewerRecordedRoundDoesNotIndexAFindingTheNewerRoundKeepsOpen(): void
+    {
+        $this->roundReporting([$this->finding('a')]);
+        $queue = new RecordingBus();
+        $older = $this->fixture->startFor(self::CHANGE, $queue, 2);
+        $this->roundReporting([$this->finding('F1', true)]);
+        $this->deliverAll($queue, [self::FIRST => new Verdict(Decision::Approve, [], ['F1'], [])]);
+
+        $this->fixture->indexing($this->index)(new IndexResolvedFindings($older));
+
+        self::assertTrue($this->fixture->storedFindings(self::CHANGE)[0]->isOpen(), 'the ledger keeps F1 open');
+        self::assertSame([], $this->remembered(['src/A.php']));
+    }
+
     public function testACompletedRoundQueuesItsIndexingOnce(): void
     {
         $id = $this->roundReporting([$this->finding('a')]);
@@ -207,15 +221,22 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     {
         $queue = new RecordingBus();
         $id = $this->fixture->startFor(self::CHANGE, $queue, 2);
+        $this->deliverAll($queue, $verdicts);
+        $this->lastQueue = $queue;
+
+        return $id;
+    }
+
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function deliverAll(RecordingBus $queue, array $verdicts): void
+    {
         $vendor = new VerdictPerRole($verdicts);
 
         foreach ($queue->messages as $message) {
             $this->fixture->deliver($message, $vendor);
         }
-
-        $this->lastQueue = $queue;
-
-        return $id;
     }
 
     /**

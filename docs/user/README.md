@@ -147,7 +147,7 @@ If Mate stops with a PHP version mismatch, it was started with a PHP other than 
 
 ## Project memory
 
-Intakt can keep short notes about a project, each tied to the files it explains, and look up the notes for the files a change touches within a size limit (in bytes). When a review round completes, every finding a reviewer marked resolved (and that stays resolved) is written as a note, with its cause and the file it concerns. This needs an OpenAI account for the embeddings (`OPENAI_API_KEY`); without one the note is not written and the message waits in the failed queue with the reason. Create the notes table once with `php bin/console ai:store:setup`. Nothing reads the notes yet: the briefing a reviewer reads comes in a later change. Reviewers can only read the notes, never change them.
+Intakt can keep short notes about a project, each tied to the files it explains, and look up the notes for the files a change touches within a size limit (in bytes). When a review round completes, every finding a reviewer marked resolved (and that stays resolved) is written as a note, with its cause and the file it concerns; a round that finishes after a newer round of the same change writes none, since its verdicts are left out of the list (see [Finding ids across review rounds](#finding-ids-across-review-rounds)). This needs an OpenAI account for the embeddings (`OPENAI_API_KEY`); without one the note is not written and the message waits in the failed queue with the reason. Create the notes table once with `php bin/console ai:store:setup`. Nothing reads the notes yet: the briefing a reviewer reads comes in a later change. Reviewers can only read the notes, never change them.
 
 ## The ledger
 

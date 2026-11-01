@@ -100,13 +100,15 @@ final readonly class StoredFindings
         }
 
         $round->keepReportedFindings(json_encode($ledger->openReportedIn($round->number()), JSON_THROW_ON_ERROR));
-        $round->keepResolvedFindings(json_encode($this->resolvedIn($round, $ledger), JSON_THROW_ON_ERROR));
 
-        // The round still keeps what it reported, under its ledger's ids, so its judge sees its findings although its verdicts must not undo the newer round's.
+        // The round still keeps what it reported, under its ledger's ids, so its judge sees its findings although its verdicts must not undo the newer round's; it keeps nothing as resolved, because a resolution its ledger accepted never reaches the stored one, where the newer round may hold the finding open.
         if ($stored->hasRecordedAfter($round->number())) {
+            $round->keepResolvedFindings(json_encode([], JSON_THROW_ON_ERROR));
+
             return;
         }
 
+        $round->keepResolvedFindings(json_encode($this->resolvedIn($round, $ledger), JSON_THROW_ON_ERROR));
         $stored->recordFindings($round->number(), json_encode($ledger->all(), JSON_THROW_ON_ERROR));
     }
 
