@@ -10,6 +10,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use NoDiscard;
 use Psr\Log\LoggerInterface;
+use SensitiveParameter;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -19,7 +20,6 @@ final readonly class InstallationTokenMinter
     private const string API = 'https://api.github.com';
 
     public function __construct(
-        private string $installationId,
         private AppJwt $jwt,
         private HttpClientInterface $http,
         private LoggerInterface $logger,
@@ -30,9 +30,9 @@ final readonly class InstallationTokenMinter
      * @throws InstallationTokenNotMinted
      */
     #[NoDiscard('a minted token that is dropped was minted for nothing')]
-    public function mint(): InstallationToken
+    public function mint(string $installationId): InstallationToken
     {
-        $answer = $this->exchange($this->jwt->sign());
+        $answer = $this->exchange($this->jwt->sign(), $installationId);
 
         return $this->tokenFrom($answer);
     }
@@ -40,23 +40,23 @@ final readonly class InstallationTokenMinter
     /**
      * @return array<mixed>
      */
-    private function exchange(string $jwt): array
+    private function exchange(#[SensitiveParameter] string $jwt, string $installationId): array
     {
         try {
-            $response = $this->http->request('POST', self::API.'/app/installations/'.rawurlencode($this->installationId).'/access_tokens', [
+            $response = $this->http->request('POST', self::API.'/app/installations/'.rawurlencode($installationId).'/access_tokens', [
                 'auth_bearer' => $jwt,
                 'headers' => ['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'],
             ]);
             $status = $response->getStatusCode();
             $body = 201 === $status ? $response->toArray(false) : [];
         } catch (ExceptionInterface $failure) {
-            $this->logger->warning('The GitHub installation token exchange did not complete.', ['installation' => $this->installationId, 'error' => $failure::class]);
+            $this->logger->warning('The GitHub installation token exchange did not complete.', ['installation' => $installationId, 'error' => $failure::class]);
 
             throw InstallationTokenNotMinted::becauseGitHubWasUnreachable($failure);
         }
 
         if (201 !== $status) {
-            $this->logger->warning('GitHub refused the installation token exchange.', ['installation' => $this->installationId, 'status' => $status]);
+            $this->logger->warning('GitHub refused the installation token exchange.', ['installation' => $installationId, 'status' => $status]);
 
             throw InstallationTokenNotMinted::becauseGitHubRefused($status);
         }

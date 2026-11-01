@@ -37,7 +37,7 @@ final class InstallationTokenMinterTest extends TestCase
             },
         );
 
-        $token = $minter->mint();
+        $token = $minter->mint('678');
 
         self::assertSame('opaque-value', $token->value);
         self::assertEquals(new DateTimeImmutable('2026-11-25T10:00:00Z'), $token->expiresAt);
@@ -55,7 +55,7 @@ final class InstallationTokenMinterTest extends TestCase
         $this->expectException(InstallationTokenNotMinted::class);
         $this->expectExceptionMessageMatches('/status '.$status.'/');
 
-        (void) $minter->mint();
+        (void) $minter->mint('678');
     }
 
     /**
@@ -73,7 +73,7 @@ final class InstallationTokenMinterTest extends TestCase
 
         $this->expectException(InstallationTokenNotMinted::class);
 
-        (void) $minter->mint();
+        (void) $minter->mint('678');
     }
 
     public function testAnAnswerWithoutATokenFailsTheCall(): void
@@ -82,7 +82,7 @@ final class InstallationTokenMinterTest extends TestCase
 
         $this->expectException(InstallationTokenNotMinted::class);
 
-        (void) $minter->mint();
+        (void) $minter->mint('678');
     }
 
     public function testAnAnswerWithAnUnreadableExpiryFailsTheCall(): void
@@ -91,7 +91,7 @@ final class InstallationTokenMinterTest extends TestCase
 
         $this->expectException(InstallationTokenNotMinted::class);
 
-        (void) $minter->mint();
+        (void) $minter->mint('678');
     }
 
     public function testNeitherTheKeyNorTheJwtReachesTheLogsOrTheFailure(): void
@@ -110,7 +110,7 @@ final class InstallationTokenMinterTest extends TestCase
         );
 
         try {
-            (void) $minter->mint();
+            (void) $minter->mint('678');
             self::fail('A refused exchange must fail.');
         } catch (InstallationTokenNotMinted $failure) {
             $everything = implode("\n", $logger->lines).$failure->getMessage().$failure->getTraceAsString();
@@ -121,11 +121,54 @@ final class InstallationTokenMinterTest extends TestCase
         self::assertStringNotContainsString(substr($sent[0], strlen('Authorization: Bearer ')), $everything);
     }
 
+    public function testTheJwtIsNotAnArgumentInTheTraceOfAFailedExchange(): void
+    {
+        $sent = [];
+        $minter = $this->minter(
+            static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
+                $sent[] = self::authorization($options);
+
+                return new MockResponse(self::recorded('access_tokens_401.json'), ['http_code' => 401]);
+            },
+        );
+        $ignoreArguments = ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            (void) $minter->mint('678');
+            self::fail('A refused exchange must fail.');
+        } catch (InstallationTokenNotMinted $failure) {
+            $arguments = self::scalarArguments($failure);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignoreArguments);
+        }
+
+        self::assertNotSame([], $arguments);
+        self::assertNotContains(substr($sent[0], strlen('Authorization: Bearer ')), $arguments);
+    }
+
     private function minter(callable $respond, ?AppKey $key = null, ?LoggerInterface $logger = null): InstallationTokenMinter
     {
         $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock('2026-11-25 10:00:00 UTC'));
 
-        return new InstallationTokenMinter('678', $jwt, new MockHttpClient($respond), $logger ?? self::createStub(LoggerInterface::class));
+        return new InstallationTokenMinter($jwt, new MockHttpClient($respond), $logger ?? self::createStub(LoggerInterface::class));
+    }
+
+    /**
+     * @return list<scalar>
+     */
+    private static function scalarArguments(InstallationTokenNotMinted $failure): array
+    {
+        // Only scalars, because printing the object arguments would walk PHPUnit's whole object graph.
+        $arguments = [];
+        foreach ($failure->getTrace() as $frame) {
+            foreach ($frame['args'] ?? [] as $argument) {
+                if (is_scalar($argument)) {
+                    $arguments[] = $argument;
+                }
+            }
+        }
+
+        return $arguments;
     }
 
     /**

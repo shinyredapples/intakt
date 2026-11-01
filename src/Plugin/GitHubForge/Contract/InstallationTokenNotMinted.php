@@ -29,4 +29,9 @@ final class InstallationTokenNotMinted extends RuntimeException
     {
         return new self('GitHub answered the installation token exchange without a usable token and expiry.');
     }
+
+    public static function becauseTheTokenLapsesTooSoon(): self
+    {
+        return new self('GitHub answered the installation token exchange with a token that has expired or expires within a minute.');
+    }
 }

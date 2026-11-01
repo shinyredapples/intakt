@@ -21,6 +21,7 @@ final class InstallationTokens implements ResetInterface
 
     public function __construct(
         private readonly InstallationTokenMinter $minter,
+        private readonly string $installationId,
         private readonly ClockInterface $clock,
     ) {
     }
@@ -31,13 +32,24 @@ final class InstallationTokens implements ResetInterface
     #[NoDiscard('the token is the credential of the call')]
     public function current(): InstallationToken
     {
-        if ($this->cached instanceof InstallationToken && $this->cached->expiresAt > $this->clock->now()->add(new DateInterval(self::MARGIN))) {
+        if ($this->cached instanceof InstallationToken && $this->isUsable($this->cached)) {
             return $this->cached;
         }
 
-        $this->cached = $this->minter->mint();
+        $this->cached = null;
+        $minted = $this->minter->mint($this->installationId);
+        if (!$this->isUsable($minted)) {
+            throw InstallationTokenNotMinted::becauseTheTokenLapsesTooSoon();
+        }
 
-        return $this->cached;
+        $this->cached = $minted;
+
+        return $minted;
+    }
+
+    private function isUsable(InstallationToken $token): bool
+    {
+        return $token->expiresAt > $this->clock->now()->add(new DateInterval(self::MARGIN));
     }
 
     public function reset(): void

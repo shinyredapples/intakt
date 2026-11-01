@@ -28,6 +28,7 @@ final class InstallationTokensTest extends TestCase
     private MockClock $clock;
     private int $exchanges = 0;
     private bool $refuse = false;
+    private string $lifetime = '+1 hour';
     private InstallationTokens $tokens;
 
     protected function setUp(): void
@@ -39,10 +40,47 @@ final class InstallationTokensTest extends TestCase
                 return new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]);
             }
 
-            return new MockResponse(json_encode(['token' => 'value-'.$this->exchanges, 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+            return new MockResponse(json_encode(['token' => 'value-'.$this->exchanges, 'expires_at' => $this->clock->now()->modify($this->lifetime)->format(DATE_ATOM)], JSON_THROW_ON_ERROR), ['http_code' => 201]);
         });
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
-        $this->tokens = new InstallationTokens(new InstallationTokenMinter('678', $jwt, $http, new NullLogger()), $this->clock);
+        $this->tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $this->clock);
+    }
+
+    public function testAFreshlyMintedTokenThatIsAlreadyExpiredFailsTheCall(): void
+    {
+        $this->lifetime = '-1 hour';
+
+        $this->expectException(InstallationTokenNotMinted::class);
+
+        (void) $this->tokens->current();
+    }
+
+    public function testAFreshlyMintedTokenAboutToLapseFailsTheCall(): void
+    {
+        $this->lifetime = '+30 seconds';
+
+        $this->expectException(InstallationTokenNotMinted::class);
+
+        (void) $this->tokens->current();
+    }
+
+    public function testAFreshlyMintedTokenWithMoreThanAMinuteToLiveIsUsed(): void
+    {
+        $this->lifetime = '+61 seconds';
+
+        self::assertSame('value-1', $this->tokens->current()->value);
+    }
+
+    public function testAFreshlyMintedTokenThatExpiredIsNotKeptForTheNextCall(): void
+    {
+        $this->lifetime = '-1 hour';
+        try {
+            (void) $this->tokens->current();
+        } catch (InstallationTokenNotMinted) {
+            $this->lifetime = '+1 hour';
+        }
+
+        self::assertSame('value-2', $this->tokens->current()->value);
     }
 
     public function testAValidTokenIsReusedWithoutAnotherExchange(): void
