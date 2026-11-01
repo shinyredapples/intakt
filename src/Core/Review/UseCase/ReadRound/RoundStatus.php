@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ReadRound;
 
 use Intakt\Core\Review\Domain\ReviewRound;
-use Intakt\Core\Review\Domain\RoundReviewer;
 
 final readonly class RoundStatus
 {
@@ -22,7 +21,7 @@ final readonly class RoundStatus
     public static function of(ReviewRound $round): self
     {
         $identity = new RoundIdentity($round->id()->toRfc4122(), $round->change(), $round->number());
-        $reviewers = array_map(static fn (RoundReviewer $reviewer): ReviewerStatus => ReviewerStatus::of($reviewer), $round->reviewers());
+        $reviewers = array_map(ReviewerStatus::of(...), $round->reviewers());
 
         return new self($identity, $round->state()->value, $reviewers);
     }
