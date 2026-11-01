@@ -80,6 +80,16 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertCount(2, $this->fixture->storedRounds());
     }
 
+    public function testARoundThatReadTheExistingLedgerBeforeAnotherRoundCommittedItBecomesTheThirdRound(): void
+    {
+        $this->fixture->start(1);
+
+        $later = $this->fixture->startWhileAnotherRoundCommitsAfterItsFirstLook(1);
+
+        self::assertSame(3, $this->fixture->round($later)->number());
+        self::assertCount(3, $this->fixture->storedRounds());
+    }
+
     public function testATransactionThatKeepsMeetingAnotherWritersCommitIsTriedThreeTimesThenFails(): void
     {
         $tries = 0;

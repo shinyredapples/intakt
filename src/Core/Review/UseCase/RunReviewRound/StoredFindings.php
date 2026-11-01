@@ -88,6 +88,8 @@ final readonly class StoredFindings
     private function locked(string $project, string $change): ChangeFindings
     {
         $this->createIfMissing($project, $change);
+        // Locked with a write, because on SQLite only a write takes the lock, and a snapshot gone stale then fails here, where the transaction starts over, rather than in the flush, which closes the entity manager.
+        $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$project, $change]);
         $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
 
         return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
