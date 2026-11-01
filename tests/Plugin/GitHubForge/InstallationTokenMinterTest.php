@@ -19,6 +19,7 @@ use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
+use Throwable;
 
 #[CoversClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationToken::class)]
@@ -146,6 +147,32 @@ final class InstallationTokenMinterTest extends TestCase
         self::assertNotContains(substr($sent[0], strlen('Authorization: Bearer ')), $arguments);
     }
 
+    public function testTheJwtIsNotAnArgumentAnywhereInTheChainOfATransportFailure(): void
+    {
+        $sent = [];
+        $minter = $this->minter(
+            static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
+                $sent[] = self::authorization($options);
+
+                throw new TransportException('connection reset');
+            },
+        );
+        $ignoreArguments = ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            (void) $minter->mint('678');
+            self::fail('A transport error must fail.');
+        } catch (InstallationTokenNotMinted $failure) {
+            $arguments = $this->scalarArguments($failure);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignoreArguments);
+        }
+
+        $jwt = substr($sent[0], strlen('Authorization: Bearer '));
+        self::assertNotSame([], $arguments);
+        self::assertSame([], array_filter($arguments, static fn (mixed $argument): bool => str_contains((string) $argument, $jwt)));
+    }
+
     private function minter(callable $respond, ?AppKey $key = null, ?LoggerInterface $logger = null): InstallationTokenMinter
     {
         $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock('2026-11-25 10:00:00 UTC'));
@@ -156,19 +183,37 @@ final class InstallationTokenMinterTest extends TestCase
     /**
      * @return list<scalar>
      */
-    private function scalarArguments(InstallationTokenNotMinted $failure): array
+    private function scalarArguments(Throwable $failure): array
     {
-        // Only scalars, because printing the object arguments would walk PHPUnit's whole object graph.
+        // Only scalars and arrays, because printing the object arguments would walk PHPUnit's whole object graph.
         $arguments = [];
-        foreach ($failure->getTrace() as $frame) {
-            foreach ($frame['args'] ?? [] as $argument) {
-                if (is_scalar($argument)) {
-                    $arguments[] = $argument;
-                }
+        for ($link = $failure; null !== $link; $link = $link->getPrevious()) {
+            foreach ($link->getTrace() as $frame) {
+                $arguments = [...$arguments, ...self::scalarsIn($frame['args'] ?? [])];
             }
         }
 
         return $arguments;
+    }
+
+    /**
+     * @param array<mixed> $values
+     *
+     * @return list<scalar>
+     */
+    private static function scalarsIn(array $values): array
+    {
+        $scalars = [];
+        foreach ($values as $value) {
+            if (is_scalar($value)) {
+                $scalars[] = $value;
+            }
+            if (is_array($value)) {
+                $scalars = [...$scalars, ...self::scalarsIn($value)];
+            }
+        }
+
+        return $scalars;
     }
 
     /**

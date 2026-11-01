@@ -52,7 +52,7 @@ final readonly class InstallationTokenMinter
         } catch (ExceptionInterface $failure) {
             $this->logger->warning('The GitHub installation token exchange did not complete.', ['installation' => $installationId, 'error' => $failure::class]);
 
-            throw InstallationTokenNotMinted::becauseGitHubWasUnreachable($failure);
+            throw InstallationTokenNotMinted::becauseGitHubWasUnreachable($failure::class);
         }
 
         if (201 !== $status) {

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Contract;
 
 use RuntimeException;
-use Throwable;
 
 // Messages carry the status or the exception class only, because they are logged and shown and must not leak the key or a token.
 final class InstallationTokenNotMinted extends RuntimeException
@@ -20,9 +19,10 @@ final class InstallationTokenNotMinted extends RuntimeException
         return new self(sprintf('GitHub refused the installation token exchange with status %d.', $status));
     }
 
-    public static function becauseGitHubWasUnreachable(Throwable $transport): self
+    // Takes the class only, because the transport exception's trace holds the request options with the JWT.
+    public static function becauseGitHubWasUnreachable(string $transportClass): self
     {
-        return new self('The installation token exchange did not complete: '.$transport::class.'.', previous: $transport);
+        return new self('The installation token exchange did not complete: '.$transportClass.'.');
     }
 
     public static function becauseTheAnswerIsInvalid(): self
