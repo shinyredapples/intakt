@@ -11,6 +11,7 @@ use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Mcp\Capability\Attribute\McpTool;
+use Mcp\Capability\Attribute\Schema;
 use Mcp\Schema\ToolAnnotations;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
@@ -29,7 +30,7 @@ final readonly class RoundActListTool
     ) {
     }
 
-    public function __invoke(string $roundId): RoundActList
+    public function __invoke(#[Schema(description: 'UUID of the review round.')] string $roundId): RoundActList
     {
         $round = $this->rounds->forTool($roundId);
         $judged = RoundState::Judged === $round->state();

@@ -61,6 +61,18 @@ final class RoundReadContractTest extends KernelTestCase
         }
     }
 
+    public function testEveryReadToolDescribesItsRoundIdAsTheReviewRoundsUuid(): void
+    {
+        $tools = OwnerServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
+        self::assertIsArray($tools);
+
+        foreach (['review_status', 'review_verdicts', 'review_act_list'] as $name) {
+            $tool = array_first(array_filter($tools, static fn (mixed $listed): bool => is_array($listed) && $name === ($listed['name'] ?? null)));
+            self::assertIsArray($tool, $name.' is not listed.');
+            self::assertSame('UUID of the review round.', OwnerServerClient::at($tool, 'inputSchema', 'properties', 'roundId', 'description'), $name);
+        }
+    }
+
     public function testTheStatusToolAnswersWithTheRoundsStateAndReviewers(): void
     {
         $result = $this->callTool('review_status');
