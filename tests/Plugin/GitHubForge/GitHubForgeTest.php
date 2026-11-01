@@ -205,10 +205,12 @@ final class GitHubForgeTest extends TestCase
     {
         $forge = $this->forge(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 403]));
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('403');
-
-        $forge->change(new ChangeId(self::PULL));
+        try {
+            $forge->change(new ChangeId(self::PULL));
+            self::fail('A 403 must fail the read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertStringContainsString('403', $failure->getMessage());
+        }
     }
 
     public function testItRetriesAFailedReadThroughTheRetryableClient(): void
@@ -238,7 +240,7 @@ final class GitHubForgeTest extends TestCase
     {
         $bearers = [];
         $forge = $this->forge(static function (string $url, array $options) use (&$bearers): ?ResponseInterface {
-            $bearers[] = $options['normalized_headers']['authorization'][0] ?? null;
+            $bearers[] = self::header($options, 'authorization');
 
             return null;
         });
@@ -280,7 +282,9 @@ final class GitHubForgeTest extends TestCase
         return $this->forgeOver(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
             $this->requested[] = $method.' '.$url;
 
-            return $override?->__invoke($url, $options) ?? $this->answer($url, $options);
+            $answer = $override instanceof Closure ? $override($url, $options) : null;
+
+            return $answer ?? $this->answer($url, $options);
         }, 'https://api.github.com'));
     }
 
@@ -301,7 +305,7 @@ final class GitHubForgeTest extends TestCase
      */
     private function answer(string $url, array $options): ResponseInterface
     {
-        $accept = $options['normalized_headers']['accept'][0] ?? '';
+        $accept = self::header($options, 'accept');
         $path = explode('?', $url)[0];
 
         return match (true) {
@@ -315,6 +319,19 @@ final class GitHubForgeTest extends TestCase
 
     private static function fixture(string $name): string
     {
-        return file_get_contents(__DIR__.'/Fixtures/'.$name) ?: throw new LogicException('Missing fixture '.$name);
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private static function header(array $options, string $name): string
+    {
+        $headers = $options['normalized_headers'] ?? [];
+        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
+
+        return is_array($values) && is_string($values[0] ?? null) ? $values[0] : '';
     }
 }
