@@ -34,7 +34,7 @@ final readonly class ReviewerPrompt
         - No overengineering: no config option, column, parameter or extension point without a caller today; plain PHP and Symfony features before custom abstractions.
         - Comments say why, never what: a comment gives a reason (a constraint, a trade-off, a link) on one line; a comment that restates the code, commented-out code and TODOs are findings; docblocks hold types only.
 
-        From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
+        From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. From the second round on, a new P1 or P2 must cite a requirement or set "regression" to true (the change broke something that worked before); otherwise it is lowered to P3. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
 
         Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
         TEXT;

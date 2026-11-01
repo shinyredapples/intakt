@@ -29,6 +29,12 @@ final readonly class Finding
         public ?string $requirement,
         #[Valid]
         public ?Evidence $evidence,
+        public bool $regression = false,
     ) {
+    }
+
+    public function withSeverity(Severity $severity): self
+    {
+        return clone ($this, ['severity' => $severity]);
     }
 }
