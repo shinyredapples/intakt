@@ -22,10 +22,19 @@ final class FindingLedger
     /**
      * @param list<TrackedFinding> $tracked
      */
-    public function __construct(array $tracked = [])
+    public function __construct(array $tracked = [], private readonly string $idPrefix = 'F')
     {
         $this->tracked = array_column($tracked, null, 'id');
         $this->goalposts = new GoalpostRule();
+    }
+
+    // Ids under the round's own prefix, for a ledger that is never stored, so they cannot meet the F<n> ids the stored ledger hands out later.
+    /**
+     * @param list<TrackedFinding> $tracked
+     */
+    public static function apartFor(int $round, array $tracked): self
+    {
+        return new self($tracked, 'R'.$round.'-F');
     }
 
     /**
@@ -161,7 +170,7 @@ final class FindingLedger
 
     private function start(int $round, Finding $finding): void
     {
-        $id = 'F'.(count($this->tracked) + 1);
+        $id = $this->idPrefix.(count($this->tracked) + 1);
         $this->tracked[$id] = new TrackedFinding($id, $finding, [$round], FindingStatus::Open);
     }
 }

@@ -84,7 +84,7 @@ final readonly class StoredFindings
     private function recordVerdictsOf(ReviewRound $round): void
     {
         $stored = $this->locked($round->project(), $round->change());
-        $ledger = $this->ledgerOf($stored);
+        $ledger = $this->ledgerFor($round, $stored);
 
         foreach ($this->verdictsOf($round) as $verdict) {
             $ledger->recordVerdict($round->number(), $verdict);
@@ -92,7 +92,7 @@ final readonly class StoredFindings
 
         $round->keepReportedFindings(json_encode($ledger->openReportedIn($round->number()), JSON_THROW_ON_ERROR));
 
-        // The round still keeps what it reported, under ids that are its own, so its judge sees its findings although its verdicts must not undo the newer round's.
+        // The round still keeps what it reported, under its ledger's ids, so its judge sees its findings although its verdicts must not undo the newer round's.
         if ($stored->hasRecordedAfter($round->number())) {
             return;
         }
@@ -143,12 +143,30 @@ final readonly class StoredFindings
         return $findings;
     }
 
+    // A round overtaken by a newer recorded one gives its new findings ids of its own, because the ids of its ledger, which is never stored, would name other findings of the stored one later.
+    private function ledgerFor(ReviewRound $round, ChangeFindings $stored): FindingLedger
+    {
+        if ($stored->hasRecordedAfter($round->number())) {
+            return FindingLedger::apartFor($round->number(), $this->trackedIn($stored));
+        }
+
+        return $this->ledgerOf($stored);
+    }
+
     private function ledgerOf(ChangeFindings $stored): FindingLedger
+    {
+        return new FindingLedger($this->trackedIn($stored));
+    }
+
+    /**
+     * @return list<TrackedFinding>
+     */
+    private function trackedIn(ChangeFindings $stored): array
     {
         /** @var list<TrackedFinding> $tracked */
         $tracked = $this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json');
 
-        return new FindingLedger($tracked);
+        return $tracked;
     }
 
     /**
