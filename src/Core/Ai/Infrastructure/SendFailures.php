@@ -22,11 +22,13 @@ final class SendFailures
         $this->failures[] = $failure;
     }
 
-    // Only when every account rejected its key, because a limited account is free again after its wait and a rejected key never is.
-    public function rejectionOfEveryAccount(): ?AuthenticationException
+    // Only when every account of the provider was tried and rejected its key, because an account cooling down from before the call, or limited during it, is free again after its wait and a rejected key never is.
+    public function rejectionOfEveryAccount(int $accounts): ?AuthenticationException
     {
         $last = array_last($this->failures);
 
-        return $last instanceof AuthenticationException && array_all($this->failures, static fn (Throwable $failure): bool => $failure instanceof AuthenticationException) ? $last : null;
+        return $last instanceof AuthenticationException
+            && $accounts === count($this->failures)
+            && array_all($this->failures, static fn (Throwable $failure): bool => $failure instanceof AuthenticationException) ? $last : null;
     }
 }

@@ -170,6 +170,18 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('revoked')), $this->answering(static fn (): never => throw new RateLimitExceededException(300)))->invoke('big', 'Review.');
     }
 
+    public function testACallWhoseOnlyFreeAccountRejectsItsKeyWhileAnotherCoolsDownWaitsForTheCoolingOne(): void
+    {
+        $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);
+
+        try {
+            $_ = $this->accounts($this->answering('first'), $this->answering(static fn (): never => throw new AuthenticationException('revoked')))->invoke('big', 'Review.');
+            self::fail('The only free account rejected its key, yet the call answered.');
+        } catch (EveryAccountCoolingDown $out) {
+            self::assertGreaterThan(0, $out->secondsUntilAnAccountIsFree);
+        }
+    }
+
     public function testACallWhoseEveryAccountFailsWithoutALimitKeepsTheFailoverError(): void
     {
         $broken = static fn (): never => throw new RuntimeException('bad request');
