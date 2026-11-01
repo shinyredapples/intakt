@@ -36,7 +36,7 @@ final class CleanupOnStop implements ResetInterface
         $cleanup = $this->cleanup;
         $this->cleanup = null;
 
-        if (null !== $cleanup) {
+        if ($cleanup instanceof Closure) {
             $cleanup();
         }
     }

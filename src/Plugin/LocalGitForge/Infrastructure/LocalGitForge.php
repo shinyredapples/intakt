@@ -242,7 +242,7 @@ final readonly class LocalGitForge implements Forge
         $process = $this->git($arguments);
 
         if (!$process->isSuccessful()) {
-            throw new ForgeReadFailed(sprintf('git %s failed: %s', self::commandOf($arguments), trim($process->getErrorOutput())));
+            throw new ForgeReadFailed(sprintf('git %s failed: %s', $this->commandOf($arguments), trim($process->getErrorOutput())));
         }
 
         return $process->getOutput();
@@ -255,7 +255,7 @@ final readonly class LocalGitForge implements Forge
     {
         // An argument with a NUL byte cannot reach git, because PHP refuses to start the process with it.
         if ([] !== array_filter($arguments, static fn (string $argument): bool => str_contains($argument, "\0"))) {
-            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', self::commandOf($arguments)));
+            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $this->commandOf($arguments)));
         }
 
         try {
@@ -265,7 +265,7 @@ final readonly class LocalGitForge implements Forge
         } catch (RepositoryAttributesRefused $refused) {
             throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('git %s did not run: %s', self::commandOf($arguments), $failure->getMessage()), $failure->getCode(), previous: $failure);
+            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $this->commandOf($arguments), $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 
         return $process;
@@ -275,7 +275,7 @@ final readonly class LocalGitForge implements Forge
      * @param list<string> $arguments
      */
     // The -c settings in front are skipped, so a failure names the git command rather than "-c".
-    private static function commandOf(array $arguments): string
+    private function commandOf(array $arguments): string
     {
         $position = 0;
         while ('-c' === ($arguments[$position] ?? null)) {
