@@ -9,8 +9,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
-use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use LogicException;
 use Override;
 
