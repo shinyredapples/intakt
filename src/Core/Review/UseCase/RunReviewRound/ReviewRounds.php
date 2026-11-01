@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Closure;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
@@ -18,6 +19,9 @@ use Throwable;
 // The stored rounds: opened with their reviewers, and completed by whichever reviewer finishes last, because an earlier finisher finds the guard closed and a message delivered twice finds the round complete.
 final readonly class ReviewRounds
 {
+    // Three, because each retry follows a commit of another round of the change, and more rounds than that rarely start at once.
+    private const int ATTEMPTS = 3;
+
     public function __construct(
         private EntityManagerInterface $entities,
         private ClockInterface $clock,
@@ -34,20 +38,7 @@ final readonly class ReviewRounds
      */
     public function inOneTransaction(Closure $work): mixed
     {
-        // The connection's transaction rather than wrapInTransaction, because that closes the entity manager when the work fails, and a worker handles its next message with the same one.
-        try {
-            return $this->entities->getConnection()->transactional(function () use ($work): mixed {
-                $result = $work();
-                $this->entities->flush();
-
-                return $result;
-            });
-        } catch (Throwable $failure) {
-            // Cleared because the rolled-back changes, and the ids the database gave them, are still in memory and would collide with the next transaction.
-            $this->entities->clear();
-
-            throw $failure;
-        }
+        return $this->attempt($work, self::ATTEMPTS);
     }
 
     public function open(RunReviewRound $command): ReviewRound
@@ -93,6 +84,53 @@ final readonly class ReviewRounds
     public function openFindingsOf(ReviewRound $round): array
     {
         return $this->findings->openFor($round);
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $work
+     *
+     * @return T
+     */
+    private function attempt(Closure $work, int $attemptsLeft): mixed
+    {
+        try {
+            return $this->once($work);
+        } catch (RetryableException $failure) {
+            // Not retried inside a caller's transaction, because only the outermost one can start over from a fresh snapshot.
+            if (1 === $attemptsLeft || $this->entities->getConnection()->isTransactionActive()) {
+                throw $failure;
+            }
+
+            // The whole transaction again, because on SQLite a transaction that read before another writer committed cannot write at all, and only a new one sees that commit.
+            return $this->attempt($work, $attemptsLeft - 1);
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $work
+     *
+     * @return T
+     */
+    private function once(Closure $work): mixed
+    {
+        // The connection's transaction rather than wrapInTransaction, because that closes the entity manager when the work fails, and a worker handles its next message with the same one.
+        try {
+            return $this->entities->getConnection()->transactional(function () use ($work): mixed {
+                $result = $work();
+                $this->entities->flush();
+
+                return $result;
+            });
+        } catch (Throwable $failure) {
+            // Cleared because the rolled-back changes, and the ids the database gave them, are still in memory and would collide with the next transaction.
+            $this->entities->clear();
+
+            throw $failure;
+        }
     }
 
     private function newId(): UuidV7

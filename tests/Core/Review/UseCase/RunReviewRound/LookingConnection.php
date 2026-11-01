@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Closure;
 use Doctrine\DBAL\Driver\Connection;
 use Doctrine\DBAL\Driver\Middleware\AbstractConnectionMiddleware;
 use Doctrine\DBAL\Driver\Statement;
 
-final class HidingConnection extends AbstractConnectionMiddleware
+final class LookingConnection extends AbstractConnectionMiddleware
 {
     private bool $looked = false;
 
-    public function __construct(Connection $connection, private readonly string $table)
+    /**
+     * @param Closure(): mixed $meanwhile
+     */
+    public function __construct(Connection $connection, private readonly string $table, private readonly Closure $meanwhile)
     {
         parent::__construct($connection);
     }
@@ -25,6 +29,6 @@ final class HidingConnection extends AbstractConnectionMiddleware
 
         $this->looked = true;
 
-        return parent::prepare(preg_replace('/ WHERE /', ' WHERE 1 = 0 AND ', $sql, 1) ?? $sql);
+        return new LookingStatement(parent::prepare($sql), $this->meanwhile);
     }
 }

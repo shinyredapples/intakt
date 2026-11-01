@@ -180,14 +180,22 @@ final readonly class RoundFixture
         return new SecondWorker($this->worker($entities, $vendor, $ledger), $entities, $ledger);
     }
 
-    // A round on its own connection that looked for the change's ledger before another round of the change stored it, the order in which two first rounds of a change meet; its ledger is in memory because the Doctrine ledger writes through the first connection.
-    public function startAfterLookingBeforeAnotherRound(int $reviewers): string
+    // A round on its own connection that looked for the change's ledger before another round of the change committed it, the order in which two first rounds of a change meet; its ledger is in memory because the Doctrine ledger writes through the first connection.
+    public function startWhileAnotherRoundCommitsAfterItsFirstLook(int $reviewers): string
     {
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new HideFirstLookAt('change_findings')]));
+        // WAL, because there a reader does not block the other round's commit but keeps the snapshot from before it, as concurrent workers on SQLite meet it.
+        $this->entities->getConnection()->executeStatement('PRAGMA journal_mode=WAL');
+        $another = fn (): ReviewRound => $this->start(1);
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AfterFirstLookAt('change_findings', $another)]));
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), self::CHANGE);
 
         return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger()), $this->bus)($command);
+    }
+
+    public function transactions(): ReviewRounds
+    {
+        return $this->rounds($this->entities);
     }
 
     public function round(string $id): ReviewRound

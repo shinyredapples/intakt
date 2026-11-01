@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Driver\PDO\Exception as PdoDriverException;
+use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -27,7 +29,9 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
+use PDOException;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
 
@@ -68,13 +72,63 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([[], []], array_values(array_map(static fn (ReviewBrief $brief): array => $brief->open, $vendor->briefs)));
     }
 
-    public function testAFirstRoundThatFoundNoLedgerBeforeAnotherRoundStoredItBecomesTheSecondRound(): void
+    public function testAFirstRoundThatFoundNoLedgerBeforeAnotherRoundCommittedItBecomesTheSecondRound(): void
     {
-        $this->fixture->start(1);
-
-        $later = $this->fixture->startAfterLookingBeforeAnotherRound(1);
+        $later = $this->fixture->startWhileAnotherRoundCommitsAfterItsFirstLook(1);
 
         self::assertSame(2, $this->fixture->round($later)->number());
+        self::assertCount(2, $this->fixture->storedRounds());
+    }
+
+    public function testATransactionThatKeepsMeetingAnotherWritersCommitIsTriedThreeTimesThenFails(): void
+    {
+        $tries = 0;
+
+        try {
+            $this->fixture->transactions()->inOneTransaction(static function () use (&$tries): never {
+                ++$tries;
+
+                throw self::databaseLocked();
+            });
+        } catch (LockWaitTimeoutException) {
+        }
+
+        self::assertSame(3, $tries);
+    }
+
+    public function testATransactionThatFailsForAnotherReasonIsTriedOnce(): void
+    {
+        $tries = 0;
+
+        try {
+            $this->fixture->transactions()->inOneTransaction(static function () use (&$tries): never {
+                ++$tries;
+
+                throw new RuntimeException('Refused.');
+            });
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame(1, $tries);
+    }
+
+    public function testATransactionInsideACallersTransactionIsLeftToTheCallerToRetry(): void
+    {
+        $tries = 0;
+        $connection = $this->fixture->entities->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $this->fixture->transactions()->inOneTransaction(static function () use (&$tries): never {
+                ++$tries;
+
+                throw self::databaseLocked();
+            });
+        } catch (LockWaitTimeoutException) {
+        }
+
+        $connection->rollBack();
+        self::assertSame(1, $tries);
     }
 
     public function testTheSecondRoundTellsEveryReviewerTheOpenFindingsUnderTheirIds(): void
@@ -270,5 +324,11 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
     private function finding(string $id, bool $repeat = false): Finding
     {
         return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+    }
+
+    // What SQLite reports when a transaction that read before another writer committed tries to write.
+    private static function databaseLocked(): LockWaitTimeoutException
+    {
+        return new LockWaitTimeoutException(PdoDriverException::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
     }
 }
