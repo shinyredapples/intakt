@@ -26,7 +26,7 @@ final readonly class WorkersOnSleep implements ClockInterface
         private ReviewWithReviewerHandler $reviewer,
         #[Autowire(service: 'intakt.test.mcp.judge_worker')]
         private JudgeRoundHandler $judge,
-        private MockClock $clock = new MockClock("2026-11-01 12:00:00", "UTC"),
+        private MockClock $clock = new MockClock('2026-11-01 12:00:00', 'UTC'),
     ) {
     }
 
