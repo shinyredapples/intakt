@@ -31,18 +31,18 @@ final class SeenChange
         OpenChange $seen,
     ) {
         $this->head = $seen->head->hash;
-        $this->updatedAt = self::momentOf($seen);
+        $this->updatedAt = $this->momentOf($seen);
     }
 
     public function isStillAt(OpenChange $open): bool
     {
-        return $this->head === $open->head->hash && $this->updatedAt === self::momentOf($open);
+        return $this->head === $open->head->hash && $this->updatedAt === $this->momentOf($open);
     }
 
     public function see(OpenChange $open): void
     {
         $this->head = $open->head->hash;
-        $this->updatedAt = self::momentOf($open);
+        $this->updatedAt = $this->momentOf($open);
     }
 
     public function project(): string
@@ -55,7 +55,7 @@ final class SeenChange
         return $this->change;
     }
 
-    private static function momentOf(OpenChange $open): string
+    private function momentOf(OpenChange $open): string
     {
         return $open->updatedAt->setTimezone(new DateTimeZone('UTC'))->format(self::MOMENT);
     }
