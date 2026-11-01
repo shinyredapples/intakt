@@ -50,7 +50,7 @@ final readonly class JudgeRoundHandler
         }
 
         try {
-            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings));
+            return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings, $round->id()));
         } catch (ProviderRateLimited $limited) {
             throw JudgeLimited::after($limited->retryAfterSeconds);
         } catch (VendorAccountBusy|ProviderFailedTransiently) {
