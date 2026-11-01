@@ -49,6 +49,10 @@ Every review round records the identity it was started on (`RunReviewRound` carr
 
 The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$TMPDIR` and remove it afterwards.
 
+## GitHub App identity
+
+`Plugin/GitHubForge` (plan task T37, part 1) is Intakt's identity on GitHub. `Infrastructure\AppJwt` signs an RS256 JWT with the App's private key (`openssl_sign`; `iss` is the App id, `iat` is 60 seconds before now and `exp` 540 seconds after, from `ClockInterface`). `InstallationTokenMinter::mint()` posts it as a bearer token to `/app/installations/{id}/access_tokens` through `HttpClientInterface` and returns an `InstallationToken` (value and UTC expiry; `#[NoDiscard]`). `InstallationTokens::current()` is the one door for a forge call and, later, for a git fetch or push: it returns the cached token while it expires more than 60 seconds from now and mints a new one otherwise; it implements `ResetInterface`, so a worker drops it between messages. Anything but a 201 with a non-empty `token` and a parseable `expires_at`, a transport error, and a key that cannot sign throw `InstallationTokenNotMinted`; there is no other credential to fall back to, and a failed mint caches nothing. The key and the JWT are `#[SensitiveParameter]`; messages and log records hold the status or the exception class only. The three settings are the environment variables `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY`, wired in `config/services.yaml`. The tests (`tests/Plugin/GitHubForge/`) replay recorded GitHub answers with `MockHttpClient` and generate their RSA key at run time. The installation readback, the permission comparison, the trust checks and the git credential door are later parts of T37.
+
 ## Quality gates
 
 `bin/check` runs every gate and prints one JSON line per gate, then a result line. CI runs the same command.
