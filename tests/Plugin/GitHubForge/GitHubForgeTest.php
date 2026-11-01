@@ -427,6 +427,7 @@ final class GitHubForgeTest extends TestCase
             self::assertStringContainsString(TransportException::class, $failure->getMessage());
         }
     }
+
     private function movedChange(GitHubForge $forge): Change
     {
         $this->pullFixture = 'pull_request_moved.json';
