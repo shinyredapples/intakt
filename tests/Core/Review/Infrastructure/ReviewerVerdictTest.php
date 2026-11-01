@@ -40,7 +40,7 @@ use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Uid\UuidV7;
 
-// The reviewer agent is covered by ReviewerPromptCachingTest; this class proves the verdict flow through the whole stack.
+// Covers nothing because ReviewerPromptCachingTest owns the reviewer agent; this class proves the verdict flow through the whole stack.
 #[CoversNothing]
 final class ReviewerVerdictTest extends WebTestCase
 {

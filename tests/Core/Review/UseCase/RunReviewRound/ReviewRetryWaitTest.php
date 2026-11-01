@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use Psr\Container\ContainerInterface;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -15,7 +14,7 @@ use Symfony\Component\Messenger\Retry\RetryStrategyInterface;
 use Symfony\Component\Messenger\Stamp\RedeliveryStamp;
 
 // The configured retry strategy of the async transport, because a busy account or a limit without a reset comes back after the wait it names.
-#[UsesClass(ReviewerRateLimited::class)]
+#[CoversNothing]
 final class ReviewRetryWaitTest extends KernelTestCase
 {
     // Within a tenth either way, because Messenger's jitter spreads the retries of workers that were refused together.

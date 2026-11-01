@@ -5,12 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Exception\TableNotFoundException;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
-use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
-use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
@@ -19,9 +15,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 
 // On the application's Doctrine transport, which the test environment otherwise replaces with the in-memory one; the queue table is made as messenger:setup-transports makes it.
 #[Group('persistence')]
-#[UsesClass(RunReviewRoundHandler::class)]
-#[UsesClass(ReviewRounds::class)]
-#[UsesClass(RoundLedger::class)]
+#[CoversNothing]
 final class DoctrineQueueTest extends KernelTestCase
 {
     private const string TRANSPORT_DSN = 'MESSENGER_TRANSPORT_DSN';

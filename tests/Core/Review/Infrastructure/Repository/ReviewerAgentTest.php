@@ -20,7 +20,7 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
-// Drives the repository tools through an agent; ReviewerToolboxFactoryTest owns the factory.
+// Covers nothing because it drives the repository tools through an agent; ReviewerToolboxFactoryTest owns the factory.
 #[CoversNothing]
 final class ReviewerAgentTest extends WebTestCase
 {

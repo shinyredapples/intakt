@@ -4,40 +4,18 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
-use Intakt\Core\Git\Contract\GitCall;
-use Intakt\Core\Git\Contract\HardenedGit;
-use Intakt\Plugin\Forge\Contract\Change;
-use Intakt\Plugin\Forge\Contract\ChangedFile;
-use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
-use Intakt\Plugin\Forge\Contract\CommitRange;
-use Intakt\Plugin\Forge\Contract\Diff;
-use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
-#[UsesClass(LocalGitForge::class)]
-#[UsesClass(Change::class)]
-#[UsesClass(ChangeId::class)]
-#[UsesClass(ChangedFile::class)]
-#[UsesClass(ChangedFiles::class)]
-#[UsesClass(CommitId::class)]
-#[UsesClass(CommitRange::class)]
-#[UsesClass(Diff::class)]
-#[UsesClass(FileStatus::class)]
-#[UsesClass(GitCall::class)]
-#[UsesClass(HardenedGit::class)]
-#[UsesClass(HeadMove::class)]
-#[UsesClass(LocalRepository::class)]
-#[UsesClass(NameStatusParser::class)]
+#[CoversNothing]
 final class HeadMoveTest extends TestCase
 {
     private TemporaryRepository $repository;

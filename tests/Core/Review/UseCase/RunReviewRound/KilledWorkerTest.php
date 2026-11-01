@@ -6,28 +6,14 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Domain\ReviewerState;
-use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
-use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // A killed worker leaves its reviewer running; the test stops a worker right after it took the reviewer and moves the clock past the hold, so the order is forced and nothing repeats.
 #[Group('persistence')]
-#[UsesClass(ReviewWithReviewerHandler::class)]
-#[UsesClass(ReviewerLeases::class)]
-#[UsesClass(ReviewerMoves::class)]
-#[UsesClass(ReviewRounds::class)]
-#[UsesClass(RoundLedger::class)]
-#[UsesClass(RoundState::class)]
-#[UsesClass(ReviewerState::class)]
-#[UsesClass(ReviewerTransition::class)]
+#[CoversNothing]
 final class KilledWorkerTest extends KernelTestCase
 {
     private RoundFixture $fixture;

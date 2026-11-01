@@ -6,33 +6,18 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Domain\ReviewerState;
-use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStillHeld;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
-use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
-use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Two workers on two connections, the second one delivering the same message while the first is inside its vendor call, because that is the interleaving a duplicate delivery produces; the vendor double forces the order, so no timing is involved.
 #[Group('persistence')]
-#[UsesClass(ReviewWithReviewerHandler::class)]
-#[UsesClass(ReviewerLeases::class)]
-#[UsesClass(ReviewerMoves::class)]
-#[UsesClass(ReviewerStillHeld::class)]
-#[UsesClass(ReviewRounds::class)]
-#[UsesClass(RoundLedger::class)]
-#[UsesClass(RoundState::class)]
-#[UsesClass(ReviewerState::class)]
-#[UsesClass(ReviewerTransition::class)]
+#[CoversNothing]
 final class DuplicateDeliveryTest extends KernelTestCase
 {
     private RoundFixture $fixture;
