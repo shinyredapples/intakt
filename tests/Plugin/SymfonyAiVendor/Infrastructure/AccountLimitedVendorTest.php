@@ -67,7 +67,7 @@ final class AccountLimitedVendorTest extends TestCase
         $vendor = self::createStub(Vendor::class);
         $vendor->method('judge')->willReturn($judgement);
 
-        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', []));
+        $result = $this->vendor($vendor)->judge('intakt', new JudgeRequest('Add a cart.', [], new UuidV7()));
 
         self::assertSame($judgement, $result);
     }

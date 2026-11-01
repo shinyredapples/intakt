@@ -67,7 +67,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $tier = Tier::Light;
         $platform = new TierRoutedPlatform($this->tiers, $this->resolver, $project);
-        $reservation = $this->usage->reserve($project, $tier);
+        $reservation = $this->usage->reserve($project, $tier, $request->round);
 
         try {
             $judgement = $this->judge->judge($request, $platform, $tier->value);

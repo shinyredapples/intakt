@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -32,6 +33,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -111,6 +113,16 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame([1, 100, 20, 120], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
     }
 
+    public function testTheTokensOfTheJudgeCallOfTheRoundAreCounted(): void
+    {
+        $reviewers = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+        $vendor = new JudgeCallingVendor($reviewers, fn (JudgeRequest $request) => $this->recordUsage('judge', 300, $request->round->toRfc4122()));
+
+        $review = $this->reviewWith($vendor);
+
+        self::assertSame([1, 250, 50, 300], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
+    }
+
     public function testTheTokensOfACallMadeForAnotherRoundAreLeftOut(): void
     {
         $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, '0192a000-0000-7000-8000-0000000000ff'));
@@ -148,7 +160,7 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(2, $second->round);
     }
 
-    private function reviewWith(VerdictPerRole $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
+    private function reviewWith(Vendor $vendor,?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
         $work = function () use ($vendor, &$delivered, $duringTheRound): void {
