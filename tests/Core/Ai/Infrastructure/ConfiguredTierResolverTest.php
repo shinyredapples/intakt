@@ -91,6 +91,16 @@ final class ConfiguredTierResolverTest extends TestCase
     public function testATierWithoutConfiguredSubstitutesHasNone(): void
     {
         self::assertSame([], $this->resolver()->substitutes('alpha', Tier::Strong));
+        self::assertFalse($this->resolver()->hasSubstitutes('alpha', Tier::Strong));
+    }
+
+    public function testATierWhoseEveryConfiguredSubstituteIsDisabledStillHasSubstitutes(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => [
+            ['provider' => 'openai', 'model' => 'one'],
+        ]]]]], ['openai' => 'Provider "openai" is disabled.']);
+
+        self::assertTrue($resolver->hasSubstitutes('alpha', Tier::Strong));
     }
 
     /**

@@ -23,4 +23,10 @@ interface TierResolver
      * @throws TierResolutionFailure
      */
     public function substitutes(string $project, Tier $tier): array;
+
+    // Counts a substitute on a disabled provider too, because the owner named a way around a provider outage, so the tier ends blocked instead of waiting.
+    /**
+     * @throws TierResolutionFailure
+     */
+    public function hasSubstitutes(string $project, Tier $tier): bool;
 }

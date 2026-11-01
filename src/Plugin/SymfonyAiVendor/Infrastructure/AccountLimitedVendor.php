@@ -43,7 +43,7 @@ final readonly class AccountLimitedVendor implements Vendor
     private function nextAccountOrWait(string $project, Tier $tier, ProviderRateLimited|ProviderFailedTransiently $out): VendorAccountOut|ProviderRateLimited
     {
         $wait = $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
-        if (0 === $wait || [] !== $this->resolver->substitutes($project, $tier)) {
+        if (0 === $wait || $this->resolver->hasSubstitutes($project, $tier)) {
             return new VendorAccountOut($out);
         }
 
@@ -55,6 +55,6 @@ final readonly class AccountLimitedVendor implements Vendor
     {
         $free = 0 === $this->cooldowns->secondsUntilAnAccountIsFree($this->resolver->resolve($project, $tier)->provider);
 
-        return $free || [] !== $this->resolver->substitutes($project, $tier) ? new VendorAccountOut($rejected) : $rejected;
+        return $free || $this->resolver->hasSubstitutes($project, $tier) ? new VendorAccountOut($rejected) : $rejected;
     }
 }

@@ -99,7 +99,7 @@ final class AccountLimitedVendorTest extends TestCase
     {
         $limited = new ProviderRateLimited(300, new RuntimeException('429'));
 
-        $out = $this->failureOf($this->vendor($this->failing($limited), $this->cooldowns(45), [new ResolvedModel(Provider::OpenAi, 'other')]));
+        $out = $this->failureOf($this->vendor($this->failing($limited), $this->cooldowns(45), $this->tierWithSubstitutes()));
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
     }
@@ -122,7 +122,7 @@ final class AccountLimitedVendorTest extends TestCase
     {
         $rejected = new ProviderRejectedTheKey(new RuntimeException('401'));
 
-        $out = $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(45), [new ResolvedModel(Provider::OpenAi, 'other')]));
+        $out = $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(45), $this->tierWithSubstitutes()));
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
     }
@@ -146,12 +146,9 @@ final class AccountLimitedVendorTest extends TestCase
         return $vendor;
     }
 
-    /**
-     * @param list<ResolvedModel> $substitutes
-     */
-    private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null, array $substitutes = []): AccountLimitedVendor
+    private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null, ?TierResolver $resolver = null): AccountLimitedVendor
     {
-        return new AccountLimitedVendor($vendor, $this->resolver($substitutes), $cooldowns ?? $this->cooldowns(0));
+        return new AccountLimitedVendor($vendor, $resolver ?? $this->tier(), $cooldowns ?? $this->cooldowns(0));
     }
 
     private function cooldowns(int $secondsUntilAnAccountIsFree): AccountCooldowns
@@ -162,14 +159,19 @@ final class AccountLimitedVendorTest extends TestCase
         return $cooldowns;
     }
 
-    /**
-     * @param list<ResolvedModel> $substitutes
-     */
-    private function resolver(array $substitutes = []): TierResolver
+    private function tier(): TierResolver
     {
         $resolver = self::createStub(TierResolver::class);
         $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
-        $resolver->method('substitutes')->willReturn($substitutes);
+
+        return $resolver;
+    }
+
+    private function tierWithSubstitutes(): TierResolver
+    {
+        $resolver = self::createStub(TierResolver::class);
+        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
+        $resolver->method('hasSubstitutes')->willReturn(true);
 
         return $resolver;
     }

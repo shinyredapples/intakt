@@ -59,6 +59,11 @@ final readonly class ConfiguredTierResolver implements TierResolver
         return $substitutes;
     }
 
+    public function hasSubstitutes(string $project, Tier $tier): bool
+    {
+        return [] !== ($this->mapping($project, $tier)['substitutes'] ?? []);
+    }
+
     /**
      * @return array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}
      */

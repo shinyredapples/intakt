@@ -44,7 +44,7 @@ final readonly class TierPlatform implements TierInvoker
         $own = $this->resolver->resolve($project, $tier);
         $substitutes = $this->resolver->substitutes($project, $tier);
 
-        $answering = array_find([$own, ...$substitutes], $this->hasAFreeAccount(...)) ?? throw $this->outage($own, $substitutes);
+        $answering = array_find([$own, ...$substitutes], $this->hasAFreeAccount(...)) ?? throw $this->outage($project, $tier, [$own, ...$substitutes]);
         $this->recordSwitch($own, $answering);
 
         return $answering;
@@ -64,18 +64,20 @@ final readonly class TierPlatform implements TierInvoker
     }
 
     /**
-     * @param list<ResolvedModel> $substitutes
+     * @param non-empty-list<ResolvedModel> $usable
      */
-    // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked.
-    private function outage(ResolvedModel $own, array $substitutes): EveryAccountCoolingDown|EveryProviderOut
+    // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked; one whose substitutes are all disabled still ends blocked, because the owner named a way around the outage.
+    private function outage(string $project, Tier $tier, array $usable): EveryAccountCoolingDown|EveryProviderOut
     {
-        if ([] === $substitutes) {
+        $own = $usable[0];
+
+        if (!$this->resolver->hasSubstitutes($project, $tier)) {
             return new EveryAccountCoolingDown($own->provider, $this->cooldowns->secondsUntilAnAccountIsFree($own->provider));
         }
 
         $waits = [];
 
-        foreach ([$own, ...$substitutes] as $model) {
+        foreach ($usable as $model) {
             $waits[$model->provider->value] ??= new ProviderWait($model->provider, $this->cooldowns->secondsUntilAnAccountIsFree($model->provider));
         }
 

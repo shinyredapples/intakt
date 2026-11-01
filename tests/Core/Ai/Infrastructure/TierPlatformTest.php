@@ -100,6 +100,18 @@ final class TierPlatformTest extends TestCase
         }
     }
 
+    public function testATierWhoseProviderIsOutAndWhoseEverySubstituteIsDisabledEndsAsAnOutageInsteadOfWaiting(): void
+    {
+        $platform = $this->tierPlatform($this->out(Provider::Anthropic), disabled: ['openai' => 'disabled', 'openai_compatible' => 'disabled']);
+
+        try {
+            $platform->answering('gamma', Tier::Strong);
+            self::fail('A tier whose every usable provider is out was answered.');
+        } catch (EveryProviderOut $out) {
+            self::assertSame('Every provider of the tier is out: anthropic for 60 s.', $out->getMessage());
+        }
+    }
+
     public function testACallGoesToTheProviderOfTheModelItIsGiven(): void
     {
         $answer = $this->tierPlatform()->invoke(new ResolvedModel(Provider::OpenAi, 'sub-openai'), new TierRequest('review'))->asText();
