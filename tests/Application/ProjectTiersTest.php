@@ -15,6 +15,7 @@ use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
+use Intakt\Tests\Core\Shadow\WriteRefusingForge;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -140,6 +141,9 @@ final class ProjectTiersTest extends KernelTestCase
         $forge->postReview('alpha-one', new ChangeId('feature'), 'approve');
 
         self::assertInstanceOf(ShadowGuardedForgeWrites::class, $forge);
+        $refusing = self::getContainer()->get(WriteRefusingForge::class);
+        self::assertInstanceOf(WriteRefusingForge::class, $refusing);
+        self::assertSame([], $refusing->writeLog);
     }
 
     public function testAProjectWithoutAModeWritesToTheForgeTheContainerWritesTo(): void
