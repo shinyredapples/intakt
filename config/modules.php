@@ -13,6 +13,7 @@ return [
     'Core/Watcher',
     'Plugin/Forge',
     'Plugin/Gate',
+    'Plugin/GitHubForge',
     'Plugin/LocalGitForge',
     'Plugin/Notifier',
     'Plugin/SymfonyAiVendor',
