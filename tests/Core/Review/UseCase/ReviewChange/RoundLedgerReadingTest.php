@@ -22,6 +22,8 @@ final class RoundLedgerReadingTest extends KernelTestCase
 {
     private const string ROUND = '0192a000-0000-7000-8000-000000000001';
 
+    private const string OTHER_ROUND = '0192a000-0000-7000-8000-000000000002';
+
     private Ledger $ledger;
 
     protected function setUp(): void
@@ -31,53 +33,51 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     public function testTheTokensOfACallRecordedTheWayUsageLedgerRecordsItAreCounted(): void
     {
-        $this->roundStarts();
-        $this->recordCall('c1', 'alpha', 'settled');
+        $this->recordCall('c1', self::ROUND, 'settled');
 
-        self::assertSame([1, 100, 20, 120], $this->tokensOf('alpha'));
+        self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
     }
 
     public function testTheTokensAnUnsettledCallSpentAreCounted(): void
     {
-        $this->roundStarts();
-        $this->recordCall('c1', 'alpha', 'unsettled');
+        $this->recordCall('c1', self::ROUND, 'unsettled');
 
-        self::assertSame([1, 100, 20, 120], $this->tokensOf('alpha'));
+        self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
     }
 
-    public function testACallOfAnotherProjectIsLeftOut(): void
+    public function testACallStartedWithoutARoundIdCountsForNoRound(): void
     {
-        $this->roundStarts();
-        $this->recordCall('c1', 'beta', 'settled');
+        $this->recordCall('c1', null, 'settled');
 
-        self::assertSame([0, 0, 0, 0], $this->tokensOf('alpha'));
+        self::assertSame([0, 0, 0, 0], $this->tokensOf(self::ROUND));
     }
 
-    public function testACallStartedBeforeTheRoundIsLeftOut(): void
-    {
-        $this->recordCall('c0', 'alpha', 'settled');
-        $this->roundStarts();
-
-        self::assertSame([0, 0, 0, 0], $this->tokensOf('alpha'));
-    }
-
-    private function roundStarts(): void
+    public function testTwoRoundsOfOneProjectWhoseCallsInterleaveEachCountOnlyTheirOwn(): void
     {
         $this->append(LedgerEventKind::ReviewStarted, ['round' => self::ROUND, 'project' => 'alpha', 'reviewers' => 1]);
+        $this->append(LedgerEventKind::ReviewStarted, ['round' => self::OTHER_ROUND, 'project' => 'alpha', 'reviewers' => 1]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'a1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'b1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::OTHER_ROUND]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'b1', 'phase' => 'settled', 'usages' => [['account' => null, 'prompt' => 500, 'completion' => 50, 'total' => 550]]]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'a1', 'phase' => 'settled', 'usages' => [['account' => null, 'prompt' => 100, 'completion' => 20, 'total' => 120]]]);
+
+        self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
+        self::assertSame([1, 500, 50, 550], $this->tokensOf(self::OTHER_ROUND));
     }
 
-    private function recordCall(string $call, string $project, string $ending): void
+    private function recordCall(string $call, ?string $round, string $ending): void
     {
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard']);
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
+        $this->append(LedgerEventKind::UsageRecorded, null === $round ? $started : $started + ['round' => $round]);
         $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => $ending, 'usages' => [['account' => null, 'prompt' => 100, 'completion' => 20, 'total' => 120]]]);
     }
 
     /**
      * @return list<int>
      */
-    private function tokensOf(string $project): array
+    private function tokensOf(string $round): array
     {
-        $tokens = new RoundLedgerReading($this->ledger)->tokensSince(self::ROUND, $project);
+        $tokens = new RoundLedgerReading($this->ledger)->tokensOf($round);
 
         return [$tokens->calls, $tokens->prompt, $tokens->completion, $tokens->total];
     }

@@ -109,7 +109,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $answering = $this->answering($project, Tier::Light);
 
-        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, Tier::Light), $request));
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, Tier::Light, $request->round), $request));
     }
 
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
