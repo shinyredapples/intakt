@@ -250,6 +250,28 @@ final class LocalGitForgeTest extends TestCase
         self::assertSame("<?php\n", $content);
     }
 
+    public function testTheSnapshotHoldsAFileTheSparseCheckoutOfTheRepositoryLeavesOut(): void
+    {
+        $this->repository->commitFile('docs/Kept.md', "kept\n");
+        $head = $this->repository->commitFile('src/Left.php', "<?php\n");
+        $this->repository->configure('core.sparseCheckout', 'true');
+        file_put_contents($this->repository->path.'/.git/info/sparse-checkout', "/docs/\n");
+
+        $held = $this->forge()->withSnapshotOf(new CommitId($head), static fn (string $snapshot): bool => is_file($snapshot.'/src/Left.php'));
+
+        self::assertTrue($held);
+    }
+
+    public function testTheSnapshotHoldsTheBytesOfTheHeadWhateverTheLineEndingConfig(): void
+    {
+        $head = $this->repository->commitFile('src/Lines.php', "<?php\nreturn 1;\n");
+        $this->repository->configure('core.autocrlf', 'true');
+
+        $content = $this->forge()->withSnapshotOf(new CommitId($head), static fn (string $snapshot): string|false => file_get_contents($snapshot.'/src/Lines.php'));
+
+        self::assertSame("<?php\nreturn 1;\n", $content);
+    }
+
     public function testItFailsToSnapshotAHeadThatIsNotInTheRepository(): void
     {
         try {
