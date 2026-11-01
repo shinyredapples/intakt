@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ListProjects;
 
+use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,7 +19,7 @@ final readonly class ListProjectsController
     ) {
     }
 
-    #[Route('/projects', name: 'dashboard_list_projects', methods: ['GET'])]
+    #[Route('/projects', name: DashboardRoutes::LIST_PROJECTS, methods: ['GET'])]
     public function __invoke(): Response
     {
         $projects = ProjectSummary::fromReviews($this->reviews->newestFirst());

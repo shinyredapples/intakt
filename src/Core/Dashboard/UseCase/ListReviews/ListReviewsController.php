@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ListReviews;
 
+use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,7 +20,7 @@ final readonly class ListReviewsController
     ) {
     }
 
-    #[Route('/reviews', name: 'dashboard_list_reviews', methods: ['GET'])]
+    #[Route('/reviews', name: DashboardRoutes::LIST_REVIEWS, methods: ['GET'])]
     public function __invoke(#[MapQueryParameter] ?string $project = null): Response
     {
         $reviews = array_values(array_filter(
