@@ -19,9 +19,6 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: 'review_round')]
 final class ReviewRound implements HasPlace
 {
-    // The one transition of a round; a single named value, so a constant rather than an enum.
-    public const string COMPLETION = 'complete';
-
     // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
     /** @var Collection<int, RoundReviewer> */
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]
@@ -36,6 +33,10 @@ final class ReviewRound implements HasPlace
 
     #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
     private ReviewSubject $subject;
+
+    // Kept with the round when it completes, because the change's ledger moves on with later rounds and skips the verdicts of a round that completes after a newer one; nullable, because MySQL refuses a default on a text column.
+    #[ORM\Column(name: 'reported_findings', type: 'text', nullable: true)]
+    private ?string $reportedFindings = null;
 
     public function __construct(
         #[ORM\Id]
@@ -98,6 +99,16 @@ final class ReviewRound implements HasPlace
     public function openFindingsJson(): ?string
     {
         return $this->change->openFindings;
+    }
+
+    public function reportedFindingsJson(): ?string
+    {
+        return $this->reportedFindings;
+    }
+
+    public function keepReportedFindings(string $json): void
+    {
+        $this->reportedFindings = $json;
     }
 
     /**

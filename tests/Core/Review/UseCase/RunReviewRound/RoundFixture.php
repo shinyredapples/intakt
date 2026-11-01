@@ -32,6 +32,9 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -51,7 +54,9 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -168,6 +173,23 @@ final readonly class RoundFixture
         return $this->leases($this->entities)->take($message->reviewerId);
     }
 
+    public function judge(Vendor $vendor): JudgeRoundHandler
+    {
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger)), $vendor);
+    }
+
+    // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
+    /**
+     * @return list<JudgeRound>
+     */
+    public function judgings(): array
+    {
+        $queue = $this->container->get('messenger.transport.async');
+        assert($queue instanceof InMemoryTransport);
+
+        return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof JudgeRound));
+    }
+
     public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
     {
         return new BlockReviewerOfFailedMessage($this->leases($this->entities, $ledger), $this->rounds($this->entities), $this->log);
@@ -267,7 +289,12 @@ final readonly class RoundFixture
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->clock, new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round')));
+        return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities));
+    }
+
+    private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
+    {
+        return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
     }
 
     private function panelOf(int $reviewers): Panel

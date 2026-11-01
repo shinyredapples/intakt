@@ -18,6 +18,7 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\HoldRoundUntilEveryReviewerFinished;
 use Intakt\Core\Review\Infrastructure\StateMarkingStore;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -42,6 +43,7 @@ use Symfony\Component\Workflow\WorkflowInterface;
 #[CoversClass(StateMarkingStore::class)]
 #[CoversClass(HoldRoundUntilEveryReviewerFinished::class)]
 #[UsesClass(RoundState::class)]
+#[CoversClass(RoundTransition::class)]
 #[UsesClass(ReviewerRole::class)]
 #[UsesClass(ReviewerModel::class)]
 #[UsesClass(PanelReviewer::class)]
@@ -134,7 +136,7 @@ final class ReviewWorkflowsTest extends KernelTestCase
         $this->finish($round->reviewers()[0]);
         $this->reviewerMachine()->apply($round->reviewers()[1], ReviewerTransition::Start->value);
 
-        self::assertFalse($this->roundMachine()->can($round, ReviewRound::COMPLETION));
+        self::assertFalse($this->roundMachine()->can($round, RoundTransition::Complete->value));
     }
 
     public function testARoundCompletesOnceAndOnlyOnceWhenEveryReviewerFinished(): void
@@ -142,11 +144,31 @@ final class ReviewWorkflowsTest extends KernelTestCase
         $round = $this->round(2);
         array_map($this->finish(...), $round->reviewers());
 
-        self::assertTrue($this->roundMachine()->can($round, ReviewRound::COMPLETION));
-        $this->roundMachine()->apply($round, ReviewRound::COMPLETION);
+        self::assertTrue($this->roundMachine()->can($round, RoundTransition::Complete->value));
+        $this->roundMachine()->apply($round, RoundTransition::Complete->value);
 
         self::assertSame(RoundState::Complete, $round->state());
-        self::assertFalse($this->roundMachine()->can($round, ReviewRound::COMPLETION));
+        self::assertFalse($this->roundMachine()->can($round, RoundTransition::Complete->value));
+    }
+
+    public function testARoundStillCollectingCannotBeJudged(): void
+    {
+        $round = $this->round(1);
+        $this->finish($round->reviewers()[0]);
+
+        self::assertFalse($this->roundMachine()->can($round, RoundTransition::Judge->value));
+    }
+
+    public function testACompleteRoundIsJudgedOnceAndOnlyOnce(): void
+    {
+        $round = $this->round(1);
+        $this->finish($round->reviewers()[0]);
+        $this->roundMachine()->apply($round, RoundTransition::Complete->value);
+
+        $this->roundMachine()->apply($round, RoundTransition::Judge->value);
+
+        self::assertSame(RoundState::Judged, $round->state());
+        self::assertFalse($this->roundMachine()->can($round, RoundTransition::Judge->value));
     }
 
     public function testTheMarkingStoreRefusesASubjectThatKeepsNoPlace(): void

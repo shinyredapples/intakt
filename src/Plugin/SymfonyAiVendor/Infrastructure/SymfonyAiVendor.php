@@ -18,6 +18,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Override;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
@@ -37,6 +38,7 @@ final readonly class SymfonyAiVendor implements Vendor
     ) {
     }
 
+    #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
     {
         $platform = new TierRoutedPlatform($this->tiers, $project);
@@ -60,6 +62,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->readOrRefused($project, $tier, $verdict);
     }
 
+    #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
         $tier = Tier::Light;

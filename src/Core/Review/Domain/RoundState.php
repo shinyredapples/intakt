@@ -8,4 +8,5 @@ enum RoundState: string
 {
     case Collecting = 'collecting';
     case Complete = 'complete';
+    case Judged = 'judged';
 }
