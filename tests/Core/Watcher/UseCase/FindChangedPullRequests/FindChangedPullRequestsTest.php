@@ -175,7 +175,7 @@ final class FindChangedPullRequestsTest extends KernelTestCase
 
     public function testAnUnchangedPullRequestWithAFractionalUpdateTimeIsNotReturnedAgainAfterReloading(): void
     {
-        $fractional = new OpenChange(new ChangeId('7'), new CommitId(str_repeat('a', 40)), new DateTimeImmutable('2026-11-01 10:00:00.123456', new DateTimeZone('UTC')));
+        $fractional = $this->at('7', '2026-11-01 10:00:00.123456');
         $this->forge->opens('alpha', $fractional);
         $this->find('alpha');
         $this->entities->clear();
@@ -194,6 +194,46 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         $this->forge->opens('alpha', RecordedForge::change('7', 'b', '2026-11-01T10:00:00Z'));
 
         self::assertSame([], $this->find('alpha'));
+    }
+
+    public function testAnUpdateWithinTheSameSecondIsReturned(): void
+    {
+        $this->forge->opens('alpha', $this->at('7', '2026-11-01 10:00:00.123456'));
+        $this->find('alpha');
+        $this->entities->clear();
+        $this->forge->opens('alpha', $this->at('7', '2026-11-01 10:00:00.654321'));
+
+        self::assertSame(['7'], $this->ids($this->find('alpha')));
+    }
+
+    public function testAPendingWriteOfTheCallerSurvivesAListing(): void
+    {
+        $this->entities->persist(new ListingValidator('beta', 'pending'));
+
+        new SeenListings($this->entities, $this->locks)->whileListing('alpha', static fn (): null => null);
+
+        $this->entities->flush();
+        $this->entities->clear();
+        self::assertSame('pending', $this->entities->find(ListingValidator::class, 'beta')?->value());
+    }
+
+    public function testAChangeToAnEntityTheCallerHoldsAcrossAListingIsFlushed(): void
+    {
+        $beta = new ListingValidator('beta', 'old');
+        $this->entities->persist($beta);
+        $this->entities->flush();
+
+        new SeenListings($this->entities, $this->locks)->whileListing('alpha', static fn (): null => null);
+
+        $beta->replace('new');
+        $this->entities->flush();
+        $this->entities->clear();
+        self::assertSame('new', $this->entities->find(ListingValidator::class, 'beta')?->value());
+    }
+
+    private function at(string $id, string $updatedAt): OpenChange
+    {
+        return new OpenChange(new ChangeId($id), new CommitId(str_repeat('a', 40)), new DateTimeImmutable($updatedAt, new DateTimeZone('UTC')));
     }
 
     /**

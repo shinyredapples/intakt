@@ -56,7 +56,7 @@ final class Version20261101130000 extends AbstractMigration
                 Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
                 Column::editor()->setUnquotedName('change_ref')->setTypeName(Types::STRING)->setLength(255)->create(),
                 Column::editor()->setUnquotedName('head')->setTypeName(Types::STRING)->setLength(64)->create(),
-                Column::editor()->setUnquotedName('updated_at')->setTypeName(Types::DATETIME_IMMUTABLE)->create(),
+                Column::editor()->setUnquotedName('updated_at')->setTypeName(Types::STRING)->setLength(26)->create(),
             )
             ->setPrimaryKeyConstraint(
                 PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('change_ref'))->create(),
