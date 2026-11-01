@@ -23,6 +23,7 @@
     "symfony/ai-generic-platform": "1.0.0-BETA1",
     "symfony/ai-open-ai-platform": "1.0.0-BETA1",
     "symfony/ai-platform": "1.0.0-BETA1",
+    "symfony/ai-sqlite-store": "1.0.0-BETA1",
     "symfony/ai-store": "1.0.0-BETA1",
     "symfony/console": "^8.1",
     "symfony/doctrine-messenger": "^8.1",

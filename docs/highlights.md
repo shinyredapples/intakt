@@ -37,9 +37,9 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| `DocumentIndexer` and `Retriever` | index resolved findings, retrieve them for the files under review | planned | T17 (#22) |
-| `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one project's memory | planned | T17 (#22) |
-| In-memory store | retrieval tests | planned | T17 (#22) |
+| `DocumentIndexer` and `Retriever` | index memory entries, retrieve those that describe the files under review | in progress | T17 (#22, #461), `src/Core/Memory/Infrastructure/StoreMemoryIndex.php`, `src/Core/Memory/Infrastructure/StoreProjectMemory.php`; indexing resolved findings after a review is still planned |
+| `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one project's memory | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/SqliteMemoryStoreTest.php`; the production wiring is still planned |
+| In-memory store | retrieval tests | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/StoreProjectMemoryTest.php` |
 | Reranker | only when a configured provider supports reranking | planned | T17 (#22) |
 
 ## AI Bundle

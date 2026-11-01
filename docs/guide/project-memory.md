@@ -1,6 +1,6 @@
 # Project memory: what Intakt remembers
 
-Every builder and reviewer starts with a fresh, empty box. So how does the tenth builder know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built, so this describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
+Every builder and reviewer starts with a fresh, empty box. So how does the tenth builder know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, but nothing writes to it or hands it to a job yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
 
 ## How it works
 
