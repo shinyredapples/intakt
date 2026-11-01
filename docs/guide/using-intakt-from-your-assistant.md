@@ -14,7 +14,7 @@ flowchart LR
 
 ## From your AI assistant (MCP)
 
-**MCP** (Model Context Protocol) is a standard way for AI assistants to use tools. Intakt runs an MCP server, so you can ask your assistant things like "start a review of my branch" or "what did the reviewers say about PR 88?", and it calls Intakt's tools to do it.
+**MCP** (Model Context Protocol) is a standard way for AI assistants to use tools. Intakt runs an MCP server, so you can ask your assistant things like "what did the reviewers say about my last review?" or "which projects does Intakt run?", and it calls Intakt's tools to do it. Asking it to "start a review of my branch" is planned.
 
 | Tool | What it does | Changes anything? |
 |---|---|---|
@@ -23,6 +23,8 @@ flowchart LR
 | read verdicts | each reviewer's verdict and findings (built) | no, read only |
 | read the act list | what the builder must fix, after the judge step (built) | no, read only |
 | list projects | the projects this install runs (built) | no, read only |
+
+Your assistant can also read one thing that is not a tool: the **round findings** (`round_findings`, built), every finding the reviewers of a round reported. It only reads and changes nothing.
 
 How it stays safe:
 - **Every tool is labeled** with what it does ("only reads", "changes something"), so your assistant knows before it calls.

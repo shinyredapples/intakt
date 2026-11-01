@@ -20,6 +20,7 @@ Then give the client the token as a bearer header: `claude mcp add --transport h
 ## What it can do
 
 - `list_projects` is marked read-only and not destructive, so a client may call it without asking you. It returns `{"projects": ["alpha", "beta"]}`, or an empty list when no project is configured.
+- The three round tools each take a `roundId`, the UUID of the review round; the tool listing describes it so.
 - `review_status` takes a `roundId` and returns the round (`round`: its id, change and number), its state (`collecting`, `complete` or `judged`) and, for each reviewer, its role and tier (under `reviewer`), state (`queued`, `running`, `verdict`, `failed` or `blocked`) and the failure, if any.
 - `review_verdicts` takes a `roundId` and returns the verdicts the reviewers have given so far: for each, its tier, decision (`approve`, `changes` or `blocked`) and findings. It does not say whether they still stand for the branch's current head.
 - `review_act_list` takes a `roundId` and returns the findings the judge marked for the builder to fix. Until the judge has answered it returns `"judged": false` and an empty list.
