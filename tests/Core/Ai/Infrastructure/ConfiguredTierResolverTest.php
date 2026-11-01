@@ -61,6 +61,19 @@ final class ConfiguredTierResolverTest extends TestCase
         self::assertSame(Provider::Anthropic, $resolved->provider);
     }
 
+    public function testTheConfiguredModelOfATierOnADisabledProviderIsStillNamed(): void
+    {
+        $resolver = $this->resolver(['openai' => 'off']);
+
+        self::assertEquals(new ResolvedModel(Provider::OpenAi, 'other'), $resolver->configured('beta', Tier::Strong));
+        self::assertTrue($resolver->isDisabled(Provider::OpenAi));
+    }
+
+    public function testAProviderThatIsNotDisabledIsEnabled(): void
+    {
+        self::assertFalse($this->resolver(['openai' => 'off'])->isDisabled(Provider::Anthropic));
+    }
+
     public function testAnUnmappedTierIsReported(): void
     {
         $this->expectException(TierNotMapped::class);
@@ -73,6 +86,34 @@ final class ConfiguredTierResolverTest extends TestCase
         $this->expectException(ProjectNotConfigured::class);
 
         $this->resolver()->resolve('gamma', Tier::Strong);
+    }
+
+    public function testATiersSubstitutesAreResolvedInConfiguredOrderAndDisabledProvidersAreLeftOut(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => [
+            ['provider' => 'openai', 'model' => 'one'],
+            ['provider' => 'claude_code', 'model' => 'two'],
+            ['provider' => 'openai_compatible', 'model' => 'three'],
+        ]]]]], ['claude_code' => 'Provider "claude_code" is disabled.']);
+
+        $substitutes = $resolver->substitutes('alpha', Tier::Strong);
+
+        self::assertEquals([new ResolvedModel(Provider::OpenAi, 'one'), new ResolvedModel(Provider::OpenAiCompatible, 'three')], $substitutes);
+    }
+
+    public function testATierWithoutConfiguredSubstitutesHasNone(): void
+    {
+        self::assertSame([], $this->resolver()->substitutes('alpha', Tier::Strong));
+        self::assertFalse($this->resolver()->hasSubstitutes('alpha', Tier::Strong));
+    }
+
+    public function testATierWhoseEveryConfiguredSubstituteIsDisabledStillHasSubstitutes(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => [
+            ['provider' => 'openai', 'model' => 'one'],
+        ]]]]], ['openai' => 'Provider "openai" is disabled.']);
+
+        self::assertTrue($resolver->hasSubstitutes('alpha', Tier::Strong));
     }
 
     /**
