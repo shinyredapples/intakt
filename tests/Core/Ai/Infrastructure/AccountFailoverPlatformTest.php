@@ -124,7 +124,7 @@ final class AccountFailoverPlatformTest extends TestCase
         }
     }
 
-    // The reviewers' probe: with a free account left the rejection used to be the provider's own, and the judging's failure listener and Messenger's retry log what they get.
+    // The reviewers' probe, because with a free account left the rejection used to be the provider's own, and the judging's failure listener and Messenger's retry log what they get.
     public function testAKeyRejectedWhenReadWhileAnotherAccountIsFreeCarriesNoTextOfTheProvider(): void
     {
         $answer = $this->accounts(new FailingWhenRead(new AuthenticationException('invalid key SENTINEL')), $this->answering('second'))->invoke('big', 'Review.');
