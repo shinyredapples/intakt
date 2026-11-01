@@ -291,7 +291,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
     private function answering(string $decision = 'changes'): PlatformInterface
     {
         return MockPlatformFactory::createPlatform(static function () use ($decision): TextResult {
-            $answer = new TextResult(VerdictDocument::fromTheDesign()->with('verdict', $decision)->with('findings', 'approve' === $decision ? [] : VerdictDocument::fromTheDesign()->decoded()['findings'])->json());
+            $answer = new TextResult(VerdictDocument::fromTheDesign()->with('verdict', $decision)->with('resolved', [])->with('findings', 'approve' === $decision ? [] : VerdictDocument::fromTheDesign()->decoded()['findings'])->json());
             $answer->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120, model: 'other'));
 
             return $answer;
