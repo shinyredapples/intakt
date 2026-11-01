@@ -42,4 +42,24 @@ final class ParameterLimitRuleTest extends SandboxTestCase
     {
         $this->assertAcceptedBy('phpstan', 'constructor-with-many-parameters');
     }
+
+    public function testAMethodWhoseFourParametersAVendorInterfaceFixesPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'vendor-method-with-four-parameters');
+    }
+
+    public function testAVendorMethodWithAParameterBeyondItsPrototypeFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'vendor-method-with-an-extra-parameter', 'intakt.parameterLimit Method denormalize() takes 5 parameters, at most 3 allowed');
+    }
+
+    public function testAMethodWithFourParametersFromARepositoryInterfaceFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'repository-interface-method-with-four-parameters', 'src/Report.php:9 intakt.parameterLimit Method line() takes 4 parameters, at most 3 allowed');
+    }
+
+    public function testAMethodNamedLikeAPrivateVendorMethodFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'method-named-like-a-private-vendor-method', 'src/ReportWorkflow.php:16 intakt.parameterLimit Method leave() takes 4 parameters, at most 3 allowed');
+    }
 }

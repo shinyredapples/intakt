@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Symfony\Component\Config\Definition\Builder\NodeBuilder;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 
@@ -22,13 +23,20 @@ final class ProjectsConfiguration implements ConfigurationInterface
 
         foreach (Tier::cases() as $tier) {
             $mapping = $tiers->arrayNode($tier->value)->children();
-            $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-            $mapping->stringNode('model')->isRequired()->cannotBeEmpty()
-                ->validate()->ifTrue(static fn (string $model): bool => !mb_check_encoding($model, 'UTF-8'))->thenInvalid('The "model" key must be valid UTF-8.')->end()
-                ->validate()->ifTrue(static fn (string $model): bool => 1 === preg_match('/^\s*$/u', $model))->thenInvalid('The "model" key must not be blank.')->end();
+            $this->addMapping($mapping);
+            // In the order they are tried, and none by default, so a tier never leaves its provider unless the owner named another.
+            $this->addMapping($mapping->arrayNode('substitutes')->defaultValue([])->arrayPrototype()->children());
         }
 
         return $tree;
+    }
+
+    private function addMapping(NodeBuilder $mapping): void
+    {
+        $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
+        $mapping->stringNode('model')->isRequired()->cannotBeEmpty()
+            ->validate()->ifTrue(static fn (string $model): bool => !mb_check_encoding($model, 'UTF-8'))->thenInvalid('The "model" key must be valid UTF-8.')->end()
+            ->validate()->ifTrue(static fn (string $model): bool => 1 === preg_match('/^\s*$/u', $model))->thenInvalid('The "model" key must not be blank.')->end();
     }
 
     // A list, not a map, because its order is the order the accounts are tried; a provider not listed keeps its default account so a single key needs no entry.

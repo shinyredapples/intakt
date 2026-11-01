@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Symfony\Component\Workflow\Marking;
+use Symfony\Component\Workflow\Transition;
+use Symfony\Component\Workflow\Workflow;
+
+final class ReportWorkflow extends Workflow
+{
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function leave(object $subject, Transition $transition, Marking $marking, array $context = []): void
+    {
+    }
+}

@@ -8,6 +8,16 @@ framework:
     #esi: true
     #fragments: true
 
+    # Reads of the GitHub API only; retry_failed wraps the client in RetryableHttpClient, so a 5xx or a dropped connection is tried again.
+    http_client:
+        scoped_clients:
+            github.client:
+                base_uri: 'https://api.github.com'
+                headers:
+                    X-GitHub-Api-Version: '2022-11-28'
+                retry_failed:
+                    max_retries: 3
+
 when@test:
     framework:
         test: true
