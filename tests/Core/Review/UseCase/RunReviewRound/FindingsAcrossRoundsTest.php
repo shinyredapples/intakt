@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
@@ -21,6 +22,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Tests\Core\Review\SampleIdentity;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -42,6 +44,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(FindingStatus::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(VerdictIdentity::class)]
 #[UsesClass(ReviewBrief::class)]
 final class FindingsAcrossRoundsTest extends KernelTestCase
 {
@@ -201,7 +204,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     public function testARoundStoredBeforeTheOpenFindingsWereKeptWithItIsToldNone(): void
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'), new ChangeRound(self::CHANGE, 2, null));
+        $round = new ReviewRound(Uuid::v7(), new ReviewSubject('alpha', __DIR__, 'Add the thing.'), new ChangeRound(self::CHANGE, 2, null), SampleIdentity::any());
 
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }

@@ -21,11 +21,15 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\RoundVerdicts;
+use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
@@ -38,6 +42,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -50,6 +55,9 @@ use Symfony\Component\Workflow\WorkflowInterface;
 // A round on the application's workflows and a SQLite database, with a bus that keeps the messages instead of queueing them, so a test delivers them in the order it chooses.
 final readonly class RoundFixture
 {
+    public const string TASK = 'Add the thing.';
+    public const string CHANGE = 'feat/thing';
+
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public MockClock $clock;
@@ -83,14 +91,28 @@ final readonly class RoundFixture
 
     public function startOn(MessageBusInterface $queue, int $reviewers): string
     {
-        return $this->startFor('feat/thing', $queue, $reviewers);
+        return $this->startFor(self::CHANGE, $queue, $reviewers);
     }
 
     public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
     {
-        $handler = new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue);
+        return $this->startWith(new RunReviewRound($this->subject(), $this->panelOf($reviewers), $change, $this->identityAt(SampleIdentity::HEAD, $reviewers)), $queue);
+    }
 
-        return $handler(new RunReviewRound(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), $this->panelOf($reviewers), $change));
+    // The identity names its own task and panel size, so a test can hand in one that does not describe the round.
+    public function startWithIdentityOf(string $task, int $panelSize, int $reviewers): string
+    {
+        return $this->startWith(new RunReviewRound($this->subject(), $this->panelOf($reviewers), self::CHANGE, SampleIdentity::of($task, $this->panelOf($panelSize))), $this->bus);
+    }
+
+    public function identityAt(string $head, int $reviewers): VerdictIdentity
+    {
+        return SampleIdentity::of(self::TASK, $this->panelOf($reviewers), $head);
+    }
+
+    public function verdictsOf(VerdictsOfRound $query): RoundVerdicts
+    {
+        return new VerdictsOfRoundHandler($this->entities, $this->serializer)($query);
     }
 
     /**
@@ -200,6 +222,16 @@ final readonly class RoundFixture
         $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
+    }
+
+    private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
+    {
+        return new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue)($command);
+    }
+
+    private function subject(): ReviewSubject
+    {
+        return new ReviewSubject('alpha', __DIR__, self::TASK);
     }
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds

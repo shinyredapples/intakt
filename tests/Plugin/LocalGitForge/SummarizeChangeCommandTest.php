@@ -17,6 +17,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange\SummarizeChangeInput;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -32,6 +33,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(SummarizeChangeInput::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(NameStatusParser::class)]
+#[UsesClass(VisiblePath::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(Change::class)]
 #[UsesClass(ChangeId::class)]

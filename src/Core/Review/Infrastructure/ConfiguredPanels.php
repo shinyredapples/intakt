@@ -10,12 +10,13 @@ use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-final readonly class ConfiguredPanels
+final readonly class ConfiguredPanels implements Panels
 {
     /**
      * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
