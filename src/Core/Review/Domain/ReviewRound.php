@@ -38,6 +38,10 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(name: 'reported_findings', type: 'text', nullable: true)]
     private ?string $reportedFindings = null;
 
+    // Kept with the round when it completes, because its indexing runs later in a worker, when a newer round may have reopened what this one resolved.
+    #[ORM\Column(name: 'resolved_findings', type: 'text', nullable: true)]
+    private ?string $resolvedFindings = null;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
@@ -109,6 +113,16 @@ final class ReviewRound implements HasPlace
     public function keepReportedFindings(string $json): void
     {
         $this->reportedFindings = $json;
+    }
+
+    public function resolvedFindingsJson(): ?string
+    {
+        return $this->resolvedFindings;
+    }
+
+    public function keepResolvedFindings(string $json): void
+    {
+        $this->resolvedFindings = $json;
     }
 
     /**

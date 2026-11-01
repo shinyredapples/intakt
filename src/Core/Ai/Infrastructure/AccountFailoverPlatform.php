@@ -7,7 +7,10 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
+use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
+use LogicException;
 use Override;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -42,18 +45,21 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        $free = $this->freeAccounts();
+        $failures = new SendFailures();
+        $free = $this->freeAccounts($failures);
         if ([] === $free) {
-            throw new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+            throw $this->outOfAccounts($failures);
         }
 
         $this->recordSwitch($free);
 
         try {
-            return $this->failover($free)->invoke($model, $input, $options);
+            $answer = $this->failover($free)->invoke($model, $input, $options);
         } catch (RuntimeException $everyAccountFailed) {
-            throw $this->typed($everyAccountFailed);
+            throw $this->typed($everyAccountFailed, $failures);
         }
+
+        return $this->typedWhenRead($answer, $failures, $options);
     }
 
     #[Override]
@@ -65,14 +71,14 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     /**
      * @return array<string, AccountPlatform>
      */
-    private function freeAccounts(): array
+    private function freeAccounts(SendFailures $failures): array
     {
         $free = [];
 
         foreach ($this->platforms as $name => $platform) {
             $account = new Account($this->provider, $name);
             if (!$this->cooldowns->isCoolingDown($account)) {
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->logger);
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->logger, $failures);
             }
         }
 
@@ -93,14 +99,74 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
-    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so with its wait.
-    private function typed(RuntimeException $everyAccountFailed): Throwable
+    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it.
+    private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
     {
-        if ([] !== $this->freeAccounts()) {
+        if ([] !== $this->freeAccounts($failures)) {
             return $everyAccountFailed;
         }
 
+        return $this->outOfAccounts($failures);
+    }
+
+    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets.
+    private function outOfAccounts(SendFailures $failures): Throwable
+    {
+        if ($this->isEveryKeyRejected($failures)) {
+            return new EveryKeyRejected($this->provider);
+        }
+
         return new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+    }
+
+    // Judged across calls through the shared cooldowns, because two accounts whose rejections land a moment apart would otherwise each be free in turn and the call would wait forever (one worker's rejection beside another's).
+    private function isEveryKeyRejected(SendFailures $failures): bool
+    {
+        foreach (array_keys($this->platforms) as $name) {
+            $account = new Account($this->provider, $name);
+            if (!$failures->wasRejected($account) && !$this->cooldowns->isRejected($account)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function typedWhenRead(DeferredResult $answer, SendFailures $failures, array $options): DeferredResult
+    {
+        $converter = new TypedRejectionConverter($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures));
+        $typed = new DeferredResult($converter, $answer->getRawResult(), $options);
+        $typed->getMetadata()->set($answer->getMetadata()->all());
+
+        return $typed;
+    }
+
+    // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
+    private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures): Throwable
+    {
+        if ([] !== $this->freeAccounts($failures)) {
+            return new KeyRejected($this->accountThatAnswered($answer));
+        }
+
+        return $this->outOfAccounts($failures);
+    }
+
+    // Matched against the provider's accounts rather than parsed, so the shape of an account key stays Account's own.
+    private function accountThatAnswered(DeferredResult $answer): Account
+    {
+        $key = $answer->getMetadata()->get(Account::METADATA);
+        foreach (array_keys($this->platforms) as $name) {
+            $account = new Account($this->provider, $name);
+            if ($account->key() === $key) {
+                return $account;
+            }
+        }
+
+        throw new LogicException(sprintf('The answer names no account of provider "%s".', $this->provider->value));
     }
 
     // Built per call over the free accounts only, because FailoverPlatform keys its limiter by platform class, which every account of a provider shares, and calls a failed platform again on the next call (upstream/ai-failover-platform-retries-a-failed-platform).

@@ -17,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -32,6 +33,8 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
+use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
@@ -188,6 +191,22 @@ final readonly class RoundFixture
         assert($queue instanceof InMemoryTransport);
 
         return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof JudgeRound));
+    }
+
+    public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler
+    {
+        return new IndexResolvedFindingsHandler($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $memory);
+    }
+
+    /**
+     * @return list<IndexResolvedFindings>
+     */
+    public function indexings(): array
+    {
+        $queue = $this->container->get('messenger.transport.async');
+        assert($queue instanceof InMemoryTransport);
+
+        return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof IndexResolvedFindings));
     }
 
     public function failedMessages(?Ledger $ledger = null): BlockReviewerOfFailedMessage
