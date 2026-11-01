@@ -23,6 +23,9 @@ final class TypeTextTest extends TestCase
         yield 'a shape over several lines' => ["array{\n    id: int\n} \$row", '$row'];
         yield 'a union with spaces' => ['int | string $value', '$value'];
         yield 'an intersection with spaces' => ['Countable & Traversable $items', '$items'];
+        yield 'an intersection with a tight right side' => ['Countable &Traversable $items', '$items'];
+        yield 'a by-reference parameter' => ['int &$count', '&$count'];
+        yield 'a by-reference variadic parameter' => ['int &...$counts', '&...$counts'];
         yield 'a callable with a spaced return type' => ['Closure(int): bool $fn', '$fn'];
         yield 'a callable with a tight return type' => ['callable(string):int', ''];
         yield 'surrounding whitespace' => ['  int   the total  ', 'the total'];
