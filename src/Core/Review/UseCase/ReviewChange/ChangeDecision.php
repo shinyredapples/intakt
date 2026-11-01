@@ -8,11 +8,11 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 
-// Plain code from the verdicts and the policy, never from a model's prose; a reviewer that gave no verdict votes as blocked.
+// Decided from the verdicts and the policy alone, because a model's prose must never decide an outcome.
 final readonly class ChangeDecision
 {
     /**
-     * @param list<PanelVerdict> $votes One per reviewer of the panel
+     * @param list<PanelVerdict> $votes
      */
     public function of(QuorumPolicy $quorum, array $votes): Decision
     {

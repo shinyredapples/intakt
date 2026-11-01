@@ -9,7 +9,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\RoundTokens;
 
-// What a round left in the ledger: the judge's act ids and the tokens its project's calls used.
+// Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded.
 final readonly class RoundLedgerReading
 {
     public function __construct(private Ledger $ledger)
@@ -33,32 +33,55 @@ final readonly class RoundLedgerReading
     // Counted from the round's start in ledger order, because a usage row names its project but not its round; another round of the project running at once is counted too.
     public function tokensSince(string $roundId, string $project): RoundTokens
     {
+        $payloads = array_values(array_filter($this->payloadsAfterStartOf($roundId), static fn (array $payload): bool => ($payload['project'] ?? null) === $project && is_array($payload['usages'] ?? null)));
+        $rows = array_merge([], ...array_map($this->rowsOf(...), $payloads));
+        $calls = array_unique(array_map(static fn (array $payload): string => is_string($payload['call'] ?? null) ? $payload['call'] : '', $payloads));
+
+        return new RoundTokens(count($calls), $this->sum($rows, 'prompt'), $this->sum($rows, 'completion'), $this->sum($rows, 'total'));
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload
+     *
+     * @return list<array<array-key, mixed>>
+     */
+    private function rowsOf(array $payload): array
+    {
+        $usages = $payload['usages'] ?? [];
+
+        return is_array($usages) ? array_values(array_filter($usages, is_array(...))) : [];
+    }
+
+    /**
+     * @param list<array<array-key, mixed>> $rows
+     */
+    private function sum(array $rows, string $key): int
+    {
+        return array_sum(array_map(static fn (array $row): int => is_int($row[$key] ?? null) ? $row[$key] : 0, $rows));
+    }
+
+    /**
+     * @return list<array<array-key, mixed>>
+     */
+    private function payloadsAfterStartOf(string $roundId): array
+    {
+        $after = [];
         $started = false;
-        $calls = [];
-        $prompt = $completion = $total = 0;
 
         foreach ($this->ledger->readInOrder() as $event) {
             $payload = $this->payloadOf($event);
             $started = $started || (LedgerEventKind::ReviewStarted === $event->event->kind && ($payload['round'] ?? null) === $roundId);
 
-            if (!$started || LedgerEventKind::UsageRecorded !== $event->event->kind || ($payload['project'] ?? $project) !== $project || !is_array($payload['usages'] ?? null)) {
-                continue;
-            }
-
-            $calls[(string) ($payload['call'] ?? '')] = true;
-
-            foreach ($payload['usages'] as $usage) {
-                $prompt += is_array($usage) ? (int) ($usage['prompt'] ?? 0) : 0;
-                $completion += is_array($usage) ? (int) ($usage['completion'] ?? 0) : 0;
-                $total += is_array($usage) ? (int) ($usage['total'] ?? 0) : 0;
+            if ($started && LedgerEventKind::UsageRecorded === $event->event->kind) {
+                $after[] = $payload;
             }
         }
 
-        return new RoundTokens(count($calls), $prompt, $completion, $total);
+        return $after;
     }
 
     /**
-     * @return iterable<array<string, mixed>>
+     * @return iterable<array<array-key, mixed>>
      */
     private function payloadsOf(LedgerEventKind $kind): iterable
     {
@@ -70,7 +93,7 @@ final readonly class RoundLedgerReading
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      */
     private function payloadOf(RecordedEvent $event): array
     {

@@ -11,7 +11,7 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
-// Runs the start of a round at once, as the application's command bus does, and leaves the reviewers' messages to the test's workers.
+// Runs the start of a round at once, because the application's command bus handles it in the caller, and leaves the reviewers' messages to the test's workers.
 final readonly class HandlingBus implements MessageBusInterface
 {
     public function __construct(private RunReviewRoundHandler $handler)

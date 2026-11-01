@@ -213,7 +213,8 @@ final class ReviewChangeCommandTest extends TestCase
     private function schemaErrors(string $output): array
     {
         $validator = new Validator();
-        $validator->validate(json_decode($output, flags: JSON_THROW_ON_ERROR), json_decode((string) file_get_contents(self::SCHEMA)));
+        $document = json_decode($output, flags: JSON_THROW_ON_ERROR);
+        $validator->validate($document, json_decode((string) file_get_contents(self::SCHEMA)));
 
         return array_values($validator->getErrors());
     }

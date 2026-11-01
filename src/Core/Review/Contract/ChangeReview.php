@@ -22,4 +22,10 @@ final readonly class ChangeReview
         public array $reasons = [],
     ) {
     }
+
+    // Blocked whatever the verdicts so far say, because a reviewer still out could change the quorum.
+    public function unfinished(string $reason): self
+    {
+        return clone ($this, ['decision' => Decision::Blocked, 'actList' => [], 'reasons' => [$reason, ...$this->reasons]]);
+    }
 }

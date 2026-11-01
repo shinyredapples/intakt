@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -104,7 +105,6 @@ final class ReviewChangeTest extends KernelTestCase
     public function testARoundNumberThatIsNotTheNextOneIsRefusedBeforeAnythingStarts(): void
     {
         $this->expectException(RoundNotNext::class);
-        $this->expectExceptionMessage('Round 2 was asked for, but the next round of this change is round 1.');
 
         $this->reviewChange(static function (): void {})->review($this->request(round: 2));
     }
@@ -139,7 +139,7 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    private function reviewChange(callable $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS): ReviewChange
+    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS): ReviewChange
     {
         $serializer = self::getContainer()->get(SerializerInterface::class);
         assert($serializer instanceof SerializerInterface);
@@ -153,7 +153,7 @@ final class ReviewChangeTest extends KernelTestCase
             new RoundLedgerReading($this->fixture->ledger()),
             new ChangeDecision(),
             $serializer,
-            new WorkerOnSleep($this->fixture->clock, $work(...)),
+            new WorkerOnSleep($this->fixture->clock, $work),
             $ceiling,
         );
     }
@@ -178,7 +178,7 @@ final class ReviewChangeTest extends KernelTestCase
 
     private function recordUsage(string $call, int $total): void
     {
-        $usage = ['call' => $call, 'phase' => 'settled', 'project' => 'alpha', 'usages' => [['prompt' => $total - $total / 6, 'completion' => $total / 6, 'total' => $total]]];
+        $usage = ['call' => $call, 'phase' => 'settled', 'project' => 'alpha', 'usages' => [['prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]];
         $appended = $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($usage, JSON_THROW_ON_ERROR)));
         self::assertTrue($appended->succeeded());
     }

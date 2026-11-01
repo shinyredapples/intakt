@@ -92,20 +92,29 @@ final readonly class ReviewChange implements ChangeReviews
 
     private function conclude(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
     {
-        $votes = array_map($this->voteOf(...), $round->reviewers());
-        $judged = RoundState::Judged === $round->state();
-        $decision = $judged ? $this->decision->of($request->panel->quorum, $votes) : Decision::Blocked;
+        $review = $this->readFrom($request, $round);
+
+        return RoundState::Judged === $round->state() ? $review : $this->unfinished($review);
+    }
+
+    private function readFrom(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
+    {
         $roundId = $round->id()->toRfc4122();
 
         return new ChangeReview(
             $roundId,
             $round->number(),
-            $decision,
+            $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers())),
             $this->verdictsOf($round),
-            $judged ? $this->actListOf($round) : [],
+            $this->actListOf($round),
             $this->ledger->tokensSince($roundId, $request->project),
-            $this->reasonsOf($round, $judged),
+            $this->reasonsOf($round),
         );
+    }
+
+    private function unfinished(ChangeReview $review): ChangeReview
+    {
+        return $review->unfinished('The round did not finish within '.$this->waitCeilingSeconds.' seconds: start workers with "messenger:consume async" and review again.');
     }
 
     // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
@@ -154,9 +163,9 @@ final readonly class ReviewChange implements ChangeReviews
     /**
      * @return list<string>
      */
-    private function reasonsOf(ReviewRound $round, bool $judged): array
+    private function reasonsOf(ReviewRound $round): array
     {
-        $reasons = $judged ? [] : ['The round did not finish within '.$this->waitCeilingSeconds.' seconds: start workers with "messenger:consume async" and review again.'];
+        $reasons = [];
 
         foreach ($round->reviewers() as $reviewer) {
             if (null !== $reviewer->failure()) {

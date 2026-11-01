@@ -9,7 +9,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 
-// docs/user/review-output.schema.json describes the JSON.
+// The JSON follows docs/user/review-output.schema.json, because scripts validate against it.
 final readonly class ReviewReport
 {
     public function __construct(private VisiblePath $text = new VisiblePath())

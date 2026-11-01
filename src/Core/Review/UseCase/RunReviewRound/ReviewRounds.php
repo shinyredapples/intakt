@@ -70,7 +70,7 @@ final readonly class ReviewRounds
         $this->withLockedRound($roundId, $this->findings->completeWhenEveryReviewerIsIn(...));
     }
 
-    // Zero for a change that has no round yet.
+    // Zero for a change that has no round yet, because the next number is this one plus one.
     public function latestNumber(string $project, string $change): int
     {
         $latest = $this->entities->createQuery('SELECT MAX(r.change.number) FROM '.ReviewRound::class.' r WHERE r.subject.project = :project AND r.change.change = :change')
