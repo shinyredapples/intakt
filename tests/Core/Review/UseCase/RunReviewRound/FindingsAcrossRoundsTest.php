@@ -9,6 +9,7 @@ use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -17,14 +18,19 @@ use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
+use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Plugin\Forge\Contract\HeadMove;
+use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -52,6 +58,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(Verdict::class)]
 #[UsesClass(VerdictIdentity::class)]
 #[UsesClass(ReviewBrief::class)]
+#[UsesClass(GoalpostRule::class)]
+#[UsesClass(VerdictsOfRoundHandler::class)]
+#[UsesClass(PanelVerdict::class)]
 final class FindingsAcrossRoundsTest extends KernelTestCase
 {
     private const string CHANGE = 'feat/thing';
@@ -179,6 +188,20 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame(1, $stored[1]->firstRound());
         self::assertSame(3, $stored[1]->latestRound());
         self::assertSame([3], $stored[2]->rounds);
+    }
+
+    public function testThePanelReadsANewRoundTwoP1AsP3LikeTheLedger(): void
+    {
+        $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+        $queue = new RecordingBus();
+        $roundId = $this->fixture->startFor(self::CHANGE, $queue, 2);
+
+        $this->deliver($queue, [self::FIRST => $this->changes([], [$this->finding('b', severity: Severity::P1)])]);
+
+        $counting = $this->fixture->verdictsOf(new VerdictsOfRound($roundId, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])))->counting;
+        $findings = array_merge(...array_map(static fn (PanelVerdict $panel): array => $panel->verdict->findings, $counting));
+        self::assertSame([Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $findings));
+        self::assertSame(Severity::P3, $this->fixture->storedFindings(self::CHANGE)[1]->latest->severity);
     }
 
     public function testARoundOfAnotherChangeIsToldNoneOfTheOpenFindings(): void
@@ -331,9 +354,9 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return new Verdict(Decision::Changes, $findings, $resolved, []);
     }
 
-    private function finding(string $id, bool $repeat = false): Finding
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
     {
-        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+        return new Finding($id, $severity,'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
     }
 
     // The message of SQLite's stale snapshot, because that is the failure a retry is for.

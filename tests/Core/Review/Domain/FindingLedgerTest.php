@@ -329,9 +329,30 @@ final class FindingLedgerTest extends TestCase
     {
         $ledger = new FindingLedger();
         $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a', severity: Severity::P1)]));
-        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true, Severity::P1)]));
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true, Severity::P3)]));
 
         self::assertSame(Severity::P1, $ledger->all()[0]->latest->severity);
+    }
+
+    public function testALoweredFindingRepeatedAsP1StaysP3(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a')]));
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('b', severity: Severity::P1)]));
+
+        $ledger->recordVerdict(3, $this->verdict([], [$this->finding('F2', true, Severity::P1)]));
+
+        self::assertSame(Severity::P3, $ledger->all()[1]->latest->severity);
+    }
+
+    public function testARoundOneP3RepeatedAsP1StaysP3(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a', severity: Severity::P3)]));
+
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true, Severity::P1)]));
+
+        self::assertSame(Severity::P3, $ledger->all()[0]->latest->severity);
     }
 
     public function testTheLedgerStoresALoweredNewFindingAsP3(): void

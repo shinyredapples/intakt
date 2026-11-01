@@ -40,9 +40,9 @@ final readonly class TrackedFinding
             return $this;
         }
 
-        // A finding reported again has come back, so it is open again even after it was resolved.
+        // A finding reported again has come back, so it is open again even after it was resolved; it keeps its first severity, so a repeat cannot raise what the goalpost rule lowered.
         return clone ($this, [
-            'latest' => $finding,
+            'latest' => $finding->withSeverity($this->latest->severity),
             'rounds' => [...$this->rounds, $round],
             'status' => FindingStatus::Open,
         ]);
