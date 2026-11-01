@@ -8,6 +8,7 @@ use Closure;
 use DateTimeImmutable;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -45,14 +46,20 @@ final readonly class ReviewerLeases
         });
     }
 
-    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict): void
+    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): void
     {
-        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->receive($stored, $verdict));
+        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->receive($stored, $verdict, $substitute));
     }
 
     public function recordFailure(RoundReviewer $reviewer, string $failure): void
     {
         $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->fail($stored, $failure));
+    }
+
+    // Blocked with the reason, because no provider is left to review and a retry would only wait for one the owner named a way around.
+    public function recordOutage(RoundReviewer $reviewer, string $reason): void
+    {
+        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->block($stored, $reason));
     }
 
     // Called for a message that will not be tried again, so the reviewer is neither left waiting in the queue nor running for a worker that is gone.

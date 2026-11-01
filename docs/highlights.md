@@ -54,7 +54,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| MCP Bundle server for the owner | agents list projects; starting reviews and reading verdicts and the act list follow | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`, `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php` |
+| MCP Bundle server for the owner | agents list projects and read a round's status, verdicts, act list and findings; starting reviews follows | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`, `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`; T15 (#20, part #509), `src/Core/Review/UseCase/ReadRound/` |
 | MCP Bundle server per review | serves the read-only repository tools of the head under review | planned | T16 (#21) |
 | `session.lock` | safe parallel calls on one session | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`; T16 (#21) |
 | `#[IsGrantedTool]` | tool authorization through Intakt's Security voter; the AI Bundle's attribute, checked for MCP tools by a wrapper around the SDK's reference handler because the bundle checks it only in its agent toolbox | in progress | T15 (#20, part #508), `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`, `src/Core/Mcp/Infrastructure/AuthorizedToolCalls.php`; T16 (#21) |

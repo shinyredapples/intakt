@@ -52,6 +52,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
+use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(SymfonyAiVendor::class)]
 #[UsesClass(JudgeAgent::class)]
@@ -81,6 +82,8 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(AppendResult::class)]
 final class SymfonyAiVendorJudgeTest extends KernelTestCase
 {
+    private const string ROUND = '0192a000-0000-7000-8000-000000000001';
+
     public function testTheVendorJudgesOnTheLightTierAndReturnsTheMarks(): void
     {
         $models = [];
@@ -104,7 +107,15 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
 
         self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame('light', $ledger->payloads()[0]['tier']);
-        self::assertArrayNotHasKey('round', $ledger->payloads()[0]);
+    }
+
+    public function testTheJudgeCallIsRecordedWithTheRoundItJudges(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(static fn (): string => '{"marks":[{"id":"F1","mark":"act"},{"id":"F2","mark":"defer"}]}', $ledger)->judge('alpha', $this->request());
+
+        self::assertSame(self::ROUND, $ledger->payloads()[0]['round'] ?? null);
     }
 
     public function testACutOffStreamMakesEveryBlockingFindingActAndLeavesTheCallUnsettled(): void
@@ -140,7 +151,7 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         return new JudgeRequest('Add a cart.', [
             new Finding('F1', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null),
             new Finding('F2', Severity::P3, null, null, null, 'Nit.', FixableBy::Builder, false, null, null),
-        ]);
+        ], Uuid::fromString(self::ROUND));
     }
 
     private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
