@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\TestCase;
+
+interface Forge
+{
+    public function name(): string;
+}
+
+#[CoversNothing]
+final class SampleTest extends TestCase
+{
+    public function testReadsTheForgeName(): void
+    {
+        $forge = $this->createStub(Forge::class);
+        $forge->method('name')->willReturn('github');
+
+        self::assertSame('github', $forge->name());
+    }
+}

@@ -39,6 +39,11 @@ final class TestsGateTest extends SandboxTestCase
         $this->assertRejectedBy('tests', 'tests-mock-without-expectations', 'No expectations were configured for the mock object');
     }
 
+    public function testAPhpunitDeprecationFailsTheGate(): void
+    {
+        $this->assertRejectedBy('tests', 'tests-phpunit-deprecation', '"cacheResult" attribute is deprecated');
+    }
+
     public function testAChangeThatLeavesTheGateTestsAloneSkipsTheGatesPassAndSaysSo(): void
     {
         $sandbox = $this->branchOffABaseWithAFailingGateTest();
