@@ -311,12 +311,9 @@ final class GitHubForgeTest extends TestCase
     {
         $forge = $this->forge(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 403]));
 
-        try {
-            $forge->change(new ChangeId(self::PULL));
-            self::fail('A 403 must fail the read.');
-        } catch (ForgeReadFailed $failure) {
-            self::assertStringContainsString('403', $failure->getMessage());
-        }
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 403 to a read.'));
+
+        $forge->change(new ChangeId(self::PULL));
     }
 
     public function testItRetriesAFailedReadThroughTheRetryableClient(): void
@@ -432,41 +429,37 @@ final class GitHubForgeTest extends TestCase
 
     public function testItNeverRetriesThePostAfterA502BecauseGitHubMayHaveStoredTheReview(): void
     {
-        $posts = 0;
-        $forge = $this->forge(static function (string $url) use (&$posts): ?ResponseInterface {
-            $isFirstPost = str_ends_with($url, '/reviews') && 1 === ++$posts;
-
-            return $isFirstPost ? new MockResponse('', ['http_code' => 502]) : null;
-        });
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? new MockResponse('', ['http_code' => 502]) : null);
         $change = $forge->change(new ChangeId(self::PULL));
 
         $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
 
         self::assertEquals(new ForgeWriteFailed('GitHub answered 502 to a write.'), $failure);
-        self::assertSame(1, $posts);
+        self::assertCount(1, array_keys($this->requested, self::POST_REVIEW, true));
     }
 
-    public function testItTurnsAFailedReadOfTheHeadBeforeThePostIntoAForgeWriteFailure(): void
+    /**
+     * @return iterable<string, array{int, class-string}>
+     */
+    public static function failedReadsOfTheHead(): iterable
+    {
+        yield 'a server error' => [500, ForgeReadFailed::class];
+        yield 'a pull request gone' => [404, ChangeNotFound::class];
+    }
+
+    /**
+     * @param class-string $readFailure
+     */
+    #[DataProvider('failedReadsOfTheHead')]
+    public function testItTurnsAFailedReadOfTheHeadBeforeThePostIntoAForgeWriteFailure(int $status, string $readFailure): void
     {
         $change = $this->forge()->change(new ChangeId(self::PULL));
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/pulls/7') ? new MockResponse('{}', ['http_code' => 500]) : null);
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/pulls/7') ? new MockResponse('{}', ['http_code' => $status]) : null);
 
         $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
 
         self::assertInstanceOf(ForgeWriteFailed::class, $failure);
-        self::assertInstanceOf(ForgeReadFailed::class, $failure->getPrevious());
-        self::assertNotContains(self::POST_REVIEW, $this->requested);
-    }
-
-    public function testItTurnsAPullRequestGoneBeforeThePostIntoAForgeWriteFailure(): void
-    {
-        $change = $this->forge()->change(new ChangeId(self::PULL));
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/pulls/7') ? new MockResponse('{}', ['http_code' => 404]) : null);
-
-        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
-
-        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
-        self::assertInstanceOf(ChangeNotFound::class, $failure->getPrevious());
+        self::assertInstanceOf($readFailure, $failure->getPrevious());
         self::assertNotContains(self::POST_REVIEW, $this->requested);
     }
 
