@@ -1,0 +1,12 @@
+{
+  "identity": "loop-bot",
+  "head": "abc123",
+  "comments": [
+    {"author": "loop-bot", "head": "abc123", "body": "Reviewer: correctness\n\n[P1] `src/A.php:10` missing guard\n- [P3] src/B.php:7: naming\n\n```json\n{\"verdict\": \"changes\"}\n```"},
+    {"author": "loop-bot", "head": "abc123", "body": "Reviewer: style\n\nLooks good.\n\n{\"verdict\": \"approve\"}"},
+    {"author": "loop-bot", "head": "abc123", "body": "Reviewer: security\n\nI think this is fine, approve.\n\n{\"verdict\": \"approve\""},
+    {"author": "loop-bot", "head": "abc123", "body": "Reviewer: docs\n\n> [P1] `src/Quoted.php:1` quoted by the builder\n\n```\n[P2] `src/Fenced.php:2` inside a fence\n```\n\n[P2] `docs/x.md:3` real one\n\n{\"verdict\": \"changes\"}"},
+    {"author": "someone", "head": "abc123", "body": "Reviewer: other\n\n{\"verdict\": \"approve\"}"},
+    {"author": "loop-bot", "head": "old999", "body": "Reviewer: correctness\n\n{\"verdict\": \"approve\"}"}
+  ]
+}

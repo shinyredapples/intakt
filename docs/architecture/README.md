@@ -318,3 +318,14 @@ The behaviors Intakt must show before it replaces the existing loop, each with t
 ## Releases
 
 `.github/workflows/release-labels.yml` labels each pull request `feat`, `fix` or `docs` from its title type and removes a stale one, reading the labels at run time; `.github/release.yml` groups the generated notes by those labels. `tests/Gates/ReleaseLabelsTest.php` runs the workflow script against a fake `gh`. Details: [Releasing](../releasing.md).
+
+## Shadow: reading the loop's reviews
+
+Plan task T42, part 1 (module `Core/Shadow`). `Domain/LoopReviewReader::read(loopIdentity, head, comments)` takes `Contract\PullRequestComment` objects (author, head commit, body) and returns `Contract\LoopReviews`: one `LoopReview` per comment whose author is the loop's identity and whose head is the shadow head, with the reviewer name, a `LoopVerdict` (`approve`, `changes` or `unreadable`) and the `LoopFinding` list (file, line, `Severity`). It exists only for the shadow report; Intakt's own reviews never parse prose. Nothing fetches comments from a forge yet, and the comparison and `intakt:shadow:report` are parts 2 and 3.
+
+Reading rules (builder's choice for what the issue leaves open; `test_agents.py` is not in this repository):
+- The reviewer is the text of a `Reviewer: <name>` line (`unknown` without one).
+- The verdict is the last JSON candidate: a fenced `json` block, or a line starting with `{`. Its `verdict` must be `approve` or `changes`; a missing, malformed or unknown verdict, or a comment without JSON, is `unreadable`, never approval.
+- A finding is a line `[P1|P2|P3] file:line ...` (optional list marker, optional backticks around the location). Lines inside a fence and lines starting with `>` are neither findings nor verdicts.
+
+`php bin/console intakt:shadow:read-loop-reviews <file>` (`UseCase/ReadLoopReviews`) prints the reader's output for a JSON file with `identity`, `head` and `comments`; an unreadable file exits with 2. Tests: `tests/Core/Shadow/` with the recorded `tests/Fixtures/Shadow/loop-review-comments.json`.

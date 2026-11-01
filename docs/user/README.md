@@ -237,3 +237,7 @@ Intakt acts on GitHub as its own GitHub App, never with a personal token. Give i
 ## Releases
 
 The owner cuts each release: a signed tag on a green `main`, then a GitHub release with generated notes, marked pre-release before `v1.0.0`. A pull request is labeled `feat`, `fix` or `docs` from the type in its title, so the notes list it under Features, Fixes or Docs; anything else lands under "Other changes". No CHANGELOG file is kept. See [Releasing](../releasing.md).
+
+## Reading the loop's reviews (shadow report, first part)
+
+`php bin/console intakt:shadow:read-loop-reviews <file>` shows how Intakt reads the existing loop's reviews of one head from recorded pull request comments: per reviewer `approve`, `changes` or `unreadable`, and the tagged finding lines with file, line and severity. A review that cannot be read is shown as `unreadable`, never as approval. The file is JSON with `identity` (the loop's account), `head` and `comments` (author, head, body). The comparison with Intakt's own reviews and `intakt:shadow:report` come later.
