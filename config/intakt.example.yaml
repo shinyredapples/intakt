@@ -24,6 +24,8 @@ projects:
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
     beta:
+        # Optional: shadow never writes to the forge; live, the default, does.
+        mode: shadow
         tiers:
             strong: { provider: openai, model: gpt-5 }
             standard: { provider: openai, model: gpt-5-mini }
