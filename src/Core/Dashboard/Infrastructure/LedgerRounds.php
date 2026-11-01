@@ -35,7 +35,7 @@ final class LedgerRounds
     /** @var array<string, list<RoundFinding>> */
     private array $judged = [];
 
-    private LedgerTokens $tokens;
+    private readonly LedgerTokens $tokens;
 
     public function __construct()
     {
@@ -111,7 +111,7 @@ final class LedgerRounds
         $change = $payload['change'] ?? '';
         $number = $payload['number'] ?? null;
 
-        if (!is_string($project) || !is_int($reviewers) || !is_string($change) || !(null === $number || is_int($number))) {
+        if (!is_string($project) || !is_int($reviewers) || !is_string($change) || null !== $number && !is_int($number)) {
             return [];
         }
 

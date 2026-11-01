@@ -35,6 +35,6 @@ final readonly class JudgedFindings
 
         $marked = static fn (Mark $mark): array => array_values(array_filter($findings, static fn (Finding $finding): bool => ($marks[$finding->id] ?? null) === $mark));
 
-        return new self($findings, $marked(Mark::Act),array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $marked(Mark::Defer)));
+        return new self($findings, $marked(Mark::Act), array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $marked(Mark::Defer)));
     }
 }
