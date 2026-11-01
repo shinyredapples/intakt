@@ -47,18 +47,6 @@ final readonly class SeenListings
         }
     }
 
-    // Detached one by one, never cleared, because a worker keeps its entity manager between listings and what another listing stored since is the truth, while the caller's own pending work must survive.
-    private function forgetRowsOf(string $project): void
-    {
-        foreach ($this->entities->getUnitOfWork()->getIdentityMap() as $managed) {
-            foreach ($managed as $entity) {
-                if (($entity instanceof ListingValidator || $entity instanceof SeenChange) && $entity->project() === $project) {
-                    $this->entities->detach($entity);
-                }
-            }
-        }
-    }
-
     public function validatorOf(string $project): ?string
     {
         return $this->entities->find(ListingValidator::class, $project)?->value();
@@ -97,6 +85,18 @@ final readonly class SeenListings
 
         $this->recordValidator($project, $validator);
         $this->entities->flush();
+    }
+
+    // Detached one by one, never cleared, because a worker keeps its entity manager between listings and what another listing stored since is the truth, while the caller's own pending work must survive.
+    private function forgetRowsOf(string $project): void
+    {
+        foreach ($this->entities->getUnitOfWork()->getIdentityMap() as $managed) {
+            foreach ($managed as $entity) {
+                if (($entity instanceof ListingValidator || $entity instanceof SeenChange) && $entity->project() === $project) {
+                    $this->entities->detach($entity);
+                }
+            }
+        }
     }
 
     /**
