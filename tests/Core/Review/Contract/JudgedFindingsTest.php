@@ -23,6 +23,13 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Finding::class)]
 final class JudgedFindingsTest extends TestCase
 {
+    public function testEveryJudgedFindingIsKeptWhateverItsMark(): void
+    {
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Act, 'b' => Mark::Defer, 'c' => Mark::Reject]), $this->findings('a', 'b', 'c', 'unmarked'));
+
+        self::assertEquals($this->findings('a', 'b', 'c', 'unmarked'), $judged->findings);
+    }
+
     public function testTheActListHoldsOnlyFindingsMarkedAct(): void
     {
         $judged = JudgedFindings::of($this->marks(['a' => Mark::Act, 'b' => Mark::Defer, 'c' => Mark::Reject]), $this->findings('a', 'b', 'c'));

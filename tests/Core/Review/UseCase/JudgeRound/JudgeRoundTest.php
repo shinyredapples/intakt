@@ -94,7 +94,19 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
 
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => ['F2']]], $this->judgeDonePayloads());
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => ['F2']]], $this->judgeCalls());
+    }
+
+    public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.'], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.'], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.']],
+            $this->judgeDonePayloads()[0]['findings'],
+        );
     }
 
     public function testJudgingARoundMovesItToJudged(): void
@@ -175,7 +187,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge($vendor)($this->judgingOf($round));
 
         self::assertSame(0, $vendor->calls);
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => [], 'follow_ups' => []]], $this->judgeDonePayloads());
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => [], 'follow_ups' => []]], $this->judgeCalls());
         self::assertSame(RoundState::Judged, $this->fixture->round($round->id()->toRfc4122())->state());
     }
 
@@ -202,7 +214,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge($vendor)($this->judgingOf($round));
 
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeDonePayloads());
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
     public function testAJudgedRoundDeliveredAgainAsksTheJudgeNothingAndRecordsNoSecondJudgeDone(): void
@@ -227,7 +239,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement($second, $otherWorker))($this->judgingOf($round));
 
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => []]], $this->judgeDonePayloads());
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
     /**
@@ -286,13 +298,21 @@ final class JudgeRoundTest extends KernelTestCase
     }
 
     /**
-     * @return list<mixed>
+     * @return list<array<string, mixed>>
+     */
+    private function judgeCalls(): array
+    {
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true]), $this->judgeDonePayloads());
+    }
+
+    /**
+     * @return list<array<string, mixed>>
      */
     private function judgeDonePayloads(): array
     {
         $events = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder()), static fn (RecordedEvent $event): bool => LedgerEventKind::JudgeDone === $event->event->kind);
 
-        return array_values(array_map(static fn (RecordedEvent $event): mixed => json_decode($event->event->payload, true), $events));
+        return array_values(array_map(static fn (RecordedEvent $event): array => json_decode($event->event->payload, true, 8, JSON_THROW_ON_ERROR), $events));
     }
 
     /**
