@@ -18,29 +18,29 @@ final class ToolAccessVoterTest extends TestCase
 {
     public function testAReadToolIsGranted(): void
     {
-        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(false), ToolAccess::Read));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Read));
     }
 
     public function testAToolThatMayWriteIsRefusedWhileTheConfigForbidsWrites(): void
     {
-        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(false), ToolAccess::Write));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Write));
     }
 
     public function testAToolThatMayWriteIsGrantedWhenTheConfigAllowsWrites(): void
     {
-        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(true), ToolAccess::Write));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write));
     }
 
     public function testArgumentsThatClaimPermissionDoNotChangeTheDecision(): void
     {
         $arguments = ['allow_write' => true, 'role' => 'admin'];
 
-        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(false), ToolAccess::Write, $arguments));
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Write, $arguments));
     }
 
     public function testItAbstainsOnAnAttributeThatIsNotAToolAccess(): void
     {
-        $result = new ToolAccessVoter(true)->vote(new NullToken(), null, ['ROLE_ADMIN']);
+        $result = new ToolAccessVoter(ToolAccess::Write)->vote(new NullToken(), null, ['ROLE_ADMIN']);
 
         self::assertSame(VoterInterface::ACCESS_ABSTAIN, $result);
     }

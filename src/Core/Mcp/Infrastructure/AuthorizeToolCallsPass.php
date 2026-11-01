@@ -37,9 +37,9 @@ final class AuthorizeToolCallsPass implements CompilerPassInterface
 
     private function locator(Definition $builder): mixed
     {
-        foreach ($builder->getMethodCalls() as [$method, $arguments]) {
-            if ('setContainer' === $method) {
-                return $arguments[0];
+        foreach ($builder->getMethodCalls() as $call) {
+            if (is_array($call) && 'setContainer' === ($call[0] ?? null) && is_array($call[1] ?? null)) {
+                return $call[1][0] ?? null;
             }
         }
 

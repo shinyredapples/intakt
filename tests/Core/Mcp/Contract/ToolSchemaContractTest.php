@@ -25,39 +25,42 @@ final class ToolSchemaContractTest extends KernelTestCase
 
     public function testListProjectsIsAnnotatedReadOnlyAndNotDestructive(): void
     {
-        $annotations = $this->listProjects($this->client())['annotations'];
+        $annotations = OwnerServerClient::at($this->listProjects($this->client()), 'annotations');
 
+        self::assertIsArray($annotations);
         self::assertTrue($annotations['readOnlyHint']);
         self::assertFalse($annotations['destructiveHint']);
     }
 
     public function testListProjectsAnswersWithTheConfiguredProjects(): void
     {
-        $client = $this->client();
+        $answer = $this->client()->call('tools/call', ['name' => 'list_projects', 'arguments' => new \stdClass()], 2);
 
-        $answer = $client->call('tools/call', ['name' => 'list_projects', 'arguments' => new stdClass()], 2);
-
-        self::assertFalse($answer['result']['isError'] ?? false);
-        self::assertIsList($answer['result']['structuredContent']['projects']);
+        self::assertFalse(OwnerServerClient::at($answer, 'result', 'isError'));
+        self::assertIsList(OwnerServerClient::at($answer, 'result', 'structuredContent', 'projects'));
     }
 
     public function testAnUnknownToolIsAnMcpErrorWithoutAStackTrace(): void
     {
-        $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new stdClass()], 2);
+        $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new \stdClass()], 2);
 
-        self::assertArrayHasKey('code', $answer['error']);
+        self::assertIsInt(OwnerServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', json_encode($answer, JSON_THROW_ON_ERROR));
-        self::assertArrayNotHasKey('trace', $answer['error']);
+        self::assertArrayNotHasKey('trace', $answer);
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function listProjects(OwnerServerClient $client): array
     {
-        $tools = $client->call('tools/list', [], 2)['result']['tools'];
+        $tools = OwnerServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
+        self::assertIsArray($tools);
 
-        return array_first(array_filter($tools, static fn (array $tool): bool => 'list_projects' === $tool['name']));
+        $found = array_first(array_filter($tools, static fn (mixed $tool): bool => is_array($tool) && 'list_projects' === ($tool['name'] ?? null)));
+        self::assertIsArray($found);
+
+        return $found;
     }
 
     private function client(): OwnerServerClient

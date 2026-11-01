@@ -38,20 +38,14 @@ final class AuthorizedToolCallsTest extends TestCase
     {
         $handler = $this->handler(granted: false);
 
-        $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('This tool needs write access, which is not granted.');
-
-        $handler->handle(new ElementReference([WriteTool::class, '__invoke']), []);
+        $this->assertRefusedWith('This tool needs write access, which is not granted.', $handler, WriteTool::class);
     }
 
     public function testAToolWithoutAnAccessLevelNeverRuns(): void
     {
         $handler = $this->handler(granted: true);
 
-        $this->expectException(ToolCallException::class);
-        $this->expectExceptionMessage('declares no access level');
-
-        $handler->handle(new ElementReference([UndeclaredTool::class, '__invoke']), []);
+        $this->assertRefusedWith('This tool declares no access level, so it is not available.', $handler, UndeclaredTool::class);
     }
 
     public function testTheVoterIsAskedAboutTheDeclaredAccessAndNothingElse(): void
@@ -67,6 +61,19 @@ final class AuthorizedToolCallsTest extends TestCase
         new AuthorizedToolCalls($this->inner(), $authorization)->handle(new ElementReference(WriteTool::class), ['allow_write' => true]);
 
         self::assertSame([[ToolAccess::Write, null]], $asked);
+    }
+
+    private function assertRefusedWith(string $message, AuthorizedToolCalls $handler, string $tool): void
+    {
+        try {
+            $handler->handle(new ElementReference([$tool, '__invoke']), []);
+        } catch (ToolCallException $refusal) {
+            self::assertSame($message, $refusal->getMessage());
+
+            return;
+        }
+
+        self::fail('The tool ran.');
     }
 
     private function handler(bool $granted): AuthorizedToolCalls

@@ -22,7 +22,7 @@ final class OwnerServerClient
     /**
      * @param array<string, mixed> $params
      *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     public function call(string $method, array $params = [], int $id = 1): array
     {
@@ -47,7 +47,7 @@ final class OwnerServerClient
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     public function initialize(string $protocolVersion): array
     {
@@ -57,16 +57,35 @@ final class OwnerServerClient
     }
 
     /**
-     * @return array<string, mixed>
+     * @param array<mixed> $answer
+     */
+    public static function at(array $answer, string ...$path): mixed
+    {
+        $value = $answer;
+
+        foreach ($path as $key) {
+            if (!is_array($value) || !array_key_exists($key, $value)) {
+                throw new \UnexpectedValueException(sprintf('The answer has no "%s".', implode('.', $path)));
+            }
+
+            $value = $value[$key];
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return array<mixed>
      */
     private function decode(string $content): array
     {
         // An answer arrives as plain JSON or as one server-sent event, because the server picks per request.
-        if (str_starts_with($content, 'event:') || str_contains($content, "\ndata:") || str_starts_with($content, 'data:')) {
-            preg_match('/^data: (.*)$/m', $content, $matches);
+        if (1 === preg_match('/^data: (.*)$/m', $content, $matches)) {
             $content = $matches[1];
         }
 
-        return json_decode($content, true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode($content, true, flags: JSON_THROW_ON_ERROR);
+
+        return is_array($decoded) ? $decoded : throw new \UnexpectedValueException('The answer is not a JSON object.');
     }
 }

@@ -7,8 +7,6 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
-    # The voter's only input; nothing sets it yet, because no tool writes (the start-review tool arrives with plan T15 part 3).
-    intakt.mcp.write_tools_allowed: false
     intakt.vendor_account_parallel_calls: 3
 
 services:
@@ -37,9 +35,10 @@ services:
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
 
+    # Read only, because no tool writes yet; the start-review tool of plan T15 part 3 is the first caller that can raise it.
     Intakt\Core\Mcp\Infrastructure\ToolAccessVoter:
         arguments:
-            $writeToolsAllowed: '%intakt.mcp.write_tools_allowed%'
+            $highestAllowed: !php/enum Intakt\Core\Mcp\Contract\ToolAccess::Read
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

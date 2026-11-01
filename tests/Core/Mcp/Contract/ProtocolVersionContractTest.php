@@ -19,16 +19,18 @@ final class ProtocolVersionContractTest extends KernelTestCase
     {
         $answer = $this->client()->initialize(self::CLAUDE_CODE_VERSION);
 
-        self::assertSame(self::CLAUDE_CODE_VERSION, $answer['result']['protocolVersion']);
-        self::assertSame('intakt', $answer['result']['serverInfo']['name']);
+        self::assertSame(self::CLAUDE_CODE_VERSION, OwnerServerClient::at($answer, 'result', 'protocolVersion'));
+        self::assertSame('intakt', OwnerServerClient::at($answer, 'result', 'serverInfo', 'name'));
     }
 
     public function testInitializeWithAnUnknownVersionGetsAVersionTheServerSpeaks(): void
     {
         $answer = $this->client()->initialize('1999-01-01');
+        $version = OwnerServerClient::at($answer, 'result', 'protocolVersion');
 
-        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $answer['result']['protocolVersion']);
-        self::assertNotSame('1999-01-01', $answer['result']['protocolVersion']);
+        self::assertIsString($version);
+        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $version);
+        self::assertNotSame('1999-01-01', $version);
     }
 
     private function client(): OwnerServerClient

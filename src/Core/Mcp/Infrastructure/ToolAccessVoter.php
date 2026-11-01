@@ -6,20 +6,22 @@ namespace Intakt\Core\Mcp\Infrastructure;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
-use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 
 // The voter never sees the arguments of a call, because a model could otherwise argue its way to a write.
 final readonly class ToolAccessVoter implements VoterInterface
 {
     public function __construct(
-        private bool $writeToolsAllowed,
+        private ToolAccess $highestAllowed,
     ) {
     }
 
-    public function vote(TokenInterface $token, mixed $subject, array $attributes, ?Vote $vote = null): int
+    // Variadic because the interface's four parameters break the three-parameter limit: the subject, the attributes and the vote.
+    public function vote(TokenInterface $token, mixed ...$rest): int
     {
         $result = self::ACCESS_ABSTAIN;
+
+        $attributes = is_array($rest[1] ?? null) ? $rest[1] : [];
 
         foreach ($attributes as $attribute) {
             if (!$attribute instanceof ToolAccess) {
@@ -38,6 +40,6 @@ final readonly class ToolAccessVoter implements VoterInterface
 
     private function grants(ToolAccess $access): bool
     {
-        return ToolAccess::Read === $access || $this->writeToolsAllowed;
+        return ToolAccess::Read === $access || ToolAccess::Write === $this->highestAllowed;
     }
 }

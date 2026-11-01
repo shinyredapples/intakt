@@ -45,10 +45,10 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
             return null;
         }
 
-        $attributes = $method->getAttributes(IsGrantedTool::class)
-            ?: $method->getDeclaringClass()->getAttributes(IsGrantedTool::class);
+        $declared = array_first($method->getAttributes(IsGrantedTool::class))
+            ?? array_first($method->getDeclaringClass()->getAttributes(IsGrantedTool::class));
 
-        return array_first($attributes)?->newInstance();
+        return $declared?->newInstance();
     }
 
     /**
