@@ -60,6 +60,9 @@ final readonly class LocalGitForge implements Forge
         return !$this->headOf($change->id)->equals($change->commits->head);
     }
 
+    /**
+     * @phpstan-impure
+     */
     // Untracked files are left out, because a build's own scratch folders would refuse every checkout; optional locks are off, so the read never rewrites the index.
     #[NoDiscard]
     public function isCheckedOutUnchanged(Change $change): bool

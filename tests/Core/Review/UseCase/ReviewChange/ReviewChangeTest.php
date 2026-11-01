@@ -105,14 +105,14 @@ final class ReviewChangeTest extends KernelTestCase
     public function testTheTokensOfCallsRecordedAfterTheRoundStartedAreAdded(): void
     {
         $this->recordUsage('before', 1000);
-        $review = $this->reviewWith(new VerdictPerRole([]), usageOfCall: 120);
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120));
 
         self::assertSame([1, 100, 20, 120], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
     }
 
     public function testTheTokensOfAnotherProjectsCallsAreLeftOut(): void
     {
-        $review = $this->reviewWith(new VerdictPerRole([]), usageOfCall: 120, project: 'beta');
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, 'beta'));
 
         self::assertSame([0, 0], [$review->tokens->calls, $review->tokens->total]);
     }
@@ -147,12 +147,12 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(2, $second->round);
     }
 
-    private function reviewWith(VerdictPerRole $vendor, ?int $round = null, int $usageOfCall = 0, string $project = 'alpha'): ChangeReview
+    private function reviewWith(VerdictPerRole $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
-        $work = function () use ($vendor, &$delivered, $usageOfCall, $project): void {
-            if (0 < $usageOfCall && 0 === $delivered) {
-                $this->recordUsage('during', $usageOfCall, $project);
+        $work = function () use ($vendor, &$delivered, $duringTheRound): void {
+            if ($duringTheRound instanceof Closure && 0 === $delivered) {
+                $duringTheRound();
             }
 
             foreach (array_slice($this->fixture->bus->messages, $delivered) as $message) {
@@ -219,7 +219,7 @@ final class ReviewChangeTest extends KernelTestCase
         return new Panel($members, QuorumPolicy::All);
     }
 
-    // The two rows UsageLedger writes: only the started one names the project, only the settled one carries the tokens.
+    // Both rows UsageLedger writes, because only the started one names the project and only the settled one carries the tokens.
     private function recordUsage(string $call, int $total, string $project = 'alpha'): void
     {
         $this->append(['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard']);
