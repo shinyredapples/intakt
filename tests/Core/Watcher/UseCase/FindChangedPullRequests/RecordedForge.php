@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChangeListing;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
+use LogicException;
 
-// A forge that answers like GitHub's conditional listing: the same validator gets `unchanged`, and only a full answer counts as a read.
+// Answers like GitHub's conditional listing so the tests can count full reads against conditional answers.
 final class RecordedForge implements OpenChanges
 {
     /** @var array<string, list<OpenChange>> */
@@ -46,7 +48,13 @@ final class RecordedForge implements OpenChanges
 
     public static function change(string $id, string $head, string $updatedAt): OpenChange
     {
-        return new OpenChange(new ChangeId($id), new CommitId(str_repeat($head, 40)), new DateTimeImmutable($updatedAt));
+        $moment = DateTimeImmutable::createFromFormat('Y-m-d\TH:i:sP', $updatedAt, new DateTimeZone('UTC'));
+
+        if (false === $moment) {
+            throw new LogicException('Not a moment: '.$updatedAt);
+        }
+
+        return new OpenChange(new ChangeId($id), new CommitId(str_repeat($head, 40)), $moment);
     }
 
     private function validatorOf(string $project): string

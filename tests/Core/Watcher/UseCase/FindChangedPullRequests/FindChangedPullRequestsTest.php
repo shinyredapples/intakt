@@ -6,10 +6,10 @@ namespace Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Core\Watcher\Domain\ListingValidator;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
-use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -21,7 +21,6 @@ use Intakt\Tests\Application\EmptyDatabase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Psr\Log\AbstractLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -41,8 +40,7 @@ final class FindChangedPullRequestsTest extends KernelTestCase
     private RecordedForge $forge;
     private EntityManagerInterface $entities;
     private LockFactory $locks;
-    /** @var list<array{string, array<string, mixed>}> */
-    private array $logged = [];
+    private RecordingLogger $log;
 
     protected function setUp(): void
     {
@@ -52,6 +50,7 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->forge = new RecordedForge();
+        $this->log = new RecordingLogger();
         $this->locks = new LockFactory(new InMemoryStore());
     }
 
@@ -77,8 +76,8 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         self::assertSame(1, $this->forge->conditionalAnswers);
         self::assertSame([null, 'W/"alpha-1"'], $this->forge->received);
         self::assertSame('W/"alpha-1"', $this->entities->find(ListingValidator::class, 'alpha')?->value());
-        self::assertSame(['Listed the open pull requests.', 'Listed the open pull requests: unchanged.'], array_column($this->logged, 0));
-        self::assertSame([['status' => 304, 'changed' => 0]], [array_intersect_key($this->logged[1][1], ['status' => 1, 'changed' => 1])]);
+        self::assertSame(['Listed the open pull requests.', 'Listed the open pull requests: unchanged.'], array_column($this->log->logged, 0));
+        self::assertSame([['status' => 304, 'changed' => 0]], [array_intersect_key($this->log->logged[1][1], ['status' => 1, 'changed' => 1])]);
     }
 
     public function testAPullRequestWhoseHeadAndUpdateTimeAreUnchangedIsNotReturnedAgain(): void
@@ -136,15 +135,9 @@ final class FindChangedPullRequestsTest extends KernelTestCase
     public function testAFailedReadKeepsWhatWasSeenSoTheNextListingIsStillFull(): void
     {
         $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
-        $failing = new class implements OpenChanges {
-            public function listOpen(string $project, ?string $validator): OpenChangeListing
-            {
-                throw new ForgeReadFailed('The forge is down.');
-            }
-        };
 
         try {
-            $this->use($failing)('alpha');
+            $this->use(new FailingForge())('alpha');
             self::fail('The read should fail.');
         } catch (ForgeReadFailed) {
         }
@@ -187,19 +180,7 @@ final class FindChangedPullRequestsTest extends KernelTestCase
 
     private function use(OpenChanges $forge): FindChangedPullRequests
     {
-        $logger = new class($this->logged) extends AbstractLogger {
-            /** @param list<array{string, array<string, mixed>}> $logged */
-            public function __construct(private array &$logged)
-            {
-            }
-
-            public function log(mixed $level, string|\Stringable $message, array $context = []): void
-            {
-                $this->logged[] = [(string) $message, $context];
-            }
-        };
-
-        return new FindChangedPullRequests($forge, new SeenListings($this->entities), $this->locks, $logger);
+        return new FindChangedPullRequests($forge, new SeenListings($this->entities), $this->locks, $this->log);
     }
 
     /**

@@ -6,9 +6,8 @@ namespace Intakt\Plugin\Forge\Contract;
 
 interface OpenChanges
 {
+    // The validator of an earlier listing lets a forge answer `unchanged`, because a conditional request costs no rate limit.
     /**
-     * Lists the open changes of a project; given the validator of an earlier listing, a forge that supports conditional requests answers `unchanged` at no cost to its rate limit.
-     *
      * @throws ForgeReadFailed
      */
     public function listOpen(string $project, ?string $validator): OpenChangeListing;

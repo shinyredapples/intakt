@@ -33,13 +33,18 @@ final class SeenChange
 
     public function isStillAt(OpenChange $open): bool
     {
-        return $this->head === $open->head->hash && $this->updatedAt == $open->updatedAt;
+        return $this->head === $open->head->hash && $this->updatedAt->format('U.u') === $open->updatedAt->format('U.u');
     }
 
     public function see(OpenChange $open): void
     {
         $this->head = $open->head->hash;
         $this->updatedAt = $open->updatedAt;
+    }
+
+    public function project(): string
+    {
+        return $this->project;
     }
 
     public function change(): string

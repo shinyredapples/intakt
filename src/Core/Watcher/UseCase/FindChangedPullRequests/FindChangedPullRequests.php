@@ -23,10 +23,10 @@ final readonly class FindChangedPullRequests
     }
 
     /**
+     * @return list<OpenChange>
+     *
      * @throws ForgeReadFailed
      * @throws ListingInProgress
-     *
-     * @return list<OpenChange> the open pull requests whose head or update time moved since the last listing
      */
     public function __invoke(string $project): array
     {
@@ -46,16 +46,16 @@ final readonly class FindChangedPullRequests
     {
         $listing = $this->forge->listOpen($project, $this->seen->validatorOf($project));
 
-        if ($listing->unchanged) {
+        if ($listing->isUnchanged()) {
             $this->logger->info('Listed the open pull requests: unchanged.', ['project' => $project, 'status' => 304, 'changed' => 0]);
 
             return [];
         }
 
-        $changed = $this->seen->changedAmong($project, $listing->changes);
+        $changed = $this->seen->changedAmong($project, $listing->changes());
         // Recorded only after the list is complete, so a failure before this leaves the old validator and the next listing is a full one.
-        $this->seen->record($project, $listing->changes, $listing->validator);
-        $this->logger->info('Listed the open pull requests.', ['project' => $project, 'status' => 200, 'open' => count($listing->changes), 'changed' => count($changed)]);
+        $this->seen->record($project, $listing->changes(), $listing->validator);
+        $this->logger->info('Listed the open pull requests.', ['project' => $project, 'status' => 200, 'open' => count($listing->changes()), 'changed' => count($changed)]);
 
         return $changed;
     }

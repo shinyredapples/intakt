@@ -19,6 +19,11 @@ final class ListingValidator
     ) {
     }
 
+    public function project(): string
+    {
+        return $this->project;
+    }
+
     public function value(): string
     {
         return $this->validator;

@@ -9,7 +9,6 @@ use Intakt\Core\Watcher\Domain\ListingValidator;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 
-// What the watcher saw of each project: the validator of its last full listing and the head and update time of each pull request in it.
 final readonly class SeenListings
 {
     public function __construct(private EntityManagerInterface $entities)
@@ -24,7 +23,7 @@ final readonly class SeenListings
     /**
      * @param list<OpenChange> $open
      *
-     * @return list<OpenChange> the ones whose head or update time differs from what was seen
+     * @return list<OpenChange>
      */
     public function changedAmong(string $project, array $open): array
     {
@@ -33,7 +32,7 @@ final readonly class SeenListings
         foreach ($open as $change) {
             $seen = $this->entities->find(SeenChange::class, ['project' => $project, 'change' => $change->id->value]);
 
-            if (!$seen?->isStillAt($change)) {
+            if (true !== $seen?->isStillAt($change)) {
                 $changed[] = $change;
             }
         }
@@ -90,7 +89,9 @@ final readonly class SeenListings
         $stored = $this->entities->find(ListingValidator::class, $project);
 
         if (null === $validator) {
-            null === $stored || $this->entities->remove($stored);
+            if (null !== $stored) {
+                $this->entities->remove($stored);
+            }
 
             return;
         }
