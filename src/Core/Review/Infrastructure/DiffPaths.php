@@ -7,15 +7,18 @@ namespace Intakt\Core\Review\Infrastructure;
 // Reads the paths from the file headers of a git diff, because the round stores the diff only; a hunk line that looks like a header is never read as one.
 final readonly class DiffPaths
 {
-    // A path git quoted (C-style, for unusual characters) or one without spaces.
+    // Quoted or free of spaces, because git C-quotes a path with unusual characters and a space would end an unquoted one.
     private const string PATH = '("(?:[^"\\\\]|\\\\.)*"|\S+)';
 
-    // Each header and whether its paths carry git's a/ or b/ prefix; a header path with spaces is taken only when both sides name the same file, the one case its split is certain.
-    private const array HEADERS = [
-        '~^diff --git a/(.+) b/\1$~' => false,
-        '~^diff --git '.self::PATH.' '.self::PATH.'$~' => true,
-        '~^(?:---|\+\+\+) '.self::PATH.'$~' => true,
-        '~^(?:rename|copy) (?:from|to) ("(?:[^"\\\\]|\\\\.)*"|.+)$~' => false,
+    // Tried first, because a header path with spaces splits for certain only when both sides name the same file.
+    private const array WITHOUT_PREFIX = [
+        '~^diff --git a/(.+) b/\1$~',
+        '~^(?:rename|copy) (?:from|to) ("(?:[^"\\\\]|\\\\.)*"|.+)$~',
+    ];
+
+    private const array WITH_PREFIX = [
+        '~^diff --git '.self::PATH.' '.self::PATH.'$~',
+        '~^(?:---|\+\+\+) '.self::PATH.'$~',
     ];
 
     /**
@@ -40,7 +43,8 @@ final readonly class DiffPaths
         $headers = [];
         $inHunk = false;
 
-        foreach (preg_split('~\r?\n~', $diff) ?: [] as $line) {
+        foreach (explode("\n", $diff) as $line) {
+            $line = rtrim($line, "\r");
             $inHunk = !str_starts_with($line, 'diff --git ') && ($inHunk || str_starts_with($line, '@@'));
 
             if (!$inHunk) {
@@ -56,9 +60,15 @@ final readonly class DiffPaths
      */
     private function pathsOn(string $line): array
     {
-        foreach (self::HEADERS as $header => $prefixed) {
+        foreach (self::WITHOUT_PREFIX as $header) {
             if (1 === preg_match($header, $line, $found)) {
-                return $this->filesIn(array_slice($found, 1), $prefixed);
+                return $this->filesIn(array_slice($found, 1));
+            }
+        }
+
+        foreach (self::WITH_PREFIX as $header) {
+            if (1 === preg_match($header, $line, $found)) {
+                return array_map(static fn (string $path): string => substr($path, 2), $this->filesIn(array_slice($found, 1)));
             }
         }
 
@@ -70,17 +80,11 @@ final readonly class DiffPaths
      *
      * @return list<string>
      */
-    private function filesIn(array $paths, bool $prefixed): array
+    private function filesIn(array $paths): array
     {
-        $files = [];
+        $files = array_filter(array_map($this->unquoted(...), $paths), static fn (string $path): bool => '/dev/null' !== $path);
 
-        foreach (array_map($this->unquoted(...), $paths) as $path) {
-            if ('/dev/null' !== $path) {
-                $files[] = $prefixed ? substr($path, 2) : $path;
-            }
-        }
-
-        return $files;
+        return array_values($files);
     }
 
     private function unquoted(string $path): string

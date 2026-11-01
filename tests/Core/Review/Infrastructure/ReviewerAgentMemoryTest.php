@@ -135,7 +135,9 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
     private function review(StoreProjectMemory $memory): void
     {
         $script = function (mixed $model, array $input): string {
-            $this->sent = $input['messages'];
+            /** @var list<array{role: string, content: string}> $messages */
+            $messages = $input['messages'];
+            $this->sent = $messages;
 
             return '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
         };
