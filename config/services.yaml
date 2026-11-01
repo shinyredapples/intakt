@@ -31,6 +31,15 @@ services:
     Symfony\Component\Semaphore\SemaphoreFactory:
         arguments: ['@Symfony\Component\Semaphore\Store\LockStore']
 
+    # The App's identity: nothing else is read as a forge credential.
+    Intakt\Plugin\GitHubForge\Infrastructure\AppJwt:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
+    Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter:
+        arguments:
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 

@@ -12,6 +12,7 @@ return [
     'Core/Upstream',
     'Plugin/Forge',
     'Plugin/Gate',
+    'Plugin/GitHubForge',
     'Plugin/LocalGitForge',
     'Plugin/Notifier',
     'Plugin/SymfonyAiVendor',
