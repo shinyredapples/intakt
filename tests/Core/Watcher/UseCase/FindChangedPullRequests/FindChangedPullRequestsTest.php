@@ -233,7 +233,10 @@ final class FindChangedPullRequestsTest extends KernelTestCase
 
     private function at(string $id, string $updatedAt): OpenChange
     {
-        return new OpenChange(new ChangeId($id), new CommitId(str_repeat('a', 40)), new DateTimeImmutable($updatedAt, new DateTimeZone('UTC')));
+        $moment = DateTimeImmutable::createFromFormat('Y-m-d H:i:s.u', $updatedAt, new DateTimeZone('UTC'));
+        self::assertInstanceOf(DateTimeImmutable::class, $moment);
+
+        return new OpenChange(new ChangeId($id), new CommitId(str_repeat('a', 40)), $moment);
     }
 
     /**
