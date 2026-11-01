@@ -14,8 +14,11 @@ final class CommentRuleHelperOwnersTest extends TestCase
     #[DataProvider('helpers')]
     public function testEachCommentRuleHelperIsCoveredOnlyByTheTestClassNamedAfterIt(string $helper): void
     {
+        $testFiles = glob(__DIR__.'/*Test.php');
+        self::assertIsArray($testFiles);
+
         $owners = array_values(array_filter(
-            glob(__DIR__.'/*Test.php') ?: [],
+            $testFiles,
             static fn (string $file): bool => str_contains((string) file_get_contents($file), '#[CoversClass('.$helper.'::class)]'),
         ));
 
