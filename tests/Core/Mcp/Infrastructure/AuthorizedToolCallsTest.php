@@ -79,11 +79,9 @@ final class AuthorizedToolCallsTest extends TestCase
 
     private function inner(): ReferenceHandlerInterface
     {
-        return new class implements ReferenceHandlerInterface {
-            public function handle(ElementReference $reference, array $arguments): mixed
-            {
-                return 'ran';
-            }
-        };
+        $inner = self::createStub(ReferenceHandlerInterface::class);
+        $inner->method('handle')->willReturn('ran');
+
+        return $inner;
     }
 }
