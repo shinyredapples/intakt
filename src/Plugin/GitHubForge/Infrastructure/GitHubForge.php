@@ -284,7 +284,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             $status = $response->getStatusCode();
             $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class), $failure->getCode(), $failure);
+            throw $this->unreachableForWrite($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -296,6 +296,12 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function unreachable(string $failure): ForgeReadFailed
     {
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    // Not chained either, for the same reason as a read.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 
     private function writeBearer(): string

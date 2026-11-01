@@ -74,11 +74,12 @@ final class GitHubForgeTest extends TestCase
     private const string MERGE_BASE = '3333333333333333333333333333333333333333';
     private const string API = 'https://api.github.com/repos/acme/widgets';
     private const string TOKEN = 'round-7-token-0123456789';
+    private const string POST_REVIEW = 'POST '.self::API.'/pulls/7/reviews';
 
     /** @var list<string> */
     private array $requested = [];
-    /** @var list<mixed> */
-    private array $posted = [];
+    /** @var array<string, array<mixed>> */
+    private array $sent = [];
     private string $pullFixture = 'pull_request.json';
     private string $compareFixture = 'compare_merge_base.json';
     private string $minted = 'installation-secret';
@@ -369,12 +370,12 @@ final class GitHubForgeTest extends TestCase
 
         $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN)));
 
-        self::assertSame([[
+        self::assertSame([
             'commit_id' => self::HEAD,
             'event' => 'COMMENT',
             'body' => "Two reviewers approve.\n\n<!-- intakt-review-token: ".self::TOKEN.' -->',
-        ]], $this->posted);
-        self::assertContains('POST '.self::API.'/pulls/7/reviews', $this->requested);
+        ], json_decode($this->postedBody(), true, flags: JSON_THROW_ON_ERROR));
+        self::assertCount(1, array_keys($this->requested, self::POST_REVIEW, true));
     }
 
     public function testItPostsNothingWhenTheHeadMovedBeforeThePost(): void
@@ -390,22 +391,17 @@ final class GitHubForgeTest extends TestCase
             self::assertStringContainsString(self::HEAD, $stale->getMessage());
         }
 
-        self::assertSame([], $this->posted);
+        self::assertNotContains(self::POST_REVIEW, $this->requested);
         self::assertSame('GET '.self::API.'/pulls/7', array_last($this->requested));
     }
 
     public function testItSendsTheInstallationTokenAsBearerWithThePost(): void
     {
-        $bearers = [];
-        $forge = $this->forge(static function (string $url, array $options) use (&$bearers): ?ResponseInterface {
-            $bearers[] = str_ends_with($url, '/reviews') ? self::header($options, 'authorization') : null;
-
-            return null;
-        });
+        $forge = $this->forge();
 
         $forge->postReview('widgets', $forge->change(new ChangeId(self::PULL)), new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
 
-        self::assertSame(['Authorization: Bearer installation-secret'], array_values(array_filter($bearers)));
+        self::assertSame('Authorization: Bearer installation-secret', self::header($this->sent[self::POST_REVIEW] ?? [], 'authorization'));
     }
 
     public function testItTurnsAnErrorStatusOfThePostIntoAForgeWriteFailure(): void
@@ -413,12 +409,9 @@ final class GitHubForgeTest extends TestCase
         $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? new MockResponse('{"message":"Unprocessable Entity"}', ['http_code' => 422]) : null);
         $change = $forge->change(new ChangeId(self::PULL));
 
-        try {
-            $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
-            self::fail('A 422 must fail the write.');
-        } catch (ForgeWriteFailed $failure) {
-            self::assertStringContainsString('422', $failure->getMessage());
-        }
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered 422 to a write.'));
+
+        $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
     }
 
     public function testItDoesNotChainTheTransportFailureOfThePostWhoseTraceHoldsTheToken(): void
@@ -434,7 +427,6 @@ final class GitHubForgeTest extends TestCase
             self::assertStringContainsString(TransportException::class, $failure->getMessage());
         }
     }
-
     private function movedChange(GitHubForge $forge): Change
     {
         $this->pullFixture = 'pull_request_moved.json';
@@ -452,9 +444,7 @@ final class GitHubForgeTest extends TestCase
     {
         return $this->forgeOver(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
             $this->requested[] = $method.' '.$url;
-            if ('POST' === $method) {
-                $this->posted[] = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '', true, flags: JSON_THROW_ON_ERROR);
-            }
+            $this->sent[$method.' '.$url] = $options;
 
             $answer = $override instanceof Closure ? $override($url, $options) : null;
 
@@ -497,6 +487,13 @@ final class GitHubForgeTest extends TestCase
     private function isBranchComparison(string $url, array $options): bool
     {
         return str_contains($url, '/compare/main...') && !str_ends_with(self::header($options, 'accept'), 'github.diff');
+    }
+
+    private function postedBody(): string
+    {
+        $body = $this->sent[self::POST_REVIEW]['body'] ?? null;
+
+        return is_string($body) ? $body : throw new LogicException('No review was posted.');
     }
 
     private static function comparison(string $mergeBase, int $files): string
