@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -28,11 +29,15 @@ final readonly class ReviewerMoves
         $this->ledger->reviewerStarted($reviewer);
     }
 
-    public function receive(RoundReviewer $reviewer, Verdict $verdict): void
+    public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): void
     {
-        $reviewer->recordVerdict($verdict);
+        $reviewer->recordVerdict($verdict, $substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
+
+        if ($substitute instanceof Provider) {
+            $this->ledger->catchUpOwed($reviewer, $substitute);
+        }
     }
 
     public function fail(RoundReviewer $reviewer, string $failure): void
