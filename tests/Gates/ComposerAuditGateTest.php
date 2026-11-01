@@ -8,7 +8,7 @@ use Intakt\Gates\ComposerAuditGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(ComposerAuditGate::class)]
-final class AuditGateTest extends SandboxTestCase
+final class ComposerAuditGateTest extends SandboxTestCase
 {
     private const string KNOWN_ADVISORY = 'PKSA-hr4y-jwk2-1yb9';
 

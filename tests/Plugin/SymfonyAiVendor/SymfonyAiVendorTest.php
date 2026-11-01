@@ -31,6 +31,8 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\JudgeAgent;
+use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -386,7 +388,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $ledger = new InMemoryLedger();
         $logger = new BufferingLogger();
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), $logger));
 
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
 
@@ -547,6 +549,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage);
     }
 }
