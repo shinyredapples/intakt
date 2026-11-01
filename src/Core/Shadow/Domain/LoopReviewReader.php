@@ -17,8 +17,9 @@ use NoDiscard;
 final readonly class LoopReviewReader
 {
     private const string REVIEWER_LINE = '/^Reviewer:\s*(\S.*?)\s*$/';
-    private const string FENCE_BLOCK = '/^[ \t]*(```|~~~)[ \t]*(\w*)[ \t]*\R(.*?)(?:\R[ \t]*\1[ \t]*$|\z)/msu';
-    private const string FINDING_LINE = '/^\s*(?:[-*]\s+)?\[(P[123])\]\s+`?([^\s`:]+):(\d+)/';
+    // A backtick fence's info string may not hold a backtick (CommonMark), so an inline span is no fence.
+    private const string FENCE_OPENING = '/^\s*(`{3,}(?!.*`)|~{3,})\s*(\S*)/';
+    private const string FINDING_LINE = '/^\s*(?:(?:[-*+]|\d+[.)])\s+)?\[(P[123])\]\s+`?([^\s`:]+):(\d+)/';
     private const string UNKNOWN_REVIEWER = 'unknown';
 
     /**
@@ -34,38 +35,71 @@ final readonly class LoopReviewReader
 
     private function readComment(PullRequestComment $comment): LoopReview
     {
-        $lines = $this->unquotedLines($this->withoutFences($comment->body));
+        $lines = $this->readableLines($comment->body);
+        $findings = $this->findingsOf($lines);
 
-        return new LoopReview($this->reviewerOf($lines), $this->verdictOf($lines), $this->findingsOf($lines));
+        return new LoopReview($this->reviewerOf($lines), $this->verdictOf($lines, $findings), $findings);
     }
 
-    // A fenced json block becomes one line so it competes with bare JSON lines by position; any other fence is dropped.
-    private function withoutFences(string $body): string
-    {
-        return preg_replace_callback(
-            self::FENCE_BLOCK,
-            static fn (array $match): string => 'json' === strtolower($match[2]) ? preg_replace('/\s*\R\s*/', ' ', trim($match[3])) ?? '' : '',
-            $body,
-        ) ?? '';
-    }
-
+    // A fenced json block becomes one line so it competes with bare JSON lines by position; fenced and quoted lines are blanked.
     /**
-     * @return list<string>
+     * @return list<array{text: string, json: bool}>
      */
-    private function unquotedLines(string $text): array
+    private function readableLines(string $body): array
     {
-        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $text));
+        $lines = [];
+        $fence = null;
+        foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $body)) as $line) {
+            if (null === $fence) {
+                $fence = $this->fenceOpenedBy($line);
+                $lines[] = ['text' => null === $fence && !str_starts_with(ltrim($line), '>') ? $line : '', 'json' => false];
+                continue;
+            }
+            if ($this->closes($fence['marker'], $line)) {
+                $lines[] = $this->fenced($fence);
+                $fence = null;
+                continue;
+            }
+            $fence['body'][] = $line;
+        }
 
-        return array_values(array_filter($lines, static fn (string $line): bool => !str_starts_with(ltrim($line), '>')));
+        return null === $fence ? $lines : [...$lines, $this->fenced($fence)];
     }
 
     /**
-     * @param list<string> $lines
+     * @return array{marker: string, json: bool, body: list<string>}|null
+     */
+    private function fenceOpenedBy(string $line): ?array
+    {
+        if (1 !== preg_match(self::FENCE_OPENING, $line, $match)) {
+            return null;
+        }
+
+        return ['marker' => $match[1], 'json' => 'json' === strtolower($match[2]), 'body' => []];
+    }
+
+    private function closes(string $marker, string $line): bool
+    {
+        return 1 === preg_match('/^\s*'.preg_quote($marker[0], '/').'{'.strlen($marker).',}\s*$/', $line);
+    }
+
+    /**
+     * @param array{marker: string, json: bool, body: list<string>} $fence
+     *
+     * @return array{text: string, json: bool}
+     */
+    private function fenced(array $fence): array
+    {
+        return ['text' => $fence['json'] ? implode(' ', $fence['body']) : '', 'json' => $fence['json']];
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
      */
     private function reviewerOf(array $lines): string
     {
         foreach ($lines as $line) {
-            if (1 === preg_match(self::REVIEWER_LINE, $line, $match)) {
+            if (!$line['json'] && 1 === preg_match(self::REVIEWER_LINE, $line['text'], $match)) {
                 return $match[1];
             }
         }
@@ -74,7 +108,7 @@ final readonly class LoopReviewReader
     }
 
     /**
-     * @param list<string> $lines
+     * @param list<array{text: string, json: bool}> $lines
      *
      * @return list<LoopFinding>
      */
@@ -82,7 +116,7 @@ final readonly class LoopReviewReader
     {
         $findings = [];
         foreach ($lines as $line) {
-            if (1 === preg_match(self::FINDING_LINE, $line, $match)) {
+            if (!$line['json'] && 1 === preg_match(self::FINDING_LINE, $line['text'], $match)) {
                 $findings[] = new LoopFinding($match[2], (int) $match[3], Severity::from($match[1]));
             }
         }
@@ -91,17 +125,30 @@ final readonly class LoopReviewReader
     }
 
     /**
-     * @param list<string> $lines
+     * @param list<array{text: string, json: bool}> $lines
+     * @param list<LoopFinding>                     $findings
      */
-    private function verdictOf(array $lines): LoopVerdict
+    private function verdictOf(array $lines, array $findings): LoopVerdict
     {
-        $candidates = array_values(array_filter($lines, static fn (string $line): bool => str_starts_with(ltrim($line), '{')));
+        $declared = $this->declaredVerdict($lines);
+        $blocking = array_any($findings, static fn (LoopFinding $finding): bool => Severity::P3 !== $finding->severity);
+
+        // The loop's rules: an open P1 or P2 finding means changes whatever the JSON says.
+        return LoopVerdict::Approve === $declared && $blocking ? LoopVerdict::Changes : $declared;
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
+     */
+    private function declaredVerdict(array $lines): LoopVerdict
+    {
+        $candidates = array_filter($lines, static fn (array $line): bool => $line['json'] || str_starts_with(ltrim($line['text']), '{'));
         if ([] === $candidates) {
             return LoopVerdict::Unreadable;
         }
 
         try {
-            $decoded = json_decode(array_last($candidates), true, 16, JSON_THROW_ON_ERROR);
+            $decoded = json_decode(array_last($candidates)['text'], true, 16, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
             return LoopVerdict::Unreadable;
         }

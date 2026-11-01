@@ -30,10 +30,11 @@ final class LoopReviewReaderTest extends TestCase
 
         $reviews = new LoopReviewReader()->read('loop-bot', 'abc123', $comments)->reviews;
 
-        self::assertSame(['correctness', 'style', 'security', 'docs'], array_column($reviews, 'reviewer'));
-        self::assertSame([LoopVerdict::Changes, LoopVerdict::Approve, LoopVerdict::Unreadable, LoopVerdict::Changes], array_column($reviews, 'verdict'));
+        self::assertSame(['correctness', 'style', 'security', 'docs', 'tests'], array_column($reviews, 'reviewer'));
+        self::assertSame([LoopVerdict::Changes, LoopVerdict::Approve, LoopVerdict::Unreadable, LoopVerdict::Changes, LoopVerdict::Changes], array_column($reviews, 'verdict'));
         self::assertCount(2, $reviews[0]->findings);
         self::assertCount(1, $reviews[3]->findings);
+        self::assertEquals([new LoopFinding('src/C.php', 42, Severity::P2)], $reviews[4]->findings);
     }
 
     public function testOnlyCommentsByTheLoopIdentityAreRead(): void
@@ -109,6 +110,64 @@ final class LoopReviewReaderTest extends TestCase
         $reviews = $this->read("Reviewer: a\n[P2] `src/A.php:12` text\n{\"verdict\": \"changes\"}");
 
         self::assertEquals([new LoopFinding('src/A.php', 12, Severity::P2)], $reviews->reviews[0]->findings);
+    }
+
+    public function testANumberedFindingIsRead(): void
+    {
+        $reviews = $this->read("Reviewer: a\n1. [P2] `src/A.php:42`: wrong\n```json\n{\"verdict\": \"changes\"}\n```");
+
+        self::assertEquals([new LoopFinding('src/A.php', 42, Severity::P2)], $reviews->reviews[0]->findings);
+    }
+
+    public function testATaggedLineInsideALongerFenceIsNotAFinding(): void
+    {
+        $reviews = $this->read("Reviewer: a\n````php\n[P1] `src/Example.php:12` example\n```\n[P1] `src/B.php:3` still fenced\n````\n{\"verdict\":\"changes\"}");
+
+        self::assertSame([], $reviews->reviews[0]->findings);
+        self::assertSame(LoopVerdict::Changes, $reviews->reviews[0]->verdict);
+    }
+
+    public function testAFenceWithAnInfoStringHidesItsFindingsAndKeepsTheLaterVerdict(): void
+    {
+        $reviews = $this->read("Reviewer: a\n```php title=x\n[P1] src/F.php:1 in fence\n```\n```json\n{\"verdict\": \"approve\"}\n```");
+
+        self::assertSame([], $reviews->reviews[0]->findings);
+        self::assertSame(LoopVerdict::Approve, $reviews->reviews[0]->verdict);
+    }
+
+    public function testAJsonVerdictFenceWithCrlfLineEndingsIsRead(): void
+    {
+        self::assertSame(LoopVerdict::Changes, $this->only("Reviewer: a\r\n```json\r\n{\"verdict\":\r\n \"changes\"}\r\n```\r\n"));
+    }
+
+    public function testAFinalFencedJsonThatIsNoObjectIsUnreadable(): void
+    {
+        self::assertSame(LoopVerdict::Unreadable, $this->only("Reviewer: a\n{\"verdict\":\"approve\"}\n```json\n[\"changes\"]\n```"));
+    }
+
+    #[DataProvider('blockingSeverities')]
+    public function testAnApprovalListingAnOpenP1OrP2FindingCountsAsChanges(string $severity): void
+    {
+        self::assertSame(LoopVerdict::Changes, $this->only("Reviewer: a\n- [{$severity}] src/A.php:1 bad\n```json\n{\"verdict\": \"approve\"}\n```"));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function blockingSeverities(): iterable
+    {
+        yield 'P1' => ['P1'];
+        yield 'P2' => ['P2'];
+    }
+
+    public function testAnApprovalListingOnlyAP3FindingStaysApproval(): void
+    {
+        self::assertSame(LoopVerdict::Approve, $this->only("Reviewer: a\n- [P3] src/A.php:1 nit\n```json\n{\"verdict\": \"approve\"}\n```"));
+    }
+
+    public function testAnUnreadableVerdictStaysUnreadableDespiteAP1Finding(): void
+    {
+        self::assertSame(LoopVerdict::Unreadable, $this->only("Reviewer: a\n- [P1] src/A.php:1 bad"));
     }
 
     private function only(string $body): LoopVerdict

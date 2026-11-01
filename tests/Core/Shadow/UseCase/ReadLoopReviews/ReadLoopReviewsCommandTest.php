@@ -25,7 +25,7 @@ final class ReadLoopReviewsCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $status);
         self::assertSame(
-            "correctness: changes\n  P1 src/A.php:10\n  P3 src/B.php:7\nstyle: approve\nsecurity: unreadable\ndocs: changes\n  P2 docs/x.md:3\n4 loop reviews read\n",
+            "correctness: changes\n  P1 src/A.php:10\n  P3 src/B.php:7\nstyle: approve\nsecurity: unreadable\ndocs: changes\n  P2 docs/x.md:3\ntests: changes\n  P2 src/C.php:42\n5 loop reviews read\n",
             $tester->getDisplay(),
         );
     }

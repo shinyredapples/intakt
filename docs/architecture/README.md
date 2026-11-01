@@ -325,7 +325,7 @@ Plan task T42, part 1 (module `Core/Shadow`). `Domain/LoopReviewReader::read(loo
 
 Reading rules (builder's choice for what the issue leaves open; `test_agents.py` is not in this repository):
 - The reviewer is the text of a `Reviewer: <name>` line (`unknown` without one).
-- The verdict is the last JSON candidate: a fenced `json` block, or a line starting with `{`. Its `verdict` must be `approve` or `changes`; a missing, malformed or unknown verdict, or a comment without JSON, is `unreadable`, never approval.
-- A finding is a line `[P1|P2|P3] file:line ...` (optional list marker, optional backticks around the location). Lines inside a fence and lines starting with `>` are neither findings nor verdicts.
+- The verdict is the last JSON candidate: a fenced block whose info string starts with `json` (whatever it holds), or a line starting with `{`. Its `verdict` must be `approve` or `changes`; a missing, malformed or unknown verdict, a final candidate that is no JSON object, or a comment without JSON, is `unreadable`, never approval. An `approve` with an open P1 or P2 finding counts as `changes`; a P3 finding keeps the approval.
+- A finding is a line `[P1|P2|P3] file:line ...` (optional bullet `-`, `*`, `+` or numbered `1.`/`1)` marker, optional backticks around the location). Lines inside a fence and lines starting with `>` are neither findings nor verdicts. A fence opens with three or more backticks or tildes, any indentation and any info string, and closes only with a line of the same character at least as long; an unclosed fence runs to the end. CRLF line endings are read like LF.
 
 `php bin/console intakt:shadow:read-loop-reviews <file>` (`UseCase/ReadLoopReviews`) prints the reader's output for a JSON file with `identity`, `head` and `comments`; an unreadable file exits with 2. Tests: `tests/Core/Shadow/` with the recorded `tests/Fixtures/Shadow/loop-review-comments.json`.

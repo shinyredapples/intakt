@@ -6,6 +6,7 @@
     {"author": "loop-bot", "head": "abc123", "body": "Reviewer: style\n\nLooks good.\n\n{\"verdict\": \"approve\"}"},
     {"author": "loop-bot", "head": "abc123", "body": "Reviewer: security\n\nI think this is fine, approve.\n\n{\"verdict\": \"approve\""},
     {"author": "loop-bot", "head": "abc123", "body": "Reviewer: docs\n\n> [P1] `src/Quoted.php:1` quoted by the builder\n\n```\n[P2] `src/Fenced.php:2` inside a fence\n```\n\n[P2] `docs/x.md:3` real one\n\n{\"verdict\": \"changes\"}"},
+    {"author": "loop-bot", "head": "abc123", "body": "Reviewer: tests\r\n\r\n1. [P2] `src/C.php:42`: untested branch\r\n\r\n````php title=example\r\n[P1] `src/Example.php:1` example\r\n```\r\n````\r\n\r\n```json title=verdict\r\n{\"verdict\":\r\n \"approve\"}\r\n```\r\n"},
     {"author": "someone", "head": "abc123", "body": "Reviewer: other\n\n{\"verdict\": \"approve\"}"},
     {"author": "loop-bot", "head": "old999", "body": "Reviewer: correctness\n\n{\"verdict\": \"approve\"}"}
   ]
