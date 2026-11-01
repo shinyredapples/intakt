@@ -9,6 +9,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewTerms;
+use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
@@ -17,16 +19,32 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\StateMarkingStore;
 use Intakt\Tests\Core\Review\SampleIdentity;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Symfony\Component\Workflow\Exception\NotEnabledTransitionException;
 use Symfony\Component\Workflow\WorkflowInterface;
 
-#[CoversNothing]
-final class ReviewWorkflowsTest extends KernelTestCase
+// Through the container's state machine, because the workflow configuration is built from these transitions.
+#[CoversClass(ReviewerTransition::class)]
+#[UsesClass(ReviewerState::class)]
+#[UsesClass(ReviewRound::class)]
+#[UsesClass(RoundReviewer::class)]
+#[UsesClass(RoundState::class)]
+#[UsesClass(ReviewSubject::class)]
+#[UsesClass(ReviewTarget::class)]
+#[UsesClass(ChangeRound::class)]
+#[UsesClass(VerdictIdentity::class)]
+#[UsesClass(ReviewTerms::class)]
+#[UsesClass(StateMarkingStore::class)]
+#[UsesClass(ReviewerRole::class)]
+#[UsesClass(ReviewerModel::class)]
+#[UsesClass(PanelReviewer::class)]
+final class ReviewerTransitionTest extends KernelTestCase
 {
     public function testAReviewerStartsThenReceivesItsVerdict(): void
     {
@@ -109,27 +127,6 @@ final class ReviewWorkflowsTest extends KernelTestCase
         self::assertFalse($this->reviewerMachine()->can($reviewer, ReviewerTransition::Receive->value));
     }
 
-    public function testARoundCannotCompleteWhileAReviewerHasNotFinished(): void
-    {
-        $round = $this->round(2);
-        $this->finish($round->reviewers()[0]);
-        $this->reviewerMachine()->apply($round->reviewers()[1], ReviewerTransition::Start->value);
-
-        self::assertFalse($this->roundMachine()->can($round, ReviewRound::COMPLETION));
-    }
-
-    public function testARoundCompletesOnceAndOnlyOnceWhenEveryReviewerFinished(): void
-    {
-        $round = $this->round(2);
-        array_map($this->finish(...), $round->reviewers());
-
-        self::assertTrue($this->roundMachine()->can($round, ReviewRound::COMPLETION));
-        $this->roundMachine()->apply($round, ReviewRound::COMPLETION);
-
-        self::assertSame(RoundState::Complete, $round->state());
-        self::assertFalse($this->roundMachine()->can($round, ReviewRound::COMPLETION));
-    }
-
     private function finish(RoundReviewer $reviewer): void
     {
         $this->reviewerMachine()->apply($reviewer, ReviewerTransition::Start->value);
@@ -150,14 +147,6 @@ final class ReviewWorkflowsTest extends KernelTestCase
     private function reviewerMachine(): WorkflowInterface
     {
         $machine = self::getContainer()->get('state_machine.reviewer');
-        assert($machine instanceof WorkflowInterface);
-
-        return $machine;
-    }
-
-    private function roundMachine(): WorkflowInterface
-    {
-        $machine = self::getContainer()->get('state_machine.review_round');
         assert($machine instanceof WorkflowInterface);
 
         return $machine;

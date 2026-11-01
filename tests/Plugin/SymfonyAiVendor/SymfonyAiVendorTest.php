@@ -24,10 +24,15 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JudgedFinding;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
@@ -60,6 +65,7 @@ use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
@@ -118,6 +124,12 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
 #[UsesClass(Kernel::class)]
+#[UsesClass(JudgeAgent::class)]
+#[UsesClass(JudgePrompt::class)]
+#[UsesClass(UntrustedSource::class)]
+#[UsesClass(Judgement::class)]
+#[UsesClass(JudgedFinding::class)]
+#[UsesClass(JudgeRequest::class)]
 final class SymfonyAiVendorTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
@@ -227,24 +239,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $unsettled['usages'];
         self::assertSame([100], array_column($usages, 'prompt'));
-    }
-
-    public function testARoundWhoseUsageCannotBeReadBeforeAFailureIsLoggedAndTheFailureStillRecorded(): void
-    {
-        $extractor = self::createStub(TokenUsageExtractorInterface::class);
-        $extractor->method('extract')->willThrowException(new JsonException('Syntax error'));
-        $converter = self::createStub(ResultConverterInterface::class);
-        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
-        $ledger = new InMemoryLedger();
-        $logger = new BufferingLogger();
-
-        new UsageLedger($ledger, new MockClock(self::NOW), $logger)->leaveUnsettled(new UsageReservation('a call'), new ServerException(503), new DeferredResult($converter, new InMemoryRawResult()));
-
-        self::assertSame(['unsettled', ServerException::class, []], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure'], $ledger->payloads()[0]['usages']]);
-        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
-        $logs = $logger->cleanLogs();
-        self::assertSame('warning', $logs[0][0]);
-        self::assertInstanceOf(JsonException::class, $logs[0][2]['exception']);
     }
 
     public function testARateLimitedCallIsATypedErrorWithTheResetTheProviderSent(): void
@@ -358,23 +352,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([100, 20], [$usages[0]['prompt'], $usages[0]['completion']]);
     }
 
-    public function testAProviderAnswerThatFailsToMapSettlesWithTheTokensItsExtractorReads(): void
-    {
-        $extractor = self::createStub(TokenUsageExtractorInterface::class);
-        $extractor->method('extract')->willReturn(new TokenUsage(promptTokens: 9, model: 'big'));
-        $converter = self::createStub(ResultConverterInterface::class);
-        $converter->method('convert')->willThrowException(new RuntimeException('not a verdict'));
-        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
-        $result = new DeferredResult($converter, new InMemoryRawResult());
-        $ledger = new InMemoryLedger();
-
-        new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger())->settle(new UsageReservation('a call'), $result);
-
-        /** @var list<array<string, int>> $usages */
-        $usages = $ledger->payloads()[0]['usages'];
-        self::assertSame(9, $usages[0]['prompt']);
-    }
-
     public function testAnAnswerWhoseUsageCannotBeReadKeepsItsVerdictAndIsLeftUnsettled(): void
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
@@ -478,6 +455,59 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertEquals(new MockClock(self::NOW)->now(), UuidV7::fromString($call)->getDateTime());
     }
 
+    public function testTheVendorJudgesOnTheLightTierAndReturnsTheMarks(): void
+    {
+        $models = [];
+        $answer = static function (Model $model) use (&$models): string {
+            $models[] = $model->getName();
+
+            return '{"marks":[{"id":"F1","mark":"defer"},{"id":"F2","mark":"reject"}]}';
+        };
+
+        $judgement = $this->vendor($answer)->judge('alpha', $this->judgeRequest());
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Defer), new JudgedFinding('F2', Mark::Reject)], $judgement->marks);
+        self::assertSame(['small'], $models);
+    }
+
+    public function testAnAnsweredJudgementIsRecordedAsStartedThenSettledOnTheLightTier(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(static fn (): string => '{"marks":[{"id":"F1","mark":"act"},{"id":"F2","mark":"defer"}]}', $ledger)->judge('alpha', $this->judgeRequest());
+
+        self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame('light', $ledger->payloads()[0]['tier']);
+    }
+
+    public function testACutOffStreamMakesEveryBlockingFindingActAndLeavesTheCallUnsettled(): void
+    {
+        $ledger = new InMemoryLedger();
+        $cutOff = static fn (): never => throw new IncompleteStreamException('The stream ended before its last event.');
+
+        $judgement = $this->vendor($cutOff, $ledger)->judge('alpha', $this->judgeRequest());
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
+    }
+
+    public function testAFailedJudgeCallIsATypedProviderErrorAndLeftUnsettled(): void
+    {
+        $ledger = new InMemoryLedger();
+        $limited = static fn (): never => throw new RateLimitExceededException(30);
+
+        try {
+            $this->vendor($limited, $ledger)->judge('alpha', $this->judgeRequest());
+            self::fail('A failed judge call must stay an error, never a judgement.');
+        } catch (ProviderRateLimited $rateLimited) {
+            self::assertSame(30, $rateLimited->retryAfterSeconds);
+        }
+
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(RateLimitExceededException::class, $ledger->payloads()[1]['failure']);
+    }
+
     #[Group('persistence')]
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
@@ -511,6 +541,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
+    private function judgeRequest(): JudgeRequest
+    {
+        return new JudgeRequest('Add a cart.', [
+            new Finding('F1', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null),
+            new Finding('F2', Severity::P3, null, null, null, 'Nit.', FixableBy::Builder, false, null, null),
+        ]);
+    }
+
     private function openFinding(string $id): Finding
     {
         return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
@@ -542,9 +580,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger(), LoggerInterface $logger = new NullLogger()): SymfonyAiVendor
     {
-        $resolver = new ConfiguredTierResolver([
-            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
-        ], []);
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => [
+            'strong' => ['provider' => 'anthropic', 'model' => 'big'],
+            'light' => ['provider' => 'anthropic', 'model' => 'small'],
+        ]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);

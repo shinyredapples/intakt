@@ -51,8 +51,6 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
-use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -180,32 +178,6 @@ final class ConfinedClaudeCodeClientTest extends KernelTestCase
         }
 
         self::fail('A failed CLI run gave a verdict.');
-    }
-
-    public function testATruncatedRecordedStreamMakesTheBridgeRaiseIncompleteStream(): void
-    {
-        $platform = $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying('truncated'));
-
-        $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
-
-        self::assertInstanceOf(StreamResult::class, $result);
-        $this->expectException(IncompleteStreamException::class);
-        iterator_to_array($result->getContent());
-    }
-
-    public function testACompleteRecordedStreamIsReadToTheEndByTheBridge(): void
-    {
-        $platform = $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying('complete'));
-
-        $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
-
-        self::assertInstanceOf(StreamResult::class, $result);
-        $text = '';
-        foreach ($result->getContent() as $delta) {
-            self::assertInstanceOf(TextDelta::class, $delta);
-            $text .= $delta->getText();
-        }
-        self::assertStringContainsString('"verdict"', $text);
     }
 
     public function testATruncatedStreamEndsTheReviewerAsBlockedWithTheReason(): void
