@@ -4,15 +4,48 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\FindChangedPullRequests;
 
+use Closure;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Core\Watcher\Domain\ListingValidator;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Symfony\Component\Lock\LockFactory;
 
 final readonly class SeenListings
 {
-    public function __construct(private EntityManagerInterface $entities)
+    public function __construct(
+        private EntityManagerInterface $entities,
+        private LockFactory $locks,
+    ) {
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $listing
+     *
+     * @return T
+     *
+     * @throws ListingInProgress
+     */
+    public function whileListing(string $project, Closure $listing): mixed
     {
+        // Held across the listing because two listings of one project would both return the same pull request as changed.
+        $lock = $this->locks->createLock('watcher-listing-'.hash('sha256', $project));
+
+        if (!$lock->acquire(false)) {
+            throw ListingInProgress::for($project);
+        }
+
+        try {
+            // Cleared because a worker keeps its entity manager between listings, and what another listing stored since is the truth.
+            $this->entities->clear();
+
+            return $listing();
+        } finally {
+            $lock->release();
+        }
     }
 
     public function validatorOf(string $project): ?string

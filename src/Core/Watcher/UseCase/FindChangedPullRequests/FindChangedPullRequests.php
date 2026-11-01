@@ -9,15 +9,12 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\LockInterface;
 
 final readonly class FindChangedPullRequests
 {
     public function __construct(
         private OpenChanges $forge,
         private SeenListings $seen,
-        private LockFactory $locks,
         private LoggerInterface $logger,
     ) {
     }
@@ -30,13 +27,7 @@ final readonly class FindChangedPullRequests
      */
     public function __invoke(string $project): array
     {
-        $lock = $this->lockOf($project);
-
-        try {
-            return $this->listChanged($project);
-        } finally {
-            $lock->release();
-        }
+        return $this->seen->whileListing($project, fn (): array => $this->listChanged($project));
     }
 
     /**
@@ -58,17 +49,5 @@ final readonly class FindChangedPullRequests
         $this->logger->info('Listed the open pull requests.', ['project' => $project, 'status' => 200, 'open' => count($listing->changes()), 'changed' => count($changed)]);
 
         return $changed;
-    }
-
-    // Held across the listing because two listings of one project would both return the same pull request as changed.
-    private function lockOf(string $project): LockInterface
-    {
-        $lock = $this->locks->createLock('watcher-listing-'.hash('sha256', $project));
-
-        if (!$lock->acquire(false)) {
-            throw ListingInProgress::for($project);
-        }
-
-        return $lock;
     }
 }

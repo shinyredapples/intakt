@@ -33,7 +33,8 @@ final class SeenChange
 
     public function isStillAt(OpenChange $open): bool
     {
-        return $this->head === $open->head->hash && $this->updatedAt->format('U.u') === $open->updatedAt->format('U.u');
+        // Whole seconds because the column stores no fraction, so a reloaded time would never equal a fractional one.
+        return $this->head === $open->head->hash && $this->updatedAt->format('U') === $open->updatedAt->format('U');
     }
 
     public function see(OpenChange $open): void

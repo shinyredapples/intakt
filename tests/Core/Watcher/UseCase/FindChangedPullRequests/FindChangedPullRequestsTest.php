@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests;
 
+use DateTimeImmutable;
+use DateTimeZone;
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Watcher\Contract\ListingInProgress;
@@ -170,6 +173,29 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         self::assertSame(['7'], $this->ids($this->find('alpha')));
     }
 
+    public function testAnUnchangedPullRequestWithAFractionalUpdateTimeIsNotReturnedAgainAfterReloading(): void
+    {
+        $fractional = new OpenChange(new ChangeId('7'), new CommitId(str_repeat('a', 40)), new DateTimeImmutable('2026-11-01 10:00:00.123456', new DateTimeZone('UTC')));
+        $this->forge->opens('alpha', $fractional);
+        $this->find('alpha');
+        $this->entities->clear();
+        $this->forge->opens('alpha', $fractional, RecordedForge::change('9', 'c', '2026-11-01T12:00:00Z'));
+
+        self::assertSame(['9'], $this->ids($this->find('alpha')));
+    }
+
+    public function testAListingSeesWhatAnotherWorkerStoredSinceItsOwnLastListing(): void
+    {
+        $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'b', '2026-11-01T10:00:00Z'));
+        $this->use($this->forge, $other)('alpha');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'b', '2026-11-01T10:00:00Z'));
+
+        self::assertSame([], $this->find('alpha'));
+    }
+
     /**
      * @return list<OpenChange>
      */
@@ -178,9 +204,9 @@ final class FindChangedPullRequestsTest extends KernelTestCase
         return $this->use($this->forge)($project);
     }
 
-    private function use(OpenChanges $forge): FindChangedPullRequests
+    private function use(OpenChanges $forge, ?EntityManagerInterface $entities = null): FindChangedPullRequests
     {
-        return new FindChangedPullRequests($forge, new SeenListings($this->entities), $this->locks, $this->log);
+        return new FindChangedPullRequests($forge, new SeenListings($entities ?? $this->entities, $this->locks), $this->log);
     }
 
     /**
