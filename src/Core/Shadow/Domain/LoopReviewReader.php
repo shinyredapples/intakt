@@ -13,13 +13,11 @@ use Intakt\Core\Shadow\Contract\PullRequestComment;
 use JsonException;
 use NoDiscard;
 
-/**
- * Reads the existing loop's prose and JSON for the shadow report only; Intakt's own reviews never parse prose for a decision.
- */
+// Parses the loop's prose because the shadow report must compare with it; Intakt's own reviews never decide from prose.
 final readonly class LoopReviewReader
 {
     private const string REVIEWER_LINE = '/^Reviewer:\s*(\S.*?)\s*$/';
-    private const string FENCE_LINE = '/^\s*(```|~~~)\s*(\w*)\s*$/';
+    private const string FENCE_BLOCK = '/^[ \t]*(```|~~~)[ \t]*(\w*)[ \t]*\R(.*?)(?:\R[ \t]*\1[ \t]*$|\z)/msu';
     private const string FINDING_LINE = '/^\s*(?:[-*]\s+)?\[(P[123])\]\s+`?([^\s`:]+):(\d+)/';
     private const string UNKNOWN_REVIEWER = 'unknown';
 
@@ -36,55 +34,68 @@ final readonly class LoopReviewReader
 
     private function readComment(PullRequestComment $comment): LoopReview
     {
-        $lines = preg_split('/\R/', $comment->body) ?: [];
-        $verdictCandidates = [];
-        $findings = [];
-        $reviewer = self::UNKNOWN_REVIEWER;
-        $fence = null;
-        $fenceBody = [];
+        $lines = $this->unquotedLines($this->withoutFences($comment->body));
 
+        return new LoopReview($this->reviewerOf($lines), $this->verdictOf($lines), $this->findingsOf($lines));
+    }
+
+    // A fenced json block becomes one line so it competes with bare JSON lines by position; any other fence is dropped.
+    private function withoutFences(string $body): string
+    {
+        return preg_replace_callback(
+            self::FENCE_BLOCK,
+            static fn (array $match): string => 'json' === strtolower($match[2]) ? preg_replace('/\s*\R\s*/', ' ', trim($match[3])) ?? '' : '',
+            $body,
+        ) ?? '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function unquotedLines(string $text): array
+    {
+        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $text));
+
+        return array_values(array_filter($lines, static fn (string $line): bool => !str_starts_with(ltrim($line), '>')));
+    }
+
+    /**
+     * @param list<string> $lines
+     */
+    private function reviewerOf(array $lines): string
+    {
         foreach ($lines as $line) {
-            if (1 === preg_match(self::FENCE_LINE, $line, $match)) {
-                if (null === $fence) {
-                    $fence = strtolower($match[2]);
-                    $fenceBody = [];
-                } else {
-                    if ('json' === $fence) {
-                        $verdictCandidates[] = implode("\n", $fenceBody);
-                    }
-                    $fence = null;
-                }
-
-                continue;
-            }
-
-            if (null !== $fence) {
-                $fenceBody[] = $line;
-
-                continue;
-            }
-
-            if (str_starts_with(ltrim($line), '>')) {
-                continue;
-            }
-
             if (1 === preg_match(self::REVIEWER_LINE, $line, $match)) {
-                $reviewer = $match[1];
-            } elseif (str_starts_with(ltrim($line), '{')) {
-                $verdictCandidates[] = $line;
-            } elseif (1 === preg_match(self::FINDING_LINE, $line, $match)) {
+                return $match[1];
+            }
+        }
+
+        return self::UNKNOWN_REVIEWER;
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<LoopFinding>
+     */
+    private function findingsOf(array $lines): array
+    {
+        $findings = [];
+        foreach ($lines as $line) {
+            if (1 === preg_match(self::FINDING_LINE, $line, $match)) {
                 $findings[] = new LoopFinding($match[2], (int) $match[3], Severity::from($match[1]));
             }
         }
 
-        return new LoopReview($reviewer, $this->verdictOf($verdictCandidates), $findings);
+        return $findings;
     }
 
     /**
-     * @param list<string> $candidates
+     * @param list<string> $lines
      */
-    private function verdictOf(array $candidates): LoopVerdict
+    private function verdictOf(array $lines): LoopVerdict
     {
+        $candidates = array_values(array_filter($lines, static fn (string $line): bool => str_starts_with(ltrim($line), '{')));
         if ([] === $candidates) {
             return LoopVerdict::Unreadable;
         }
@@ -96,8 +107,7 @@ final readonly class LoopReviewReader
         }
 
         $value = is_array($decoded) ? ($decoded['verdict'] ?? null) : null;
-        $verdict = is_string($value) ? LoopVerdict::tryFrom($value) : null;
 
-        return $verdict ?? LoopVerdict::Unreadable;
+        return (is_string($value) ? LoopVerdict::tryFrom($value) : null) ?? LoopVerdict::Unreadable;
     }
 }

@@ -62,29 +62,41 @@ final readonly class ReadLoopReviewsCommand
      */
     private function load(string $file): ?array
     {
+        $data = $this->decode($file);
+        if (!is_string($data['identity'] ?? null) || !is_string($data['head'] ?? null) || !is_array($data['comments'] ?? null)) {
+            return null;
+        }
+
+        $comments = array_map($this->comment(...), array_values($data['comments']));
+
+        return in_array(null, $comments, true) ? null : ['identity' => $data['identity'], 'head' => $data['head'], 'comments' => $comments];
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function decode(string $file): array
+    {
         $text = is_file($file) ? file_get_contents($file) : false;
         if (false === $text) {
-            return null;
+            return [];
         }
 
         try {
             $data = json_decode($text, true, 16, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
+            return [];
+        }
+
+        return is_array($data) ? $data : [];
+    }
+
+    private function comment(mixed $comment): ?PullRequestComment
+    {
+        if (!is_array($comment) || !is_string($comment['author'] ?? null) || !is_string($comment['head'] ?? null) || !is_string($comment['body'] ?? null)) {
             return null;
         }
 
-        if (!is_array($data) || !is_string($data['identity'] ?? null) || !is_string($data['head'] ?? null) || !is_array($data['comments'] ?? null)) {
-            return null;
-        }
-
-        $comments = [];
-        foreach ($data['comments'] as $comment) {
-            if (!is_array($comment) || !is_string($comment['author'] ?? null) || !is_string($comment['head'] ?? null) || !is_string($comment['body'] ?? null)) {
-                return null;
-            }
-            $comments[] = new PullRequestComment($comment['author'], $comment['head'], $comment['body']);
-        }
-
-        return ['identity' => $data['identity'], 'head' => $data['head'], 'comments' => $comments];
+        return new PullRequestComment($comment['author'], $comment['head'], $comment['body']);
     }
 }

@@ -24,6 +24,7 @@ final class LoopReviewReaderTest extends TestCase
 {
     public function testRecordedLoopReviewsGiveTheExpectedVerdictsAndFindings(): void
     {
+        /** @var array{comments: list<array{author: string, head: string, body: string}>} $recorded */
         $recorded = json_decode((string) file_get_contents(__DIR__.'/../../../Fixtures/Shadow/loop-review-comments.json'), true, 16, JSON_THROW_ON_ERROR);
         $comments = array_map(static fn (array $c): PullRequestComment => new PullRequestComment($c['author'], $c['head'], $c['body']), $recorded['comments']);
 
