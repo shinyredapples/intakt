@@ -75,7 +75,7 @@ final readonly class AccountLimitedVendor implements Vendor
         return 0 === $wait ? new VendorAccountOut($out) : new ProviderRateLimited($wait, $out);
     }
 
-    // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes. Another account is known only from KeyRejected, which the account failover throws while one is free; a free cooldown says nothing here, because a provider without an accounts list reports zero and its one key would be called again forever.
+    // A rejected key ends the reviewer unless there is another account or a substitute to try, because it is the only failure that no wait overcomes. Only KeyRejected, which the account failover throws while another account is free, proves that another account of the provider is free; a cooldown reading is not that proof, so the rejected key is never called again at once.
     private function nextAccountOrSubstituteOrFailure(string $project, Tier $tier, ProviderRejectedTheKey $rejected): VendorAccountOut|ProviderRejectedTheKey
     {
         if ($this->resolver->hasSubstitutes($project, $tier) || $rejected->getPrevious() instanceof KeyRejected) {
