@@ -222,7 +222,10 @@ final class ReviewChangeTest extends KernelTestCase
 
     private function openRoundId(): string
     {
-        return array_first($this->fixture->storedRounds())->id()->toRfc4122();
+        $round = array_first($this->fixture->storedRounds());
+        self::assertInstanceOf(ReviewRound::class, $round);
+
+        return $round->id()->toRfc4122();
     }
 
     // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
