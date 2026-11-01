@@ -68,6 +68,18 @@ final readonly class StoredFindings
         return $this->findingsIn($round->reportedFindingsJson());
     }
 
+    /**
+     * @return list<TrackedFinding>
+     */
+    public function resolvedBy(ReviewRound $round): array
+    {
+        $stored = $this->entities->find(ChangeFindings::class, ['project' => $round->project(), 'change' => $round->change()]) ?? throw ChangeFindingsNotFound::for($round->project(), $round->change());
+        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : $verdict->resolved, $this->verdictsOf($round)));
+
+        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
+        return array_values(array_filter($this->trackedIn($stored), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));
+    }
+
     // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
     public function markJudged(ReviewRound $round): bool
     {

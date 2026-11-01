@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
@@ -185,7 +186,15 @@ return static function (ContainerConfigurator $container): void {
     // The reviewer's rounds each keep a conversation, in the table the migration creates for the DBAL store.
     $conversations = ['doctrine' => ['dbal' => ['reviewer_conversation' => ['connection' => 'default']]]];
 
-    $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations]);
+    // Project memory embeds with OpenAI, the only configured provider with an embedding model; without an enabled account the placeholder platform names the missing key when a worker indexes.
+    $embeddings = array_key_exists(Provider::OpenAi->value, $enabledAccounts) ? 'intakt.ai.accounts.'.Provider::OpenAi->value : EmbeddingsNotConfigured::class;
+    $memory = [
+        'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:%kernel.project_dir%/var/memory.db', 'table_name' => 'project_memory']]],
+        'vectorizer' => ['memory' => ['platform' => $embeddings, 'model' => 'text-embedding-3-small']],
+        'indexer' => ['memory' => ['vectorizer' => 'ai.vectorizer.memory', 'store' => 'ai.store.sqlite.memory']],
+    ];
+
+    $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations, ...$memory]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
     $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
     $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
