@@ -164,7 +164,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertSame(ReviewerState::Blocked, $reviewer->state());
         self::assertSame('Every provider of the tier is out: anthropic keys rejected, openai keys rejected.', $reviewer->failure());
         self::assertFalse($reviewer->owesCatchUp());
-        self::assertSame([(string) $reviewer->failure()], $this->payloadValues(LedgerEventKind::ReviewerBlocked, 'reason'));
+        self::assertSame([$reviewer->failure()], $this->payloadValues(LedgerEventKind::ReviewerBlocked, 'reason'));
     }
 
     public function testALimitHalfwayThroughAReviewStartsItAgainOnTheSubstituteInANewConversation(): void

@@ -252,7 +252,7 @@ final class AccountFailoverPlatformTest extends TestCase
 
         $this->expectException(EveryAccountCoolingDown::class);
 
-        $_ = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
+        $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
     }
 
     public function testACallWhoseOnlyFreeAccountRejectsItsKeyBesideAnAccountCoolingDownFromItsOwnRejectionIsTheRejection(): void
