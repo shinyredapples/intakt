@@ -15,7 +15,6 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use Intakt\Tests\Core\Mcp\Contract\Tool\ScriptedChangeReviews;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -106,9 +105,20 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
         self::assertFalse($result->isError);
         $answer = $this->structured($result);
-        self::assertSame(ScriptedChangeReviews::ROUND_ID, $answer['roundId']);
+        self::assertSame(1, $answer['round']);
         self::assertSame('changes', $answer['decision']);
         self::assertSame(['F1'], $this->actIds($answer));
+    }
+
+    public function testTheActListOfAStartedReviewIsReadBackThroughTheReadTool(): void
+    {
+        $client = $this->connected(withWrites: true, bearer: $this->ownerToken);
+        $started = $this->structured($this->start($client));
+
+        $act = $this->structured($client->callTool('review_act_list', ['roundId' => $started['roundId']]));
+
+        self::assertTrue($act['judged']);
+        self::assertSame(['F1'], $this->actIds($act));
     }
 
     public function testStartingAReviewSendsProgressNotificationsBeforeTheResult(): void

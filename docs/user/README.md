@@ -11,7 +11,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, but no forge for GitHub and nothing that runs it exists yet, so there is nothing to set up (planned)
 - Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); running its panel on every new pull request head, marking its verdicts as shadow and the lower usage ceiling for shadow work are planned
 - Looking at projects and reviews in the browser (see [below](#the-dashboard)); the page of one review and the button that starts a review are planned
-- Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list` and serves a round's findings (see [Connecting an agent through MCP](mcp.md)); starting a review is planned
+- Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
 
