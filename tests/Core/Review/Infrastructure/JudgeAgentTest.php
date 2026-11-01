@@ -57,11 +57,11 @@ final class JudgeAgentTest extends KernelTestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
     }
 
-    public function testAnEmptyIdFailsTheValidatorAndMakesEveryBlockingFindingAct(): void
+    public function testABlankIdFailsTheValidatorEvenWhenAFindingWithThatIdWasGiven(): void
     {
-        $judgement = $this->judge(['F1' => Severity::P2], '{"marks":[{"id":"","mark":"reject"}]}');
+        $judgement = $this->judge(['' => Severity::P2], '{"marks":[{"id":"","mark":"reject"}]}');
 
-        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+        self::assertEquals([new JudgedFinding('', Mark::Act)], $judgement->marks);
     }
 
     public function testAnAnswerNamingAnIdThatWasNotGivenMakesEveryBlockingFindingAct(): void
