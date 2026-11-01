@@ -32,7 +32,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     {
         $now = $this->clock->now();
         $refusal = $this->refusalOf($reading, $now);
-        if (null !== $refusal) {
+        if ($refusal instanceof ReadingOutcome) {
             return $refusal;
         }
 
@@ -63,7 +63,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
     // A reset in the past or further ahead than the window is long is a frozen or wrong reading, so the last good one stays.
     private function refusalOf(WindowReading $reading, DateTimeImmutable $now): ?ReadingOutcome
     {
-        if (null === $reading->resetsAt) {
+        if (!$reading->resetsAt instanceof DateTimeImmutable) {
             return null;
         }
 
