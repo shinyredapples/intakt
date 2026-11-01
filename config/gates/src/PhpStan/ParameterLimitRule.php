@@ -88,6 +88,12 @@ final readonly class ParameterLimitRule implements Rule
         }
 
         $prototype = $native->getMethod($name);
+
+        // a child's method of the same name does not override a private one, so its parameters are the author's choice
+        if ($prototype->isPrivate()) {
+            return 0;
+        }
+
         $file = $prototype->getDeclaringClass()->getFileName();
 
         return false !== $file && $this->isRepositoryCode($file) ? 0 : $prototype->getNumberOfParameters();

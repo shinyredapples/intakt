@@ -57,4 +57,9 @@ final class ParameterLimitRuleTest extends SandboxTestCase
     {
         $this->assertRejectedBy('phpstan', 'repository-interface-method-with-four-parameters', 'src/Report.php:9 intakt.parameterLimit Method line() takes 4 parameters, at most 3 allowed');
     }
+
+    public function testAMethodNamedLikeAPrivateVendorMethodFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'method-named-like-a-private-vendor-method', 'src/ReportWorkflow.php:16 intakt.parameterLimit Method leave() takes 4 parameters, at most 3 allowed');
+    }
 }
