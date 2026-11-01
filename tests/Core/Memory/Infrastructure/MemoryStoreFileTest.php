@@ -13,7 +13,7 @@ final class MemoryStoreFileTest extends KernelTestCase
 {
     public function testTheMemoryStoreKeepsItsFileForTheKernelEnvironment(): void
     {
-        $file = self::bootKernel()->getProjectDir() . '/var/memory_test.db';
+        $file = self::bootKernel()->getProjectDir().'/var/memory_test.db';
         if (is_file($file)) {
             unlink($file);
         }
