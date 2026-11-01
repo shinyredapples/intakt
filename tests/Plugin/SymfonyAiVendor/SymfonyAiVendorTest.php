@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
-use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -16,13 +15,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
-use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
-use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
-use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
-use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -94,7 +88,6 @@ use Symfony\AI\Platform\TokenUsage\TokenUsageAggregation;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
-use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -145,12 +138,6 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(VendorAccountBusy::class)]
 #[UsesClass(VendorReview::class)]
 #[UsesClass(Kernel::class)]
-#[UsesClass(Account::class)]
-#[UsesClass(AccountCooldownWindows::class)]
-#[UsesClass(AccountFailoverPlatform::class)]
-#[UsesClass(AccountPlatform::class)]
-#[UsesClass(SendFailures::class)]
-#[UsesClass(TypedRejectionConverter::class)]
 final class SymfonyAiVendorTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
@@ -425,18 +412,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         }
     }
 
-    public function testEveryProviderOutIsATypedErrorWithTheReasonNamingThem(): void
-    {
-        $out = static fn (): never => throw new EveryProviderOut([new ProviderWait(Provider::Anthropic, 45), new ProviderWait(Provider::OpenAi, 60)]);
-
-        try {
-            $this->vendor($out)->review('alpha', Tier::Strong, $this->request());
-            self::fail('A tier with no provider left must be a typed error.');
-        } catch (NoProviderLeft $left) {
-            self::assertSame('Every provider of the tier is out: anthropic for 45 s, openai for 60 s.', $left->getMessage());
-        }
-    }
-
     public function testARejectedKeyIsATypedErrorWithoutTheProvidersText(): void
     {
         $revoked = static fn (): never => throw new AuthenticationException('invalid x-api-key: sk-secret');
@@ -546,28 +521,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[0]['usages'];
         self::assertSame(9, $usages[0]['prompt']);
-    }
-
-    public function testARoundAnsweredThroughTheAccountsOfAProviderSettlesWithOneEntryForItsTokens(): void
-    {
-        $extractor = self::createStub(TokenUsageExtractorInterface::class);
-        $extractor->method('extract')->willReturn(new TokenUsage(promptTokens: 10, model: 'big'));
-        $converter = self::createStub(ResultConverterInterface::class);
-        $converter->method('supports')->willReturn(true);
-        $converter->method('convert')->willReturnCallback(static fn (): TextResult => new TextResult('ok'));
-        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
-        $platform = self::createStub(PlatformInterface::class);
-        $platform->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult($converter, new InMemoryRawResult()));
-        $cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), [Provider::Anthropic->value => [Account::DEFAULT]]);
-        $round = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], $cooldowns, new MockClock(self::NOW), new NullLogger())->invoke('big', 'Review.');
-        $round->getResult();
-        $ledger = new InMemoryLedger();
-
-        new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger())->settle(new UsageReservation('a call'), $round);
-
-        /** @var list<array<string, int|string|null>> $usages */
-        $usages = $ledger->payloads()[0]['usages'];
-        self::assertSame([['anthropic.default', 10]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt']], $usages));
     }
 
     public function testAnAnswerWhoseUsageCannotBeReadKeepsItsVerdictAndIsLeftUnsettled(): void

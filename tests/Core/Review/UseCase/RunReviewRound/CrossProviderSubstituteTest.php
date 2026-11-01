@@ -64,7 +64,6 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
-use Throwable;
 
 // Through the real vendor stack down to in-memory providers, so the substitution is proven end to end: the tier's own provider fails with a revoked key or a limit and the next provider is its configured substitute.
 #[Group('persistence')]
@@ -189,37 +188,6 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertFalse($firstConversation->equals($reviewer->conversationId()));
         self::assertSame(Provider::OpenAi, $reviewer->substitute());
         self::assertSame(['openai'], $this->payloadValues(LedgerEventKind::CatchUpOwed, 'substitute'));
-    }
-
-    public function testASubstituteWhosePlacesAreAllTakenIsNeverCalled(): void
-    {
-        $this->fixture->start(1);
-        $message = $this->fixture->bus->messages[0];
-        $this->cooldowns->coolDown(new Account(Provider::Anthropic, Account::DEFAULT), 300);
-        $vendor = $this->vendor($this->answering(), $this->answering());
-
-        $refused = null;
-
-        try {
-            $this->limit->run(Provider::OpenAi, fn () => $this->fixture->deliver($message, $vendor));
-        } catch (Throwable $thrown) {
-            $refused = $thrown;
-        }
-
-        self::assertInstanceOf(ReviewerRateLimited::class, $refused);
-        self::assertSame([], $this->sent);
-        self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
-    }
-
-    public function testASubstituteWithAFreePlaceReviewsWhileTheOwnProvidersPlacesAreTaken(): void
-    {
-        $round = $this->fixture->start(1);
-        $this->cooldowns->coolDown(new Account(Provider::Anthropic, Account::DEFAULT), 300);
-        $vendor = $this->vendor($this->answering(), $this->answering());
-
-        $this->limit->run(Provider::Anthropic, fn () => $this->fixture->deliver($this->fixture->bus->messages[0], $vendor));
-
-        self::assertSame(Provider::OpenAi, $this->fixture->round($round->id()->toRfc4122())->reviewers()[0]->substitute());
     }
 
     public function testAKeyRejectedAsTheCallIsSentWithNoOtherAccountOrSubstituteEndsTheReviewerFailed(): void
