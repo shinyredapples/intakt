@@ -39,6 +39,15 @@ services:
     Symfony\Component\Semaphore\SemaphoreFactory:
         arguments: ['@Symfony\Component\Semaphore\Store\LockStore']
 
+    # The App's identity: nothing else is read as a forge credential.
+    Intakt\Plugin\GitHubForge\Infrastructure\AppJwt:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+            $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
+    Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
+        arguments:
+            $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
