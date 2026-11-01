@@ -70,6 +70,17 @@ final readonly class ReviewRounds
         $this->withLockedRound($roundId, $this->findings->completeWhenEveryReviewerIsIn(...));
     }
 
+    // Zero for a change that has no round yet.
+    public function latestNumber(string $project, string $change): int
+    {
+        $latest = $this->entities->createQuery('SELECT MAX(r.change.number) FROM '.ReviewRound::class.' r WHERE r.subject.project = :project AND r.change.change = :change')
+            ->setParameter('project', $project)
+            ->setParameter('change', $change)
+            ->getSingleScalarResult();
+
+        return (int) $latest;
+    }
+
     public function stored(string $roundId): ReviewRound
     {
         if (!Uuid::isValid($roundId)) {
