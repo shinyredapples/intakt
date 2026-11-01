@@ -14,12 +14,15 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
+use Intakt\Core\Review\UseCase\ReadRound\ReviewerIdentity;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerStatus;
 use Intakt\Core\Review\UseCase\ReadRound\RoundActList;
 use Intakt\Core\Review\UseCase\ReadRound\RoundActListTool;
 use Intakt\Core\Review\UseCase\ReadRound\RoundFindingsResource;
+use Intakt\Core\Review\UseCase\ReadRound\RoundIdentity;
 use Intakt\Core\Review\UseCase\ReadRound\RoundStatus;
 use Intakt\Core\Review\UseCase\ReadRound\RoundStatusTool;
 use Intakt\Core\Review\UseCase\ReadRound\RoundVerdicts;
@@ -41,6 +44,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundStatusTool::class)]
 #[CoversClass(RoundStatus::class)]
 #[CoversClass(ReviewerStatus::class)]
+#[CoversClass(RoundIdentity::class)]
+#[CoversClass(ReviewerIdentity::class)]
 #[CoversClass(RoundVerdictsTool::class)]
 #[CoversClass(RoundVerdicts::class)]
 #[CoversClass(RoundActListTool::class)]
@@ -68,6 +73,17 @@ final class ReadRoundToolsTest extends KernelTestCase
 
         self::assertSame('collecting', $status->state);
         self::assertSame(['queued', 'queued'], array_map(static fn (ReviewerStatus $reviewer): string => $reviewer->state, $status->reviewers));
+    }
+
+    public function testTheStatusNamesTheRoundAndEachReviewersRoleAndTier(): void
+    {
+        $round = $this->fixture->start(2);
+        $panel = array_map(static fn (RoundReviewer $reviewer): ReviewerIdentity => new ReviewerIdentity($reviewer->roleName(), $reviewer->tier()->value), $round->reviewers());
+
+        $status = $this->statusTool()($round->id()->toRfc4122());
+
+        self::assertEquals(new RoundIdentity($round->id()->toRfc4122(), RoundFixture::CHANGE, 1), $status->round);
+        self::assertEquals($panel, array_map(static fn (ReviewerStatus $reviewer): ReviewerIdentity => $reviewer->reviewer, $status->reviewers));
     }
 
     public function testTheStatusOfAReviewedRoundIsCompleteWithItsReviewersInVerdict(): void

@@ -70,6 +70,8 @@ final class RoundReadContractTest extends KernelTestCase
         $reviewers = OwnerServerClient::at($result, 'structuredContent', 'reviewers');
         self::assertIsArray($reviewers);
         self::assertCount(2, $reviewers);
+        self::assertSame(1, OwnerServerClient::at($result, 'structuredContent', 'round', 'number'));
+        self::assertSame('verdict', OwnerServerClient::at($result, 'structuredContent', 'reviewers', '0', 'state'));
     }
 
     public function testTheVerdictsToolAnswersWithTheReviewersVerdicts(): void
