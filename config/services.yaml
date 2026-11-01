@@ -42,3 +42,5 @@ when@test:
     imports:
         # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
         - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }
+        # No forge writes yet (plan task T18), so the tests give the container one that refuses every write.
+        - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }

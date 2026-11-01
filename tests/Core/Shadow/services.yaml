@@ -1,0 +1,5 @@
+services:
+    # Public so a kernel test reaches the container's forge writes, which the shadow guard decorates.
+    Intakt\Plugin\Forge\Contract\ForgeWrites:
+        class: Intakt\Tests\Core\Shadow\WriteRefusingForge
+        public: true
