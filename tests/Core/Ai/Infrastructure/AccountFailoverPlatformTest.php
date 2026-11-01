@@ -327,7 +327,7 @@ final class AccountFailoverPlatformTest extends TestCase
         return MockPlatformFactory::createPlatform($answer);
     }
 
-    // Builds what a provider's bridge hands back: the usage is read from the raw answer by the converter's extractor, not carried by the converted result.
+    // Not MockPlatformFactory, because a provider's bridge reads the usage from the raw answer with its converter's extractor instead of carrying it on the converted result.
     private function extracting(TokenUsage $usage, Closure $convert): PlatformInterface
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
