@@ -52,8 +52,8 @@ final readonly class ReviewerPrompt
     {
         $messages = [
             Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
-            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->task)),
-            Message::ofUser("The diff of the change:\n\n".$this->fence->wrap(UntrustedSource::Diff, $brief->diff)),
+            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->change->task)),
+            Message::ofUser("The diff of the change:\n\n".$this->fence->wrap(UntrustedSource::Diff, $brief->change->diff)),
         ];
 
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.

@@ -12,6 +12,7 @@ use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -56,6 +57,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(ReviewBrief::class)]
+#[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(VerdictParser::class)]
@@ -145,7 +147,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         $prompt = new ReviewerPrompt(new Fence(), new VerdictParser(), new ReviewerMemory($memory, new Fence(), new DiffPaths()));
         $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief('alpha', 'Fix the cart.', self::DIFF, []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
     }
 
     private function systemSent(): string

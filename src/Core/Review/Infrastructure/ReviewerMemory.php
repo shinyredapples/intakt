@@ -25,7 +25,7 @@ final readonly class ReviewerMemory
 
     public function briefingOn(ReviewBrief $brief): ?string
     {
-        $entries = $this->memory->relevantTo(new MemoryQuery($brief->project, $this->paths->in($brief->diff), self::MAX_BYTES))->entries;
+        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), self::MAX_BYTES))->entries;
 
         return $this->briefingWithin($entries);
     }

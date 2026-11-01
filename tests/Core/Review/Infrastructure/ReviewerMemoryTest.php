@@ -11,6 +11,7 @@ use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -38,6 +39,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ReviewerPrompt::class)]
 #[UsesClass(DiffPaths::class)]
 #[UsesClass(ReviewBrief::class)]
+#[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(VerdictParser::class)]
 #[UsesClass(Fence::class)]
@@ -85,7 +87,7 @@ final class ReviewerMemoryTest extends TestCase
     {
         $this->index->index(new MemoryEntry('beta', 'Resolved finding: beta private billing secret leaked in composer.json scripts.', ['composer.json']));
 
-        $briefing = $this->memory->briefingOn(new ReviewBrief(self::PROJECT, 'Task.', "diff --git a/composer.json b/composer.json\n", []));
+        $briefing = $this->memory->briefingOn(new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', "diff --git a/composer.json b/composer.json\n"), []));
 
         self::assertNull($briefing);
     }
@@ -185,7 +187,7 @@ final class ReviewerMemoryTest extends TestCase
 
     private function brief(string $diff): ReviewBrief
     {
-        return new ReviewBrief(self::PROJECT, 'Task.', $diff, []);
+        return new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', $diff), []);
     }
 
     private function briefing(string $diff): string

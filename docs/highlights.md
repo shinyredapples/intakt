@@ -38,7 +38,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
 | `DocumentIndexer` and `Retriever` | index memory entries, retrieve those that describe the files under review | in progress | T17 (#22, #461), `src/Core/Memory/Infrastructure/StoreMemoryIndex.php`, `src/Core/Memory/Infrastructure/StoreProjectMemory.php`, `src/Core/Review/UseCase/IndexResolvedFindings/IndexResolvedFindingsHandler.php` (T17 #462: resolved findings are indexed after a completed review); T17 #463: `Retriever` feeds each reviewer's briefing through `src/Core/Review/Infrastructure/ReviewerMemory.php`, `config/packages/ai.php` |
-| `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one project's memory | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/SqliteMemoryStoreTest.php`, `config/packages/ai.php` (store, vectorizer and indexer for production, T17 #462) |
+| `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one install's memory | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/SqliteMemoryStoreTest.php`, `config/packages/ai.php` (store, vectorizer and indexer for production, T17 #462) |
 | In-memory store | retrieval tests | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/StoreProjectMemoryTest.php` |
 | Reranker | only when a configured provider supports reranking | planned | T17 (#22) |
 
