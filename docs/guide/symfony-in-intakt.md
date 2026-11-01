@@ -66,7 +66,7 @@ flowchart LR
 
 ## Project memory
 
-**Symfony AI Store** is a searchable notebook. When a review finding is fixed, Intakt files it there; when a later change touches the same files, the reviewers are reminded of what went wrong before. It stores everything in the same small SQLite database as the rest of Intakt, so nothing extra has to run. *(planned)*
+**Symfony AI Store** is a searchable notebook. When a review finding is fixed, Intakt files it there; when a later change touches the same files, the reviewers are reminded of what went wrong before. It stores everything in the same small SQLite database as the rest of Intakt, so nothing extra has to run. *(writing fixed findings is built; reminding reviewers is planned)*
 
 ## The engine room
 

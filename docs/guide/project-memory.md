@@ -1,6 +1,6 @@
 # Project memory: what Intakt remembers
 
-Every builder and reviewer starts with a fresh, empty box. So how does the tenth builder know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, but nothing writes to it or hands it to a job yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
+Every builder and reviewer starts with a fresh, empty box. So how does the tenth builder know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, and a finished review writes the fixed findings into it, but nothing hands it to a job yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
 
 ## How it works
 
@@ -31,4 +31,4 @@ flowchart LR
 
 ## Remembering past mistakes
 
-Fixed review findings are also kept in a searchable store. When a new change touches the same files, the reviewers are reminded what went wrong there before, so the same mistake is caught faster the second time.
+Fixed review findings are also kept in a searchable store: once every reviewer of a round is in, each finding a reviewer marked as fixed is written there with its cause. The reminder to later reviewers is planned. When a new change touches the same files, the reviewers are reminded what went wrong there before, so the same mistake is caught faster the second time.
