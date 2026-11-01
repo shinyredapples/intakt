@@ -187,7 +187,7 @@ final class InstallationTokenMinterTest extends TestCase
     {
         // Only scalars and arrays, because printing the object arguments would walk PHPUnit's whole object graph.
         $arguments = [];
-        for ($link = $failure; null !== $link; $link = $link->getPrevious()) {
+        for ($link = $failure; $link instanceof Throwable; $link = $link->getPrevious()) {
             foreach ($link->getTrace() as $frame) {
                 $arguments = [...$arguments, ...self::scalarsIn($frame['args'] ?? [])];
             }
