@@ -18,8 +18,8 @@ final readonly class MemoryDocuments
     {
         $content = implode(' ', $entry->files).PHP_EOL.$entry->text;
 
-        // The same entry gets the same id, so indexing it twice replaces it.
-        return new TextDocument(hash('sha256', $content), $content, new Metadata([
+        // The same entry gets the same id, so indexing it twice replaces it; JSON keeps file lists that join alike apart.
+        return new TextDocument(hash('sha256', json_encode([$entry->files, $entry->text], JSON_THROW_ON_ERROR)), $content, new Metadata([
             Metadata::KEY_TEXT => $content,
             self::FILES => $entry->files,
             self::ENTRY => $entry->text,

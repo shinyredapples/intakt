@@ -36,12 +36,21 @@ final readonly class StoreProjectMemory implements ProjectMemory
     private function describing(array $files): Generator
     {
         // Decided here because the store ranks every entry by similarity and would return those about other files too.
-        foreach ($this->retriever->retrieve(implode(' ', $files)) as $document) {
+        foreach ($this->retriever->retrieve($this->searchText($files)) as $document) {
             $entry = $this->documents->toEntry($document);
 
             if ($entry->describesAnyOf($files)) {
                 yield $entry;
             }
         }
+    }
+
+    /**
+     * @param list<string> $files
+     */
+    private function searchText(array $files): string
+    {
+        // The SQLite store quotes FTS5 terms without escaping a quote (upstream/ai-sqlite-store-unescaped-fts-quote), and its tokenizer drops quotes anyway.
+        return str_replace('"', ' ', implode(' ', $files));
     }
 }

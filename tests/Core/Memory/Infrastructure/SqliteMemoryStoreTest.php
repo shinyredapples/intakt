@@ -27,7 +27,10 @@ use Symfony\AI\Store\Retriever;
 #[CoversNothing]
 final class SqliteMemoryStoreTest extends TestCase
 {
-    public function testAnEntryIndexedInTheSqliteStoreIsRetrievedForItsFile(): void
+    private StoreMemoryIndex $index;
+    private StoreProjectMemory $memory;
+
+    protected function setUp(): void
     {
         $store = Store::fromPdo(new PDO('sqlite::memory:'), 'project_memory');
         $store->setup();
@@ -36,11 +39,36 @@ final class SqliteMemoryStoreTest extends TestCase
         ));
         $vectorizer = new Vectorizer($platform, 'embedder');
         $documents = new MemoryDocuments();
-        new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents)
-            ->index(new MemoryEntry('Run the migration first.', ['src/Db.php']));
 
-        $found = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents)->relevantTo(new MemoryQuery(['src/Db.php'], 1000));
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
+    }
+
+    public function testAnEntryIndexedInTheSqliteStoreIsRetrievedForItsFile(): void
+    {
+        $this->index->index(new MemoryEntry('Run the migration first.', ['src/Db.php']));
+
+        $found = $this->memory->relevantTo(new MemoryQuery(['src/Db.php'], 1000));
 
         self::assertEquals([new MemoryEntry('Run the migration first.', ['src/Db.php'])], $found->entries);
+    }
+
+    public function testAnEntryForAPathWithAQuoteIsRetrievedFromTheSqliteStore(): void
+    {
+        $this->index->index(new MemoryEntry('Note.', ['src/Quote"d.php']));
+
+        $found = $this->memory->relevantTo(new MemoryQuery(['src/Quote"d.php'], 1000));
+
+        self::assertEquals([new MemoryEntry('Note.', ['src/Quote"d.php'])], $found->entries);
+    }
+
+    public function testEntriesForFileListsThatJoinToTheSameTextAreBothKept(): void
+    {
+        $this->index->index(new MemoryEntry('Same note.', ['a b.php']));
+        $this->index->index(new MemoryEntry('Same note.', ['a', 'b.php']));
+
+        $found = $this->memory->relevantTo(new MemoryQuery(['a b.php'], 1000));
+
+        self::assertEquals([new MemoryEntry('Same note.', ['a b.php'])], $found->entries);
     }
 }
