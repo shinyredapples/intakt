@@ -14,7 +14,7 @@ use LogicException;
 use Override;
 use Throwable;
 
-// Fails every judge call with the given exception, as a limited or busy vendor account does.
+// A double of its own, because the limits a vendor account throws must reach the handler unchanged to show which of them it retries.
 final readonly class FailingJudge implements Vendor
 {
     public function __construct(private Throwable $failure)
