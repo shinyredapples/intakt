@@ -31,7 +31,7 @@ final class Version20261031150000 extends AbstractMigration
         $columns = [
             Column::editor()->setUnquotedName('change_ref')->setTypeName(Types::STRING)->setLength(255)->setDefaultValue('')->create(),
             Column::editor()->setUnquotedName('round_number')->setTypeName(Types::INTEGER)->setDefaultValue(1)->create(),
-            // Nullable rather than defaulted, because MySQL refuses a default on a text column.
+            // Nullable rather than defaulted, because DBAL's MySQL platform leaves a default on a text column out of the column declaration, so a declared default would not reach the MySQL schema.
             Column::editor()->setUnquotedName('open_findings')->setTypeName(Types::TEXT)->setNotNull(false)->create(),
         ];
 
