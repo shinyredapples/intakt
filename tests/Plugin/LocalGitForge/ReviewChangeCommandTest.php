@@ -43,7 +43,6 @@ use InvalidArgumentException;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\RequiresFunction;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -230,25 +229,14 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertCount(1, $this->repository->worktrees());
     }
 
-    // Required by function rather than by extension, because a php.ini can disable the pcntl functions of a loaded extension.
-    #[RequiresFunction('pcntl_signal')]
-    public function testItListensForTheStopSignals(): void
+    // One test for a PHP with and without signal support rather than a skipped one, because the tests gate fails on a skip and the CI image has no pcntl.
+    public function testItListensForTheStopSignalsOnlyWherePhpCanHandleThem(): void
     {
         $command = new ReviewChangeCommand($this->onePanel(), $this->reviewing(Decision::Approve), new NameStatusParser());
 
-        self::assertSame([constant('SIGINT'), constant('SIGTERM')], $command->getSubscribedSignals());
-    }
+        $expected = SignalRegistry::isSupported() ? [constant('SIGINT'), constant('SIGTERM')] : [];
 
-    // Skipped where signals work, because then the case cannot occur; the CI image has no pcntl, so it runs there.
-    public function testItListensForNoSignalWherePhpCannotHandleThem(): void
-    {
-        if (SignalRegistry::isSupported()) {
-            self::markTestSkipped('This PHP can handle signals.');
-        }
-
-        $command = new ReviewChangeCommand($this->onePanel(), $this->reviewing(Decision::Approve), new NameStatusParser());
-
-        self::assertSame([], $command->getSubscribedSignals());
+        self::assertSame($expected, $command->getSubscribedSignals());
     }
 
     public function testARoundBelowOneFailsBeforeAnyReview(): void
