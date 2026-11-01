@@ -207,9 +207,7 @@ final class LocalGitForgeTest extends TestCase
         $head = $this->repository->commitFile('src/New.php', "<?php\n");
         $this->repository->checkout('main');
 
-        $seen = $this->forge()->withSnapshotOf(new CommitId($head), function (string $snapshot): array {
-            return [$snapshot, file_get_contents($snapshot.'/src/New.php'), is_file($snapshot.'/.git'), count($this->repository->worktrees())];
-        });
+        $seen = $this->forge()->withSnapshotOf(new CommitId($head), fn (string $snapshot): array => [$snapshot, file_get_contents($snapshot.'/src/New.php'), is_file($snapshot.'/.git'), count($this->repository->worktrees())]);
 
         self::assertSame(["<?php\n", true, 2], array_slice($seen, 1));
         self::assertNotSame(realpath($this->repository->path), $seen[0]);
