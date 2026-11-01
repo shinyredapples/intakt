@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -24,6 +25,7 @@ final readonly class ReviewWithReviewerHandler
         private ReviewerLeases $leases,
         private Vendor $vendor,
         private ReviewRounds $rounds,
+        private GoalpostRule $goalposts,
     ) {
     }
 
@@ -67,6 +69,6 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $this->leases->recordVerdict($reviewer, $verdict);
+        $this->leases->recordVerdict($reviewer, $this->goalposts->applyToVerdict($round->number(), $verdict, $brief->open));
     }
 }

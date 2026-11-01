@@ -11,16 +11,20 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'change_findings')]
 final class ChangeFindings
 {
+    // Read by the raw insert of a change's first row too, so the entity and the insert start alike.
+    public const int NO_ROUNDS = 0;
+    public const string NO_FINDINGS = '[]';
+
     #[ORM\Column]
-    private int $rounds = 0;
+    private int $rounds = self::NO_ROUNDS;
 
     // JSON, because a finding is a contract value that the mapping cannot embed.
     #[ORM\Column(type: 'text')]
-    private string $findings = '[]';
+    private string $findings = self::NO_FINDINGS;
 
     // Rounds of one change can overlap, and one that completes after a newer one reviewed an older head, so its verdicts must not undo the newer ones.
     #[ORM\Column(name: 'recorded_round')]
-    private int $recordedRound = 0;
+    private int $recordedRound = self::NO_ROUNDS;
 
     public function __construct(
         #[ORM\Id]

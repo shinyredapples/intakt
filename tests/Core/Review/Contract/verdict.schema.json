@@ -87,6 +87,9 @@
                             "output"
                         ],
                         "additionalProperties": false
+                    },
+                    "regression": {
+                        "type": "boolean"
                     }
                 },
                 "required": [
@@ -99,7 +102,8 @@
                     "fixable_by",
                     "repeat",
                     "requirement",
-                    "evidence"
+                    "evidence",
+                    "regression"
                 ],
                 "additionalProperties": false
             }

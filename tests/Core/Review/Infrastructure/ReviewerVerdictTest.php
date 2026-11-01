@@ -137,6 +137,24 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertGreaterThan(strpos($this->sent[0], 'The task of the change'), strpos($this->sent[0], 'The open findings of earlier rounds'));
     }
 
+    public function testAnOpenFindingWithoutASymbolIsListedWithoutATrailingSpace(): void
+    {
+        $this->open = [$this->openFinding('F1')];
+
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertStringContainsString('F1 [P2] src\/A.php:3\nrequirement', $this->sent[0]);
+    }
+
+    public function testAnOpenFindingWithASymbolIsListedAsFileAndLineFollowedByTheSymbol(): void
+    {
+        $this->open = [$this->openFinding('F1', 'Cart::add')];
+
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertStringContainsString('F1 [P2] src\/A.php:3 Cart::add\nrequirement', $this->sent[0]);
+    }
+
     public function testThePromptLimitsTheGivenIdsToResolvedAndRepeatSoANewFindingMayTakeANewId(): void
     {
         $this->review('Add a cart.', [], self::APPROVE);
@@ -440,9 +458,9 @@ final class ReviewerVerdictTest extends WebTestCase
         return $verdict;
     }
 
-    private function openFinding(string $id): Finding
+    private function openFinding(string $id, ?string $symbol = null): Finding
     {
-        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
+        return new Finding($id, Severity::P2, 'src/A.php', 3, $symbol, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 
     /**

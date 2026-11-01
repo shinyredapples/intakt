@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\FindingStatus;
+use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\RoundNotAfterLatest;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(RoundNotAfterLatest::class)]
 #[UsesClass(FindingStatus::class)]
 #[UsesClass(Finding::class)]
+#[UsesClass(GoalpostRule::class)]
 #[UsesClass(Verdict::class)]
 final class FindingLedgerTest extends TestCase
 {
@@ -323,6 +325,45 @@ final class FindingLedgerTest extends TestCase
         self::assertSame('Text y', $open[0]->text);
     }
 
+    public function testARepeatKeepsTheSeverityItWasReportedWith(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a', severity: Severity::P1)]));
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true, Severity::P3)]));
+
+        self::assertSame(Severity::P1, $ledger->all()[0]->latest->severity);
+    }
+
+    public function testALoweredFindingRepeatedAsP1StaysP3(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a')]));
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('b', severity: Severity::P1)]));
+
+        $ledger->recordVerdict(3, $this->verdict([], [$this->finding('F2', true, Severity::P1)]));
+
+        self::assertSame(Severity::P3, $ledger->all()[1]->latest->severity);
+    }
+
+    public function testARoundOneP3RepeatedAsP1StaysP3(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a', severity: Severity::P3)]));
+
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('F1', true, Severity::P1)]));
+
+        self::assertSame(Severity::P3, $ledger->all()[0]->latest->severity);
+    }
+
+    public function testTheLedgerStoresALoweredNewFindingAsP3(): void
+    {
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $this->verdict([], [$this->finding('a')]));
+        $ledger->recordVerdict(2, $this->verdict([], [$this->finding('b', severity: Severity::P1)]));
+
+        self::assertSame([Severity::P2, Severity::P3], array_map(static fn (TrackedFinding $tracked): Severity => $tracked->latest->severity, $ledger->all()));
+    }
+
     /**
      * @param list<string>  $resolved
      * @param list<Finding> $findings
@@ -332,8 +373,8 @@ final class FindingLedgerTest extends TestCase
         return new Verdict(Decision::Changes, $findings, $resolved, []);
     }
 
-    private function finding(string $id, bool $repeat = false): Finding
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
     {
-        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
     }
 }
