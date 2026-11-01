@@ -137,7 +137,7 @@ final class InstallationTokenMinterTest extends TestCase
             (void) $minter->mint('678');
             self::fail('A refused exchange must fail.');
         } catch (InstallationTokenNotMinted $failure) {
-            $arguments = self::scalarArguments($failure);
+            $arguments = $this->scalarArguments($failure);
         } finally {
             ini_set('zend.exception_ignore_args', (string) $ignoreArguments);
         }
@@ -156,7 +156,7 @@ final class InstallationTokenMinterTest extends TestCase
     /**
      * @return list<scalar>
      */
-    private static function scalarArguments(InstallationTokenNotMinted $failure): array
+    private function scalarArguments(InstallationTokenNotMinted $failure): array
     {
         // Only scalars, because printing the object arguments would walk PHPUnit's whole object graph.
         $arguments = [];
