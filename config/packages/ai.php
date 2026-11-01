@@ -186,7 +186,7 @@ return static function (ContainerConfigurator $container): void {
     // The reviewer's rounds each keep a conversation, in the table the migration creates for the DBAL store.
     $conversations = ['doctrine' => ['dbal' => ['reviewer_conversation' => ['connection' => 'default']]]];
 
-    // Project memory embeds with OpenAI, the only configured provider with an embedding model; without an enabled account the placeholder platform names the missing key when a worker indexes.
+    // Project memory embeds with OpenAI because it is the only configured provider with an embedding model; without an enabled account the placeholder platform names the missing key when a worker indexes.
     $embeddings = array_key_exists(Provider::OpenAi->value, $enabledAccounts) ? 'intakt.ai.accounts.'.Provider::OpenAi->value : EmbeddingsNotConfigured::class;
     $memory = [
         'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:%kernel.project_dir%/var/memory.db', 'table_name' => 'project_memory']]],

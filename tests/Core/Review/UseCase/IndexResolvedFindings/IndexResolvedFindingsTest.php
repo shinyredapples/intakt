@@ -165,8 +165,10 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     {
         $bus = new RecordingBus();
         $listener = new QueueIndexingOfCompletedRound($bus);
+        /** @var CompletedEvent<object> $event */
+        $event = new CompletedEvent(new stdClass(), new Marking(), new Transition('complete', 'a', 'b'));
 
-        $listener(new CompletedEvent(new stdClass(), new Marking(), new Transition('complete', 'a', 'b')));
+        $listener($event);
 
         self::assertSame([], $bus->messages);
     }

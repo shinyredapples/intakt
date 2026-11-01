@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\UseCase\IndexResolvedFindings;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
+use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -40,7 +41,7 @@ final readonly class IndexResolvedFindingsHandler
             $lines[] = 'Cause: '.$finding->requirement;
         }
 
-        if (null !== $finding->evidence) {
+        if ($finding->evidence instanceof Evidence) {
             $lines[] = 'Evidence: '.$finding->evidence->probe.': '.$finding->evidence->output;
         }
 

@@ -20,7 +20,7 @@ final class MemoryWiringTest extends KernelTestCase
         assert($index instanceof MemoryIndex);
 
         $this->expectException(LogicException::class);
-        $this->expectExceptionMessage('needs an embedding model');
+        $this->expectExceptionMessageMatches('/needs an embedding model/');
 
         $index->index(new MemoryEntry('Text.', ['src/A.php']));
     }
