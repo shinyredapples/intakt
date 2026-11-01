@@ -10,6 +10,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, but no forge for GitHub and nothing that runs it exists yet, so there is nothing to set up (planned)
 - Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); running its panel on every new pull request head, marking its verdicts as shadow and the lower usage ceiling for shadow work are planned
+- Looking at projects and reviews in the browser (see [below](#the-dashboard)); the page of one review and the button that starts a review are planned
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list` and serves a round's findings (see [Connecting an agent through MCP](mcp.md)); starting a review is planned
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
@@ -17,6 +18,15 @@ For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on y
 ## Reading a change from a local repository
 
 Intakt can treat a branch of a local git repository as a pull request: the branch is the change and the repository's base branch is what it is compared with. It reads the branch's latest commit, the diff against the point where the branch left the base, the list of changed files and any file as it was at that commit (by its exact name, even one starting with `:`), ignoring git's replacement refs (`git replace`) and graft file (`.git/info/grafts`), which could otherwise show other content under the same commit or hide commits. It reads the repository with its own git settings: the repository's configuration and attributes cannot run a program (a hook, a filter, a diff or signature tool, or a fetch from a remote the repository names for an object it lacks: such an object is an error, never fetched) or change what is read, every file in the diff is shown as text, and the git configuration of the user running Intakt (`~/.gitconfig`, even a broken one) is not read. A repository whose `.git/info/attributes` file exists cannot be read, because that file could hide a change and git offers no way to ignore it: remove it first. It notices when the branch has moved to a newer commit since it was read. A name that is not a valid branch name (such as `../tags/v1`) is treated like a branch that does not exist. It only reads; it never changes the repository. `php bin/console intakt:change:summarize <branch>` prints what it reads (see [Summarizing a branch](#summarizing-a-branch)); for an invalid name it prints the same error as for a missing branch and exits with 1.
+
+## The dashboard
+
+Intakt serves two pages in the browser, built from the ledger of review events alone (no forge, no model call):
+
+- `/projects` lists the projects that started a review, with how many rounds each has had and how many of them the judge has decided.
+- `/reviews` lists every round, newest first, with its project, its number of reviewers, when it started (UTC) and its state: `judged` once the judge has decided it, `in progress` before. `/reviews?project=<name>` keeps one project's rounds; each project on the first page links there.
+
+The pages answer only an address on the computer itself: `localhost`, `127.0.0.1` or `[::1]` with the dashboard's port, which is `DASHBOARD_PORT` (default 7780, set it to the port you publish on the host). Any other address in the request, or another port, gets `400 Bad Request` and no data, so a web page that points its own name at your computer cannot read them. The pages are plain HTML and never refresh themselves: reload the page to see newer rounds. Two rounds of one change appear as two rows of the same project, because the ledger does not link rounds to a change yet. The page of one round (reviewers, verdicts, findings, cost) and the button that starts a review are planned.
 
 ## Background work
 

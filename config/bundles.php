@@ -8,6 +8,7 @@ use Symfony\AI\AiBundle\AiBundle;
 use Symfony\AI\McpBundle\McpBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
+use Symfony\Bundle\TwigBundle\TwigBundle;
 
 return [
     FrameworkBundle::class => ['all' => true],
@@ -16,4 +17,5 @@ return [
     AiBundle::class => ['all' => true],
     McpBundle::class => ['all' => true],
     SecurityBundle::class => ['all' => true],
+    TwigBundle::class => ['all' => true],
 ];

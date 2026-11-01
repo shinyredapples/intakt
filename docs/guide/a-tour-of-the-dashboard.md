@@ -2,7 +2,16 @@
 
 The dashboard is a board in your browser that shows everything Intakt is doing, updated live. This page walks through it. Intakt is still being built, so this describes the decided design ([details](../design/05-architecture/13-dashboard.md)).
 
-## The board
+## What you can open today
+
+Two plain pages are built. They list what Intakt has written down about its reviews, and they never refresh by themselves: reload the page to see news.
+
+- **Projects** (`/projects`): one row per project that has had a review, with how many review rounds it has had and how many of them reached the judge.
+- **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only.
+
+Both pages only answer when you open them on the computer Intakt runs on (`localhost` and the dashboard's port, 7780 unless you changed it); any other address gets an error page and none of your data. A change that is reviewed twice shows as two rows of the same project. The page for a single review (rounds, verdicts, findings) and the board below are still planned.
+
+## The board (planned)
 
 Every task in flight is a card, and its column says where it is now. Cards move left to right:
 
