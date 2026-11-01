@@ -138,6 +138,37 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['F1', 'Text of A.'], ['F2', 'Another defect.']], $this->idsAndTexts($asked));
     }
 
+    public function testAnOlderRoundCompletingAfterANewerOneStillSendsItsFindingsToTheJudge(): void
+    {
+        $older = $this->fixture->start(1);
+        $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole([]));
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]));
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($older));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame([['F1', 'Text of A.']], $this->idsAndTexts($asked));
+    }
+
+    public function testAFindingALaterRoundReportsAgainStillReachesTheJudgeOfTheRoundThatReportedItFirst(): void
+    {
+        $first = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]));
+        $this->fixture->start(1);
+        $repeat = new Finding('F1', Severity::P1, null, null, null, 'Text of A, again.', FixableBy::Builder, true, null, null);
+        $this->fixture->deliver($this->fixture->bus->messages[1], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$repeat], [], [])]));
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($first));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame([['F1', 'Text of A.']], $this->idsAndTexts($asked));
+    }
+
     public function testAnInvalidJudgeAnswerLeavesEveryBlockingFindingOnTheActListAndMakesNoFollowUp(): void
     {
         $round = $this->completedRound();

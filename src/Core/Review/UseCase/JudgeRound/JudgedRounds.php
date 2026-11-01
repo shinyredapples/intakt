@@ -34,7 +34,7 @@ final readonly class JudgedRounds
      */
     public function findingsOf(ReviewRound $round): array
     {
-        return $this->findings->openReportedIn($round);
+        return $this->findings->reportedIn($round);
     }
 
     // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model.
