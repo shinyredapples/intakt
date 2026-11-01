@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
@@ -32,6 +34,8 @@ final readonly class ReviewerPrompt
         - No overengineering: no config option, column, parameter or extension point without a caller today; plain PHP and Symfony features before custom abstractions.
         - Comments say why, never what: a comment gives a reason (a constraint, a trade-off, a link) on one line; a comment that restates the code, commented-out code and TODOs are findings; docblocks hold types only.
 
+        From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
+
         Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
         TEXT;
 
@@ -41,13 +45,39 @@ final readonly class ReviewerPrompt
     ) {
     }
 
-    public function messagesFor(ReviewerConversation $conversation, string $task): MessageBag
+    public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
     {
-        return MessageBag::forId(
-            $conversation->id,
+        $messages = [
             Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
-            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $task)),
-        );
+            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->task)),
+        ];
+
+        // After the task, so the cached prefix of the first round stays the same.
+        if ([] !== $brief->open) {
+            $messages[] = Message::ofUser("The open findings of earlier rounds:\n\n".$this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($brief->open)));
+        }
+
+        return MessageBag::forId($conversation->id, ...$messages);
+    }
+
+    /**
+     * @param list<Finding> $open
+     */
+    private function listOf(array $open): string
+    {
+        return implode("\n\n", array_map(
+            static fn (Finding $finding): string => sprintf(
+                "%s [%s] %s:%s %s\nrequirement: %s\n%s",
+                $finding->id,
+                $finding->severity->value,
+                $finding->file ?? '-',
+                $finding->line ?? '-',
+                $finding->symbol ?? '',
+                $finding->requirement ?? '-',
+                $finding->text,
+            ),
+            $open,
+        ));
     }
 
     // The tool answers are prompt input too, so they reach the model through the same fence as the task.

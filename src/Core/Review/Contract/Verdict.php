@@ -12,6 +12,7 @@ final readonly class Verdict
     public const string INVALID_OUTPUT = 'invalid-output';
     public const string INCOMPLETE_STREAM = 'incomplete-stream';
     public const string UNREAD_APPROVAL = 'unread-approval';
+    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL];
 
     /**
      * @param list<Finding> $findings
@@ -25,6 +26,12 @@ final readonly class Verdict
         public array $resolved,
         public array $follow_ups,
     ) {
+    }
+
+    // By the finding ids the failure verdicts carry, because a reviewer that uses one of them itself gains nothing: its verdict then adds no finding and closes none.
+    public function isFailedReview(): bool
+    {
+        return array_any($this->findings, static fn (Finding $finding): bool => in_array($finding->id, self::FAILED_REVIEWS, true));
     }
 
     public static function invalidOutput(string $reason): self

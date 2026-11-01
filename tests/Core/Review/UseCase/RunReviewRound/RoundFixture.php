@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -15,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -22,9 +25,12 @@ use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
+use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -36,6 +42,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -52,18 +59,23 @@ use Symfony\Component\Workflow\WorkflowInterface;
 final readonly class RoundFixture
 {
     public const string TASK = 'Add the thing.';
+    public const string CHANGE = 'feat/thing';
 
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public MockClock $clock;
     public BufferingLogger $log;
     private Ledger $ledger;
+    private SerializerInterface $serializer;
 
     public function __construct(private ContainerInterface $container)
     {
         $entities = $container->get('doctrine.orm.entity_manager');
         assert($entities instanceof EntityManagerInterface);
         $this->entities = $entities;
+        $serializer = $container->get(SerializerInterface::class);
+        assert($serializer instanceof SerializerInterface);
+        $this->serializer = $serializer;
         $this->bus = new RecordingBus();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
@@ -82,13 +94,18 @@ final readonly class RoundFixture
 
     public function startOn(MessageBusInterface $queue, int $reviewers): string
     {
-        return $this->startWith($queue, $reviewers, $this->identityAt(SampleIdentity::HEAD, $reviewers));
+        return $this->startFor(self::CHANGE, $queue, $reviewers);
+    }
+
+    public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
+    {
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), $change), $queue);
     }
 
     // The identity names its own task and panel size, so a test can hand in one that does not describe the round.
     public function startWithIdentityOf(string $task, int $panelSize, int $reviewers): string
     {
-        return $this->startWith($this->bus, $reviewers, SampleIdentity::of($task, $this->panelOf($panelSize)));
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of($task, $this->panelOf($panelSize))), $this->panelOf($reviewers), self::CHANGE), $this->bus);
     }
 
     public function identityAt(string $head, int $reviewers): VerdictIdentity
@@ -98,10 +115,29 @@ final readonly class RoundFixture
 
     public function verdictsOf(VerdictsOfRound $query): RoundVerdicts
     {
-        $serializer = $this->container->get('serializer');
-        assert($serializer instanceof SerializerInterface);
+        return new VerdictsOfRoundHandler($this->entities, $this->serializer)($query);
+    }
 
-        return new VerdictsOfRoundHandler($this->entities, $serializer)($query);
+    /**
+     * @return list<TrackedFinding>
+     */
+    public function storedFindings(string $change): array
+    {
+        $this->entities->clear();
+        $stored = $this->entities->find(ChangeFindings::class, ['project' => 'alpha', 'change' => $change]);
+        assert($stored instanceof ChangeFindings);
+        $tracked = $this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json');
+        assert(is_array($tracked));
+
+        return array_values(array_filter($tracked, static fn (mixed $finding): bool => $finding instanceof TrackedFinding));
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    public function openFindingsOf(ReviewRound $round): array
+    {
+        return $this->rounds($this->entities)->openFindingsOf($round);
     }
 
     /**
@@ -145,6 +181,23 @@ final readonly class RoundFixture
         return new SecondWorker($this->worker($entities, $vendor, $ledger), $entities, $ledger);
     }
 
+    // A round on its own connection that looked for the change's ledger before another round of the change committed it, the order in which two first rounds of a change meet; its ledger is in memory because the Doctrine ledger writes through the first connection.
+    public function startWhileAnotherRoundCommitsAfterItsFirstLook(int $reviewers): string
+    {
+        $this->useWalOnSqlite();
+        $another = fn (): ReviewRound => $this->start(1);
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AfterFirstLookAt('change_findings', $another)]));
+        $entities = new EntityManager($connection, $this->entities->getConfiguration());
+        $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), self::CHANGE);
+
+        return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger()), $this->bus)($command);
+    }
+
+    public function transactions(): ReviewRounds
+    {
+        return $this->rounds($this->entities);
+    }
+
     public function round(string $id): ReviewRound
     {
         $this->entities->clear();
@@ -184,6 +237,16 @@ final readonly class RoundFixture
         return array_values(array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($this->ledger->readInOrder())));
     }
 
+    // WAL, because there a reader does not block the other round's commit but keeps the snapshot from before it, as concurrent workers on SQLite meet it; other engines refuse the pragma and read committed rows already.
+    private function useWalOnSqlite(): void
+    {
+        $connection = $this->entities->getConnection();
+
+        if ($connection->getDatabasePlatform() instanceof SQLitePlatform) {
+            $connection->executeStatement('PRAGMA journal_mode=WAL');
+        }
+    }
+
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
         $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger));
@@ -191,16 +254,19 @@ final readonly class RoundFixture
         return new ReviewerLeases($entities, $moves, $this->clock);
     }
 
-    private function startWith(MessageBusInterface $queue, int $reviewers, VerdictIdentity $identity): string
+    private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
-        $handler = new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue);
+        return new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue)($command);
+    }
 
-        return $handler(new RunReviewRound(new ReviewSubject('alpha', __DIR__, self::TASK), $this->panelOf($reviewers), $identity));
+    private function subject(): ReviewSubject
+    {
+        return new ReviewSubject('alpha', __DIR__, self::TASK);
     }
 
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
-        return new ReviewRounds($entities, $this->machine('state_machine.review_round'), $this->clock);
+        return new ReviewRounds($entities, $this->clock, new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round')));
     }
 
     private function panelOf(int $reviewers): Panel

@@ -23,8 +23,11 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
@@ -107,6 +110,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
+#[UsesClass(ReviewBrief::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
@@ -494,7 +498,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request);
 
-        self::assertCount(3, $conversations->load($request->conversation->id));
+        self::assertCount(4, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
@@ -502,7 +506,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), 'Review the change.', new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
     private function reviewer(): ReviewerAgent
