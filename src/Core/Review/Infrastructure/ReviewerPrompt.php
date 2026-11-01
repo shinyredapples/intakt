@@ -86,7 +86,7 @@ final readonly class ReviewerPrompt
         ));
     }
 
-    // The notes about the files under review, read-only: the reviewer gets retrieval and nothing that writes.
+    // Retrieval only, because the reviewer is given no way to write to memory.
     public function remembering(ReviewBrief $brief): MemoryInputProcessor
     {
         return new MemoryInputProcessor([new ReviewerMemory($this->memory, $this->fence, $brief->diff)]);

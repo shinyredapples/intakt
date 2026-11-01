@@ -23,19 +23,19 @@ final class OptionalProjectMemoryTest extends TestCase
 {
     public function testAReadableMemoryIsPassedThrough(): void
     {
-        $inner = $this->createStub(ProjectMemory::class);
+        $inner = self::createStub(ProjectMemory::class);
         $inner->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('Note.', ['a.php'])], 100));
 
-        $found = new OptionalProjectMemory($inner, $this->createStub(LoggerInterface::class))->relevantTo(new MemoryQuery(['a.php'], 100));
+        $found = new OptionalProjectMemory($inner, self::createStub(LoggerInterface::class))->relevantTo(new MemoryQuery(['a.php'], 100));
 
         self::assertCount(1, $found->entries);
     }
 
     public function testAMemoryThatCannotBeReadGivesNoEntriesAndIsLoggedByClass(): void
     {
-        $inner = $this->createStub(ProjectMemory::class);
+        $inner = self::createStub(ProjectMemory::class);
         $inner->method('relevantTo')->willThrowException(new LogicException('needs a key sk-secret'));
-        $logger = $this->createMock(LoggerInterface::class);
+        $logger = self::createMock(LoggerInterface::class);
         $logger->expects(self::once())->method('warning')->with(self::anything(), ['failure' => LogicException::class]);
 
         $found = new OptionalProjectMemory($inner, $logger)->relevantTo(new MemoryQuery(['a.php'], 100));
