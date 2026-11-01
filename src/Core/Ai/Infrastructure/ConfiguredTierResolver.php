@@ -16,8 +16,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final readonly class ConfiguredTierResolver implements TierResolver
 {
     /**
-     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string}>}> $projects
-     * @param array<string, string>                                                                        $disabledProviders
+     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}>}> $projects
+     * @param array<string, string>                                                                                                                                              $disabledProviders
      */
     public function __construct(
         #[Autowire('%intakt.projects%')]
@@ -34,13 +34,52 @@ final readonly class ConfiguredTierResolver implements TierResolver
 
     public function resolve(string $project, Tier $tier): ResolvedModel
     {
-        $mapping = ($this->projects[$project] ?? throw new ProjectNotConfigured($project))['tiers'][$tier->value] ?? throw new TierNotMapped($project, $tier);
-        $provider = Provider::from($mapping['provider']);
+        $own = $this->configured($project, $tier);
 
-        if (isset($this->disabledProviders[$provider->value])) {
-            throw new TierProviderDisabled($project, $tier, $this->disabledProviders[$provider->value]);
+        if ($this->isDisabled($own->provider)) {
+            throw new TierProviderDisabled($project, $tier, $this->disabledProviders[$own->provider->value]);
         }
 
-        return new ResolvedModel($provider, $mapping['model']);
+        return $own;
+    }
+
+    public function configured(string $project, Tier $tier): ResolvedModel
+    {
+        $mapping = $this->mapping($project, $tier);
+
+        return new ResolvedModel(Provider::from($mapping['provider']), $mapping['model']);
+    }
+
+    public function isDisabled(Provider $provider): bool
+    {
+        return isset($this->disabledProviders[$provider->value]);
+    }
+
+    public function substitutes(string $project, Tier $tier): array
+    {
+        $substitutes = [];
+
+        foreach ($this->mapping($project, $tier)['substitutes'] ?? [] as $substitute) {
+            $provider = Provider::from($substitute['provider']);
+
+            if (!$this->isDisabled($provider)) {
+                $substitutes[] = new ResolvedModel($provider, $substitute['model']);
+            }
+        }
+
+        return $substitutes;
+    }
+
+    public function hasSubstitutes(string $project, Tier $tier): bool
+    {
+        return [] !== ($this->mapping($project, $tier)['substitutes'] ?? []);
+    }
+
+    /**
+     * @return array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}
+     */
+    private function mapping(string $project, Tier $tier): array
+    {
+        return ($this->projects[$project] ?? throw new ProjectNotConfigured($project))['tiers'][$tier->value] ?? throw new TierNotMapped($project, $tier);
     }
 }

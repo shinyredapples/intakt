@@ -45,7 +45,7 @@ final class ProbeProvidersCommandTest extends TestCase
         }));
 
         self::assertSame(0, $tester->getStatusCode());
-        self::assertSame(['alpha/strong', 'alpha/light'], $calls->getArrayCopy());
+        self::assertSame(['anthropic/big', 'openai/big'], $calls->getArrayCopy());
         self::assertStringContainsString('anthropic: model big, prompt 12, completion 3, cached 4, total 15, remaining 900', $tester->getDisplay());
         self::assertStringContainsString('openai: model big, prompt 12', $tester->getDisplay());
     }
@@ -105,7 +105,7 @@ final class ProbeProvidersCommandTest extends TestCase
         $tester = $this->execute($this->resolver(), $this->invoker($calls, $unreadableFirst));
 
         self::assertSame(1, $tester->getStatusCode());
-        self::assertSame(['alpha/strong', 'alpha/light'], $calls->getArrayCopy());
+        self::assertSame(['anthropic/big', 'openai/big'], $calls->getArrayCopy());
         self::assertStringContainsString('anthropic: the call failed with '.RuntimeException::class, $tester->getDisplay());
         self::assertStringContainsString('openai: the provider reported no token usage', $tester->getDisplay());
     }
@@ -142,8 +142,8 @@ final class ProbeProvidersCommandTest extends TestCase
     {
         $platform = MockPlatformFactory::createPlatform($answer(...));
         $invoker = self::createStub(TierInvoker::class);
-        $invoker->method('invoke')->willReturnCallback(static function (string $project, Tier $tier, TierRequest $request) use ($calls, $platform): DeferredResult {
-            $calls->append($project.'/'.$tier->value);
+        $invoker->method('invoke')->willReturnCallback(static function (ResolvedModel $model, TierRequest $request) use ($calls, $platform): DeferredResult {
+            $calls->append($model->provider->value.'/'.$model->model);
 
             return $platform->invoke('big', $request->input);
         });

@@ -9,9 +9,15 @@ use Symfony\AI\Platform\Result\DeferredResult;
 
 interface TierInvoker
 {
+    // Chosen once before a review starts and kept for every call of it, because a review is never continued by another vendor: the tier's own model while its provider is enabled and has a free account, else its first substitute that does.
     /**
      * @throws TierResolutionFailure
+     * @throws EveryKeyRejected
+     * @throws EveryAccountCoolingDown
+     * @throws EveryProviderOut
      */
+    public function answering(string $project, Tier $tier): ResolvedModel;
+
     #[NoDiscard('the answer is only in the result')]
-    public function invoke(string $project, Tier $tier, TierRequest $request): DeferredResult;
+    public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult;
 }

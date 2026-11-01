@@ -43,7 +43,7 @@ final class TierRoutedPlatform implements PlatformInterface
     {
         $name = $model instanceof Model ? $model->getName() : $model;
 
-        $round = $this->tiers->invoke($this->project, Tier::from($name), new TierRequest($input, $options));
+        $round = $this->tiers->invoke($this->tiers->answering($this->project, Tier::from($name)), new TierRequest($input, $options));
         $this->rounds[] = $round;
 
         return $round;
