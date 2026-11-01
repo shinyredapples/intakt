@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\EveryKeyRejected;
+use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierProviderDisabled;
+use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Judgement;
@@ -17,20 +22,16 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
-use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
+use Intakt\Plugin\Vendor\Contract\VendorReview;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
-use Symfony\Component\Semaphore\SemaphoreFactory;
-use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -40,19 +41,23 @@ use Throwable;
 #[UsesClass(Checkout::class)]
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(ReviewBrief::class)]
-#[UsesClass(VendorAccountLimit::class)]
-#[UsesClass(VendorAccountBusy::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgeRequest::class)]
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
+#[UsesClass(ProviderRejectedTheKey::class)]
+#[UsesClass(TierProviderDisabled::class)]
+#[UsesClass(TierResolutionFailure::class)]
+#[UsesClass(Account::class)]
+#[UsesClass(KeyRejected::class)]
+#[UsesClass(EveryKeyRejected::class)]
 final class AccountLimitedVendorTest extends TestCase
 {
     public function testAReviewOnAnAccountWithAFreePlaceReturnsTheVendorsVerdict(): void
     {
-        $verdict = Verdict::unreadApproval();
+        $verdict = new VendorReview(Verdict::unreadApproval());
         $vendor = self::createStub(Vendor::class);
         $vendor->method('review')->willReturn($verdict);
 
@@ -72,26 +77,6 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertSame($judgement, $result);
     }
 
-    public function testAReviewOnAFullAccountIsRefusedWithoutCallingTheVendor(): void
-    {
-        $limit = $this->limit();
-        $called = false;
-        $vendor = self::createStub(Vendor::class);
-        $vendor->method('review')->willReturnCallback(static function () use (&$called): Verdict {
-            $called = true;
-
-            return Verdict::unreadApproval();
-        });
-
-        $this->expectException(VendorAccountBusy::class);
-
-        try {
-            $limit->run(Provider::Anthropic, fn (): Verdict => new AccountLimitedVendor($vendor, $this->resolver(), $limit, $this->cooldowns(0))->review('intakt', Tier::Standard, $this->request()));
-        } finally {
-            self::assertFalse($called);
-        }
-    }
-
     public function testARateLimitWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
     {
         $limited = new ProviderRateLimited(300, new RuntimeException('429'));
@@ -100,6 +85,16 @@ final class AccountLimitedVendorTest extends TestCase
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
         self::assertSame($limited, $out->getPrevious());
+    }
+
+    public function testARateLimitedJudgementWhileAnotherAccountOfTheVendorIsFreeMovesThereAtOnce(): void
+    {
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('judge')->willThrowException(new ProviderRateLimited(300, new RuntimeException('429')));
+
+        $this->expectException(VendorAccountOut::class);
+
+        $this->vendor($vendor, $this->cooldowns(0))->judge('intakt', new JudgeRequest('Add a cart.', []));
     }
 
     public function testARateLimitWhileEveryAccountOfTheVendorCoolsDownWaitsUntilTheFirstIsFree(): void
@@ -135,6 +130,67 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertSame($failure, $this->failureOf($this->vendor($this->failing($failure), $this->cooldowns(0))));
     }
 
+    public function testALimitWhileEveryAccountIsOutStartsAgainAtOnceWhenTheTierHasSubstitutes(): void
+    {
+        $limited = new ProviderRateLimited(300, new RuntimeException('429'));
+
+        $out = $this->failureOf($this->vendor($this->failing($limited), $this->cooldowns(45), $this->tierWithSubstitutes()));
+
+        self::assertInstanceOf(VendorAccountOut::class, $out);
+    }
+
+    public function testARejectedKeyWithNoOtherAccountOrSubstituteIsTheReviewersFailure(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new RuntimeException('401'));
+
+        self::assertSame($rejected, $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(45))));
+    }
+
+    public function testARejectedKeyWhileAnotherAccountIsFreeMovesTheReviewThereAtOnce(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new KeyRejected(new Account(Provider::Anthropic, 'first')));
+
+        $out = $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(0)));
+
+        self::assertInstanceOf(VendorAccountOut::class, $out);
+    }
+
+    public function testARejectedKeyOnAProviderWithoutAnAccountsListEndsTheReviewer(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new RuntimeException('401'));
+
+        self::assertSame($rejected, $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(0))));
+    }
+
+    public function testARejectedKeyOnEveryAccountEndsTheReviewerEvenWhileTheCooldownsReportAFreeOne(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new EveryKeyRejected(Provider::Anthropic));
+
+        self::assertSame($rejected, $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(0))));
+    }
+
+    public function testARejectedKeyWithASubstituteStartsAgainAtOnce(): void
+    {
+        $rejected = new ProviderRejectedTheKey(new RuntimeException('401'));
+
+        $out = $this->failureOf($this->vendor($this->failing($rejected), $this->cooldowns(45), $this->tierWithSubstitutes()));
+
+        self::assertInstanceOf(VendorAccountOut::class, $out);
+    }
+
+    public function testAFailureOfASubstituteWhileTheTiersOwnProviderIsDisabledStartsAgainAtOnce(): void
+    {
+        $resolver = self::createStub(TierResolver::class);
+        $resolver->method('resolve')->willThrowException(new TierProviderDisabled('intakt', Tier::Standard, 'disabled'));
+        $resolver->method('hasSubstitutes')->willReturn(true);
+
+        $limited = $this->failureOf($this->vendor($this->failing(new ProviderRateLimited(300, new RuntimeException('429'))), $this->cooldowns(45), $resolver));
+        $rejected = $this->failureOf($this->vendor($this->failing(new ProviderRejectedTheKey(new RuntimeException('401'))), $this->cooldowns(45), $resolver));
+
+        self::assertInstanceOf(VendorAccountOut::class, $limited);
+        self::assertInstanceOf(VendorAccountOut::class, $rejected);
+    }
+
     private function failureOf(AccountLimitedVendor $vendor): Throwable
     {
         try {
@@ -154,9 +210,9 @@ final class AccountLimitedVendorTest extends TestCase
         return $vendor;
     }
 
-    private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null): AccountLimitedVendor
+    private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null, ?TierResolver $resolver = null): AccountLimitedVendor
     {
-        return new AccountLimitedVendor($vendor, $this->resolver(), $this->limit(), $cooldowns ?? $this->cooldowns(0));
+        return new AccountLimitedVendor($vendor, $resolver ?? $this->tier(), $cooldowns ?? $this->cooldowns(0));
     }
 
     private function cooldowns(int $secondsUntilAnAccountIsFree): AccountCooldowns
@@ -167,15 +223,19 @@ final class AccountLimitedVendorTest extends TestCase
         return $cooldowns;
     }
 
-    private function limit(): VendorAccountLimit
-    {
-        return new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-    }
-
-    private function resolver(): TierResolver
+    private function tier(): TierResolver
     {
         $resolver = self::createStub(TierResolver::class);
         $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
+
+        return $resolver;
+    }
+
+    private function tierWithSubstitutes(): TierResolver
+    {
+        $resolver = self::createStub(TierResolver::class);
+        $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-test'));
+        $resolver->method('hasSubstitutes')->willReturn(true);
 
         return $resolver;
     }

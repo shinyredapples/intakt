@@ -66,7 +66,7 @@ flowchart LR
 
 ## Project memory
 
-**Symfony AI Store** is a searchable notebook. When a review finding is fixed, Intakt files it there; when a later change touches the same files, the reviewers are reminded of what went wrong before. It keeps the notebook in a small SQLite file of its own (`var/memory.db`), next to Intakt's database, so nothing extra has to run. To make the notes searchable, the text of each fixed finding is sent to OpenAI, which turns it into numbers; without an OpenAI account nothing is filed. *(writing fixed findings is built; reminding reviewers is planned)*
+**Symfony AI Store** is a searchable notebook. When a review finding is fixed, Intakt files it there; when a later change touches the same files, the reviewers are reminded of what went wrong before. It keeps the notebook in a small SQLite file of its own (one per environment, such as `var/memory_dev.db` or `var/memory_test.db`, so tests never write into the notebook a running Intakt uses), next to Intakt's database, so nothing extra has to run. To make the notes searchable, the text of each fixed finding is sent to OpenAI, which turns it into numbers; without an OpenAI account nothing is filed. *(writing fixed findings is built; reminding reviewers is planned)*
 
 ## The engine room
 
