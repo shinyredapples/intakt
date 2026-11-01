@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -183,8 +184,7 @@ final readonly class RoundFixture
     // A round on its own connection that looked for the change's ledger before another round of the change committed it, the order in which two first rounds of a change meet; its ledger is in memory because the Doctrine ledger writes through the first connection.
     public function startWhileAnotherRoundCommitsAfterItsFirstLook(int $reviewers): string
     {
-        // WAL, because there a reader does not block the other round's commit but keeps the snapshot from before it, as concurrent workers on SQLite meet it.
-        $this->entities->getConnection()->executeStatement('PRAGMA journal_mode=WAL');
+        $this->useWalOnSqlite();
         $another = fn (): ReviewRound => $this->start(1);
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AfterFirstLookAt('change_findings', $another)]));
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
@@ -235,6 +235,16 @@ final readonly class RoundFixture
     public function ledgerKinds(): array
     {
         return array_values(array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($this->ledger->readInOrder())));
+    }
+
+    // WAL, because there a reader does not block the other round's commit but keeps the snapshot from before it, as concurrent workers on SQLite meet it; other engines refuse the pragma and read committed rows already.
+    private function useWalOnSqlite(): void
+    {
+        $connection = $this->entities->getConnection();
+
+        if ($connection->getDatabasePlatform() instanceof SQLitePlatform) {
+            $connection->executeStatement('PRAGMA journal_mode=WAL');
+        }
     }
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
