@@ -29,3 +29,4 @@ framework:
         routing:
             Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer: async
             Intakt\Core\Review\UseCase\JudgeRound\JudgeRound: async
+            Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings: async

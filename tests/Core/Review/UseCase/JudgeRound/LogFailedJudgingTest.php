@@ -68,15 +68,20 @@ final class LogFailedJudgingTest extends TestCase
         $log = new BufferingLogger();
         $incoming = new InMemoryTransport();
         $incoming->send(new Envelope(new JudgeRound(self::ROUND)));
+        $incoming->send(new Envelope(new stdClass()));
         $failed = new InMemoryTransport();
         $dispatcher = new EventDispatcher();
         $dispatcher->addListener(WorkerMessageFailedEvent::class, new LogFailedJudging($log));
         $dispatcher->addSubscriber(new SendFailedMessageToFailureTransportListener(new ServiceLocator(['async' => static fn (): InMemoryTransport => $failed])));
-        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
+        $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(2));
 
         new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: new MockClock('2026-10-30 12:00:00', 'UTC'))->run(['sleep' => 0]);
 
-        self::assertCount(1, $failed->getSent());
+        $parked = $failed->getSent();
+        self::assertCount(2, $parked);
+        self::assertInstanceOf(JudgeRound::class, $parked[0]->getMessage());
+        self::assertInstanceOf(stdClass::class, $parked[1]->getMessage());
+        self::assertSame([], $incoming->get());
         self::assertCount(1, $log->cleanLogs());
     }
 
