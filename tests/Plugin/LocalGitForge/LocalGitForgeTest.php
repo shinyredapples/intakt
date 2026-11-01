@@ -222,16 +222,16 @@ final class LocalGitForgeTest extends TestCase
         $snapshot = '';
 
         try {
-            $this->forge()->withSnapshotOf(new CommitId($head), static function (string $directory) use (&$snapshot): never {
+            $outcome = $this->forge()->withSnapshotOf(new CommitId($head), static function (string $directory) use (&$snapshot): string {
                 $snapshot = $directory;
 
                 throw new RuntimeException('the work failed');
             });
-            self::fail('The failure of the work was swallowed.');
         } catch (RuntimeException $failure) {
-            self::assertSame('the work failed', $failure->getMessage());
+            $outcome = $failure->getMessage();
         }
 
+        self::assertSame('the work failed', $outcome);
         self::assertDirectoryDoesNotExist($snapshot);
         self::assertCount(1, $this->repository->worktrees());
     }
@@ -252,10 +252,14 @@ final class LocalGitForgeTest extends TestCase
 
     public function testItFailsToSnapshotAHeadThatIsNotInTheRepository(): void
     {
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('git worktree failed');
+        try {
+            $outcome = $this->forge()->withSnapshotOf(new CommitId(str_repeat('a', 40)), static fn (string $snapshot): string => $snapshot);
+        } catch (ForgeReadFailed $failure) {
+            $outcome = $failure->getMessage();
+        }
 
-        $this->forge()->withSnapshotOf(new CommitId(str_repeat('a', 40)), static fn (string $snapshot): string => $snapshot);
+        self::assertStringContainsString('git worktree failed', $outcome);
+        self::assertCount(1, $this->repository->worktrees());
     }
 
     public function testItRefusesARepositoryWhoseInfoAttributesExistBecauseTheyCouldHideAFileAsBinary(): void
