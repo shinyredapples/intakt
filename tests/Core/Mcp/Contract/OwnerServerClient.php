@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Mcp\Contract;
 use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use UnexpectedValueException;
 
 final class OwnerServerClient
 {
@@ -65,7 +66,7 @@ final class OwnerServerClient
 
         foreach ($path as $key) {
             if (!is_array($value) || !array_key_exists($key, $value)) {
-                throw new \UnexpectedValueException(sprintf('The answer has no "%s".', implode('.', $path)));
+                throw new UnexpectedValueException(sprintf('The answer has no "%s".', implode('.', $path)));
             }
 
             $value = $value[$key];
@@ -86,6 +87,6 @@ final class OwnerServerClient
 
         $decoded = json_decode($content, true, flags: JSON_THROW_ON_ERROR);
 
-        return is_array($decoded) ? $decoded : throw new \UnexpectedValueException('The answer is not a JSON object.');
+        return is_array($decoded) ? $decoded : throw new UnexpectedValueException('The answer is not a JSON object.');
     }
 }

@@ -34,7 +34,7 @@ final class ToolSchemaContractTest extends KernelTestCase
 
     public function testListProjectsAnswersWithTheConfiguredProjects(): void
     {
-        $answer = $this->client()->call('tools/call', ['name' => 'list_projects', 'arguments' => new \stdClass()], 2);
+        $answer = $this->client()->call('tools/call', ['name' => 'list_projects', 'arguments' => new stdClass()], 2);
 
         self::assertFalse(OwnerServerClient::at($answer, 'result', 'isError'));
         self::assertIsList(OwnerServerClient::at($answer, 'result', 'structuredContent', 'projects'));
@@ -42,7 +42,7 @@ final class ToolSchemaContractTest extends KernelTestCase
 
     public function testAnUnknownToolIsAnMcpErrorWithoutAStackTrace(): void
     {
-        $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new \stdClass()], 2);
+        $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new stdClass()], 2);
 
         self::assertIsInt(OwnerServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', json_encode($answer, JSON_THROW_ON_ERROR));
