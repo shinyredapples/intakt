@@ -1,0 +1,23 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Projects - Intakt{% endblock %}
+
+{% block body %}
+<h1>Projects</h1>
+{% if projects is empty %}
+<p>No project has started a review yet.</p>
+{% else %}
+<table>
+    <thead><tr><th>Project</th><th>Rounds</th><th>Judged</th></tr></thead>
+    <tbody>
+    {% for project in projects %}
+        <tr>
+            <td><a href="{{ path('dashboard_list_reviews', {project: project.name}) }}">{{ project.name }}</a></td>
+            <td>{{ project.rounds }}</td>
+            <td>{{ project.judgedRounds }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}
