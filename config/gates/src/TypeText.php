@@ -55,6 +55,11 @@ final readonly class TypeText
 
     private function continuesWithOperator(string $before, string $after): bool
     {
-        return str_ends_with($before, '|') || str_ends_with($before, '&') || str_ends_with($before, ':') || str_starts_with($after, '|') || str_starts_with($after, '&') || str_starts_with($after, ':');
+        return str_ends_with($before, '|') || str_ends_with($before, '&') || str_ends_with($before, ':') || str_starts_with($after, '|') || $this->startsWithIntersection($after) || str_starts_with($after, ':');
+    }
+
+    private function startsWithIntersection(string $after): bool
+    {
+        return str_starts_with($after, '&') && 1 !== preg_match('/^&(\.\.\.)?\$/', $after);
     }
 }
