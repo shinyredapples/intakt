@@ -18,7 +18,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Throwable;
 
-// Covers no code: it checks which failures carry the interface, which is a declaration rather than behavior.
+// Covers no code, because which failures carry the interface is a declaration rather than behavior.
 #[CoversNothing]
 final class ReportableFailureTest extends TestCase
 {

@@ -62,7 +62,7 @@ final readonly class CheckVerdictIdentityCommand
         $this->printStanding($io, $reviewed->standingAt($current, $forge->headMoveSince($reviewed->commits->head, $change)));
     }
 
-    // Only here is a recorded identity typed by a person; one read from storage stays a programming error.
+    // Reportable here only, because here a person typed the identity, while an unreadable one from storage is a programming error.
     private function readReviewed(string $recorded): VerdictIdentity
     {
         try {

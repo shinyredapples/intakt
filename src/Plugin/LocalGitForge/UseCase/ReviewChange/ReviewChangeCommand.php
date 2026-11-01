@@ -72,7 +72,8 @@ final readonly class ReviewChangeCommand implements SignalableCommandInterface
         return SignalRegistry::isSupported() ? [SIGINT, SIGTERM] : [];
     }
 
-    public function handleSignal(int $signal, int|false $previousExitCode = 0): int
+    // The previous exit code is widened to mixed because the interface requires the parameter and the command ignores it: a stop always ends with the signal's code.
+    public function handleSignal(int $signal, mixed $previousExitCode = 0): int
     {
         $this->onStop->stop();
 

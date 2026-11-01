@@ -210,19 +210,21 @@ final class ReviewChangeCommandTest extends TestCase
     #[DataProvider('stopSignals')]
     public function testAStopSignalDuringTheRoundRemovesTheSnapshotAndGivesTheSignalsExitCode(int $signal, int $code): void
     {
-        $seen = [];
+        $snapshot = '';
+        $exit = null;
         $reviews = self::createStub(ChangeReviews::class);
         $command = new ReviewChangeCommand($this->onePanel(), $reviews, new NameStatusParser());
-        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($command, $signal, &$seen): ChangeReview {
-            $seen = [$request->checkoutRoot, $command->handleSignal($signal)];
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($command, $signal, &$snapshot, &$exit): ChangeReview {
+            $snapshot = $request->checkoutRoot;
+            $exit = $command->handleSignal($signal);
 
             return $this->outcome(Decision::Approve);
         });
 
         $this->whenTheCommandIsRun($command);
 
-        self::assertSame($code, $seen[1]);
-        self::assertDirectoryDoesNotExist($seen[0]);
+        self::assertSame($code, $exit);
+        self::assertDirectoryDoesNotExist($snapshot);
         self::assertCount(1, $this->repository->worktrees());
     }
 
