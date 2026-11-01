@@ -14,7 +14,6 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 // The AI Bundle checks #[IsGrantedTool] only on its agent toolbox events, which MCP tool calls never pass, so this wrapper checks it for them.
-// A ToolCallException reaches the client as an MCP error result, because the SDK never sends its trace.
 final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
 {
     public function __construct(
@@ -74,6 +73,7 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
         return null;
     }
 
+    // A ToolCallException reaches the client as an MCP error result, because the SDK never sends its trace.
     private function authorize(IsGrantedTool $check): void
     {
         // A subject would be built from the call's arguments, and a model must not argue its way to access.
@@ -82,7 +82,7 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
         }
 
         if (!$this->authorization->isGranted($check->attribute)) {
-            throw new ToolCallException(sprintf('This tool needs %s, which is not granted.', $check->attribute));
+            throw new ToolCallException(sprintf('This tool needs %s, which is not granted.', is_string($check->attribute) ? $check->attribute : 'its expression'));
         }
     }
 }
