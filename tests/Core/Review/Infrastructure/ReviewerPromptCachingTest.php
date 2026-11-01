@@ -110,7 +110,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief('Add a cart.', []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
+        $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief('Add a cart.', 'diff --git a/a b/a', []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
 
         return $platform;
     }

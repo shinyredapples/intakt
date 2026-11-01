@@ -86,7 +86,7 @@ final readonly class ProbeProvidersCommand
         [$project, $tier] = $target;
 
         try {
-            $result = $this->tiers->invoke($project, $tier, new TierRequest(new MessageBag(Message::ofUser(self::PROMPT))));
+            $result = $this->tiers->invoke($this->resolver->resolve($project, $tier), new TierRequest(new MessageBag(Message::ofUser(self::PROMPT))));
             $result->asText();
             $io->writeln(sprintf('%s: %s', $provider, $this->usageLine($result)));
         } catch (Throwable $failure) {

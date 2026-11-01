@@ -34,7 +34,7 @@ final class ReviewRound implements HasPlace
     #[ORM\Embedded(class: ReviewSubject::class, columnPrefix: false)]
     private ReviewSubject $subject;
 
-    // Kept with the round when it completes, because the change's ledger moves on with later rounds and skips the verdicts of a round that completes after a newer one; nullable, because MySQL refuses a default on a text column.
+    // Kept with the round when it completes, because the change's ledger moves on with later rounds and skips the verdicts of a round that completes after a newer one; nullable rather than defaulted, because DBAL's MySQL platform leaves a default on a text column out of the column declaration, so a declared default would not reach the MySQL schema.
     #[ORM\Column(name: 'reported_findings', type: 'text', nullable: true)]
     private ?string $reportedFindings = null;
 
@@ -88,6 +88,11 @@ final class ReviewRound implements HasPlace
     public function task(): string
     {
         return $this->subject->task;
+    }
+
+    public function diff(): string
+    {
+        return $this->subject->diff;
     }
 
     public function change(): string

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -159,6 +160,24 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAReviewOnAnOutProviderIsNotAnsweredByASubstituteThatNeverReadsTheCheckout(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => [
+            'provider' => 'anthropic', 'model' => 'big',
+            'substitutes' => [['provider' => 'claude_code', 'model' => 'sub']],
+        ]]]], []);
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('secondsUntilAnAccountIsFree')->willReturnCallback(static fn (Provider $provider): int => Provider::Anthropic === $provider ? 60 : 0);
+        $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('findings', [])->with('follow_ups', [$model->getName()])->json();
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platforms = new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform, 'claude_code' => static fn (): PlatformInterface => $platform]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $cooldowns, new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger()));
+
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['big'], $verdict->follow_ups);
     }
 
     private function vendorAnswering(string $output): SymfonyAiVendor
@@ -383,6 +402,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $converter->method('convert')->willThrowException(new UnexpectedResultTypeException(ObjectResult::class, TextResult::class));
         $converter->method('getTokenUsageExtractor')->willReturn($extractor);
         $tiers = self::createStub(TierInvoker::class);
+        $tiers->method('answering')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
         $tiers->method('invoke')->willReturn(new DeferredResult($converter, new InMemoryRawResult()));
         $resolver = self::createStub(TierResolver::class);
         $resolver->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'big'));
@@ -500,7 +520,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request);
 
-        self::assertCount(4, $conversations->load($request->conversation->id));
+        self::assertCount(5, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
@@ -508,7 +528,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', 'diff --git a/a b/a', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function openFinding(string $id): Finding
@@ -549,6 +569,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, self::createStub(AccountCooldowns::class), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage);
     }
 }

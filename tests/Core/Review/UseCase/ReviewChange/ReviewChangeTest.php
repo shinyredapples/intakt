@@ -206,7 +206,7 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $panel = $this->panel();
 
-        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, new RequestedRound(RoundFixture::CHANGE, $round), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE, $round), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
     }
 
     // The roles and prompts RoundFixture's workers answer by, so a scripted verdict reaches the reviewer it names.

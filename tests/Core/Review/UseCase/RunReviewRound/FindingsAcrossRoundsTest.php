@@ -82,6 +82,13 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([[], []], array_values(array_map(static fn (ReviewBrief $brief): array => $brief->open, $vendor->briefs)));
     }
 
+    public function testEveryReviewerIsBriefedWithTheDiffStoredWithTheRound(): void
+    {
+        $vendor = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
+
+        self::assertSame([RoundFixture::DIFF, RoundFixture::DIFF], array_values(array_map(static fn (ReviewBrief $brief): string => $brief->diff, $vendor->briefs)));
+    }
+
     public function testAFirstRoundThatFoundNoLedgerBeforeAnotherRoundCommittedItBecomesTheSecondRound(): void
     {
         $later = $this->fixture->startWhileAnotherRoundCommitsAfterItsFirstLook(1);
@@ -324,7 +331,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     public function testARoundStoredBeforeTheOpenFindingsWereKeptWithItIsToldNone(): void
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), SampleIdentity::any()), new ChangeRound(self::CHANGE, 2, null));
+        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.', 'diff --git a/a b/a'), SampleIdentity::any()), new ChangeRound(self::CHANGE, 2, null));
 
         self::assertSame([], $this->fixture->openFindingsOf($round));
     }
