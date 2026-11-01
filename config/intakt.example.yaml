@@ -8,6 +8,8 @@ projects:
     alpha:
         tiers:
             strong: { provider: anthropic, model: claude-opus-5-5 }
+            # A tier may list substitutes, in order, for when every account of its provider is out; reviews do not use them yet, so none is set here:
+            # standard: { provider: anthropic, model: claude-sonnet-5-5, substitutes: [{ provider: openai, model: gpt-5-mini }] }
             standard: { provider: anthropic, model: claude-sonnet-5-5 }
             light: { provider: anthropic, model: claude-haiku-5-5 }
         # An optional review section sets the panel: quorum is all, majority or one-strong-plus-one;
@@ -24,6 +26,8 @@ projects:
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
     beta:
+        # Optional: shadow never writes to the forge; live, the default, does.
+        mode: shadow
         tiers:
             strong: { provider: openai, model: gpt-5 }
             standard: { provider: openai, model: gpt-5-mini }

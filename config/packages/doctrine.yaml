@@ -15,6 +15,12 @@ doctrine:
             Doctrine\DBAL\Platforms\PostgreSQLPlatform: identity
         auto_mapping: false
         mappings:
+            Budget:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Budget/Domain'
+                prefix: 'Intakt\Core\Budget\Domain'
+                alias: Budget
             Ledger:
                 type: attribute
                 is_bundle: false

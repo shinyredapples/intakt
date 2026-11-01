@@ -87,7 +87,7 @@ A cycle that changes nothing (the builder couldn't fix the problem because it ne
 
 ## Budgets, windows and pace
 
-AI subscriptions come with allowances that refill over time, usually a **five-hour window** and a **weekly window**. Intakt reads how much of each is used, as the AI company measures it, and compares that with how much of the week has passed:
+AI subscriptions come with allowances that refill over time, usually a **five-hour window** and a **weekly window**. Intakt reads how much of each is used, as the AI company measures it, and compares that with how much of the week has passed. Today Intakt can keep the latest reading of each window per account; reading the windows from the AI companies and the pace and ceilings below are planned.
 
 ```mermaid
 flowchart LR
