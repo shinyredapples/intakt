@@ -44,6 +44,11 @@ final readonly class JudgeRoundHandler
      */
     private function judgementOf(ReviewRound $round, array $findings): Judgement
     {
+        // Nothing to mark, so the model is not paid for an empty answer.
+        if ([] === $findings) {
+            return new Judgement([]);
+        }
+
         try {
             return $this->vendor->judge($round->project(), new JudgeRequest($round->task(), $findings));
         } catch (ProviderRateLimited $limited) {
