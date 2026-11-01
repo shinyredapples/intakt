@@ -18,11 +18,11 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Override;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
-use Override;
 use Throwable;
 
 // Public because no service injects it before the panel (plan T8), and an unused private service is removed.
