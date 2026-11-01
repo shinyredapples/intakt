@@ -28,6 +28,14 @@ final readonly class Verdict
     ) {
     }
 
+    /**
+     * @param list<Finding> $findings
+     */
+    public function withFindings(array $findings): self
+    {
+        return clone ($this, ['findings' => $findings]);
+    }
+
     // By the finding ids the failure verdicts carry, because a reviewer that uses one of them itself gains nothing: its verdict then adds no finding and closes none.
     public function isFailedReview(): bool
     {

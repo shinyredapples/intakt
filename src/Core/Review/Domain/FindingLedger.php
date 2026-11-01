@@ -17,12 +17,15 @@ final class FindingLedger
 
     private ?int $latestRound = null;
 
+    private readonly GoalpostRule $goalposts;
+
     /**
      * @param list<TrackedFinding> $tracked
      */
     public function __construct(array $tracked = [])
     {
         $this->tracked = array_column($tracked, null, 'id');
+        $this->goalposts = new GoalpostRule();
     }
 
     /**
@@ -70,6 +73,7 @@ final class FindingLedger
                 $tracked->latest->repeat,
                 $tracked->latest->requirement,
                 $tracked->latest->evidence,
+                $tracked->latest->regression,
             ),
             $this->open(),
         );
@@ -139,7 +143,7 @@ final class FindingLedger
             return;
         }
 
-        $this->start($round, $finding);
+        $this->start($round, $this->goalposts->applyTo($round, $finding));
     }
 
     private function start(int $round, Finding $finding): void

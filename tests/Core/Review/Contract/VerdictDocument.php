@@ -24,6 +24,7 @@ final readonly class VerdictDocument
                 'id' => 'F3', 'severity' => 'P1', 'file' => '...', 'line' => 12, 'symbol' => '...',
                 'text' => '...', 'fixable_by' => 'builder', 'repeat' => false, 'requirement' => '...',
                 'evidence' => ['probe' => '...', 'output' => '...'],
+                'regression' => false,
             ],
         );
     }
