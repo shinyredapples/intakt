@@ -61,22 +61,18 @@ final class FindingLedger
      */
     public function openForReviewers(): array
     {
-        return array_map(
-            static fn (TrackedFinding $tracked): Finding => new Finding(
-                $tracked->id,
-                $tracked->latest->severity,
-                $tracked->latest->file,
-                $tracked->latest->line,
-                $tracked->latest->symbol,
-                $tracked->latest->text,
-                $tracked->latest->fixable_by,
-                $tracked->latest->repeat,
-                $tracked->latest->requirement,
-                $tracked->latest->evidence,
-                $tracked->latest->regression,
-            ),
-            $this->open(),
-        );
+        return array_map($this->underItsId(...), $this->open());
+    }
+
+    // The open findings a round reported last, under the ledger's ids, because two reviewers can give different findings the same id of their own.
+    /**
+     * @return list<Finding>
+     */
+    public function openReportedIn(int $round): array
+    {
+        $reported = array_filter($this->open(), static fn (TrackedFinding $tracked): bool => $tracked->latestRound() === $round);
+
+        return array_values(array_map($this->underItsId(...), $reported));
     }
 
     /**
@@ -144,6 +140,23 @@ final class FindingLedger
         }
 
         $this->start($round, $this->goalposts->applyTo($round, $finding));
+    }
+
+    private function underItsId(TrackedFinding $tracked): Finding
+    {
+        return new Finding(
+            $tracked->id,
+            $tracked->latest->severity,
+            $tracked->latest->file,
+            $tracked->latest->line,
+            $tracked->latest->symbol,
+            $tracked->latest->text,
+            $tracked->latest->fixable_by,
+            $tracked->latest->repeat,
+            $tracked->latest->requirement,
+            $tracked->latest->evidence,
+            $tracked->latest->regression,
+        );
     }
 
     private function start(int $round, Finding $finding): void

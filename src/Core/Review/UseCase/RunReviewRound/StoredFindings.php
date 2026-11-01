@@ -14,6 +14,7 @@ use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -43,43 +44,57 @@ final readonly class StoredFindings
      */
     public function openFor(ReviewRound $round): array
     {
-        $json = $round->openFindingsJson();
-
         // None, because a round stored before the ledger existed kept no open findings and had none to tell.
-        if (null === $json) {
-            return [];
-        }
-
-        /** @var list<Finding> $open */
-        $open = $this->serializer->deserialize($json, Finding::class.'[]', 'json');
-
-        return $open;
+        return $this->findingsIn($round->openFindingsJson());
     }
 
     // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed.
     public function completeWhenEveryReviewerIsIn(ReviewRound $round): void
     {
-        if (!$this->machine->can($round, ReviewRound::COMPLETION)) {
+        if (!$this->machine->can($round, RoundTransition::Complete->value)) {
             return;
         }
 
-        $this->machine->apply($round, ReviewRound::COMPLETION);
+        $this->machine->apply($round, RoundTransition::Complete->value);
         $this->recordVerdictsOf($round);
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    public function reportedIn(ReviewRound $round): array
+    {
+        // None, because a round completed before migration Version20261101120000 kept no reported findings and was never queued for judging.
+        return $this->findingsIn($round->reportedFindingsJson());
+    }
+
+    // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
+    public function markJudged(ReviewRound $round): bool
+    {
+        if (!$this->machine->can($round, RoundTransition::Judge->value)) {
+            return false;
+        }
+
+        $this->machine->apply($round, RoundTransition::Judge->value);
+
+        return true;
     }
 
     // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.
     private function recordVerdictsOf(ReviewRound $round): void
     {
         $stored = $this->locked($round->project(), $round->change());
-
-        if ($stored->hasRecordedAfter($round->number())) {
-            return;
-        }
-
         $ledger = $this->ledgerOf($stored);
 
         foreach ($this->verdictsOf($round) as $verdict) {
             $ledger->recordVerdict($round->number(), $verdict);
+        }
+
+        $round->keepReportedFindings(json_encode($ledger->openReportedIn($round->number()), JSON_THROW_ON_ERROR));
+
+        // The round still keeps what it reported, under ids that are its own, so its judge sees its findings although its verdicts must not undo the newer round's.
+        if ($stored->hasRecordedAfter($round->number())) {
+            return;
         }
 
         $stored->recordFindings($round->number(), json_encode($ledger->all(), JSON_THROW_ON_ERROR));
@@ -111,6 +126,21 @@ final readonly class StoredFindings
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another round of the change created the row meanwhile, and the lock that follows waits for that round.
         }
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    private function findingsIn(?string $json): array
+    {
+        if (null === $json) {
+            return [];
+        }
+
+        /** @var list<Finding> $findings */
+        $findings = $this->serializer->deserialize($json, Finding::class.'[]', 'json');
+
+        return $findings;
     }
 
     private function ledgerOf(ChangeFindings $stored): FindingLedger

@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -66,14 +67,34 @@ final readonly class ReviewRounds
 
     public function completeWhenEveryReviewerIsIn(Uuid $roundId): void
     {
+        $this->withLockedRound($roundId, $this->findings->completeWhenEveryReviewerIsIn(...));
+    }
+
+    public function stored(string $roundId): ReviewRound
+    {
+        if (!Uuid::isValid($roundId)) {
+            throw RoundNotFound::for($roundId);
+        }
+
+        // Cleared because a worker keeps its entity manager between messages, and the verdicts other workers stored since are the truth.
+        $this->entities->clear();
+
+        return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
+    }
+
+    /**
+     * @param Closure(ReviewRound): mixed $work
+     */
+    public function withLockedRound(Uuid $roundId, Closure $work): void
+    {
         // Cleared so the lock reads the reviewers other workers stored, not the ones this worker loaded earlier.
         $this->entities->clear();
 
-        $this->inOneTransaction(function () use ($roundId): void {
+        $this->inOneTransaction(function () use ($roundId, $work): void {
             $round = $this->entities->find(ReviewRound::class, $roundId, LockMode::PESSIMISTIC_WRITE);
 
             if ($round instanceof ReviewRound) {
-                $this->findings->completeWhenEveryReviewerIsIn($round);
+                $work($round);
             }
         });
     }

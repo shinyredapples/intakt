@@ -7,6 +7,9 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FollowUp;
+use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -43,6 +46,15 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerBlocked, $this->identify($reviewer) + ['reason' => $reason]);
     }
 
+    public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, [
+            'round' => $round->id()->toRfc4122(),
+            'act' => array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
+            'follow_ups' => array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
+        ]);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -52,7 +64,7 @@ final readonly class RoundLedger
     }
 
     /**
-     * @param array<string, int|string> $payload
+     * @param array<string, int|string|list<string>> $payload
      */
     private function append(LedgerEventKind $kind, array $payload): void
     {
