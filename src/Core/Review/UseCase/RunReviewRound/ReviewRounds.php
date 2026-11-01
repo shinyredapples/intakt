@@ -103,6 +103,11 @@ final readonly class ReviewRounds
                 throw $failure;
             }
 
+            // Rethrown because a failed flush closes the entity manager, and a retry on it would fail with EntityManagerClosed and hide this failure.
+            if (!$this->entities->isOpen()) {
+                throw $failure;
+            }
+
             // The whole transaction again, because on SQLite a transaction that read before another writer committed cannot write at all, and only a new one sees that commit.
             return $this->attempt($work, $attemptsLeft - 1);
         }

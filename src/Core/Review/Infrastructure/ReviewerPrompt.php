@@ -67,12 +67,12 @@ final readonly class ReviewerPrompt
     {
         return implode("\n\n", array_map(
             static fn (Finding $finding): string => sprintf(
-                "%s [%s] %s:%s %s\nrequirement: %s\n%s",
+                "%s [%s] %s:%s%s\nrequirement: %s\n%s",
                 $finding->id,
                 $finding->severity->value,
                 $finding->file ?? '-',
                 $finding->line ?? '-',
-                $finding->symbol ?? '',
+                null === $finding->symbol ? '' : ' '.$finding->symbol,
                 $finding->requirement ?? '-',
                 $finding->text,
             ),
