@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -177,6 +178,16 @@ final readonly class RoundFixture
         $ledger = new InMemoryLedger();
 
         return new SecondWorker($this->worker($entities, $vendor, $ledger), $entities, $ledger);
+    }
+
+    // A round on its own connection that looked for the change's ledger before another round of the change stored it, the order in which two first rounds of a change meet; its ledger is in memory because the Doctrine ledger writes through the first connection.
+    public function startAfterLookingBeforeAnotherRound(int $reviewers): string
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new HideFirstLookAt('change_findings')]));
+        $entities = new EntityManager($connection, $this->entities->getConfiguration());
+        $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), self::CHANGE);
+
+        return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger()), $this->bus)($command);
     }
 
     public function round(string $id): ReviewRound

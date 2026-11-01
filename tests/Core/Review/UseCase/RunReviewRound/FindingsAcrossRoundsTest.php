@@ -68,6 +68,15 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         self::assertSame([[], []], array_values(array_map(static fn (ReviewBrief $brief): array => $brief->open, $vendor->briefs)));
     }
 
+    public function testAFirstRoundThatFoundNoLedgerBeforeAnotherRoundStoredItBecomesTheSecondRound(): void
+    {
+        $this->fixture->start(1);
+
+        $later = $this->fixture->startAfterLookingBeforeAnotherRound(1);
+
+        self::assertSame(2, $this->fixture->round($later)->number());
+    }
+
     public function testTheSecondRoundTellsEveryReviewerTheOpenFindingsUnderTheirIds(): void
     {
         $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a'), $this->finding('b')])]);

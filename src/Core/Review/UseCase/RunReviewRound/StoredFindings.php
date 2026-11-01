@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Finding;
@@ -85,16 +87,28 @@ final readonly class StoredFindings
 
     private function locked(string $project, string $change): ChangeFindings
     {
+        $this->createIfMissing($project, $change);
         $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
 
-        if ($stored instanceof ChangeFindings) {
-            return $stored;
+        return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
+    }
+
+    // A row that does not exist yet cannot be locked, so two first rounds of a change can both find none; the one whose insert loses takes the other's row instead of failing.
+    private function createIfMissing(string $project, string $change): void
+    {
+        $connection = $this->entities->getConnection();
+
+        // Looked up without a lock, because a lock on a missing row in MySQL is a gap lock that makes two such inserts deadlock.
+        if (false !== $connection->fetchOne('SELECT 1 FROM change_findings WHERE project = ? AND change_ref = ?', [$project, $change])) {
+            return;
         }
 
-        $stored = new ChangeFindings($project, $change);
-        $this->entities->persist($stored);
-
-        return $stored;
+        try {
+            // In a savepoint, because PostgreSQL refuses every further statement of a transaction in which one failed.
+            $connection->transactional(static fn (Connection $inner): int|string => $inner->insert('change_findings', ['project' => $project, 'change_ref' => $change, 'rounds' => 0, 'findings' => '[]', 'recorded_round' => 0]));
+        } catch (UniqueConstraintViolationException) {
+            // Another round of the change created it meanwhile; the lock that follows waits for that round.
+        }
     }
 
     private function ledgerOf(ChangeFindings $stored): FindingLedger
