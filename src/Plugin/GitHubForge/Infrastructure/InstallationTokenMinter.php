@@ -72,7 +72,7 @@ final readonly class InstallationTokenMinter
         // Sensitive because the answer holds the minted token, which must not land in a trace's arguments.
         $token = $answer['token'] ?? null;
         $expiresAt = $this->expiryFrom($answer['expires_at'] ?? null);
-        if (!is_string($token) || '' === $token || null === $expiresAt) {
+        if (!is_string($token) || '' === $token || !$expiresAt instanceof DateTimeImmutable) {
             throw InstallationTokenNotMinted::becauseTheAnswerIsInvalid();
         }
 
