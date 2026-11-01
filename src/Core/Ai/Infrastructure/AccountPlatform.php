@@ -45,6 +45,7 @@ final readonly class AccountPlatform implements PlatformInterface
 
         $result->getMetadata()->add(Account::METADATA, $this->account->key());
         // A provider's limit arrives when the answer is read, not when the call is sent, so the cooldown hangs on the result.
+        $result->onError($this->failures->record(...));
         $result->onError($this->coolDownAfter(...));
 
         return $result;

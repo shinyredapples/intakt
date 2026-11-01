@@ -8,7 +8,7 @@ use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 
-// What the accounts of one call failed with as it was sent, kept by the call because FailoverPlatform's own error names no cause; excluded from the container because AccountFailoverPlatform builds one per call.
+// What the accounts of one call failed with as it was sent or as its answer was read, kept by the call because FailoverPlatform's own error names no cause; excluded from the container because AccountFailoverPlatform builds one per call.
 #[Exclude]
 final class SendFailures
 {

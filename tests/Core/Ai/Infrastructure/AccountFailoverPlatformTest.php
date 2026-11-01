@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
+use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -36,6 +37,7 @@ use Throwable;
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(SendFailures::class)]
+#[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
@@ -180,6 +182,43 @@ final class AccountFailoverPlatformTest extends TestCase
         } catch (EveryAccountCoolingDown $out) {
             self::assertGreaterThan(0, $out->secondsUntilAnAccountIsFree);
         }
+    }
+
+    public function testAnAnswerWhoseKeyIsRejectedWhenReadWhileAnotherAccountCoolsDownWaitsForTheCoolingOne(): void
+    {
+        $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);
+        $answer = $this->accounts($this->answering('first'), new FailingWhenRead(new AuthenticationException('revoked')))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('The only free account rejected its key, yet the answer was read.');
+        } catch (EveryAccountCoolingDown $out) {
+            self::assertGreaterThan(0, $out->secondsUntilAnAccountIsFree);
+        }
+    }
+
+    public function testAnAnswerWhoseKeyIsRejectedWhenReadAfterTheOtherAccountRejectedItsKeyIsTheRejection(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+        $answer = $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('revoked')), new FailingWhenRead($revoked))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('Every account rejected its key, yet the answer was read.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+    }
+
+    public function testAnAnswerReadFromAnAccountThatAnswersKeepsItsTextAndItsAccount(): void
+    {
+        $this->cooldowns->coolDown($this->account(Account::DEFAULT), 300);
+
+        $answer = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
+
+        self::assertSame('anthropic.team', $answer->getMetadata()->get(Account::METADATA));
+        self::assertSame('second', $answer->asText());
+        self::assertSame('anthropic.team', $answer->getMetadata()->get(Account::METADATA));
     }
 
     public function testACallWhoseEveryAccountFailsWithoutALimitKeepsTheFailoverError(): void

@@ -12,6 +12,7 @@ use Override;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Failover\FailoverPlatform;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
@@ -51,10 +52,12 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->recordSwitch($free);
 
         try {
-            return $this->failover($free)->invoke($model, $input, $options);
+            $answer = $this->failover($free)->invoke($model, $input, $options);
         } catch (RuntimeException $everyAccountFailed) {
             throw $this->typed($everyAccountFailed, $failures);
         }
+
+        return $this->typedWhenRead($answer, $failures, $options);
     }
 
     #[Override]
@@ -102,6 +105,19 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         }
 
         return $failures->rejectionOfEveryAccount(count($this->platforms)) ?? new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+    }
+
+    // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function typedWhenRead(DeferredResult $answer, SendFailures $failures, array $options): DeferredResult
+    {
+        $converter = new TypedRejectionConverter($answer, fn (AuthenticationException $rejected): Throwable => $this->typed($rejected, $failures));
+        $typed = new DeferredResult($converter, $answer->getRawResult(), $options);
+        $typed->getMetadata()->set($answer->getMetadata()->all());
+
+        return $typed;
     }
 
     // Built per call over the free accounts only, because FailoverPlatform keys its limiter by platform class, which every account of a provider shares, and calls a failed platform again on the next call (upstream/ai-failover-platform-retries-a-failed-platform).
