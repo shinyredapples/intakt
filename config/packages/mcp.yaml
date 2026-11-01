@@ -11,3 +11,4 @@ mcp:
                 lock: true
             registry:
                 tools: ['Intakt\']
+                resource_templates: ['Intakt\']

@@ -79,7 +79,7 @@ Every model output is untrusted too: it is validated against its schema before u
 
 ### Agents over MCP
 - **Outside agents** (an owner's agent CLI) reach Intakt's MCP server. They send tool arguments and read verdicts and act lists, which carry text derived from code under review. Starting a review needs the configured token; whether a tool may write is decided by a Symfony Security voter on Intakt's own config, never by the model's arguments; read tools are marked read-only. No MCP tool changes an owner control (a ceiling, a pause, a share, a back-off, an account): those need the owner's dashboard session ([Dashboard](13-dashboard.md#only-the-owner)).
-- **Built so far (T15, #508):** the owner's server answers `list_projects` only, a read tool. Every tool must carry `#[IsGrantedTool]`; a tool without it, or whose check names a subject built from the call's arguments, never runs, and `ToolAccessVoter` refuses `Write` while Intakt's config forbids writes (the default), whatever the arguments say.
+- **Built so far (T15, #508, #509):** the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list` and serves a round's findings as a resource, all read tools; the finding text they return comes from code under review and is data for the client. Every tool must carry `#[IsGrantedTool]`; a tool without it, or whose check names a subject built from the call's arguments, never runs, and `ToolAccessVoter` refuses `Write` while Intakt's config forbids writes (the default), whatever the arguments say.
 - **Reviewers** reach their repository tools as MCP clients of a per-review server that serves only the head under review, read-only.
 
 ## Where model output authorizes something
