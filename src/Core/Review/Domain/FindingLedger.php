@@ -26,7 +26,7 @@ final class FindingLedger
 
     private ?int $latestRound = null;
 
-    private GoalpostRule $goalposts;
+    private readonly GoalpostRule $goalposts;
 
     /**
      * @param list<Finding> $findings

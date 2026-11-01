@@ -35,6 +35,6 @@ final readonly class Finding
 
     public function withSeverity(Severity $severity): self
     {
-        return clone($this, ['severity' => $severity]);
+        return clone ($this, ['severity' => $severity]);
     }
 }
