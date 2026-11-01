@@ -22,6 +22,9 @@ final class ScriptedVendor implements Vendor
     /** @var list<string> */
     public array $conversations = [];
 
+    /** @var list<?string> */
+    public array $rounds = [];
+
     public function __construct(private readonly ?Throwable $failure = null)
     {
     }
@@ -31,6 +34,7 @@ final class ScriptedVendor implements Vendor
     {
         ++$this->calls;
         $this->conversations[] = $request->conversation->id->toRfc4122();
+        $this->rounds[] = $request->conversation->round?->toRfc4122();
 
         return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
     }

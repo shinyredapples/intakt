@@ -10,7 +10,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, but no forge for GitHub and nothing that runs it exists yet, so there is nothing to set up (planned)
 - Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); running its panel on every new pull request head, marking its verdicts as shadow and the lower usage ceiling for shadow work are planned
-- Connecting an agent through MCP (planned)
+- Connecting an agent through MCP: the owner's server answers `list_projects` (see [Connecting an agent through MCP](mcp.md)); the other tools are planned
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
 

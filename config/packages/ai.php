@@ -199,7 +199,7 @@ return static function (ContainerConfigurator $container): void {
     // Project memory embeds with OpenAI because it is the only configured provider with an embedding model; without an enabled account the placeholder platform names the missing key when a worker indexes.
     $embeddings = array_key_exists(Provider::OpenAi->value, $enabledAccounts) ? 'intakt.ai.accounts.'.Provider::OpenAi->value : EmbeddingsNotConfigured::class;
     $memory = [
-        'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:%kernel.project_dir%/var/memory.db', 'table_name' => 'project_memory']]],
+        'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:%kernel.project_dir%/var/memory_%kernel.environment%.db', 'table_name' => 'project_memory']]],
         'vectorizer' => ['memory' => ['platform' => $embeddings, 'model' => 'text-embedding-3-small']],
         'indexer' => ['memory' => ['vectorizer' => 'ai.vectorizer.memory', 'store' => 'ai.store.sqlite.memory']],
         'retriever' => ['memory' => ['vectorizer' => 'ai.vectorizer.memory', 'store' => 'ai.store.sqlite.memory']],

@@ -1,6 +1,6 @@
 # Using Intakt from your AI assistant or the command line
 
-Besides the dashboard, you can talk to Intakt from your own AI assistant (such as Claude Code or another agent) or from a terminal. The review command for the terminal is built. The MCP server is still planned (task T15 in [the plan](../plan.md)), so its part below describes the planned design.
+Besides the dashboard, you can talk to Intakt from your own AI assistant (such as Claude Code or another agent) or from a terminal. The review command for the terminal is built. The MCP server exists in part (task T15 in [the plan](../plan.md)): today it can only list your projects, so the rest of its part below describes the planned design.
 
 ```mermaid
 flowchart LR
