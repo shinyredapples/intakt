@@ -18,6 +18,7 @@ use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageAggregation;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -36,10 +37,11 @@ final readonly class UsageLedger
      * @throws UsageNotRecorded
      */
     #[NoDiscard('a reservation must be settled or left unsettled')]
-    public function reserve(string $project, Tier $tier): UsageReservation
+    public function reserve(string $project, Tier $tier, ?Uuid $round = null): UsageReservation
     {
         $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $this->record(['call' => $reservation->call, 'phase' => 'started', 'project' => $project, 'tier' => $tier->value]);
+        $started = ['call' => $reservation->call, 'phase' => 'started', 'project' => $project, 'tier' => $tier->value];
+        $this->record($round instanceof Uuid ? $started + ['round' => $round->toString()] : $started);
 
         return $reservation;
     }
