@@ -10,6 +10,7 @@ return [
     'Core/Platform',
     'Core/Review',
     'Core/Upstream',
+    'Core/Watcher',
     'Plugin/Forge',
     'Plugin/Gate',
     'Plugin/GitHubForge',

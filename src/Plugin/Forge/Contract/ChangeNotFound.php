@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use RuntimeException;
 
-final class ChangeNotFound extends RuntimeException
+final class ChangeNotFound extends RuntimeException implements ReportableFailure
 {
     public static function named(ChangeId $id): self
     {

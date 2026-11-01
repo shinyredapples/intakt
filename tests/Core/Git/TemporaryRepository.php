@@ -126,6 +126,14 @@ final readonly class TemporaryRepository
         $this->git('checkout', '--quiet', $name);
     }
 
+    /**
+     * @return list<string>
+     */
+    public function worktrees(): array
+    {
+        return array_values(array_filter(explode("\n", $this->git('worktree', 'list', '--porcelain')), static fn (string $line): bool => str_starts_with($line, 'worktree ')));
+    }
+
     public function merge(string $branch): string
     {
         $this->git(...self::IDENTITY, ...['merge', '--quiet', '--no-ff', '--no-edit', $branch]);

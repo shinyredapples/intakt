@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\SummarizeChange;
 
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
-use Intakt\Plugin\Forge\Contract\ChangeNotFound;
-use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
-use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -32,8 +30,8 @@ final readonly class SummarizeChangeCommand
     public function __invoke(SymfonyStyle $io, #[MapInput] SummarizeChangeInput $input): int
     {
         try {
-            $change = new LocalGitForge(new LocalRepository($input->repository, $input->base), $this->nameStatus)->change(new ChangeId($input->branch));
-        } catch (ChangeNotFound|ForgeReadFailed|InvalidArgumentException $failure) {
+            $change = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), $this->nameStatus)->change(new ChangeId($input->branch));
+        } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

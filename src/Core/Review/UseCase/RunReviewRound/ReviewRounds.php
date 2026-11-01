@@ -10,6 +10,8 @@ use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Symfony\Component\Clock\ClockInterface;
@@ -53,7 +55,9 @@ final readonly class ReviewRounds
             throw IdentityNotOfRound::forTaskOrPanel();
         }
 
-        $round = new ReviewRound($this->newId(), $command->target, $this->findings->openRound($subject->project, $command->change));
+        $opened = $this->findings->openRound($subject->project, $command->round->change);
+        $this->refuseAnotherNumber($command, $opened);
+        $round = new ReviewRound($this->newId(), $command->target, $opened);
 
         foreach ($command->panel->reviewers as $member) {
             $round->addReviewer($this->newId(), $member);
@@ -156,6 +160,16 @@ final readonly class ReviewRounds
             $this->entities->clear();
 
             throw $failure;
+        }
+    }
+
+    // Thrown inside the transaction, so the number taken is rolled back with it.
+    private function refuseAnotherNumber(RunReviewRound $command, ChangeRound $opened): void
+    {
+        $expected = $command->round->number;
+
+        if (null !== $expected && $expected !== $opened->number) {
+            throw RoundNotNext::for($expected, $opened->number);
         }
     }
 

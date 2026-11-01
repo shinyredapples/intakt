@@ -89,6 +89,13 @@ Every model output is untrusted too: it is validated against its schema before u
 - **A false positive of the secret check** ([The maintainer agent](09-maintainer-agent.md)): the maintainer agent may rule a hit a false positive. Safeguards: the ruling only becomes a decision in the task description for the next build (for example, replace the fixture value that looks like a key); it never skips or relaxes the scan. The scan is fail-closed before every push, its rules and allowlist are protected paths and the owner's, and inline allow directives are refused, so the next head must pass the unchanged scan.
 - **Reviewer approvals** count toward the quorum. Safeguards: the quorum policy (by default two reviewers from different vendors), verdict identity, green CI and the merge steps.
 
+## Writing project memory
+
+Once a review round completes, a worker indexes the findings it resolved into project memory. This is plain code, not a model role: which findings count is decided by the change's finding ledger (a resolved claim from a failed review, or one another reviewer of the round reported again, does not count), and the text, cause and probe output of each are kept with the round when it completes. Reviewers never reach the indexing side; they only read memory, fenced, through the briefing.
+- **New model input:** that text, written by reviewers (often of another vendor), is sent to the embedding model (OpenAI's `text-embedding-3-small`, through the enabled OpenAI account). This is what leaves the install for memory: the finding's text, its cause (the requirement it names) and its probe output, and nothing of the checkout. The embedding call has no tools and returns only a vector, so steered text cannot make it act; at worst it places a note poorly in search.
+- **Stored text stays untrusted:** a note is model text, so when the briefing gives it to a later reviewer it is fenced as project memory ([Untrusted text](#untrusted-text)).
+- **No OpenAI account:** nothing is sent; the indexing message fails with the reason and stays in the failure transport.
+
 ## External dependencies
 
 A project can connect its jobs to an external dependency: an instance that is already running, such as a staging backend or a shared dev server ([New and existing projects](12-new-and-existing-projects.md#dependent-services-and-projects)). Intakt adds its address to the job's egress allowlist and injects its credentials into the job types the owner allows: check and review jobs by default, build jobs only on the owner's opt-in. This is the one path where model-written code acts on something outside its container before any review:
