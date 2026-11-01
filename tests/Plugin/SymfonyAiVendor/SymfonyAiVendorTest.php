@@ -500,7 +500,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request);
 
-        self::assertCount(4, $conversations->load($request->conversation->id));
+        self::assertCount(5, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
@@ -508,7 +508,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', 'diff --git a/a b/a', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function openFinding(string $id): Finding

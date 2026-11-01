@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-// Its own value, because a reviewer is always told the task and the open findings together and the request stays at three parts.
+// Its own value, because a reviewer is always told the task, the diff and the open findings together and the request stays at three parts.
 final readonly class ReviewBrief
 {
     /**
@@ -12,6 +12,7 @@ final readonly class ReviewBrief
      */
     public function __construct(
         public string $task,
+        public string $diff,
         public array $open,
     ) {
     }

@@ -186,7 +186,7 @@ final class ReviewWorkflowsTest extends KernelTestCase
 
     private function round(int $reviewers): ReviewRound
     {
-        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.'), SampleIdentity::any()), new ChangeRound('feat/thing', 1, '[]'));
+        $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.', 'diff --git a/a b/a'), SampleIdentity::any()), new ChangeRound('feat/thing', 1, '[]'));
 
         foreach (range(1, $reviewers) as $number) {
             $round->addReviewer(new UuidV7(), new PanelReviewer(new ReviewerRole('role-'.$number, 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1));

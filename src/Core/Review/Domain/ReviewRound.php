@@ -90,6 +90,11 @@ final class ReviewRound implements HasPlace
         return $this->subject->task;
     }
 
+    public function diff(): string
+    {
+        return $this->subject->diff;
+    }
+
     public function change(): string
     {
         return $this->change->change;

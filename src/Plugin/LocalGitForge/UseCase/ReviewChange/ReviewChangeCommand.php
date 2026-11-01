@@ -111,7 +111,7 @@ final readonly class ReviewChangeCommand implements SignalableCommandInterface
         $identity = new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
         $round = new RequestedRound($input->change, $input->round);
 
-        return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $round, $identity, $panel);
+        return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
     }
 
     private function describe(Change $change): ChangeDescription
