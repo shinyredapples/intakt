@@ -7,6 +7,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Running the demo with `docker compose up` (planned)
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), but nothing runs the panel yet.
 - Reviewing a pull request and reading the verdicts (planned)
+- Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Connecting an agent through MCP (planned)
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
@@ -97,7 +98,20 @@ Intakt knows four providers: `anthropic`, `openai`, `openai_compatible` (any end
 | `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY` |
 | `claude_code` | `CLAUDE_CODE_OAUTH_TOKEN` |
 
-A provider whose variables are not all set (empty counts as not set, and so does a secret Intakt cannot decrypt when the container is built), neither in the environment nor in the secrets, is switched off, and Intakt still starts. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on, except `claude_code`, which is not part of the AI Bundle's configuration: `php bin/console debug:container intakt.ai.platform.claude_code` finds that service only when it is on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`.
+A provider whose variables are not all set (empty counts as not set, and so does a secret Intakt cannot decrypt when the container is built), neither in the environment nor in the secrets, is switched off, and Intakt still starts. A provider with several accounts (see below) stays on as long as one of its accounts is fully set. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on, except `claude_code`, which is not part of the AI Bundle's configuration: `php bin/console debug:container intakt.ai.platform.claude_code` finds that service only when it is on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`.
+
+### More than one account of a provider
+
+A provider can have several accounts, for example a personal and a team API key. List them under `accounts:` in `config/intakt.yaml`, in the order Intakt tries them (see `config/intakt.example.yaml`):
+
+```yaml
+accounts:
+    anthropic: [default, team]
+```
+
+The account `default` reads the variables in the table above. Any other account reads the same variables with its name in capitals appended: `team` reads `ANTHROPIC_API_KEY_TEAM` (for `openai_compatible`, `OPENAI_COMPATIBLE_BASE_URL_TEAM` and `OPENAI_COMPATIBLE_API_KEY_TEAM`; for `claude_code`, `CLAUDE_CODE_OAUTH_TOKEN_TEAM`, with its own folder `var/claude-code-team/`). A name starts with a lowercase letter and holds only lowercase letters, digits and underscores, and is listed once; anything else stops Intakt from starting. A provider you do not list has its `default` account only. An account whose variables are not all set is switched off with a line such as `Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.`; the provider is switched off only when none of its accounts is set.
+
+When a provider limits a call (a rate limit or quota) or fails it with a temporary error, the account that made the call **cools down** until the reset time the provider sent (one minute when it sent none, at most one day). Every reviewer on that account waits out the same cooldown, also in other workers on this computer, and the reviewer starts again at once on the next free account of the same provider: it stays the same reviewer, so no catch-up review is owed. Only when every account of the provider is cooling down does the reviewer wait, until the first account is free again; this holds for a temporary error too, so such a reviewer is not marked failed. A failed account is logged with its name and the kind of error, never with the provider's error text, which can repeat a key. Each cooldown is recorded in the ledger as an `account_cooled_down` event with the account (`anthropic.team`) and its end, and each usage row names the account the call ran on. Cooldowns are kept in Symfony's cache, so `php bin/console cache:clear` ends them. Taking a reviewer from another provider when every account is out is planned.
 
 ### A reviewer on a Claude subscription
 
@@ -157,6 +171,18 @@ It prints one line per event (the moment in UTC, the id, the kind and the payloa
 
 `php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A control character in a file name is shown in a visible form such as `\x1b`, and a backslash as `\\`. A branch the repository does not have, a repository git cannot read, or a repository whose `.git/info/attributes` file exists, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
 
+## Checking whether a verdict still counts
+
+A reviewer's verdict counts only for what it reviewed: the branch's latest commit, the commit it was compared with, the task, the check command and the project's review panel. `php bin/console intakt:verdict:identity <project> <branch> <task> <check-command> [--repository=.] [--base=main]` prints that identity as one line, `identity` followed by five parts separated by dots (the two commits, then fingerprints of the task text, the check command and the panel). The task text and the command are not shown, only their fingerprints.
+
+Pass a printed identity back with `--reviewed=<identity>` to see whether a verdict given on it still counts:
+
+- `current`: nothing changed.
+- `stale: head changed` (or any other changed parts): the verdict no longer counts. A new task text, check command or panel always makes it stale, and so does a new commit, unless one of the two cases below applies.
+- `kept-for-untouched-parts: ...`: the verdict still counts for everything the change left alone, and each `review again <path>` line names a file to review again. This happens when the base branch was merged into the branch and git merged it by itself (no conflict to resolve, no other edit in the merge commit), or when the new commits touch only files in the repository's `docs/` folder and the base did not move.
+
+A project without a review panel, a branch the repository does not have, or an identity that is not in the printed form prints an error and exits with 1. Every review round remembers the identity it was started on, and reading its verdicts applies the same rules: a stale round's verdicts no longer count. Nothing reads them that way from the command line or the loop yet.
+
 ## Checking a new Symfony AI release against the known bugs
 
 `php bin/console intakt:upstream:run` runs every reproduction in `upstream/` and prints the installed Symfony AI versions, then `passes` (the bug seems fixed) or `still fails` for each reproduction, and a count. Add `-v` to see why a reproduction fails. The exit code is 1 while any reproduction still fails. A reproduction counts as `passes` only when its PHPUnit tests ran and asserted something, or when its `reproduce.php` script exits with 0 and prints `REPRODUCTION PASSES` as its last line. One without tests or script, with a skipped or incomplete test, or that runs longer than 5 minutes is reported as `still fails`, and the other reproductions still run. A folder that does not exist, cannot be read or cannot be opened (no execute permission) is an error (exit code 2).
@@ -169,7 +195,7 @@ Each reviewer keeps its conversation of a review round (the prompt, the model's 
 
 Every such review is recorded in the ledger as `usage_recorded` events: one when it starts, and one when it ends, either with the tokens it used in all its rounds (one entry per model call, because the reviewer may call tools between answers) (prompt, completion, cached and the others the provider reports, plus the remaining-token figures) or marked unsettled when the call failed, with the tokens of the rounds that had answered before it failed. Both carry the same call id, so a call is counted once. An answer that is not a valid verdict still records the tokens it used. If the tokens of an answer cannot be read, the call is marked unsettled and a warning is logged, but the review still gets its verdict. If the ledger cannot store the first row, the call is not sent; if it cannot store the last one, the call fails and the row, tokens included, is logged as an error so it can be recorded later. `php bin/console intakt:ledger:events` shows the rows.
 
-A call the provider refuses because of a rate limit or quota fails with a clear error that carries the time to wait when the provider sent one; other temporary provider errors fail with their own error, so a later retry can tell them apart.
+A call the provider refuses because of a rate limit or quota fails with a clear error that carries the time to wait when the provider sent one; other temporary provider errors fail with their own error, so a later retry can tell them apart. Either one cools the account down, and the review moves to another account of the same provider when one is free (see [More than one account of a provider](#more-than-one-account-of-a-provider)).
 
 Run `php bin/console intakt:vendor:probe` after you set or change a provider key, to check the setup before a first review. It checks the real setup: it sends one tiny call to each enabled provider your projects use and prints a line with the model and the tokens used (prompt, completion, cached, total, remaining). It uses the keys from your environment, costs a few tokens per provider, and exits with 1 if any call fails. A failed call shows only the kind of error, never the provider's message, so a key it echoes stays off your screen. A provider that is switched off (see the `Provider "..." is disabled` lines above) is not probed.
 

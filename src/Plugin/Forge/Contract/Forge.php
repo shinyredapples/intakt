@@ -22,6 +22,11 @@ interface Forge
     public function hasHeadMoved(Change $change): bool;
 
     /**
+     * @throws ForgeReadFailed
+     */
+    public function headMoveSince(CommitId $earlier, Change $change): HeadMove;
+
+    /**
      * @throws FileNotFoundAtHead
      * @throws ForgeReadFailed
      */

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ChoosePanel;
 
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
-use Intakt\Core\Review\Infrastructure\GlobCannotBeEvaluated;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
