@@ -27,6 +27,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Core/Review/Domain'
                 prefix: 'Intakt\Core\Review\Domain'
                 alias: Review
+            Watcher:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Core/Watcher/Domain'
+                prefix: 'Intakt\Core\Watcher\Domain'
+                alias: Watcher
 
 when@test:
     doctrine:

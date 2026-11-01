@@ -1,0 +1,106 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Watcher\UseCase\FindChangedPullRequests;
+
+use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Watcher\Domain\ListingValidator;
+use Intakt\Core\Watcher\Domain\SeenChange;
+use Intakt\Plugin\Forge\Contract\OpenChange;
+
+// What the watcher saw of each project: the validator of its last full listing and the head and update time of each pull request in it.
+final readonly class SeenListings
+{
+    public function __construct(private EntityManagerInterface $entities)
+    {
+    }
+
+    public function validatorOf(string $project): ?string
+    {
+        return $this->entities->find(ListingValidator::class, $project)?->value();
+    }
+
+    /**
+     * @param list<OpenChange> $open
+     *
+     * @return list<OpenChange> the ones whose head or update time differs from what was seen
+     */
+    public function changedAmong(string $project, array $open): array
+    {
+        $changed = [];
+
+        foreach ($open as $change) {
+            $seen = $this->entities->find(SeenChange::class, ['project' => $project, 'change' => $change->id->value]);
+
+            if (!$seen?->isStillAt($change)) {
+                $changed[] = $change;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param list<OpenChange> $open
+     */
+    public function record(string $project, array $open, ?string $validator): void
+    {
+        $this->forgetClosed($project, $open);
+
+        foreach ($open as $change) {
+            $this->recordSeen($project, $change);
+        }
+
+        $this->recordValidator($project, $validator);
+        $this->entities->flush();
+    }
+
+    /**
+     * @param list<OpenChange> $open
+     */
+    private function forgetClosed(string $project, array $open): void
+    {
+        // Forgotten so a pull request that is closed and opened again is looked at as new, and the table does not grow with every pull request ever listed.
+        $stillOpen = array_map(static fn (OpenChange $change): string => $change->id->value, $open);
+
+        foreach ($this->entities->getRepository(SeenChange::class)->findBy(['project' => $project]) as $seen) {
+            if (!in_array($seen->change(), $stillOpen, true)) {
+                $this->entities->remove($seen);
+            }
+        }
+    }
+
+    private function recordSeen(string $project, OpenChange $change): void
+    {
+        $seen = $this->entities->find(SeenChange::class, ['project' => $project, 'change' => $change->id->value]);
+
+        if (null === $seen) {
+            $this->entities->persist(new SeenChange($project, $change->id->value, $change));
+
+            return;
+        }
+
+        $seen->see($change);
+    }
+
+    // A forge that sends no validator leaves none stored, so the next listing is a full one.
+    private function recordValidator(string $project, ?string $validator): void
+    {
+        $stored = $this->entities->find(ListingValidator::class, $project);
+
+        if (null === $validator) {
+            null === $stored || $this->entities->remove($stored);
+
+            return;
+        }
+
+        if (null === $stored) {
+            $this->entities->persist(new ListingValidator($project, $validator));
+
+            return;
+        }
+
+        $stored->replace($validator);
+    }
+}

@@ -1,0 +1,214 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests;
+
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Watcher\Domain\ListingValidator;
+use Intakt\Core\Watcher\Domain\SeenChange;
+use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
+use Intakt\Core\Watcher\Contract\ListingInProgress;
+use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\OpenChange;
+use Intakt\Plugin\Forge\Contract\OpenChangeListing;
+use Intakt\Plugin\Forge\Contract\OpenChanges;
+use Intakt\Tests\Application\EmptyDatabase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\AbstractLogger;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+
+#[Group('persistence')]
+#[CoversClass(FindChangedPullRequests::class)]
+#[CoversClass(SeenListings::class)]
+#[CoversClass(SeenChange::class)]
+#[CoversClass(ListingValidator::class)]
+#[CoversClass(ListingInProgress::class)]
+#[UsesClass(OpenChangeListing::class)]
+#[UsesClass(OpenChange::class)]
+#[UsesClass(ChangeId::class)]
+#[UsesClass(CommitId::class)]
+final class FindChangedPullRequestsTest extends KernelTestCase
+{
+    private RecordedForge $forge;
+    private EntityManagerInterface $entities;
+    private LockFactory $locks;
+    /** @var list<array{string, array<string, mixed>}> */
+    private array $logged = [];
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->forge = new RecordedForge();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    public function testAPullRequestSeenForTheFirstTimeIsReturned(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+
+        $changed = $this->find('alpha');
+
+        self::assertSame(['7'], $this->ids($changed));
+    }
+
+    public function testAnUnchangedListingReadsNothingFurtherAndKeepsTheStoredValidator(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'), RecordedForge::change('8', 'b', '2026-11-01T11:00:00Z'));
+        $first = $this->find('alpha');
+
+        $second = $this->find('alpha');
+
+        self::assertSame(['7', '8'], $this->ids($first));
+        self::assertSame([], $second);
+        self::assertSame(1, $this->forge->fullReads);
+        self::assertSame(1, $this->forge->conditionalAnswers);
+        self::assertSame([null, 'W/"alpha-1"'], $this->forge->received);
+        self::assertSame('W/"alpha-1"', $this->entities->find(ListingValidator::class, 'alpha')?->value());
+        self::assertSame(['Listed the open pull requests.', 'Listed the open pull requests: unchanged.'], array_column($this->logged, 0));
+        self::assertSame([['status' => 304, 'changed' => 0]], [array_intersect_key($this->logged[1][1], ['status' => 1, 'changed' => 1])]);
+    }
+
+    public function testAPullRequestWhoseHeadAndUpdateTimeAreUnchangedIsNotReturnedAgain(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'), RecordedForge::change('9', 'c', '2026-11-01T12:00:00Z'));
+
+        $changed = $this->find('alpha');
+
+        self::assertSame(['9'], $this->ids($changed));
+    }
+
+    public function testAPullRequestWhoseHeadMovedIsReturned(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'b', '2026-11-01T10:00:00Z'));
+
+        self::assertSame(['7'], $this->ids($this->find('alpha')));
+    }
+
+    public function testAPullRequestWhoseUpdateTimeChangedIsReturned(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:05:00Z'));
+
+        self::assertSame(['7'], $this->ids($this->find('alpha')));
+    }
+
+    public function testAPullRequestClosedAndOpenedAgainIsReturnedAsNew(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+        $this->forge->opens('alpha');
+        $this->find('alpha');
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+
+        self::assertSame(['7'], $this->ids($this->find('alpha')));
+    }
+
+    public function testTheValidatorOfOneProjectNeverAffectsAnother(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->forge->opens('beta', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+
+        $changed = $this->find('beta');
+
+        self::assertSame(['7'], $this->ids($changed));
+        self::assertSame([null, null], $this->forge->received);
+    }
+
+    public function testAFailedReadKeepsWhatWasSeenSoTheNextListingIsStillFull(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $failing = new class implements OpenChanges {
+            public function listOpen(string $project, ?string $validator): OpenChangeListing
+            {
+                throw new ForgeReadFailed('The forge is down.');
+            }
+        };
+
+        try {
+            $this->use($failing)('alpha');
+            self::fail('The read should fail.');
+        } catch (ForgeReadFailed) {
+        }
+
+        self::assertSame(['7'], $this->ids($this->find('alpha')));
+    }
+
+    public function testAListingOfAProjectIsRefusedWhileAnotherOneRuns(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $held = $this->locks->createLock('watcher-listing-'.hash('sha256', 'alpha'));
+        self::assertTrue($held->acquire());
+
+        $this->expectException(ListingInProgress::class);
+
+        try {
+            $this->find('alpha');
+        } finally {
+            self::assertSame(0, $this->forge->fullReads);
+        }
+    }
+
+    public function testTheLockIsReleasedAfterAListing(): void
+    {
+        $this->forge->opens('alpha', RecordedForge::change('7', 'a', '2026-11-01T10:00:00Z'));
+        $this->find('alpha');
+
+        $this->forge->opens('alpha', RecordedForge::change('7', 'b', '2026-11-01T10:00:00Z'));
+
+        self::assertSame(['7'], $this->ids($this->find('alpha')));
+    }
+
+    /**
+     * @return list<OpenChange>
+     */
+    private function find(string $project): array
+    {
+        return $this->use($this->forge)($project);
+    }
+
+    private function use(OpenChanges $forge): FindChangedPullRequests
+    {
+        $logger = new class($this->logged) extends AbstractLogger {
+            /** @param list<array{string, array<string, mixed>}> $logged */
+            public function __construct(private array &$logged)
+            {
+            }
+
+            public function log(mixed $level, string|\Stringable $message, array $context = []): void
+            {
+                $this->logged[] = [(string) $message, $context];
+            }
+        };
+
+        return new FindChangedPullRequests($forge, new SeenListings($this->entities), $this->locks, $logger);
+    }
+
+    /**
+     * @param list<OpenChange> $changes
+     *
+     * @return list<string>
+     */
+    private function ids(array $changes): array
+    {
+        return array_map(static fn (OpenChange $change): string => $change->id->value, $changes);
+    }
+}

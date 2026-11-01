@@ -8,6 +8,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), but nothing runs the panel yet.
 - Reviewing a pull request and reading the verdicts (planned)
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
+- Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, but no forge for GitHub and nothing that runs it exists yet, so there is nothing to set up (planned)
 - Connecting an agent through MCP (planned)
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
