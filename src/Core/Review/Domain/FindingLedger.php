@@ -15,6 +15,10 @@ final class FindingLedger
     /** @var array<string, TrackedFinding> */
     private array $tracked;
 
+    private ?int $latestRound = null;
+
+    private readonly GoalpostRule $goalposts;
+
     /**
      * @param list<TrackedFinding> $tracked
      */
@@ -23,10 +27,6 @@ final class FindingLedger
         $this->tracked = array_column($tracked, null, 'id');
         $this->goalposts = new GoalpostRule();
     }
-
-    private ?int $latestRound = null;
-
-    private readonly GoalpostRule $goalposts;
 
     /**
      * @param list<Finding> $findings
@@ -61,20 +61,22 @@ final class FindingLedger
      */
     public function openForReviewers(): array
     {
-        return array_map(static fn (TrackedFinding $tracked): Finding => new Finding(
-            $tracked->id,
-            $tracked->latest->severity,
-            $tracked->latest->file,
-            $tracked->latest->line,
-            $tracked->latest->symbol,
-            $tracked->latest->text,
-            $tracked->latest->fixable_by,
-            $tracked->latest->repeat,
-            $tracked->latest->requirement,
-            $tracked->latest->evidence,
-            $tracked->latest->regression,
-        ),
-            $this->open(), );
+        return array_map(
+            static fn (TrackedFinding $tracked): Finding => new Finding(
+                $tracked->id,
+                $tracked->latest->severity,
+                $tracked->latest->file,
+                $tracked->latest->line,
+                $tracked->latest->symbol,
+                $tracked->latest->text,
+                $tracked->latest->fixable_by,
+                $tracked->latest->repeat,
+                $tracked->latest->requirement,
+                $tracked->latest->evidence,
+                $tracked->latest->regression,
+            ),
+            $this->open(),
+        );
     }
 
     /**
