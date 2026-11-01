@@ -14,6 +14,7 @@ use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -57,14 +58,34 @@ final readonly class StoredFindings
     }
 
     // Completing and recording are one step, so the verdicts of a round reach the ledger exactly once: a second completion finds the guard closed.
-    public function completeWhenEveryReviewerIsIn(ReviewRound $round): bool
+    public function completeWhenEveryReviewerIsIn(ReviewRound $round): void
     {
-        if (!$this->machine->can($round, ReviewRound::COMPLETION)) {
+        if (!$this->machine->can($round, RoundTransition::Complete->value)) {
+            return;
+        }
+
+        $this->machine->apply($round, RoundTransition::Complete->value);
+        $this->recordVerdictsOf($round);
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    public function openReportedIn(ReviewRound $round): array
+    {
+        $stored = $this->entities->find(ChangeFindings::class, ['project' => $round->project(), 'change' => $round->change()]);
+
+        return null === $stored ? [] : $this->ledgerOf($stored)->openReportedIn($round->number());
+    }
+
+    // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
+    public function markJudged(ReviewRound $round): bool
+    {
+        if (!$this->machine->can($round, RoundTransition::Judge->value)) {
             return false;
         }
 
-        $this->machine->apply($round, ReviewRound::COMPLETION);
-        $this->recordVerdictsOf($round);
+        $this->machine->apply($round, RoundTransition::Judge->value);
 
         return true;
     }

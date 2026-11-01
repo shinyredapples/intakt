@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
+namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -13,13 +14,20 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use LogicException;
 use Override;
 
-// Answers every judge call with the given judgement and keeps the request, so a test sees what the judge was asked.
+// Answers every judge call with the given judgement and keeps the request, so a test sees what the judge was asked; what runs meanwhile happens while the call is out, the moment another worker can act.
 final class ScriptedJudgement implements Vendor
 {
     public ?JudgeRequest $asked = null;
 
-    public function __construct(private readonly Judgement $judgement)
-    {
+    public int $calls = 0;
+
+    /**
+     * @param ?Closure(): void $meanwhile
+     */
+    public function __construct(
+        private readonly Judgement $judgement,
+        private readonly ?Closure $meanwhile = null,
+    ) {
     }
 
     #[Override]
@@ -32,6 +40,11 @@ final class ScriptedJudgement implements Vendor
     public function judge(string $project, JudgeRequest $request): Judgement
     {
         $this->asked = $request;
+        ++$this->calls;
+
+        if (null !== $this->meanwhile) {
+            ($this->meanwhile)();
+        }
 
         return $this->judgement;
     }

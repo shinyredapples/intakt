@@ -1,5 +1,5 @@
-// The state machines of a review round (plan task T9, parts 2 and 3). Render with: dot -Tsvg review-round.dot
-// The places and transitions are the cases of RoundState, ReviewerState and ReviewerTransition and the constant ReviewRound::COMPLETION in src/Core/Review/Domain/, which config/packages/workflow.php turns into the two workflows.
+// The state machines of a review round (plan task T9, parts 2 and 3; the judged place from T12). Render with: dot -Tsvg review-round.dot
+// The places and transitions are the cases of RoundState, RoundTransition, ReviewerState and ReviewerTransition in src/Core/Review/Domain/, which config/packages/workflow.php turns into the two workflows.
 digraph review_round {
     rankdir=LR;
     node [shape=circle, fontname="Helvetica"];
@@ -9,9 +9,11 @@ digraph review_round {
         label="review_round (state machine of ReviewRound)";
         round_start [shape=point, label=""];
         collecting;
-        complete [shape=doublecircle];
+        complete;
+        judged [shape=doublecircle];
         round_start -> collecting;
-        collecting -> complete [label="complete\n(guard: every reviewer is in verdict, failed or blocked)"];
+        collecting -> complete [label="complete\n(guard: every reviewer is in verdict, failed or blocked;\nqueues the judge)"];
+        complete -> judged [label="judge\n(the judge's result is recorded once)"];
     }
 
     subgraph cluster_reviewer {

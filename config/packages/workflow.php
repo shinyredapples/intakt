@@ -7,6 +7,7 @@ use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\StateMarkingStore;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
@@ -19,9 +20,10 @@ return static function (ContainerConfigurator $container): void {
             'supports' => [ReviewRound::class],
             'initial_marking' => RoundState::Collecting->value,
             'places' => array_map(static fn (RoundState $state): string => $state->value, RoundState::cases()),
-            'transitions' => [
-                ReviewRound::COMPLETION => ['from' => RoundState::Collecting->value, 'to' => RoundState::Complete->value],
-            ],
+            'transitions' => array_combine(
+                array_map(static fn (RoundTransition $step): string => $step->value, RoundTransition::cases()),
+                array_map(static fn (RoundTransition $step): array => ['from' => $step->fromPlace()->value, 'to' => $step->toPlace()->value], RoundTransition::cases()),
+            ),
         ],
         'reviewer' => [
             'type' => 'state_machine',

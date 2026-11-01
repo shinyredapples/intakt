@@ -19,9 +19,6 @@ use Symfony\Component\Uid\UuidV7;
 #[ORM\Table(name: 'review_round')]
 final class ReviewRound implements HasPlace
 {
-    // The one transition of a round; a single named value, so a constant rather than an enum.
-    public const string COMPLETION = 'complete';
-
     // The properties are not readonly because the lazy proxy a reviewer holds for its round sets them again when it loads.
     /** @var Collection<int, RoundReviewer> */
     #[ORM\OneToMany(targetEntity: RoundReviewer::class, mappedBy: 'round', cascade: ['persist'])]
