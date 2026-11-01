@@ -10,6 +10,7 @@ return [
     'Core/Memory',
     'Core/Platform',
     'Core/Review',
+    'Core/Shadow',
     'Core/Upstream',
     'Core/Watcher',
     'Plugin/Forge',

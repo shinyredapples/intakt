@@ -1,0 +1,7 @@
+services:
+    # Public under its own name, because the guard takes over the forge writes' name and a test reads this forge's write log.
+    Intakt\Tests\Core\Shadow\WriteRefusingForge:
+        public: true
+    Intakt\Plugin\Forge\Contract\ForgeWrites:
+        alias: Intakt\Tests\Core\Shadow\WriteRefusingForge
+        public: true
