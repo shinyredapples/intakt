@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\UseCase\ReadRound;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Mcp\Capability\Attribute\McpTool;
+use Mcp\Capability\Attribute\Schema;
 use Mcp\Schema\ToolAnnotations;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
@@ -21,7 +22,7 @@ final readonly class RoundStatusTool
     {
     }
 
-    public function __invoke(string $roundId): RoundStatus
+    public function __invoke(#[Schema(description: 'UUID of the review round.')] string $roundId): RoundStatus
     {
         return RoundStatus::of($this->rounds->forTool($roundId));
     }
