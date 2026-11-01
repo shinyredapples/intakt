@@ -8,12 +8,13 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
+use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
+use LogicException;
 use Override;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Failover\FailoverPlatform;
-use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
@@ -137,11 +138,35 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
      */
     private function typedWhenRead(DeferredResult $answer, SendFailures $failures, array $options): DeferredResult
     {
-        $converter = new TypedRejectionConverter($answer, fn (AuthenticationException $rejected): Throwable => $this->typed($rejected, $failures));
+        $converter = new TypedRejectionConverter($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures));
         $typed = new DeferredResult($converter, $answer->getRawResult(), $options);
         $typed->getMetadata()->set($answer->getMetadata()->all());
 
         return $typed;
+    }
+
+    // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.
+    private function rejectedWhenRead(DeferredResult $answer, SendFailures $failures): Throwable
+    {
+        if ([] !== $this->freeAccounts($failures)) {
+            return new KeyRejected($this->accountThatAnswered($answer));
+        }
+
+        return $this->outOfAccounts($failures);
+    }
+
+    // Matched against the provider's accounts rather than parsed, so the shape of an account key stays Account's own.
+    private function accountThatAnswered(DeferredResult $answer): Account
+    {
+        $key = $answer->getMetadata()->get(Account::METADATA);
+        foreach (array_keys($this->platforms) as $name) {
+            $account = new Account($this->provider, $name);
+            if ($account->key() === $key) {
+                return $account;
+            }
+        }
+
+        throw new LogicException(sprintf('The answer names no account of provider "%s".', $this->provider->value));
     }
 
     // Built per call over the free accounts only, because FailoverPlatform keys its limiter by platform class, which every account of a provider shares, and calls a failed platform again on the next call (upstream/ai-failover-platform-retries-a-failed-platform).

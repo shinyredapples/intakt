@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
+use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
@@ -46,6 +47,7 @@ use Throwable;
 #[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
 #[CoversClass(EveryKeyRejected::class)]
+#[CoversClass(KeyRejected::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
@@ -120,6 +122,31 @@ final class AccountFailoverPlatformTest extends TestCase
             self::assertStringNotContainsString('SENTINEL', $failure->getMessage());
             self::assertNull($failure->getPrevious());
         }
+    }
+
+    // The reviewers' probe: with a free account left the rejection used to be the provider's own, and the judging's failure listener and Messenger's retry log what they get.
+    public function testAKeyRejectedWhenReadWhileAnotherAccountIsFreeCarriesNoTextOfTheProvider(): void
+    {
+        $answer = $this->accounts(new FailingWhenRead(new AuthenticationException('invalid key SENTINEL')), $this->answering('second'))->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('The default key was rejected when read, yet the answer was read.');
+        } catch (Throwable $failure) {
+            self::assertInstanceOf(KeyRejected::class, $failure);
+            self::assertSame('The key of account "anthropic.default" was rejected.', $failure->getMessage());
+            self::assertNull($failure->getPrevious());
+        }
+
+        self::assertTrue($this->cooldowns->isRejected($this->account(Account::DEFAULT)));
+    }
+
+    public function testAKeyRejectedAsTheCallIsSentWhileAnotherAccountIsFreeHandsTheCallToTheNextAccount(): void
+    {
+        $result = $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('invalid key SENTINEL')), $this->answering('second'))->invoke('big', 'Review.');
+
+        self::assertSame('second', $result->asText());
+        self::assertTrue($this->cooldowns->isRejected($this->account(Account::DEFAULT)));
     }
 
     public function testACallWhileEveryAccountCoolsDownIsRefusedBeforeAnyAccountIsCalled(): void

@@ -23,7 +23,7 @@ final readonly class TypedRejectionConverter implements ResultConverterInterface
     private const string TOKEN_USAGE = 'token_usage';
 
     /**
-     * @param Closure(AuthenticationException): Throwable $typed
+     * @param Closure(): Throwable $typed
      */
     public function __construct(
         private DeferredResult $answer,
@@ -42,8 +42,8 @@ final readonly class TypedRejectionConverter implements ResultConverterInterface
     {
         try {
             return $this->answer->getResult();
-        } catch (AuthenticationException $rejected) {
-            throw ($this->typed)($rejected);
+        } catch (AuthenticationException) {
+            throw ($this->typed)();
         }
     }
 
