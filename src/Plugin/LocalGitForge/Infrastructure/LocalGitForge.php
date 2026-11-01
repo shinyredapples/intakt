@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 
+use Closure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\Forge\Contract\Change;
@@ -39,6 +40,9 @@ final readonly class LocalGitForge implements Forge
     // Because a merge attribute that is set picks git's own text merge, while merge.default, even "text", picks a driver the repository's config defines and git would run it.
     private const string BUILTIN_MERGE_ATTRIBUTES = __DIR__.'/builtin-merge.gitattributes';
 
+    // Because the reviewers must read the head's bytes, which a line-ending conversion or a sparse checkout the repository configures would change or leave out.
+    private const array SNAPSHOT_AS_COMMITTED = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'core.sparseCheckout=false', '-c', 'core.sparseCheckoutCone=false'];
+
     public function __construct(
         private LocalRepository $repository,
         private NameStatusParser $nameStatus,
@@ -58,6 +62,34 @@ final readonly class LocalGitForge implements Forge
     public function hasHeadMoved(Change $change): bool
     {
         return !$this->headOf($change->id)->equals($change->commits->head);
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(string): T $work
+     *
+     * @return T
+     */
+    // A detached worktree in a scratch directory, removed after the work, because what is read there must be the head's files whatever happens in the checkout meanwhile.
+    #[NoDiscard]
+    public function withSnapshotOf(CommitId $head, Closure $work): mixed
+    {
+        $snapshot = $this->addWorktree($head);
+
+        try {
+            return $work($snapshot);
+        } finally {
+            $this->removeSnapshot($snapshot);
+        }
+    }
+
+    // Skips a snapshot already gone, because a stopped command removes it before the work returns.
+    public function removeSnapshot(string $snapshot): void
+    {
+        if (is_dir($snapshot)) {
+            $this->read(['worktree', 'remove', '--force', $snapshot]);
+        }
     }
 
     public function headMoveSince(CommitId $earlier, Change $change): HeadMove
@@ -82,6 +114,17 @@ final readonly class LocalGitForge implements Forge
         $head = $change->commits->head;
 
         return new FileContent($path, $head, $this->read(['cat-file', 'blob', $this->blobAt($head, $path)]));
+    }
+
+    private function addWorktree(CommitId $head): string
+    {
+        $directory = sys_get_temp_dir().'/intakt-review-'.bin2hex(random_bytes(8));
+        $this->read([...self::SNAPSHOT_AS_COMMITTED, 'worktree', 'add', '--detach', '--quiet', $directory, $head->hash]);
+
+        // Resolved because a worker started elsewhere reads the stored path from its own working directory.
+        $snapshot = realpath($directory);
+
+        return false === $snapshot ? throw new ForgeReadFailed('git worktree add left no directory at '.$directory.'.') : $snapshot;
     }
 
     private function headOf(ChangeId $id): CommitId
@@ -199,7 +242,7 @@ final readonly class LocalGitForge implements Forge
         $process = $this->git($arguments);
 
         if (!$process->isSuccessful()) {
-            throw new ForgeReadFailed(sprintf('git %s failed: %s', $arguments[0], trim($process->getErrorOutput())));
+            throw new ForgeReadFailed(sprintf('git %s failed: %s', $this->commandOf($arguments), trim($process->getErrorOutput())));
         }
 
         return $process->getOutput();
@@ -212,7 +255,7 @@ final readonly class LocalGitForge implements Forge
     {
         // An argument with a NUL byte cannot reach git, because PHP refuses to start the process with it.
         if ([] !== array_filter($arguments, static fn (string $argument): bool => str_contains($argument, "\0"))) {
-            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $arguments[0]));
+            throw new ForgeReadFailed(sprintf('git %s was given an argument with a NUL byte.', $this->commandOf($arguments)));
         }
 
         try {
@@ -222,9 +265,23 @@ final readonly class LocalGitForge implements Forge
         } catch (RepositoryAttributesRefused $refused) {
             throw new ForgeReadFailed($refused->getMessage(), $refused->getCode(), previous: $refused);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $arguments[0], $failure->getMessage()), $failure->getCode(), previous: $failure);
+            throw new ForgeReadFailed(sprintf('git %s did not run: %s', $this->commandOf($arguments), $failure->getMessage()), $failure->getCode(), previous: $failure);
         }
 
         return $process;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    // The -c settings in front are skipped, so a failure names the git command rather than "-c".
+    private function commandOf(array $arguments): string
+    {
+        $position = 0;
+        while ('-c' === ($arguments[$position] ?? null)) {
+            $position += 2;
+        }
+
+        return $arguments[$position] ?? '';
     }
 }

@@ -129,7 +129,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Description:** One command reviews a change end to end (`--project`, change reference, `--round`) and prints the outcome, the act list and the cost, or JSON with `--format=json`.
 - **Acceptance:** exit codes distinguish approve, changes and blocked; the JSON output validates against a documented schema.
 - **Evidence:** the command's output on the sample repository with two providers.
-- **Symfony:** Console 8.1 input mapping for the arguments and options; tests use `CommandTester` assertions and `AiAssertionsTrait`.
+- **Symfony:** Console 8.1 input mapping for the arguments and options; tests use `CommandTester` assertions (the round is scripted at the vendor contract, so no platform call is made for `AiAssertionsTrait` to assert).
 - **Waits for:** T12. **Size:** S. **Labels:** `class:feature`, `priority:high`.
 
 ### T14 Provider limits and substitutes

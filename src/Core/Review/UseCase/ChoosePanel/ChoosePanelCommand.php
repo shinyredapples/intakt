@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ChoosePanel;
 
+use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeDescription;
-use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
 use Intakt\Core\Review\Contract\Panel;
-use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
-use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
+use Intakt\Core\Review\Contract\Panels;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -19,7 +18,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'intakt:review:panel', description: 'Print the review panel the configuration chooses for a described change, without calling a model')]
 final readonly class ChoosePanelCommand
 {
-    public function __construct(private ConfiguredPanels $panels)
+    public function __construct(private Panels $panels)
     {
     }
 
@@ -35,7 +34,7 @@ final readonly class ChoosePanelCommand
 
         try {
             $panel = $this->panels->panelForChange($input->project, $change);
-        } catch (PanelNotConfigured|GlobCannotBeEvaluated $failure) {
+        } catch (ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;

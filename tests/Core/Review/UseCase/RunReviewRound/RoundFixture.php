@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundVerdicts;
@@ -38,6 +39,7 @@ use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandle
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
+use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -108,13 +110,13 @@ final readonly class RoundFixture
 
     public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
     {
-        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), $change), $queue);
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change)), $queue);
     }
 
     // The identity names its own task and panel size, so a test can hand in one that does not describe the round.
     public function startWithIdentityOf(string $task, int $panelSize, int $reviewers): string
     {
-        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of($task, $this->panelOf($panelSize))), $this->panelOf($reviewers), self::CHANGE), $this->bus);
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), SampleIdentity::of($task, $this->panelOf($panelSize))), $this->panelOf($reviewers), new RequestedRound(self::CHANGE)), $this->bus);
     }
 
     public function identityAt(string $head, int $reviewers): VerdictIdentity
@@ -124,7 +126,7 @@ final readonly class RoundFixture
 
     public function verdictsOf(VerdictsOfRound $query): RoundVerdicts
     {
-        return new VerdictsOfRoundHandler($this->entities, $this->serializer)($query);
+        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer))($query);
     }
 
     /**
@@ -230,7 +232,7 @@ final readonly class RoundFixture
         $another = fn (): ReviewRound => $this->start(1);
         $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new AfterFirstLookAt('change_findings', $another)]));
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
-        $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), self::CHANGE);
+        $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
         return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger()), $this->bus)($command);
     }

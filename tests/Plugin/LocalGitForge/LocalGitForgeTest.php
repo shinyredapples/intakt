@@ -26,6 +26,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 #[CoversClass(LocalGitForge::class)]
 #[UsesClass(Change::class)]
@@ -198,6 +199,89 @@ final class LocalGitForgeTest extends TestCase
         self::assertFileDoesNotExist($marker);
         self::assertStringContainsString('+head', $change->diff->patch);
         self::assertSame("head\n", $content->content);
+    }
+
+    public function testItGivesTheWorkADetachedSnapshotOfTheHeadAndRemovesItAfterwards(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->checkout('main');
+
+        $seen = $this->forge()->withSnapshotOf(new CommitId($head), fn (string $snapshot): array => [$snapshot, file_get_contents($snapshot.'/src/New.php'), is_file($snapshot.'/.git'), count($this->repository->worktrees())]);
+
+        self::assertSame(["<?php\n", true, 2], array_slice($seen, 1));
+        self::assertNotSame(realpath($this->repository->path), $seen[0]);
+        self::assertDirectoryDoesNotExist($seen[0]);
+        self::assertCount(1, $this->repository->worktrees());
+        self::assertFileDoesNotExist($this->repository->path.'/src/New.php');
+    }
+
+    public function testItRemovesTheSnapshotWhenTheWorkFails(): void
+    {
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $snapshot = '';
+
+        try {
+            $outcome = $this->forge()->withSnapshotOf(new CommitId($head), static function (string $directory) use (&$snapshot): string {
+                $snapshot = $directory;
+
+                throw new RuntimeException('the work failed');
+            });
+        } catch (RuntimeException $failure) {
+            $outcome = $failure->getMessage();
+        }
+
+        self::assertSame('the work failed', $outcome);
+        self::assertDirectoryDoesNotExist($snapshot);
+        self::assertCount(1, $this->repository->worktrees());
+    }
+
+    public function testItTakesTheSnapshotWithoutTheHookAndTheFilterTheRepositoryConfigures(): void
+    {
+        $marker = $this->repository->path.'/command-ran';
+        $script = $this->repository->writeHook('post-checkout', "#!/bin/sh\ntouch ".$marker."\n");
+        $this->repository->commitFile('.gitattributes', "*.php filter=evil\n");
+        $head = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->configure('filter.evil.smudge', $script);
+
+        $content = $this->forge()->withSnapshotOf(new CommitId($head), static fn (string $snapshot): string|false => file_get_contents($snapshot.'/src/New.php'));
+
+        self::assertFileDoesNotExist($marker);
+        self::assertSame("<?php\n", $content);
+    }
+
+    public function testTheSnapshotHoldsAFileTheSparseCheckoutOfTheRepositoryLeavesOut(): void
+    {
+        $this->repository->commitFile('docs/Kept.md', "kept\n");
+        $head = $this->repository->commitFile('src/Left.php', "<?php\n");
+        $this->repository->configure('core.sparseCheckout', 'true');
+        file_put_contents($this->repository->path.'/.git/info/sparse-checkout', "/docs/\n");
+
+        $held = $this->forge()->withSnapshotOf(new CommitId($head), static fn (string $snapshot): bool => is_file($snapshot.'/src/Left.php'));
+
+        self::assertTrue($held);
+    }
+
+    public function testTheSnapshotHoldsTheBytesOfTheHeadWhateverTheLineEndingConfig(): void
+    {
+        $head = $this->repository->commitFile('src/Lines.php', "<?php\nreturn 1;\n");
+        $this->repository->configure('core.autocrlf', 'true');
+
+        $content = $this->forge()->withSnapshotOf(new CommitId($head), static fn (string $snapshot): string|false => file_get_contents($snapshot.'/src/Lines.php'));
+
+        self::assertSame("<?php\nreturn 1;\n", $content);
+    }
+
+    public function testItFailsToSnapshotAHeadThatIsNotInTheRepository(): void
+    {
+        try {
+            $outcome = $this->forge()->withSnapshotOf(new CommitId(str_repeat('a', 40)), static fn (string $snapshot): string => $snapshot);
+        } catch (ForgeReadFailed $failure) {
+            $outcome = $failure->getMessage();
+        }
+
+        self::assertStringContainsString('git worktree failed', $outcome);
+        self::assertCount(1, $this->repository->worktrees());
     }
 
     public function testItRefusesARepositoryWhoseInfoAttributesExistBecauseTheyCouldHideAFileAsBinary(): void

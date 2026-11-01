@@ -8,6 +8,7 @@ use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeIdEmpty;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
@@ -15,6 +16,8 @@ use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Contract\LocalRepositoryIncomplete;
+use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
@@ -35,6 +38,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(NameStatusParser::class)]
 #[UsesClass(VisiblePath::class)]
 #[UsesClass(LocalRepository::class)]
+#[UsesClass(LocalRepositoryIncomplete::class)]
+#[UsesClass(RepositoryNotFound::class)]
+#[UsesClass(ChangeIdEmpty::class)]
 #[UsesClass(Change::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeNotFound::class)]
@@ -182,10 +188,38 @@ final class SummarizeChangeCommandTest extends TestCase
 
     public function testAnUnreadableRepositoryFailsWithAMessage(): void
     {
-        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path.'/missing']);
+        $plain = $this->repository->path.'/plain';
+        mkdir($plain);
+        file_put_contents($plain.'/.git', "gitdir: nowhere\n");
+
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $plain]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('[ERROR] git', $tester->getDisplay());
+    }
+
+    public function testAMissingRepositoryFailsNamingThePath(): void
+    {
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => 'no-such-repository']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString(RepositoryNotFound::at('no-such-repository')->getMessage(), $tester->getDisplay());
+    }
+
+    public function testABlankBaseBranchFailsWithAMessage(): void
+    {
+        $tester = $this->whenTheCommandRuns(['branch' => 'feature', '--repository' => $this->repository->path, '--base' => ' ']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('A local repository needs a path and a base branch.', $tester->getDisplay());
+    }
+
+    public function testABlankBranchFailsWithAMessage(): void
+    {
+        $tester = $this->whenTheCommandRuns(['branch' => ' ', '--repository' => $this->repository->path]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('A change id is not empty.', $tester->getDisplay());
     }
 
     /**
