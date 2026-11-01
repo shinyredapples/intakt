@@ -54,13 +54,13 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| MCP Bundle server for the owner | agents list projects and read a round's status, verdicts, act list and findings; starting reviews follows | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`, `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`; T15 (#20, part #509), `src/Core/Review/UseCase/ReadRound/` |
+| MCP Bundle server for the owner | agents list projects, read a round's status, verdicts, act list and findings, and start a review, with progress notifications | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`, `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`; T15 (#20, part #509), `src/Core/Review/UseCase/ReadRound/`; T15 (#20, part #510), `src/Plugin/LocalGitForge/UseCase/ReviewChange/StartReviewTool.php` |
 | MCP Bundle server per review | serves the read-only repository tools of the head under review | planned | T16 (#21) |
 | `session.lock` | safe parallel calls on one session | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`; T16 (#21) |
 | `#[IsGrantedTool]` | tool authorization through Intakt's Security voter; the AI Bundle's attribute, checked for MCP tools by a wrapper around the SDK's reference handler because the bundle checks it only in its agent toolbox | in progress | T15 (#20, part #508), `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`, `src/Core/Mcp/Infrastructure/AuthorizedToolCalls.php`; T16 (#21) |
-| Tool annotations (`readOnlyHint`, `destructiveHint`) | every tool states its effect | in progress | T15 (#20, part #508), `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`; T16 (#21) |
-| Progress notifications | long tools report progress | planned | T15 (#20), T16 (#21) |
-| MCP SDK client | contract tests that call every tool | planned | T15 (#20) |
+| Tool annotations (`readOnlyHint`, `destructiveHint`) | every tool states its effect | in progress | T15 (#20, parts #508 and #510), `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`, `src/Plugin/LocalGitForge/UseCase/ReviewChange/StartReviewTool.php`; T16 (#21) |
+| Progress notifications | long tools report progress: `start_review` sends one step per finished reviewer and one for the judge | in progress | T15 (#20, part #510), `src/Plugin/LocalGitForge/UseCase/ReviewChange/ForwardedProgress.php`; T16 (#21) |
+| MCP SDK client | contract tests that call every tool, through `Mcp\Client` over a PSR-18 client into the kernel | in progress | T15 (#20, part #510), `tests/Core/Mcp/Contract/OwnerServerSdkClientTest.php` |
 
 ## Mate
 
@@ -91,7 +91,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98) |
 | Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`, `JsonDecode::ASSOCIATIVE`) | maps a verdict strictly: no unknown and no left-out fields, no object as a list | in progress | T1 (#5), `src/Core/Review/Infrastructure/StrictVerdictConverter.php` |
-| Security | a voter decides which MCP tools may write | in progress | T15 (#20, part #508), `src/Core/Mcp/Infrastructure/ToolAccessVoter.php`; T16 (#21) |
+| Security | a voter decides which MCP tools may write; the `access_token` authenticator checks the owner's bearer token | in progress | T15 (#20, parts #508 and #510), `src/Core/Mcp/Infrastructure/ToolAccessVoter.php`, `src/Core/Mcp/Infrastructure/OwnerTokenHandler.php`; T16 (#21) |
 | Process | the local git forge; every git call hardened, in the forge and in the gates; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T6 (#11, part #124), `src/Core/Git/Contract/HardenedGit.php`, `config/gates/src/HardenedGitCall.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |

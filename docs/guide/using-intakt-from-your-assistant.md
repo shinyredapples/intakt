@@ -1,6 +1,6 @@
 # Using Intakt from your AI assistant or the command line
 
-Besides the dashboard, you can talk to Intakt from your own AI assistant (such as Claude Code or another agent) or from a terminal. The review command for the terminal is built. The MCP server exists in part (task T15 in [the plan](../plan.md)): today it can list your projects, read a review's status and verdicts and its act list, and read a round's findings; starting a review is planned.
+Besides the dashboard, you can talk to Intakt from your own AI assistant (such as Claude Code or another agent) or from a terminal. The review command for the terminal is built. The MCP server (task T15 in [the plan](../plan.md)) can list your projects, start a review of a branch, read a review's status and verdicts and its act list, and read a round's findings. Reviewing a pull request instead of a branch is planned.
 
 ```mermaid
 flowchart LR
@@ -12,13 +12,13 @@ flowchart LR
   dash --> intakt
 ```
 
-## From your AI assistant (MCP, planned)
+## From your AI assistant (MCP)
 
 **MCP** (Model Context Protocol) is a standard way for AI assistants to use tools. Intakt runs an MCP server, so you can ask your assistant things like "start a review of my branch" or "what did the reviewers say about PR 88?", and it calls Intakt's tools to do it.
 
 | Tool | What it does | Changes anything? |
 |---|---|---|
-| start a review | reviews a branch or pull request end to end (planned) | yes |
+| start a review | reviews a branch end to end and reports progress while it waits (built; a pull request is planned) | yes |
 | review status | where a review stands (built) | no, read only |
 | read verdicts | each reviewer's verdict and findings (built) | no, read only |
 | read the act list | what the builder must fix, after the judge step (built) | no, read only |
@@ -26,7 +26,7 @@ flowchart LR
 
 How it stays safe:
 - **Every tool is labeled** with what it does ("only reads", "changes something"), so your assistant knows before it calls.
-- **Starting a review needs a token** you set in Intakt's config.
+- **Starting a review needs a token** you set in Intakt's config, and writing must be switched on there too. Without both, your assistant can read but not start anything ([how to set it up](../user/mcp.md)).
 - **Intakt decides, not the model:** whether a tool may write is decided by Intakt's own rules, never by what the assistant asks for.
 - **Approvals are not tools:** no MCP tool can approve a merge or a protected change. That stays your click or comment on the forge.
 
