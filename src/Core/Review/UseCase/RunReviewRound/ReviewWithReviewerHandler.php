@@ -48,7 +48,7 @@ final readonly class ReviewWithReviewerHandler
 
         try {
             $brief = new ReviewBrief($round->task(), $round->diff(), $this->rounds->openFindingsOf($round));
-            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId()), $round->id());
+            $request = new ReviewRequest(new Checkout($round->checkoutRoot()), $brief, new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId(), $round->id()));
             $verdict = $this->vendor->review($round->project(), $reviewer->tier(), $request);
         } catch (ProviderRateLimited $limited) {
             $this->leases->handBack($reviewer);

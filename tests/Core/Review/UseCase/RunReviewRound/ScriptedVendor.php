@@ -34,7 +34,7 @@ final class ScriptedVendor implements Vendor
     {
         ++$this->calls;
         $this->conversations[] = $request->conversation->id->toRfc4122();
-        $this->rounds[] = $request->round?->toRfc4122();
+        $this->rounds[] = $request->conversation->round?->toRfc4122();
 
         return $this->failure instanceof Throwable ? throw $this->failure : new Verdict(Decision::Approve, [], [], []);
     }
