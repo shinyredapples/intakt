@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
-use Doctrine\DBAL\Driver\PDO\Exception as PdoDriverException;
+use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -326,9 +326,9 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
     }
 
-    // What SQLite reports when a transaction that read before another writer committed tries to write.
+    // The message of SQLite's stale snapshot, because that is the failure a retry is for.
     private static function databaseLocked(): LockWaitTimeoutException
     {
-        return new LockWaitTimeoutException(PdoDriverException::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
+        return new LockWaitTimeoutException(Exception::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
     }
 }
