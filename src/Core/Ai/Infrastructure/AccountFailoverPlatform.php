@@ -115,7 +115,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         foreach (array_keys($this->platforms) as $name) {
             $account = new Account($this->provider, $name);
             $rejected = $failures->rejectionOf($account);
-            if (null === $rejected && !$this->cooldowns->isRejected($account)) {
+            if (!$rejected instanceof AuthenticationException && !$this->cooldowns->isRejected($account)) {
                 return null;
             }
 
