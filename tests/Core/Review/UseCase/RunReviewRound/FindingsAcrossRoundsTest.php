@@ -356,7 +356,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
     {
-        return new Finding($id, $severity,'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
     }
 
     // The message of SQLite's stale snapshot, because that is the failure a retry is for.
