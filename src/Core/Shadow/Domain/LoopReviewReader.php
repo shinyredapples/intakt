@@ -160,7 +160,7 @@ final readonly class LoopReviewReader
     {
         $filed = false;
         foreach ($lines as $line) {
-            $filed = $filed || 1 === preg_match(self::FOLLOW_UPS_LINE, $line['text']);
+            $filed = $filed || (!$line['json'] && 1 === preg_match(self::FOLLOW_UPS_LINE, $line['text']));
             $severity = $this->findingIn($line)?->severity;
             if (Severity::P1 === $severity || (Severity::P2 === $severity && !$filed)) {
                 return true;

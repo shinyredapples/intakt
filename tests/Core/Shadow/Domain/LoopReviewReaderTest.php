@@ -199,6 +199,7 @@ final class LoopReviewReaderTest extends TestCase
     {
         yield 'quoted' => ['> Follow-ups:'];
         yield 'fenced' => ["```\nFollow-ups:\n```"];
+        yield 'json fence' => ["```json\nFollow-ups:\n```"];
     }
 
     public function testAnUnreadableVerdictStaysUnreadableDespiteAP1Finding(): void

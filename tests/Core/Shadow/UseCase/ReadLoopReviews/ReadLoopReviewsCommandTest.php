@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Shadow\UseCase\ReadLoopReviews;
 
+use Intakt\Core\Shadow\Contract\LoopFinding;
+use Intakt\Core\Shadow\Contract\LoopReview;
+use Intakt\Core\Shadow\Contract\LoopReviews;
+use Intakt\Core\Shadow\Contract\PullRequestComment;
 use Intakt\Core\Shadow\Domain\LoopReviewReader;
 use Intakt\Core\Shadow\UseCase\ReadLoopReviews\ReadLoopReviewsCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -15,6 +19,10 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(ReadLoopReviewsCommand::class)]
 #[UsesClass(LoopReviewReader::class)]
+#[UsesClass(PullRequestComment::class)]
+#[UsesClass(LoopReviews::class)]
+#[UsesClass(LoopReview::class)]
+#[UsesClass(LoopFinding::class)]
 final class ReadLoopReviewsCommandTest extends TestCase
 {
     public function testTheCommandPrintsTheReaderOutputForTheRecordedComments(): void
