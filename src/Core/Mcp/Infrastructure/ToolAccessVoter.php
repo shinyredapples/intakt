@@ -6,6 +6,7 @@ namespace Intakt\Core\Mcp\Infrastructure;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 
 // The voter never sees the arguments of a call, because a model could otherwise argue its way to a write.
@@ -16,12 +17,9 @@ final readonly class ToolAccessVoter implements VoterInterface
     ) {
     }
 
-    // Variadic because the interface's four parameters break the three-parameter limit: the subject, the attributes and the vote.
-    public function vote(TokenInterface $token, mixed ...$rest): int
+    public function vote(TokenInterface $token, mixed $subject, array $attributes, ?Vote $vote = null): int
     {
         $result = self::ACCESS_ABSTAIN;
-
-        $attributes = is_array($rest[1] ?? null) ? $rest[1] : [];
 
         foreach ($attributes as $attribute) {
             $access = is_string($attribute) ? ToolAccess::tryFrom($attribute) : null;
