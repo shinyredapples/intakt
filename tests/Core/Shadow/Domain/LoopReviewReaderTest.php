@@ -30,11 +30,12 @@ final class LoopReviewReaderTest extends TestCase
 
         $reviews = new LoopReviewReader()->read('loop-bot', 'abc123', $comments)->reviews;
 
-        self::assertSame(['correctness', 'style', 'security', 'docs', 'tests'], array_column($reviews, 'reviewer'));
-        self::assertSame([LoopVerdict::Changes, LoopVerdict::Approve, LoopVerdict::Unreadable, LoopVerdict::Changes, LoopVerdict::Changes], array_column($reviews, 'verdict'));
+        self::assertSame(['correctness', 'style', 'security', 'docs', 'tests', 're-review'], array_column($reviews, 'reviewer'));
+        self::assertSame([LoopVerdict::Changes, LoopVerdict::Approve, LoopVerdict::Unreadable, LoopVerdict::Changes, LoopVerdict::Changes, LoopVerdict::Approve], array_column($reviews, 'verdict'));
         self::assertCount(2, $reviews[0]->findings);
         self::assertCount(1, $reviews[3]->findings);
         self::assertEquals([new LoopFinding('src/C.php', 42, Severity::P2)], $reviews[4]->findings);
+        self::assertCount(2, $reviews[5]->findings);
     }
 
     public function testOnlyCommentsByTheLoopIdentityAreRead(): void
@@ -163,6 +164,41 @@ final class LoopReviewReaderTest extends TestCase
     public function testAnApprovalListingOnlyAP3FindingStaysApproval(): void
     {
         self::assertSame(LoopVerdict::Approve, $this->only("Reviewer: a\n- [P3] src/A.php:1 nit\n```json\n{\"verdict\": \"approve\"}\n```"));
+    }
+
+    public function testAnApprovalWithAP2FiledUnderFollowUpsStaysApproval(): void
+    {
+        $body = "Reviewer: a\nResolved: 1.\n\nFollow-ups:\n- [P2] src/A.php:3: left as follow-up\n- [P3] src/B.php:4: nit\n\n```json\n{\"verdict\": \"approve\", \"summary\": \"ok\"}\n```";
+
+        $review = $this->read($body)->reviews[0];
+
+        self::assertSame(LoopVerdict::Approve, $review->verdict);
+        self::assertEquals([new LoopFinding('src/A.php', 3, Severity::P2), new LoopFinding('src/B.php', 4, Severity::P3)], $review->findings);
+    }
+
+    public function testAP1FiledUnderFollowUpsStillTurnsAnApprovalIntoChanges(): void
+    {
+        self::assertSame(LoopVerdict::Changes, $this->only("Reviewer: a\nFollow-ups:\n- [P1] src/A.php:12: wrong\n```json\n{\"verdict\":\"approve\"}\n```"));
+    }
+
+    public function testAP2BeforeTheFollowUpsLineStillTurnsAnApprovalIntoChanges(): void
+    {
+        self::assertSame(LoopVerdict::Changes, $this->only("Reviewer: a\n- [P2] src/A.php:12: open\nFollow-ups:\n- [P3] src/B.php:1: nit\n```json\n{\"verdict\":\"approve\"}\n```"));
+    }
+
+    #[DataProvider('hiddenFollowUpsLines')]
+    public function testAFencedOrQuotedFollowUpsLineDoesNotFileTheFindingsAfterIt(string $followUps): void
+    {
+        self::assertSame(LoopVerdict::Changes, $this->only("Reviewer: a\n{$followUps}\n- [P2] src/A.php:12: open\n```json\n{\"verdict\":\"approve\"}\n```"));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function hiddenFollowUpsLines(): iterable
+    {
+        yield 'quoted' => ['> Follow-ups:'];
+        yield 'fenced' => ["```\nFollow-ups:\n```"];
     }
 
     public function testAnUnreadableVerdictStaysUnreadableDespiteAP1Finding(): void

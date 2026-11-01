@@ -20,6 +20,7 @@ final readonly class LoopReviewReader
     // A backtick fence's info string may not hold a backtick (CommonMark), so an inline span is no fence.
     private const string FENCE_OPENING = '/^\s*(`{3,}(?!.*`)|~{3,})\s*(\S*)/';
     private const string FINDING_LINE = '/^\s*(?:(?:[-*+]|\d+[.)])\s+)?\[(P[123])\]\s+`?([^\s`:]+):(\d+)/';
+    private const string FOLLOW_UPS_LINE = '/^\s*Follow-ups:\s*$/i';
     private const string UNKNOWN_REVIEWER = 'unknown';
 
     /**
@@ -36,9 +37,8 @@ final readonly class LoopReviewReader
     private function readComment(PullRequestComment $comment): LoopReview
     {
         $lines = $this->readableLines($comment->body);
-        $findings = $this->findingsOf($lines);
 
-        return new LoopReview($this->reviewerOf($lines), $this->verdictOf($lines, $findings), $findings);
+        return new LoopReview($this->reviewerOf($lines), $this->verdictOf($lines), $this->findingsOf($lines));
     }
 
     // A fenced json block becomes one line so it competes with bare JSON lines by position; fenced and quoted lines are blanked.
@@ -126,27 +126,48 @@ final readonly class LoopReviewReader
      */
     private function findingsOf(array $lines): array
     {
-        $findings = [];
-        foreach ($lines as $line) {
-            if (!$line['json'] && 1 === preg_match(self::FINDING_LINE, $line['text'], $match)) {
-                $findings[] = new LoopFinding($match[2], (int) $match[3], Severity::from($match[1]));
-            }
+        return array_values(array_filter(array_map($this->findingIn(...), $lines)));
+    }
+
+    /**
+     * @param array{text: string, json: bool} $line
+     */
+    private function findingIn(array $line): ?LoopFinding
+    {
+        if ($line['json'] || 1 !== preg_match(self::FINDING_LINE, $line['text'], $match)) {
+            return null;
         }
 
-        return $findings;
+        return new LoopFinding($match[2], (int) $match[3], Severity::from($match[1]));
     }
 
     /**
      * @param list<array{text: string, json: bool}> $lines
-     * @param list<LoopFinding>                     $findings
      */
-    private function verdictOf(array $lines, array $findings): LoopVerdict
+    private function verdictOf(array $lines): LoopVerdict
     {
         $declared = $this->declaredVerdict($lines);
-        $blocking = array_any($findings, static fn (LoopFinding $finding): bool => Severity::P3 !== $finding->severity);
 
         // An open P1 or P2 finding means changes whatever the JSON says, because the loop's rules count it so.
-        return LoopVerdict::Approve === $declared && $blocking ? LoopVerdict::Changes : $declared;
+        return LoopVerdict::Approve === $declared && $this->hasBlockingFinding($lines) ? LoopVerdict::Changes : $declared;
+    }
+
+    // The loop files a P2 of a re-review under a line "Follow-ups:" and still approves; a P1 blocks wherever it stands.
+    /**
+     * @param list<array{text: string, json: bool}> $lines
+     */
+    private function hasBlockingFinding(array $lines): bool
+    {
+        $filed = false;
+        foreach ($lines as $line) {
+            $filed = $filed || 1 === preg_match(self::FOLLOW_UPS_LINE, $line['text']);
+            $severity = $this->findingIn($line)?->severity;
+            if (Severity::P1 === $severity || (Severity::P2 === $severity && !$filed)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
