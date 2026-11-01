@@ -24,7 +24,7 @@ final readonly class ListReviewsController
     {
         $reviews = array_values(array_filter(
             $this->reviews->newestFirst(),
-            static fn (ReviewSummary $review): bool => $project === null || $review->project === $project,
+            static fn (ReviewSummary $review): bool => null === $project || $review->project === $project,
         ));
 
         return new Response($this->twig->render('dashboard/reviews.html.twig', ['reviews' => $reviews, 'project' => $project]));

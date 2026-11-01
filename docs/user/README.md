@@ -22,7 +22,7 @@ Intakt can treat a branch of a local git repository as a pull request: the branc
 
 Intakt serves two pages in the browser, built from the ledger of review events alone (no forge, no model call):
 
-- `/` lists the projects that started a review, with how many rounds each has had and how many of them the judge has decided.
+- `/projects` lists the projects that started a review, with how many rounds each has had and how many of them the judge has decided.
 - `/reviews` lists every round, newest first, with its project, its number of reviewers, when it started (UTC) and its state: `judged` once the judge has decided it, `in progress` before. `/reviews?project=<name>` keeps one project's rounds; each project on the first page links there.
 
 The pages are plain HTML and never refresh themselves: reload the page to see newer rounds. Two rounds of one change appear as two rows of the same project, because the ledger does not link rounds to a change yet. The page of one round (reviewers, verdicts, findings, cost) and the button that starts a review are planned.

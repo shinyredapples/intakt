@@ -25,7 +25,7 @@ final readonly class ProjectSummary
 
         foreach ($reviews as $review) {
             $rounds[$review->project] = ($rounds[$review->project] ?? 0) + 1;
-            $judged[$review->project] = ($judged[$review->project] ?? 0) + ($review->state === ReviewState::Judged ? 1 : 0);
+            $judged[$review->project] = ($judged[$review->project] ?? 0) + (ReviewState::Judged === $review->state ? 1 : 0);
         }
 
         ksort($rounds, SORT_STRING);
@@ -33,7 +33,7 @@ final readonly class ProjectSummary
         $projects = [];
 
         foreach ($rounds as $name => $count) {
-            // PHP turns a numeric project name into an integer key.
+            // A numeric project name became an integer key, and the name is a string again here because PHP turns such keys into integers.
             $projects[] = new self(strval($name), $count, $judged[$name]);
         }
 

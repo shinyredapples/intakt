@@ -18,7 +18,7 @@ final readonly class ListProjectsController
     ) {
     }
 
-    #[Route('/', name: 'dashboard_list_projects', methods: ['GET'])]
+    #[Route('/projects', name: 'dashboard_list_projects', methods: ['GET'])]
     public function __invoke(): Response
     {
         $projects = ProjectSummary::fromReviews($this->reviews->newestFirst());

@@ -24,7 +24,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $this->ledger->startRound('round-3', 'alpha');
         $this->ledger->judgeRound('round-2');
 
-        $crawler = $this->browser->request('GET', '/');
+        $crawler = $this->browser->request('GET', '/projects');
 
         self::assertResponseIsSuccessful();
         self::assertSame(['alpha', 'zeta'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
@@ -36,14 +36,14 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRound('round-1', 'alpha');
 
-        $crawler = $this->browser->request('GET', '/');
+        $crawler = $this->browser->request('GET', '/projects');
 
         self::assertSame('/reviews?project=alpha', $crawler->filter('tbody a')->attr('href'));
     }
 
     public function testTheProjectListSaysSoWhenTheLedgerHasNoReviews(): void
     {
-        $this->browser->request('GET', '/');
+        $this->browser->request('GET', '/projects');
 
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('main', 'No project has started a review yet.');
@@ -54,7 +54,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRound('round-1', '<b>bold</b>');
 
-        $this->browser->request('GET', '/');
+        $this->browser->request('GET', '/projects');
 
         self::assertSelectorNotExists('main b');
         self::assertStringContainsString('&lt;b&gt;bold&lt;/b&gt;', (string) $this->browser->getResponse()->getContent());

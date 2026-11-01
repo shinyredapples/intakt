@@ -15,7 +15,7 @@ final class NoPollingTest extends DashboardPageTestCase
      */
     public static function pages(): iterable
     {
-        yield 'project list' => ['/'];
+        yield 'project list' => ['/projects'];
         yield 'review list' => ['/reviews'];
         yield 'review list of one project' => ['/reviews?project=alpha'];
     }

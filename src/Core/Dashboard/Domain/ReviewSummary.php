@@ -19,6 +19,6 @@ final readonly class ReviewSummary
 
     public function judged(): self
     {
-        return clone($this, ['state' => ReviewState::Judged]);
+        return clone ($this, ['state' => ReviewState::Judged]);
     }
 }
