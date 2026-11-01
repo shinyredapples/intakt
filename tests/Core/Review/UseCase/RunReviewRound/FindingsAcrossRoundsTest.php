@@ -32,9 +32,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
-use Throwable;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
+use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(StoredFindings::class)]
