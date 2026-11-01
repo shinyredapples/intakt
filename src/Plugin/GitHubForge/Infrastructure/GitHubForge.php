@@ -118,7 +118,7 @@ final readonly class GitHubForge implements Forge
     private function changedFiles(PullRequestAddress $address): ChangedFiles
     {
         $files = [];
-        for ($page = 1; ; ++$page) {
+        for ($page = 1;; ++$page) {
             $body = $this->get($address->pullRequestPath().'/files', self::JSON, ['per_page' => self::PAGE_SIZE, 'page' => $page]);
             $entries = $this->decode($body ?? throw new ForgeReadFailed('GitHub has no file list for the pull request.'));
             $files = [...$files, ...array_merge(...array_map($this->filesOf(...), $entries))];
@@ -185,7 +185,7 @@ final readonly class GitHubForge implements Forge
         try {
             return new CommitId($this->textAt($data, ...$keys));
         } catch (InvalidArgumentException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than a commit hash.', previous: $invalid);
+            throw new ForgeReadFailed('GitHub answered something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
     }
 
@@ -210,7 +210,7 @@ final readonly class GitHubForge implements Forge
         try {
             $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', previous: $invalid);
+            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
         }
 
         return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
@@ -228,7 +228,7 @@ final readonly class GitHubForge implements Forge
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), previous: $failure);
+            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class), $failure->getCode(), previous: $failure);
         }
 
         if (self::NOT_FOUND === $status) {
@@ -243,7 +243,7 @@ final readonly class GitHubForge implements Forge
         try {
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted $notMinted) {
-            throw new ForgeReadFailed('No GitHub installation token for a read.', previous: $notMinted);
+            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
         }
     }
 }

@@ -15,7 +15,6 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
-use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
@@ -35,8 +34,8 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
-use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
+use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -63,7 +62,6 @@ final class GitHubForgeTest extends TestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
     private const string HEAD = '1111111111111111111111111111111111111111';
-    private const string MOVED = '2222222222222222222222222222222222222222';
     private const string MERGE_BASE = '3333333333333333333333333333333333333333';
     private const string API = 'https://api.github.com/repos/acme/widgets';
 
@@ -170,7 +168,7 @@ final class GitHubForgeTest extends TestCase
 
         $this->expectException(FileNotFoundAtHead::class);
 
-        (void) $forge->fileAtHead($change, 'src/Missing.php');
+        $forge->fileAtHead($change, 'src/Missing.php');
     }
 
     /**
@@ -191,7 +189,7 @@ final class GitHubForgeTest extends TestCase
     {
         $this->expectException(ChangeNotFound::class);
 
-        (void) $this->forge()->change(new ChangeId($address));
+        $this->forge()->change(new ChangeId($address));
     }
 
     public function testItTreatsAMissingPullRequestAsChangeNotFound(): void
@@ -200,7 +198,7 @@ final class GitHubForgeTest extends TestCase
 
         $this->expectException(ChangeNotFound::class);
 
-        (void) $forge->change(new ChangeId(self::PULL));
+        $forge->change(new ChangeId(self::PULL));
     }
 
     public function testItTurnsAnErrorStatusIntoAForgeReadFailure(): void
@@ -210,7 +208,7 @@ final class GitHubForgeTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
         $this->expectExceptionMessage('403');
 
-        (void) $forge->change(new ChangeId(self::PULL));
+        $forge->change(new ChangeId(self::PULL));
     }
 
     public function testItRetriesAFailedReadThroughTheRetryableClient(): void
@@ -245,7 +243,7 @@ final class GitHubForgeTest extends TestCase
             return null;
         });
 
-        (void) $forge->change(new ChangeId(self::PULL));
+        $forge->change(new ChangeId(self::PULL));
 
         self::assertSame(['Authorization: Bearer installation-secret'], array_values(array_unique($bearers)));
     }
@@ -261,7 +259,7 @@ final class GitHubForgeTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        (void) $forge->change(new ChangeId(self::PULL));
+        $forge->change(new ChangeId(self::PULL));
     }
 
     private function movedChange(GitHubForge $forge): Change
