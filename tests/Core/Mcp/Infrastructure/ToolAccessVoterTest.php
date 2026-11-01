@@ -40,7 +40,7 @@ final class ToolAccessVoterTest extends TestCase
 
     public function testItAbstainsOnAnAttributeThatIsNotAToolAccess(): void
     {
-        $result = (new ToolAccessVoter(true))->vote(new NullToken(), null, ['ROLE_ADMIN']);
+        $result = new ToolAccessVoter(true)->vote(new NullToken(), null, ['ROLE_ADMIN']);
 
         self::assertSame(VoterInterface::ACCESS_ABSTAIN, $result);
     }

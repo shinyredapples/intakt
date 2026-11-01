@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Mcp\Contract;
 
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use stdClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Covers nothing because the contract is the behavior of the MCP Bundle and SDK as Intakt configures them.
@@ -34,7 +35,7 @@ final class ToolSchemaContractTest extends KernelTestCase
     {
         $client = $this->client();
 
-        $answer = $client->call('tools/call', ['name' => 'list_projects', 'arguments' => new \stdClass()], 2);
+        $answer = $client->call('tools/call', ['name' => 'list_projects', 'arguments' => new stdClass()], 2);
 
         self::assertFalse($answer['result']['isError'] ?? false);
         self::assertIsList($answer['result']['structuredContent']['projects']);
@@ -42,7 +43,7 @@ final class ToolSchemaContractTest extends KernelTestCase
 
     public function testAnUnknownToolIsAnMcpErrorWithoutAStackTrace(): void
     {
-        $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new \stdClass()], 2);
+        $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new stdClass()], 2);
 
         self::assertArrayHasKey('code', $answer['error']);
         self::assertStringNotContainsString('#0', json_encode($answer, JSON_THROW_ON_ERROR));

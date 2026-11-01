@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Mcp\Infrastructure;
 
+use Closure;
 use Intakt\Core\Mcp\Contract\IsGrantedTool;
 use Mcp\Capability\Registry\ElementReference;
 use Mcp\Capability\Registry\ReferenceHandlerInterface;
 use Mcp\Exception\ToolCallException;
+use ReflectionMethod;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 /**
@@ -41,7 +43,7 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
     {
         $method = $this->method($reference->handler);
 
-        if (!$method instanceof \ReflectionMethod) {
+        if (!$method instanceof ReflectionMethod) {
             return null;
         }
 
@@ -52,16 +54,16 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
     }
 
     /**
-     * @param \Closure|array{0: object|string, 1: string}|string $handler
+     * @param Closure|array{0: object|string, 1: string}|string $handler
      */
-    private function method(\Closure|array|string $handler): ?\ReflectionMethod
+    private function method(Closure|array|string $handler): ?ReflectionMethod
     {
         if (is_array($handler)) {
-            return new \ReflectionMethod($handler[0], $handler[1]);
+            return new ReflectionMethod($handler[0], $handler[1]);
         }
 
         if (is_string($handler) && class_exists($handler)) {
-            return new \ReflectionMethod($handler, '__invoke');
+            return new ReflectionMethod($handler, '__invoke');
         }
 
         return null;

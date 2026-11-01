@@ -64,7 +64,7 @@ final class AuthorizedToolCallsTest extends TestCase
             return true;
         });
 
-        (new AuthorizedToolCalls($this->inner(), $authorization))->handle(new ElementReference(WriteTool::class), ['allow_write' => true]);
+        new AuthorizedToolCalls($this->inner(), $authorization)->handle(new ElementReference(WriteTool::class), ['allow_write' => true]);
 
         self::assertSame([[ToolAccess::Write, null]], $asked);
     }

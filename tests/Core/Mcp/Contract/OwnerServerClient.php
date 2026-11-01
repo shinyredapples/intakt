@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Contract;
 
+use stdClass;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
@@ -53,7 +54,7 @@ final class OwnerServerClient
      */
     public function initialize(string $protocolVersion): array
     {
-        $params = ['protocolVersion' => $protocolVersion, 'capabilities' => new \stdClass(), 'clientInfo' => ['name' => 'claude-code', 'version' => '1.0.0']];
+        $params = ['protocolVersion' => $protocolVersion, 'capabilities' => new stdClass(), 'clientInfo' => ['name' => 'claude-code', 'version' => '1.0.0']];
 
         return $this->call('initialize', $params);
     }
