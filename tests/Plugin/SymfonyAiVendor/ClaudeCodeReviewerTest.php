@@ -30,6 +30,8 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\JudgeAgent;
+use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -249,6 +251,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
     }
 }
