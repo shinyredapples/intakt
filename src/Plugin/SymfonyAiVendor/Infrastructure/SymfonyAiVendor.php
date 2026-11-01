@@ -26,6 +26,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
+use Override;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
@@ -50,6 +51,7 @@ final readonly class SymfonyAiVendor implements Vendor
     /**
      * @throws VendorAccountBusy
      */
+    #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         $answering = $this->answering($project, $tier);
@@ -102,6 +104,7 @@ final readonly class SymfonyAiVendor implements Vendor
     /**
      * @throws VendorAccountBusy
      */
+    #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
         $answering = $this->answering($project, Tier::Light);
