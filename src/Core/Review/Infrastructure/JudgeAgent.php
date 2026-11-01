@@ -34,7 +34,7 @@ final readonly class JudgeAgent implements Judge
 
         $judgement = $this->answerIn($execution);
 
-        return null !== $judgement && $this->marksEachFindingOnce($request->findings, $judgement) ? $judgement : Judgement::everyBlockingFindingActs($request->findings);
+        return $judgement instanceof Judgement && $this->marksEachFindingOnce($request->findings, $judgement) ? $judgement : Judgement::everyBlockingFindingActs($request->findings);
     }
 
     // Anything the Validator or the mapping refuses is no answer; a failed call is not the judge's answer, so it stays an error.

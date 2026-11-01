@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Plugin\Vendor\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use NoDiscard;
