@@ -31,4 +31,4 @@ flowchart LR
 
 ## Remembering past mistakes
 
-Fixed review findings are also kept in a searchable store: once every reviewer of a round is in, each finding a reviewer marked as fixed is written there with its cause (a round that finishes after a newer round of the same change writes nothing, because the newer round's view of the findings wins). The reminder to later reviewers is planned. When a new change touches the same files, the reviewers are reminded what went wrong there before, so the same mistake is caught faster the second time.
+Fixed review findings are also kept in a searchable store: once every reviewer of a round is in, each finding a reviewer marked as fixed is written there with its cause (a round that finishes after a newer round of the same change writes nothing, because the newer round's view of the findings wins). When a new change touches the same files (a renamed file counts under its old name too), the reviewers are reminded what went wrong there before, so the same mistake is caught faster the second time. The reminder is short, is shown as notes to check rather than rules to follow, and never changes the reviewer's own instructions.
