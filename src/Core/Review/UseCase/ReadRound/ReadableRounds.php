@@ -22,7 +22,7 @@ final readonly class ReadableRounds
         try {
             return $this->rounds->stored($roundId);
         } catch (RoundNotFound $notFound) {
-            throw new ToolCallException($notFound->getMessage(), previous: $notFound);
+            throw new ToolCallException($notFound->getMessage(), $notFound->getCode(), previous: $notFound);
         }
     }
 
@@ -30,7 +30,7 @@ final readonly class ReadableRounds
     {
         try {
             return $this->rounds->stored($roundId);
-        } catch (RoundNotFound $notFound) {
+        } catch (RoundNotFound) {
             throw new ResourceNotFoundException($uri);
         }
     }

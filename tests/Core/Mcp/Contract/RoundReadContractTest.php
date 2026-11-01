@@ -56,7 +56,8 @@ final class RoundReadContractTest extends KernelTestCase
         foreach (['review_status', 'review_verdicts', 'review_act_list'] as $name) {
             $tool = array_first(array_filter($tools, static fn (mixed $listed): bool => is_array($listed) && $name === ($listed['name'] ?? null)));
             self::assertIsArray($tool, $name.' is not listed.');
-            self::assertSame(['readOnlyHint' => true, 'destructiveHint' => false], array_intersect_key($tool['annotations'], ['readOnlyHint' => 1, 'destructiveHint' => 1]), $name);
+            self::assertTrue(OwnerServerClient::at($tool, 'annotations', 'readOnlyHint'), $name);
+            self::assertFalse(OwnerServerClient::at($tool, 'annotations', 'destructiveHint'), $name);
         }
     }
 
@@ -64,26 +65,30 @@ final class RoundReadContractTest extends KernelTestCase
     {
         $result = $this->callTool('review_status');
 
-        self::assertFalse($result['isError']);
-        self::assertSame('judged', $result['structuredContent']['state']);
-        self::assertCount(2, $result['structuredContent']['reviewers']);
+        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertSame('judged', OwnerServerClient::at($result, 'structuredContent', 'state'));
+        $reviewers = OwnerServerClient::at($result, 'structuredContent', 'reviewers');
+        self::assertIsArray($reviewers);
+        self::assertCount(2, $reviewers);
     }
 
     public function testTheVerdictsToolAnswersWithTheReviewersVerdicts(): void
     {
         $result = $this->callTool('review_verdicts');
 
-        self::assertFalse($result['isError']);
-        self::assertSame('changes', $result['structuredContent']['verdicts'][0]['verdict']['verdict']);
+        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertSame('changes', OwnerServerClient::at($result, 'structuredContent', 'verdicts', '0', 'verdict', 'verdict'));
     }
 
     public function testTheActListToolAnswersWithTheFindingsTheJudgeMarkedAct(): void
     {
         $result = $this->callTool('review_act_list');
 
-        self::assertFalse($result['isError']);
-        self::assertTrue($result['structuredContent']['judged']);
-        self::assertSame(['F1'], array_column($result['structuredContent']['act'], 'id'));
+        $act = OwnerServerClient::at($result, 'structuredContent', 'act');
+        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertTrue(OwnerServerClient::at($result, 'structuredContent', 'judged'));
+        self::assertIsArray($act);
+        self::assertSame(['F1'], array_column($act, 'id'));
     }
 
     public function testAnUnknownRoundIsAnMcpToolErrorWithoutAStackTrace(): void
@@ -107,10 +112,12 @@ final class RoundReadContractTest extends KernelTestCase
     {
         $answer = $this->client->call('resources/read', ['uri' => 'intakt://rounds/'.$this->roundId.'/findings'], 3);
 
-        $contents = OwnerServerClient::at($answer, 'result', 'contents');
-        self::assertIsArray($contents);
-        self::assertSame('application/json', $contents[0]['mimeType']);
-        self::assertSame(['F1'], array_column(json_decode($contents[0]['text'], true, flags: JSON_THROW_ON_ERROR), 'id'));
+        $text = OwnerServerClient::at($answer, 'result', 'contents', '0', 'text');
+        self::assertSame('application/json', OwnerServerClient::at($answer, 'result', 'contents', '0', 'mimeType'));
+        self::assertIsString($text);
+        $findings = json_decode($text, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($findings);
+        self::assertSame(['F1'], array_column($findings, 'id'));
     }
 
     public function testAnUnknownRoundResourceIsAnMcpErrorWithoutAStackTrace(): void
