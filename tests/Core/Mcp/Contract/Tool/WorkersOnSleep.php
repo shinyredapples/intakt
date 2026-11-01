@@ -19,6 +19,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 // The waiting review's clock: each sleep hands what is queued now to the workers, so a started round is stored and judged within the request and no test sleeps for real; one batch per sleep, so every step of the round is reported.
 final readonly class WorkersOnSleep implements ClockInterface
 {
+    private MockClock $clock;
+
     public function __construct(
         #[Autowire(service: 'messenger.transport.async')]
         private InMemoryTransport $queue,
@@ -26,8 +28,8 @@ final readonly class WorkersOnSleep implements ClockInterface
         private ReviewWithReviewerHandler $reviewer,
         #[Autowire(service: 'intakt.test.mcp.judge_worker')]
         private JudgeRoundHandler $judge,
-        private MockClock $clock = new MockClock('2026-11-01 12:00:00', 'UTC'),
     ) {
+        $this->clock = new MockClock('2026-11-01 12:00:00', 'UTC');
     }
 
     #[Override]
