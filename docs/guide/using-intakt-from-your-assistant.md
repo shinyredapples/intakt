@@ -14,7 +14,7 @@ flowchart LR
 
 ## From your AI assistant (MCP)
 
-**MCP** (Model Context Protocol) is a standard way for AI assistants to use tools. Intakt runs an MCP server, so you can ask your assistant things like "what did the reviewers say about PR 88?" or "which projects does Intakt run?", and it calls Intakt's tools to do it. Asking it to "start a review of my branch" is planned.
+**MCP** (Model Context Protocol) is a standard way for AI assistants to use tools. Intakt runs an MCP server, so you can ask your assistant things like "what did the reviewers say about my last review?" or "which projects does Intakt run?", and it calls Intakt's tools to do it. Asking it to "start a review of my branch" is planned.
 
 | Tool | What it does | Changes anything? |
 |---|---|---|
