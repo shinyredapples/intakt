@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
 use Closure;
+use DateTimeImmutable;
+use DateTimeZone;
 use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
@@ -20,7 +22,7 @@ final readonly class WorkerOnSleep implements ClockInterface
     }
 
     #[Override]
-    public function now(): \DateTimeImmutable
+    public function now(): DateTimeImmutable
     {
         return $this->clock->now();
     }
@@ -33,7 +35,7 @@ final readonly class WorkerOnSleep implements ClockInterface
     }
 
     #[Override]
-    public function withTimeZone(\DateTimeZone|string $timezone): static
+    public function withTimeZone(DateTimeZone|string $timezone): static
     {
         return new self($this->clock->withTimeZone($timezone), $this->work);
     }
