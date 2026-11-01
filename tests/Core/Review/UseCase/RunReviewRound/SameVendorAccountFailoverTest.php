@@ -10,7 +10,9 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -71,6 +73,9 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(SymfonyAiVendor::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(TierPlatform::class)]
+#[UsesClass(SendFailures::class)]
+#[UsesClass(TypedRejectionConverter::class)]
+#[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(VendorAccountOut::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRateLimited::class)]
@@ -149,8 +154,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
-        $vendor = new AccountLimitedVendor(new ScriptedVendor(new ProviderFailedTransiently(new ServerException(503))), $resolver, $limit, $this->cooldowns);
+        $vendor = new AccountLimitedVendor(new ScriptedVendor(new ProviderFailedTransiently(new ServerException(503))), $resolver, $this->cooldowns);
 
         try {
             $this->fixture->deliver($message, $vendor);
@@ -201,10 +205,10 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger());
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser(), new RemembersNothing()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $limit);
 
-        return new AccountLimitedVendor($vendor, $resolver, $limit, $this->cooldowns);
+        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
     }
 
     /**

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
-use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -44,6 +43,8 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -58,6 +59,10 @@ use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ConfinedClaudeCodeClient::class)]
@@ -93,6 +98,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
+#[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(Kernel::class)]
 final class ClaudeCodeReviewerTest extends KernelTestCase
 {
@@ -100,7 +106,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
@@ -133,14 +139,14 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testAStreamInWhichTheCliUsedOneOfItsOwnToolsStillYieldsItsVerdict(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
     public function testTheSubscriptionReviewerCannotApproveAChangeItNeverRead(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('could not read', $verdict->findings[0]->text);
@@ -148,7 +154,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliThatExitsMidStreamEndsTheReviewerAsBlocked(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('exit code 143', $verdict->findings[0]->text);
@@ -156,7 +162,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliKilledMidStreamEndsTheReviewerAsBlocked(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::killedAfter('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::killedAfter('truncated'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('stopped by signal 15', $verdict->findings[0]->text);
@@ -164,7 +170,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACliThatTimesOutMidStreamEndsTheReviewerAsBlocked(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::stalledAfter('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::stalledAfter('truncated'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('the CLI timed out', $verdict->findings[0]->text);
@@ -212,7 +218,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testATruncatedStreamEndsTheReviewerAsBlockedWithTheReason(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('truncated'))->review('alpha', Tier::Strong, $this->request());
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('truncated'))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
@@ -253,6 +259,8 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser(), new RemembersNothing()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, self::createStub(AccountCooldowns::class), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $limit);
     }
 }
