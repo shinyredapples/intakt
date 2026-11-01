@@ -11,8 +11,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
+#[CoversClass(FencedCodeBlocks::class)]
 #[UsesClass(HighlightStatus::class)]
-#[UsesClass(FencedCodeBlocks::class)]
 final class HighlightsGateTest extends SandboxTestCase
 {
     private const string HEADER = "| Feature | How Intakt uses it | Status | Where |\n|---|---|---|---|\n";
