@@ -70,7 +70,7 @@ final readonly class InstallationTokenMinter
     private function tokenFrom(array $answer): InstallationToken
     {
         $token = $answer['token'] ?? null;
-        $expiresAt = is_string($answer['expires_at'] ?? null) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $answer['expires_at']) : false;
+        $expiresAt = is_string($answer['expires_at'] ?? null) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $answer['expires_at'], new DateTimeZone('UTC')) : false;
         if (!is_string($token) || '' === $token || false === $expiresAt) {
             throw InstallationTokenNotMinted::becauseTheAnswerIsInvalid();
         }

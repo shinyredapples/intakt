@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use DateTimeImmutable;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,13 +18,15 @@ final class AppJwtTest extends TestCase
     public function testTheJwtIsSignedWithRs256ForTheAppAndLivesTenMinutesAtMost(): void
     {
         $key = AppKey::generate();
-        $clock = new MockClock(new DateTimeImmutable('2026-11-25 10:00:00 UTC'));
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
 
         [$header, $claims, $signature] = explode('.', new AppJwt('12345', $key->private, $clock)->sign());
 
         self::assertSame(['alg' => 'RS256', 'typ' => 'JWT'], $this->decode($header));
         $decoded = $this->decode($claims);
         self::assertSame('12345', $decoded['iss']);
+        self::assertIsInt($decoded['exp']);
+        self::assertIsInt($decoded['iat']);
         self::assertLessThanOrEqual(600, $decoded['exp'] - $clock->now()->getTimestamp());
         self::assertLessThan($clock->now()->getTimestamp(), $decoded['iat']);
         self::assertSame(1, openssl_verify($header.'.'.$claims, $this->bytes($signature), $key->public, OPENSSL_ALGO_SHA256));
@@ -37,7 +38,7 @@ final class AppJwtTest extends TestCase
         $jwt = new AppJwt('12345', $unreadable, new MockClock());
 
         try {
-            $jwt->sign();
+            (void) $jwt->sign();
             self::fail('An unreadable key must not sign.');
         } catch (InstallationTokenNotMinted $failure) {
             self::assertStringNotContainsString($unreadable, $failure->getMessage());
@@ -45,15 +46,18 @@ final class AppJwtTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function decode(string $segment): array
     {
-        return json_decode($this->bytes($segment), true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode($this->bytes($segment), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+
+        return $decoded;
     }
 
     private function bytes(string $segment): string
     {
-        return base64_decode(strtr($segment, '-_', '+/'), true);
+        return (string) base64_decode(strtr($segment, '-_', '+/'), true);
     }
 }

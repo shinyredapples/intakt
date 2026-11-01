@@ -31,7 +31,7 @@ final class InstallationTokenMinterTest extends TestCase
         $requests = [];
         $minter = $this->minter(
             static function (string $method, string $url, array $options) use (&$requests): ResponseInterface {
-                $requests[] = [$method, $url, $options['normalized_headers']['authorization'][0] ?? ''];
+                $requests[] = [$method, $url, self::authorization($options)];
 
                 return new MockResponse(self::answer('opaque-value', '2026-11-25T11:00:00+01:00'), ['http_code' => 201]);
             },
@@ -53,9 +53,9 @@ final class InstallationTokenMinterTest extends TestCase
         $minter = $this->minter(static fn (): ResponseInterface => new MockResponse(self::recorded($fixture), ['http_code' => $status]));
 
         $this->expectException(InstallationTokenNotMinted::class);
-        $this->expectExceptionMessage((string) $status);
+        $this->expectExceptionMessageMatches('/status '.$status.'/');
 
-        $minter->mint();
+        (void) $minter->mint();
     }
 
     /**
@@ -73,7 +73,7 @@ final class InstallationTokenMinterTest extends TestCase
 
         $this->expectException(InstallationTokenNotMinted::class);
 
-        $minter->mint();
+        (void) $minter->mint();
     }
 
     public function testAnAnswerWithoutATokenFailsTheCall(): void
@@ -82,7 +82,7 @@ final class InstallationTokenMinterTest extends TestCase
 
         $this->expectException(InstallationTokenNotMinted::class);
 
-        $minter->mint();
+        (void) $minter->mint();
     }
 
     public function testAnAnswerWithAnUnreadableExpiryFailsTheCall(): void
@@ -91,7 +91,7 @@ final class InstallationTokenMinterTest extends TestCase
 
         $this->expectException(InstallationTokenNotMinted::class);
 
-        $minter->mint();
+        (void) $minter->mint();
     }
 
     public function testNeitherTheKeyNorTheJwtReachesTheLogsOrTheFailure(): void
@@ -101,7 +101,7 @@ final class InstallationTokenMinterTest extends TestCase
         $logger = new RecordingLogger();
         $minter = $this->minter(
             static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
-                $sent[] = $options['normalized_headers']['authorization'][0];
+                $sent[] = self::authorization($options);
 
                 return new MockResponse(self::recorded('access_tokens_401.json'), ['http_code' => 401]);
             },
@@ -110,7 +110,7 @@ final class InstallationTokenMinterTest extends TestCase
         );
 
         try {
-            $minter->mint();
+            (void) $minter->mint();
             self::fail('A refused exchange must fail.');
         } catch (InstallationTokenNotMinted $failure) {
             $everything = implode("\n", $logger->lines).$failure->getMessage().$failure->getTraceAsString();
@@ -123,9 +123,22 @@ final class InstallationTokenMinterTest extends TestCase
 
     private function minter(callable $respond, ?AppKey $key = null, ?LoggerInterface $logger = null): InstallationTokenMinter
     {
-        $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock(new DateTimeImmutable('2026-11-25 10:00:00 UTC')));
+        $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, new MockClock('2026-11-25 10:00:00 UTC'));
 
-        return new InstallationTokenMinter('678', $jwt, new MockHttpClient($respond), $logger ?? $this->createStub(LoggerInterface::class));
+        return new InstallationTokenMinter('678', $jwt, new MockHttpClient($respond), $logger ?? self::createStub(LoggerInterface::class));
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private static function authorization(array $options): string
+    {
+        $headers = $options['normalized_headers'];
+        self::assertIsArray($headers);
+
+        $authorization = (array) ($headers['authorization'] ?? []);
+
+        return is_string($authorization[0] ?? null) ? $authorization[0] : '';
     }
 
     private static function answer(string $token, string $expiresAt): string
@@ -135,6 +148,6 @@ final class InstallationTokenMinterTest extends TestCase
 
     private static function recorded(string $fixture): string
     {
-        return file_get_contents(__DIR__.'/Fixtures/'.$fixture);
+        return (string) file_get_contents(__DIR__.'/Fixtures/'.$fixture);
     }
 }

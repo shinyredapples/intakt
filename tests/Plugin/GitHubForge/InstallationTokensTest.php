@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use DateTimeImmutable;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
@@ -33,7 +32,7 @@ final class InstallationTokensTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->clock = new MockClock(new DateTimeImmutable('2026-11-25 10:00:00 UTC'));
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
         $http = new MockHttpClient(function (): ResponseInterface {
             ++$this->exchanges;
             if ($this->refuse) {
@@ -66,22 +65,22 @@ final class InstallationTokensTest extends TestCase
 
     public function testATokenAboutToLapseIsMintedAgainBeforeTheCall(): void
     {
-        $this->tokens->current();
+        (void) $this->tokens->current();
         $this->clock->modify('+59 minutes 30 seconds');
 
-        $this->tokens->current();
+        (void) $this->tokens->current();
 
         self::assertSame(2, $this->exchanges);
     }
 
     public function testAFailedExchangeFailsTheCallAndKeepsNoStaleToken(): void
     {
-        $this->tokens->current();
+        (void) $this->tokens->current();
         $this->clock->modify('+2 hours');
         $this->refuse = true;
 
         try {
-            $this->tokens->current();
+            (void) $this->tokens->current();
             self::fail('A refused exchange must fail the call.');
         } catch (InstallationTokenNotMinted) {
             $this->refuse = false;
@@ -92,10 +91,10 @@ final class InstallationTokensTest extends TestCase
 
     public function testAResetForgetsTheToken(): void
     {
-        $this->tokens->current();
+        (void) $this->tokens->current();
 
         $this->tokens->reset();
-        $this->tokens->current();
+        (void) $this->tokens->current();
 
         self::assertSame(2, $this->exchanges);
     }

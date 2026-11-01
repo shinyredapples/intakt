@@ -43,8 +43,8 @@ final readonly class AppJwt
     private function signature(string $payload): string
     {
         $key = openssl_pkey_get_private($this->privateKey);
-        $signature = '';
-        if (false === $key || !openssl_sign($payload, $signature, $key, OPENSSL_ALGO_SHA256)) {
+        $signature = null;
+        if (false === $key || !openssl_sign($payload, $signature, $key, OPENSSL_ALGO_SHA256) || !is_string($signature)) {
             throw InstallationTokenNotMinted::becauseTheKeyCannotSign();
         }
 
