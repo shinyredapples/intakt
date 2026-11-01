@@ -47,3 +47,5 @@ when@test:
     imports:
         # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
         - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }
+        # A write tool that proves, through the whole server, that a tool the voter refuses does not run.
+        - { resource: '../tests/Core/Mcp/services.yaml', ignore_errors: not_found }

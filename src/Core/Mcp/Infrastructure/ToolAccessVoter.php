@@ -24,11 +24,13 @@ final readonly class ToolAccessVoter implements VoterInterface
         $attributes = is_array($rest[1] ?? null) ? $rest[1] : [];
 
         foreach ($attributes as $attribute) {
-            if (!$attribute instanceof ToolAccess) {
+            $access = is_string($attribute) ? ToolAccess::tryFrom($attribute) : null;
+
+            if (null === $access) {
                 continue;
             }
 
-            if ($this->grants($attribute)) {
+            if ($this->grants($access)) {
                 return self::ACCESS_GRANTED;
             }
 

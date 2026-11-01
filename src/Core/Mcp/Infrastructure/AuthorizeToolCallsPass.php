@@ -22,11 +22,8 @@ final class AuthorizeToolCallsPass implements CompilerPassInterface
 
     private function authorize(ContainerBuilder $container, Definition $builder, string $builderId): void
     {
+        // A server without a handler locator is wrapped too, because a server left to the SDK's handler would run tools unchecked.
         $locator = $this->locator($builder);
-
-        if (null === $locator) {
-            return;
-        }
 
         $handlerId = $builderId.'.authorized_tool_calls';
         $container->register($handlerId, AuthorizedToolCalls::class)

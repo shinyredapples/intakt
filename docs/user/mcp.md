@@ -4,7 +4,7 @@ Intakt runs an MCP server for your own agents (Claude Code or another MCP client
 
 ## Reaching the server
 
-The server is served over HTTP at `/mcp/owner` by the same web application as the rest of Intakt, for example `http://localhost:8000/mcp/owner` after `php -S localhost:8000 -t public`. It accepts only requests whose host is `localhost`. There is no token yet: nothing it offers can change anything.
+The server is served over HTTP at `/mcp/owner` by the same web application as the rest of Intakt, for example `http://localhost:8000/mcp/owner` after `php -S localhost:8000 -t public`. It accepts only requests whose host is `localhost`, `127.0.0.1` or `[::1]`. There is no token yet: nothing it offers can change anything.
 
 With Claude Code: `claude mcp add --transport http intakt http://localhost:8000/mcp/owner`.
 

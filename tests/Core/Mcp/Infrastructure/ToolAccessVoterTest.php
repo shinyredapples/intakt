@@ -50,6 +50,6 @@ final class ToolAccessVoterTest extends TestCase
      */
     private function vote(ToolAccessVoter $voter, ToolAccess $access, ?array $subject = null): int
     {
-        return $voter->vote(new NullToken(), $subject, [$access]);
+        return $voter->vote(new NullToken(), $subject, [$access->value]);
     }
 }
