@@ -41,7 +41,7 @@ final readonly class SymfonyAiVendor implements Vendor
     #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): Verdict
     {
-        $platform = new TierRoutedPlatform($this->tiers, $project);
+        $platform = new TierRoutedPlatform($this->tiers, $this->resolver, $project);
         $reservation = $this->usage->reserve($project, $tier, $request->conversation->round);
 
         try {
@@ -66,7 +66,7 @@ final readonly class SymfonyAiVendor implements Vendor
     public function judge(string $project, JudgeRequest $request): Judgement
     {
         $tier = Tier::Light;
-        $platform = new TierRoutedPlatform($this->tiers, $project);
+        $platform = new TierRoutedPlatform($this->tiers, $this->resolver, $project);
         $reservation = $this->usage->reserve($project, $tier);
 
         try {
