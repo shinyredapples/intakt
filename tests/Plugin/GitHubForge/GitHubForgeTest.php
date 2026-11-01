@@ -16,8 +16,12 @@ use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\ReviewComment;
+use Intakt\Plugin\Forge\Contract\ReviewToken;
+use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
@@ -53,7 +57,11 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(ForgeReadFailed::class)]
+#[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(HeadMove::class)]
+#[UsesClass(ReviewComment::class)]
+#[UsesClass(ReviewToken::class)]
+#[UsesClass(RoundStale::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenNotMinted::class)]
 #[UsesClass(InstallationTokenMinter::class)]
@@ -65,9 +73,12 @@ final class GitHubForgeTest extends TestCase
     private const string HEAD = '1111111111111111111111111111111111111111';
     private const string MERGE_BASE = '3333333333333333333333333333333333333333';
     private const string API = 'https://api.github.com/repos/acme/widgets';
+    private const string TOKEN = 'round-7-token-0123456789';
 
     /** @var list<string> */
     private array $requested = [];
+    /** @var list<mixed> */
+    private array $posted = [];
     private string $pullFixture = 'pull_request.json';
     private string $compareFixture = 'compare_merge_base.json';
     private string $minted = 'installation-secret';
@@ -351,6 +362,79 @@ final class GitHubForgeTest extends TestCase
         $forge->change(new ChangeId(self::PULL));
     }
 
+    public function testItPostsTheOutcomeAsOneCommentReviewCarryingTheRoundToken(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN)));
+
+        self::assertSame([[
+            'commit_id' => self::HEAD,
+            'event' => 'COMMENT',
+            'body' => "Two reviewers approve.\n\n<!-- intakt-review-token: ".self::TOKEN.' -->',
+        ]], $this->posted);
+        self::assertContains('POST '.self::API.'/pulls/7/reviews', $this->requested);
+    }
+
+    public function testItPostsNothingWhenTheHeadMovedBeforeThePost(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+        $this->pullFixture = 'pull_request_moved.json';
+
+        try {
+            $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN)));
+            self::fail('A stale round must not post.');
+        } catch (RoundStale $stale) {
+            self::assertStringContainsString(self::HEAD, $stale->getMessage());
+        }
+
+        self::assertSame([], $this->posted);
+        self::assertSame('GET '.self::API.'/pulls/7', array_last($this->requested));
+    }
+
+    public function testItSendsTheInstallationTokenAsBearerWithThePost(): void
+    {
+        $bearers = [];
+        $forge = $this->forge(static function (string $url, array $options) use (&$bearers): ?ResponseInterface {
+            $bearers[] = str_ends_with($url, '/reviews') ? self::header($options, 'authorization') : null;
+
+            return null;
+        });
+
+        $forge->postReview('widgets', $forge->change(new ChangeId(self::PULL)), new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
+
+        self::assertSame(['Authorization: Bearer installation-secret'], array_values(array_filter($bearers)));
+    }
+
+    public function testItTurnsAnErrorStatusOfThePostIntoAForgeWriteFailure(): void
+    {
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? new MockResponse('{"message":"Unprocessable Entity"}', ['http_code' => 422]) : null);
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        try {
+            $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
+            self::fail('A 422 must fail the write.');
+        } catch (ForgeWriteFailed $failure) {
+            self::assertStringContainsString('422', $failure->getMessage());
+        }
+    }
+
+    public function testItDoesNotChainTheTransportFailureOfThePostWhoseTraceHoldsTheToken(): void
+    {
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? throw new TransportException('connection dropped') : null);
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        try {
+            $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
+            self::fail('A transport failure must fail the write.');
+        } catch (ForgeWriteFailed $failure) {
+            self::assertNull($failure->getPrevious());
+            self::assertStringContainsString(TransportException::class, $failure->getMessage());
+        }
+    }
+
     private function movedChange(GitHubForge $forge): Change
     {
         $this->pullFixture = 'pull_request_moved.json';
@@ -368,6 +452,9 @@ final class GitHubForgeTest extends TestCase
     {
         return $this->forgeOver(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
             $this->requested[] = $method.' '.$url;
+            if ('POST' === $method) {
+                $this->posted[] = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '', true, flags: JSON_THROW_ON_ERROR);
+            }
 
             $answer = $override instanceof Closure ? $override($url, $options) : null;
 
@@ -396,6 +483,7 @@ final class GitHubForgeTest extends TestCase
         $path = explode('?', $url)[0];
 
         return match (true) {
+            str_ends_with($path, '/reviews') => new MockResponse(self::fixture('review_posted.json'), ['http_code' => 200]),
             str_contains($url, '/contents/') => new MockResponse(self::fixture('contents_widget.txt')),
             str_contains($path, '/pulls/7') => new MockResponse(self::fixture($this->pullFixture)),
             str_ends_with($accept, 'github.diff') => new MockResponse(self::fixture('pull.diff')),

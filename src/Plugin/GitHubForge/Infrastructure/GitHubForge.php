@@ -17,8 +17,12 @@ use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\Forge;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\ReviewComment;
+use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
 use JsonException;
@@ -27,8 +31,10 @@ use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-final readonly class GitHubForge implements Forge
+final readonly class GitHubForge implements Forge, ForgeWrites
 {
+    // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
+    private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
     private const string RAW = 'application/vnd.github.raw+json';
@@ -93,6 +99,20 @@ final readonly class GitHubForge implements Forge
         $content = $this->get($address->repositoryPath().'/contents/'.implode('/', $segments), self::RAW, ['ref' => $head->hash]);
 
         return null === $content ? throw FileNotFoundAtHead::at($path, $head) : new FileContent($path, $head, $content);
+    }
+
+    public function postReview(string $project, Change $change, ReviewComment $comment): void
+    {
+        if ($this->hasHeadMoved($change)) {
+            throw RoundStale::on($change);
+        }
+
+        $this->post(PullRequestAddress::of($change->id)->pullRequestPath().'/reviews', [
+            // Pinned to the reviewed head, so a push between the check and the post cannot attach the review to a head it did not see.
+            'commit_id' => $change->commits->head->hash,
+            'event' => 'COMMENT',
+            'body' => $comment->body."\n\n".sprintf(self::TOKEN_MARKER, $comment->token->value),
+        ]);
     }
 
     /**
@@ -252,10 +272,39 @@ final readonly class GitHubForge implements Forge
         return $status >= 200 && $status < 300 ? $body : throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status));
     }
 
+    /**
+     * @param array<string, string> $payload
+     */
+    private function post(string $path, array $payload): void
+    {
+        $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => self::JSON]];
+
+        try {
+            $response = $this->http->request('POST', $path, $options);
+            $status = $response->getStatusCode();
+            $response->getContent(false);
+        } catch (ExceptionInterface $failure) {
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
+        }
+
+        if ($status < 200 || $status >= 300) {
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
+        }
+    }
+
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.
     private function unreachable(string $failure): ForgeReadFailed
     {
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    private function writeBearer(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted $notMinted) {
+            throw new ForgeWriteFailed('No GitHub installation token for a write.', $notMinted->getCode(), previous: $notMinted);
+        }
     }
 
     private function bearer(): string
