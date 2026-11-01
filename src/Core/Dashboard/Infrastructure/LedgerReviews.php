@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
+use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -62,7 +63,7 @@ final readonly class LedgerReviews
             return null;
         }
 
-        return new ReviewSummary($round, $project, $reviewers, $startedAt);
+        return new ReviewSummary(new RoundStart($round, $project, $reviewers), $startedAt);
     }
 
     /**

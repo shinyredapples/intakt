@@ -8,13 +8,18 @@ use DateTimeImmutable;
 
 final readonly class ReviewSummary
 {
+    public string $round;
+    public string $project;
+    public int $reviewers;
+
     public function __construct(
-        public string $round,
-        public string $project,
-        public int $reviewers,
+        RoundStart $start,
         public DateTimeImmutable $startedAt,
         public ReviewState $state = ReviewState::InProgress,
     ) {
+        $this->round = $start->round;
+        $this->project = $start->project;
+        $this->reviewers = $start->reviewers;
     }
 
     public function judged(): self

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
+use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -20,6 +21,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerReviews::class)]
 #[CoversClass(ReviewSummary::class)]
+#[CoversClass(RoundStart::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(RecordedEvents::class)]
 #[UsesClass(LedgerEvent::class)]

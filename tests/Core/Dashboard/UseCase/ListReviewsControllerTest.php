@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
+use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,6 +14,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(ListReviewsController::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(ReviewSummary::class)]
+#[UsesClass(RoundStart::class)]
 final class ListReviewsControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewListShowsEachRoundWithItsProjectNewestFirst(): void
