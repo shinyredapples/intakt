@@ -1,0 +1,13 @@
+mcp:
+    servers:
+        owner:
+            name: intakt
+            description: Intakt, for the agents of the owner
+            http:
+                path: /mcp/owner
+            session:
+                store: file
+                # Concurrent calls of one session wait for each other, so none overwrites what another saved.
+                lock: true
+            registry:
+                tools: ['Intakt\']

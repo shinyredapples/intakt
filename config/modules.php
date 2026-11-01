@@ -6,6 +6,7 @@ return [
     'Core/Ai',
     'Core/Git',
     'Core/Ledger',
+    'Core/Mcp',
     'Core/Memory',
     'Core/Platform',
     'Core/Review',

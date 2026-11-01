@@ -54,11 +54,11 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| MCP Bundle server for the owner | agents start reviews and read verdicts and the act list | planned | T15 (#20) |
+| MCP Bundle server for the owner | agents list projects; starting reviews and reading verdicts and the act list follow | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`, `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php` |
 | MCP Bundle server per review | serves the read-only repository tools of the head under review | planned | T16 (#21) |
-| `session.lock` | safe parallel calls on one session | planned | T15 (#20), T16 (#21) |
-| `#[IsGrantedTool]` | tool authorization through Intakt's Security voter | planned | T15 (#20), T16 (#21) |
-| Tool annotations (`readOnlyHint`, `destructiveHint`) | every tool states its effect | planned | T15 (#20), T16 (#21) |
+| `session.lock` | safe parallel calls on one session | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`; T16 (#21) |
+| `#[IsGrantedTool]` | tool authorization through Intakt's Security voter; the installed bundle has no such attribute, so Intakt defines its own and checks it in a wrapper around the SDK's reference handler | in progress | T15 (#20, part #508), `src/Core/Mcp/Contract/IsGrantedTool.php`, `src/Core/Mcp/Infrastructure/AuthorizedToolCalls.php`; T16 (#21) |
+| Tool annotations (`readOnlyHint`, `destructiveHint`) | every tool states its effect | in progress | T15 (#20, part #508), `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`; T16 (#21) |
 | Progress notifications | long tools report progress | planned | T15 (#20), T16 (#21) |
 | MCP SDK client | contract tests that call every tool | planned | T15 (#20) |
 
@@ -89,7 +89,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Clock | time only through `ClockInterface`, enforced by a gate | done | `config/gates/phpstan.neon` |
 | Validator | checks typed verdicts from structured output | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98) |
 | Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`, `JsonDecode::ASSOCIATIVE`) | maps a verdict strictly: no unknown and no left-out fields, no object as a list | in progress | T1 (#5), `src/Core/Review/Infrastructure/StrictVerdictConverter.php` |
-| Security | a voter decides which MCP tools may write | planned | T15 (#20), T16 (#21) |
+| Security | a voter decides which MCP tools may write | in progress | T15 (#20, part #508), `src/Core/Mcp/Infrastructure/ToolAccessVoter.php`; T16 (#21) |
 | Process | the local git forge; every git call hardened, in the forge and in the gates; one PHPUnit or script run per upstream reproduction, with a timeout | in progress | T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T6 (#11, part #124), `src/Core/Git/Contract/HardenedGit.php`, `config/gates/src/HardenedGitCall.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
@@ -133,6 +133,7 @@ Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinne
 | Streaming with a tool call and a stream cut mid-text: execution fails, usage counted once, the tool runs once | planned | T25 (#32) | |
 | Worker-mode state: two models and two MCP sessions in one kernel, flat memory over 1,000 calls | planned | T28 (#35), T29 (#29) | |
 | Structured output with enums and nested lists per provider, a stream truncated mid-array | planned | T28 (#35) | |
+| MCP: initialize with protocol 2025-11-25 and an unknown version, empty parameters as `{}` (done in `tests/Core/Mcp/Contract/`, T15, #508) | in progress | T15 (#20) | |
 | MCP: three parallel `tools/call` on one session, with and without `session.lock`, protocol 2025-11-25, empty parameters as `{}` | planned | T28 (#35) | |
 | FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 stops cleanly on SIGTERM; a Symfony reproduction if it still crashes | planned | T28 (#35) | php/frankenphp#2479 (existing) |
 | Reset in worker mode: Symfony AI services with mutable state but no `ResetInterface` (first candidate: the Platform `Provider` keeps `$resolvedModel`), found by running one kernel for two different requests | planned | T29 (#29) | |
