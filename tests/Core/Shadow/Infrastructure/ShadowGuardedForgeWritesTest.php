@@ -11,6 +11,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
 use Intakt\Tests\Core\Shadow\ReviewToPost;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(Diff::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(ReviewComment::class)]
 #[UsesClass(ReviewToken::class)]
 final class ShadowGuardedForgeWritesTest extends TestCase

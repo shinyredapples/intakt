@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
 
@@ -22,6 +23,6 @@ final class ReviewToPost
 
     public static function comment(string $body): ReviewComment
     {
-        return new ReviewComment($body, new ReviewToken('shadow-round-token-0001'));
+        return new ReviewComment($body, new ReviewToken('shadow-round-token-0001'), new JobCredentials());
     }
 }

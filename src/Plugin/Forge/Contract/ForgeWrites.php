@@ -8,6 +8,7 @@ namespace Intakt\Plugin\Forge\Contract;
 interface ForgeWrites
 {
     /**
+     * @throws ReviewTextHoldsSecret
      * @throws RoundStale
      * @throws ForgeWriteFailed
      */

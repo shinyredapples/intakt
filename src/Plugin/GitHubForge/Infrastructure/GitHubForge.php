@@ -22,6 +22,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
+use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
@@ -45,6 +46,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         #[Target('github.client')]
         private HttpClientInterface $http,
         private InstallationTokens $tokens,
+        private SecretScan $secrets,
     ) {
     }
 
@@ -103,7 +105,12 @@ final readonly class GitHubForge implements Forge, ForgeWrites
 
     public function postReview(string $project, Change $change, ReviewComment $comment): void
     {
-        if ($this->hasHeadMoved($change)) {
+        $body = $comment->redactedBody();
+        if ($this->secrets->findsSecretIn($body)) {
+            throw ReviewTextHoldsSecret::afterRedaction();
+        }
+
+        if ($this->isStale($change)) {
             throw RoundStale::on($change);
         }
 
@@ -111,8 +118,17 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             // Pinned to the reviewed head, so a push between the check and the post cannot attach the review to a head it did not see.
             'commit_id' => $change->commits->head->hash,
             'event' => 'COMMENT',
-            'body' => $comment->body."\n\n".sprintf(self::TOKEN_MARKER, $comment->token->value),
+            'body' => $body."\n\n".sprintf(self::TOKEN_MARKER, $comment->token->value),
         ]);
+    }
+
+    private function isStale(Change $change): bool
+    {
+        try {
+            return $this->hasHeadMoved($change);
+        } catch (ForgeReadFailed|ChangeNotFound $failure) {
+            throw new ForgeWriteFailed('The head could not be read before the post: '.$failure->getMessage(), 0, $failure);
+        }
     }
 
     /**
@@ -277,7 +293,8 @@ final readonly class GitHubForge implements Forge, ForgeWrites
      */
     private function post(string $path, array $payload): void
     {
-        $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => self::JSON]];
+        // Never retried, because GitHub can store a review and still answer 502, and a retry would post it twice.
+        $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => self::JSON], 'max_retries' => 0];
 
         try {
             $response = $this->http->request('POST', $path, $options);

@@ -19,7 +19,9 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
+use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
 use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
@@ -29,12 +31,14 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
+use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -59,8 +63,11 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(HeadMove::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(ReviewComment::class)]
+#[UsesClass(ReviewTextHoldsSecret::class)]
 #[UsesClass(ReviewToken::class)]
+#[UsesClass(SecretScan::class)]
 #[UsesClass(RoundStale::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenNotMinted::class)]
@@ -356,7 +363,7 @@ final class GitHubForgeTest extends TestCase
             '678',
             new MockClock('2026-11-25 10:00:00 UTC'),
         );
-        $forge = new GitHubForge(new MockHttpClient(), $tokens);
+        $forge = new GitHubForge(new MockHttpClient(), $tokens, $this->secretScan());
 
         $this->expectException(ForgeReadFailed::class);
 
@@ -368,7 +375,7 @@ final class GitHubForgeTest extends TestCase
         $forge = $this->forge();
         $change = $forge->change(new ChangeId(self::PULL));
 
-        $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN)));
+        $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN), new JobCredentials()));
 
         self::assertSame([
             'commit_id' => self::HEAD,
@@ -384,13 +391,10 @@ final class GitHubForgeTest extends TestCase
         $change = $forge->change(new ChangeId(self::PULL));
         $this->pullFixture = 'pull_request_moved.json';
 
-        try {
-            $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN)));
-            self::fail('A stale round must not post.');
-        } catch (RoundStale $stale) {
-            self::assertStringContainsString(self::HEAD, $stale->getMessage());
-        }
+        $stale = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
 
+        self::assertInstanceOf(RoundStale::class, $stale);
+        self::assertStringContainsString(self::HEAD, $stale->getMessage());
         self::assertNotContains(self::POST_REVIEW, $this->requested);
         self::assertSame('GET '.self::API.'/pulls/7', array_last($this->requested));
     }
@@ -399,7 +403,7 @@ final class GitHubForgeTest extends TestCase
     {
         $forge = $this->forge();
 
-        $forge->postReview('widgets', $forge->change(new ChangeId(self::PULL)), new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
+        $forge->postReview('widgets', $forge->change(new ChangeId(self::PULL)), new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN), new JobCredentials()));
 
         self::assertSame('Authorization: Bearer installation-secret', self::header($this->sent[self::POST_REVIEW] ?? [], 'authorization'));
     }
@@ -411,7 +415,7 @@ final class GitHubForgeTest extends TestCase
 
         $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered 422 to a write.'));
 
-        $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
+        $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN), new JobCredentials()));
     }
 
     public function testItDoesNotChainTheTransportFailureOfThePostWhoseTraceHoldsTheToken(): void
@@ -419,13 +423,93 @@ final class GitHubForgeTest extends TestCase
         $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? throw new TransportException('connection dropped') : null);
         $change = $forge->change(new ChangeId(self::PULL));
 
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Changes needed.'));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertNull($failure->getPrevious());
+        self::assertStringContainsString(TransportException::class, $failure->getMessage());
+    }
+
+    public function testItNeverRetriesThePostAfterA502BecauseGitHubMayHaveStoredTheReview(): void
+    {
+        $posts = 0;
+        $forge = $this->forge(static function (string $url) use (&$posts): ?ResponseInterface {
+            $isFirstPost = str_ends_with($url, '/reviews') && 1 === ++$posts;
+
+            return $isFirstPost ? new MockResponse('', ['http_code' => 502]) : null;
+        });
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
+
+        self::assertEquals(new ForgeWriteFailed('GitHub answered 502 to a write.'), $failure);
+        self::assertSame(1, $posts);
+    }
+
+    public function testItTurnsAFailedReadOfTheHeadBeforeThePostIntoAForgeWriteFailure(): void
+    {
+        $change = $this->forge()->change(new ChangeId(self::PULL));
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/pulls/7') ? new MockResponse('{}', ['http_code' => 500]) : null);
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertInstanceOf(ForgeReadFailed::class, $failure->getPrevious());
+        self::assertNotContains(self::POST_REVIEW, $this->requested);
+    }
+
+    public function testItTurnsAPullRequestGoneBeforeThePostIntoAForgeWriteFailure(): void
+    {
+        $change = $this->forge()->change(new ChangeId(self::PULL));
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/pulls/7') ? new MockResponse('{}', ['http_code' => 404]) : null);
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertInstanceOf(ChangeNotFound::class, $failure->getPrevious());
+        self::assertNotContains(self::POST_REVIEW, $this->requested);
+    }
+
+    public function testItPostsTheReviewWithEveryCredentialOfTheJobRedacted(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $forge->postReview('widgets', $change, $this->comment('The test prints project-db-pass-42 in its log.', 'project-db-pass-42'));
+
+        self::assertSame([
+            'commit_id' => self::HEAD,
+            'event' => 'COMMENT',
+            'body' => "The test prints [redacted] in its log.\n\n<!-- intakt-review-token: ".self::TOKEN.' -->',
+        ], json_decode($this->postedBody(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testItPostsNothingWhenTheRedactedTextStillTripsTheSecretScan(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+        $requestsBefore = count($this->requested);
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment("The fixture holds a key:\n".AppKey::generate()->private, 'project-db-pass-42'));
+
+        self::assertEquals(ReviewTextHoldsSecret::afterRedaction(), $failure);
+        self::assertCount($requestsBefore, $this->requested);
+    }
+
+    private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
+    {
         try {
-            $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN)));
-            self::fail('A transport failure must fail the write.');
-        } catch (ForgeWriteFailed $failure) {
-            self::assertNull($failure->getPrevious());
-            self::assertStringContainsString(TransportException::class, $failure->getMessage());
+            $forge->postReview('widgets', $change, $comment);
+        } catch (RuntimeException $failure) {
+            return $failure;
         }
+
+        throw new LogicException('The post was expected to fail.');
+    }
+
+    private function comment(string $body, string ...$credentials): ReviewComment
+    {
+        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
     }
 
     private function movedChange(GitHubForge $forge): Change
@@ -443,14 +527,15 @@ final class GitHubForgeTest extends TestCase
      */
     private function forge(?Closure $override = null): GitHubForge
     {
-        return $this->forgeOver(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
+        // Retrying as the scoped client is in the container, so the tests see which requests are tried again.
+        return $this->forgeOver(new RetryableHttpClient(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
             $this->requested[] = $method.' '.$url;
             $this->sent[$method.' '.$url] = $options;
 
             $answer = $override instanceof Closure ? $override($url, $options) : null;
 
             return $answer ?? $this->answer($url, $options);
-        }, 'https://api.github.com'));
+        }, 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2));
     }
 
     private function forgeOver(HttpClientInterface $http): GitHubForge
@@ -462,7 +547,12 @@ final class GitHubForgeTest extends TestCase
         ));
         $tokens = new InstallationTokens(new InstallationTokenMinter(new AppJwt('12345', AppKey::generate()->private, $clock), $minting, new NullLogger()), '678', $clock);
 
-        return new GitHubForge($http, $tokens);
+        return new GitHubForge($http, $tokens, $this->secretScan());
+    }
+
+    private function secretScan(): SecretScan
+    {
+        return new SecretScan(dirname(__DIR__, 3));
     }
 
     /**
