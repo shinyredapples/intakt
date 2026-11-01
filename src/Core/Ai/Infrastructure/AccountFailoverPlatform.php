@@ -42,7 +42,8 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        $free = $this->freeAccounts();
+        $failures = new SendFailures();
+        $free = $this->freeAccounts($failures);
         if ([] === $free) {
             throw new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
         }
@@ -52,7 +53,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         try {
             return $this->failover($free)->invoke($model, $input, $options);
         } catch (RuntimeException $everyAccountFailed) {
-            throw $this->typed($everyAccountFailed);
+            throw $this->typed($everyAccountFailed, $failures);
         }
     }
 
@@ -65,14 +66,14 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     /**
      * @return array<string, AccountPlatform>
      */
-    private function freeAccounts(): array
+    private function freeAccounts(SendFailures $failures): array
     {
         $free = [];
 
         foreach ($this->platforms as $name => $platform) {
             $account = new Account($this->provider, $name);
             if (!$this->cooldowns->isCoolingDown($account)) {
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->logger);
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->logger, $failures);
             }
         }
 
@@ -93,14 +94,14 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
-    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so with its wait.
-    private function typed(RuntimeException $everyAccountFailed): Throwable
+    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so with its wait; when every one of them rejected its key there is nothing to wait for, so the rejection itself is thrown.
+    private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
     {
-        if ([] !== $this->freeAccounts()) {
+        if ([] !== $this->freeAccounts($failures)) {
             return $everyAccountFailed;
         }
 
-        return new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
+        return $failures->rejectionOfEveryAccount() ?? new EveryAccountCoolingDown($this->provider, $this->cooldowns->secondsUntilAnAccountIsFree($this->provider));
     }
 
     // Built per call over the free accounts only, because FailoverPlatform keys its limiter by platform class, which every account of a provider shares, and calls a failed platform again on the next call (upstream/ai-failover-platform-retries-a-failed-platform).

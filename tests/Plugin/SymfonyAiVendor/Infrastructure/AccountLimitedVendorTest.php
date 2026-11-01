@@ -14,22 +14,16 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
-use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
-use Symfony\Component\Semaphore\SemaphoreFactory;
-use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -38,8 +32,6 @@ use Throwable;
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(ReviewerConversation::class)]
-#[UsesClass(VendorAccountLimit::class)]
-#[UsesClass(VendorAccountBusy::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ProviderRateLimited::class)]
@@ -56,26 +48,6 @@ final class AccountLimitedVendorTest extends TestCase
         $result = $this->vendor($vendor)->review('intakt', Tier::Standard, $this->request());
 
         self::assertSame($verdict, $result);
-    }
-
-    public function testAReviewOnAFullAccountIsRefusedWithoutCallingTheVendor(): void
-    {
-        $limit = $this->limit();
-        $called = false;
-        $vendor = self::createStub(Vendor::class);
-        $vendor->method('review')->willReturnCallback(static function () use (&$called): VendorReview {
-            $called = true;
-
-            return new VendorReview(Verdict::unreadApproval());
-        });
-
-        $this->expectException(VendorAccountBusy::class);
-
-        try {
-            $limit->run(Provider::Anthropic, fn (): VendorReview => new AccountLimitedVendor($vendor, $this->resolver(), $limit, $this->cooldowns(0))->review('intakt', Tier::Standard, $this->request()));
-        } finally {
-            self::assertFalse($called);
-        }
     }
 
     public function testARateLimitWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
@@ -177,7 +149,7 @@ final class AccountLimitedVendorTest extends TestCase
      */
     private function vendor(Vendor $vendor, ?AccountCooldowns $cooldowns = null, array $substitutes = []): AccountLimitedVendor
     {
-        return new AccountLimitedVendor($vendor, $this->resolver($substitutes), $this->limit(), $cooldowns ?? $this->cooldowns(0));
+        return new AccountLimitedVendor($vendor, $this->resolver($substitutes), $cooldowns ?? $this->cooldowns(0));
     }
 
     private function cooldowns(int $secondsUntilAnAccountIsFree): AccountCooldowns
@@ -186,11 +158,6 @@ final class AccountLimitedVendorTest extends TestCase
         $cooldowns->method('secondsUntilAnAccountIsFree')->willReturn($secondsUntilAnAccountIsFree);
 
         return $cooldowns;
-    }
-
-    private function limit(): VendorAccountLimit
-    {
-        return new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
     }
 
     /**

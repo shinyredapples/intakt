@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -34,6 +35,7 @@ use Throwable;
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
+#[CoversClass(SendFailures::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
@@ -145,6 +147,27 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->expectException(EveryAccountCoolingDown::class);
 
         $this->accounts($this->answering($limited), $this->answering($limited))->invoke('big', 'Review.');
+    }
+
+    public function testACallWhoseEveryAccountRejectsItsKeyAsItIsSentIsTheRejectionAndNotAWait(): void
+    {
+        $revoked = new AuthenticationException('revoked');
+
+        try {
+            $_ = $this->accounts($this->answering(static fn (): never => throw $revoked), $this->answering(static fn (): never => throw $revoked))->invoke('big', 'Review.');
+            self::fail('Every account rejected its key, yet the call answered.');
+        } catch (Throwable $failure) {
+            self::assertSame($revoked, $failure);
+        }
+
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
+    public function testACallWithOneAccountRejectingItsKeyAndTheOtherLimitedWaitsForTheLimitedOne(): void
+    {
+        $this->expectException(EveryAccountCoolingDown::class);
+
+        $this->accounts($this->answering(static fn (): never => throw new AuthenticationException('revoked')), $this->answering(static fn (): never => throw new RateLimitExceededException(300)))->invoke('big', 'Review.');
     }
 
     public function testACallWhoseEveryAccountFailsWithoutALimitKeepsTheFailoverError(): void

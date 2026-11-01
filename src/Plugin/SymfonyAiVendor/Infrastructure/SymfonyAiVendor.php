@@ -7,6 +7,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -19,6 +20,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
@@ -36,21 +38,51 @@ final readonly class SymfonyAiVendor implements Vendor
         private TierResolver $resolver,
         private Reviewer $reviewer,
         private UsageLedger $usage,
+        private VendorAccountLimit $accounts,
     ) {
     }
 
+    /**
+     * @throws VendorAccountBusy
+     */
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
-        $platform = new TierRoutedPlatform($this->tiers, $project);
-        $reservation = $this->usage->reserve($project, $tier);
+        $answering = $this->answering($project, $tier);
+        $substitute = $this->substituteOf($project, $tier, $answering);
+
+        // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
+            $this->readOrRefused($answering->provider, $this->verdictOn($answering, $this->usage->reserve($project, $tier), $request)),
+            $substitute,
+        ));
+    }
+
+    private function answering(string $project, Tier $tier): ResolvedModel
+    {
+        try {
+            return $this->tiers->answering($project, $tier);
+        } catch (EveryAccountCoolingDown|EveryProviderOut $out) {
+            throw $this->typed($out);
+        }
+    }
+
+    // Read from the model chosen before the review, never from its text, so a reviewer cannot claim to be a substitute.
+    private function substituteOf(string $project, Tier $tier, ResolvedModel $answering): ?Provider
+    {
+        return $this->resolver->resolve($project, $tier)->provider === $answering->provider ? null : $answering->provider;
+    }
+
+    private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
+    {
+        $platform = new TierRoutedPlatform($this->tiers, $answering);
 
         try {
-            $verdict = $this->reviewer->review($request, $platform, $tier->value);
+            $verdict = $this->reviewer->review($request, $platform, $answering->model);
         } catch (IncompleteStreamException $incomplete) {
             // Left unsettled, never settled as well, so the call's usage is counted once.
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
 
-            return new VendorReview(Verdict::incompleteStream($incomplete->getMessage()), $this->substituteOf($platform));
+            return Verdict::incompleteStream($incomplete->getMessage());
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 
@@ -59,22 +91,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        $substitute = $this->substituteOf($platform);
-
-        return new VendorReview($this->readOrRefused($substitute ?? $this->resolver->resolve($project, $tier)->provider, $verdict), $substitute);
-    }
-
-    // Read from what the platform marked on each round, never from text, so a reviewer cannot claim to be a substitute.
-    private function substituteOf(TierRoutedPlatform $platform): ?Provider
-    {
-        $substitute = null;
-
-        foreach ($platform->rounds() as $round) {
-            $marked = $round->getMetadata()->get(Provider::SUBSTITUTE_METADATA);
-            $substitute = (is_string($marked) ? Provider::tryFrom($marked) : null) ?? $substitute;
-        }
-
-        return $substitute;
+        return $verdict;
     }
 
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve.

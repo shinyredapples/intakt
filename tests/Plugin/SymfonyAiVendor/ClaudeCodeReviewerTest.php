@@ -13,7 +13,6 @@ use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
-use Intakt\Core\Ai\Infrastructure\ProviderFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -39,6 +38,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -52,8 +52,11 @@ use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
-use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Semaphore\SemaphoreFactory;
+use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ConfinedClaudeCodeClient::class)]
@@ -88,6 +91,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
+#[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(Kernel::class)]
 final class ClaudeCodeReviewerTest extends KernelTestCase
 {
@@ -243,6 +247,8 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, new ProviderFailoverPlatform($platforms, new NoCooldowns(), new NativeClock(), new NullLogger())), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()));
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger()), $limit);
     }
 }

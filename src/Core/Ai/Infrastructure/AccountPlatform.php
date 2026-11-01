@@ -27,6 +27,7 @@ final readonly class AccountPlatform implements PlatformInterface
         private PlatformInterface $platform,
         private AccountCooldowns $cooldowns,
         private LoggerInterface $logger,
+        private SendFailures $failures,
     ) {
     }
 
@@ -36,6 +37,7 @@ final readonly class AccountPlatform implements PlatformInterface
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
+            $this->failures->record($failure);
             $this->coolDownAfter($failure);
 
             throw $failure;

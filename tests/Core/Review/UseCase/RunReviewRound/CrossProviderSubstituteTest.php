@@ -11,9 +11,7 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
-use Intakt\Core\Ai\Infrastructure\FailoverTrail;
-use Intakt\Core\Ai\Infrastructure\ProviderCandidate;
-use Intakt\Core\Ai\Infrastructure\ProviderFailoverPlatform;
+use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
@@ -27,6 +25,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMovesToAnotherAccount;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -40,6 +39,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
+use Intakt\Tests\Core\Ai\Infrastructure\RecordingCalls;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -48,8 +48,11 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -61,24 +64,24 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 
-// Through the real vendor stack down to in-memory providers, so the substitution is proven end to end: the tier's own provider answers with a revoked key and the next provider is its configured substitute.
+// Through the real vendor stack down to in-memory providers, so the substitution is proven end to end: the tier's own provider fails with a revoked key or a limit and the next provider is its configured substitute.
 #[Group('persistence')]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(AccountLimitedVendor::class)]
 #[CoversClass(SymfonyAiVendor::class)]
-#[CoversClass(ProviderFailoverPlatform::class)]
+#[CoversClass(TierPlatform::class)]
 #[CoversClass(RoundReviewer::class)]
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(ReviewerLeases::class)]
 #[UsesClass(ReviewerMoves::class)]
 #[UsesClass(UsageLedger::class)]
-#[UsesClass(TierPlatform::class)]
+#[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(NoProviderLeft::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
 #[UsesClass(VendorAccountOut::class)]
 #[UsesClass(VendorReview::class)]
-#[UsesClass(ProviderCandidate::class)]
-#[UsesClass(FailoverTrail::class)]
+#[UsesClass(SendFailures::class)]
+#[UsesClass(ReviewerRateLimited::class)]
 #[UsesClass(EveryProviderOut::class)]
 #[UsesClass(AccountFailoverPlatform::class)]
 #[UsesClass(AccountPlatform::class)]
@@ -88,10 +91,17 @@ final class CrossProviderSubstituteTest extends KernelTestCase
 {
     private RoundFixture $fixture;
     private AccountCooldownWindows $cooldowns;
+    private VendorAccountLimit $limit;
+
+    /**
+     * @var list<string>
+     */
+    private array $sent = [];
 
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
         $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
     }
 
@@ -156,6 +166,69 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertSame([(string) $reviewer->failure()], $this->payloadValues(LedgerEventKind::ReviewerBlocked, 'reason'));
     }
 
+    public function testALimitHalfwayThroughAReviewStartsItAgainOnTheSubstituteInANewConversation(): void
+    {
+        $round = $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = $this->vendor($this->limitedOnTheSecondRound(), $this->answering());
+
+        try {
+            $this->fixture->deliver($message, $vendor);
+            self::fail('The substitute continued the review its own provider began.');
+        } catch (ReviewerMovesToAnotherAccount) {
+        }
+
+        self::assertSame(['anthropic', 'anthropic'], $this->sent);
+        $firstConversation = $this->fixture->reviewer($message->reviewerId)->conversationId();
+        $this->fixture->deliver($message, $vendor);
+        $reviewer = $this->fixture->round($round->id()->toRfc4122())->reviewers()[0];
+        self::assertSame(['anthropic', 'anthropic', 'openai'], $this->sent);
+        self::assertFalse($firstConversation->equals($reviewer->conversationId()));
+        self::assertSame(Provider::OpenAi, $reviewer->substitute());
+        self::assertSame(['openai'], $this->payloadValues(LedgerEventKind::CatchUpOwed, 'substitute'));
+    }
+
+    public function testASubstituteWhosePlacesAreAllTakenIsNeverCalled(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $this->cooldowns->coolDown(new Account(Provider::Anthropic, Account::DEFAULT), 300);
+        $vendor = $this->vendor($this->answering(), $this->answering());
+
+        try {
+            $this->limit->run(Provider::OpenAi, fn () => $this->fixture->deliver($message, $vendor));
+            self::fail('The substitute was called while its only place was taken.');
+        } catch (ReviewerRateLimited) {
+        }
+
+        self::assertSame([], $this->sent);
+        self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
+    }
+
+    public function testASubstituteWithAFreePlaceReviewsWhileTheOwnProvidersPlacesAreTaken(): void
+    {
+        $round = $this->fixture->start(1);
+        $this->cooldowns->coolDown(new Account(Provider::Anthropic, Account::DEFAULT), 300);
+        $vendor = $this->vendor($this->answering(), $this->answering());
+
+        $this->limit->run(Provider::Anthropic, fn () => $this->fixture->deliver($this->fixture->bus->messages[0], $vendor));
+
+        self::assertSame(Provider::OpenAi, $this->fixture->round($round->id()->toRfc4122())->reviewers()[0]->substitute());
+    }
+
+    public function testAKeyRejectedAsTheCallIsSentWithNoOtherAccountOrSubstituteEndsTheReviewerFailed(): void
+    {
+        $round = $this->fixture->start(1);
+        $revoked = MockPlatformFactory::createPlatform(static fn (): never => throw new AuthenticationException('revoked'));
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], $this->vendor($revoked, $this->answering(), null));
+
+        $stored = $this->fixture->round($round->id()->toRfc4122());
+        self::assertSame(RoundState::Complete, $stored->state());
+        self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
+        self::assertSame(ProviderRejectedTheKey::class, $stored->reviewers()[0]->failure());
+    }
+
     // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
     private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor, int $moves = 1): void
     {
@@ -171,20 +244,42 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         $this->fixture->deliver($message, $vendor);
     }
 
-    private function vendor(PlatformInterface $own, PlatformInterface $substitute, Provider $substituteProvider = Provider::OpenAi): Vendor
+    // A null substitute provider maps the tier without substitutes.
+    private function vendor(PlatformInterface $own, PlatformInterface $substitute, ?Provider $substituteProvider = Provider::OpenAi): Vendor
     {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => [['provider' => $substituteProvider->value, 'model' => 'other']]]]]], []);
+        $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => 'other']] : [];
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => $substitutes]]]], []);
         $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger());
         $platforms = new ServiceLocator([
-            Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $own, $this->cooldowns),
-            $substituteProvider->value => fn (): PlatformInterface => $accounts($substituteProvider, $substitute, $this->cooldowns),
+            Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $this->recording(Provider::Anthropic, $own), $this->cooldowns),
+            ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
         ]);
-        $tiers = new TierPlatform($resolver, new ProviderFailoverPlatform($platforms, $this->cooldowns, new NativeClock(), new NullLogger()));
+        $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()));
-        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $this->limit);
 
-        return new AccountLimitedVendor($vendor, $resolver, $limit, $this->cooldowns);
+        return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+    }
+
+    private function recording(Provider $provider, PlatformInterface $platform): PlatformInterface
+    {
+        return new RecordingCalls($platform, function () use ($provider): void {
+            $this->sent[] = $provider->value;
+        });
+    }
+
+    // The first round asks for a file and the second is refused for a limit as it is sent, so the limit comes halfway through the review.
+    private function limitedOnTheSecondRound(): PlatformInterface
+    {
+        $round = 0;
+
+        return MockPlatformFactory::createPlatform(static function () use (&$round): ToolCallResult {
+            if (0 === $round++) {
+                return new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+            }
+
+            throw new RateLimitExceededException(300);
+        }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
     }
 
     private function answering(string $decision = 'changes'): PlatformInterface
