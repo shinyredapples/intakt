@@ -68,7 +68,7 @@ final readonly class ParameterLimitRule implements Rule
     {
         $class = $scope->getClassReflection();
 
-        if (!$node instanceof ClassMethod || null === $class) {
+        if (!$node instanceof ClassMethod || !$class instanceof ClassReflection) {
             return 0;
         }
 
