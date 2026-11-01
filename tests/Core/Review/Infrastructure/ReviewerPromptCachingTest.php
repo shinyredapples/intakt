@@ -108,7 +108,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             return array_shift($responses) ?? self::fail('The reviewer asked for a third round.');
         });
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser(), new RemembersNothing()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
 
         $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief('Add a cart.', 'diff --git a/a b/a', []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
 

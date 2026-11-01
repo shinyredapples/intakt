@@ -37,6 +37,7 @@ use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
@@ -538,7 +539,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        return new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser(), new RemembersNothing()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

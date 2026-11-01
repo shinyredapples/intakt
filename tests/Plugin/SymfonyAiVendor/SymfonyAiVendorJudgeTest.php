@@ -28,6 +28,7 @@ use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
@@ -144,7 +145,7 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         ]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser(), new RemembersNothing()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
         $usage = new UsageLedger($ledger, new MockClock('2026-10-27 12:00:00 UTC'), new NullLogger());
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, self::createStub(AccountCooldowns::class), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), $usage);
