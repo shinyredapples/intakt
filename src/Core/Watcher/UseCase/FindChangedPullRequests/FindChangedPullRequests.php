@@ -22,7 +22,6 @@ final readonly class FindChangedPullRequests
     /**
      * @return list<OpenChange>
      *
-     * @throws ForgeReadFailed
      * @throws ListingInProgress
      */
     public function __invoke(string $project): array
@@ -32,6 +31,8 @@ final readonly class FindChangedPullRequests
 
     /**
      * @return list<OpenChange>
+     *
+     * @throws ForgeReadFailed
      */
     private function listChanged(string $project): array
     {
