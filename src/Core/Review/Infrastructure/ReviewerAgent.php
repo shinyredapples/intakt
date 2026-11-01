@@ -47,7 +47,7 @@ final readonly class ReviewerAgent implements Reviewer
         $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->brief));
         $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
 
-        $verdict = $this->answerOf($this->agent($tools, $request->brief, [$platform, $model])->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]));
+        $verdict = $this->answerOf($this->agent($tools, [$platform, $model])->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]));
 
         if ($tools->seen()) {
             return Verdict::invalidOutput('the reviewer made a malformed tool call.');
@@ -88,12 +88,12 @@ final readonly class ReviewerAgent implements Reviewer
     /**
      * @param array{PlatformInterface, non-empty-string} $vendor
      */
-    private function agent(ToolboxInterface $tools, ReviewBrief $brief, array $vendor): Agent
+    private function agent(ToolboxInterface $tools, array $vendor): Agent
     {
         [$platform, $model] = $vendor;
         $toolbox = $this->prompt->fenced(new FaultTolerantToolbox($tools));
 
-        return new Agent($platform, $model, inputProcessors: [$this->prompt->remembering($brief)], name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
+        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
     }
 
     private function answerOf(ExecutionInterface $execution): Verdict
