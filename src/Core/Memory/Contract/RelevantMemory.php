@@ -7,7 +7,7 @@ namespace Intakt\Core\Memory\Contract;
 final readonly class RelevantMemory
 {
     /**
-     * @param list<MemoryEntry> $entries most relevant first
+     * @param list<MemoryEntry> $entries
      */
     private function __construct(
         public array $entries,
@@ -15,7 +15,7 @@ final readonly class RelevantMemory
     }
 
     /**
-     * @param iterable<MemoryEntry> $ranked most relevant first
+     * @param iterable<MemoryEntry> $ranked
      */
     public static function within(iterable $ranked, int $maxBytes): self
     {

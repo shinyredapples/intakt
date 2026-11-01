@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Memory\Infrastructure;
 
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
-use Intakt\Core\Memory\Contract\RelevantMemory;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;

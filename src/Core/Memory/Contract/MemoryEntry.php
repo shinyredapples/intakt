@@ -7,7 +7,7 @@ namespace Intakt\Core\Memory\Contract;
 final readonly class MemoryEntry
 {
     /**
-     * @param list<string> $files repository-relative paths the text describes
+     * @param list<string> $files
      */
     public function __construct(
         public string $text,

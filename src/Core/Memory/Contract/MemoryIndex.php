@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Memory\Contract;
 
-// Held by the orchestrator only; reviewers get ProjectMemory.
+// Kept apart from ProjectMemory because reviewers must be able to read memory without being able to write it.
 interface MemoryIndex
 {
     public function index(MemoryEntry $entry): void;

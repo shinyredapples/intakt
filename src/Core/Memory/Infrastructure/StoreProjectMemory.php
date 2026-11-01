@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Memory\Infrastructure;
 
+use Generator;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -30,11 +31,11 @@ final readonly class StoreProjectMemory implements ProjectMemory
     /**
      * @param list<string> $files
      *
-     * @return \Generator<MemoryEntry>
+     * @return Generator<MemoryEntry>
      */
-    private function describing(array $files): \Generator
+    private function describing(array $files): Generator
     {
-        // The store ranks by similarity and matches any entry; which entries concern these files is decided here.
+        // Decided here because the store ranks every entry by similarity and would return those about other files too.
         foreach ($this->retriever->retrieve(implode(' ', $files)) as $document) {
             $entry = $this->documents->toEntry($document);
 
