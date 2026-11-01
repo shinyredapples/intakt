@@ -57,7 +57,7 @@ final readonly class ReviewRounds
         new Checkout($subject->checkoutRoot);
 
         // Refused because verdicts recorded under another task or panel would read as current for a question the reviewers were never asked.
-        if (!$command->target->identity->terms->describe($subject->task, $command->panel)) {
+        if (!$command->target->identity->terms->describes($subject->task, $command->panel)) {
             throw IdentityNotOfRound::forTaskOrPanel();
         }
 

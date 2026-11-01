@@ -28,7 +28,7 @@ final readonly class ReviewTerms
         return new self(hash(self::HASH, $task), hash(self::HASH, $checkCommand), hash(self::HASH, self::policyOf($panel)));
     }
 
-    public function describe(string $task, Panel $panel): bool
+    public function describes(string $task, Panel $panel): bool
     {
         return hash(self::HASH, $task) === $this->taskRevision && hash(self::HASH, self::policyOf($panel)) === $this->panelPolicy;
     }
