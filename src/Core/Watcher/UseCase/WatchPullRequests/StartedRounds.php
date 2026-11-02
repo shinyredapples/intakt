@@ -8,35 +8,28 @@ use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\OpenChange;
-use Symfony\Component\Lock\LockFactory;
-use Throwable;
+use NoDiscard;
 
 final readonly class StartedRounds
 {
     public function __construct(
         private EntityManagerInterface $entities,
-        private LockFactory $locks,
+        private PendingHeads $pending,
     ) {
     }
 
-    // Null because this head may already have a round, or another worker may be starting it.
+    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done; null when this head already has its round.
     /**
      * @param Closure(): string $start
      */
     public function startOnce(string $project, OpenChange $change, Closure $start): ?string
     {
-        // Tried without waiting, because a tick has a time budget and the worker holding it starts the round anyway.
-        $lock = $this->locks->createLock('watcher-round-'.hash('sha256', json_encode([$project, $change->id->value, $change->head->hash], JSON_THROW_ON_ERROR)));
+        return $this->entities->getConnection()->transactional(function () use ($project, $change, $start): ?string {
+            $roundId = $this->isStarted($project, $change) ? null : $this->record($project, $change, $start());
+            $this->pending->forget($project, $change);
 
-        if (!$lock->acquire(false)) {
-            return null;
-        }
-
-        try {
-            return $this->claimAndStart($project, $change, $start);
-        } finally {
-            $lock->release();
-        }
+            return $roundId;
+        });
     }
 
     // Only rounds not yet found stale, because a round is reported stale once.
@@ -51,7 +44,7 @@ final readonly class StartedRounds
             // Refreshed because a worker keeps its entity manager and another worker may have changed the row.
             $this->entities->refresh($round);
 
-            if (null !== $round->roundId() && !$round->isStale() && $round->head() !== $change->head->hash) {
+            if (!$round->isStale() && $round->head() !== $change->head->hash) {
                 $rounds[] = $round;
             }
         }
@@ -59,46 +52,33 @@ final readonly class StartedRounds
         return $rounds;
     }
 
-    public function markStale(StartedRound $round): void
+    // One statement on the stored row, because the review's queries clear the entity manager and a loaded round would no longer be written; false when another worker marked it first.
+    #[NoDiscard]
+    public function markStale(StartedRound $round): bool
     {
-        $round->markStale();
-        $this->entities->flush();
+        $marked = $this->entities->createQueryBuilder()
+            ->update(StartedRound::class, 'r')
+            ->set('r.stale', ':stale')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.stale = :fresh')
+            ->setParameter('stale', true)
+            ->setParameter('fresh', false)
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->setParameter('head', $round->head())
+            ->getQuery()
+            ->execute();
+
+        return 1 === $marked;
     }
 
-    /**
-     * @param Closure(): string $start
-     */
-    private function claimAndStart(string $project, OpenChange $change, Closure $start): ?string
+    private function isStarted(string $project, OpenChange $change): bool
     {
-        $key = ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash];
-
-        if (null !== $this->entities->find(StartedRound::class, $key)) {
-            return null;
-        }
-
-        $claim = new StartedRound($project, $change->id->value, $change->head->hash);
-        $this->entities->persist($claim);
-        $this->entities->flush();
-
-        return $this->queue($claim, $start);
+        return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
     }
 
-    /**
-     * @param Closure(): string $start
-     */
-    private function queue(StartedRound $claim, Closure $start): string
+    private function record(string $project, OpenChange $change, string $roundId): string
     {
-        try {
-            $roundId = $start();
-        } catch (Throwable $failure) {
-            // Released so the next tick tries this head again.
-            $this->entities->remove($claim);
-            $this->entities->flush();
-
-            throw $failure;
-        }
-
-        $claim->queuedAs($roundId);
+        $this->entities->persist(new StartedRound($project, $change, $roundId));
         $this->entities->flush();
 
         return $roundId;

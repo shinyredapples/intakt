@@ -12,13 +12,17 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use LogicException;
 
-// Kept because an unchanged listing names no pull request, so a head still waiting for its CI is read again from here.
+// Kept from the listing until the head is settled, because an unchanged listing names no pull request, so a head still waiting for its CI or for a start that failed is read again from here.
 #[ORM\Entity]
 #[ORM\Table(name: 'watcher_pending_head')]
 final class PendingHead
 {
     // Text because the platforms' datetime columns keep whole seconds, as in SeenChange.
     private const string MOMENT = 'Y-m-d H:i:s.u';
+
+    #[ORM\Id]
+    #[ORM\Column(name: 'change_ref', length: 255)]
+    private readonly string $change;
 
     #[ORM\Column(length: 64)]
     private string $head;
@@ -33,12 +37,10 @@ final class PendingHead
         #[ORM\Id]
         #[ORM\Column(length: 255)]
         private readonly string $project,
-        #[ORM\Id]
-        #[ORM\Column(name: 'change_ref', length: 255)]
-        private readonly string $change,
         OpenChange $waiting,
         DateTimeImmutable $readAgainAt,
     ) {
+        $this->change = $waiting->id->value;
         $this->wait($waiting, $readAgainAt);
     }
 
@@ -57,6 +59,11 @@ final class PendingHead
     public function change(): string
     {
         return $this->change;
+    }
+
+    public function isAt(OpenChange $open): bool
+    {
+        return $this->head === $open->head->hash;
     }
 
     public function isDueAt(DateTimeImmutable $now): bool

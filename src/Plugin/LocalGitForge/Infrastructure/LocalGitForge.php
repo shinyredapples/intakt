@@ -56,7 +56,16 @@ final readonly class LocalGitForge implements Forge
 
     public function change(ChangeId $id): Change
     {
-        $head = $this->headOf($id);
+        return $this->changeAt($id, $this->headOf($id));
+    }
+
+    // The change as it was at a given head, so a caller that checked that head reads it even when the branch moved on or was never fetched under the change's name.
+    public function changeAt(ChangeId $id, CommitId $head): Change
+    {
+        if (!$this->exists($head)) {
+            throw new ForgeReadFailed(sprintf('The head %s of change "%s" is not in the local repository.', $head->hash, $id->value));
+        }
+
         $commits = new CommitRange($this->mergeBase($head), $head);
 
         return new Change($id, $commits, $this->diff($commits));

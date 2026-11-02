@@ -32,9 +32,6 @@ services:
         decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
         decoration_on_invalid: ignore
 
-    # The watcher reads pull requests from GitHub; LocalGitForge is built per repository by its commands and is no service to inject.
-    Intakt\Plugin\Forge\Contract\Forge: '@Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge'
-
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
     Symfony\Component\Lock\Store\FlockStore:
         arguments: ['%kernel.project_dir%/var/locks']

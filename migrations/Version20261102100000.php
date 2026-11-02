@@ -42,7 +42,7 @@ final class Version20261102100000 extends AbstractMigration
                 Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
                 Column::editor()->setUnquotedName('change_ref')->setTypeName(Types::STRING)->setLength(255)->create(),
                 Column::editor()->setUnquotedName('head')->setTypeName(Types::STRING)->setLength(64)->create(),
-                Column::editor()->setUnquotedName('round_id')->setTypeName(Types::STRING)->setLength(36)->setNotNull(false)->create(),
+                Column::editor()->setUnquotedName('round_id')->setTypeName(Types::STRING)->setLength(36)->create(),
                 Column::editor()->setUnquotedName('stale')->setTypeName(Types::BOOLEAN)->setDefaultValue(false)->create(),
             )
             ->setPrimaryKeyConstraint(

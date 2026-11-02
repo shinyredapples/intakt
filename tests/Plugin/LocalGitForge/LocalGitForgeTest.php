@@ -79,6 +79,26 @@ final class LocalGitForgeTest extends TestCase
         self::assertSame($baseHash, $change->commits->base->hash);
     }
 
+    public function testItReturnsTheChangeAtTheGivenHeadEvenWhenTheBranchHasMovedPastIt(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $checked = $this->repository->commitFile('src/New.php', "<?php\n");
+        $this->repository->commitFile('src/Later.php', "<?php\n");
+
+        $change = $this->forge()->changeAt(new ChangeId('7'), new CommitId($checked));
+
+        self::assertSame($checked, $change->commits->head->hash);
+        self::assertSame(['src/New.php'], array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]));
+    }
+
+    public function testItRefusesTheChangeAtAHeadThatIsNotInTheRepository(): void
+    {
+        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionMessage('is not in the local repository');
+
+        $this->forge()->changeAt(new ChangeId('7'), new CommitId(str_repeat('a', 40)));
+    }
+
     public function testItReturnsTheDiffAndTheChangedFilesOfTheBranch(): void
     {
         $this->repository->checkoutNewBranch('feature');

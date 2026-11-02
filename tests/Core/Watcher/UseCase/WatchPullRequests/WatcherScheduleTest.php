@@ -38,7 +38,7 @@ final class WatcherScheduleTest extends TestCase
     {
         $project = $this->projects()->named('alpha');
 
-        self::assertSame(['alpha', 'repo', 'main', 'Review it.'], [$project->name, $project->repository, $project->base, $project->task]);
+        self::assertSame(['alpha', 'repo', 'main', 'Review it.'], [$project->name, $project->source->repository, $project->source->base, $project->task]);
     }
 
     private function projects(): WatchedProjects
