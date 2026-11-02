@@ -98,6 +98,16 @@ final class VerdictsOfRoundTest extends KernelTestCase
         self::assertSame([], $verdicts->counting);
     }
 
+    public function testAShadowVerdictCommittedAfterTheLedgerWasReadDoesNotCountOnceTheProjectIsLive(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
+        $round = $this->fixture->start(1)->id()->toRfc4122();
+
+        $verdicts = $this->fixture->verdictsReadWhileAVerdictCommitsAfterTheLedgerRead(new ConfiguredProjectModes([]), new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 1), new HeadMove(HeadMoveKind::Unmoved, [])));
+
+        self::assertSame([], $verdicts->counting);
+    }
+
     public function testAnotherProjectInShadowModeLeavesTheVerdictsOfThisOneCounting(): void
     {
         $round = $this->reviewedRound();

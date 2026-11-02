@@ -25,12 +25,14 @@ final readonly class VerdictsOfRoundHandler
     {
         $round = $this->storedRound($query->roundId);
         $standing = $round->standingAt($query->current, $query->move);
+        // Read before the ledger, because a verdict and its ledger row commit together, so the ledger read after it always holds the shadow mark of every verdict read.
+        $verdicts = $this->verdicts->of($round);
 
         if (Standing::Stale === $standing->standing || $this->shadow->isShadow($round)) {
             return new RoundVerdicts($standing, []);
         }
 
-        return new RoundVerdicts($standing, $this->verdicts->of($round));
+        return new RoundVerdicts($standing, $verdicts);
     }
 
     private function storedRound(string $roundId): ReviewRound
