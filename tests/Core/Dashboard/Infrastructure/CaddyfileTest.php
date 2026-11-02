@@ -52,45 +52,47 @@ final class CaddyfileTest extends TestCase
     {
         $issuer = $this->issuerIn($this->adapted('--envfile', '.env.local', '--envfile', '.env'));
 
-        self::assertSame(self::ISSUER, $issuer['identifier']);
-        self::assertSame(self::SECRET, $issuer['publisher']['jwt']['key']);
+        self::assertSame(self::ISSUER, $issuer['identifier'] ?? null);
+        self::assertSame(self::SECRET, self::at($issuer, 'publisher', 'jwt', 'key'));
     }
 
     public function testTheHubGetsNoKeyWhenEnvComesFirst(): void
     {
         $issuer = $this->issuerIn($this->adapted('--envfile', '.env', '--envfile', '.env.local'));
 
-        self::assertNotSame(self::SECRET, $issuer['publisher']['jwt']['key'] ?? null);
+        self::assertNotSame(self::SECRET, self::at($issuer, 'publisher', 'jwt', 'key'));
     }
 
     public function testTheAdminApiListensOnLocalhostOnly(): void
     {
-        self::assertSame(['localhost:2019'], (array) $this->adapted('--envfile', '.env.local', '--envfile', '.env')['admin']['listen']);
+        self::assertSame(['localhost:2019'], (array) self::at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'admin', 'listen'));
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function adapted(string ...$envFiles): array
     {
         $process = new Process([$this->frankenphp, 'adapt', '--config', 'Caddyfile', '--adapter', 'caddyfile', ...$envFiles], $this->directory, ['MERCURE_JWT_SECRET' => false, 'MERCURE_JWT_ISSUER' => false, 'CADDY_ADMIN' => false]);
         $process->mustRun();
+        $config = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($config);
 
-        /* @var array<string, mixed> */
-        return json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
+        return $config;
     }
 
     /**
      * @param array<mixed> $config
      *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     // Searched, because the route nesting is Caddy's choice and only the hub's first issuer is under test.
     private function issuerIn(array $config): array
     {
-        if (isset($config['issuers'][0]) && is_array($config['issuers'][0])) {
-            /* @var array<string, mixed> */
-            return $config['issuers'][0];
+        $issuers = $config['issuers'] ?? null;
+
+        if (is_array($issuers) && isset($issuers[0]) && is_array($issuers[0])) {
+            return $issuers[0];
         }
 
         foreach (array_filter($config, is_array(...)) as $nested) {
@@ -102,5 +104,23 @@ final class CaddyfileTest extends TestCase
         }
 
         return [];
+    }
+
+    /**
+     * @param array<mixed> $config
+     */
+    private static function at(array $config, string ...$keys): mixed
+    {
+        $value = $config;
+
+        foreach ($keys as $key) {
+            if (!is_array($value)) {
+                return null;
+            }
+
+            $value = $value[$key] ?? null;
+        }
+
+        return $value;
     }
 }
