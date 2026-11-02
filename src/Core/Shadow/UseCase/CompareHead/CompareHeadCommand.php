@@ -8,6 +8,7 @@ use Intakt\Core\Shadow\Contract\HeadComparison;
 use Intakt\Core\Shadow\Contract\ReviewerDecision;
 use Intakt\Core\Shadow\Domain\LoopReviewReader;
 use Intakt\Core\Shadow\Domain\ReviewComparison;
+use Intakt\Core\Shadow\Infrastructure\RecordedHead;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
