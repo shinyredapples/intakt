@@ -24,3 +24,11 @@ services:
     # Public so the SDK client test can take them out of the container; it swaps them in for the contracts itself, so no other test gets them.
     Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel:
         public: true
+
+    # The owner server also serves the test tools, which an install without tests/ lacks, so the pattern comes with them.
+
+mcp:
+    servers:
+        owner:
+            registry:
+                tools: ['Intakt\Tests\Core\Mcp\']

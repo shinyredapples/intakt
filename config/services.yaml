@@ -53,6 +53,10 @@ services:
     Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation:
         factory: ['Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation', 'fromSettings']
         arguments: ['%env(GITHUB_APP_PERMISSIONS)%', '%env(GITHUB_APP_REPOSITORIES)%']
+    # Empty while no maintainer App runs, so no bot but Intakt's own steers.
+    Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities:
+        arguments:
+            $maintainerAppSlug: '%env(GITHUB_MAINTAINER_APP_SLUG)%'
 
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
@@ -73,6 +77,11 @@ services:
         arguments:
             $configuredToken: '%env(MCP_OWNER_TOKEN)%'
 
+    # Read from inside the container only, because the admin API stays bound to localhost.
+    Intakt\Core\Server\Infrastructure\AdminApi:
+        arguments:
+            $baseUrl: '%env(FRANKENPHP_ADMIN_URL)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
@@ -86,3 +95,5 @@ when@test:
         - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }
         # The secret scan as the container wires it, so its test proves the INTAKT_GITLEAKS binding.
         - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
+        # Recorded pull requests and CI runs, so a tick runs on an install in the test environment while no forge lists them (plan task T18).
+        - { resource: '../tests/Core/Watcher/services.yaml', ignore_errors: not_found }

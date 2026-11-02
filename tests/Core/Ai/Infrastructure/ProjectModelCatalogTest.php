@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
+use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Bridge\Generic\CompletionsModel;
 use Symfony\AI\Platform\Bridge\OpenAi\Gpt;
 use Symfony\AI\Platform\Capability;
@@ -60,6 +61,16 @@ final class ProjectModelCatalogTest extends TestCase
 
         self::assertSame(ClaudeCode::class, $models['sonnet']['class']);
         self::assertContains(Capability::OUTPUT_STRUCTURED, $models['sonnet']['capabilities']);
+    }
+
+    public function testACodexModelIsAddedEvenWhenTheBridgeKnowsItSoItSupportsStructuredOutput(): void
+    {
+        $catalog = new ProjectModelCatalog(['gamma' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]);
+
+        $models = $catalog->models(Provider::Codex);
+
+        self::assertSame(Codex::class, $models['gpt-5.3-codex']['class']);
+        self::assertContains(Capability::OUTPUT_STRUCTURED, $models['gpt-5.3-codex']['capabilities']);
     }
 
     public function testAProviderNoProjectMapsGetsNoModels(): void

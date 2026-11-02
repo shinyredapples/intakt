@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerEventsAreAppendOnly;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
@@ -51,7 +52,20 @@ final readonly class DoctrineLedger implements Ledger
 
     public function readInOrder(): RecordedEvents
     {
-        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy([], ['position' => 'ASC']);
+        return $this->recordedEventsOf([]);
+    }
+
+    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->recordedEventsOf(['kind' => $kind]);
+    }
+
+    /**
+     * @param array<string, LedgerEventKind> $criteria
+     */
+    private function recordedEventsOf(array $criteria): RecordedEvents
+    {
+        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']);
 
         return new RecordedEvents(array_map(
             static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->id(), new LedgerEvent($record->kind(), $record->payload()), $record->recordedAt()),

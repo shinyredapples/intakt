@@ -12,6 +12,7 @@ return [
     'Core/Memory',
     'Core/Platform',
     'Core/Review',
+    'Core/Server',
     'Core/Shadow',
     'Core/Upstream',
     'Core/Watcher',

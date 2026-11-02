@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Mcp\Contract;
 
 use stdClass;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use UnexpectedValueException;
 
@@ -17,6 +18,8 @@ final class OwnerServerClient
 
     public function __construct(
         private readonly HttpKernelInterface $kernel,
+        private readonly string $path = '/mcp/owner',
+        private readonly ?string $bearer = null,
     ) {
     }
 
@@ -34,10 +37,14 @@ final class OwnerServerClient
             $server['HTTP_MCP_SESSION_ID'] = $this->session;
         }
 
-        $response = $this->kernel->handle(Request::create('http://localhost/mcp/owner', 'POST', server: $server, content: $body));
+        if (null !== $this->bearer) {
+            $server['HTTP_AUTHORIZATION'] = 'Bearer '.$this->bearer;
+        }
+
+        $response = $this->kernel->handle(Request::create('http://localhost'.$this->path, 'POST', server: $server, content: $body));
         $this->session ??= $response->headers->get('Mcp-Session-Id');
 
-        $this->lastBody = (string) $response->getContent();
+        $this->lastBody = $response instanceof StreamedResponse ? $this->streamed($response) : (string) $response->getContent();
 
         return $this->decode($this->lastBody);
     }
@@ -75,14 +82,30 @@ final class OwnerServerClient
         return $value;
     }
 
+    // Progress notifications are sent while the call runs, so the answer is a stream.
+    private function streamed(StreamedResponse $response): string
+    {
+        $sent = '';
+        // A callback because the server flushes after each event, which would otherwise pass the text on to the test runner.
+        ob_start(static function (string $chunk) use (&$sent): string {
+            $sent .= $chunk;
+
+            return '';
+        });
+        $response->sendContent();
+        ob_end_clean();
+
+        return $sent;
+    }
+
     /**
      * @return array<mixed>
      */
     private function decode(string $content): array
     {
-        // An answer arrives as plain JSON or as one server-sent event, because the server picks per request.
-        if (1 === preg_match('/^data: (.*)$/m', $content, $matches)) {
-            $content = $matches[1];
+        // An answer arrives as plain JSON or as server-sent events, because the server picks per request; the last event is the answer, the ones before are notifications.
+        if (false !== preg_match_all('/^data: (.*)$/m', $content, $matches) && [] !== $matches[1]) {
+            $content = array_last($matches[1]);
         }
 
         $decoded = json_decode($content, true, flags: JSON_THROW_ON_ERROR);

@@ -1,0 +1,83 @@
+{
+    "ThreadDebugStates": [
+        {
+            "Index": 0,
+            "Name": "Regular PHP Thread",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85390,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 0,
+            "MemoryUsage": 0
+        },
+        {
+            "Index": 1,
+            "Name": "Regular PHP Thread",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85388,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 0,
+            "MemoryUsage": 0
+        },
+        {
+            "Index": 2,
+            "Name": "Regular PHP Thread",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85386,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 0,
+            "MemoryUsage": 0
+        },
+        {
+            "Index": 3,
+            "Name": "Regular PHP Thread",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85384,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 0,
+            "MemoryUsage": 0
+        },
+        {
+            "Index": 4,
+            "Name": "Worker PHP Thread - /app/public/index.php",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85205,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 1,
+            "MemoryUsage": 842024
+        },
+        {
+            "Index": 5,
+            "Name": "Worker PHP Thread - /app/public/index.php",
+            "State": "ready",
+            "IsWaiting": true,
+            "IsBusy": false,
+            "WaitingSinceMilliseconds": 85205,
+            "CurrentURI": "",
+            "CurrentMethod": "",
+            "RequestStartedAt": 0,
+            "RequestCount": 0,
+            "MemoryUsage": 820440
+        }
+    ],
+    "ReservedThreadCount": 0
+}

@@ -15,12 +15,15 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Shadow\Contract\ProjectModes;
 
 // Called inside the caller's transaction, so a refused event rolls the move it reports back with it.
 final readonly class RoundLedger
 {
-    public function __construct(private Ledger $ledger)
-    {
+    public function __construct(
+        private Ledger $ledger,
+        private ProjectModes $modes,
+    ) {
     }
 
     // The repository, base and task go with the start, because the dashboard starts the change's next round from the ledger alone and ledger rows are never back-filled.
@@ -40,9 +43,14 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerStarted, $this->identify($reviewer));
     }
 
+    // The mode goes with each verdict, because a verdict recorded as shadow must never count for a merge, even after the project is switched to live.
     public function verdictReceived(RoundReviewer $reviewer, Verdict $verdict): void
     {
-        $this->append(LedgerEventKind::VerdictReceived, $this->identify($reviewer) + ['decision' => $verdict->verdict->value, 'findings' => count($verdict->findings)]);
+        $this->append(LedgerEventKind::VerdictReceived, $this->identify($reviewer) + [
+            'decision' => $verdict->verdict->value,
+            'findings' => count($verdict->findings),
+            'mode' => $this->modes->of($reviewer->round()->project())->value,
+        ]);
     }
 
     // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up.
