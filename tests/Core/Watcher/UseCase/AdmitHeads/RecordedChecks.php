@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\AdmitHeads;
 
+use DateTimeImmutable;
+use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CiRun;
+use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -13,6 +16,9 @@ use JsonException;
 use LogicException;
 
 // Plays recorded GitHub responses, because a live forge is out of reach; it keeps the runs of the asked sha like the real call must.
+/**
+ * @phpstan-type Recorded array{name?: string, app?: array{slug: string}, event?: string, pull_requests: list<array{number: int}>, created_at: string, head_sha: string, status: string, conclusion: string|null}
+ */
 final class RecordedChecks implements HeadChecks
 {
     /** @var list<string> */
@@ -34,12 +40,27 @@ final class RecordedChecks implements HeadChecks
         foreach (['workflow_runs', 'check_suites'] as $kind) {
             foreach ($recorded[$kind] as $entry) {
                 if ($entry['head_sha'] === $head->hash) {
-                    $runs[] = new CiRun($entry['name'] ?? $entry['app'] ?? 'check', $this->stateOf($entry['status'], $entry['conclusion']));
+                    $runs[] = new CiRun($this->originOf($entry), $this->stateOf($entry['status'], $entry['conclusion']), new DateTimeImmutable($entry['created_at']));
                 }
             }
         }
 
         return new CiState($head, $runs);
+    }
+
+    // A check suite names no event, so its kind stands in for one.
+    /**
+     * @param Recorded $entry
+     */
+    private function originOf(array $entry): CiRunOrigin
+    {
+        $change = array_first($entry['pull_requests']);
+
+        return new CiRunOrigin(
+            $entry['name'] ?? $entry['app']['slug'] ?? 'check',
+            $entry['event'] ?? 'check_suite',
+            null === $change ? null : new ChangeId((string) $change['number']),
+        );
     }
 
     private function stateOf(string $status, ?string $conclusion): CiRunState
@@ -53,12 +74,12 @@ final class RecordedChecks implements HeadChecks
     }
 
     /**
-     * @return array<string, list<array{name?: string, app?: string, head_sha: string, status: string, conclusion: string|null}>>
+     * @return array<string, list<Recorded>>
      */
     private function read(string $file): array
     {
         try {
-            /** @var array<string, list<array{name?: string, app?: string, head_sha: string, status: string, conclusion: string|null}>> $recorded */
+            /** @var array<string, list<Recorded>> $recorded */
             $recorded = json_decode((string) file_get_contents(__DIR__.'/recorded/'.$file.'.json'), true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
             throw new LogicException('Not a recording: '.$file, 0, $e);

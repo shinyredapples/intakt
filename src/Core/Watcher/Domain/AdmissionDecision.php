@@ -22,11 +22,11 @@ final readonly class AdmissionDecision
         };
     }
 
-    // Dropped because a rerun of the same name on the same head replaced it, see docs/design/05-architecture/08-merge.md.
+    // Dropped because a newer run of the same origin on the same head replaced it, see docs/design/05-architecture/08-merge.md.
     private function withoutReplacedCancellations(CiState $ci): CiState
     {
-        $rerun = array_map(static fn (CiRun $run): string => $run->name, array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state));
-        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state || !in_array($run->name, $rerun, true));
+        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state
+            || !array_any($ci->runs, static fn (CiRun $other): bool => $other->isNewerRunOf($run)));
 
         return new CiState($ci->head, array_values($kept));
     }

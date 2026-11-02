@@ -11,6 +11,7 @@ use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\UseCase\AdmitHeads\AdmitHeads;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CiRun;
+use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
@@ -26,6 +27,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(HeadDecision::class)]
 #[UsesClass(CiState::class)]
 #[UsesClass(CiRun::class)]
+#[UsesClass(CiRunOrigin::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(OpenChange::class)]
 #[UsesClass(ChangeId::class)]
@@ -37,7 +39,7 @@ final class AdmitHeadsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->forge = new RecordedChecks([str_repeat('a', 40) => 'pending', str_repeat('b', 40) => 'green', str_repeat('c', 40) => 'red', str_repeat('d', 40) => 'cancelled', str_repeat('e', 40) => 'rerun']);
+        $this->forge = new RecordedChecks([str_repeat('a', 40) => 'pending', str_repeat('b', 40) => 'green', str_repeat('c', 40) => 'red', str_repeat('d', 40) => 'cancelled', str_repeat('e', 40) => 'rerun', str_repeat('f', 40) => 'cancelled-after-success']);
         $this->log = new RecordingLogger();
         $this->admit = new AdmitHeads($this->forge, new AdmissionDecision(), new MockClock('2026-11-02T10:00:00+00:00'), $this->log);
     }
@@ -82,6 +84,14 @@ final class AdmitHeadsTest extends TestCase
         [$decision] = ($this->admit)('demo', [$this->change('5', 'e')]);
 
         self::assertTrue($decision->startsRound());
+    }
+
+    public function testACancelledRunNewerThanTheSucceededOneOnTheHeadIsWaitedOn(): void
+    {
+        [$decision] = ($this->admit)('demo', [$this->change('6', 'f')]);
+
+        self::assertSame(HeadAdmission::Pending, $decision->admission);
+        self::assertFalse($decision->startsRound());
     }
 
     public function testTheCiStateIsReadForTheExactHeadAndOlderRunsDoNotPaintItGreen(): void

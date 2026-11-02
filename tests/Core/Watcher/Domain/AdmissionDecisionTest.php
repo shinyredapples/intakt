@@ -10,6 +10,7 @@ use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CiRun;
+use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(HeadDecision::class)]
 #[UsesClass(CiState::class)]
 #[UsesClass(CiRun::class)]
+#[UsesClass(CiRunOrigin::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(OpenChange::class)]
 #[UsesClass(ChangeId::class)]
@@ -52,18 +54,37 @@ final class AdmissionDecisionTest extends TestCase
         self::assertSame(HeadAdmission::Pending, $this->admission(CiRunState::Cancelled));
     }
 
-    public function testACancelledRunIsIgnoredWhenARunOfTheSameNameReplacedIt(): void
+    public function testACancelledRunIsIgnoredWhenANewerRunOfTheSameOriginReplacedIt(): void
     {
-        $runs = [new CiRun('ci', CiRunState::Cancelled), new CiRun('ci', CiRunState::Succeeded), new CiRun('lint', CiRunState::Succeeded)];
+        $runs = [$this->ciRun(CiRunState::Cancelled, '10:00'), $this->ciRun(CiRunState::Succeeded, '10:05'), $this->ciRun(CiRunState::Succeeded, '10:00', new CiRunOrigin('lint', 'pull_request', new ChangeId('7')))];
 
-        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), $runs)));
+        self::assertSame(HeadAdmission::Green, $this->admissionOfRuns(...$runs));
+    }
+
+    public function testACancelledRunNewerThanTheSucceededOneIsPending(): void
+    {
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, '10:05'), $this->ciRun(CiRunState::Succeeded, '10:00')));
     }
 
     public function testACancelledRunOfAnotherNameIsNotReplaced(): void
     {
-        $runs = [new CiRun('ci', CiRunState::Cancelled), new CiRun('lint', CiRunState::Succeeded)];
+        $lint = new CiRunOrigin('lint', 'pull_request', new ChangeId('7'));
 
-        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), $runs)));
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, '10:00'), $this->ciRun(CiRunState::Succeeded, '10:05', $lint)));
+    }
+
+    public function testACancelledRunIsNotReplacedByANewerRunOfAnotherEvent(): void
+    {
+        $push = new CiRunOrigin('ci', 'push', new ChangeId('7'));
+
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, '10:00'), $this->ciRun(CiRunState::Succeeded, '10:05', $push)));
+    }
+
+    public function testACancelledRunIsNotReplacedByANewerRunForAnotherPullRequest(): void
+    {
+        $other = new CiRunOrigin('ci', 'pull_request', new ChangeId('8'));
+
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, '10:00'), $this->ciRun(CiRunState::Succeeded, '10:05', $other)));
     }
 
     public function testOnlyAGreenHeadStartsARound(): void
@@ -98,9 +119,17 @@ final class AdmissionDecisionTest extends TestCase
 
     private function admission(CiRunState ...$states): HeadAdmission
     {
-        $runs = array_map(static fn (CiRunState $state): CiRun => new CiRun('ci', $state), $states);
+        return $this->admissionOfRuns(...array_map(fn (CiRunState $state): CiRun => $this->ciRun($state, '10:00'), $states));
+    }
 
+    private function admissionOfRuns(CiRun ...$runs): HeadAdmission
+    {
         return new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), array_values($runs)));
+    }
+
+    private function ciRun(CiRunState $state, string $startedAt, ?CiRunOrigin $origin = null): CiRun
+    {
+        return new CiRun($origin ?? new CiRunOrigin('ci', 'pull_request', new ChangeId('7')), $state, new DateTimeImmutable('2026-11-02T'.$startedAt.':00+00:00'));
     }
 
     private function decided(string $id, HeadAdmission $admission): HeadDecision
