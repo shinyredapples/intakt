@@ -21,7 +21,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
-// Asks Review whether the verdicts of a round on an earlier head still stand (T11); Review alone decides, the Watcher only records the answer.
+// Review alone decides whether the verdicts of an earlier head still stand (T11), because it holds the round's recorded identity; the Watcher only records the answer.
 final readonly class StaleVerdicts
 {
     // The command a round is started with when the start names none, so the identity matches the one the round recorded.
@@ -52,7 +52,7 @@ final readonly class StaleVerdicts
 
         if ($verdicts instanceof RoundVerdicts && Standing::Stale === $verdicts->standing->standing) {
             $this->rounds->markStale($round);
-            $this->ledger->verdictsStale($project->name, $round->change(), (string) $round->roundId(), $round->head());
+            $this->ledger->verdictsStale($round);
         }
     }
 

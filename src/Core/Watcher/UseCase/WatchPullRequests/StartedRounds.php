@@ -19,10 +19,9 @@ final readonly class StartedRounds
     ) {
     }
 
+    // Null because this head may already have a round, or another worker may be starting it.
     /**
-     * @param Closure(): string $start queues the round and returns its id
-     *
-     * @return string|null the id of the round, or null when this head already has one or another worker is starting it
+     * @param Closure(): string $start
      */
     public function startOnce(string $project, OpenChange $change, Closure $start): ?string
     {
@@ -40,8 +39,9 @@ final readonly class StartedRounds
         }
     }
 
+    // Only rounds not yet found stale, because a round is reported stale once.
     /**
-     * @return list<StartedRound> the rounds of the change on another head whose verdicts were not yet found stale
+     * @return list<StartedRound>
      */
     public function openRoundsBefore(string $project, OpenChange $change): array
     {

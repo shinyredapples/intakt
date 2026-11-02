@@ -9,7 +9,7 @@ use Symfony\Component\Scheduler\RecurringMessage;
 use Symfony\Component\Scheduler\Schedule;
 use Symfony\Component\Scheduler\ScheduleProviderInterface;
 
-// Run by `messenger:consume scheduler_watcher`; the tick is the only trigger until webhooks (plan task T32) and stays the fallback after.
+// Run by `messenger:consume scheduler_watcher`, because the tick is the only trigger until webhooks (plan task T32) and stays the fallback after.
 #[AsSchedule('watcher')]
 final readonly class WatcherSchedule implements ScheduleProviderInterface
 {

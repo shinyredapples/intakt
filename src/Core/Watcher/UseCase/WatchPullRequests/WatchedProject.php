@@ -10,7 +10,7 @@ final readonly class WatchedProject
         public string $name,
         public string $repository,
         public string $base,
-        // One text for every pull request until the pull request text is read from the forge.
+        // Shared by every pull request because the forge's pull request text is not read yet.
         public string $task,
     ) {
     }

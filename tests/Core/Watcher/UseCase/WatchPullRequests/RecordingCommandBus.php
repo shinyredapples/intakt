@@ -11,7 +11,7 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
-// Answers a round id like the review start does, and can run code while the start is in flight to force the order of two ticks.
+// Runs code while a start is in flight because that forces the order of two ticks.
 final class RecordingCommandBus implements MessageBusInterface
 {
     /** @var list<StartReview> */
@@ -24,7 +24,7 @@ final class RecordingCommandBus implements MessageBusInterface
         assert($message instanceof StartReview);
         $this->started[] = $message;
 
-        if (null !== $this->whileStarting) {
+        if ($this->whileStarting instanceof Closure) {
             ($this->whileStarting)();
         }
 

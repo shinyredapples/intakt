@@ -12,7 +12,7 @@ use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
-// Judges the standing with the real identity rules, as the handler of the query does, for a round recorded on one identity.
+// Judges with the real identity rules because the handler of the query does, for a round recorded on one identity.
 final class StandingQueryBus implements MessageBusInterface
 {
     /** @var list<VerdictsOfRound> */

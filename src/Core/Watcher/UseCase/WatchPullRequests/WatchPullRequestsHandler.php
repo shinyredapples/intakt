@@ -37,7 +37,7 @@ final readonly class WatchPullRequestsHandler
         try {
             $toLookAt = $this->changedAndDue($project->name);
         } catch (ListingInProgress) {
-            // The listing in progress reports its own result, and the next tick comes soon.
+            // Skipped because the running listing reports for itself and the next tick comes soon.
             return;
         }
 

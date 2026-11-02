@@ -30,6 +30,11 @@ final class StartedRound
     ) {
     }
 
+    public function project(): string
+    {
+        return $this->project;
+    }
+
     public function change(): string
     {
         return $this->change;

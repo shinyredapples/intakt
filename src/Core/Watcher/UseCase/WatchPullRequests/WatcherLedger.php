@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Core\Watcher\Domain\StartedRound;
 
 final readonly class WatcherLedger
 {
@@ -16,7 +17,7 @@ final readonly class WatcherLedger
     {
     }
 
-    // A green head is recorded by the round it starts, not here.
+    // Skipped for a green head because the round it starts is recorded instead.
     public function headDecided(string $project, HeadDecision $decision): void
     {
         $kind = match ($decision->admission) {
@@ -35,9 +36,9 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::RoundQueued, $this->headOf($project, $decision) + ['round' => $round]);
     }
 
-    public function verdictsStale(string $project, string $change, string $round, string $head): void
+    public function verdictsStale(StartedRound $round): void
     {
-        $this->append(LedgerEventKind::VerdictsStale, ['project' => $project, 'change' => $change, 'round' => $round, 'head' => $head]);
+        $this->append(LedgerEventKind::VerdictsStale, ['project' => $round->project(), 'change' => $round->change(), 'round' => $round->roundId(), 'head' => $round->head()]);
     }
 
     /**

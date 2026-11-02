@@ -17,7 +17,7 @@ use LogicException;
 #[ORM\Table(name: 'watcher_pending_head')]
 final class PendingHead
 {
-    // Text for the same reason as in SeenChange.
+    // Text because the platforms' datetime columns keep whole seconds, as in SeenChange.
     private const string MOMENT = 'Y-m-d H:i:s.u';
 
     #[ORM\Column(length: 64)]
@@ -49,6 +49,11 @@ final class PendingHead
         $this->readAgainAt = $this->format($readAgainAt);
     }
 
+    public function project(): string
+    {
+        return $this->project;
+    }
+
     public function change(): string
     {
         return $this->change;
@@ -71,6 +76,8 @@ final class PendingHead
 
     private function parse(string $moment): DateTimeImmutable
     {
-        return DateTimeImmutable::createFromFormat(self::MOMENT, $moment, new DateTimeZone('UTC')) ?: throw new LogicException('A stored moment is unreadable.');
+        $parsed = DateTimeImmutable::createFromFormat(self::MOMENT, $moment, new DateTimeZone('UTC'));
+
+        return false === $parsed ? throw new LogicException('A stored moment is unreadable.') : $parsed;
     }
 }

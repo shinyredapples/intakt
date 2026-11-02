@@ -18,11 +18,8 @@ use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\ReviewTerms;
-use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Contract\VerdictIdentity;
-use Intakt\Core\Review\Contract\VerdictsOfRound;
-use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\PendingHead;
@@ -50,7 +47,6 @@ use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\Forge;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
-use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\AdmitHeads\RecordedChecks;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
@@ -59,6 +55,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
@@ -200,11 +197,11 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     public function testAFailedStartReleasesTheHeadSoTheNextTickStartsItsRound(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
-        $this->commands->whileStarting = static fn () => throw new \RuntimeException('the bus is down');
+        $this->commands->whileStarting = static fn () => throw new RuntimeException('the bus is down');
         try {
             $this->tick();
             self::fail('The failed start was swallowed.');
-        } catch (\RuntimeException) {
+        } catch (RuntimeException) {
             $this->commands->whileStarting = null;
         }
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:30:00Z'));
