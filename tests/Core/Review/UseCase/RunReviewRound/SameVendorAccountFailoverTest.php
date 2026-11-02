@@ -12,7 +12,6 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
-use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Domain\ReviewerState;
@@ -74,7 +73,6 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(TierPlatform::class)]
 #[UsesClass(SendFailures::class)]
-#[UsesClass(TypedRejectionConverter::class)]
 #[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(VendorAccountOut::class)]
 #[UsesClass(ProviderFailedTransiently::class)]

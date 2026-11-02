@@ -580,7 +580,9 @@ final class ReviewerVerdictTest extends WebTestCase
     // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round; a closure answers from the call's options, as a provider that streams only when asked.
     private function reviewRounds(string $task, array $rounds, string|ResultInterface|Closure $answer): Verdict
     {
-        $script = function (mixed $model, mixed $input, array $options) use (&$rounds, $answer): string|ResultInterface {
+        $script = function (mixed $model, mixed $input, array $given) use (&$rounds, $answer): string|ResultInterface {
+            /** @var array<string, mixed> $options */
+            $options = $given;
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
             $this->options[] = $options;
             $next = array_shift($rounds);

@@ -577,7 +577,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
         })()));
         $result = new DeferredResult($converter, new InMemoryRawResult());
         // Consumed as the agent runner does: converted first, then drained, so the usage arrives after the deferred result took its copy of the metadata.
-        foreach ($result->getResult()->getContent() as $delta) {
+        $stream = $result->getResult();
+        self::assertInstanceOf(StreamResult::class, $stream);
+        foreach ($stream->getContent() as $delta) {
             self::assertInstanceOf(TextDelta::class, $delta);
         }
         $ledger = new InMemoryLedger();
