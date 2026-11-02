@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AccountUnusable;
@@ -17,6 +18,7 @@ use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 
@@ -28,6 +30,7 @@ final readonly class AccountPlatform implements PlatformInterface
         private Account $account,
         private PlatformInterface $platform,
         private AccountCooldowns $cooldowns,
+        private ClockInterface $clock,
         private LoggerInterface $logger,
         private SendFailures $failures,
     ) {
@@ -36,6 +39,8 @@ final readonly class AccountPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
+        $sentAt = $this->clock->now();
+
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
@@ -49,7 +54,7 @@ final readonly class AccountPlatform implements PlatformInterface
         // A provider's limit arrives when the answer is read, not when the call is sent, so the cooldown hangs on the result.
         $result->onError($this->record(...));
         $result->onError($this->coolDownAfter(...));
-        $result->onConvert($this->answered(...));
+        $result->onConvert(fn (ResultInterface $answer): ResultInterface => $this->answered($answer, $sentAt));
 
         return $result;
     }
@@ -80,9 +85,9 @@ final readonly class AccountPlatform implements PlatformInterface
         };
     }
 
-    private function answered(ResultInterface $answer): ResultInterface
+    private function answered(ResultInterface $answer, DateTimeImmutable $sentAt): ResultInterface
     {
-        $this->cooldowns->answered($this->account);
+        $this->cooldowns->answered($this->account, $sentAt);
 
         return $answer;
     }

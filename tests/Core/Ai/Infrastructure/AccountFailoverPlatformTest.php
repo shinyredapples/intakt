@@ -217,6 +217,18 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertSame(['account' => 'anthropic.default', 'error' => 'model_not_on_plan'], $this->ledger->payloads()[1]);
     }
 
+    // Forced order: a call is sent, another call's lost login is reported, and only then is the older call's answer read.
+    public function testAnAnswerToACallSentBeforeAnAccountErrorWasReportedDoesNotReportItAgain(): void
+    {
+        $older = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
+        $this->cooldowns->coolDownUnusable($this->account(Account::DEFAULT), AccountError::LoginLost);
+
+        $older->asText();
+        $this->cooldowns->coolDownUnusable($this->account(Account::DEFAULT), AccountError::LoginLost);
+
+        self::assertCount(1, array_keys($this->ledger->kinds(), LedgerEventKind::AccountErrorReported, true));
+    }
+
     public function testAnAnswerReadFromAnAccountTellsTheCooldownsThatTheAccountAnswered(): void
     {
         $cooldowns = $this->createMock(AccountCooldowns::class);

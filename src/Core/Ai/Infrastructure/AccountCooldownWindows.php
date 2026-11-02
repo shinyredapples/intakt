@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
@@ -86,9 +87,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->reportOnce($account, $error);
     }
 
-    public function answered(Account $account): void
+    public function answered(Account $account, DateTimeImmutable $sentAt): void
     {
-        $this->pool->deleteItems(array_map(static fn (AccountError $error): string => self::reportKey($account, $error), AccountError::cases()));
+        $reports = $this->pool->getItems(array_map(static fn (AccountError $error): string => self::reportKey($account, $error), AccountError::cases()));
+        $before = array_filter(iterator_to_array($reports), static fn (CacheItemInterface $report): bool => $report->get() instanceof DateTimeImmutable && $report->get() < $sentAt);
+
+        $this->pool->deleteItems(array_keys($before));
     }
 
     public function isCoolingDown(Account $account): bool
@@ -168,7 +172,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
             return;
         }
 
-        $this->pool->save($reported->set(true));
+        $this->pool->save($reported->set($this->clock->now()));
         $this->report($account, $error);
     }
 

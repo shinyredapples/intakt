@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Contract;
 
+use DateTimeImmutable;
+
 interface AccountCooldowns
 {
     public function coolDown(Account $account, ?int $resetInSeconds): void;
@@ -14,8 +16,8 @@ interface AccountCooldowns
     // Reported to the owner once per account and error, because each later call fails the same way until the owner acts.
     public function coolDownUnusable(Account $account, AccountError $error): void;
 
-    // An account that answers has no account error left, so a later one is reported again.
-    public function answered(Account $account): void;
+    // Only an answer to a call sent after a report rearms it, because an older call can answer after the error and proves nothing about the account since.
+    public function answered(Account $account, DateTimeImmutable $sentAt): void;
 
     public function isCoolingDown(Account $account): bool;
 

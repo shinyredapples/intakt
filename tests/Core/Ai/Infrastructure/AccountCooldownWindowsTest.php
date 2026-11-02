@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountError;
 use Intakt\Core\Ai\Contract\Provider;
@@ -284,17 +285,29 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testAnAccountErrorAfterTheAccountAnsweredAgainIsReportedAgain(): void
     {
         $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
-        $this->cooldowns()->answered($this->default());
+        $this->cooldowns()->answered($this->default(), $this->afterTheReport());
 
         $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
 
         self::assertCount(2, $this->reports());
     }
 
+    // Forced order: the call was sent, the error reported, and only then the call answered.
+    public function testAnAnswerToACallSentBeforeTheReportKeepsTheReportedError(): void
+    {
+        $sentAt = new NativeClock()->now();
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+        $this->cooldowns()->answered($this->default(), $sentAt);
+
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertCount(1, $this->reports());
+    }
+
     public function testAnAnswerOfAnotherAccountKeepsTheReportedError(): void
     {
         $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
-        $this->cooldowns()->answered($this->team());
+        $this->cooldowns()->answered($this->team(), $this->afterTheReport());
 
         $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
 
@@ -324,6 +337,12 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), [Provider::Anthropic->value => [$account->name]])
             ->secondsUntilAnAccountIsFree(Provider::Anthropic);
+    }
+
+    // A second later, so the call is sent after the report even when both fall in the same microsecond.
+    private function afterTheReport(): DateTimeImmutable
+    {
+        return new NativeClock()->now()->modify('+1 second');
     }
 
     private function cooldowns(?BufferingLogger $logger = null): AccountCooldownWindows
