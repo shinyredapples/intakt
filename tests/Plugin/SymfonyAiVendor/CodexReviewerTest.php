@@ -233,6 +233,38 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame([['codex.team', 2300, 70, 512]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt'], $usage['completion'], $usage['cached']], $usages));
     }
 
+    public function testACompletedTurnWhoseCliThenExitsNonZeroFailsTheReviewer(): void
+    {
+        $this->replaying('no-answer', 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(RuntimeException::class, $failure::class);
+        self::assertStringContainsString('process failed', $failure->getMessage());
+        self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
+    }
+
+    public function testACompletedTurnWhoseCliThenExitsNonZeroStillRecordsItsUsageOnce(): void
+    {
+        $this->replaying('no-answer', 1);
+
+        $this->failureOfReview();
+
+        self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+        /** @var list<array<string, int|string|null>> $usages */
+        $usages = $this->ledger->payloads()[1]['usages'];
+        self::assertSame([['codex.team', 2300, 70, 512]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt'], $usage['completion'], $usage['cached']], $usages));
+    }
+
+    public function testAFailedTurnWithoutAReportedUsageRecordsNone(): void
+    {
+        $this->replaying('failed', 1);
+
+        $this->failureOfReview();
+
+        self::assertSame([], $this->ledger->payloads()[1]['usages']);
+    }
+
     public function testTheReviewerCannotApproveAChangeItNeverRead(): void
     {
         $this->replaying('tool-use');

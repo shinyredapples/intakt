@@ -6,6 +6,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Override;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\Component\Process\Process;
 
@@ -18,6 +19,10 @@ final readonly class CompletedCodexTurn implements RawResultInterface
 
     private const string TOOL_CALLS = 'tool_calls';
 
+    private const string TYPE = 'type';
+
+    private const string MESSAGE = 'message';
+
     public function __construct(
         private RawResultInterface $inner,
     ) {
@@ -25,11 +30,16 @@ final readonly class CompletedCodexTurn implements RawResultInterface
 
     /**
      * @throws IncompleteStreamException
+     * @throws RuntimeException
      */
     #[Override]
     public function getData(): array
     {
-        $data = $this->inner->getData();
+        try {
+            $data = $this->inner->getData();
+        } catch (RuntimeException $processFailed) {
+            return $this->failedWithReportedUsage($processFailed);
+        }
 
         // The CLI has already run the tools it used, so the bridge's copy of them is not the agent's to run again (upstream/ai-codex-platform-cli-tool-calls).
         unset($data[self::TOOL_CALLS]);
@@ -76,6 +86,22 @@ final readonly class CompletedCodexTurn implements RawResultInterface
         $usage = $this->reportedUsage();
 
         return null === $usage ? $data : [...$data, self::USAGE => $usage];
+    }
+
+    /**
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException
+     */
+    // The bridge throws on a non-zero exit before it reads the output, so the usage of a turn the CLI completed and then failed on would be lost though the account spent it; an error message keeps the conversion failing the reviewer while the extractor reads the usage.
+    private function failedWithReportedUsage(RuntimeException $processFailed): array
+    {
+        $usage = $this->reportedUsage();
+        if (null === $usage) {
+            throw $processFailed;
+        }
+
+        return [self::TYPE => 'error', self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
     }
 
     /**
