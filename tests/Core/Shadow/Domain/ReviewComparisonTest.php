@@ -161,12 +161,10 @@ final class ReviewComparisonTest extends TestCase
     public function testAStricterFindingJoiningAMergedSpotKeepsTheEarlierLineForMatching(): void
     {
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 7));
-        $round = ComparisonBuilder::round(ComparisonBuilder::changes(
-            ComparisonBuilder::finding('src/A.php', 10, Severity::P2),
-            ComparisonBuilder::finding('src/A.php', 13, Severity::P1),
-        ));
+        $p2 = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P2)));
+        $p1 = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 13, Severity::P1)));
 
-        $result = new ReviewComparison()->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$p2, $p1]);
 
         self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
         self::assertSame(Severity::P1, $result->matches[0]->intakt->severity);
@@ -175,14 +173,61 @@ final class ReviewComparisonTest extends TestCase
     public function testAMergedSpotWhoseStricterFindingIsOutsideTheWindowStillMatchesByItsNearerLine(): void
     {
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 5));
+        $p3 = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 7, Severity::P3)));
+        $p1 = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P1)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$p3, $p1]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+    }
+
+    public function testFindingsOfOneReviewNeverMergeSoEachMatchesItsOwnLoopFinding(): void
+    {
+        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 8), ComparisonBuilder::loopFinding('src/A.php', 15));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(
-            ComparisonBuilder::finding('src/A.php', 7, Severity::P3),
-            ComparisonBuilder::finding('src/A.php', 10, Severity::P1),
+            ComparisonBuilder::finding('src/A.php', 10),
+            ComparisonBuilder::finding('src/A.php', 13),
         ));
 
         $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
-        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+        self::assertSame([2, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+    }
+
+    public function testNearbyFindingsOfOneReviewStaySeparateFindings(): void
+    {
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(
+            ComparisonBuilder::finding('src/A.php', 10),
+            ComparisonBuilder::finding('src/A.php', 13),
+            ComparisonBuilder::finding('src/A.php', 16),
+            ComparisonBuilder::finding('src/A.php', 19),
+        ));
+
+        $result = new ReviewComparison()->compare('h', ComparisonBuilder::loop(), [$round]);
+
+        self::assertCount(4, $result->intaktOnly);
+    }
+
+    public function testFindingsOfSeveralReviewersMergeNoWiderThanTheLineWindow(): void
+    {
+        $rounds = array_map(
+            static fn (int $line): ChangeReview => ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', $line))),
+            [10, 13, 16, 19],
+        );
+
+        $result = new ReviewComparison()->compare('h', ComparisonBuilder::loop(), $rounds);
+
+        self::assertCount(2, $result->intaktOnly);
+    }
+
+    public function testFindingsWithoutAFileFromTwoReviewersNeverMerge(): void
+    {
+        $a = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding(null, 10)));
+        $b = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding(null, 11)));
+
+        $result = new ReviewComparison()->compare('h', ComparisonBuilder::loop(), [$a, $b]);
+
+        self::assertCount(2, $result->intaktOnly);
     }
 
     public function testAMergedLoopSpotMatchesByItsNearestLine(): void
@@ -200,17 +245,17 @@ final class ReviewComparisonTest extends TestCase
 
     public function testFindingsOnOneSideMergeTheSameWhateverTheirOrder(): void
     {
-        $a = ComparisonBuilder::finding('src/A.php', 10, Severity::P2);
-        $b = ComparisonBuilder::finding('src/A.php', 16, Severity::P2);
-        $c = ComparisonBuilder::finding('src/A.php', 13, Severity::P1);
+        $a = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P2)));
+        $b = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 16, Severity::P3)));
+        $c = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 12, Severity::P1)));
         $comparison = new ReviewComparison();
 
-        $first = $comparison->compare('h', ComparisonBuilder::loop(), [ComparisonBuilder::round(ComparisonBuilder::changes($a, $b, $c))]);
-        $second = $comparison->compare('h', ComparisonBuilder::loop(), [ComparisonBuilder::round(ComparisonBuilder::changes($c, $a, $b))]);
+        $first = $comparison->compare('h', ComparisonBuilder::loop(), [$a, $b, $c]);
+        $second = $comparison->compare('h', ComparisonBuilder::loop(), [$c, $b, $a]);
 
-        self::assertCount(1, $first->intaktOnly);
-        self::assertCount(1, $second->intaktOnly);
-        self::assertSame(Severity::P1, $second->intaktOnly[0]->severity);
+        $severities = static fn (HeadComparison $result): array => array_map(static fn (Finding $finding): Severity => $finding->severity, $result->intaktOnly);
+        self::assertSame([Severity::P1, Severity::P3], $severities($first));
+        self::assertSame([Severity::P1, Severity::P3], $severities($second));
     }
 
     public function testAnIntaktFindingMatchesOnlyOneLoopFinding(): void

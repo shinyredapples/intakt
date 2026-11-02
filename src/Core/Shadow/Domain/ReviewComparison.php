@@ -29,7 +29,7 @@ final readonly class ReviewComparison
     #[NoDiscard('a comparison that is not read reports nothing')]
     public function compare(string $head, LoopReviews $loop, array $shadowRounds): HeadComparison
     {
-        $loopFindings = $this->mergedBySpot(array_merge(...array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews)));
+        $loopFindings = $this->mergedBySpot(array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews));
         $intaktFindings = $this->mergedBySpot($this->countingFindings($shadowRounds));
         [$matches, $loopOnly, $intaktOnly] = $this->match($loopFindings, $intaktFindings);
 
@@ -47,23 +47,23 @@ final readonly class ReviewComparison
     /**
      * @template T of LoopFinding|Finding
      *
-     * @param list<T> $findings
+     * @param list<list<T>> $reviews
      *
      * @return list<MergedSpot<T>>
      */
-    private function mergedBySpot(array $findings): array
+    private function mergedBySpot(array $reviews): array
     {
-        // Several reviewers on one side often raise the same spot, at different severities or a line apart, so a spot counts once within the same window the match uses. Sorted by file and line, a finding joins the spot before it when it is within the window, so the spots do not depend on the reviewers' order. A finding without a file or line has no spot, so it stays alone.
+        // Several reviewers on one side often raise the same spot, at different severities or a line apart, so a spot counts once within the same window the match uses. Sorted by file and line, a finding joins the spot before it when the spot admits it, so the spots do not depend on the reviewers' order.
         $spots = [];
-        foreach ($this->byFileAndLine($findings) as $finding) {
+        foreach ($this->byFileAndLine($reviews) as [$review, $finding]) {
             $last = array_last($spots);
-            if (null !== $last && $this->withinWindow($last->linesApart(MergedSpot::of($finding)))) {
+            if (null !== $last && $last->admits($finding, $review)) {
                 array_pop($spots);
-                $spots[] = $last->joinedBy($finding);
+                $spots[] = $last->joinedBy($finding, $review);
                 continue;
             }
 
-            $spots[] = MergedSpot::of($finding);
+            $spots[] = MergedSpot::of($finding, $review);
         }
 
         return $spots;
@@ -77,15 +77,22 @@ final readonly class ReviewComparison
     /**
      * @template T of LoopFinding|Finding
      *
-     * @param list<T> $findings
+     * @param list<list<T>> $reviews
      *
-     * @return list<T>
+     * @return list<array{int, T}>
      */
-    private function byFileAndLine(array $findings): array
+    private function byFileAndLine(array $reviews): array
     {
-        usort($findings, static fn (LoopFinding|Finding $a, LoopFinding|Finding $b): int => [$a->file ?? '', $a->line ?? 0] <=> [$b->file ?? '', $b->line ?? 0]);
+        $tagged = [];
+        foreach ($reviews as $review => $findings) {
+            foreach ($findings as $finding) {
+                $tagged[] = [$review, $finding];
+            }
+        }
 
-        return $findings;
+        usort($tagged, static fn (array $a, array $b): int => [$a[1]->file ?? '', $a[1]->line ?? 0] <=> [$b[1]->file ?? '', $b[1]->line ?? 0]);
+
+        return $tagged;
     }
 
     /**
@@ -134,18 +141,18 @@ final readonly class ReviewComparison
     /**
      * @param list<ChangeReview> $shadowRounds
      *
-     * @return list<Finding>
+     * @return list<list<Finding>>
      */
     private function countingFindings(array $shadowRounds): array
     {
-        $findings = [];
+        $reviews = [];
         foreach ($this->verdicts($shadowRounds) as $verdict) {
             if (!$verdict->verdict->isFailedReview()) {
-                array_push($findings, ...$verdict->verdict->findings);
+                $reviews[] = $verdict->verdict->findings;
             }
         }
 
-        return $findings;
+        return $reviews;
     }
 
     /**

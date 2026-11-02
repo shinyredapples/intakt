@@ -14,12 +14,12 @@ use Intakt\Core\Shadow\Contract\LoopFinding;
 final readonly class MergedSpot
 {
     /**
-     * @param T $finding
+     * @param T               $finding
+     * @param array<int, T>   $members
      */
     private function __construct(
         public LoopFinding|Finding $finding,
-        private ?int $firstLine,
-        private ?int $lastLine,
+        private array $members,
     ) {
     }
 
@@ -30,9 +30,24 @@ final readonly class MergedSpot
      *
      * @return self<F>
      */
-    public static function of(LoopFinding|Finding $finding): self
+    public static function of(LoopFinding|Finding $finding, int $review): self
     {
-        return new self($finding, $finding->line, $finding->line);
+        return new self($finding, [$review => $finding]);
+    }
+
+    /**
+     * @param T $finding
+     */
+    public function admits(LoopFinding|Finding $finding, int $review): bool
+    {
+        // One review's findings are separate points by its own account, and a spot no wider than the window keeps a chain of nearby findings from collapsing into one.
+        if (array_key_exists($review, $this->members) || !$this->sameFile($finding)) {
+            return false;
+        }
+
+        $lines = [...$this->lines(), (int) $finding->line];
+
+        return max($lines) - min($lines) <= ReviewComparison::LINE_WINDOW;
     }
 
     /**
@@ -40,12 +55,12 @@ final readonly class MergedSpot
      *
      * @return self<T>
      */
-    public function joinedBy(LoopFinding|Finding $finding): self
+    public function joinedBy(LoopFinding|Finding $finding, int $review): self
     {
-        // The whole span stays, because a later, stricter finding must not erase the line an earlier member matched on.
+        // Every member's line stays, because a later, stricter finding must not erase the line an earlier member matched on.
         $representative = $this->outranks($finding->severity) ? $this->finding : $finding;
 
-        return new self($representative, min((int) $this->firstLine, (int) $finding->line), max((int) $this->lastLine, (int) $finding->line));
+        return new self($representative, $this->members + [$review => $finding]);
     }
 
     /**
@@ -55,11 +70,25 @@ final readonly class MergedSpot
      */
     public function linesApart(self $other): ?int
     {
-        if ($this->finding->file !== $other->finding->file || null === $this->firstLine || null === $other->firstLine) {
+        if (!$this->sameFile($other->finding)) {
             return null;
         }
 
-        return max(0, $other->firstLine - (int) $this->lastLine, $this->firstLine - (int) $other->lastLine);
+        return max(0, min($other->lines()) - max($this->lines()), min($this->lines()) - max($other->lines()));
+    }
+
+    private function sameFile(LoopFinding|Finding $finding): bool
+    {
+        // A finding without a file or line names no spot, so it never shares one.
+        return null !== $finding->file && null !== $finding->line && null !== $this->finding->line && $finding->file === $this->finding->file;
+    }
+
+    /**
+     * @return non-empty-list<int>
+     */
+    private function lines(): array
+    {
+        return array_values(array_map(static fn (LoopFinding|Finding $member): int => (int) $member->line, $this->members));
     }
 
     private function outranks(Severity $severity): bool
