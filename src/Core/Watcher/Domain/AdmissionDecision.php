@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\Domain;
 
+use Intakt\Plugin\Forge\Contract\CiRun;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 
@@ -11,12 +12,23 @@ final readonly class AdmissionDecision
 {
     public function admissionOf(CiState $ci): HeadAdmission
     {
+        $ci = $this->withoutReplacedCancellations($ci);
+
         // Red wins over pending, because a failure is final while other runs still go.
         return match (true) {
             $ci->has(CiRunState::Failed) => HeadAdmission::Red,
-            $ci->isEmpty(), $ci->has(CiRunState::Unfinished) => HeadAdmission::Pending,
+            $ci->isEmpty(), $ci->has(CiRunState::Unfinished), $ci->has(CiRunState::Cancelled) => HeadAdmission::Pending,
             default => HeadAdmission::Green,
         };
+    }
+
+    // A rerun of the same name on the same head replaces a cancelled run; one nothing replaced stays unfinished CI (08-merge.md).
+    private function withoutReplacedCancellations(CiState $ci): CiState
+    {
+        $rerun = array_map(static fn (CiRun $run): string => $run->name, array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state));
+        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state || !in_array($run->name, $rerun, true));
+
+        return new CiState($ci->head, array_values($kept));
     }
 
     // Stable sort, so that a running head keeps its place among the running ones.

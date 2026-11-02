@@ -47,6 +47,25 @@ final class AdmissionDecisionTest extends TestCase
         self::assertSame(HeadAdmission::Red, $this->admission(CiRunState::Unfinished, CiRunState::Failed));
     }
 
+    public function testACancelledRunNothingReplacedIsPendingNotRed(): void
+    {
+        self::assertSame(HeadAdmission::Pending, $this->admission(CiRunState::Cancelled));
+    }
+
+    public function testACancelledRunIsIgnoredWhenARunOfTheSameNameReplacedIt(): void
+    {
+        $runs = [new CiRun('ci', CiRunState::Cancelled), new CiRun('ci', CiRunState::Succeeded), new CiRun('lint', CiRunState::Succeeded)];
+
+        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), $runs)));
+    }
+
+    public function testACancelledRunOfAnotherNameIsNotReplaced(): void
+    {
+        $runs = [new CiRun('ci', CiRunState::Cancelled), new CiRun('lint', CiRunState::Succeeded)];
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf(new CiState(new CommitId(str_repeat('a', 40)), $runs)));
+    }
+
     public function testOnlyAGreenHeadStartsARound(): void
     {
         self::assertTrue($this->decided('1', HeadAdmission::Green)->startsRound());

@@ -37,7 +37,7 @@ final class AdmitHeadsTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->forge = new RecordedChecks([str_repeat('a', 40) => 'pending', str_repeat('b', 40) => 'green', str_repeat('c', 40) => 'red']);
+        $this->forge = new RecordedChecks([str_repeat('a', 40) => 'pending', str_repeat('b', 40) => 'green', str_repeat('c', 40) => 'red', str_repeat('d', 40) => 'cancelled', str_repeat('e', 40) => 'rerun']);
         $this->log = new RecordingLogger();
         $this->admit = new AdmitHeads($this->forge, new AdmissionDecision(), new MockClock('2026-11-02T10:00:00+00:00'), $this->log);
     }
@@ -67,6 +67,21 @@ final class AdmitHeadsTest extends TestCase
         self::assertFalse($decision->startsRound());
         self::assertSame('red', $this->log->logged[0][1]['admission']);
         self::assertSame(str_repeat('c', 40), $this->log->logged[0][1]['head']);
+    }
+
+    public function testACancelledRunOnTheHeadIsWaitedOnNotRecordedAsRed(): void
+    {
+        [$decision] = ($this->admit)('demo', [$this->change('4', 'd')]);
+
+        self::assertSame(HeadAdmission::Pending, $decision->admission);
+        self::assertEquals(new DateTimeImmutable('2026-11-02T10:01:00+00:00'), $decision->readAgainAt);
+    }
+
+    public function testACancelledRunReplacedByARerunOnTheSameHeadIsIgnored(): void
+    {
+        [$decision] = ($this->admit)('demo', [$this->change('5', 'e')]);
+
+        self::assertTrue($decision->startsRound());
     }
 
     public function testTheCiStateIsReadForTheExactHeadAndOlderRunsDoNotPaintItGreen(): void

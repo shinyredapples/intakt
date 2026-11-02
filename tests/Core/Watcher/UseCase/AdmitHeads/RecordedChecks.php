@@ -47,6 +47,7 @@ final class RecordedChecks implements HeadChecks
         return match (true) {
             'completed' !== $status => CiRunState::Unfinished,
             in_array($conclusion, ['success', 'neutral', 'skipped'], true) => CiRunState::Succeeded,
+            'cancelled' === $conclusion => CiRunState::Cancelled,
             default => CiRunState::Failed,
         };
     }
