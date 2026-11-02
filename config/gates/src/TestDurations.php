@@ -44,12 +44,18 @@ final readonly class TestDurations
     public function write(array $durations, string $cacheDirectory): void
     {
         $directory = $cacheDirectory.'/tests';
+        $file = $directory.'/durations.json';
+
+        // Because the durations never affect the run: an unwritable cache is skipped before PHP can print a warning into the gate lines.
+        if (!$this->canCreate($directory) || !$this->canWrite($file)) {
+            return;
+        }
 
         if (!is_dir($directory) && !mkdir($directory, 0o777, true) && !is_dir($directory)) {
             return;
         }
 
-        file_put_contents($directory.'/durations.json', json_encode($durations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)."\n", LOCK_EX);
+        file_put_contents($file, json_encode($durations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)."\n", LOCK_EX);
     }
 
     /**
@@ -88,6 +94,26 @@ final readonly class TestDurations
         }
 
         return $cases;
+    }
+
+    private function canCreate(string $directory): bool
+    {
+        $existing = $directory;
+
+        while (!file_exists($existing) && dirname($existing) !== $existing) {
+            $existing = dirname($existing);
+        }
+
+        return is_dir($existing) && ($existing === $directory || is_writable($existing));
+    }
+
+    private function canWrite(string $file): bool
+    {
+        if (file_exists($file)) {
+            return is_file($file) && is_writable($file);
+        }
+
+        return !is_dir(dirname($file)) || is_writable(dirname($file));
     }
 
     private function relative(string $file): string

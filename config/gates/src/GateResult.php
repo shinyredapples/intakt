@@ -9,16 +9,18 @@ final readonly class GateResult
     private const int MAXIMUM_FINDINGS = 10;
     private const int MAXIMUM_FINDING_LENGTH = 300;
 
+    /** @var array<string, float> */
+    private array $slowest;
+
     /**
-     * @param list<string>         $findings
-     * @param array<string, float> $slowest
+     * @param list<string> $findings
      */
     private function __construct(
         public string $gate,
         public array $findings,
         private ?string $note = null,
-        private array $slowest = [],
     ) {
+        $this->slowest = [];
     }
 
     public static function passed(string $gate): self
@@ -46,7 +48,7 @@ final readonly class GateResult
 
     public function noted(string $note): self
     {
-        return new self($this->gate, $this->findings, $note, $this->slowest);
+        return clone($this, ['note' => $note]);
     }
 
     /**
@@ -54,7 +56,7 @@ final readonly class GateResult
      */
     public function withSlowest(array $slowest): self
     {
-        return new self($this->gate, $this->findings, $this->note, $slowest);
+        return clone($this, ['slowest' => $slowest]);
     }
 
     public function isPassing(): bool

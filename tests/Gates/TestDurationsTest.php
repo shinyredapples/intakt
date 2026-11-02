@@ -78,6 +78,49 @@ final class TestDurationsTest extends TestCase
         self::assertSame(['tests/AlphaTest.php' => 0.75], $written);
     }
 
+    public function testACacheThatIsAPlainFileIsLeftAloneWithoutAWarning(): void
+    {
+        file_put_contents($this->directory.'/plain', 'x');
+
+        $warnings = $this->warningsOf(fn () => new TestDurations('/work')->write(['tests/AlphaTest.php' => 0.75], $this->directory.'/plain'));
+
+        self::assertSame([], $warnings);
+        self::assertSame('x', file_get_contents($this->directory.'/plain'));
+    }
+
+    public function testADurationsPathThatIsADirectoryIsLeftAloneWithoutAWarning(): void
+    {
+        mkdir($this->directory.'/tests/durations.json', 0o777, true);
+
+        $warnings = $this->warningsOf(fn () => new TestDurations('/work')->write(['tests/AlphaTest.php' => 0.75], $this->directory));
+
+        self::assertSame([], $warnings);
+        self::assertDirectoryExists($this->directory.'/tests/durations.json');
+    }
+
+    /**
+     * @param callable(): void $write
+     *
+     * @return list<string>
+     */
+    private function warningsOf(callable $write): array
+    {
+        $warnings = [];
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+
+        try {
+            $write();
+        } finally {
+            restore_error_handler();
+        }
+
+        return $warnings;
+    }
+
     private function removeDirectory(string $directory): void
     {
         foreach (scandir($directory) as $entry) {
