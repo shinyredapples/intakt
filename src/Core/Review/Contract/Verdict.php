@@ -105,7 +105,7 @@ final readonly class Verdict
             file: null,
             line: null,
             symbol: null,
-            text: 'The reviewer got no tools to read the change (the review server could not be reached or listed none), so it did not review and the review is blocked.',
+            text: 'The reviewer had no tools to read the change (the review server could not be reached, listed none or was lost during the review), so it did not review and the review is blocked.',
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'A reviewer judges only a change it can read.',

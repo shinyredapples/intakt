@@ -106,6 +106,8 @@ final readonly class ReviewerAgent implements Reviewer
             return $this->prompt->verdictIn($execution);
         } catch (MaxIterationsExceededException) {
             return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', self::MAX_ROUNDS));
+        } catch (ReviewServerLost) {
+            return Verdict::noTools();
         }
     }
 }

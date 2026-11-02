@@ -20,6 +20,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
+use Intakt\Core\Review\Infrastructure\ReviewServerLost;
 use Intakt\Core\Review\Infrastructure\ToolsOfRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
@@ -32,6 +33,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -47,6 +50,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ReviewServerHttpClient::class)]
 #[CoversClass(ToolsOfRound::class)]
 #[UsesClass(ReviewerAgent::class)]
+#[UsesClass(ReviewServerLost::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReviewerPrompt::class)]
@@ -149,6 +153,26 @@ final class ReviewerOverMcpTest extends KernelTestCase
         self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
     }
 
+    public function testAReviewThatLosesItsServerAfterListingTheToolsIsBlockedInsteadOfApproved(): void
+    {
+        $alive = true;
+        $factory = $this->mcpToolboxes($this->cutOffWhen($alive));
+        self::assertNotSame([], $factory->create($this->request())->getTools());
+        $alive = false;
+
+        $verdict = $this->review($factory->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+    }
+
+    public function testAToolErrorTheServerAnswersStaysWithTheModel(): void
+    {
+        $verdict = $this->review($this->mcpToolboxes()->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file', ['path' => 'no-such-file.php']);
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
     public function testNoRequestReachesTheReviewServerOutsideAReview(): void
     {
         $this->mcpToolboxes();
@@ -169,6 +193,17 @@ final class ReviewerOverMcpTest extends KernelTestCase
         self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
 
         return $factory;
+    }
+
+    private function cutOffWhen(bool &$alive): ClientInterface
+    {
+        $served = new KernelHttpClient($this->server());
+        $http = self::createStub(ClientInterface::class);
+        $http->method('sendRequest')->willReturnCallback(static function (RequestInterface $request) use ($served, &$alive): ResponseInterface {
+            return $alive ? $served->sendRequest($request) : throw new RuntimeException('Connection refused.');
+        });
+
+        return $http;
     }
 
     // A kernel of its own, as the web server is a process of its own: the kernel under test resets its services before each request it handles, which would end the reviewer's call mid-way.
