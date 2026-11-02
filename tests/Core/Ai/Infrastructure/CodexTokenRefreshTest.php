@@ -42,10 +42,10 @@ final class CodexTokenRefreshTest extends TestCase
 
         $refreshed = $this->refresh($answer)->refreshedIfDue($this->dueLogin());
 
-        self::assertSame(
-            ['id_token' => 'id-1', 'access_token' => 'access-2', 'refresh_token' => 'refresh-2', 'account_id' => 'acct'],
-            json_decode((string) $refreshed?->json(), true)['tokens'] ?? null,
-        );
+        self::assertInstanceOf(CodexLogin::class, $refreshed);
+        /** @var array{tokens: array<string, string>} $contents */
+        $contents = json_decode($refreshed->json(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame(['id_token' => 'id-1', 'access_token' => 'access-2', 'refresh_token' => 'refresh-2', 'account_id' => 'acct'], $contents['tokens']);
     }
 
     public function testALoginThatIsNotDueIsNotRefreshed(): void

@@ -58,7 +58,7 @@ final readonly class CodexLogins
         $login = $this->stored($account);
         $refreshed = $this->refresh->refreshedIfDue($login);
 
-        if (null === $refreshed) {
+        if (!$refreshed instanceof CodexLogin) {
             return $login;
         }
 

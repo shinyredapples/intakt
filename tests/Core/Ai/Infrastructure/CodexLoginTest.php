@@ -48,18 +48,18 @@ final class CodexLoginTest extends TestCase
 
     public function testAnEmptyObjectInTheLoginStaysAnObject(): void
     {
-        $login = CodexLogin::fromJson(self::jsonWithEmptyObject('2026-10-30T12:00:00Z'));
+        $login = CodexLogin::fromJson($this->jsonWithEmptyObject('2026-10-30T12:00:00Z'));
 
-        self::assertEquals(new stdClass(), json_decode($login->json())->extra);
+        self::assertEquals(new stdClass(), $this->extraOf($login->json()));
     }
 
     public function testAnEmptyObjectInTheLoginStaysAnObjectAfterARefresh(): void
     {
-        $login = CodexLogin::fromJson(self::jsonWithEmptyObject('2026-10-01T00:00:00Z'));
+        $login = CodexLogin::fromJson($this->jsonWithEmptyObject('2026-10-01T00:00:00Z'));
 
         $refreshed = $login->refreshed(['access_token' => 'access-2'], $this->moment('2026-11-02T12:00:00Z'));
 
-        self::assertEquals(new stdClass(), json_decode($refreshed->json())->extra);
+        self::assertEquals(new stdClass(), $this->extraOf($refreshed->json()));
     }
 
     /**
@@ -92,9 +92,17 @@ final class CodexLoginTest extends TestCase
         ], JSON_THROW_ON_ERROR);
     }
 
-    private static function jsonWithEmptyObject(string $lastRefresh): string
+    private function jsonWithEmptyObject(string $lastRefresh): string
     {
         return '{"extra":{},"tokens":{"id_token":"id-1","access_token":"access-1","refresh_token":"refresh-1"},"last_refresh":"'.$lastRefresh.'"}';
+    }
+
+    private function extraOf(string $json): mixed
+    {
+        $contents = json_decode($json, flags: JSON_THROW_ON_ERROR);
+        self::assertInstanceOf(stdClass::class, $contents);
+
+        return $contents->extra ?? null;
     }
 
     private function moment(string $moment): DateTimeImmutable
