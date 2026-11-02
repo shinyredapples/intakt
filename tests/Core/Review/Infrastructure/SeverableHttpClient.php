@@ -20,11 +20,10 @@ final class SeverableHttpClient implements ClientInterface
     {
     }
 
-    // Without an answer the connection is refused; with one, every later request gets it instead of the server's.
-    public function sever(?ResponseInterface $answer = null): void
+    public function sever(?ResponseInterface $answerInstead = null): void
     {
         $this->severed = true;
-        $this->answer = $answer;
+        $this->answer = $answerInstead;
     }
 
     #[Override]
