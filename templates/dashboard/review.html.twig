@@ -31,7 +31,7 @@
                 <td>{{ outcome.role }}</td>
                 <td>{{ outcome.tier }}</td>
                 <td>{{ outcome.progress.value }}</td>
-                <td>{{ outcome.decision ?? '' }}</td>
+                <td>{{ outcome.decision ?? '' }}{% if outcome.decision is not null and outcome.mode.name == 'Shadow' %} (shadow){% endif %}</td>
                 <td>{{ outcome.findings ?? '' }}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
             </tr>

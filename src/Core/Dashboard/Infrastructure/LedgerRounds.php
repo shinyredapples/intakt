@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Shadow\Contract\ProjectMode;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Collected per round and joined at the end, because a reviewer's, the judge's or a call's event says nothing about where its round's start sits in the ledger; excluded from the container because LedgerReviewPages builds one per read.
@@ -225,12 +226,23 @@ final class LedgerRounds
 
         return match (true) {
             LedgerEventKind::ReviewerStarted === $kind => $outcome->restarted(),
-            LedgerEventKind::VerdictReceived === $kind && is_string($decision) && is_int($findings) => $outcome->answered($decision, $findings),
+            LedgerEventKind::VerdictReceived === $kind && is_string($decision) && is_int($findings) => $outcome->answered($decision, $findings, $this->modeOf($payload)),
             LedgerEventKind::ReviewerFailed === $kind && is_string($failure) => $outcome->failed($failure),
             LedgerEventKind::ReviewerBlocked === $kind && is_string($reason) => $outcome->blocked($reason),
             LedgerEventKind::CatchUpOwed === $kind && is_string($substitute) => $outcome->substitutedBy($substitute),
             default => null,
         };
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    // A verdict recorded before the field existed, or with a value no mode has, reads as an ordinary one.
+    private function modeOf(array $payload): ProjectMode
+    {
+        $mode = $payload['mode'] ?? null;
+
+        return is_string($mode) ? ProjectMode::tryFrom($mode) ?? ProjectMode::Live : ProjectMode::Live;
     }
 
     private function completed(ReviewedRound $round): ReviewedRound
