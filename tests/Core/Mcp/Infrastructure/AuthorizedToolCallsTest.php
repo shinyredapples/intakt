@@ -12,6 +12,7 @@ use Mcp\Exception\ToolCallException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
@@ -76,9 +77,32 @@ final class AuthorizedToolCallsTest extends TestCase
             return true;
         });
 
-        new AuthorizedToolCalls($this->inner(), $authorization)->handle(new ElementReference(WriteTool::class), ['allow_write' => true]);
+        new AuthorizedToolCalls($this->inner(), $authorization, self::createStub(LoggerInterface::class))->handle(new ElementReference(WriteTool::class), ['allow_write' => true]);
 
         self::assertSame([['mcp_tool_write', null]], $asked);
+    }
+
+    public function testAGrantedCallIsLoggedWithItsToolAndAccessWithoutItsArguments(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('info')->with(
+            'Tool call {tool} granted.',
+            self::callback(static fn (array $context): bool => [WriteTool::class.'::__invoke', 'mcp_tool_write'] === [$context['tool'], $context['access']] && !str_contains(json_encode($context, JSON_THROW_ON_ERROR), 'secret-argument')),
+        );
+
+        $this->handlerLogging($logger, ToolAccess::Write)->handle(new ElementReference([WriteTool::class, '__invoke']), ['note' => 'secret-argument']);
+    }
+
+    public function testARefusedCallIsLoggedAsRefusedAndTheToolDoesNotRun(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            'Tool call {tool} refused: {access} is not granted.',
+            ['tool' => WriteTool::class.'::__invoke', 'access' => 'mcp_tool_write'],
+        );
+        $logger->expects(self::never())->method('info');
+
+        $this->assertRefusedWith('This tool needs mcp_tool_write, which is not granted.', $this->handlerLogging($logger, ToolAccess::Read), WriteTool::class);
     }
 
     private function assertRefusedWith(string $message, AuthorizedToolCalls $handler, string $tool): void
@@ -94,13 +118,18 @@ final class AuthorizedToolCallsTest extends TestCase
         self::fail('The tool ran.');
     }
 
-    private function handler(ToolAccess ...$granted): AuthorizedToolCalls
+    private function handler(ToolAccess $first, ToolAccess ...$granted): AuthorizedToolCalls
+    {
+        return $this->handlerLogging(self::createStub(LoggerInterface::class), $first, ...$granted);
+    }
+
+    private function handlerLogging(LoggerInterface $logger, ToolAccess ...$granted): AuthorizedToolCalls
     {
         $values = array_map(static fn (ToolAccess $access): string => $access->value, $granted);
         $authorization = self::createStub(AuthorizationCheckerInterface::class);
         $authorization->method('isGranted')->willReturnCallback(static fn (mixed $attribute): bool => in_array($attribute, $values, true));
 
-        return new AuthorizedToolCalls($this->inner(), $authorization);
+        return new AuthorizedToolCalls($this->inner(), $authorization, $logger);
     }
 
     private function inner(): ReferenceHandlerInterface
