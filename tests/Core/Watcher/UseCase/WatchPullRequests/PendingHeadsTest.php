@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -67,7 +66,7 @@ final class PendingHeadsTest extends KernelTestCase
     {
         $old = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');
         $this->pending->enqueue('alpha', [$old]);
-        $this->entities->getEventManager()->addEventListener([Events::postLoad], $this->queueNewerHeadOnFirstLoad($this->entities->getConnection()));
+        $this->entities->getEventManager()->addEventListener([Events::postLoad], new NewerHeadOnFirstLoad($this->entities->getConnection(), str_repeat('b', 40), '2026-11-02 10:00:00.000000'));
 
         $this->pending->keep('alpha', $this->pendingDecision($old));
 
@@ -85,30 +84,5 @@ final class PendingHeadsTest extends KernelTestCase
     private function dueHeads(): array
     {
         return array_map(static fn (OpenChange $open): string => $open->head->hash, $this->pending->dueFor('alpha'));
-    }
-
-    // Written right after the row is first read, as the listing of another worker would, so a keep that reads before it writes overwrites the newer head's due time.
-    private function queueNewerHeadOnFirstLoad(Connection $connection): object
-    {
-        return new class($connection) {
-            private bool $queued = false;
-
-            public function __construct(private readonly Connection $connection)
-            {
-            }
-
-            public function postLoad(): void
-            {
-                if ($this->queued) {
-                    return;
-                }
-
-                $this->queued = true;
-                $this->connection->executeStatement(
-                    'UPDATE watcher_pending_head SET head = ?, read_again_at = ? WHERE project = ?',
-                    [str_repeat('b', 40), '2026-11-02 10:00:00.000000', 'alpha'],
-                );
-            }
-        };
     }
 }
