@@ -22,7 +22,7 @@ final readonly class AdmissionDecision
         };
     }
 
-    // A rerun of the same name on the same head replaces a cancelled run; one nothing replaced stays unfinished CI (08-merge.md).
+    // Dropped because a rerun of the same name on the same head replaced it, see docs/design/05-architecture/08-merge.md.
     private function withoutReplacedCancellations(CiState $ci): CiState
     {
         $rerun = array_map(static fn (CiRun $run): string => $run->name, array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state));
