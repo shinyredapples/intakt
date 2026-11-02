@@ -74,7 +74,7 @@ final readonly class ShadowRoundHold
         try {
             return [$this->tiers->configured($project, Tier::Light)->provider, ...$this->substituteProvidersOf($project, Tier::Light)];
         } catch (TierNotMapped) {
-            // Without a light tier the judge never reaches an account, and it names that failure itself.
+            // Left out because without a light tier the judge never reaches an account and names that failure itself.
             return [];
         }
     }

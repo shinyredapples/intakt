@@ -154,15 +154,15 @@ final readonly class RoundFixture
         return new ConfiguredTierResolver($tiers, []);
     }
 
-    // A light tier for the judge on its own provider, and optionally a substitute, so a test sees whether the hold looks at the judge's providers.
-    public static function tiersJudgedOn(Provider $provider, ?Provider $substitute = null): TierResolver
+    // A light tier for the judge with its substitutes, so a test sees whether the hold looks at the judge's providers.
+    public static function tiersJudgedOn(Provider $provider, Provider ...$substitutes): TierResolver
     {
         $tiers = self::TIERS;
-        $tiers['alpha']['tiers']['light'] = ['provider' => $provider->value, 'model' => 'small'];
-
-        if (null !== $substitute) {
-            $tiers['alpha']['tiers']['light']['substitutes'] = [['provider' => $substitute->value, 'model' => 'other']];
-        }
+        $tiers['alpha']['tiers']['light'] = [
+            'provider' => $provider->value,
+            'model' => 'small',
+            'substitutes' => array_values(array_map(static fn (Provider $substitute): array => ['provider' => $substitute->value, 'model' => 'other'], $substitutes)),
+        ];
 
         return new ConfiguredTierResolver($tiers, []);
     }
