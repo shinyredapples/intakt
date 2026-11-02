@@ -19,7 +19,7 @@ use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\Uid\Uuid;
 
-// How a reviewer's agent runs: its conversation kept for the next round, its rounds capped, and what it does shown as it happens.
+// Apart from ReviewerAgent, because how the agent runs (its stored conversation, its cap, its live progress) changes for other reasons than what a review asks and checks.
 final readonly class ReviewerRuns
 {
     // Rounds, not calls, because the bill grows with every round that resends the conversation, however many files one round asks for; the agent's default of 50 is a long bill for a review that reads a handful of files.

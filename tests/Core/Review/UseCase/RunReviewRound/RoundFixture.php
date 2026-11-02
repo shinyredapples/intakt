@@ -257,7 +257,7 @@ final readonly class RoundFixture
         return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->liveProgress($entities));
     }
 
-    // One lock store for every worker of the fixture, as the workers of one install share theirs.
+    // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
     public function liveProgress(EntityManagerInterface $entities): LiveRoundProgress
     {
         return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks);

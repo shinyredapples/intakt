@@ -12,8 +12,10 @@ use Symfony\AI\Platform\Result\Stream\CompleteEvent;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\Stream\DeltaEvent;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Refuses a streamed answer the strict mapping refuses, before Symfony AI's own listener assembles the object the agent returns; that one maps leniently.
+// Needed because Symfony AI's own listener, which assembles the object the agent returns from a stream, maps leniently; excluded from the container because one is built per stream, so its text never outlives the answer.
+#[Exclude]
 final class StrictVerdictStreamListener extends AbstractStreamListener
 {
     private string $answer = '';
@@ -45,7 +47,7 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
     #[Override]
     public function onComplete(CompleteEvent $event): void
     {
-        // A round that asks for tools is a step towards the verdict, as in the unstreamed conversion.
+        // Skipped because a round that asks for tools is a step towards the verdict, as in the unstreamed conversion.
         if ($this->askedForTools) {
             return;
         }
