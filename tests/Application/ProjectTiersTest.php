@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use DateTimeImmutable;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Budget\Contract\Holds;
+use Intakt\Core\Budget\Contract\ShadowStartGuard;
+use Intakt\Core\Budget\Contract\SharedHold;
+use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites;
@@ -209,6 +216,26 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertEqualsCanonicalizing(['five-hour' => 70.0, 'weekly' => 50.0], $this->bootedContainer()->getParameter('intakt.budget.shadow_ceilings'));
     }
 
+    public function testTheShadowGuardOfTheContainerHoldsAProviderWhileTheOwnerPausedTheInstall(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
+        self::assertInstanceOf(ShadowStartGuard::class, $guard);
+        $this->pauseTheInstall();
+
+        self::assertSame(StartDecision::Paused, $guard->decide(Provider::Anthropic));
+    }
+
+    public function testTheShadowGuardOfTheContainerStartsAProviderWhileNothingHoldsIt(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
+        self::assertInstanceOf(ShadowStartGuard::class, $guard);
+        $this->emptyDatabase();
+
+        self::assertSame(StartDecision::Start, $guard->decide(Provider::Anthropic));
+    }
+
     public function testACeilingAboveAHundredPercentStopsTheBoot(): void
     {
         file_put_contents($this->file, "budget:\n    ceilings:\n        weekly: 120\n");
@@ -295,6 +322,22 @@ final class ProjectTiersTest extends KernelTestCase
 
         self::assertInstanceOf(AccountFailoverPlatform::class, $platform);
         self::assertSame($model, $platform->getModelCatalog()->getModel($model)->getName());
+    }
+
+    private function pauseTheInstall(): void
+    {
+        $this->emptyDatabase();
+        $holds = self::getContainer()->get(Holds::class);
+        self::assertInstanceOf(Holds::class, $holds);
+        $holds->hold(SharedHold::Pause, new DateTimeImmutable('2999-01-01 00:00:00 UTC'));
+    }
+
+    private function emptyDatabase(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
     private function listAccounts(string $line): void

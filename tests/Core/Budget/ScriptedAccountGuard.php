@@ -30,4 +30,11 @@ final class ScriptedAccountGuard implements StartGuard
 
         return $this->byAccount[$account->key()] ?? StartDecision::Start;
     }
+
+    // A round never merges, so no test of the hold scripts a merge.
+    #[Override]
+    public function decideMerge(): StartDecision
+    {
+        return StartDecision::Start;
+    }
 }
