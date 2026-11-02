@@ -30,6 +30,11 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents($this->recorded);
     }
 
+    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
+    }
+
     public function startRound(string $round, string $project): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 2]);
