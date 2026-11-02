@@ -49,6 +49,10 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+    # Built when first needed, so only the installation check and the forge need the two settings.
+    Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation:
+        factory: ['Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation', 'fromSettings']
+        arguments: ['%env(GITHUB_APP_PERMISSIONS)%', '%env(GITHUB_APP_REPOSITORIES)%']
 
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
