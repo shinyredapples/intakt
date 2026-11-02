@@ -68,11 +68,11 @@ final readonly class ReviewComparison
             }
         }
 
-        return $merged;
+        return array_values($merged);
     }
 
     /**
-     * @param list<LoopFinding|Finding> $merged
+     * @param array<int, LoopFinding|Finding> $merged
      */
     private function sameSpot(LoopFinding|Finding $finding, array $merged): ?int
     {
