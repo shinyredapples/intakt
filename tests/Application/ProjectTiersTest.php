@@ -279,6 +279,46 @@ final class ProjectTiersTest extends KernelTestCase
         return new ConfiguredPanels($parameter);
     }
 
+    public function testWithItsSectionEveryListedCodexAccountGetsAPlatformOfItsOwn(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            codex: { model: gpt-5.3-codex, effort: high }
+            accounts:
+                codex: [default, team]
+            projects:
+                alpha-one:
+                    tiers:
+                        strong: { provider: codex, model: gpt-5.3-codex }
+            YAML);
+
+        $container = $this->bootedContainer();
+
+        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.codex'));
+        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.codex.team'));
+        self::assertSame(['default', 'team'], $this->parameterList($container, 'intakt.ai.accounts')['codex'] ?? null);
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.disabled_providers'));
+    }
+
+    public function testWithoutItsSectionCodexIsLeftOutWithoutADisabledMessage(): void
+    {
+        $container = $this->bootedContainer();
+
+        self::assertFalse($container->has('intakt.ai.platform.codex'));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.accounts'));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.disabled_providers'));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function parameterList(ContainerInterface $container, string $name): array
+    {
+        $parameter = $container->getParameter($name);
+        self::assertIsArray($parameter);
+
+        return $parameter;
+    }
+
     private function bootedContainer(): ContainerInterface
     {
         new Filesystem()->remove(self::createKernel()->getCacheDir());

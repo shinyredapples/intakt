@@ -85,7 +85,32 @@ final class IsolatedCodexCliTest extends TestCase
     {
         $seen = $this->runOf($this->cli(), ['model' => 'other', 'config' => ['model_reasoning_effort="minimal"']]);
 
-        self::assertSame(['--model', 'gpt-5.3-codex', '--config', 'model_reasoning_effort="high"'], array_slice($seen['arguments'], 2, 4));
+        self::assertSame(['--model', 'gpt-5.3-codex', '--config', 'web_search="disabled"', '--config', 'model_reasoning_effort="high"'], array_slice($seen['arguments'], 2, 6));
+        self::assertNotContains('other', $seen['arguments']);
+        self::assertNotContains('model_reasoning_effort="minimal"', $seen['arguments']);
+    }
+
+    public function testTheCliRunsWithoutItsToolsWebSearchSavedSessionOrUserConfig(): void
+    {
+        $arguments = $this->runOf($this->cli())['arguments'];
+
+        foreach (['shell_tool', 'unified_exec', 'apps', 'plugins', 'browser_use', 'in_app_browser', 'computer_use', 'multi_agent', 'image_generation', 'view_image', 'hooks'] as $feature) {
+            self::assertContains($feature, $arguments);
+            self::assertSame('--disable', $arguments[array_search($feature, $arguments, true) - 1]);
+        }
+
+        self::assertContains('web_search="disabled"', $arguments);
+        self::assertSame([], array_values(array_diff(['--ephemeral', '--ignore-user-config', '--ignore-rules', '--skip-git-repo-check'], $arguments)));
+    }
+
+    public function testACallerCannotLiftTheConfinement(): void
+    {
+        $arguments = $this->runOf($this->cli(), ['sandbox' => 'danger-full-access', 'disable' => [], 'config' => ['web_search="live"']])['arguments'];
+
+        self::assertSame('read-only', $arguments[array_search('--sandbox', $arguments, true) + 1]);
+        self::assertNotContains('danger-full-access', $arguments);
+        self::assertNotContains('web_search="live"', $arguments);
+        self::assertContains('shell_tool', $arguments);
     }
 
     private function cli(): IsolatedCodexCli

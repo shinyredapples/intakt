@@ -65,7 +65,7 @@ final class ProbeCodexLoginCommandTest extends TestCase
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertMatchesRegularExpression('/Model\s+gpt-5\.3-codex/', $output);
         self::assertMatchesRegularExpression('/Effort\s+high/', $output);
-        self::assertStringContainsString('Codexanswered:{"arguments":["exec","--json","--model","gpt-5.3-codex"', (string) preg_replace('/\s+/', '', $output));
+        self::assertStringContainsString('"--model","gpt-5.3-codex","--config","web_search=\"disabled\"","--config","model_reasoning_effort=\"high\""', (string) preg_replace('/\s+/', '', $output));
     }
 
     public function testWithoutACodexSectionTheProbeSaysWhatToConfigure(): void

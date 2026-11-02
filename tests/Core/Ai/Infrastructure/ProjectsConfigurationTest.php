@@ -181,6 +181,37 @@ final class ProjectsConfigurationTest extends TestCase
         $this->process(['codex' => $codex]);
     }
 
+    public function testATierOnCodexThatMapsThePinnedModelIsKept(): void
+    {
+        $processed = $this->process(['codex' => ['model' => 'gpt-5.3-codex', 'effort' => 'high'], 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]]);
+
+        self::assertSame('codex', $processed['projects']['alpha']['tiers']['strong']['provider']);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function codexMappingsOffThePin(): iterable
+    {
+        $pinned = ['model' => 'gpt-5.3-codex', 'effort' => 'high'];
+
+        yield 'a tier on another model' => [['codex' => $pinned, 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.4']]]]]];
+        yield 'a substitute on another model' => [['codex' => $pinned, 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'openai', 'model' => 'gpt-5', 'substitutes' => [['provider' => 'codex', 'model' => 'gpt-5.4']]]]]]]];
+        yield 'a tier without the codex section' => [['projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]]];
+    }
+
+    /**
+     * @param array<string, mixed> $contents
+     */
+    #[DataProvider('codexMappingsOffThePin')]
+    public function testACodexMappingOffThePinnedModelIsRefused(array $contents): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessage('must map the model pinned under codex.model');
+
+        $this->process($contents);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

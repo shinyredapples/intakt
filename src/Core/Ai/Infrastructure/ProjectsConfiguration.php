@@ -29,7 +29,30 @@ final class ProjectsConfiguration implements ConfigurationInterface
             $this->addMapping($mapping->arrayNode('substitutes')->defaultValue([])->arrayPrototype()->children());
         }
 
+        $tree->getRootNode()->validate()->ifTrue(self::leavesThePinnedCodexModel(...))
+            ->thenInvalid('A tier or substitute on provider "codex" must map the model pinned under codex.model, because every Codex call runs on that model.');
+
         return $tree;
+    }
+
+    /**
+     * @param array{projects?: array<string, array{tiers: array<string, array{provider: string, model: string, substitutes: list<array{provider: string, model: string}>}>}>, codex?: array{model: string}} $intakt
+     */
+    private static function leavesThePinnedCodexModel(array $intakt): bool
+    {
+        $pinned = $intakt['codex']['model'] ?? null;
+
+        foreach ($intakt['projects'] ?? [] as $project) {
+            foreach ($project['tiers'] as $tier) {
+                foreach ([$tier, ...$tier['substitutes']] as $mapping) {
+                    if (Provider::Codex->value === $mapping['provider'] && $pinned !== $mapping['model']) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private function addMapping(NodeBuilder $mapping): void
