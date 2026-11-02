@@ -97,7 +97,7 @@ final readonly class InstallationReader
     }
 
     /**
-     * @param list<string>                             $names
+     * @param list<string>                           $names
      * @param array{names: list<string>, total: int} $listing
      */
     private function isComplete(array $names, int $total, array $listing): bool

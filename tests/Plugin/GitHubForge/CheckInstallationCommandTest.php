@@ -22,9 +22,6 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
-use Symfony\Component\HttpClient\MockHttpClient;
-use Symfony\Component\HttpClient\Response\MockResponse;
-use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(CheckInstallationCommand::class)]
 #[UsesClass(InstallationReadBack::class)]
