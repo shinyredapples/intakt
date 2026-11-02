@@ -41,7 +41,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
-use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;

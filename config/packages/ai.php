@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
@@ -73,11 +74,18 @@ return static function (ContainerConfigurator $container): void {
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the shadow tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $modes = [];
+    $watches = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
+
+            if (is_array($project) && array_key_exists('watch', $project)) {
+                $watches[$name] = $project['watch'];
+                unset($project['watch']);
                 $contentProjects[$name] = $project;
             }
 
@@ -98,6 +106,8 @@ return static function (ContainerConfigurator $container): void {
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
+    /** @var array<string, array{repository: string, base: string, task: string}> $projectWatches */
+    $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
     $env = static fn (string $variable): string => '%env('.$variable.')%';
@@ -211,6 +221,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
     $container->parameters()->set('intakt.projects', $projects);
     $container->parameters()->set('intakt.review.panels', $panels);
+    $container->parameters()->set('intakt.watcher.projects', $projectWatches);
     $container->parameters()->set('intakt.shadow.modes', array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])

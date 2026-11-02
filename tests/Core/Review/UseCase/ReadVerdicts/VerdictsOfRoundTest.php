@@ -14,7 +14,7 @@ use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
-use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\IdentityNotOfRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;

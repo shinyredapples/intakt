@@ -25,6 +25,9 @@ projects:
                 - paths: [config/**, src/**/Security/**]
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
+        # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
+        # the task text is given to every round until the pull request text is read from the forge.
+        watch: { repository: /path/to/alpha, base: main, task: Review the pull request. }
     beta:
         # Optional: shadow never writes to the forge; live, the default, does.
         mode: shadow

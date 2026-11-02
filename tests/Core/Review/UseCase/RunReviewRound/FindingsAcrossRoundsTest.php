@@ -24,7 +24,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\TrackedFinding;
-use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
