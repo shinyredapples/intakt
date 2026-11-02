@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Bridge\Codex\ResultConverter;
 use Symfony\AI\Platform\Exception\RuntimeException;
+use Symfony\AI\Platform\Result\TextResult;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -61,6 +62,12 @@ final readonly class ProbeCodexLoginCommand
     {
         $raw = new IsolatedCodexCli($this->logins, $settings, $account)->request(new Codex($settings->model), self::PROMPT);
 
-        return (string) new ResultConverter()->convert($raw)->getContent();
+        $result = new ResultConverter()->convert($raw);
+
+        if (!$result instanceof TextResult) {
+            throw new RuntimeException('Codex answered with more than text.');
+        }
+
+        return $result->getContent();
     }
 }

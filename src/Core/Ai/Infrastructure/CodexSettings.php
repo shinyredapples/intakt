@@ -24,7 +24,7 @@ final readonly class CodexSettings
         return new self($configuration['model'], CodexEffort::from($configuration['effort']));
     }
 
-    // In the bridge's option form, which turns each key into the CLI flag of the same name.
+    // In the bridge's option form, because it turns each key into the CLI flag of the same name.
     /**
      * @return array{model: non-empty-string, config: list<string>}
      */

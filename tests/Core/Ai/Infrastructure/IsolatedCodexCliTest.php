@@ -30,7 +30,7 @@ final class IsolatedCodexCliTest extends TestCase
 {
     private const string INHERITED = 'INTAKT_TEST_INHERITED_CREDENTIAL';
 
-    // Answers like `codex exec --json` with what the call saw: its arguments, environment, directory and login file.
+    // Answers in the shape of `codex exec --json`, so the bridge reads what the call saw as the answer's text.
     public const string FAKE_CLI = <<<'PHP_WRAP'
     #!/usr/bin/env php
     <?php
@@ -98,14 +98,19 @@ final class IsolatedCodexCliTest extends TestCase
     /**
      * @param array<string, mixed> $options
      *
-     * @return array<string, mixed>
+     * @return array{arguments: list<string>, cwd: string, environment: array<string, string>, login: ?string, writable: bool}
      */
     private function runOf(IsolatedCodexCli $cli, array $options = []): array
     {
         $data = $cli->request(new Codex('gpt-5.3-codex'), 'Answer with OK.', $options)->getData();
-        self::assertIsArray($data['item'] ?? null);
+        $item = $data['item'] ?? null;
+        self::assertIsArray($item);
+        $text = $item['text'] ?? null;
+        self::assertIsString($text);
 
-        /** @var array<string, mixed> */
-        return json_decode((string) $data['item']['text'], true, flags: JSON_THROW_ON_ERROR);
+        /** @var array{arguments: list<string>, cwd: string, environment: array<string, string>, login: ?string, writable: bool} $seen */
+        $seen = json_decode($text, true, flags: JSON_THROW_ON_ERROR);
+
+        return $seen;
     }
 }

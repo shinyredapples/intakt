@@ -26,10 +26,12 @@ final class CodexTokenRefreshTest extends TestCase
 
         new CodexTokenRefresh(new MockHttpClient($answer))->tokensFor('refresh-1');
 
+        $body = $answer->getRequestOptions()['body'];
+        self::assertIsString($body);
         self::assertSame(['POST', 'https://auth.openai.com/oauth/token'], [$answer->getRequestMethod(), $answer->getRequestUrl()]);
         self::assertSame(
             ['client_id' => 'app_EMoamEEZ73f0CkXaXp7hrann', 'grant_type' => 'refresh_token', 'refresh_token' => 'refresh-1', 'scope' => 'openid profile email'],
-            json_decode((string) $answer->getRequestOptions()['body'], true),
+            json_decode($body, true),
         );
     }
 

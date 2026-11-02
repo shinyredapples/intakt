@@ -17,7 +17,7 @@ final readonly class CodexLogin
     public const array TOKENS = ['id_token', 'access_token', 'refresh_token'];
 
     /**
-     * @param array<string, mixed>         $contents
+     * @param array<mixed>                    $contents
      * @param array<string, non-empty-string> $tokens
      */
     private function __construct(
@@ -35,12 +35,13 @@ final readonly class CodexLogin
             throw new CodexLoginUnusable('The Codex login is no JSON.');
         }
 
-        if (!is_array($contents) || !is_array($contents['tokens'] ?? null)) {
+        $tokens = is_array($contents) ? $contents['tokens'] ?? null : null;
+
+        if (!is_array($contents) || !is_array($tokens)) {
             throw new CodexLoginUnusable('The Codex login holds no tokens.');
         }
 
-        /** @var array<string, mixed> $contents */
-        return new self($contents, self::tokensOf($contents['tokens']), self::momentOf($contents['last_refresh'] ?? null));
+        return new self($contents, self::tokensOf($tokens), self::momentOf($contents['last_refresh'] ?? null));
     }
 
     public function isDueAt(DateTimeImmutable $now): bool
@@ -70,6 +71,8 @@ final readonly class CodexLogin
     }
 
     /**
+     * @param array<mixed> $tokens
+     *
      * @return array<string, non-empty-string>
      */
     private static function tokensOf(array $tokens): array

@@ -11,7 +11,7 @@ use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Result\RawResultInterface;
 
-// The CLI runs in the account's call home with a read-only copy of its login and the pinned model and effort, whatever the caller asks for.
+// The CLI runs in the account's call home with a read-only copy of its login, so it never writes the kept one, and with the pinned model and effort, so no caller changes them.
 final readonly class IsolatedCodexCli implements ModelClientInterface
 {
     private const float TIMEOUT = 300.0;

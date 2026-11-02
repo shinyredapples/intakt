@@ -32,7 +32,7 @@ final readonly class CodexTokenRefresh
                 'scope' => 'openid profile email',
             ]])->toArray();
         } catch (ExceptionInterface $failure) {
-            throw new CodexLoginUnusable('The Codex login could not be refreshed: '.$failure->getMessage(), previous: $failure);
+            throw new CodexLoginUnusable('The Codex login could not be refreshed: '.$failure->getMessage(), $failure->getCode(), previous: $failure);
         }
 
         return $this->validated($answer);
@@ -46,13 +46,20 @@ final readonly class CodexTokenRefresh
      */
     private function validated(array $answer): array
     {
-        $tokens = array_intersect_key($answer, array_flip(CodexLogin::TOKENS));
+        $tokens = [];
 
-        if (!array_key_exists('access_token', $tokens) || [] !== array_filter($tokens, static fn (mixed $token): bool => !is_string($token) || '' === $token)) {
-            throw new CodexLoginUnusable('The Codex login refresh answered without a usable access token.');
+        foreach (array_intersect_key($answer, array_flip(CodexLogin::TOKENS)) as $name => $token) {
+            if (!is_string($token) || '' === $token) {
+                throw new CodexLoginUnusable('The Codex login refresh answered with an unusable '.$name.'.');
+            }
+
+            $tokens[$name] = $token;
         }
 
-        /** @var array<string, non-empty-string> $tokens */
+        if (!array_key_exists('access_token', $tokens)) {
+            throw new CodexLoginUnusable('The Codex login refresh answered without an access_token.');
+        }
+
         return $tokens;
     }
 }

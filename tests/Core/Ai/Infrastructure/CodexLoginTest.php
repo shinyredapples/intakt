@@ -21,28 +21,28 @@ final class CodexLoginTest extends TestCase
     {
         $login = CodexLogin::fromJson(self::json('2026-10-27T12:00:00.123456789Z'));
 
-        self::assertFalse($login->isDueAt(self::moment('2026-11-02T12:00:00Z')));
+        self::assertFalse($login->isDueAt($this->moment('2026-11-02T12:00:00Z')));
     }
 
     public function testALoginRefreshedSevenDaysAgoIsDue(): void
     {
         $login = CodexLogin::fromJson(self::json('2026-10-26T12:00:00Z'));
 
-        self::assertTrue($login->isDueAt(self::moment('2026-11-02T12:00:00Z')));
+        self::assertTrue($login->isDueAt($this->moment('2026-11-02T12:00:00Z')));
     }
 
     public function testARefreshReplacesTheTokensItGotAndKeepsTheRest(): void
     {
         $login = CodexLogin::fromJson(self::json('2026-10-01T00:00:00Z'));
 
-        $refreshed = $login->refreshed(['access_token' => 'access-2', 'id_token' => 'id-2'], self::moment('2026-11-02T12:00:00Z'));
+        $refreshed = $login->refreshed(['access_token' => 'access-2', 'id_token' => 'id-2'], $this->moment('2026-11-02T12:00:00Z'));
 
         self::assertSame(
             ['OPENAI_API_KEY' => null, 'tokens' => ['id_token' => 'id-2', 'access_token' => 'access-2', 'refresh_token' => 'refresh-1', 'account_id' => 'acct'], 'last_refresh' => '2026-11-02T12:00:00Z'],
             json_decode($refreshed->json(), true),
         );
         self::assertSame('refresh-1', $refreshed->refreshToken());
-        self::assertFalse($refreshed->isDueAt(self::moment('2026-11-02T12:00:00Z')));
+        self::assertFalse($refreshed->isDueAt($this->moment('2026-11-02T12:00:00Z')));
     }
 
     /**
@@ -75,8 +75,11 @@ final class CodexLoginTest extends TestCase
         ], JSON_THROW_ON_ERROR);
     }
 
-    private static function moment(string $moment): DateTimeImmutable
+    private function moment(string $moment): DateTimeImmutable
     {
-        return DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $moment, new DateTimeZone('UTC')) ?: self::fail('Unreadable moment.');
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $moment, new DateTimeZone('UTC'));
+        self::assertInstanceOf(DateTimeImmutable::class, $parsed);
+
+        return $parsed;
     }
 }

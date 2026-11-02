@@ -98,7 +98,8 @@ final class CodexLoginsTest extends TestCase
 
         $home = $logins->handOver('team');
 
-        $kept = (array) json_decode((string) file_get_contents($logins->loginFile('team')), true);
+        /** @var array{tokens: array<string, string>, last_refresh: string} $kept */
+        $kept = json_decode((string) file_get_contents($logins->loginFile('team')), true, flags: JSON_THROW_ON_ERROR);
         self::assertSame(['id-1', 'access-2', 'refresh-2', '2026-11-02T12:00:00Z'], [$kept['tokens']['id_token'], $kept['tokens']['access_token'], $kept['tokens']['refresh_token'], $kept['last_refresh']]);
         self::assertSame(0o600, fileperms($logins->loginFile('team')) & 0o777);
         self::assertSame($kept, json_decode((string) file_get_contents($home.'/auth.json'), true));
@@ -165,7 +166,7 @@ final class CodexLoginsTest extends TestCase
         $logins = $this->logins();
 
         $this->expectException(CodexLoginUnusable::class);
-        $this->expectExceptionMessage($this->root.'/logins/team/auth.json');
+        $this->expectExceptionMessageMatches('#'.preg_quote($this->root.'/logins/team/auth.json', '#').'#');
 
         $logins->handOver('team');
     }
