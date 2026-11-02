@@ -1,0 +1,103 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Plugin\GitHubForge\Infrastructure;
+
+use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
+use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
+use NoDiscard;
+
+// Asked on each event and never cached, because write access can be taken away between two events: docs/design/05-architecture/14-threat-model.md
+final readonly class SteeringTrustCheck
+{
+    private const string LOGIN = '/^[A-Za-z0-9][A-Za-z0-9-]{0,38}(?:\[bot\])?$/';
+    private const string REPOSITORY = '#^[A-Za-z0-9][A-Za-z0-9-]*/(?!\.+$)[A-Za-z0-9._-]+$#';
+    // GitHub reports the maintain role as write and the triage role as read, so triage never steers.
+    private const array LEVELS = ['admin' => true, 'write' => true, 'read' => false, 'none' => false];
+
+    public function __construct(
+        private SteeringIdentities $identities,
+        private TrustAnswers $github,
+        private CheckedInstallationTokens $tokens,
+    ) {
+    }
+
+    /**
+     * @throws TrustNotChecked
+     */
+    #[NoDiscard('a trust decision nobody looks at lets anyone steer')]
+    public function check(string $repository, string $login): SteeringTrust
+    {
+        $this->refuseMalformed($repository, $login);
+
+        if ($this->identities->isBot($login)) {
+            return $this->trustOfBot($login);
+        }
+
+        return $this->trustFromPermission($this->permissionOf($repository, $login), $login);
+    }
+
+    private function refuseMalformed(string $repository, string $login): void
+    {
+        if (1 !== preg_match(self::REPOSITORY, $repository)) {
+            throw TrustNotChecked::becauseTheRepositoryIsMalformed();
+        }
+        if (1 !== preg_match(self::LOGIN, $login)) {
+            throw TrustNotChecked::becauseTheAccountIsMalformed();
+        }
+    }
+
+    private function trustOfBot(string $login): SteeringTrust
+    {
+        return match (true) {
+            $this->identities->isMaintainer($login) => SteeringTrust::Maintainer,
+            $this->identities->isOwn($login) => SteeringTrust::OwnIdentity,
+            default => SteeringTrust::ForeignBot,
+        };
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function permissionOf(string $repository, string $login): array
+    {
+        [$owner, $name] = explode('/', $repository, 2);
+        $path = sprintf('/repos/%s/%s/collaborators/%s/permission', rawurlencode($owner), rawurlencode($name), rawurlencode($login));
+
+        return $this->github->get($path, $this->installationToken());
+    }
+
+    /**
+     * @param array<mixed> $answer
+     */
+    private function trustFromPermission(array $answer, string $login): SteeringTrust
+    {
+        $level = $answer['permission'] ?? null;
+        $user = $answer['user'] ?? null;
+        $answeredLogin = is_array($user) ? ($user['login'] ?? null) : null;
+        $type = is_array($user) ? ($user['type'] ?? null) : null;
+        if (!is_string($level) || !isset(self::LEVELS[$level]) || !is_string($answeredLogin) || !is_string($type) || strtolower($answeredLogin) !== strtolower($login)) {
+            throw TrustNotChecked::becauseTheAnswerIsInvalid();
+        }
+
+        return match (true) {
+            'Bot' === $type => SteeringTrust::ForeignBot,
+            self::LEVELS[$level] => SteeringTrust::Writer,
+            default => SteeringTrust::NonWriter,
+        };
+    }
+
+    // The installation token is the only credential: a failed exchange ends the check instead of trying another.
+    private function installationToken(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted|InstallationNotReadBack|InstallationDoesNotMatchConfiguration $failure) {
+            throw TrustNotChecked::becauseNoCredential($failure->getMessage());
+        }
+    }
+}

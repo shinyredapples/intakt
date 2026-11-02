@@ -1,0 +1,265 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\GitHubForge;
+
+use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
+use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
+use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
+use Intakt\Plugin\GitHubForge\Domain\Installation;
+use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
+use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
+use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
+use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
+
+#[CoversClass(SteeringTrustCheck::class)]
+#[CoversClass(SteeringIdentities::class)]
+#[CoversClass(TrustAnswers::class)]
+#[CoversClass(SteeringTrust::class)]
+#[CoversClass(TrustNotChecked::class)]
+#[UsesClass(AppJwt::class)]
+#[UsesClass(CheckedInstallationTokens::class)]
+#[UsesClass(ExpectedInstallation::class)]
+#[UsesClass(Installation::class)]
+#[UsesClass(InstallationNotReadBack::class)]
+#[UsesClass(InstallationReadBack::class)]
+#[UsesClass(InstallationReader::class)]
+#[UsesClass(InstallationToken::class)]
+#[UsesClass(InstallationTokenMinter::class)]
+#[UsesClass(InstallationTokenNotMinted::class)]
+#[UsesClass(InstallationTokens::class)]
+final class SteeringTrustCheckTest extends TestCase
+{
+    private const string REPOSITORY = 'acme/widget';
+
+    private RecordedTrust $github;
+    private RecordingLogger $logger;
+    private AppKey $key;
+
+    protected function setUp(): void
+    {
+        $this->github = new RecordedTrust();
+        $this->logger = new RecordingLogger();
+        $this->key = AppKey::generate();
+    }
+
+    public function testAnAccountWithWriteAccessSteers(): void
+    {
+        $trust = $this->check(RecordedTrust::WRITER);
+
+        self::assertSame(SteeringTrust::Writer, $trust);
+        self::assertTrue($trust->steers());
+    }
+
+    public function testTheWriteAccessIsAskedWithTheInstallationToken(): void
+    {
+        (void) $this->check(RecordedTrust::WRITER);
+
+        self::assertSame('Authorization: Bearer minted-value', $this->github->credentials['https://api.github.com/repos/acme/widget/collaborators/alice/permission']);
+    }
+
+    public function testAnAccountWithTheTriageRoleDoesNotSteer(): void
+    {
+        $trust = $this->check(RecordedTrust::TRIAGE);
+
+        self::assertSame(SteeringTrust::NonWriter, $trust);
+        self::assertFalse($trust->steers());
+    }
+
+    public function testAForeignBotNeverSteersAndItsPermissionIsNotAsked(): void
+    {
+        $trust = $this->check(RecordedTrust::FOREIGN_BOT);
+
+        self::assertSame(SteeringTrust::ForeignBot, $trust);
+        self::assertFalse($trust->steers());
+        self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/collaborators/')));
+    }
+
+    public function testAnAccountGitHubCallsABotDoesNotSteerWhateverItsPermission(): void
+    {
+        self::assertSame(SteeringTrust::ForeignBot, $this->check(RecordedTrust::BOT_BY_TYPE));
+    }
+
+    public function testIntaktsOwnIdentityReadFromGitHubSteers(): void
+    {
+        $trust = $this->check(RecordedTrust::OWN_IDENTITY);
+
+        self::assertSame(SteeringTrust::OwnIdentity, $trust);
+        self::assertTrue($trust->steers());
+        self::assertContains('https://api.github.com/app', $this->github->requested);
+    }
+
+    public function testIntaktsOwnIdentityIsRecognizedWhateverTheCaseOfTheLogin(): void
+    {
+        self::assertSame(SteeringTrust::OwnIdentity, $this->check('Acme-Intakt[bot]'));
+    }
+
+    public function testABotNamedLikeIntaktButNotItDoesNotSteer(): void
+    {
+        self::assertSame(SteeringTrust::ForeignBot, $this->check('acme-intakt-helper[bot]'));
+    }
+
+    public function testTheMaintainersIdentitySteers(): void
+    {
+        $trust = $this->check(RecordedTrust::MAINTAINER);
+
+        self::assertSame(SteeringTrust::Maintainer, $trust);
+        self::assertTrue($trust->steers());
+    }
+
+    public function testWithoutAMaintainerConfiguredTheMaintainersBotDoesNotSteer(): void
+    {
+        self::assertSame(SteeringTrust::ForeignBot, $this->checkWith(RecordedTrust::MAINTAINER, ''));
+    }
+
+    public function testAMaintainerSettingThatIsNoSlugIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (void) $this->checkWith(RecordedTrust::WRITER, 'acme/maintainer');
+    }
+
+    public function testEachCheckAsksGitHubAgain(): void
+    {
+        $trust = $this->trust(RecordedTrust::MAINTAINER_SLUG);
+
+        (void) $trust->check(self::REPOSITORY, RecordedTrust::WRITER);
+        (void) $trust->check(self::REPOSITORY, RecordedTrust::WRITER);
+
+        self::assertCount(2, array_filter($this->github->requested, static fn (string $url): bool => str_contains($url, '/collaborators/alice/permission')));
+    }
+
+    public function testAFailedTokenExchangeFailsTheCheckAndTriesNoOtherCredential(): void
+    {
+        $this->github = new RecordedTrust(401);
+
+        try {
+            (void) $this->check(RecordedTrust::WRITER);
+            self::fail('The check passed without a token.');
+        } catch (TrustNotChecked $failure) {
+            self::assertStringContainsString('status 401', $failure->getMessage());
+        }
+
+        self::assertSame([], array_filter($this->github->requested, static fn (string $url): bool => !str_ends_with($url, '/access_tokens')));
+    }
+
+    public function testThePrivateKeyNeverAppearsInTheFailureOrTheLogs(): void
+    {
+        $this->github = new RecordedTrust(401);
+
+        try {
+            (void) $this->check(RecordedTrust::WRITER);
+            self::fail('The check passed without a token.');
+        } catch (TrustNotChecked $failure) {
+            $written = $failure->getMessage().implode("\n", $this->logger->lines);
+        }
+
+        self::assertNotSame([], $this->logger->lines);
+        self::assertStringNotContainsString(substr($this->key->body(), 0, 64), $written);
+        self::assertStringNotContainsString(trim(explode(' ', $this->github->credentials['https://api.github.com/app/installations/678/access_tokens'])[2]), $written);
+    }
+
+    public function testAKeyThatCannotSignFailsTheCheckOfABot(): void
+    {
+        $trust = new SteeringTrustCheck(
+            new SteeringIdentities(new TrustAnswers($this->github->client()), new AppJwt('12345', 'not a key', new MockClock('2026-11-25 10:00:00 UTC')), ''),
+            new TrustAnswers($this->github->client()),
+            $this->tokens(),
+        );
+
+        $this->expectExceptionObject(TrustNotChecked::becauseNoCredential('The GitHub App private key cannot be read or cannot sign.'));
+
+        (void) $trust->check(self::REPOSITORY, RecordedTrust::OWN_IDENTITY);
+    }
+
+    public function testAnAnswerAboutAnotherAccountFailsTheCheck(): void
+    {
+        $this->expectExceptionObject(TrustNotChecked::becauseTheAnswerIsInvalid());
+
+        (void) $this->check('impostor');
+    }
+
+    public function testAPermissionLevelGitHubDoesNotDocumentFailsTheCheck(): void
+    {
+        $this->expectExceptionObject(TrustNotChecked::becauseTheAnswerIsInvalid());
+
+        (void) $this->check('carol');
+    }
+
+    public function testARefusedPermissionReadFailsTheCheckInsteadOfDenying(): void
+    {
+        $this->expectExceptionObject(TrustNotChecked::becauseGitHubRefused(404));
+
+        (void) $this->check('stranger');
+    }
+
+    public function testAMalformedAccountFailsTheCheckWithoutARequest(): void
+    {
+        try {
+            (void) $this->check('alice/../../admin');
+            self::fail('A malformed account was checked.');
+        } catch (TrustNotChecked $failure) {
+            self::assertEquals(TrustNotChecked::becauseTheAccountIsMalformed(), $failure);
+        }
+
+        self::assertSame([], $this->github->requested);
+    }
+
+    public function testAMalformedRepositoryFailsTheCheckWithoutARequest(): void
+    {
+        try {
+            (void) $this->trust(RecordedTrust::MAINTAINER_SLUG)->check('acme/..', RecordedTrust::WRITER);
+            self::fail('A malformed repository was checked.');
+        } catch (TrustNotChecked $failure) {
+            self::assertEquals(TrustNotChecked::becauseTheRepositoryIsMalformed(), $failure);
+        }
+
+        self::assertSame([], $this->github->requested);
+    }
+
+    private function check(string $login): SteeringTrust
+    {
+        return $this->checkWith($login, RecordedTrust::MAINTAINER_SLUG);
+    }
+
+    private function checkWith(string $login, string $maintainerSlug): SteeringTrust
+    {
+        return $this->trust($maintainerSlug)->check(self::REPOSITORY, $login);
+    }
+
+    private function trust(string $maintainerSlug): SteeringTrustCheck
+    {
+        $answers = new TrustAnswers($this->github->client());
+
+        return new SteeringTrustCheck(new SteeringIdentities($answers, $this->jwt(), $maintainerSlug), $answers, $this->tokens());
+    }
+
+    private function tokens(): CheckedInstallationTokens
+    {
+        $http = $this->github->client();
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $tokens = new InstallationTokens(new InstallationTokenMinter($this->jwt(), $http, $this->logger), '678', $clock);
+        $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
+
+        return new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($this->jwt(), $tokens, $http), $expected, $this->logger), $tokens);
+    }
+
+    private function jwt(): AppJwt
+    {
+        return new AppJwt('12345', $this->key->private, new MockClock('2026-11-25 10:00:00 UTC'));
+    }
+}

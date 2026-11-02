@@ -1,0 +1,96 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\GitHubForge;
+
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Contracts\HttpClient\ResponseInterface;
+use Uri\Rfc3986\Uri;
+
+// The answers GitHub gave for the App, its installation and the permission of each recorded account.
+final class RecordedTrust
+{
+    public const string WRITER = 'alice';
+    public const string TRIAGE = 'mallory';
+    public const string BOT_BY_TYPE = 'ci-machine';
+    public const string OWN_IDENTITY = 'acme-intakt[bot]';
+    public const string MAINTAINER_SLUG = 'acme-intakt-maintainer';
+    public const string MAINTAINER = 'acme-intakt-maintainer[bot]';
+    public const string FOREIGN_BOT = 'dependabot[bot]';
+
+    private const array PERMISSIONS = [
+        self::WRITER => 'permission_writer.json',
+        self::TRIAGE => 'permission_triage.json',
+        self::BOT_BY_TYPE => 'permission_bot_type.json',
+        'impostor' => 'permission_other_account.json',
+        'carol' => 'permission_unknown_level.json',
+    ];
+
+    /** @var list<string> */
+    public array $requested = [];
+
+    /** @var array<string, string> */
+    public array $credentials = [];
+
+    public function __construct(
+        private readonly int $tokenStatus = 201,
+    ) {
+    }
+
+    public function client(): MockHttpClient
+    {
+        return new MockHttpClient(fn (string $method, string $url, array $options): ResponseInterface => $this->answer($url, $options), 'https://api.github.com');
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function answer(string $url, array $options): ResponseInterface
+    {
+        $this->requested[] = $url;
+        $this->credentials[$url] = $this->bearerOf($options);
+        $path = new Uri($url)->getPath();
+
+        return match (true) {
+            str_ends_with($path, '/access_tokens') => $this->token(),
+            '/app' === $path => $this->fixture('app.json'),
+            str_starts_with($path, '/app/installations/') => $this->fixture('installation.json'),
+            str_starts_with($path, '/installation/repositories') => $this->fixture('installation_repositories.json'),
+            default => $this->permission($path),
+        };
+    }
+
+    private function token(): MockResponse
+    {
+        if (201 !== $this->tokenStatus) {
+            return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/access_tokens_401.json'), ['http_code' => $this->tokenStatus]);
+        }
+
+        return new MockResponse(json_encode(['token' => 'minted-value', 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    private function permission(string $path): MockResponse
+    {
+        $matched = preg_match('#^/repos/acme/widget/collaborators/([^/]+)/permission$#', $path, $parts);
+        $fixture = 1 === $matched ? (self::PERMISSIONS[rawurldecode($parts[1])] ?? null) : null;
+
+        return null === $fixture ? new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/not_found.json'), ['http_code' => 404]) : $this->fixture($fixture);
+    }
+
+    private function fixture(string $name): MockResponse
+    {
+        return new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/'.$name));
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function bearerOf(array $options): string
+    {
+        $headers = $options['normalized_headers']['authorization'] ?? [];
+
+        return is_array($headers) && is_string($headers[0] ?? null) ? $headers[0] : '';
+    }
+}
