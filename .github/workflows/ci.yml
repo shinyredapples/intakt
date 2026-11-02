@@ -100,14 +100,16 @@ jobs:
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
   # The persistence group on each supported engine; bin/check keeps running it on SQLite. One job runs all three engines
-  # (a service each, a step each): on an ephemeral self-hosted runner every job is a full machine reset, so a matrix of
-  # three jobs cost three resets per run for about a minute of tests. The tests run in the CI image as uid 1000 on the
+  # (a service each), in parallel inside one step: on an ephemeral self-hosted runner every job is a full machine reset,
+  # so a matrix of three jobs would cost three resets and three runners per run, while one after another took about 13
+  # minutes (MySQL 7, MariaDB 4.5, PostgreSQL 2). Each engine's data directory is a tmpfs: the databases are throwaway,
+  # so their disk syncs only cost time. The tests run in the CI image as uid 1000 on the
   # network the runner creates for the job's services, and reach each database by its service name; no port is published
   # and there is no job container, so no Docker socket inside. The databases take no password (throwaway, never published).
   # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database services instead:
   # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
-  # job that fails skips the engines and fails the run. Each engine's step runs once the CI image was built, even when an
-  # earlier engine failed, so the run reports every engine.
+  # job that fails skips the engines and fails the run. Every engine runs to its end even when another fails, so the run
+  # reports every engine, each in its own log group.
   persistence:
     needs: changes
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
@@ -122,6 +124,7 @@ jobs:
           MYSQL_DATABASE: intakt_test
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
         options: >-
+          --tmpfs /var/lib/mysql
           --health-cmd "mysqladmin ping --silent"
           --health-interval 5s
           --health-timeout 5s
@@ -132,6 +135,7 @@ jobs:
           MARIADB_DATABASE: intakt_test
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
         options: >-
+          --tmpfs /var/lib/mysql
           --health-cmd "healthcheck.sh --connect --innodb_initialized"
           --health-interval 5s
           --health-timeout 5s
@@ -142,6 +146,7 @@ jobs:
           POSTGRES_DB: intakt_test
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
+          --tmpfs /var/lib/postgresql/data
           --health-cmd "pg_isready --username=postgres"
           --health-interval 5s
           --health-timeout 5s
@@ -156,30 +161,32 @@ jobs:
         if: env.ENGINES == 'true'
         run: .github/ci/build-image.sh
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
-      - name: Run the persistence group on mysql 8.4
+      # The three engines run at once, each in its own container with its own output file; the step fails when any fails.
+      - name: Run the persistence group on mysql 8.4, mariadb 11.4 and postgresql 17
         if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
         env:
-          DATABASE_URL: mysql://root@mysql:3306/intakt
-          SERVICE_NETWORK: ${{ job.services.mysql.network }}
+          MYSQL_NETWORK: ${{ job.services.mysql.network }}
+          MARIADB_NETWORK: ${{ job.services.mariadb.network }}
+          POSTGRESQL_NETWORK: ${{ job.services.postgresql.network }}
         run: |
-          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
-            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
-      - name: Run the persistence group on mariadb 11.4
-        if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
-        env:
-          DATABASE_URL: mysql://root@mariadb:3306/intakt
-          SERVICE_NETWORK: ${{ job.services.mariadb.network }}
-        run: |
-          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
-            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
-      - name: Run the persistence group on postgresql 17
-        if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
-        env:
-          DATABASE_URL: postgresql://postgres@postgresql:5432/intakt
-          SERVICE_NETWORK: ${{ job.services.postgresql.network }}
-        run: |
-          docker run --rm --user 1000:1000 --network "$SERVICE_NETWORK" --env DATABASE_URL \
-            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence
+          set -u
+          out=$(mktemp -d)
+          run_engine() {
+            docker run --rm --user 1000:1000 --network "$2" --env DATABASE_URL="$3" \
+              --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+              "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence > "$out/$1.log" 2>&1
+            echo $? > "$out/$1.status"
+          }
+          run_engine "mysql 8.4" "$MYSQL_NETWORK" mysql://root@mysql:3306/intakt &
+          run_engine "mariadb 11.4" "$MARIADB_NETWORK" mysql://root@mariadb:3306/intakt &
+          run_engine "postgresql 17" "$POSTGRESQL_NETWORK" postgresql://postgres@postgresql:5432/intakt &
+          wait
+          failed=0
+          for engine in "mysql 8.4" "mariadb 11.4" "postgresql 17"; do
+            status=$(cat "$out/$engine.status" 2>/dev/null || echo missing)
+            echo "::group::persistence on $engine (exit $status)"
+            cat "$out/$engine.log"
+            echo "::endgroup::"
+            if [ "$status" != 0 ]; then echo "::error::persistence on $engine failed (exit $status)"; failed=1; fi
+          done
+          exit "$failed"
