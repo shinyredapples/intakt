@@ -6,6 +6,8 @@ ARG COMPOSER_VERSION=2.11.0
 ARG COMPOSER_SHA256=9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b
 ARG GITLEAKS_VERSION=8.30.1
 ARG GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+ARG FRANKENPHP_VERSION=1.13.4
+ARG FRANKENPHP_SHA256=3bbd2f11929550e3b35ddb407c7981ef14bc5337e705c910068f85a6ccbf91f3
 
 RUN set -eu; \
     apt-get update; \
@@ -20,6 +22,10 @@ RUN set -eu; \
     echo "$GITLEAKS_SHA256  /tmp/gitleaks.tar.gz" | sha256sum --check --strict; \
     tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks; \
     rm /tmp/gitleaks.tar.gz; \
+    curl -fsSL -o /usr/local/bin/frankenphp "https://github.com/php/frankenphp/releases/download/v$FRANKENPHP_VERSION/frankenphp-linux-x86_64"; \
+    echo "$FRANKENPHP_SHA256  /usr/local/bin/frankenphp" | sha256sum --check --strict; \
+    chmod 755 /usr/local/bin/frankenphp; \
+    /usr/local/bin/frankenphp version; \
     useradd --uid 1000 --user-group --create-home ci
 
 USER 1000:1000
