@@ -10,6 +10,7 @@ final readonly class MemoryEntry
      * @param list<string> $files
      */
     public function __construct(
+        public string $project,
         public string $text,
         public array $files,
     ) {

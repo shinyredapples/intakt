@@ -24,7 +24,13 @@ final readonly class RoundLedger
 
     public function reviewStarted(ReviewRound $round): void
     {
-        $this->append(LedgerEventKind::ReviewStarted, ['round' => $round->id()->toRfc4122(), 'project' => $round->project(), 'reviewers' => count($round->reviewers())]);
+        $this->append(LedgerEventKind::ReviewStarted, [
+            'round' => $round->id()->toRfc4122(),
+            'project' => $round->project(),
+            'reviewers' => count($round->reviewers()),
+            'change' => $round->change(),
+            'number' => $round->number(),
+        ]);
     }
 
     public function reviewerStarted(RoundReviewer $reviewer): void
@@ -53,12 +59,14 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerBlocked, $this->identify($reviewer) + ['reason' => $reason]);
     }
 
+    // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
     public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
     {
         $this->append(LedgerEventKind::JudgeDone, [
             'round' => $round->id()->toRfc4122(),
             'act' => array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
             'follow_ups' => array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
+            'findings' => array_map(static fn (Finding $finding): array => ['id' => $finding->id, 'severity' => $finding->severity->value, 'text' => $finding->text], $judged->findings),
         ]);
     }
 
@@ -71,7 +79,7 @@ final readonly class RoundLedger
     }
 
     /**
-     * @param array<string, int|string|list<string>> $payload
+     * @param array<string, int|string|list<string>|list<array<string, string>>> $payload
      */
     private function append(LedgerEventKind $kind, array $payload): void
     {

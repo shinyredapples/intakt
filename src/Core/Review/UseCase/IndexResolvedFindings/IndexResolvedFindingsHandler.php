@@ -28,11 +28,11 @@ final readonly class IndexResolvedFindingsHandler
         $round = $this->rounds->stored($command->roundId);
 
         foreach ($this->findings->resolvedBy($round) as $finding) {
-            $this->memory->index($this->entryOf($finding));
+            $this->memory->index($this->entryOf($round->project(), $finding));
         }
     }
 
-    private function entryOf(Finding $finding): MemoryEntry
+    private function entryOf(string $project, Finding $finding): MemoryEntry
     {
         $lines = ['Resolved finding: '.$finding->text];
 
@@ -44,6 +44,6 @@ final readonly class IndexResolvedFindingsHandler
             $lines[] = 'Evidence: '.$finding->evidence->probe.': '.$finding->evidence->output;
         }
 
-        return new MemoryEntry(implode(PHP_EOL, $lines), null === $finding->file ? [] : [$finding->file]);
+        return new MemoryEntry($project, implode(PHP_EOL, $lines), null === $finding->file ? [] : [$finding->file]);
     }
 }
