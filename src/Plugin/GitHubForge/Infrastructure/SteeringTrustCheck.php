@@ -34,11 +34,16 @@ final readonly class SteeringTrustCheck
     {
         $this->refuseMalformed($repository, $login);
 
-        if ($this->identities->isBot($login)) {
-            return $this->trustOfBot($login);
+        if (!$this->identities->isBot($login)) {
+            return $this->trustOfPerson($repository, $login);
         }
 
-        return $this->trustFromPermission($this->permissionOf($repository, $login), $login);
+        $identity = $this->identityOfBot($login);
+        if (SteeringTrust::ForeignBot === $identity) {
+            return $identity;
+        }
+
+        return $this->trustOfIdentity($repository, $login, $identity);
     }
 
     private function refuseMalformed(string $repository, string $login): void
@@ -51,7 +56,18 @@ final readonly class SteeringTrustCheck
         }
     }
 
-    private function trustOfBot(string $login): SteeringTrust
+    private function trustOfPerson(string $repository, string $login): SteeringTrust
+    {
+        $permission = $this->permissionOf($repository, $login);
+
+        return match (true) {
+            $permission['bot'] => SteeringTrust::ForeignBot,
+            $permission['writes'] => SteeringTrust::Writer,
+            default => SteeringTrust::NonWriter,
+        };
+    }
+
+    private function identityOfBot(string $login): SteeringTrust
     {
         return match (true) {
             $this->identities->isMaintainer($login) => SteeringTrust::Maintainer,
@@ -60,21 +76,31 @@ final readonly class SteeringTrustCheck
         };
     }
 
+    // A trusted name is not enough, because an App can lose its write access to one repository while it keeps its name.
+    private function trustOfIdentity(string $repository, string $login, SteeringTrust $identity): SteeringTrust
+    {
+        $permission = $this->permissionOf($repository, $login);
+
+        return $permission['bot'] && $permission['writes'] ? $identity : SteeringTrust::NonWriter;
+    }
+
     /**
-     * @return array<mixed>
+     * @return array{writes: bool, bot: bool}
      */
     private function permissionOf(string $repository, string $login): array
     {
         [$owner, $name] = explode('/', $repository, 2);
         $path = sprintf('/repos/%s/%s/collaborators/%s/permission', rawurlencode($owner), rawurlencode($name), rawurlencode($login));
 
-        return $this->github->get($path, $this->installationToken());
+        return $this->permissionFrom($this->github->get($path, $this->installationToken()), $login);
     }
 
     /**
      * @param array<mixed> $answer
+     *
+     * @return array{writes: bool, bot: bool}
      */
-    private function trustFromPermission(array $answer, string $login): SteeringTrust
+    private function permissionFrom(array $answer, string $login): array
     {
         $level = $answer['permission'] ?? null;
         $user = $answer['user'] ?? null;
@@ -84,11 +110,7 @@ final readonly class SteeringTrustCheck
             throw TrustNotChecked::becauseTheAnswerIsInvalid();
         }
 
-        return match (true) {
-            'Bot' === $type => SteeringTrust::ForeignBot,
-            self::LEVELS[$level] => SteeringTrust::Writer,
-            default => SteeringTrust::NonWriter,
-        };
+        return ['writes' => self::LEVELS[$level], 'bot' => 'Bot' === $type];
     }
 
     // No other credential is tried, because a fallback would let a lost App identity still decide who steers.

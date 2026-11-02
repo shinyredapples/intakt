@@ -19,11 +19,16 @@ final class RecordedTrust
     public const string MAINTAINER_SLUG = 'acme-intakt-maintainer';
     public const string MAINTAINER = 'acme-intakt-maintainer[bot]';
     public const string FOREIGN_BOT = 'dependabot[bot]';
+    public const string READER_SLUG = 'acme-reader';
+    public const string READER = 'acme-reader[bot]';
 
     private const array PERMISSIONS = [
         self::WRITER => 'permission_writer.json',
         self::TRIAGE => 'permission_triage.json',
         self::BOT_BY_TYPE => 'permission_bot_type.json',
+        self::OWN_IDENTITY => 'permission_own_identity.json',
+        self::MAINTAINER => 'permission_maintainer.json',
+        self::READER => 'permission_bot_read.json',
         'impostor' => 'permission_other_account.json',
         'carol' => 'permission_unknown_level.json',
     ];
@@ -74,7 +79,7 @@ final class RecordedTrust
     private function permission(string $path): MockResponse
     {
         $matched = preg_match('#^/repos/acme/widget/collaborators/([^/]+)/permission$#', $path, $parts);
-        $fixture = 1 === $matched ? (self::PERMISSIONS[rawurldecode($parts[1])] ?? null) : null;
+        $fixture = 1 === $matched ? (self::PERMISSIONS[strtolower(rawurldecode($parts[1]))] ?? null) : null;
 
         return null === $fixture ? new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/not_found.json'), ['http_code' => 404]) : $this->fixture($fixture);
     }

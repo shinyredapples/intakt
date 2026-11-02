@@ -104,6 +104,49 @@ final class SteeringTrustCheckTest extends TestCase
         self::assertContains('https://api.github.com/app', $this->github->requested);
     }
 
+    public function testIntaktsOwnIdentityIsAskedForWriteAccessWithTheInstallationToken(): void
+    {
+        (void) $this->check(RecordedTrust::OWN_IDENTITY);
+
+        self::assertSame('Authorization: Bearer minted-value', $this->github->credentials['https://api.github.com/repos/acme/widget/collaborators/acme-intakt%5Bbot%5D/permission']);
+    }
+
+    public function testIntaktsOwnIdentityDoesNotSteerWhenTheTokenExchangeFails(): void
+    {
+        $this->github = new RecordedTrust(401);
+
+        $this->expectException(TrustNotChecked::class);
+
+        (void) $this->check(RecordedTrust::OWN_IDENTITY);
+    }
+
+    public function testTheMaintainersIdentityDoesNotSteerWhenTheTokenExchangeFails(): void
+    {
+        $this->github = new RecordedTrust(401);
+
+        try {
+            (void) $this->check(RecordedTrust::MAINTAINER);
+            self::fail('The maintainer steered without a token.');
+        } catch (TrustNotChecked $failure) {
+            self::assertStringContainsString('status 401', $failure->getMessage());
+        }
+    }
+
+    public function testATrustedBotWithoutWriteAccessDoesNotSteer(): void
+    {
+        $trust = $this->checkWith(RecordedTrust::READER, RecordedTrust::READER_SLUG);
+
+        self::assertSame(SteeringTrust::NonWriter, $trust);
+        self::assertFalse($trust->steers());
+    }
+
+    public function testATrustedBotWhosePermissionIsRefusedFailsTheCheck(): void
+    {
+        $this->expectExceptionObject(TrustNotChecked::becauseGitHubRefused(404));
+
+        (void) $this->checkWith('acme-gone[bot]', 'acme-gone');
+    }
+
     public function testIntaktsOwnIdentityIsRecognizedWhateverTheCaseOfTheLogin(): void
     {
         self::assertSame(SteeringTrust::OwnIdentity, $this->check('Acme-Intakt[bot]'));
@@ -120,6 +163,7 @@ final class SteeringTrustCheckTest extends TestCase
 
         self::assertSame(SteeringTrust::Maintainer, $trust);
         self::assertTrue($trust->steers());
+        self::assertContains('https://api.github.com/repos/acme/widget/collaborators/acme-intakt-maintainer%5Bbot%5D/permission', $this->github->requested);
     }
 
     public function testWithoutAMaintainerConfiguredTheMaintainersBotDoesNotSteer(): void
