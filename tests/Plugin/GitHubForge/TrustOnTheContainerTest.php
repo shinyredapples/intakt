@@ -51,22 +51,36 @@ final class TrustOnTheContainerTest extends KernelTestCase
         'GITHUB_MAINTAINER_APP_SLUG' => RecordedTrust::MAINTAINER_SLUG,
     ];
 
+    private const string PRIVATE_KEY = 'GITHUB_APP_PRIVATE_KEY';
+
     /** @var array<string, mixed> */
-    private array $saved = [];
+    private array $savedServer = [];
+
+    /** @var array<string, mixed> */
+    private array $savedEnv = [];
 
     protected function setUp(): void
     {
-        foreach ([...self::SETTINGS, 'GITHUB_APP_PRIVATE_KEY' => AppKey::generate()->private] as $name => $value) {
-            $this->saved[$name] = $_SERVER[$name] ?? null;
+        $this->savedServer = [];
+        $this->savedEnv = [];
+        foreach ([...self::SETTINGS, self::PRIVATE_KEY => AppKey::generate()->private] as $name => $value) {
+            if (array_key_exists($name, $_SERVER)) {
+                $this->savedServer[$name] = $_SERVER[$name];
+            }
+            if (array_key_exists($name, $_ENV)) {
+                $this->savedEnv[$name] = $_ENV[$name];
+            }
             $_SERVER[$name] = $_ENV[$name] = $value;
         }
     }
 
     protected function tearDown(): void
     {
-        foreach ($this->saved as $name => $value) {
-            $_SERVER[$name] = $_ENV[$name] = $value;
+        foreach ([...array_keys(self::SETTINGS), self::PRIVATE_KEY] as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
         }
+        $_SERVER = [...$_SERVER, ...$this->savedServer];
+        $_ENV = [...$_ENV, ...$this->savedEnv];
         parent::tearDown();
     }
 

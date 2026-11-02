@@ -39,6 +39,12 @@ final class InMemoryLedger implements Ledger
         return new RecordedEvents([]);
     }
 
+    #[Override]
+    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    {
+        return new RecordedEvents([]);
+    }
+
     public function count(): int
     {
         return count($this->events);
