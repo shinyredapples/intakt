@@ -17,7 +17,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Streaming | reviewer text shown live | planned | T21 (#27) |
 | `MockPlatformFactory` with `ScriptedResponse` | offline tests of every model call | in progress | T4 (#9), T5 (#10, part #98), `tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php`; T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 | `RecordingProvider` with `HttpCassette` | real responses recorded once, replayed offline with redaction | planned | T25 (#32), T28 (#35) |
-| Claude Code and Codex platform bridges | a reviewer on a subscription account (its automation token where the vendor has one), `IncompleteStreamException` exercised | in progress | T33 (#61), `src/Core/Ai/Infrastructure/ClaudeCodePlatformFactory.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php` (Claude Code); T39 (#321, part #500), `src/Core/Ai/Infrastructure/IsolatedCodexCli.php` (Codex: the login per account, its refresh and a probe call, no reviewer yet) |
+| Claude Code and Codex platform bridges | a reviewer on a subscription account (its automation token where the vendor has one), `IncompleteStreamException` exercised | in progress | T33 (#61), `src/Core/Ai/Infrastructure/ClaudeCodePlatformFactory.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php` (Claude Code); T39 (#321, parts #500 and #501), `src/Core/Ai/Infrastructure/IsolatedCodexCli.php` (Codex: the login per account, its refresh and a probe call), `src/Core/Ai/Infrastructure/CodexPlatformFactory.php` (Codex: the reviewer, `IncompleteStreamException` for a stream without `turn.completed`) |
 
 ## Symfony AI Agent
 
