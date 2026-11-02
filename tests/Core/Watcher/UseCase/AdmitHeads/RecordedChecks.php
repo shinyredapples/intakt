@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\AdmitHeads;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CiRun;
 use Intakt\Plugin\Forge\Contract\CiRunOrigin;
@@ -40,7 +41,7 @@ final class RecordedChecks implements HeadChecks
         foreach (['workflow_runs', 'check_suites'] as $kind) {
             foreach ($recorded[$kind] as $entry) {
                 if ($entry['head_sha'] === $head->hash) {
-                    $runs[] = new CiRun($this->originOf($entry), $this->stateOf($entry['status'], $entry['conclusion']), new DateTimeImmutable($entry['created_at']));
+                    $runs[] = new CiRun($this->originOf($entry), $this->stateOf($entry['status'], $entry['conclusion']), $this->momentOf($entry['created_at']));
                 }
             }
         }
@@ -61,6 +62,13 @@ final class RecordedChecks implements HeadChecks
             $entry['event'] ?? 'check_suite',
             null === $change ? null : new ChangeId((string) $change['number']),
         );
+    }
+
+    private function momentOf(string $recorded): DateTimeImmutable
+    {
+        $moment = DateTimeImmutable::createFromFormat(DATE_ATOM, $recorded, new DateTimeZone('UTC'));
+
+        return false === $moment ? throw new LogicException('Not a recorded moment: '.$recorded) : $moment;
     }
 
     private function stateOf(string $status, ?string $conclusion): CiRunState
