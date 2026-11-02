@@ -102,8 +102,6 @@ final class StreamedReviewTest extends KernelTestCase
 {
     private const string NOW = '2026-11-02 12:00:00.000 UTC';
 
-    private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
-
     private ReviewCheckout $fixture;
 
     private InMemoryLedger $ledger;

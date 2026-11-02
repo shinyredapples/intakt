@@ -564,7 +564,7 @@ final class ReviewerVerdictTest extends WebTestCase
     }
 
     /**
-     * @param list<ToolCall>                                                   $toolCalls
+     * @param list<ToolCall>                                                                 $toolCalls
      * @param string|ResultInterface|Closure(array<string, mixed>): (string|ResultInterface) $answer
      */
     // Because the script asks for one tool call per round, the answer follows the last call.
@@ -574,7 +574,7 @@ final class ReviewerVerdictTest extends WebTestCase
     }
 
     /**
-     * @param list<list<ToolCall>|ResultInterface>                             $rounds
+     * @param list<list<ToolCall>|ResultInterface>                                           $rounds
      * @param string|ResultInterface|Closure(array<string, mixed>): (string|ResultInterface) $answer
      */
     // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round; a closure answers from the call's options, as a provider that streams only when asked.
