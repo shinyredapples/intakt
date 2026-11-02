@@ -55,18 +55,44 @@ final readonly class ReviewComparison
     {
         // Several reviewers on one side often raise the same spot, at different severities or a line apart, so a spot counts once within the same window the match uses. Sorted by file and line, a finding joins the spot before it when the spot admits it, so the spots do not depend on the reviewers' order.
         $spots = [];
-        foreach ($this->byFileAndLine($reviews) as [$review, $finding]) {
-            $last = array_last($spots);
-            if (null !== $last && $last->admits($finding, $review)) {
-                array_pop($spots);
-                $spots[] = $last->joinedBy($finding, $review);
-                continue;
-            }
-
-            $spots[] = MergedSpot::of($finding, $review);
+        foreach ($this->byFileAndLine($reviews) as $sameLine) {
+            $spots = $this->placed($sameLine, $spots);
         }
 
         return $spots;
+    }
+
+    /**
+     * @template T of LoopFinding|Finding
+     *
+     * @param non-empty-list<array{int, T}> $sameLine
+     * @param list<MergedSpot<T>>           $spots
+     *
+     * @return list<MergedSpot<T>>
+     */
+    private function placed(array $sameLine, array $spots): array
+    {
+        // Findings on one line tie in the sort, so every one the spot admits joins it before any of them opens a new spot; otherwise the reviewers' order would decide which spots form.
+        $last = array_pop($spots);
+        $waiting = [];
+        foreach ($sameLine as [$review, $finding]) {
+            if (null !== $last && $last->admits($finding, $review)) {
+                $last = $last->joinedBy($finding, $review);
+                continue;
+            }
+
+            $waiting[] = [$review, $finding];
+        }
+
+        $spots = null === $last ? $spots : [...$spots, $last];
+        if ([] === $waiting) {
+            return $spots;
+        }
+
+        [$review, $finding] = array_shift($waiting);
+        $spots[] = MergedSpot::of($finding, $review);
+
+        return [] === $waiting ? $spots : $this->placed($waiting, $spots);
     }
 
     private function withinWindow(?int $linesApart): bool
@@ -79,7 +105,7 @@ final readonly class ReviewComparison
      *
      * @param list<list<T>> $reviews
      *
-     * @return list<array{int, T}>
+     * @return list<non-empty-list<array{int, T}>>
      */
     private function byFileAndLine(array $reviews): array
     {
@@ -90,9 +116,21 @@ final readonly class ReviewComparison
             }
         }
 
-        usort($tagged, static fn (array $a, array $b): int => [$a[1]->file ?? '', $a[1]->line ?? 0] <=> [$b[1]->file ?? '', $b[1]->line ?? 0]);
+        $spot = static fn (array $entry): array => [$entry[1]->file ?? '', $entry[1]->line ?? 0];
+        usort($tagged, static fn (array $a, array $b): int => $spot($a) <=> $spot($b));
 
-        return $tagged;
+        $groups = [];
+        foreach ($tagged as $entry) {
+            $previous = array_last($groups);
+            if (null !== $previous && $spot($previous[0]) === $spot($entry)) {
+                $groups[array_key_last($groups)][] = $entry;
+                continue;
+            }
+
+            $groups[] = [$entry];
+        }
+
+        return $groups;
     }
 
     /**

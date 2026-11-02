@@ -258,6 +258,18 @@ final class ReviewComparisonTest extends TestCase
         self::assertSame([Severity::P1, Severity::P3], $severities($second));
     }
 
+    public function testFindingsOfTwoReviewsOnTheSameLineMergeTheSameWhateverTheReviewersOrder(): void
+    {
+        $a = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10), ComparisonBuilder::finding('src/A.php', 12)));
+        $b = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 12), ComparisonBuilder::finding('src/A.php', 14)));
+        $comparison = new ReviewComparison();
+
+        $first = $comparison->compare('h', ComparisonBuilder::loop(), [$a, $b]);
+        $second = $comparison->compare('h', ComparisonBuilder::loop(), [$b, $a]);
+
+        self::assertSame([2, 2], [count($first->intaktOnly), count($second->intaktOnly)]);
+    }
+
     public function testAnIntaktFindingMatchesOnlyOneLoopFinding(): void
     {
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10), ComparisonBuilder::loopFinding('src/A.php', 11 + ReviewComparison::LINE_WINDOW));
