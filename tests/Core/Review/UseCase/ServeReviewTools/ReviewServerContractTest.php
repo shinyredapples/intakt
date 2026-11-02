@@ -216,6 +216,37 @@ final class ReviewServerContractTest extends KernelTestCase
         self::assertStringNotContainsString('VerdictPerRole.php', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
+    public function testInitializeWithTheVersionOfClaudeCodeGetsThatVersionBack(): void
+    {
+        $answer = $this->freshClient()->initialize('2025-11-25');
+
+        self::assertSame('2025-11-25', OwnerServerClient::at($answer, 'result', 'protocolVersion'));
+        self::assertSame('intakt-review', OwnerServerClient::at($answer, 'result', 'serverInfo', 'name'));
+    }
+
+    public function testInitializeWithAnUnknownVersionGetsAVersionTheServerSpeaks(): void
+    {
+        $version = OwnerServerClient::at($this->freshClient()->initialize('1999-01-01'), 'result', 'protocolVersion');
+
+        self::assertIsString($version);
+        self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $version);
+        self::assertNotSame('1999-01-01', $version);
+    }
+
+    public function testNoToolDeclaresItsPropertiesAsAnEmptyList(): void
+    {
+        $this->client->call('tools/list', [], 2);
+
+        // Decoding to arrays turns {} into [], so the raw body decides: a client validates against an object.
+        self::assertStringContainsString('"properties":{', $this->client->lastBody());
+        self::assertStringNotContainsString('"properties":[]', $this->client->lastBody());
+    }
+
+    private function freshClient(): OwnerServerClient
+    {
+        return new OwnerServerClient($this->app, '/mcp/review', $this->credential->issueFor($this->roundId));
+    }
+
     private function clientOf(string $roundId): OwnerServerClient
     {
         $client = new OwnerServerClient($this->app, '/mcp/review', $this->credential->issueFor($roundId));

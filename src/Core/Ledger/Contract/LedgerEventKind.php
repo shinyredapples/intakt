@@ -15,4 +15,8 @@ enum LedgerEventKind: string
     case JudgeDone = 'judge_done';
     case UsageRecorded = 'usage_recorded';
     case AccountCooledDown = 'account_cooled_down';
+    case HeadPending = 'head_pending';
+    case HeadRed = 'head_red';
+    case RoundQueued = 'round_queued';
+    case VerdictsStale = 'verdicts_stale';
 }

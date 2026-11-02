@@ -60,6 +60,7 @@ final class ProjectTiersTest extends KernelTestCase
                         quorum: all
                         reviewers:
                             - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
+                    watch: { repository: repos/alpha, base: main, task: Review the pull request. }
                 beta:
                     tiers:
                         strong: { provider: openai, model: other }
@@ -156,6 +157,24 @@ final class ProjectTiersTest extends KernelTestCase
         $forge->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
     }
 
+    public function testAProjectWatchSectionLoadsAsAWatchedProjectBesideItsTiers(): void
+    {
+        $container = $this->bootedContainer();
+
+        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter('intakt.watcher.projects'));
+        self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
+    }
+
+    public function testAWatchSectionWithoutItsTaskStopsTheBoot(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        watch: { repository: repos/beta, base: main }\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/"task" under "intakt\.projects\.beta" must be configured/');
+
+        $this->bootedContainer();
+    }
+
     public function testAnUnknownProjectModeStopsTheBoot(): void
     {
         file_put_contents($this->file, "projects:\n    beta:\n        mode: quiet\n        tiers:\n            strong: { provider: openai, model: other }\n");
@@ -172,6 +191,23 @@ final class ProjectTiersTest extends KernelTestCase
 
         $this->expectException(LoaderLoadException::class);
         $this->expectExceptionMessageMatches('/Invalid type for path "intakt\.projects"/');
+
+        $this->bootedContainer();
+    }
+
+    public function testTheOwnersCeilingsBesideTheProjectsReachTheBudgetWithTheDefaultForAWindowLeftOut(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter('intakt.budget.ceilings'));
+    }
+
+    public function testACeilingAboveAHundredPercentStopsTheBoot(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        weekly: 120\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/intakt\.budget\.ceilings\.weekly/');
 
         $this->bootedContainer();
     }
@@ -277,6 +313,46 @@ final class ProjectTiersTest extends KernelTestCase
         $parameter = $this->bootedContainer()->getParameter('intakt.review.panels');
 
         return new ConfiguredPanels($parameter);
+    }
+
+    public function testWithItsSectionEveryListedCodexAccountGetsAPlatformOfItsOwn(): void
+    {
+        file_put_contents($this->file, <<<'YAML'
+            codex: { model: gpt-5.3-codex, effort: high }
+            accounts:
+                codex: [default, team]
+            projects:
+                alpha-one:
+                    tiers:
+                        strong: { provider: codex, model: gpt-5.3-codex }
+            YAML);
+
+        $container = $this->bootedContainer();
+
+        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.codex'));
+        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.codex.team'));
+        self::assertSame(['default', 'team'], $this->parameterList($container, 'intakt.ai.accounts')['codex'] ?? null);
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.disabled_providers'));
+    }
+
+    public function testWithoutItsSectionCodexIsLeftOutWithoutADisabledMessage(): void
+    {
+        $container = $this->bootedContainer();
+
+        self::assertFalse($container->has('intakt.ai.platform.codex'));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.accounts'));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.disabled_providers'));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function parameterList(ContainerInterface $container, string $name): array
+    {
+        $parameter = $container->getParameter($name);
+        self::assertIsArray($parameter);
+
+        return $parameter;
     }
 
     private function bootedContainer(): ContainerInterface

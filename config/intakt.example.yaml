@@ -3,9 +3,15 @@
 # any other name reads them with its name appended (ANTHROPIC_API_KEY_TEAM). A provider not listed has its default account only.
 accounts:
     anthropic: [default, team]
+# Optional: no call starts on an account while a window's measured use is at its ceiling, in percent from 1 to 100 (default 90 each).
+budget:
+    ceilings:
+        five-hour: 90
+        weekly: 90
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
+# A tier on provider codex must name this model: { provider: codex, model: gpt-5.3-codex }.
 codex: { model: gpt-5.3-codex, effort: high }
-# Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible) and a model name.
+# Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible, claude_code, codex) and a model name.
 projects:
     alpha:
         tiers:
@@ -27,6 +33,9 @@ projects:
                 - paths: [config/**, src/**/Security/**]
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
+        # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
+        # the task text is given to every round until the pull request text is read from the forge.
+        watch: { repository: /path/to/alpha, base: main, task: Review the pull request. }
     beta:
         # Optional: shadow never writes to the forge; live, the default, does.
         mode: shadow
