@@ -38,6 +38,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Main** | the official version of your project | |
 | **Maintainer agent** | the AI agent that settles stuck work, so it rarely reaches you | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |
+| **Memory limit** | how much memory a job and the programs it runs may use before they are stopped | [containers](containers-and-services.md#when-a-job-runs-out-of-memory) |
 | **Merge** | adding a pull request's change to main | [journey](the-journey-of-a-task.md#6-merging) |
 | **Orchestrator** | Intakt itself, the part that runs everything | [how it works](how-intakt-works.md) |
 | **Owner** | you: the person who decides what only a person may | [steering](steering-intakt.md) |

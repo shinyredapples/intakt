@@ -51,6 +51,8 @@ It produces two things, and nothing else leaves the workspace:
 
 Before it finishes, it runs a **self-check**: no merge commits, nothing that looks like a password or key, description not too long. Catching those itself is much cheaper than being refused afterwards.
 
+Planned: the self-check also runs the project's quick checks, ticks off every piece of evidence the task asks for, and looks for documentation the change made wrong. Intakt checks before it asks the reviewers because every round of fixes after a review costs about as much as four reviews, and with one account that comes straight out of new work. When the same kind of problem keeps coming back from the reviewers, Intakt suggests a new automatic check as a task; label it to accept it, and the problem is caught before review from then on.
+
 ## 3. Checking
 
 Intakt never trusts the builder's word that the work passes. It unpacks the change in a **fresh, separate container** and runs the project's own checks there:

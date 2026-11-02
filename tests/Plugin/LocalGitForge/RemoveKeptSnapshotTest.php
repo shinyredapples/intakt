@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\KeptSnapshots;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\RemoveKeptSnapshot;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,6 +20,7 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RemoveKeptSnapshot::class)]
+#[CoversClass(KeptSnapshots::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(NameStatusParser::class)]
@@ -96,6 +98,6 @@ final class RemoveKeptSnapshotTest extends TestCase
 
     private function listener(): RemoveKeptSnapshot
     {
-        return new RemoveKeptSnapshot($this->log);
+        return new RemoveKeptSnapshot(new KeptSnapshots($this->log));
     }
 }
