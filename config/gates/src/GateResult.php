@@ -48,7 +48,7 @@ final readonly class GateResult
 
     public function noted(string $note): self
     {
-        return clone($this, ['note' => $note]);
+        return clone ($this, ['note' => $note]);
     }
 
     /**
@@ -56,7 +56,7 @@ final readonly class GateResult
      */
     public function withSlowest(array $slowest): self
     {
-        return clone($this, ['slowest' => $slowest]);
+        return clone ($this, ['slowest' => $slowest]);
     }
 
     public function isPassing(): bool
