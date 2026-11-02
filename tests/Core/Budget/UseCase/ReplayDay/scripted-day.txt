@@ -1,0 +1,41 @@
+# A day on two Claude accounts, main and team, whose week resets on 2026-11-08 at 08:00 UTC.
+2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.main weekly 10 2026-11-08T08:00
+2026-11-02T08:00 read claude_code.team five-hour 5 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.team weekly 5 2026-11-08T08:00
+2026-11-02T08:00 start claude_code.main 0
+2026-11-02T08:01 start claude_code.main 1
+# A usage-limit answer cools main down until its reset; team and merges go on.
+2026-11-02T09:00 limit claude_code.main 2026-11-02T13:00
+2026-11-02T09:00 start claude_code.main 0
+2026-11-02T09:00 start claude_code.team 0
+2026-11-02T09:00 merge
+# A reset already passed or beyond the week is a wrong answer and cools nothing down.
+2026-11-02T09:05 limit claude_code.team 2026-11-01T13:00
+2026-11-02T09:05 limit claude_code.team 2026-11-10T13:00
+2026-11-02T09:05 start claude_code.team 0
+# A shared back-off holds every account, and approved heads still merge.
+2026-11-02T10:00 hold back-off 2026-11-02T10:30
+2026-11-02T10:00 start claude_code.team 0
+2026-11-02T10:00 merge
+2026-11-02T10:30 start claude_code.team 0
+# A pause lets merges through, a drain holds them too; team's last reading is three hours old by now.
+2026-11-02T11:00 hold pause 2026-11-02T12:00
+2026-11-02T11:00 start claude_code.team 0
+2026-11-02T11:00 merge
+2026-11-02T11:30 hold drain 2026-11-02T11:45
+2026-11-02T11:30 start claude_code.team 0
+2026-11-02T11:30 merge
+2026-11-02T11:45 merge
+2026-11-02T12:00 start claude_code.team 0
+2026-11-02T12:00 start claude_code.team 1
+2026-11-02T12:10 read claude_code.team five-hour 30 2026-11-02T13:00
+2026-11-02T12:10 read claude_code.team weekly 8 2026-11-08T08:00
+2026-11-02T12:10 start claude_code.team 1
+# Main's cooldown has ended at its reset.
+2026-11-02T13:00 start claude_code.main 0
+2026-11-02T13:05 read claude_code.main five-hour 91 2026-11-02T18:00
+2026-11-02T13:05 start claude_code.main 0
+# A new outage of team, after a new reading, is noticed again.
+2026-11-02T15:10 start claude_code.team 0
+2026-11-02T16:00 start claude_code.team 0
