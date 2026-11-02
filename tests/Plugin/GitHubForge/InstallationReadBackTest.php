@@ -228,10 +228,12 @@ final class InstallationReadBackTest extends TestCase
 
     public function testAPermissionNamedTwiceIsRefused(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('GITHUB_APP_PERMISSIONS names contents more than once.');
-
-        ExpectedInstallation::fromSettings('contents:read,contents:write', 'acme/widget');
+        try {
+            ExpectedInstallation::fromSettings('contents:read,contents:write', 'acme/widget');
+            self::fail('A permission named twice must be refused.');
+        } catch (InvalidArgumentException $refused) {
+            self::assertSame('GITHUB_APP_PERMISSIONS names contents more than once.', $refused->getMessage());
+        }
     }
 
     public function testDistinctPermissionsAreAccepted(): void
