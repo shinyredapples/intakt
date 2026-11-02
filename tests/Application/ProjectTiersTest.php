@@ -60,6 +60,7 @@ final class ProjectTiersTest extends KernelTestCase
                         quorum: all
                         reviewers:
                             - { role: correctness, tier: strong, provider: anthropic, prompt: Check the logic., budget: 3 }
+                    watch: { repository: repos/alpha, base: main, task: Review the pull request. }
                 beta:
                     tiers:
                         strong: { provider: openai, model: other }
@@ -154,6 +155,24 @@ final class ProjectTiersTest extends KernelTestCase
         $this->expectExceptionObject(new LogicException('The test forge refuses every write.'));
 
         $forge->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
+    }
+
+    public function testAProjectWatchSectionLoadsAsAWatchedProjectBesideItsTiers(): void
+    {
+        $container = $this->bootedContainer();
+
+        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter('intakt.watcher.projects'));
+        self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
+    }
+
+    public function testAWatchSectionWithoutItsTaskStopsTheBoot(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        watch: { repository: repos/beta, base: main }\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/"task" under "intakt\.projects\.beta" must be configured/');
+
+        $this->bootedContainer();
     }
 
     public function testAnUnknownProjectModeStopsTheBoot(): void
