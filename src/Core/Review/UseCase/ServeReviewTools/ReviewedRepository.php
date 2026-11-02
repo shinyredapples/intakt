@@ -16,6 +16,7 @@ use InvalidArgumentException;
 use Mcp\Exception\ToolCallException;
 use RuntimeException;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 // Because a client must not name the head, this is the one place that decides it: the checkout of the round its credential was issued for, while that round is under review.
 final readonly class ReviewedRepository
@@ -70,7 +71,7 @@ final readonly class ReviewedRepository
     {
         $reviewer = $this->security->getUser();
 
-        if (null === $reviewer || !$this->security->isGranted(ReviewCredential::REVIEWER_ROLE)) {
+        if (!$reviewer instanceof UserInterface || !$this->security->isGranted(ReviewCredential::REVIEWER_ROLE)) {
             throw new ToolCallException('The request carries no review credential.');
         }
 
