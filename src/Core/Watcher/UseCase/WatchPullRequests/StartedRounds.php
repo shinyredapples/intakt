@@ -35,6 +35,7 @@ final readonly class StartedRounds
 
         try {
             $queued = $this->startUnlessStarted($project, $change, $start);
+            $this->record($project, $change, $queued);
             $this->pending->forget($project, $change);
             $connection->commit();
         } catch (Throwable $failure) {
@@ -117,11 +118,17 @@ final readonly class StartedRounds
             return null;
         }
 
-        $queued = $start();
+        return $start();
+    }
+
+    private function record(string $project, OpenChange $change, ?QueuedRound $queued): void
+    {
+        if (!$queued instanceof QueuedRound) {
+            return;
+        }
+
         $this->entities->persist(new StartedRound($project, $change, $queued->roundId));
         $this->entities->flush();
-
-        return $queued;
     }
 
     private function isStarted(string $project, OpenChange $change): bool

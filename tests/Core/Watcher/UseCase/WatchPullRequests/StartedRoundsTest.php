@@ -62,6 +62,24 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(0, $this->storedRounds());
     }
 
+    public function testARoundQueuedBeforeItsRecordFailedToFlushIsDiscardedAndLeavesNoRecord(): void
+    {
+        $connection = $this->entities->getConnection();
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
+                $connection->executeStatement('DROP TABLE watcher_started_round');
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The failed record of the round was swallowed.');
+        } catch (Exception) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
+        self::assertSame(0, $this->storedRounds());
+    }
+
     public function testAStartThatFailsItselfLeavesTheDiscardToTheStart(): void
     {
         try {
