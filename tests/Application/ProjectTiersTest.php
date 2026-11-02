@@ -329,7 +329,7 @@ final class ProjectTiersTest extends KernelTestCase
         $this->emptyDatabase();
         $holds = self::getContainer()->get(Holds::class);
         self::assertInstanceOf(Holds::class, $holds);
-        $holds->hold(SharedHold::Pause, new DateTimeImmutable('2999-01-01 00:00:00 UTC'));
+        $holds->hold(SharedHold::Pause, new DateTimeImmutable('2999-01-01T00:00:00Z'));
     }
 
     private function emptyDatabase(): void
