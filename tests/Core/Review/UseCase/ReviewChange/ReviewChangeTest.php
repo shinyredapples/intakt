@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -22,6 +23,7 @@ use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -54,6 +56,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(StoredVerdicts::class)]
 #[UsesClass(ChangeDecision::class)]
+#[UsesClass(RoundProgress::class)]
+#[UsesClass(IgnoredProgress::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 final class ReviewChangeTest extends KernelTestCase
 {
@@ -103,6 +107,35 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertSame([], $review->actList);
         self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
+    }
+
+    public function testEachPollReportsTheProgressOfTheRound(): void
+    {
+        $progress = new RecordingProgress();
+
+        $this->reviewChange(static function (): void {}, 3)->review($this->request(), $progress);
+
+        // The first read of the round reports too, because the caller should see the start before any wait.
+        self::assertCount(4, $progress->reported);
+        self::assertEquals(new RoundProgress(0, 2, false), $progress->reported[3]);
+    }
+
+    public function testTheLastReportSaysTheRoundIsJudgedWhenTheWorkersFinishIt(): void
+    {
+        $progress = new RecordingProgress();
+        $work = function (): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, new VerdictPerRole([]));
+            }
+
+            foreach ($this->fixture->judgings() as $judging) {
+                $this->fixture->judge(new VerdictPerRole([]))($judging);
+            }
+        };
+
+        $this->reviewChange($work)->review($this->request(), $progress);
+
+        self::assertEquals(new RoundProgress(2, 2, true), array_last($progress->reported));
     }
 
     public function testTheTokensOfTheCallsMadeForTheRoundAreAddedAndNoOthers(): void

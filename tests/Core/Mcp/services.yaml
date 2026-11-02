@@ -5,3 +5,22 @@ services:
 
     Intakt\Tests\Core\Mcp\Contract\Tool\:
         resource: 'Contract/Tool/'
+
+    # The start tool runs the real review on a stored round, without workers or a configured panel: the waiting review's sleeps run the workers, a scripted vendor answers, and a panel of one reviews.
+    # Not autoconfigured, so these workers are no message handlers of the bus and the configured vendor stays everywhere else.
+    intakt.test.mcp.reviewer_worker:
+        class: Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler
+        autoconfigure: false
+        arguments: { $vendor: '@Intakt\Tests\Core\Mcp\Contract\Tool\OneFindingVendor' }
+    intakt.test.mcp.judge_worker:
+        class: Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler
+        autoconfigure: false
+        arguments: { $vendor: '@Intakt\Tests\Core\Mcp\Contract\Tool\OneFindingVendor' }
+    intakt.test.mcp.review_change:
+        class: Intakt\Core\Review\UseCase\ReviewChange\ReviewChange
+        autoconfigure: false
+        arguments: { $clock: '@Intakt\Tests\Core\Mcp\Contract\Tool\WorkersOnSleep' }
+    Intakt\Core\Review\Contract\ChangeReviews:
+        alias: intakt.test.mcp.review_change
+    Intakt\Core\Review\Contract\Panels:
+        alias: Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel
