@@ -76,7 +76,7 @@ final class CaddyfileTest extends TestCase
         $process = new Process([$this->frankenphp, 'adapt', '--config', 'Caddyfile', '--adapter', 'caddyfile', ...$envFiles], $this->directory, ['MERCURE_JWT_SECRET' => false, 'MERCURE_JWT_ISSUER' => false, 'CADDY_ADMIN' => false]);
         $process->mustRun();
 
-        /** @var array<string, mixed> */
+        /* @var array<string, mixed> */
         return json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
     }
 
@@ -89,7 +89,7 @@ final class CaddyfileTest extends TestCase
     private function issuerIn(array $config): array
     {
         if (isset($config['issuers'][0]) && is_array($config['issuers'][0])) {
-            /** @var array<string, mixed> */
+            /* @var array<string, mixed> */
             return $config['issuers'][0];
         }
 

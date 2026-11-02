@@ -42,7 +42,7 @@ final class RecordedRoundUpdates implements RoundUpdates
         $meanwhile = $this->whilePublishingNextRoundChange;
         $this->whilePublishingNextRoundChange = null;
 
-        if (null !== $meanwhile) {
+        if ($meanwhile instanceof Closure) {
             $meanwhile();
         }
 
