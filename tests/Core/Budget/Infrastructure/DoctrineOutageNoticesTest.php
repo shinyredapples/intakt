@@ -19,6 +19,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
@@ -41,7 +42,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->lastReading = new DateTimeImmutable('2026-11-02 08:00:00 UTC');
+        $this->lastReading = new MockClock('2026-11-02 08:00:00 UTC')->now();
     }
 
     public function testAnOutageIsNoticedToTheOwnerOnce(): void
@@ -63,7 +64,7 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
     public function testAWarningThatFailedIsTriedAgain(): void
     {
         $attempts = 0;
-        $logger = $this->createStub(LoggerInterface::class);
+        $logger = self::createStub(LoggerInterface::class);
         $logger->method('warning')->willReturnCallback(static function () use (&$attempts): void {
             if (1 === ++$attempts) {
                 throw new RuntimeException('The warning could not be written.');
