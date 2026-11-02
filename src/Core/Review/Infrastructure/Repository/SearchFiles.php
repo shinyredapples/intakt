@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure\Repository;
 
+use Closure;
 use FilesystemIterator;
 use Generator;
 use Intakt\Core\Review\Contract\Checkout;
@@ -26,7 +27,11 @@ final readonly class SearchFiles
     private const int MAX_LINE_BYTES = 500;
     private const int MAX_ANSWER_BYTES = 100_000;
 
-    public function __construct(private Checkout $checkout)
+    /**
+     * @param (Closure(int): void)|null $fileSearched
+     */
+    // The callback gets the number of files searched so far, because the MCP door turns it into progress.
+    public function __construct(private Checkout $checkout, private ?Closure $fileSearched = null)
     {
     }
 
@@ -59,8 +64,11 @@ final readonly class SearchFiles
      */
     private function matches(string $real, string $text): Generator
     {
+        $searched = 0;
+
         foreach ($this->files($real) as $file) {
             yield from $this->matchesIn($file, $text);
+            $this->fileSearched?->__invoke(++$searched);
         }
     }
 

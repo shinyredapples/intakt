@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Contract;
 
+use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -188,6 +191,7 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         $this->setEnvironment($withWrites ? 'mcp_tool_write' : 'mcp_tool_read');
         $kernel = self::bootKernel();
         self::assertInstanceOf(Kernel::class, $kernel);
+        $this->useTestReviews();
         $this->seedRound();
         $this->bearer = $bearer;
         $this->kernelClient = new KernelHttpClient($kernel);
@@ -198,6 +202,13 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         }
 
         return $client;
+    }
+
+    private function useTestReviews(): void
+    {
+        $container = self::getContainer();
+        $container->set(ChangeReviews::class, $container->get('intakt.test.mcp.review_change'));
+        $container->set(Panels::class, $container->get(OnePanel::class));
     }
 
     private function transport(): HttpTransport

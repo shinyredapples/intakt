@@ -9,6 +9,17 @@ mcp:
                 store: file
                 # Concurrent calls of one session wait for each other, so none overwrites what another saved.
                 lock: true
+            # Listed by namespace, because a prefix of all Intakt would also serve the repository tools of the review server.
             registry:
-                tools: ['Intakt\']
-                resource_templates: ['Intakt\']
+                tools: ['Intakt\Core\Ai\UseCase\ListProjects\', 'Intakt\Core\Review\UseCase\ReadRound\', 'Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\']
+                resource_templates: ['Intakt\Core\Review\UseCase\ReadRound\']
+        review:
+            name: intakt-review
+            description: The read-only tools of the repository at the head under review
+            http:
+                path: /mcp/review
+            session:
+                store: file
+                lock: true
+            registry:
+                tools: ['Intakt\Core\Review\UseCase\ServeReviewTools\']
