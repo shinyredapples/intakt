@@ -42,7 +42,7 @@ final class StandingQueryBus implements MessageBusInterface
         return new Envelope($message, [new HandledStamp($answer, 'handler')]);
     }
 
-    // Fails like the local repository does for a commit it lacks.
+    // Fails when not fetched, because the local repository throws for a commit it lacks.
     private function identityAt(IdentityAtHead $query): HeadIdentity
     {
         if (!$this->fetched) {
