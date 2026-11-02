@@ -225,7 +225,7 @@ Besides the ceilings, Intakt can hold work back in these ways (the tables are cr
 
 When several are in effect, the strictest wins: drain, then failure back-off, then pause, then budget back-off, then an account's cooldown, then the ceilings. Each one ends by itself at the time it was given.
 
-When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
+When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; if writing the warning fails, Intakt tries again at the next decision; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
 
 Nothing places a cooldown, a back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes.
 

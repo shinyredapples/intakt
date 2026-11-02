@@ -9,11 +9,14 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
+use Intakt\Core\Budget\Domain\OutageWatch;
+use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Core\Budget\Infrastructure\DoctrineOutageNotices;
 use Intakt\Core\Budget\UseCase\ReplayDay\DayReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ReplayDayCommand;
+use Intakt\Core\Budget\UseCase\ReplayDay\RolledBackReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Application\EmptyDatabase;
@@ -28,6 +31,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 // Through the kernel and the Doctrine stores, because the evidence of the guard is this command on a running install.
 #[Group('persistence')]
 #[CoversClass(ReplayDayCommand::class)]
+#[CoversClass(RolledBackReplay::class)]
+#[UsesClass(OutageWatch::class)]
+#[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(DayReplay::class)]
 #[UsesClass(ScriptedStep::class)]
 #[UsesClass(ScriptLineNotUnderstood::class)]
@@ -121,20 +127,47 @@ final class ReplayDayCommandTest extends KernelTestCase
 
     public function testALineNotUnderstoodStopsTheReplayWithItsRule(): void
     {
-        $script = sys_get_temp_dir().'/intakt-day-'.bin2hex(random_bytes(4)).'.txt';
-        file_put_contents($script, "2026-11-02T08:00 merge\n2026-11-02T08:05 start claude_code.main many\n2026-11-02T08:10 merge\n");
-
-        try {
-            $this->command->execute(['script' => $script]);
-        } finally {
-            unlink($script);
-        }
+        $this->executeScript("2026-11-02T08:00 merge\n2026-11-02T08:05 start claude_code.main many\n2026-11-02T08:10 merge\n");
 
         self::assertSame(Command::FAILURE, $this->command->getStatusCode());
         $display = $this->command->getDisplay();
         self::assertStringContainsString('2026-11-02T08:00 merge: start', $display);
         self::assertStringContainsString('whole number', $display);
         self::assertStringNotContainsString('08:10', $display);
+    }
+
+    public function testAStepBeforeThePreviousOneStopsTheReplayWithItsRule(): void
+    {
+        $this->executeScript("2026-11-02T08:00 merge\n2026-11-02T07:59 merge\n");
+
+        self::assertSame(Command::FAILURE, $this->command->getStatusCode());
+        $display = $this->command->getDisplay();
+        self::assertStringContainsString('2026-11-02T08:00 merge: start', $display);
+        self::assertStringContainsString('in time order', $display);
+    }
+
+    public function testTheClockAdvancesToEachStepsMoment(): void
+    {
+        $this->executeScript("2026-11-02T08:00 limit claude_code.main 2026-11-02T09:00\n2026-11-02T08:59 start claude_code.main 0\n2026-11-02T09:00 start claude_code.main 0\n");
+
+        $this->command->assertCommandIsSuccessful();
+        self::assertSame([
+            '2026-11-02T08:00 limit claude_code.main 2026-11-02T09:00: recorded',
+            '2026-11-02T08:59 start claude_code.main 0: cooling-down',
+            '2026-11-02T09:00 start claude_code.main 0: start',
+        ], $this->linesOf($this->command->getDisplay()));
+    }
+
+    private function executeScript(string $contents): void
+    {
+        $script = sys_get_temp_dir().'/intakt-day-'.bin2hex(random_bytes(4)).'.txt';
+        file_put_contents($script, $contents);
+
+        try {
+            $this->command->execute(['script' => $script]);
+        } finally {
+            unlink($script);
+        }
     }
 
     /**

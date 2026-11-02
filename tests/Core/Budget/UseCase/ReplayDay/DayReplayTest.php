@@ -13,23 +13,25 @@ use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
+use Intakt\Core\Budget\Domain\OutageWatch;
 use Intakt\Core\Budget\UseCase\ReplayDay\DayReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
-use Intakt\Tests\Core\Budget\NoticesInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 #[CoversClass(DayReplay::class)]
 #[CoversClass(ScriptedStep::class)]
 #[CoversClass(ScriptLineNotUnderstood::class)]
 #[UsesClass(BudgetGuard::class)]
 #[UsesClass(CeilingStartGuard::class)]
+#[UsesClass(OutageWatch::class)]
 #[UsesClass(SharedHold::class)]
 #[UsesClass(StartDecision::class)]
 #[UsesClass(Account::class)]
@@ -46,24 +48,17 @@ final class DayReplayTest extends TestCase
         $clock = new MockClock('2026-11-02 08:00:00 UTC');
         $readings = new ReadingsInMemory($clock);
         $holds = new HoldsInMemory($clock);
-        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), $readings, new NoticesInMemory());
-        $this->replay = new DayReplay($clock, $readings, $holds, $guard);
+        $guard = new BudgetGuard($holds, new CeilingStartGuard($readings, $clock, ['five-hour' => 90.0, 'weekly' => 90.0]), new OutageWatch($readings, $clock, new EventDispatcher()));
+        $this->replay = new DayReplay($readings, $holds, $guard);
     }
 
     public function testEachStepAnswersWithItsOutcome(): void
     {
         self::assertSame('recorded', $this->play('2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00'));
         self::assertSame('recorded', $this->play('2026-11-02T08:00 limit claude_code.main 2026-11-02T09:00'));
-        self::assertSame('cooling-down', $this->play('2026-11-02T08:30 start claude_code.main 0'));
-        self::assertSame('held', $this->play('2026-11-02T08:30 hold drain 2026-11-02T09:00'));
-        self::assertSame('draining', $this->play('2026-11-02T08:30 merge'));
-    }
-
-    public function testTheClockAdvancesToEachStepsMoment(): void
-    {
-        $this->play('2026-11-02T08:00 limit claude_code.main 2026-11-02T09:00');
-
-        self::assertSame('start', $this->play('2026-11-02T09:00 start claude_code.main 0'));
+        self::assertSame('cooling-down', $this->play('2026-11-02T08:00 start claude_code.main 0'));
+        self::assertSame('held', $this->play('2026-11-02T08:00 hold drain 2026-11-02T09:00'));
+        self::assertSame('draining', $this->play('2026-11-02T08:00 merge'));
     }
 
     /**
@@ -85,7 +80,6 @@ final class DayReplayTest extends TestCase
         yield 'calls running that are no whole number' => ['2026-11-02T08:00 start claude_code.main -1', 'whole number of zero or more'];
         yield 'a moment that rolls over' => ['2026-11-02T08:00 limit claude_code.main 2026-11-02T25:00', 'a moment is written as 2026-11-02T08:00 in UTC'];
         yield 'a moment with a zone' => ['2026-11-02T08:00+02:00 merge', 'a moment is written as 2026-11-02T08:00 in UTC'];
-        yield 'a moment before the previous step' => ['2026-11-02T07:59 merge', 'the steps must be in time order'];
     }
 
     #[DataProvider('linesNotUnderstood')]

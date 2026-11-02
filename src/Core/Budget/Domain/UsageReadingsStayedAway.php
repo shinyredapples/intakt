@@ -8,7 +8,12 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 
 // An outage is named by its account and the moment of the last reading before it, so a new outage after a new reading gets its own notice.
-interface OutageNotices
+final readonly class UsageReadingsStayedAway
 {
-    public function noticeOnce(Account $account, DateTimeImmutable $lastReadingAt): void;
+    public function __construct(
+        public Account $account,
+        public DateTimeImmutable $lastReadingAt,
+        public DateTimeImmutable $seenAt,
+    ) {
+    }
 }

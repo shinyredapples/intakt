@@ -15,17 +15,21 @@ use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
+use Intakt\Core\Budget\Domain\OutageWatch;
+use Intakt\Core\Budget\Domain\UsageReadingsStayedAway;
 use Intakt\Tests\Core\Budget\HoldsInMemory;
-use Intakt\Tests\Core\Budget\NoticesInMemory;
 use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 #[CoversClass(BudgetGuard::class)]
 #[CoversClass(SharedHold::class)]
 #[UsesClass(CeilingStartGuard::class)]
+#[UsesClass(OutageWatch::class)]
+#[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(StartDecision::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Usage::class)]
@@ -37,17 +41,22 @@ final class BudgetGuardTest extends TestCase
     private MockClock $clock;
     private ReadingsInMemory $readings;
     private HoldsInMemory $holds;
-    private NoticesInMemory $notices;
     private BudgetGuard $guard;
+
+    /** @var list<string> */
+    private array $outages = [];
 
     protected function setUp(): void
     {
         $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
         $this->readings = new ReadingsInMemory($this->clock);
         $this->holds = new HoldsInMemory($this->clock);
-        $this->notices = new NoticesInMemory();
+        $events = new EventDispatcher();
+        $events->addListener(UsageReadingsStayedAway::class, function (UsageReadingsStayedAway $outage): void {
+            $this->outages[] = $outage->account->key();
+        });
         $ceilings = new CeilingStartGuard($this->readings, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
-        $this->guard = new BudgetGuard($this->holds, $ceilings, $this->readings, $this->notices);
+        $this->guard = new BudgetGuard($this->holds, $ceilings, new OutageWatch($this->readings, $this->clock, $events));
         foreach ([$this->claude('main'), $this->claude('team'), new Account(Provider::Anthropic, 'main')] as $account) {
             $this->readLow($account);
         }
@@ -182,51 +191,22 @@ final class BudgetGuardTest extends TestCase
         self::assertSame(StartDecision::AtCeiling, $this->guard->decide($this->claude('main'), 0));
     }
 
-    public function testAReadingOlderThanThreeHoursIsReportedAsAnOutageSinceThatReading(): void
+    public function testEveryStartDecisionWatchesItsAccountForAnOutage(): void
     {
-        $this->clock->sleep(BudgetGuard::OUTAGE_SECONDS);
+        $this->clock->sleep(OutageWatch::OUTAGE_SECONDS);
 
         $this->guard->decide($this->claude('main'), 0);
 
-        self::assertSame(['claude_code.main since 2026-11-02T08:00:00+00:00'], $this->notices->requested);
+        self::assertSame(['claude_code.main'], $this->outages);
     }
 
-    public function testAReadingYoungerThanThreeHoursIsNoOutage(): void
+    public function testAMergeDecisionWatchesNoAccount(): void
     {
-        $this->clock->sleep(BudgetGuard::OUTAGE_SECONDS - 1);
+        $this->clock->sleep(OutageWatch::OUTAGE_SECONDS);
 
-        $this->guard->decide($this->claude('main'), 0);
+        $this->guard->decideMerge();
 
-        self::assertSame([], $this->notices->requested);
-    }
-
-    public function testTheNewestReadingOfEitherWindowEndsAnOutage(): void
-    {
-        $this->clock->sleep(BudgetGuard::OUTAGE_SECONDS);
-        $this->readings->record(new WindowReading($this->claude('main'), UsageWindow::Weekly, new Usage(11.0, $this->clock->now()->modify('+5 days'))));
-
-        $this->guard->decide($this->claude('main'), 0);
-
-        self::assertSame([], $this->notices->requested);
-    }
-
-    public function testAnAccountNeverReadHasNoOutage(): void
-    {
-        $this->clock->sleep(BudgetGuard::OUTAGE_SECONDS);
-
-        $this->guard->decide($this->claude('new'), 0);
-
-        self::assertSame([], $this->notices->requested);
-    }
-
-    public function testAnOutageIsReportedOnlyForTheAccountAskedAbout(): void
-    {
-        $this->clock->sleep(BudgetGuard::OUTAGE_SECONDS);
-        $this->readLow($this->claude('team'));
-
-        $this->guard->decide($this->claude('team'), 0);
-
-        self::assertSame([], $this->notices->requested);
+        self::assertSame([], $this->outages);
     }
 
     private function readLow(Account $account): void

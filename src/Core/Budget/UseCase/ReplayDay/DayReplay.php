@@ -13,7 +13,6 @@ use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowReading;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Built for one replay, because its stores and guard run on the replay's own clock instead of the install's.
@@ -21,7 +20,6 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class DayReplay
 {
     public function __construct(
-        private MockClock $clock,
         private MeasuredUse $measured,
         private Holds $holds,
         private StartGuard $guard,
@@ -33,8 +31,6 @@ final readonly class DayReplay
      */
     public function play(ScriptedStep $step): string
     {
-        $this->advanceTo($step);
-
         return match ($step->words[0] ?? '') {
             'read' => $this->read($step),
             'limit' => $this->limit($step),
@@ -43,17 +39,6 @@ final readonly class DayReplay
             'merge' => $this->merge($step),
             default => throw ScriptLineNotUnderstood::because($step->line, 'a step is read, limit, hold, start or merge'),
         };
-    }
-
-    // The clock never steps back, so a reading's age and every reset are what the day would have shown.
-    private function advanceTo(ScriptedStep $step): void
-    {
-        $seconds = $step->at->getTimestamp() - $this->clock->now()->getTimestamp();
-        if ($seconds < 0) {
-            throw ScriptLineNotUnderstood::because($step->line, 'the steps must be in time order');
-        }
-
-        $this->clock->sleep($seconds);
     }
 
     /**
