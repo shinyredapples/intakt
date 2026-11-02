@@ -226,6 +226,21 @@ final class InstallationReadBackTest extends TestCase
         ExpectedInstallation::fromSettings('contents', 'acme/widget');
     }
 
+    public function testAPermissionNamedTwiceIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('GITHUB_APP_PERMISSIONS names contents more than once.');
+
+        ExpectedInstallation::fromSettings('contents:read,contents:write', 'acme/widget');
+    }
+
+    public function testDistinctPermissionsAreAccepted(): void
+    {
+        $expected = ExpectedInstallation::fromSettings('contents:read,issues:write', 'acme/widget');
+
+        self::assertSame(['contents' => 'read', 'issues' => 'write'], $expected->permissions);
+    }
+
     private function readBack(string $permissions, string $repositories): InstallationReadBack
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');

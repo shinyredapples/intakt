@@ -27,6 +27,10 @@ final readonly class ExpectedInstallation
             if ('' === $name || '' === $level) {
                 throw new InvalidArgumentException('GITHUB_APP_PERMISSIONS must list name:level pairs, such as contents:write.');
             }
+            // The comparison is exact, so a second level for one name would silently replace the first.
+            if (array_key_exists($name, $levels)) {
+                throw new InvalidArgumentException(sprintf('GITHUB_APP_PERMISSIONS names %s more than once.', $name));
+            }
             $levels[$name] = $level;
         }
 

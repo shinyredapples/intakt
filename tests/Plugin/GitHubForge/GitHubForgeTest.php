@@ -372,14 +372,22 @@ final class GitHubForgeTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
-        $refusing = new MockHttpClient(new MockResponse('{}', ['http_code' => 401]));
-        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $refusing, new NullLogger()), '678', $clock);
-        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $refusing), ExpectedInstallation::fromSettings('contents:write', 'acme/widget'), new NullLogger());
-        $forge = new GitHubForge(new MockHttpClient(), new CheckedInstallationTokens($readBack, $tokens), $this->secretScan());
+        $identity = new RecordedInstallation(self::MINTED)->client();
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
+        $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
+        $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, $identity), $expected, new NullLogger()), $tokens);
+        (void) $checked->current();
+        // Past the recorded expiry, so the next mint answers with a token that already lapsed.
+        $clock->modify('+2 hours');
+        $forge = new GitHubForge(new MockHttpClient(), $checked, $this->secretScan());
 
-        $this->expectException(ForgeReadFailed::class);
-
-        $forge->change(new ChangeId(self::PULL));
+        try {
+            $forge->change(new ChangeId(self::PULL));
+            self::fail('A token that cannot be minted must refuse the read.');
+        } catch (ForgeReadFailed $refused) {
+            self::assertSame('No GitHub installation token for a read.', $refused->getMessage());
+            self::assertInstanceOf(InstallationTokenNotMinted::class, $refused->getPrevious());
+        }
     }
 
     public function testItReadsNothingFromAPullRequestWhenTheInstallationDoesNotMatch(): void
