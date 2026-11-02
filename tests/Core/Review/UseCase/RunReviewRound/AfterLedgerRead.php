@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // Runs the other work right after the ledger was read, so a test can force a commit between a reader's ledger read and its next read.
@@ -30,6 +31,14 @@ final readonly class AfterLedgerRead implements Ledger
     public function readInOrder(): RecordedEvents
     {
         $read = $this->inner->readInOrder();
+        ($this->other)();
+
+        return $read;
+    }
+
+    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    {
+        $read = $this->inner->readOfKind($kind);
         ($this->other)();
 
         return $read;

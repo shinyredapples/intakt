@@ -26,11 +26,7 @@ final readonly class ShadowRounds
 
     private function hasShadowVerdict(string $roundId): bool
     {
-        foreach ($this->ledger->readInOrder() as $recorded) {
-            if (LedgerEventKind::VerdictReceived !== $recorded->event->kind) {
-                continue;
-            }
-
+        foreach ($this->ledger->readOfKind(LedgerEventKind::VerdictReceived) as $recorded) {
             $payload = json_decode($recorded->event->payload, true);
 
             if (is_array($payload) && $roundId === ($payload['round'] ?? null) && ProjectMode::Shadow->value === ($payload['mode'] ?? null)) {

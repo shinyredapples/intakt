@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\UseCase\CompareHead;
+namespace Intakt\Core\Shadow\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeReview;
@@ -18,7 +18,7 @@ use JsonException;
 use TypeError;
 use ValueError;
 
-// Read here, not in the domain, because the file format belongs to the evidence door alone.
+// Read here, not in the domain, because the file format belongs to the evidence doors (compare-head and report) alone.
 final readonly class RecordedHead
 {
     /**

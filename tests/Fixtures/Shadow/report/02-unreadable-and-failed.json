@@ -1,0 +1,14 @@
+{
+ "identity": "loop-bot",
+ "head": "bbb222",
+ "comments": [
+  {"author": "loop-bot", "head": "bbb222", "body": "Reviewer: security\n\nI think this is fine, approve.\n\n{\"verdict\": \"approve\""},
+  {"author": "loop-bot", "head": "bbb222", "body": "Reviewer: tests\n\n[P2] `src/C.php:42`: untested branch\n\n{\"verdict\": \"changes\"}"}
+ ],
+ "intakt": [
+  {"round": 1, "tokens": {"calls": 2, "prompt": 500, "completion": 100}, "verdicts": [
+   {"tier": "strong", "verdict": "changes", "findings": [{"id": "F1", "severity": "P3", "file": "src/B.php", "line": 40}]},
+   {"tier": "light", "verdict": "changes", "findings": [{"id": "invalid-output", "severity": "P1"}]}
+  ]}
+ ]
+}
