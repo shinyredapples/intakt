@@ -1,0 +1,72 @@
+# Two ticks of the test-environment install over two recorded pull requests (.evidence/490-recording.json): #1 with CI in progress, #2 with CI green.
+# Setup: APP_ENV=test, INTAKT_CONFIG with a watch section on a local repository with branches for both heads, WATCHER_RECORDING=.evidence/490-recording.json, SQLite.
+$ php bin/console messenger:consume scheduler_watcher --limit=1   # tick 1
+[info] Received message Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests
+[info] Listed the open pull requests.
+[info] Decided a head from its CI.
+[info] Decided a head from its CI.
+[info] Sending message Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer with async sender using Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport
+[info] Message Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound handled by Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler::__invoke
+[info] Message Intakt\Core\Review\Contract\StartReviewAtHead handled by Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartReviewAtHeadHandler::__invoke
+[info] Message Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests handled by Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler::__invoke
+[info] Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests was handled successfully (acknowledging to transport).
+[info] Stopping worker.
+[info] Worker stopped due to maximum count of 1 messages processed
+[info] Disconnecting
+$ php bin/console messenger:consume scheduler_watcher --limit=1   # tick 2, listing unchanged, pending head not yet due
+[info] Received message Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests
+[info] Listed the open pull requests: unchanged.
+[info] Decided a head from its CI.
+[info] Message Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests handled by Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler::__invoke
+[info] Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests was handled successfully (acknowledging to transport).
+[info] Stopping worker.
+[info] Worker stopped due to maximum count of 1 messages processed
+[info] Disconnecting
+$ php bin/console intakt:ledger:events
+2026-11-02T07:31:32Z 01a19b2b-a979-738a-9e31-58136d9a1dfc review_started {"round":"01a19b2b-a973-794e-9e63-c69e83e13a46","project":"alpha","reviewers":1,"change":"2","number":1,"task":"Review the pull request.","repository":"$TMPDIR/watch-evidence\/alpha","base":"main"}
+2026-11-02T07:31:32Z 01a19b2b-a98a-79ab-a963-53fad23a037f round_queued {"project":"alpha","change":"2","head":"69d542a9f7199589e0797f2f698934e2a4a0bd96","round":"01a19b2b-a973-794e-9e63-c69e83e13a46"}
+2026-11-02T07:31:32Z 01a19b2b-a990-7c8f-8ec3-65b1e85741ac head_pending {"project":"alpha","change":"1","head":"5ba62a3a20d0bf6cdff0f042d484cc17f849658d","read_again_at":"2026-11-02T07:32:32+00:00"}
+2026-11-02T07:32:32Z 01a19b2c-94c6-779a-8a59-6a4d3ae548bd head_pending {"project":"alpha","change":"1","head":"5ba62a3a20d0bf6cdff0f042d484cc17f849658d","read_again_at":"2026-11-02T07:33:32+00:00"}
+4 events
+$ php bin/console dbal:run-sql "select * from watcher_started_round"
+ --------- ------------ ------------------------------------------ -------------------------------------- ------- 
+  project   change_ref   head                                       round_id                               stale  
+ --------- ------------ ------------------------------------------ -------------------------------------- ------- 
+  alpha     2            69d542a9f7199589e0797f2f698934e2a4a0bd96   01a19b2b-a973-794e-9e63-c69e83e13a46   0      
+ --------- ------------ ------------------------------------------ -------------------------------------- ------- 
+
+$ php bin/console dbal:run-sql "select * from watcher_pending_head"
+ --------- ------------ ------------------------------------------ ---------------------------- ---------------------------- 
+  project   change_ref   head                                       updated_at                   read_again_at               
+ --------- ------------ ------------------------------------------ ---------------------------- ---------------------------- 
+  alpha     1            5ba62a3a20d0bf6cdff0f042d484cc17f849658d   2026-11-02 09:00:00.000000   2026-11-02 07:33:32.581778  
+ --------- ------------ ------------------------------------------ ---------------------------- ---------------------------- 
+
+
+# Tick 3: #2 moved to 0c2dd98bda50fd4b5d4fd66046a5ae8907feda10 (src/Two.php changed, CI green) in .evidence/490-recording-moved.json
+$ php bin/console messenger:consume scheduler_watcher --limit=1
+[info] Received message Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests
+[info] Listed the open pull requests.
+[info] Decided a head from its CI.
+[info] Decided a head from its CI.
+[info] Message Intakt\Core\Review\Contract\IdentityAtHead handled by Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\IdentityAtHeadHandler::__invoke
+[info] Message Intakt\Core\Review\Contract\VerdictsOfRound handled by Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler::__invoke
+[info] Sending message Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer with async sender using Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport
+[info] Message Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound handled by Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler::__invoke
+[info] Message Intakt\Core\Review\Contract\StartReviewAtHead handled by Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartReviewAtHeadHandler::__invoke
+[info] Message Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests handled by Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler::__invoke
+[info] Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests was handled successfully (acknowledging to transport).
+$ php bin/console intakt:ledger:events (tick 3)
+2026-11-02T07:33:49Z 01a19b2d-bfbf-7226-980a-db4efa42110e verdicts_stale {"project":"alpha","change":"2","round":"01a19b2b-a973-794e-9e63-c69e83e13a46","head":"69d542a9f7199589e0797f2f698934e2a4a0bd96"}
+2026-11-02T07:33:49Z 01a19b2d-bfe4-7644-bf87-6093c0de8909 review_started {"round":"01a19b2d-bfe2-7ed2-8fb0-e4ae6d41685d","project":"alpha","reviewers":1,"change":"2","number":2,"task":"Review the pull request.","repository":"$TMPDIR/watch-evidence\/alpha","base":"main"}
+2026-11-02T07:33:49Z 01a19b2d-bff2-7287-9554-441d2197162f round_queued {"project":"alpha","change":"2","head":"0c2dd98bda50fd4b5d4fd66046a5ae8907feda10","round":"01a19b2d-bfe2-7ed2-8fb0-e4ae6d41685d"}
+2026-11-02T07:33:49Z 01a19b2d-bffb-7e7e-aaf1-bbfb78e0a981 head_pending {"project":"alpha","change":"1","head":"5ba62a3a20d0bf6cdff0f042d484cc17f849658d","read_again_at":"2026-11-02T07:34:49+00:00"}
+8 events
+$ php bin/console dbal:run-sql "select * from watcher_started_round"
+ --------- ------------ ------------------------------------------ -------------------------------------- ------- 
+  project   change_ref   head                                       round_id                               stale  
+ --------- ------------ ------------------------------------------ -------------------------------------- ------- 
+  alpha     2            69d542a9f7199589e0797f2f698934e2a4a0bd96   01a19b2b-a973-794e-9e63-c69e83e13a46   1      
+  alpha     2            0c2dd98bda50fd4b5d4fd66046a5ae8907feda10   01a19b2d-bfe2-7ed2-8fb0-e4ae6d41685d   0      
+ --------- ------------ ------------------------------------------ -------------------------------------- ------- 
+
