@@ -70,8 +70,8 @@ final class CheckedInstallationTokensTest extends TestCase
     {
         $tokens = $this->tokens('contents:read');
 
-        self::assertFalse(self::handsOut($tokens));
-        self::assertFalse(self::handsOut($tokens));
+        self::assertFalse($this->handsOut($tokens));
+        self::assertFalse($this->handsOut($tokens));
         self::assertCount(2, array_filter($this->requested, static fn (string $url): bool => str_contains($url, '/installation/repositories')));
     }
 
@@ -94,7 +94,7 @@ final class CheckedInstallationTokensTest extends TestCase
         return new CheckedInstallationTokens($readBack, $tokens);
     }
 
-    private static function handsOut(CheckedInstallationTokens $tokens): bool
+    private function handsOut(CheckedInstallationTokens $tokens): bool
     {
         try {
             return '' !== $tokens->current()->value;
