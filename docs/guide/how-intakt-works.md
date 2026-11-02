@@ -119,6 +119,8 @@ flowchart LR
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
 
+Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks.
+
 A finished pull request is never kept waiting for a much bigger task. If only one part of it needs that task (say, a screenshot of a screen not built yet), that part becomes its own follow-up task, and the rest is reviewed and merged now.
 
 ## Spending wisely
