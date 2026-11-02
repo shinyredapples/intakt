@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\IdentityAtHead;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
@@ -48,6 +49,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(CleanupOnStop::class)]
 #[UsesClass(StartReview::class)]
+#[UsesClass(QueuedRound::class)]
 final class StartReviewAtHeadHandlerTest extends TestCase
 {
     private TemporaryRepository $repository;
@@ -83,6 +85,18 @@ final class StartReviewAtHeadHandlerTest extends TestCase
         self::assertSame($this->checked, $seen->identity->commits->head->hash);
         self::assertFileDoesNotExist($seen->checkoutRoot.'/src/Unchecked.php');
         $this->removeSnapshot($seen->checkoutRoot);
+    }
+
+    public function testTheStartAnswersTheQueuedRoundWithTheSnapshotItKept(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('start')->willReturn('round-1');
+
+        $queued = new StartReviewAtHeadHandler($this->review($reviews))($this->startAt($this->checked));
+
+        self::assertSame('round-1', $queued->roundId);
+        self::assertFileExists($queued->checkoutRoot.'/src/Feature.php');
+        $this->removeSnapshot($queued->checkoutRoot);
     }
 
     public function testARoundOnAHeadThatIsNotInTheRepositoryIsNotStarted(): void

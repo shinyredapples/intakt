@@ -6,31 +6,44 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
+use Intakt\Core\Review\Contract\DiscardQueuedRound;
+use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use NoDiscard;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Throwable;
 
 final readonly class StartedRounds
 {
     public function __construct(
         private EntityManagerInterface $entities,
         private PendingHeads $pending,
+        private MessageBusInterface $commands,
     ) {
     }
 
-    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done.
+    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done; a round queued before the rollback is discarded, because its checkout lives outside the database.
     /**
-     * @param Closure(): string $start
+     * @param Closure(): QueuedRound $start
      */
     public function startOnce(string $project, OpenChange $change, Closure $start): void
     {
-        $this->entities->getConnection()->transactional(function () use ($project, $change, $start): void {
-            if (!$this->isStarted($project, $change)) {
-                $this->record($project, $change, $start());
-            }
+        $connection = $this->entities->getConnection();
+        $connection->beginTransaction();
+        $queued = null;
 
+        try {
+            $queued = $this->startUnlessStarted($project, $change, $start);
+            $this->record($project, $change, $queued);
             $this->pending->forget($project, $change);
-        });
+            $connection->commit();
+        } catch (Throwable $failure) {
+            $connection->rollBack();
+            $this->discard($queued);
+
+            throw $failure;
+        }
     }
 
     /**
@@ -40,11 +53,10 @@ final readonly class StartedRounds
     {
         $rounds = [];
 
-        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'queuedRecorded' => false]) as $round) {
-            // Refreshed because a worker keeps its entity manager and another worker may have recorded the line.
-            $this->entities->refresh($round);
+        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'queuedRecorded' => false]) as $loaded) {
+            $round = $this->readAgain($loaded);
 
-            if ($round->owesQueuedLine()) {
+            if (true === $round?->owesQueuedLine()) {
                 $rounds[] = $round;
             }
         }
@@ -73,11 +85,10 @@ final readonly class StartedRounds
     {
         $rounds = [];
 
-        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'change' => $change->id->value]) as $round) {
-            // Refreshed because a worker keeps its entity manager and another worker may have changed the row.
-            $this->entities->refresh($round);
+        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'change' => $change->id->value]) as $loaded) {
+            $round = $this->readAgain($loaded);
 
-            if (!$round->isStale() && $round->head() !== $change->head->hash) {
+            if (false === $round?->isStale() && $round->head() !== $change->head->hash) {
                 $rounds[] = $round;
             }
         }
@@ -98,15 +109,46 @@ final readonly class StartedRounds
         });
     }
 
+    /**
+     * @param Closure(): QueuedRound $start
+     */
+    private function startUnlessStarted(string $project, OpenChange $change, Closure $start): ?QueuedRound
+    {
+        if ($this->isStarted($project, $change)) {
+            return null;
+        }
+
+        return $start();
+    }
+
+    private function record(string $project, OpenChange $change, ?QueuedRound $queued): void
+    {
+        if (!$queued instanceof QueuedRound) {
+            return;
+        }
+
+        $this->entities->persist(new StartedRound($project, $change, $queued->roundId));
+        $this->entities->flush();
+    }
+
     private function isStarted(string $project, OpenChange $change): bool
     {
         return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
     }
 
-    private function record(string $project, OpenChange $change, string $roundId): void
+    private function discard(?QueuedRound $queued): void
     {
-        $this->entities->persist(new StartedRound($project, $change, $roundId));
-        $this->entities->flush();
+        if ($queued instanceof QueuedRound) {
+            $this->commands->dispatch(new DiscardQueuedRound($queued));
+        }
+    }
+
+    // Read again by its key rather than refreshed, because a worker keeps its entity manager, another worker may have changed or removed the row, and a refresh of a deleted row keeps its old values.
+    private function readAgain(StartedRound $loaded): ?StartedRound
+    {
+        $this->entities->detach($loaded);
+
+        return $this->entities->find(StartedRound::class, ['project' => $loaded->project(), 'change' => $loaded->change(), 'head' => $loaded->head()]);
     }
 
     private function claim(StartedRound $round): bool

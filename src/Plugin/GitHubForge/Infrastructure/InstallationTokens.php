@@ -47,13 +47,13 @@ final class InstallationTokens implements ResetInterface
         return $minted;
     }
 
-    private function isUsable(InstallationToken $token): bool
-    {
-        return $token->expiresAt > $this->clock->now()->add(new DateInterval(self::MARGIN));
-    }
-
     public function reset(): void
     {
         $this->cached = null;
+    }
+
+    private function isUsable(InstallationToken $token): bool
+    {
+        return $token->expiresAt > $this->clock->now()->add(new DateInterval(self::MARGIN));
     }
 }
