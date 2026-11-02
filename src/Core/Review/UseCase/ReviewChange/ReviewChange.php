@@ -22,6 +22,7 @@ use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
+use Intakt\Core\Review\UseCase\RunReviewRound\ShadowCeilingReached;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Messenger\Envelope;
@@ -66,13 +67,13 @@ final readonly class ReviewChange implements ChangeReviews
         return $roundId;
     }
 
-    // Unwrapped, because a round another caller opened first is the caller's to report in its own words, not a failed handler.
+    // Unwrapped, because a round another caller opened first or a shadow round held above its ceiling is the caller's to report in its own words, not a failed handler.
     private function dispatched(RunReviewRound $command): Envelope
     {
         try {
             return $this->commands->dispatch($command);
         } catch (HandlerFailedException $failed) {
-            throw array_first($failed->getWrappedExceptions(RoundNotNext::class, true)) ?? $failed;
+            throw array_first($failed->getWrappedExceptions(RoundNotNext::class, true)) ?? array_first($failed->getWrappedExceptions(ShadowCeilingReached::class, true)) ?? $failed;
         }
     }
 
