@@ -52,21 +52,33 @@ final class TrustOnTheContainerTest extends KernelTestCase
     ];
 
     /** @var array<string, mixed> */
-    private array $saved = [];
+    private array $savedServer = [];
+
+    /** @var array<string, mixed> */
+    private array $savedEnv = [];
 
     protected function setUp(): void
     {
+        $this->savedServer = [];
+        $this->savedEnv = [];
         foreach ([...self::SETTINGS, 'GITHUB_APP_PRIVATE_KEY' => AppKey::generate()->private] as $name => $value) {
-            $this->saved[$name] = $_SERVER[$name] ?? null;
+            if (array_key_exists($name, $_SERVER)) {
+                $this->savedServer[$name] = $_SERVER[$name];
+            }
+            if (array_key_exists($name, $_ENV)) {
+                $this->savedEnv[$name] = $_ENV[$name];
+            }
             $_SERVER[$name] = $_ENV[$name] = $value;
         }
     }
 
     protected function tearDown(): void
     {
-        foreach ($this->saved as $name => $value) {
-            $_SERVER[$name] = $_ENV[$name] = $value;
+        foreach (array_keys([...self::SETTINGS, 'GITHUB_APP_PRIVATE_KEY' => '']) as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
         }
+        $_SERVER = [...$_SERVER, ...$this->savedServer];
+        $_ENV = [...$_ENV, ...$this->savedEnv];
         parent::tearDown();
     }
 
