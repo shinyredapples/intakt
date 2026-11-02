@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
+use Generator;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
@@ -14,7 +15,6 @@ use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
-use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -28,11 +28,14 @@ use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -44,7 +47,6 @@ use Throwable;
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(SendFailures::class)]
-#[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
 #[CoversClass(EveryKeyRejected::class)]
 #[CoversClass(KeyRejected::class)]
@@ -384,6 +386,23 @@ final class AccountFailoverPlatformTest extends TestCase
 
         self::assertSame($usage, $answer->getResult()->getMetadata()->get('token_usage'));
         self::assertSame($usage, $answer->getMetadata()->get('token_usage'));
+    }
+
+    public function testAStreamedAnswerReadFromAnAccountCarriesTheUsageItsStreamReportedOnce(): void
+    {
+        $streamed = static fn (): StreamResult => new StreamResult((static function (): Generator {
+            yield new TextDelta('ok');
+            yield new TokenUsage(promptTokens: 40, completionTokens: 10);
+        })());
+
+        $answer = $this->accounts($this->answering($streamed), $this->answering('second'))->invoke('big', 'Review.', ['stream' => true]);
+        foreach ($answer->asStream() as $delta) {
+            self::assertInstanceOf(TextDelta::class, $delta);
+        }
+
+        $usage = $answer->getMetadata()->get('token_usage');
+        self::assertInstanceOf(TokenUsageInterface::class, $usage);
+        self::assertSame([40, 10], [$usage->getPromptTokens(), $usage->getCompletionTokens()]);
     }
 
     public function testAnAnswerThatFailsToMapStillHasItsTokenUsageReadByTheAccountsExtractor(): void

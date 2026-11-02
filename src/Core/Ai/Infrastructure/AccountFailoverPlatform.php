@@ -15,6 +15,7 @@ use Override;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Bridge\Failover\FailoverPlatform;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
@@ -59,7 +60,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             throw $this->typed($everyAccountFailed, $failures);
         }
 
-        return $this->typedWhenRead($answer, $failures, $options);
+        return $this->typedWhenRead($answer, $failures);
     }
 
     #[Override]
@@ -133,16 +134,16 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
     }
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function typedWhenRead(DeferredResult $answer, SendFailures $failures, array $options): DeferredResult
+    private function typedWhenRead(DeferredResult $answer, SendFailures $failures): DeferredResult
     {
-        $converter = new TypedRejectionConverter($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures));
-        $typed = new DeferredResult($converter, $answer->getRawResult(), $options);
-        $typed->getMetadata()->set($answer->getMetadata()->all());
+        // Hooked on the account's own result rather than wrapped in a second one, because a second DeferredResult registers Symfony AI's usage listener on a streamed answer again and counts its usage twice (upstream/ai-platform-nested-deferred-result-counts-usage-twice); an error callback that throws replaces the exception the read throws, after the account's own callbacks recorded the rejection.
+        $answer->onError(function (Throwable $failure) use ($answer, $failures): void {
+            if ($failure instanceof AuthenticationException) {
+                throw $this->rejectedWhenRead($answer, $failures);
+            }
+        });
 
-        return $typed;
+        return $answer;
     }
 
     // With a free account left the rejection is thrown as KeyRejected, never as the provider's own, because its message can echo a key and the judging's failure listener logs what it gets; FailoverPlatform already hides the provider's own when the key is rejected as the call is sent.

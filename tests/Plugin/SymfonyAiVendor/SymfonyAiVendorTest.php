@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Generator;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
@@ -85,6 +86,8 @@ use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
@@ -563,6 +566,27 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[0]['usages'];
         self::assertSame(9, $usages[0]['prompt']);
+    }
+
+    public function testAStreamedAnswerSettlesWithTheUsageItsStreamReportedAfterTheDeferredResultCopiedItsMetadata(): void
+    {
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willReturn(new StreamResult((static function (): Generator {
+            yield new TextDelta('{"verdict":"approve"}');
+            yield new TokenUsage(promptTokens: 40, completionTokens: 10, model: 'big');
+        })()));
+        $result = new DeferredResult($converter, new InMemoryRawResult());
+        // Consumed as the agent runner does: converted first, then drained, so the usage arrives after the deferred result took its copy of the metadata.
+        foreach ($result->getResult()->getContent() as $delta) {
+            self::assertInstanceOf(TextDelta::class, $delta);
+        }
+        $ledger = new InMemoryLedger();
+
+        new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger())->settle(new UsageReservation('a call'), $result);
+
+        /** @var list<array<string, int|string|null>> $usages */
+        $usages = $ledger->payloads()[0]['usages'];
+        self::assertSame([['big', 40, 10]], array_map(static fn (array $usage): array => [$usage['model'], $usage['prompt'], $usage['completion']], $usages));
     }
 
     public function testAnAnswerWhoseUsageCannotBeReadKeepsItsVerdictAndIsLeftUnsettled(): void
