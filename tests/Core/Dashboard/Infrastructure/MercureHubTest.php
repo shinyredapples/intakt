@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Mercure\Hub;
 use Symfony\Component\Mercure\Jwt\Grant;
@@ -87,8 +88,7 @@ final class MercureHubTest extends TestCase
         }
 
         if (isset($this->storage)) {
-            array_map(unlink(...), glob($this->storage.'/*') ?? []);
-            rmdir($this->storage);
+            new Filesystem()->remove($this->storage);
         }
     }
 
