@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
@@ -339,7 +340,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         }
     }
 
-    private function failOnce(): callable
+    private function failOnce(): Closure
     {
         return static fn () => throw new RuntimeException('the bus is down');
     }

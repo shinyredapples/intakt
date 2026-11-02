@@ -93,10 +93,12 @@ final class LocalGitForgeTest extends TestCase
 
     public function testItRefusesTheChangeAtAHeadThatIsNotInTheRepository(): void
     {
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('is not in the local repository');
-
-        $this->forge()->changeAt(new ChangeId('7'), new CommitId(str_repeat('a', 40)));
+        try {
+            $this->forge()->changeAt(new ChangeId('7'), new CommitId(str_repeat('a', 40)));
+            self::fail('A head missing from the repository was read.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertStringContainsString('is not in the local repository', $failure->getMessage());
+        }
     }
 
     public function testItReturnsTheDiffAndTheChangedFilesOfTheBranch(): void
