@@ -9,18 +9,15 @@ final readonly class GateResult
     private const int MAXIMUM_FINDINGS = 10;
     private const int MAXIMUM_FINDING_LENGTH = 300;
 
-    /** @var array<string, float> */
-    private array $slowest;
-
     /**
-     * @param list<string> $findings
+     * @param list<string>                                         $findings
+     * @param array{note?: string, slowest?: array<string, float>} $extras
      */
     private function __construct(
         public string $gate,
         public array $findings,
-        private ?string $note = null,
+        private array $extras = [],
     ) {
-        $this->slowest = [];
     }
 
     public static function passed(string $gate): self
@@ -30,7 +27,7 @@ final readonly class GateResult
 
     public static function passedBecause(string $gate, string $note): self
     {
-        return new self($gate, [], $note);
+        return new self($gate, [], ['note' => $note]);
     }
 
     /**
@@ -48,7 +45,7 @@ final readonly class GateResult
 
     public function noted(string $note): self
     {
-        return clone ($this, ['note' => $note]);
+        return new self($this->gate, $this->findings, ['note' => $note] + $this->extras);
     }
 
     /**
@@ -56,7 +53,7 @@ final readonly class GateResult
      */
     public function withSlowest(array $slowest): self
     {
-        return clone ($this, ['slowest' => $slowest]);
+        return new self($this->gate, $this->findings, ['slowest' => $slowest] + $this->extras);
     }
 
     public function isPassing(): bool
@@ -75,8 +72,8 @@ final readonly class GateResult
             'omitted' => count($this->findings) - count($shown),
         ];
 
-        $report += null === $this->note ? [] : ['note' => $this->note];
-        $report += [] === $this->slowest ? [] : ['slowest' => $this->slowestList()];
+        $report += isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
+        $report += [] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()];
 
         return json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
@@ -88,7 +85,7 @@ final readonly class GateResult
     {
         $list = [];
 
-        foreach ($this->slowest as $file => $seconds) {
+        foreach ($this->extras['slowest'] ?? [] as $file => $seconds) {
             $list[] = ['file' => $file, 'seconds' => round($seconds, 3)];
         }
 
