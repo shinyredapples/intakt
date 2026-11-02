@@ -66,15 +66,17 @@ final readonly class ShadowReportCommand
     /**
      * @return list<string>|null
      */
+    // Listed literally rather than with glob(), because a folder name holding [, * or ? is a pattern to glob() and matches nothing.
     private function files(string $folder): ?array
     {
-        $files = is_dir($folder) ? glob(rtrim($folder, '/').'/*.json') : false;
-        if (false === $files) {
+        $names = is_dir($folder) ? scandir($folder) : false;
+        if (false === $names) {
             return null;
         }
-        sort($files);
 
-        return $files;
+        $paths = array_map(static fn (string $name): string => rtrim($folder, '/').'/'.$name, $names);
+
+        return array_values(array_filter($paths, static fn (string $path): bool => str_ends_with($path, '.json') && is_file($path)));
     }
 
     private function compare(string $file): ?HeadComparison
@@ -183,8 +185,8 @@ final readonly class ShadowReportCommand
 
     // A period without Intakt reviews has no average, and a divide by zero must not stand in for one.
     #[NoDiscard('an average that is not read reports nothing')]
-    private function tokensPerReview(int $tokens, int $reviews): ?int
+    private function tokensPerReview(int $tokens, int $reviews): ?float
     {
-        return 0 === $reviews ? null : intdiv($tokens, $reviews);
+        return 0 === $reviews ? null : round($tokens / $reviews, 2);
     }
 }

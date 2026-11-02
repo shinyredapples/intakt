@@ -131,6 +131,83 @@ final class ShadowReportCommandTest extends TestCase
         self::assertStringContainsString('broken.json', $tester->getDisplay());
     }
 
+    public function testAFolderWithPatternCharactersInItsNameStillFindsItsHeads(): void
+    {
+        $folder = sys_get_temp_dir().'/shadow[1]*?-'.bin2hex(random_bytes(4));
+        mkdir($folder);
+        copy(self::RECORDED.'/01-clean.json', $folder.'/01-clean.json');
+        $tester = $this->tester();
+
+        try {
+            $tester->execute(['folder' => $folder, '--format' => 'json']);
+        } finally {
+            unlink($folder.'/01-clean.json');
+            rmdir($folder);
+        }
+
+        /** @var array{summary: array{heads: int}} $report */
+        $report = json_decode($tester->getDisplay(), true, 16, JSON_THROW_ON_ERROR);
+        self::assertSame(1, $report['summary']['heads']);
+    }
+
+    public function testTheReportReadsOnlyTheJsonFilesOfTheFolder(): void
+    {
+        $folder = sys_get_temp_dir().'/shadow-report-'.bin2hex(random_bytes(4));
+        mkdir($folder);
+        mkdir($folder.'/nested.json');
+        copy(self::RECORDED.'/01-clean.json', $folder.'/01-clean.json');
+        file_put_contents($folder.'/notes.txt', 'not a head');
+        $tester = $this->tester();
+
+        try {
+            $status = $tester->execute(['folder' => $folder, '--format' => 'json']);
+        } finally {
+            unlink($folder.'/01-clean.json');
+            unlink($folder.'/notes.txt');
+            rmdir($folder.'/nested.json');
+            rmdir($folder);
+        }
+
+        self::assertSame(Command::SUCCESS, $status);
+        /** @var array{summary: array{heads: int}} $report */
+        $report = json_decode($tester->getDisplay(), true, 16, JSON_THROW_ON_ERROR);
+        self::assertSame(1, $report['summary']['heads']);
+    }
+
+    public function testTokensPerReviewKeepsTheFraction(): void
+    {
+        $folder = sys_get_temp_dir().'/shadow-report-'.bin2hex(random_bytes(4));
+        mkdir($folder);
+        file_put_contents($folder.'/head.json', json_encode([
+            'identity' => 'loop-bot',
+            'head' => 'ccc333',
+            'comments' => [],
+            'intakt' => [[
+                'round' => 1,
+                'tokens' => ['calls' => 2, 'prompt' => 3, 'completion' => 2],
+                'verdicts' => [
+                    ['tier' => 'strong', 'verdict' => 'approve', 'findings' => []],
+                    ['tier' => 'standard', 'verdict' => 'approve', 'findings' => []],
+                ],
+            ]],
+        ], JSON_THROW_ON_ERROR));
+        $table = $this->tester();
+        $json = $this->tester();
+
+        try {
+            $table->execute(['folder' => $folder]);
+            $json->execute(['folder' => $folder, '--format' => 'json']);
+        } finally {
+            unlink($folder.'/head.json');
+            rmdir($folder);
+        }
+
+        self::assertStringContainsString('5 intakt tokens in 2 reviews (2.5 per review)', $table->getDisplay());
+        /** @var array{summary: array{tokensPerReview: float}} $report */
+        $report = json_decode($json->getDisplay(), true, 16, JSON_THROW_ON_ERROR);
+        self::assertSame(2.5, $report['summary']['tokensPerReview']);
+    }
+
     public function testAFolderThatDoesNotExistIsAnInputError(): void
     {
         $tester = $this->tester();
