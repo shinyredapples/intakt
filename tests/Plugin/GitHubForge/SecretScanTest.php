@@ -21,10 +21,25 @@ final class SecretScanTest extends KernelTestCase
     private const string SCANNER_ENVIRONMENT = 'INTAKT_GITLEAKS';
     private const string CONFIGURED_SCAN = 'intakt.test.secret_scan';
 
+    private string|false $callerScanner = false;
+
+    // The caller may point INTAKT_GITLEAKS at its scanner, so each test starts without it and gives it back.
+    #[Override]
+    protected function setUp(): void
+    {
+        $this->callerScanner = getenv(self::SCANNER_ENVIRONMENT);
+        $this->unsetEnvironment(self::SCANNER_ENVIRONMENT);
+    }
+
     #[Override]
     protected function tearDown(): void
     {
         $this->unsetEnvironment(self::SCANNER_ENVIRONMENT);
+
+        if (false !== $this->callerScanner) {
+            $this->setEnvironment(self::SCANNER_ENVIRONMENT, $this->callerScanner);
+        }
+
         parent::tearDown();
     }
 
