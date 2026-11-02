@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 #[CoversClass(CodexLogin::class)]
 #[UsesClass(CodexLoginUnusable::class)]
@@ -45,6 +46,22 @@ final class CodexLoginTest extends TestCase
         self::assertFalse($refreshed->isDueAt($this->moment('2026-11-02T12:00:00Z')));
     }
 
+    public function testAnEmptyObjectInTheLoginStaysAnObject(): void
+    {
+        $login = CodexLogin::fromJson(self::jsonWithEmptyObject('2026-10-30T12:00:00Z'));
+
+        self::assertEquals(new stdClass(), json_decode($login->json())->extra);
+    }
+
+    public function testAnEmptyObjectInTheLoginStaysAnObjectAfterARefresh(): void
+    {
+        $login = CodexLogin::fromJson(self::jsonWithEmptyObject('2026-10-01T00:00:00Z'));
+
+        $refreshed = $login->refreshed(['access_token' => 'access-2'], $this->moment('2026-11-02T12:00:00Z'));
+
+        self::assertEquals(new stdClass(), json_decode($refreshed->json())->extra);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
@@ -73,6 +90,11 @@ final class CodexLoginTest extends TestCase
             'tokens' => ['id_token' => 'id-1', 'access_token' => 'access-1', 'refresh_token' => 'refresh-1', 'account_id' => 'acct'],
             'last_refresh' => $lastRefresh,
         ], JSON_THROW_ON_ERROR);
+    }
+
+    private static function jsonWithEmptyObject(string $lastRefresh): string
+    {
+        return '{"extra":{},"tokens":{"id_token":"id-1","access_token":"access-1","refresh_token":"refresh-1"},"last_refresh":"'.$lastRefresh.'"}';
     }
 
     private function moment(string $moment): DateTimeImmutable

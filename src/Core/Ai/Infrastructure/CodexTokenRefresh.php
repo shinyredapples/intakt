@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use SensitiveParameter;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -16,13 +17,25 @@ final readonly class CodexTokenRefresh
 
     public function __construct(
         private HttpClientInterface $http,
+        private ClockInterface $clock,
     ) {
+    }
+
+    public function refreshedIfDue(CodexLogin $login): ?CodexLogin
+    {
+        $now = $this->clock->now();
+
+        if (!$login->isDueAt($now)) {
+            return null;
+        }
+
+        return $login->refreshed($this->tokensFor($login->refreshToken()), $now);
     }
 
     /**
      * @return array<string, non-empty-string>
      */
-    public function tokensFor(#[SensitiveParameter] string $refreshToken): array
+    private function tokensFor(#[SensitiveParameter] string $refreshToken): array
     {
         try {
             $answer = $this->http->request('POST', self::ENDPOINT, ['json' => [

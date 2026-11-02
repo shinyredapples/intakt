@@ -81,6 +81,36 @@ final class CodexLoginsTest extends TestCase
         self::assertSame(json_decode(CodexLoginTest::json('2026-11-01T00:00:00Z'), true), json_decode((string) file_get_contents($home.'/auth.json'), true));
     }
 
+    public function testALinkTheCallLeftInPlaceOfItsCopyDoesNotRedirectTheHandOver(): void
+    {
+        $logins = $this->logins();
+        $this->storeLogin($logins, '2026-11-01T00:00:00Z');
+        new Filesystem()->dumpFile($logins->loginFile('other'), 'other account login');
+        $home = $logins->handOver('team');
+        unlink($home.'/auth.json');
+        symlink($logins->loginFile('other'), $home.'/auth.json');
+
+        $logins->handOver('team');
+
+        self::assertSame('other account login', file_get_contents($logins->loginFile('other')));
+        self::assertFalse(is_link($home.'/auth.json'));
+    }
+
+    public function testALinkTheCallLeftInPlaceOfItsHomeDoesNotRedirectTheHandOver(): void
+    {
+        $logins = $this->logins();
+        $this->storeLogin($logins, '2026-11-01T00:00:00Z');
+        new Filesystem()->dumpFile($logins->loginFile('other'), 'other account login');
+        $home = $logins->handOver('team');
+        new Filesystem()->remove($home);
+        symlink(dirname($logins->loginFile('other')), $home);
+
+        $logins->handOver('team');
+
+        self::assertSame('other account login', file_get_contents($logins->loginFile('other')));
+        self::assertFalse(is_link($home));
+    }
+
     public function testAFreshLoginIsHandedOverWithoutARefresh(): void
     {
         $logins = $this->logins();
@@ -198,7 +228,7 @@ final class CodexLoginsTest extends TestCase
 
     private function logins(): CodexLogins
     {
-        return new CodexLogins($this->root, new CodexTokenRefresh($this->http), new LockFactory($this->lockStore), new MockClock('2026-11-02 12:00:00', 'UTC'));
+        return new CodexLogins($this->root, new CodexTokenRefresh($this->http, new MockClock('2026-11-02 12:00:00', 'UTC')), new LockFactory($this->lockStore));
     }
 
     private function storeLogin(CodexLogins $logins, string $lastRefresh): void

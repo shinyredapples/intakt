@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use DateTimeImmutable;
 use DateTimeZone;
 use JsonException;
+use stdClass;
 
 // The login file the Codex CLI writes (auth.json); keys Intakt does not read are kept as they are, so the CLI still finds them.
 final readonly class CodexLogin
@@ -17,11 +18,10 @@ final readonly class CodexLogin
     public const array TOKENS = ['id_token', 'access_token', 'refresh_token'];
 
     /**
-     * @param array<mixed>                    $contents
      * @param array<string, non-empty-string> $tokens
      */
     private function __construct(
-        private array $contents,
+        private string $json,
         private array $tokens,
         private DateTimeImmutable $lastRefresh,
     ) {
@@ -41,7 +41,7 @@ final readonly class CodexLogin
             throw new CodexLoginUnusable('The Codex login holds no tokens.');
         }
 
-        return new self($contents, self::tokensOf($tokens), self::momentOf($contents['last_refresh'] ?? null));
+        return new self($json, self::tokensOf($tokens), self::momentOf($contents['last_refresh'] ?? null));
     }
 
     public function isDueAt(DateTimeImmutable $now): bool
@@ -60,14 +60,18 @@ final readonly class CodexLogin
     public function refreshed(array $tokens, DateTimeImmutable $now): self
     {
         $merged = [...$this->tokens, ...$tokens];
-        $contents = [...$this->contents, 'tokens' => [...(array) $this->contents['tokens'], ...$merged], 'last_refresh' => $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z')];
+        // Decoded as objects, because an empty object decoded as an array would be written back as a list.
+        $contents = json_decode($this->json, flags: JSON_THROW_ON_ERROR);
+        assert($contents instanceof stdClass);
+        $contents->tokens = (object) [...(array) $contents->tokens, ...$merged];
+        $contents->last_refresh = $now->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
 
-        return new self($contents, $merged, $now);
+        return new self(json_encode($contents, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT), $merged, $now);
     }
 
     public function json(): string
     {
-        return json_encode($this->contents, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        return $this->json;
     }
 
     /**

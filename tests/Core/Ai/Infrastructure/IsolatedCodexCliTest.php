@@ -90,7 +90,7 @@ final class IsolatedCodexCliTest extends TestCase
 
     private function cli(): IsolatedCodexCli
     {
-        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh(new MockHttpClient()), new LockFactory(new InMemoryStore()), new MockClock('2026-11-02 12:00:00', 'UTC'));
+        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh(new MockHttpClient(), new MockClock('2026-11-02 12:00:00', 'UTC')), new LockFactory(new InMemoryStore()));
 
         return new IsolatedCodexCli($logins, new CodexSettings('gpt-5.3-codex', CodexEffort::High), 'team');
     }

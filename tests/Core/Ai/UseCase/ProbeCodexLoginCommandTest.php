@@ -89,7 +89,7 @@ final class ProbeCodexLoginCommandTest extends TestCase
      */
     private function execute(?array $codex, string $account): CommandTester
     {
-        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh(new MockHttpClient()), new LockFactory(new InMemoryStore()), new MockClock('2026-11-02 12:00:00', 'UTC'));
+        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh(new MockHttpClient(), new MockClock('2026-11-02 12:00:00', 'UTC')), new LockFactory(new InMemoryStore()));
         $application = new Application();
         $application->addCommand(new ProbeCodexLoginCommand($logins, $codex));
         $tester = new CommandTester($application->find('intakt:codex:probe'));

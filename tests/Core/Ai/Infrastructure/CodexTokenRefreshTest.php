@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -24,7 +25,7 @@ final class CodexTokenRefreshTest extends TestCase
     {
         $answer = new JsonMockResponse(['access_token' => 'access-2']);
 
-        new CodexTokenRefresh(new MockHttpClient($answer))->tokensFor('refresh-1');
+        $this->refresh($answer)->refreshedIfDue($this->dueLogin());
 
         $body = $answer->getRequestOptions()['body'];
         self::assertIsString($body);
@@ -39,9 +40,22 @@ final class CodexTokenRefreshTest extends TestCase
     {
         $answer = new JsonMockResponse(['access_token' => 'access-2', 'refresh_token' => 'refresh-2', 'expires_in' => 3600]);
 
-        $tokens = new CodexTokenRefresh(new MockHttpClient($answer))->tokensFor('refresh-1');
+        $refreshed = $this->refresh($answer)->refreshedIfDue($this->dueLogin());
 
-        self::assertSame(['access_token' => 'access-2', 'refresh_token' => 'refresh-2'], $tokens);
+        self::assertSame(
+            ['id_token' => 'id-1', 'access_token' => 'access-2', 'refresh_token' => 'refresh-2', 'account_id' => 'acct'],
+            json_decode((string) $refreshed?->json(), true)['tokens'] ?? null,
+        );
+    }
+
+    public function testALoginThatIsNotDueIsNotRefreshed(): void
+    {
+        $http = new MockHttpClient();
+
+        $refreshed = new CodexTokenRefresh($http, new MockClock('2026-11-02 12:00:00', 'UTC'))->refreshedIfDue(CodexLogin::fromJson(CodexLoginTest::json('2026-11-01T00:00:00Z')));
+
+        self::assertNull($refreshed);
+        self::assertSame(0, $http->getRequestsCount());
     }
 
     /**
@@ -61,6 +75,16 @@ final class CodexTokenRefreshTest extends TestCase
     {
         $this->expectException(CodexLoginUnusable::class);
 
-        new CodexTokenRefresh(new MockHttpClient($answer))->tokensFor('refresh-1');
+        $this->refresh($answer)->refreshedIfDue($this->dueLogin());
+    }
+
+    private function refresh(MockResponse $answer): CodexTokenRefresh
+    {
+        return new CodexTokenRefresh(new MockHttpClient($answer), new MockClock('2026-11-02 12:00:00', 'UTC'));
+    }
+
+    private function dueLogin(): CodexLogin
+    {
+        return CodexLogin::fromJson(CodexLoginTest::json('2026-10-01T00:00:00Z'));
     }
 }

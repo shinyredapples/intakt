@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
-use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
@@ -20,7 +19,6 @@ final readonly class CodexLogins
         private string $directory,
         private CodexTokenRefresh $refresh,
         private LockFactory $locks,
-        private ClockInterface $clock,
     ) {
     }
 
@@ -58,13 +56,12 @@ final readonly class CodexLogins
     private function refreshedIfDue(string $account): CodexLogin
     {
         $login = $this->stored($account);
-        $now = $this->clock->now();
+        $refreshed = $this->refresh->refreshedIfDue($login);
 
-        if (!$login->isDueAt($now)) {
+        if (null === $refreshed) {
             return $login;
         }
 
-        $refreshed = $login->refreshed($this->refresh->tokensFor($login->refreshToken()), $now);
         $this->write($this->loginFile($account), $refreshed->json(), 0o600);
 
         return $refreshed;
@@ -92,12 +89,20 @@ final readonly class CodexLogins
         return $this->directory.'/homes/'.$account;
     }
 
-    // The directory keeps the file from other users while it is written, before its own mode is set.
+    // The call can write its home, so a link it leaves for the home or the file must not redirect this write: a link home is removed, and a new file renamed over the path replaces a link instead of following it.
     private function write(string $file, string $contents, int $mode): void
     {
         $filesystem = new Filesystem();
-        $filesystem->mkdir(dirname($file), 0o700);
-        $filesystem->dumpFile($file, $contents);
-        $filesystem->chmod($file, $mode);
+        $directory = dirname($file);
+
+        if (is_link($directory)) {
+            $filesystem->remove($directory);
+        }
+
+        $filesystem->mkdir($directory, 0o700);
+        $written = $filesystem->tempnam($directory, '.'.self::LOGIN_FILE.'.');
+        $filesystem->appendToFile($written, $contents);
+        $filesystem->chmod($written, $mode);
+        $filesystem->rename($written, $file, true);
     }
 }
