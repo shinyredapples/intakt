@@ -32,7 +32,7 @@ final readonly class ClaudeCodePlatformFactory
         $provider = new Provider(
             self::NAME,
             [new ConfinedClaudeCodeClient($cli)],
-            [new UnstreamedCliConverter(new ResultConverter())],
+            [new ResultConverter()],
             new ModelCatalog($models),
             ClaudeCodeContract::create(),
             $this->events,

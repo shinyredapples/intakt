@@ -54,15 +54,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
-use Symfony\AI\Platform\Bridge\ClaudeCode\Contract\ClaudeCodeContract;
-use Symfony\AI\Platform\Bridge\ClaudeCode\ModelCatalog;
-use Symfony\AI\Platform\Bridge\ClaudeCode\ResultConverter;
-use Symfony\AI\Platform\Capability;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RuntimeException;
-use Symfony\AI\Platform\Platform;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\AI\Platform\Provider as PlatformProvider;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -203,7 +197,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testATruncatedRecordedStreamMakesTheBridgeRaiseIncompleteStream(): void
     {
-        $platform = $this->bridgeStreaming(RecordedClaudeCodeCli::replaying('truncated'));
+        $platform = $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying('truncated'));
 
         $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
 
@@ -214,7 +208,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     public function testACompleteRecordedStreamIsReadToTheEndByTheBridge(): void
     {
-        $platform = $this->bridgeStreaming(RecordedClaudeCodeCli::replaying('complete'));
+        $platform = $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying('complete'));
 
         $result = $platform->invoke('sonnet', 'Review.', ['stream' => true])->getResult();
 
@@ -258,24 +252,9 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     private function claudeCodePlatform(RecordedClaudeCodeCli $cli): PlatformInterface
     {
-        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $this->models());
-    }
+        $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
 
-    // The bridge's bare converter, because the factory's platform answers in one piece on purpose and these cases exercise the bridge's own stream parsing.
-    private function bridgeStreaming(RecordedClaudeCodeCli $cli): PlatformInterface
-    {
-        $dispatcher = ScriptedReviewer::in(self::getContainer())->dispatcher;
-        $provider = new PlatformProvider('claude_code', [new ConfinedClaudeCodeClient($cli)], [new ResultConverter()], new ModelCatalog($this->models()), ClaudeCodeContract::create(), $dispatcher);
-
-        return new Platform([$provider], eventDispatcher: $dispatcher);
-    }
-
-    /**
-     * @return array<non-empty-string, array{class: string, capabilities: list<Capability>}>
-     */
-    private function models(): array
-    {
-        return new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
+        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
     }
 
     private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor

@@ -18,8 +18,6 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final class StrictVerdictStreamListener extends AbstractStreamListener
 {
-    public const string VERDICT = 'verdict';
-
     private string $answer = '';
 
     private bool $askedForTools = false;
@@ -54,7 +52,6 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
             return;
         }
 
-        // On the metadata, because the traced platform of a debug install wraps the stream in one of its own without its listeners, so the object Symfony AI assembles never reaches the agent there, while metadata is copied over: upstream/ai-platform-traceable-platform-streamed-object
-        $event->getMetadata()->add(self::VERDICT, ($this->verdictFrom)($this->answer));
+        ($this->verdictFrom)($this->answer);
     }
 }

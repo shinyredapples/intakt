@@ -40,8 +40,7 @@ final readonly class ReviewerAgent implements Reviewer
         $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
         $agent = $this->runs->agent($this->prompt->fenced(new FaultTolerantToolbox($tools)), $platform, $model);
 
-        // Streamed, so each text delta reaches the live view as the reviewer writes it; a provider that ignores the option answers in one piece and the verdict path is the same.
-        $execution = $agent->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class, 'stream' => true]);
+        $execution = $agent->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
         $verdict = $this->answerOf($this->runs->reporting($execution, $request->conversation));
 
         if ($tools->seen()) {

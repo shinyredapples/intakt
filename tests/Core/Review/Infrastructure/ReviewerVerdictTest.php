@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
-use Closure;
 use Generator;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
@@ -49,11 +48,11 @@ use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
-use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
+use Symfony\AI\Platform\TraceablePlatform;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Uid\UuidV7;
 
@@ -108,11 +107,6 @@ final class ReviewerVerdictTest extends WebTestCase
      */
     private array $sent = [];
 
-    /**
-     * @var list<array<string, mixed>>
-     */
-    private array $options = [];
-
     private string $diff = 'diff --git a/a b/a';
 
     protected function setUp(): void
@@ -137,7 +131,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
-        self::assertCount(2, $this->sent);
+        self::assertPlatformCallCount(2);
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);
         self::assertStringContainsString('final class Cart', $this->sent[1]);
@@ -148,20 +142,6 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
         self::assertSame([sprintf('tool %s read_file', $this->conversation->toRfc4122())], $this->updates->seen);
-    }
-
-    public function testTheReviewerCallAsksTheProviderToStreamItsAnswer(): void
-    {
-        $this->review('Add a cart.', [], self::APPROVE);
-
-        self::assertTrue($this->options[0]['stream'] ?? false);
-    }
-
-    public function testAProviderThatStreamsOnlyWhenAskedPublishesTextProgress(): void
-    {
-        $this->review('Add a cart.', [], $this->streamed(self::APPROVE));
-
-        self::assertNotEmpty($this->updates->seen, 'The production call must request streaming for text progress to be published.');
     }
 
     public function testStreamedTextOfTheReviewerIsPublishedInTheOrderItArrived(): void
@@ -176,25 +156,6 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
 
         self::assertSame(Decision::Approve, $verdict->verdict);
-    }
-
-    public function testAStreamedToolRoundFollowedByAStreamedVerdictPublishesTheCallAndTheTextAndKeepsTheApproval(): void
-    {
-        $verdict = $this->reviewRounds('Add a cart.', [$this->streamedToolCalls(new ToolCall('1', 'read_file', ['path' => 'src/Cart.php']))], $this->streamed(self::APPROVE));
-
-        self::assertSame(Decision::Approve, $verdict->verdict);
-        self::assertToolCalled('read_file');
-        self::assertStringContainsString('final class Cart', $this->sent[1]);
-        self::assertSame([sprintf('tool %s read_file', $this->conversation->toRfc4122()), sprintf('text %s %s', $this->conversation->toRfc4122(), self::APPROVE)], $this->updates->seen);
-    }
-
-    public function testAStreamedVerdictThatIsNoVerdictEndsAsChangesAfterItsTextWasPublished(): void
-    {
-        $verdict = $this->review('Add a cart.', [], $this->streamed('Looks good ', 'to me.'));
-
-        self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-        self::assertSame([sprintf('text %s Looks good ', $this->conversation->toRfc4122()), sprintf('text %s to me.', $this->conversation->toRfc4122())], $this->updates->seen);
     }
 
     public function testAStreamedVerdictWithAFieldTheSchemaDoesNotNameEndsAsChanges(): void
@@ -213,11 +174,10 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
 
-    public function testAProviderThatIgnoresTheStreamOptionAnswersInOnePieceAndNoTextIsPublished(): void
+    public function testTheTextIsNotPublishedWhenTheModelAnswersInOnePiece(): void
     {
-        $verdict = $this->review('Add a cart.', [], self::APPROVE);
+        $this->review('Add a cart.', [], self::APPROVE);
 
-        self::assertSame(Decision::Approve, $verdict->verdict);
         self::assertSame([], $this->updates->seen);
     }
 
@@ -510,7 +470,7 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
         self::assertStringContainsString('still asking for tools after 30 rounds', $verdict->findings[0]->text);
-        self::assertCount(31, $this->sent);
+        self::assertPlatformCallCount(31);
     }
 
     public function testARoundThatAsksForMoreThanThirtyFilesCountsAsOneRoundOfTheCap(): void
@@ -520,7 +480,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->reviewRounds('Add a cart.', [$batch], self::APPROVE);
 
         self::assertSame(Decision::Approve, $verdict->verdict);
-        self::assertCount(2, $this->sent);
+        self::assertPlatformCallCount(2);
         self::assertToolCallCount(35);
     }
 
@@ -564,66 +524,45 @@ final class ReviewerVerdictTest extends WebTestCase
     }
 
     /**
-     * @param list<ToolCall>                                                                 $toolCalls
-     * @param string|ResultInterface|Closure(array<string, mixed>): (string|ResultInterface) $answer
+     * @param list<ToolCall> $toolCalls
      */
     // Because the script asks for one tool call per round, the answer follows the last call.
-    private function review(string $task, array $toolCalls, string|ResultInterface|Closure $answer): Verdict
+    private function review(string $task, array $toolCalls, string|ResultInterface $answer): Verdict
     {
         return $this->reviewRounds($task, array_map(static fn (ToolCall $call): array => [$call], $toolCalls), $answer);
     }
 
     /**
-     * @param list<list<ToolCall>|ResultInterface>                                           $rounds
-     * @param string|ResultInterface|Closure(array<string, mixed>): (string|ResultInterface) $answer
+     * @param list<list<ToolCall>> $rounds
      */
-    // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round; a closure answers from the call's options, as a provider that streams only when asked.
-    private function reviewRounds(string $task, array $rounds, string|ResultInterface|Closure $answer): Verdict
+    // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round.
+    private function reviewRounds(string $task, array $rounds, string|ResultInterface $answer): Verdict
     {
-        $script = function (mixed $model, mixed $input, array $given) use (&$rounds, $answer): string|ResultInterface {
-            /** @var array<string, mixed> $options */
-            $options = $given;
+        $script = function (mixed $model, mixed $input) use (&$rounds, $answer): string|ResultInterface {
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
-            $this->options[] = $options;
             $next = array_shift($rounds);
 
-            if (null !== $next) {
-                return $next instanceof ResultInterface ? $next : new ToolCallResult($next);
-            }
-
-            return $answer instanceof Closure ? $answer($options) : $answer;
+            return null === $next ? $answer : new ToolCallResult($next);
         };
-        // The platform is not traced, because a traced one wraps a streamed call in a stream of its own and refuses a provider that answers in one piece (upstream/ai-platform-traceable-platform-streamed-object); the calls are counted from the script.
-        $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 
-        $collector = new DataCollector([], [$toolbox], [$toolbox], [], [], []);
+        $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
     }
 
-    /**
-     * @return Closure(array<string, mixed>): (string|StreamResult)
-     */
-    // A provider that streams only when asked, as the real ones do: the whole answer in one piece otherwise.
-    private function streamed(string ...$parts): Closure
+    private function streamed(string ...$parts): StreamResult
     {
-        return static fn (array $options): string|StreamResult => ($options['stream'] ?? false) ? new StreamResult((static function () use ($parts): Generator {
+        return new StreamResult((static function () use ($parts): Generator {
             foreach ($parts as $part) {
                 yield new TextDelta($part);
             }
-        })()) : implode('', $parts);
-    }
-
-    private function streamedToolCalls(ToolCall ...$calls): StreamResult
-    {
-        return new StreamResult((static function () use ($calls): Generator {
-            yield new ToolCallComplete($calls);
         })());
     }
 

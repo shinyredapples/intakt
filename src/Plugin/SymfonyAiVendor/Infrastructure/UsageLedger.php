@@ -15,7 +15,6 @@ use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
-use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageAggregation;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\ClockInterface;
@@ -139,24 +138,10 @@ final readonly class UsageLedger
     private function tokenUsageOf(DeferredResult $result): ?TokenUsageInterface
     {
         $usage = $result->getMetadata()->get(self::TOKEN_USAGE)
-            ?? $this->streamedUsageOf($result)
             ?? $result->getResultConverter()->getTokenUsageExtractor()?->extract($result->getRawResult())
             ?? $this->convertedUsageOf($result->getRawResult());
 
         return $usage instanceof TokenUsageInterface ? $usage : null;
-    }
-
-    // A streamed answer reports its usage in its last events, after the deferred result took its copy of the metadata and where the provider's extractor reads nothing, so it is read from the consumed stream itself.
-    private function streamedUsageOf(DeferredResult $result): mixed
-    {
-        try {
-            $converted = $result->getResult();
-        } catch (Throwable) {
-            // An answer that failed to map has no stream to read, so its tokens come from the raw answer.
-            return null;
-        }
-
-        return $converted instanceof StreamResult ? $converted->getMetadata()->get(self::TOKEN_USAGE) : null;
     }
 
     // Needed because an in-memory platform (MockPlatformFactory) has no extractor and hands over a converted result that carries the usage.

@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -85,6 +86,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(VendorAccountOut::class)]
 #[UsesClass(VendorReview::class)]
 #[UsesClass(SendFailures::class)]
+#[UsesClass(TypedRejectionConverter::class)]
 #[UsesClass(ReviewerRateLimited::class)]
 #[UsesClass(EveryProviderOut::class)]
 #[UsesClass(AccountFailoverPlatform::class)]

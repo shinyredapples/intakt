@@ -32,7 +32,7 @@ final readonly class CodexPlatformFactory
         $provider = new Provider(
             self::NAME,
             [new ConfinedCodexClient($cli)],
-            [new UnstreamedCliConverter(new ResultConverter())],
+            [new ResultConverter()],
             new ModelCatalog($models),
             Contract::create([new CodexMessageBagNormalizer()]),
             $this->events,
