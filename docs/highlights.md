@@ -31,7 +31,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each reviewer in each round, kept in the `reviewer_conversation` table | in progress | T7 (#12), T29 (#29), `src/Core/Review/Infrastructure/ReviewerRuns.php`, `config/packages/ai.php`, `migrations/Version20261029120000.php`; T43 (#384): a build's conversation kept at a vendor limit |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
 | `MemoryInputProcessor` | after a vendor limit, the hand-off note and the kept conversation for the next account; not the reviewer's briefing, because its fixed preamble tells the model that memory outweighs the system prompt and the briefing holds untrusted notes (T17 #463 sends the fenced notes as a user message from `src/Core/Review/Infrastructure/ReviewerMemory.php` instead) | planned | T43 (#384) |
-| Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button. Built: `onProgress()` forwards each tool call and streamed text delta of a reviewer to the hub; the stop button (`cancel()`) is planned | in progress | T21 (#27, part #583), `src/Core/Review/Infrastructure/ReviewerRuns.php` |
+| Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button. Built: `onProgress()` forwards each tool call and streamed text delta of a reviewer to the hub (the reviewer's call requests no stream yet, #644); the stop button (`cancel()`) is planned | in progress | T21 (#27, part #583), `src/Core/Review/Infrastructure/ReviewerRuns.php` |
 
 ## Symfony AI Store
 
