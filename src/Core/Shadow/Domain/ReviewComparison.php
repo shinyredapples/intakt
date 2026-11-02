@@ -8,7 +8,6 @@ use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PanelVerdict;
-use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Shadow\Contract\FindingMatch;
 use Intakt\Core\Shadow\Contract\HeadComparison;
 use Intakt\Core\Shadow\Contract\LoopFinding;
@@ -50,84 +49,79 @@ final readonly class ReviewComparison
      *
      * @param list<T> $findings
      *
-     * @return list<T>
+     * @return list<MergedSpot<T>>
      */
     private function mergedBySpot(array $findings): array
     {
-        // Several reviewers on one side often raise the same spot, at different severities or a line apart, so a spot counts once within the same window the match uses. The most severe one stands for it, because a panel acts on its strictest reading. A finding without a file or line has no spot, so it stays alone.
-        $merged = [];
-        foreach ($findings as $finding) {
-            $index = null === $finding->file || null === $finding->line ? null : $this->sameSpot($finding, $merged);
-            if (null === $index) {
-                $merged[] = $finding;
+        // Several reviewers on one side often raise the same spot, at different severities or a line apart, so a spot counts once within the same window the match uses. Sorted by file and line, a finding joins the spot before it when it is within the window, so the spots do not depend on the reviewers' order. A finding without a file or line has no spot, so it stays alone.
+        $spots = [];
+        foreach ($this->byFileAndLine($findings) as $finding) {
+            $last = array_last($spots);
+            if (null !== $last && $this->withinWindow($last->linesApart(MergedSpot::of($finding)))) {
+                $spots[array_key_last($spots)] = $last->joinedBy($finding);
                 continue;
             }
 
-            if ($this->isMoreSevere($finding->severity, $merged[$index]->severity)) {
-                $merged[$index] = $finding;
-            }
+            $spots[] = MergedSpot::of($finding);
         }
 
-        return array_values($merged);
+        return $spots;
+    }
+
+    private function withinWindow(?int $linesApart): bool
+    {
+        return null !== $linesApart && $linesApart <= self::LINE_WINDOW;
     }
 
     /**
-     * @param array<int, LoopFinding|Finding> $merged
+     * @template T of LoopFinding|Finding
+     *
+     * @param list<T> $findings
+     *
+     * @return list<T>
      */
-    private function sameSpot(LoopFinding|Finding $finding, array $merged): ?int
+    private function byFileAndLine(array $findings): array
     {
-        foreach ($merged as $index => $kept) {
-            if ($kept->file === $finding->file && null !== $kept->line && null !== $finding->line && abs($kept->line - $finding->line) <= self::LINE_WINDOW) {
-                return $index;
-            }
-        }
+        usort($findings, static fn (LoopFinding|Finding $a, LoopFinding|Finding $b): int => [$a->file ?? '', $a->line ?? 0] <=> [$b->file ?? '', $b->line ?? 0]);
 
-        return null;
-    }
-
-    private function isMoreSevere(Severity $severity, Severity $than): bool
-    {
-        return array_search($severity, Severity::cases(), true) < array_search($than, Severity::cases(), true);
+        return $findings;
     }
 
     /**
-     * @param list<LoopFinding> $loopFindings
-     * @param list<Finding>     $intaktFindings
+     * @param list<MergedSpot<LoopFinding>> $loopSpots
+     * @param list<MergedSpot<Finding>>     $intaktSpots
      *
      * @return array{list<FindingMatch>, list<LoopFinding>, list<Finding>}
      */
-    private function match(array $loopFindings, array $intaktFindings): array
+    private function match(array $loopSpots, array $intaktSpots): array
     {
         $matches = [];
         $loopOnly = [];
-        foreach ($loopFindings as $loopFinding) {
-            $index = $this->closest($loopFinding, $intaktFindings);
+        foreach ($loopSpots as $loopSpot) {
+            $index = $this->closest($loopSpot, $intaktSpots);
             if (null === $index) {
-                $loopOnly[] = $loopFinding;
+                $loopOnly[] = $loopSpot->finding;
                 continue;
             }
 
-            $matches[] = new FindingMatch($loopFinding, $intaktFindings[$index]);
-            unset($intaktFindings[$index]);
+            $matches[] = new FindingMatch($loopSpot->finding, $intaktSpots[$index]->finding);
+            unset($intaktSpots[$index]);
         }
 
-        return [$matches, $loopOnly, array_values($intaktFindings)];
+        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): Finding => $spot->finding, array_values($intaktSpots))];
     }
 
     /**
-     * @param array<int, Finding> $intaktFindings
+     * @param MergedSpot<LoopFinding>          $loopSpot
+     * @param array<int, MergedSpot<Finding>> $intaktSpots
      */
-    private function closest(LoopFinding $loopFinding, array $intaktFindings): ?int
+    private function closest(MergedSpot $loopSpot, array $intaktSpots): ?int
     {
         $closest = null;
         $distance = self::LINE_WINDOW + 1;
-        foreach ($intaktFindings as $index => $finding) {
-            if ($finding->file !== $loopFinding->file || null === $finding->line) {
-                continue;
-            }
-
-            $apart = abs($finding->line - $loopFinding->line);
-            if ($apart < $distance) {
+        foreach ($intaktSpots as $index => $spot) {
+            $apart = $loopSpot->linesApart($spot);
+            if ($this->withinWindow($apart) && $apart < $distance) {
                 $closest = $index;
                 $distance = $apart;
             }
