@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
-use Doctrine\DBAL\Exception as DbalException;
+use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -55,7 +55,7 @@ final class StartedRoundsTest extends KernelTestCase
         try {
             $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
             self::fail('The failed end of the wait was swallowed.');
-        } catch (DbalException) {
+        } catch (Exception) {
         }
 
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
@@ -124,6 +124,8 @@ final class StartedRoundsTest extends KernelTestCase
 
     private function storedRounds(): int
     {
-        return (int) $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM watcher_started_round');
+        $this->entities->clear();
+
+        return $this->entities->getRepository(StartedRound::class)->count([]);
     }
 }
