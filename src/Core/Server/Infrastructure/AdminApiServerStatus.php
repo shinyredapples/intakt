@@ -58,11 +58,13 @@ final readonly class AdminApiServerStatus implements ServerStatus
         if (!$samples instanceof PrometheusSamples || !$samples->has('frankenphp_queue_depth')) {
             return $this->unusable(self::METRICS);
         }
+        $queueDepth = $samples->sum('frankenphp_queue_depth', 'frankenphp_worker_queue_depth');
+        $workerRestarts = $samples->sum('frankenphp_worker_restarts');
+        if (null === $queueDepth || null === $workerRestarts) {
+            return $this->unusable(self::METRICS);
+        }
 
-        return new ServerMetrics(
-            $samples->sum('frankenphp_queue_depth') + $samples->sum('frankenphp_worker_queue_depth'),
-            $samples->sum('frankenphp_worker_restarts'),
-        );
+        return new ServerMetrics($queueDepth, $workerRestarts);
     }
 
     private function hubHealth(): HubHealth|EndpointDown

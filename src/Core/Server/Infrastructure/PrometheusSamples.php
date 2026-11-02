@@ -24,10 +24,11 @@ final readonly class PrometheusSamples
             if ('' === $line || str_starts_with($line, '#')) {
                 continue;
             }
-            if (1 !== preg_match(self::SAMPLE, $line, $sample) || !is_numeric($sample[2])) {
+            $value = 1 === preg_match(self::SAMPLE, $line, $sample) ? self::value($sample[2]) : null;
+            if (null === $value) {
                 return null;
             }
-            $totals[$sample[1]] = ($totals[$sample[1]] ?? 0.0) + (float) $sample[2];
+            $totals[$sample[1]] = ($totals[$sample[1]] ?? 0.0) + $value;
         }
 
         return new self($totals);
@@ -39,8 +40,21 @@ final readonly class PrometheusSamples
     }
 
     // FrankenPHP leaves a labeled series out until it first counts, so an absent one is zero.
-    public function sum(string $name): int
+    public function sum(string ...$names): ?int
     {
-        return (int) round($this->totals[$name] ?? 0.0);
+        $total = array_sum(array_map(fn (string $name): float => $this->totals[$name] ?? 0.0, $names));
+
+        return is_finite($total) ? (int) round($total) : null;
+    }
+
+    // The text format allows NaN and infinities (a summary without observations has NaN quantiles).
+    private static function value(string $text): ?float
+    {
+        return match (strtolower($text)) {
+            'nan' => NAN,
+            'inf', '+inf' => INF,
+            '-inf' => -INF,
+            default => is_numeric($text) ? (float) $text : null,
+        };
     }
 }

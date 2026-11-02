@@ -13,6 +13,7 @@ use Intakt\Core\Server\Infrastructure\AdminApi;
 use Intakt\Core\Server\Infrastructure\AdminApiServerStatus;
 use Intakt\Core\Server\Infrastructure\PrometheusSamples;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -128,6 +129,31 @@ final class AdminApiServerStatusTest extends TestCase
     public function testMetricsWithAnUnreadableSampleAreDown(): void
     {
         $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt')."frankenphp_worker_restarts{worker=\"app\"} NaN-ish\n");
+
+        self::assertEquals(new EndpointDown('/metrics answered in an unusable shape'), $api->status()->read()->metrics);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unrelatedSpecialValueSamples(): iterable
+    {
+        yield 'NaN summary quantile' => ["go_gc_duration_seconds{quantile=\"0.5\"} NaN\n"];
+        yield '+Inf gauge' => ["some_gauge +Inf\n"];
+        yield '-Inf gauge' => ["some_gauge -Inf\n"];
+    }
+
+    #[DataProvider('unrelatedSpecialValueSamples')]
+    public function testASpecialValueInAnUnrelatedSeriesLeavesTheMetricsRead(string $sample): void
+    {
+        $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt').$sample);
+
+        self::assertEquals(new ServerMetrics(queueDepth: 0, workerRestarts: 2), $api->status()->read()->metrics);
+    }
+
+    public function testASpecialValueInACountedSeriesIsDown(): void
+    {
+        $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt')."frankenphp_worker_queue_depth{worker=\"app\"} NaN\n");
 
         self::assertEquals(new EndpointDown('/metrics answered in an unusable shape'), $api->status()->read()->metrics);
     }
