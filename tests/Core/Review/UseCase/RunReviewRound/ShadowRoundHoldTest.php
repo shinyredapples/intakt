@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Domain\EveryAccountShadowGuard;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -38,6 +41,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(ReviewChange::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(EveryAccountShadowGuard::class)]
+#[UsesClass(ConfiguredTierResolver::class)]
+#[UsesClass(ResolvedModel::class)]
 final class ShadowRoundHoldTest extends KernelTestCase
 {
     public function testAShadowRoundAboveTheShadowCeilingDoesNotStart(): void
@@ -98,6 +103,32 @@ final class ShadowRoundHoldTest extends KernelTestCase
         $this->expectException(ShadowCeilingReached::class);
 
         $fixture->startHandlerOn($fixture->bus, $guard)($fixture->commandFor(RoundFixture::CHANGE, 2));
+    }
+
+    public function testAShadowRoundIsHeldWhileOnlyATiersSubstituteProviderIsAboveTheCeiling(): void
+    {
+        $fixture = $this->fixtureOf('shadow');
+        $guard = new ScriptedAccountGuard(['openai.default' => StartDecision::AtCeiling]);
+
+        try {
+            $fixture->startHandlerOn($fixture->bus, $guard, RoundFixture::tiersSubstitutedBy(Provider::OpenAi))($fixture->commandFor(RoundFixture::CHANGE, 2));
+            self::fail('The round started while the substitute it may answer on is above the shadow ceiling.');
+        } catch (ShadowCeilingReached) {
+            self::assertContains('openai.default', $guard->asked);
+            self::assertSame([], $fixture->storedRounds());
+            self::assertSame('openai', $this->heldPayload($fixture)['provider']);
+        }
+    }
+
+    public function testAShadowRoundStartsWhileOwnAndSubstituteAccountsAreBelowTheCeiling(): void
+    {
+        $fixture = $this->fixtureOf('shadow');
+        $guard = new ScriptedAccountGuard();
+
+        $id = $fixture->startHandlerOn($fixture->bus, $guard, RoundFixture::tiersSubstitutedBy(Provider::OpenAi))($fixture->commandFor(RoundFixture::CHANGE, 2));
+
+        self::assertSame($id, $fixture->round($id)->id()->toRfc4122());
+        self::assertSame(['anthropic.default', 'anthropic.team', 'openai.default'], $guard->asked);
     }
 
     public function testALiveRoundStartsAboveTheShadowCeilingWithoutAskingIt(): void

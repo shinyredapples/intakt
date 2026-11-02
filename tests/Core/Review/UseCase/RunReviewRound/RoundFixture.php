@@ -13,7 +13,9 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
+use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Domain\EveryAccountShadowGuard;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -84,6 +86,8 @@ final readonly class RoundFixture
     public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
 
+    private const array TIERS = ['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]];
+
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
     public MockClock $clock;
@@ -134,12 +138,20 @@ final readonly class RoundFixture
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
-    public function startHandlerOn(MessageBusInterface $queue, StartGuard $guard = new ScriptedAccountGuard()): RunReviewRoundHandler
+    public function startHandlerOn(MessageBusInterface $queue, StartGuard $guard = new ScriptedAccountGuard(), TierResolver $tiers = new ConfiguredTierResolver(self::TIERS, [])): RunReviewRoundHandler
     {
         $ledger = new RoundLedger($this->ledger, $this->modes);
-        $shadowGuard = new EveryAccountShadowGuard($guard, new ConfiguredAccounts([Provider::Anthropic->value => ['default', 'team']]));
 
-        return new RunReviewRoundHandler(new ShadowRoundHold($this->modes, $shadowGuard, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue));
+        return new RunReviewRoundHandler($this->shadowHold($guard, $tiers, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue));
+    }
+
+    // The panel's tier with one substitute on another provider, so a test sees whether the hold looks at the provider a reviewer may answer on.
+    public static function tiersSubstitutedBy(Provider $provider): TierResolver
+    {
+        $tiers = self::TIERS;
+        $tiers['alpha']['tiers']['standard']['substitutes'] = [['provider' => $provider->value, 'model' => 'other']];
+
+        return new ConfiguredTierResolver($tiers, []);
     }
 
     public function startFromSource(ChangeSource $source): string
@@ -284,9 +296,17 @@ final readonly class RoundFixture
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
         $ledger = new RoundLedger(new InMemoryLedger(), $this->modes);
-        $hold = new ShadowRoundHold($this->modes, new EveryAccountShadowGuard(new ScriptedAccountGuard(), new ConfiguredAccounts([])), $ledger);
+        $hold = $this->shadowHold(new ScriptedAccountGuard(), new ConfiguredTierResolver(self::TIERS, []), $ledger);
 
         return new RunReviewRoundHandler($hold, new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
+    }
+
+    // The accounts hold a second provider, so a substitute on it has an account the hold can look at.
+    private function shadowHold(StartGuard $guard, TierResolver $tiers, RoundLedger $ledger): ShadowRoundHold
+    {
+        $accounts = new ConfiguredAccounts([Provider::Anthropic->value => ['default', 'team'], Provider::OpenAi->value => ['default']]);
+
+        return new ShadowRoundHold($this->modes, new EveryAccountShadowGuard($guard, $accounts), $ledger, $tiers);
     }
 
     public function findingStore(): StoredFindings

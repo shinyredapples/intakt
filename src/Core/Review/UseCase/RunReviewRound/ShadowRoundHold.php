@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Shadow\Contract\ProjectMode;
@@ -16,6 +18,7 @@ final readonly class ShadowRoundHold
         private ProjectModes $modes,
         private ShadowStartGuard $guard,
         private RoundLedger $ledger,
+        private TierResolver $tiers,
     ) {
     }
 
@@ -46,8 +49,23 @@ final readonly class ShadowRoundHold
      */
     private function providersOf(RunReviewRound $command): array
     {
-        $providers = array_map(static fn (PanelReviewer $reviewer): Provider => $reviewer->model->provider, $command->panel->reviewers);
+        $project = $command->target->subject->project;
+        $providers = [];
+
+        foreach ($command->panel->reviewers as $reviewer) {
+            $providers[] = $reviewer->model->provider;
+            // A reviewer answers on a substitute as soon as its own provider is out, so the substitute's accounts must be below the ceilings too.
+            array_push($providers, ...$this->substituteProvidersOf($project, $reviewer));
+        }
 
         return array_values(array_unique($providers, SORT_REGULAR));
+    }
+
+    /**
+     * @return list<Provider>
+     */
+    private function substituteProvidersOf(string $project, PanelReviewer $reviewer): array
+    {
+        return array_map(static fn (ResolvedModel $substitute): Provider => $substitute->provider, $this->tiers->substitutes($project, $reviewer->model->tier));
     }
 }
