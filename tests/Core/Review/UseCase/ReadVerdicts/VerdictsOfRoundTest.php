@@ -18,6 +18,8 @@ use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\IdentityNotOfRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
+use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
+use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -33,6 +35,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[Group('persistence')]
 #[CoversClass(VerdictsOfRoundHandler::class)]
 #[CoversClass(VerdictsOfRound::class)]
+#[CoversClass(ShadowRounds::class)]
+#[UsesClass(ConfiguredProjectModes::class)]
 #[CoversClass(RoundVerdicts::class)]
 #[CoversClass(RoundNotFound::class)]
 #[CoversClass(IdentityNotOfRound::class)]
@@ -62,6 +66,45 @@ final class VerdictsOfRoundTest extends KernelTestCase
 
         self::assertSame(Standing::Current, $verdicts->standing->standing);
         self::assertSame([Decision::Approve, Decision::Approve], array_map(static fn (PanelVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->counting));
+    }
+
+    public function testAShadowProjectsCurrentVerdictsDoNotCountForAMerge(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
+        $round = $this->reviewedRound();
+
+        $verdicts = $this->fixture->verdictsOf($this->unmovedQuery($round));
+
+        self::assertSame(Standing::Current, $verdicts->standing->standing);
+        self::assertSame([], $verdicts->counting);
+    }
+
+    public function testVerdictsRecordedAsShadowStillDoNotCountOnceTheProjectIsLive(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
+        $round = $this->reviewedRound();
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes(['alpha' => 'live']), $this->unmovedQuery($round));
+
+        self::assertSame([], $verdicts->counting);
+    }
+
+    public function testVerdictsRecordedAsLiveDoNotCountOnceTheProjectIsShadow(): void
+    {
+        $round = $this->reviewedRound();
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes(['alpha' => 'shadow']), $this->unmovedQuery($round));
+
+        self::assertSame([], $verdicts->counting);
+    }
+
+    public function testAnotherProjectInShadowModeLeavesTheVerdictsOfThisOneCounting(): void
+    {
+        $round = $this->reviewedRound();
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes(['beta' => 'shadow']), $this->unmovedQuery($round));
+
+        self::assertCount(2, $verdicts->counting);
     }
 
     public function testANewCommitOnTheHeadMakesTheStoredVerdictsStaleSoNoneCounts(): void
@@ -135,6 +178,11 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $this->expectException(IdentityNotOfRound::class);
 
         $this->fixture->startWithIdentityOf(RoundFixture::TASK, 3, 2);
+    }
+
+    private function unmovedQuery(string $round): VerdictsOfRound
+    {
+        return new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, []));
     }
 
     private function reviewedRound(): string

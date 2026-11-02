@@ -17,6 +17,7 @@ final readonly class VerdictsOfRoundHandler
     public function __construct(
         private EntityManagerInterface $entities,
         private StoredVerdicts $verdicts,
+        private ShadowRounds $shadow,
     ) {
     }
 
@@ -25,7 +26,7 @@ final readonly class VerdictsOfRoundHandler
         $round = $this->storedRound($query->roundId);
         $standing = $round->standingAt($query->current, $query->move);
 
-        if (Standing::Stale === $standing->standing) {
+        if (Standing::Stale === $standing->standing || $this->shadow->isShadow($round)) {
             return new RoundVerdicts($standing, []);
         }
 

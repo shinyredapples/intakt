@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Shadow;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\Decision;
@@ -15,7 +17,11 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\RoundVerdicts;
+use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRound;
+use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\ReviewChange\ChangeDecision;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -23,7 +29,10 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Core\Shadow\Contract\ProjectModes;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
+use Intakt\Plugin\Forge\Contract\HeadMove;
+use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\WorkerOnSleep;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
@@ -65,7 +74,7 @@ final class ShadowRoundTest extends KernelTestCase
             YAML);
         $_SERVER['INTAKT_CONFIG'] = $this->file;
         new Filesystem()->remove(self::createKernel()->getCacheDir());
-        $this->fixture = new RoundFixture(self::getContainer());
+        $this->fixture = new RoundFixture(self::getContainer(), $this->modes());
     }
 
     protected function tearDown(): void
@@ -100,6 +109,67 @@ final class ShadowRoundTest extends KernelTestCase
         self::assertSame(['post review on beta '.RoundFixture::CHANGE], $this->forge()->writeLog);
     }
 
+    public function testAShadowProjectsVerdictsAreMarkedShadowInTheLedger(): void
+    {
+        $this->reviewChange()->review($this->request('alpha'));
+
+        self::assertSame(['shadow', 'shadow'], $this->recordedVerdictModes());
+    }
+
+    public function testALiveProjectsVerdictsAreMarkedLiveInTheLedger(): void
+    {
+        $this->reviewChange()->review($this->request('beta'));
+
+        self::assertSame(['live', 'live'], $this->recordedVerdictModes());
+    }
+
+    public function testAShadowProjectsApprovingVerdictsAreNotCountedForAMerge(): void
+    {
+        $review = $this->reviewChange()->review($this->request('alpha'));
+
+        $verdicts = $this->countedFor($review);
+
+        self::assertSame(Standing::Current, $verdicts->standing->standing);
+        self::assertSame([], $verdicts->counting);
+    }
+
+    public function testALiveProjectsApprovingVerdictsAreCountedForAMerge(): void
+    {
+        $review = $this->reviewChange()->review($this->request('beta'));
+
+        $verdicts = $this->countedFor($review);
+
+        self::assertSame(Standing::Current, $verdicts->standing->standing);
+        self::assertCount(2, $verdicts->counting);
+    }
+
+    // Read through the container's handler, so the project's mode comes from its config as the merge will read it.
+    private function countedFor(ChangeReview $review): RoundVerdicts
+    {
+        $handler = self::getContainer()->get(VerdictsOfRoundHandler::class);
+        assert($handler instanceof VerdictsOfRoundHandler);
+
+        return $handler(new VerdictsOfRound($review->roundId, SampleIdentity::of(RoundFixture::TASK, $this->panel()), new HeadMove(HeadMoveKind::Unmoved, [])));
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function recordedVerdictModes(): array
+    {
+        $verdicts = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder(), false), static fn (RecordedEvent $recorded): bool => LedgerEventKind::VerdictReceived === $recorded->event->kind);
+
+        return array_values(array_map(static fn (RecordedEvent $recorded): mixed => json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR)['mode'] ?? null, $verdicts));
+    }
+
+    private function modes(): ProjectModes
+    {
+        $modes = self::getContainer()->get(ProjectModes::class);
+        assert($modes instanceof ProjectModes);
+
+        return $modes;
+    }
+
     // Posts the decision the way a round will once it posts its outcome, so the only write a round leads to goes through the container's forge writes.
     private function reviewAndPost(string $project): ChangeReview
     {
@@ -126,7 +196,7 @@ final class ShadowRoundTest extends KernelTestCase
         };
         $serializer = self::getContainer()->get(SerializerInterface::class);
         assert($serializer instanceof SerializerInterface);
-        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger()), $this->fixture->bus);
+        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger(), $this->modes()), $this->fixture->bus);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
@@ -141,13 +211,19 @@ final class ShadowRoundTest extends KernelTestCase
 
     private function request(string $project): ChangeReviewRequest
     {
+        $panel = $this->panel();
+
+        return new ChangeReviewRequest($project, __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+    }
+
+    private function panel(): Panel
+    {
         $members = array_map(
             static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
             [1, 2],
         );
-        $panel = new Panel($members, QuorumPolicy::All);
 
-        return new ChangeReviewRequest($project, __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+        return new Panel($members, QuorumPolicy::All);
     }
 
     private function forge(): WriteRefusingForge

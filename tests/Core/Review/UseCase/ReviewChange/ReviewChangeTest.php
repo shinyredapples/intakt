@@ -36,6 +36,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
+use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -234,7 +235,7 @@ final class ReviewChangeTest extends KernelTestCase
     // Messenger's own handling, so a refusal reaches the caller wrapped as the application's command bus wraps it; the reviewers' messages go to the test's workers.
     private function commandBus(): MessageBusInterface
     {
-        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger()), $this->fixture->bus);
+        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger(), new ConfiguredProjectModes([])), $this->fixture->bus);
 
         return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]);
     }
