@@ -53,19 +53,19 @@ final class CaddyfileTest extends TestCase
         $issuer = $this->issuerIn($this->adapted('--envfile', '.env.local', '--envfile', '.env'));
 
         self::assertSame(self::ISSUER, $issuer['identifier'] ?? null);
-        self::assertSame(self::SECRET, self::at($issuer, 'publisher', 'jwt', 'key'));
+        self::assertSame(self::SECRET, $this->at($issuer, 'publisher', 'jwt', 'key'));
     }
 
     public function testTheHubGetsNoKeyWhenEnvComesFirst(): void
     {
         $issuer = $this->issuerIn($this->adapted('--envfile', '.env', '--envfile', '.env.local'));
 
-        self::assertNotSame(self::SECRET, self::at($issuer, 'publisher', 'jwt', 'key'));
+        self::assertNotSame(self::SECRET, $this->at($issuer, 'publisher', 'jwt', 'key'));
     }
 
     public function testTheAdminApiListensOnLocalhostOnly(): void
     {
-        self::assertSame(['localhost:2019'], (array) self::at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'admin', 'listen'));
+        self::assertSame(['localhost:2019'], (array) $this->at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'admin', 'listen'));
     }
 
     /**
@@ -109,7 +109,7 @@ final class CaddyfileTest extends TestCase
     /**
      * @param array<mixed> $config
      */
-    private static function at(array $config, string ...$keys): mixed
+    private function at(array $config, string ...$keys): mixed
     {
         $value = $config;
 
