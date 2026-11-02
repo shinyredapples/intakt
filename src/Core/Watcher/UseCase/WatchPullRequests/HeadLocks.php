@@ -39,7 +39,7 @@ final readonly class HeadLocks
                 // Read again under the lock, because another tick may have settled this head or queued a newer one between the read and the acquire.
                 $current = $this->pending->stillDue($project, $open);
 
-                if (null !== $current) {
+                if ($current instanceof OpenChange) {
                     $heads[] = $current;
                 }
             }

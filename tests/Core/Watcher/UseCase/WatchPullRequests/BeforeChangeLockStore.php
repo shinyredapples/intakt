@@ -26,7 +26,7 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     {
         $step = $this->beforeChangeLock;
 
-        if (null !== $step && str_starts_with((string) $key, 'watcher-change-')) {
+        if ($step instanceof Closure && str_starts_with((string) $key, 'watcher-change-')) {
             $this->beforeChangeLock = null;
             $step();
         }
