@@ -132,14 +132,26 @@ final class LedgerRounds
         $act = $this->strings($payload['act'] ?? null);
         $followUps = $this->strings($payload['follow_ups'] ?? null);
         $readable = array_values(array_filter(array_map($this->readableFinding(...), $this->listOf($payload['findings'] ?? null))));
-        $readableIds = array_map(static fn (RoundFinding $finding): string => $finding->id, $readable);
-        $markedOnly = array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique([...$act, ...$followUps]), $readableIds)));
 
         return array_map(static fn (RoundFinding $finding): RoundFinding => match (true) {
             in_array($finding->id, $act, true) => $finding->calledBy(JudgeCall::Act),
             in_array($finding->id, $followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
             default => $finding,
-        }, [...$readable, ...$markedOnly]);
+        }, [...$readable, ...$this->markedOnly($act, $followUps, $readable)]);
+    }
+
+    /**
+     * @param list<string>       $act
+     * @param list<string>       $followUps
+     * @param list<RoundFinding> $readable
+     *
+     * @return list<RoundFinding>
+     */
+    private function markedOnly(array $act, array $followUps, array $readable): array
+    {
+        $readableIds = array_map(static fn (RoundFinding $finding): string => $finding->id, $readable);
+
+        return array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique([...$act, ...$followUps]), $readableIds)));
     }
 
     private function readableFinding(mixed $entry): ?RoundFinding

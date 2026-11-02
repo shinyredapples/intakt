@@ -25,8 +25,8 @@ final readonly class RelevantMemory
         foreach ($ranked as $entry) {
             $used += strlen($entry->text);
 
-            // Stops at the first entry that does not fit, so a less relevant one never jumps the queue.
-            if ($used > $maxBytes) {
+            // Stops at the first entry that does not fit, so a less relevant one never jumps the queue; the most relevant one is kept even over the cap, so the caller can shorten it instead of getting nothing.
+            if ($used > $maxBytes && [] !== $entries) {
                 break;
             }
 

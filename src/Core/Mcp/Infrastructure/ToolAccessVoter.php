@@ -9,7 +9,7 @@ use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\Vote;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 
-// The voter never sees the arguments of a call, because a model could otherwise argue its way to a write.
+// The voter never sees the arguments of a call, because a model could otherwise argue its way to a write; a write needs the config and the owner's token.
 final readonly class ToolAccessVoter implements VoterInterface
 {
     public function __construct(
@@ -28,7 +28,7 @@ final readonly class ToolAccessVoter implements VoterInterface
                 continue;
             }
 
-            if ($this->grants($access)) {
+            if ($this->grants($access, $token)) {
                 return self::ACCESS_GRANTED;
             }
 
@@ -38,8 +38,12 @@ final readonly class ToolAccessVoter implements VoterInterface
         return $result;
     }
 
-    private function grants(ToolAccess $access): bool
+    private function grants(ToolAccess $access, TokenInterface $token): bool
     {
-        return ToolAccess::Read === $access || ToolAccess::Write === $this->highestAllowed;
+        if (ToolAccess::Read === $access) {
+            return true;
+        }
+
+        return ToolAccess::Write === $this->highestAllowed && in_array(OwnerTokenHandler::OWNER_ROLE, $token->getRoleNames(), true);
     }
 }

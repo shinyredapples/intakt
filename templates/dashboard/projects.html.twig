@@ -12,7 +12,7 @@
     <tbody>
     {% for project in projects %}
         <tr>
-            <td><a href="{{ path('dashboard_list_reviews', {project: project.name}) }}">{{ project.name }}</a></td>
+            <td><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: project.name}) }}">{{ project.name }}</a></td>
             <td>{{ project.rounds }}</td>
             <td>{{ project.judgedRounds }}</td>
         </tr>

@@ -96,13 +96,13 @@ final class StoreProjectMemoryTest extends TestCase
         self::assertCount(2, $found->entries);
     }
 
-    public function testAnEntryLargerThanTheWholeCapIsNeverReturned(): void
+    public function testALoneEntryLargerThanTheWholeCapIsStillReturnedForTheCallerToShorten(): void
     {
         $this->index->index(new MemoryEntry('alpha', 'far too long for the cap', ['a.php']));
 
         $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 5));
 
-        self::assertSame([], $found->entries);
+        self::assertSame(['far too long for the cap'], array_map(static fn (MemoryEntry $entry): string => $entry->text, $found->entries));
     }
 
     public function testRetrievalFromAnEmptyMemoryReturnsNoEntries(): void

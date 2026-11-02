@@ -69,6 +69,19 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         );
     }
 
+    public function testAFailedReviewerAnsweredByASubstituteShowsBothNotesSeparated(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->failReviewer('round-1', 'security', 'The provider is down.');
+        $this->ledger->owesCatchUp('round-1', 'security');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
+        self::assertSame('The provider is down.; answered by the substitute openai, a catch-up review is owed', $rows[0][5]);
+    }
+
     public function testAReviewerStartedAgainAfterAFailureShowsAsRunning(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
