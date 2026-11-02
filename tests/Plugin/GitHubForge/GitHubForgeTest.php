@@ -545,7 +545,7 @@ final class GitHubForgeTest extends TestCase
 
     private function secretScan(): SecretScan
     {
-        return new SecretScan(dirname(__DIR__, 3));
+        return new SecretScan(dirname(__DIR__, 3), 'gitleaks');
     }
 
     /**
