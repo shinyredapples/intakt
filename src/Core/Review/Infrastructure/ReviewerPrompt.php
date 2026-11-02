@@ -102,7 +102,9 @@ final readonly class ReviewerPrompt
     public function verdictIn(ExecutionInterface $execution): Verdict
     {
         return $this->parser->parseWith(static function () use ($execution): Verdict {
-            $answer = $execution->getContent();
+            // The final result, never the content, because a streamed execution's content is its deltas: reading the result drives the stream to its end, so the progress callback sees every delta. A streamed answer's verdict is the one the strict listener mapped and left on the metadata (see the listener for why).
+            $result = $execution->getResult();
+            $answer = $result->getMetadata()->get(StrictVerdictStreamListener::VERDICT) ?? $result->getContent();
 
             return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
         });
