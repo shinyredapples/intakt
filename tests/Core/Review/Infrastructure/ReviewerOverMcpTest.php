@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Closure;
+use GuzzleHttp\Psr7\Response;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
@@ -30,6 +31,7 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Http\Client\ClientInterface;
@@ -162,6 +164,31 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+    }
+
+    #[DataProvider('failedAnswers')]
+    public function testAReviewWhoseServerAnswersWithAFailureAfterListingTheToolsIsBlockedInsteadOfApproved(int $status, string $contentType, string $body): void
+    {
+        $http = new SeverableHttpClient(new KernelHttpClient($this->server()));
+        $factory = $this->mcpToolboxes($http);
+        self::assertNotSame([], $factory->create($this->request())->getTools());
+        $http->sever(new Response($status, ['Content-Type' => $contentType], $body));
+
+        $verdict = $this->review($factory->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+    }
+
+    /**
+     * @return iterable<string, array{int, string, string}>
+     */
+    public static function failedAnswers(): iterable
+    {
+        yield 'unauthorized' => [401, 'application/json', 'Unauthorized'];
+        yield 'server error' => [500, 'text/html', 'Internal Server Error'];
+        yield 'malformed json' => [200, 'application/json', '{"jsonrpc":'];
+        yield 'internal error of the protocol' => [500, 'application/json', '{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Error while executing tool"}}'];
     }
 
     public function testAToolErrorTheServerAnswersStaysWithTheModel(): void

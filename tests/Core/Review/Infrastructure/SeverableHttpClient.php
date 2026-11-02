@@ -14,18 +14,26 @@ final class SeverableHttpClient implements ClientInterface
 {
     private bool $severed = false;
 
+    private ?ResponseInterface $answer = null;
+
     public function __construct(private readonly ClientInterface $inner)
     {
     }
 
-    public function sever(): void
+    // Without an answer the connection is refused; with one, every later request gets it instead of the server's.
+    public function sever(?ResponseInterface $answer = null): void
     {
         $this->severed = true;
+        $this->answer = $answer;
     }
 
     #[Override]
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
-        return $this->severed ? throw new RuntimeException('Connection refused.') : $this->inner->sendRequest($request);
+        if (!$this->severed) {
+            return $this->inner->sendRequest($request);
+        }
+
+        return $this->answer ?? throw new RuntimeException('Connection refused.');
     }
 }
