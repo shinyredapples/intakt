@@ -25,6 +25,7 @@ RUN set -eu; \
     curl -fsSL -o /usr/local/bin/frankenphp "https://github.com/php/frankenphp/releases/download/v$FRANKENPHP_VERSION/frankenphp-linux-x86_64"; \
     echo "$FRANKENPHP_SHA256  /usr/local/bin/frankenphp" | sha256sum --check --strict; \
     chmod 755 /usr/local/bin/frankenphp; \
+    /usr/local/bin/frankenphp version; \
     useradd --uid 1000 --user-group --create-home ci
 
 USER 1000:1000
