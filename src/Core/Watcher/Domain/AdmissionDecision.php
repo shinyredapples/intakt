@@ -11,7 +11,7 @@ final readonly class AdmissionDecision
 {
     public function admissionOf(CiState $ci): HeadAdmission
     {
-        // A failure counts while other runs still go: red CI is never reviewed.
+        // Red wins over pending, because a failure is final while other runs still go.
         return match (true) {
             $ci->has(CiRunState::Failed) => HeadAdmission::Red,
             $ci->isEmpty(), $ci->has(CiRunState::Unfinished) => HeadAdmission::Pending,
@@ -19,9 +19,8 @@ final readonly class AdmissionDecision
         };
     }
 
+    // Stable sort, so that a running head keeps its place among the running ones.
     /**
-     * Heads with finished CI first; the sort is stable, so a running head keeps its place among the running ones.
-     *
      * @param list<HeadDecision> $decisions
      *
      * @return list<HeadDecision>

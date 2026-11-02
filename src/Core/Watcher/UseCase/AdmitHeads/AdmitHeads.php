@@ -29,7 +29,7 @@ final readonly class AdmitHeads
     /**
      * @param list<OpenChange> $changed
      *
-     * @return list<HeadDecision> heads with finished CI first
+     * @return list<HeadDecision>
      *
      * @throws ForgeReadFailed
      */

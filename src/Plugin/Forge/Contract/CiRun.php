@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
-// One workflow run or check suite of a head.
+// Kept as one type for both, because a head is judged by all of them together.
 final readonly class CiRun
 {
     public function __construct(

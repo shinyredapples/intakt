@@ -12,7 +12,7 @@ final readonly class HeadDecision
     public function __construct(
         public OpenChange $change,
         public HeadAdmission $admission,
-        // Set only for a pending head: the moment to read its CI again. A pending head holds no lock and no lane.
+        // Only a pending head has one, because nothing else is read again; it holds no lock and no lane.
         public ?DateTimeImmutable $readAgainAt = null,
     ) {
     }

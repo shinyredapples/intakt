@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
-// The workflow runs and check suites of exactly one head; folding them into one outcome is the caller's rule, not each forge's.
+// Folding the runs into one outcome is the caller's rule, because then no forge repeats it.
 final readonly class CiState
 {
     /**

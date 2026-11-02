@@ -12,14 +12,14 @@ use Intakt\Plugin\Forge\Contract\HeadChecks;
 use JsonException;
 use LogicException;
 
-// Answers from recorded GitHub responses (workflow runs and check suites of a repository), keeping only the runs of the asked sha.
+// Plays recorded GitHub responses, because a live forge is out of reach; it keeps the runs of the asked sha like the real call must.
 final class RecordedChecks implements HeadChecks
 {
     /** @var list<string> */
     public array $asked = [];
 
     /**
-     * @param array<string, string> $recordings recorded file name by head sha
+     * @param array<string, string> $recordings
      */
     public function __construct(private readonly array $recordings)
     {
@@ -34,7 +34,7 @@ final class RecordedChecks implements HeadChecks
         foreach (['workflow_runs', 'check_suites'] as $kind) {
             foreach ($recorded[$kind] as $entry) {
                 if ($entry['head_sha'] === $head->hash) {
-                    $runs[] = new CiRun($entry['name'] ?? $entry['app'], $this->stateOf($entry['status'], $entry['conclusion']));
+                    $runs[] = new CiRun($entry['name'] ?? $entry['app'] ?? 'check', $this->stateOf($entry['status'], $entry['conclusion']));
                 }
             }
         }
@@ -52,11 +52,12 @@ final class RecordedChecks implements HeadChecks
     }
 
     /**
-     * @return array<string, list<array<string, string|null>>>
+     * @return array<string, list<array{name?: string, app?: string, head_sha: string, status: string, conclusion: string|null}>>
      */
     private function read(string $file): array
     {
         try {
+            /** @var array<string, list<array{name?: string, app?: string, head_sha: string, status: string, conclusion: string|null}>> $recorded */
             $recorded = json_decode((string) file_get_contents(__DIR__.'/recorded/'.$file.'.json'), true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
             throw new LogicException('Not a recording: '.$file, 0, $e);

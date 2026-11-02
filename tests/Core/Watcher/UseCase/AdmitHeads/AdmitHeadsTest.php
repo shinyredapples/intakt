@@ -14,7 +14,6 @@ use Intakt\Plugin\Forge\Contract\CiRun;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
-use Intakt\Plugin\Forge\Contract\HeadChecks;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -72,7 +71,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testTheCiStateIsReadForTheExactHeadAndOlderRunsDoNotPaintItGreen(): void
     {
-        // The green recording also holds a failed run of the older head a...a, and the pending one a failed run of c...c.
+        // The green recording holds a failed run of an older head, because a rerun must not decide for the new one.
         $decisions = ($this->admit)('demo', [$this->change('1', 'a'), $this->change('2', 'b')]);
 
         self::assertSame([str_repeat('a', 40), str_repeat('b', 40)], $this->forge->asked);
@@ -81,12 +80,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testAnAnswerForAnotherHeadIsAFailedRead(): void
     {
-        $forge = new class implements HeadChecks {
-            public function ciStateOf(string $project, CommitId $head): CiState
-            {
-                return new CiState(new CommitId(str_repeat('f', 40)), []);
-            }
-        };
+        $forge = new WrongHeadChecks();
 
         $this->expectException(ForgeReadFailed::class);
 
