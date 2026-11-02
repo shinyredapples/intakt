@@ -43,8 +43,14 @@ final readonly class ReviewerAgent implements Reviewer
     #[Override]
     public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
     {
-        $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->brief));
         $tools = new MalformedToolCalls(($this->toolboxes)($request));
+
+        // Before the model is asked, because a toolbox that cannot reach its server lists no tools and raises nothing, and a reviewer without them could approve code it never read.
+        if ([] === $tools->getTools()) {
+            return Verdict::noTools();
+        }
+
+        $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->brief));
 
         $verdict = $this->answerOf($this->agent($tools, $platform, $model)->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]));
 

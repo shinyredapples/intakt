@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
@@ -18,6 +19,8 @@ use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
+use Intakt\Core\Review\Infrastructure\ToolsOfRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Kernel;
@@ -26,6 +29,8 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Http\Client\ClientInterface;
+use RuntimeException;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
@@ -34,11 +39,15 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\Uid\UuidV7;
 
 #[Group('persistence')]
 #[CoversClass(ReviewerMcpToolboxFactory::class)]
+#[CoversClass(ReviewServerHttpClient::class)]
+#[CoversClass(ToolsOfRound::class)]
 #[UsesClass(ReviewerAgent::class)]
+#[UsesClass(Verdict::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(MalformedToolCalls::class)]
@@ -121,12 +130,37 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $this->mcpToolboxes()->create($request);
     }
 
-    private function mcpToolboxes(): ReviewerMcpToolboxFactory
+    public function testAReviewWhoseServerCannotBeReachedIsBlockedInsteadOfJudgedWithoutTools(): void
     {
-        $kernel = new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.'));
-        $this->http = new RecordingHttpClient($kernel);
+        $refused = $this->createStub(ClientInterface::class);
+        $refused->method('sendRequest')->willThrowException(new RuntimeException('Connection refused.'));
 
-        return new ReviewerMcpToolboxFactory($this->credential, $this->http, 'http://localhost');
+        $verdict = $this->review($this->mcpToolboxes($refused)->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+    }
+
+    public function testNoRequestReachesTheReviewServerOutsideAReview(): void
+    {
+        $this->mcpToolboxes();
+        $client = self::getContainer()->get(ReviewServerHttpClient::class);
+        self::assertInstanceOf(ReviewServerHttpClient::class, $client);
+
+        $this->expectException(LogicException::class);
+
+        $client->sendRequest(new Psr18Client()->createRequest('POST', 'http://localhost/mcp/review'));
+    }
+
+    // Through the container, so the configured mcp_server entry and its connection are what the test exercises.
+    private function mcpToolboxes(?ClientInterface $http = null): ReviewerMcpToolboxFactory
+    {
+        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.')));
+        self::getContainer()->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($this->credential, $this->http));
+        $factory = self::getContainer()->get(ReviewerMcpToolboxFactory::class);
+        self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
+
+        return $factory;
     }
 
     /**

@@ -41,6 +41,9 @@ use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
+use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
+use Intakt\Core\Review\Infrastructure\ToolsOfRound;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
@@ -59,11 +62,13 @@ use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Mcp\Contract\KernelHttpClient;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use JsonException;
+use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -135,6 +140,9 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReviewerMcpToolboxFactory::class)]
+#[UsesClass(ReviewServerHttpClient::class)]
+#[UsesClass(ToolsOfRound::class)]
+#[UsesClass(ReviewCredential::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
@@ -671,9 +679,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
     #[Group('persistence')]
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
-        // Port 1 refuses at once, so the reviewer's MCP server is unreachable here and the review runs without tools instead of calling a server.
-        $_SERVER['REVIEW_MCP_BASE_URL'] = 'http://localhost:1';
         $container = self::getContainer();
+        // The kernel under test serves the review server, so the reviewer lists its tools without a web server.
+        $credential = $container->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $container->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.'))));
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
         $container->set(TierResolver::class, new ConfiguredTierResolver([
@@ -696,7 +706,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
-        unset($_SERVER['REVIEW_MCP_BASE_URL']);
     }
 
     public function testAReviewerCallMadeForARoundWritesItsRoundIdOnTheStartedRow(): void
