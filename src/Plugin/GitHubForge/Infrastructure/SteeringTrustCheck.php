@@ -91,7 +91,7 @@ final readonly class SteeringTrustCheck
         };
     }
 
-    // The installation token is the only credential: a failed exchange ends the check instead of trying another.
+    // No other credential is tried, because a fallback would let a lost App identity still decide who steers.
     private function installationToken(): string
     {
         try {

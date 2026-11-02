@@ -21,6 +21,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use InvalidArgumentException;
+use NoDiscard;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -231,11 +232,13 @@ final class SteeringTrustCheckTest extends TestCase
         self::assertSame([], $this->github->requested);
     }
 
+    #[NoDiscard]
     private function check(string $login): SteeringTrust
     {
         return $this->checkWith($login, RecordedTrust::MAINTAINER_SLUG);
     }
 
+    #[NoDiscard]
     private function checkWith(string $login, string $maintainerSlug): SteeringTrust
     {
         return $this->trust($maintainerSlug)->check(self::REPOSITORY, $login);

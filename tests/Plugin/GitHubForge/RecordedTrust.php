@@ -9,7 +9,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Uri\Rfc3986\Uri;
 
-// The answers GitHub gave for the App, its installation and the permission of each recorded account.
+// Apart from RecordedInstallation, because the trust tests also need the App's own answer and a permission answer per account.
 final class RecordedTrust
 {
     public const string WRITER = 'alice';
@@ -89,7 +89,8 @@ final class RecordedTrust
      */
     private function bearerOf(array $options): string
     {
-        $headers = $options['normalized_headers']['authorization'] ?? [];
+        $normalized = $options['normalized_headers'] ?? null;
+        $headers = is_array($normalized) ? ($normalized['authorization'] ?? null) : null;
 
         return is_array($headers) && is_string($headers[0] ?? null) ? $headers[0] : '';
     }
