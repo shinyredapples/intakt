@@ -217,7 +217,7 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertSame(['account' => 'anthropic.default', 'error' => 'model_not_on_plan'], $this->ledger->payloads()[1]);
     }
 
-    // Forced order: a call is sent, another call's lost login is reported, and only then is the older call's answer read.
+    // Forced order, because the older call's answer is read only after another call's lost login was reported, as a slow reviewer's would be.
     public function testAnAnswerToACallSentBeforeAnAccountErrorWasReportedDoesNotReportItAgain(): void
     {
         $older = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');

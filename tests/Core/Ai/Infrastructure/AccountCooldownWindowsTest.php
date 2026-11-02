@@ -292,7 +292,7 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertCount(2, $this->reports());
     }
 
-    // Forced order: the call was sent, the error reported, and only then the call answered.
+    // Forced order, because an answer read after the report proves nothing when its call was sent before it.
     public function testAnAnswerToACallSentBeforeTheReportKeepsTheReportedError(): void
     {
         $sentAt = new NativeClock()->now();

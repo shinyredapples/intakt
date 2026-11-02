@@ -12,7 +12,6 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
@@ -89,10 +88,9 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     public function answered(Account $account, DateTimeImmutable $sentAt): void
     {
-        $reports = $this->pool->getItems(array_map(static fn (AccountError $error): string => self::reportKey($account, $error), AccountError::cases()));
-        $before = array_filter(iterator_to_array($reports), static fn (CacheItemInterface $report): bool => $report->get() instanceof DateTimeImmutable && $report->get() < $sentAt);
+        $reports = array_map(static fn (AccountError $error): string => self::reportKey($account, $error), AccountError::cases());
 
-        $this->pool->deleteItems(array_keys($before));
+        $this->pool->deleteItems(array_values(array_filter($reports, fn (string $report): bool => $this->wasReportedBefore($report, $sentAt))));
     }
 
     public function isCoolingDown(Account $account): bool
@@ -163,6 +161,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         } finally {
             $lock->release();
         }
+    }
+
+    private function wasReportedBefore(string $report, DateTimeImmutable $moment): bool
+    {
+        $reportedAt = $this->pool->getItem($report)->get();
+
+        return $reportedAt instanceof DateTimeImmutable && $reportedAt < $moment;
     }
 
     private function reportUnlessReported(Account $account, AccountError $error): void
