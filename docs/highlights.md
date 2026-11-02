@@ -30,15 +30,15 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `ToolCallArgumentResolver` | the listener validates a call's arguments before it denies a path, so a malformed call never passes as a denial | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerToolboxFactory.php` |
 | Message store (`MessageStoreInterface`, Doctrine DBAL store) | the conversation of each reviewer in each round, kept in the `reviewer_conversation` table | in progress | T7 (#12), T29 (#29), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `config/packages/ai.php`, `migrations/Version20261029120000.php`; T43 (#384): a build's conversation kept at a vendor limit |
 | Built-in MCP client tool (`mcp_server` in `ai.agent.<name>.tools`) | reviewers reach the per-review MCP server | planned | T16 (#21) |
-| `MemoryInputProcessor` | the project memory briefing, with a size cap; after a vendor limit also the hand-off note and the kept conversation for the next account | planned | T17 (#22), T43 (#384) |
+| `MemoryInputProcessor` | after a vendor limit, the hand-off note and the kept conversation for the next account; not the reviewer's briefing, because its fixed preamble tells the model that memory outweighs the system prompt and the briefing holds untrusted notes (T17 #463 sends the fenced notes as a user message from `src/Core/Review/Infrastructure/ReviewerMemory.php` instead) | planned | T43 (#384) |
 | Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button | planned | T21 (#27) |
 
 ## Symfony AI Store
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| `DocumentIndexer` and `Retriever` | index memory entries, retrieve those that describe the files under review | in progress | T17 (#22, #461), `src/Core/Memory/Infrastructure/StoreMemoryIndex.php`, `src/Core/Memory/Infrastructure/StoreProjectMemory.php`, `src/Core/Review/UseCase/IndexResolvedFindings/IndexResolvedFindingsHandler.php` (T17 #462: resolved findings are indexed after a completed review); retrieval for reviewers is still planned |
-| `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one project's memory | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/SqliteMemoryStoreTest.php`, `config/packages/ai.php` (store, vectorizer and indexer for production, T17 #462) |
+| `DocumentIndexer` and `Retriever` | index memory entries, retrieve those that describe the files under review | in progress | T17 (#22, #461), `src/Core/Memory/Infrastructure/StoreMemoryIndex.php`, `src/Core/Memory/Infrastructure/StoreProjectMemory.php`, `src/Core/Review/UseCase/IndexResolvedFindings/IndexResolvedFindingsHandler.php` (T17 #462: resolved findings are indexed after a completed review); T17 #463: `Retriever` feeds each reviewer's briefing through `src/Core/Review/Infrastructure/ReviewerMemory.php`, `config/packages/ai.php` |
+| `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one install's memory | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/SqliteMemoryStoreTest.php`, `config/packages/ai.php` (store, vectorizer and indexer for production, T17 #462) |
 | In-memory store | retrieval tests | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/StoreProjectMemoryTest.php` |
 | Reranker | only when a configured provider supports reranking | planned | T17 (#22) |
 

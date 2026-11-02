@@ -21,7 +21,8 @@ final readonly class SecretScan
     public function __construct(
         #[Autowire('%kernel.project_dir%')]
         private string $directory,
-        private string $scanner = 'gitleaks',
+        #[Autowire(env: 'default:intakt.gitleaks:INTAKT_GITLEAKS')]
+        private string $scanner,
     ) {
     }
 

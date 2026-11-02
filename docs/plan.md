@@ -161,10 +161,10 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T7, T15. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ### T17 Project memory with the Store
-- **Description:** After each completed review, resolved findings and their causes are indexed with the Symfony AI Store (an embedded store that works on SQLite); each reviewer's briefing retrieves the entries relevant to the files under review, with a size cap. Indexing uses the `DocumentIndexer`, retrieval the `Retriever`, and the briefing reaches the agent through `MemoryInputProcessor`. A reranker is added only when a configured provider supports reranking.
+- **Description:** After each completed review, resolved findings and their causes are indexed with the Symfony AI Store (an embedded store that works on SQLite); each reviewer's briefing retrieves the entries relevant to the files under review, with a size cap. Indexing uses the `DocumentIndexer`, retrieval the `Retriever`, and the briefing reaches the agent as a fenced user message of its own (not through `MemoryInputProcessor`, whose fixed preamble ranks memory above the system prompt). A reranker is added only when a configured provider supports reranking.
 - **Acceptance:** indexing and retrieval are tested with an in-memory store; the briefing respects its cap; memory is read-only to reviewers.
 - **Evidence:** a second review on the sample repository whose briefing cites an earlier finding.
-- **Store backend:** `symfony/ai-sqlite-store` (SQLite FTS5 plus vector similarity computed in PHP, needs only `pdo_sqlite`) behind Intakt's own small retrieval contract; the in-memory store in tests. It loads all vectors into PHP memory for a query, which is fine at the size of one project's memory; `docs/architecture/` says so.
+- **Store backend:** `symfony/ai-sqlite-store` (SQLite FTS5 plus vector similarity computed in PHP, needs only `pdo_sqlite`) behind Intakt's own small retrieval contract; the in-memory store in tests. It loads all vectors into PHP memory for a query, which is fine at the size of one install's memory (one store for every project, its notes kept apart by project); `docs/architecture/` says so.
 - **Waits for:** T12. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T18 GitHub forge plugin

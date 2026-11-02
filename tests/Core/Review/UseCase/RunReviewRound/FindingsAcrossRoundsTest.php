@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -59,6 +60,7 @@ use Throwable;
 #[UsesClass(Verdict::class)]
 #[UsesClass(VerdictIdentity::class)]
 #[UsesClass(ReviewBrief::class)]
+#[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(GoalpostRule::class)]
 #[UsesClass(VerdictsOfRoundHandler::class)]
 #[UsesClass(PanelVerdict::class)]
@@ -86,7 +88,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
     {
         $vendor = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
 
-        self::assertSame([RoundFixture::DIFF, RoundFixture::DIFF], array_values(array_map(static fn (ReviewBrief $brief): string => $brief->diff, $vendor->briefs)));
+        self::assertSame([RoundFixture::DIFF, RoundFixture::DIFF], array_values(array_map(static fn (ReviewBrief $brief): string => $brief->change->diff, $vendor->briefs)));
     }
 
     public function testAFirstRoundThatFoundNoLedgerBeforeAnotherRoundCommittedItBecomesTheSecondRound(): void

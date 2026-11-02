@@ -22,6 +22,7 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
@@ -60,6 +61,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
+use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -135,6 +137,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(ReviewBrief::class)]
+#[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(FencedToolbox::class)]
@@ -716,7 +719,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(?Uuid $round = null): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', 'diff --git a/a b/a', [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
     }
 
     private function openFinding(string $id): Finding
@@ -726,7 +729,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
