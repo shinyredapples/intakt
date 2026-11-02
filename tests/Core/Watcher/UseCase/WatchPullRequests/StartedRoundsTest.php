@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -65,10 +66,11 @@ final class StartedRoundsTest extends KernelTestCase
     public function testARoundQueuedBeforeItsRecordFailedToFlushIsDiscardedAndLeavesNoRecord(): void
     {
         $connection = $this->entities->getConnection();
+        $green = $this->green();
 
         try {
-            $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
-                $connection->executeStatement('DROP TABLE watcher_started_round');
+            $this->rounds->startOnce('alpha', $green, static function () use ($connection, $green): QueuedRound {
+                $connection->insert('watcher_started_round', ['project' => 'alpha', 'change_ref' => $green->id->value, 'head' => $green->head->hash, 'round_id' => 'round-0', 'stale' => false, 'queued_recorded' => false], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
 
                 return RecordingCommandBus::queued(1);
             });
@@ -78,6 +80,24 @@ final class StartedRoundsTest extends KernelTestCase
 
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
         self::assertSame(0, $this->storedRounds());
+    }
+
+    // The connection is lost while the round is queued, which ends its transaction as MySQL's implicit commit before a DROP does, so the rollback fails too.
+    public function testARoundQueuedBeforeItsTransactionWasLostIsDiscardedWhenTheRollbackFails(): void
+    {
+        $connection = $this->entities->getConnection();
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
+                $connection->close();
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The failed rollback was swallowed.');
+        } catch (Exception) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
     }
 
     public function testAStartThatFailsItselfLeavesTheDiscardToTheStart(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
+use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
@@ -39,8 +40,7 @@ final readonly class StartedRounds
             $this->pending->forget($project, $change);
             $connection->commit();
         } catch (Throwable $failure) {
-            $connection->rollBack();
-            $this->discard($queued);
+            $this->rollBackAndDiscard($connection, $queued);
 
             throw $failure;
         }
@@ -134,6 +134,16 @@ final readonly class StartedRounds
     private function isStarted(string $project, OpenChange $change): bool
     {
         return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+    }
+
+    // Discarded even when the rollback fails, because a lost connection or MySQL's implicit commit before DDL leaves no transaction to roll back, and the round's checkout would stay behind.
+    private function rollBackAndDiscard(Connection $connection, ?QueuedRound $queued): void
+    {
+        try {
+            $connection->rollBack();
+        } finally {
+            $this->discard($queued);
+        }
     }
 
     private function discard(?QueuedRound $queued): void
