@@ -29,7 +29,41 @@ final class ProjectsConfiguration implements ConfigurationInterface
             $this->addMapping($mapping->arrayNode('substitutes')->defaultValue([])->arrayPrototype()->children());
         }
 
+        $tree->getRootNode()->validate()->ifTrue($this->leavesThePinnedCodexModel(...))
+            ->thenInvalid('A tier or substitute on provider "codex" must map the model pinned under codex.model, because every Codex call runs on that model.');
+
         return $tree;
+    }
+
+    /**
+     * @param array{projects?: array<string, array{tiers: array<string, array{provider: string, model: string, substitutes: list<array{provider: string, model: string}>}>}>, codex?: array{model: string}} $intakt
+     */
+    private function leavesThePinnedCodexModel(array $intakt): bool
+    {
+        $pinned = $intakt['codex']['model'] ?? null;
+
+        return array_any(
+            $this->mappingsOf($intakt['projects'] ?? []),
+            static fn (array $mapping): bool => Provider::Codex->value === $mapping['provider'] && $pinned !== $mapping['model'],
+        );
+    }
+
+    /**
+     * @param array<string, array{tiers: array<string, array{provider: string, model: string, substitutes: list<array{provider: string, model: string}>}>}> $projects
+     *
+     * @return list<array{provider: string, model: string}>
+     */
+    private function mappingsOf(array $projects): array
+    {
+        $mappings = [];
+
+        foreach ($projects as $project) {
+            foreach ($project['tiers'] as $tier) {
+                $mappings = [...$mappings, ['provider' => $tier['provider'], 'model' => $tier['model']], ...$tier['substitutes']];
+            }
+        }
+
+        return $mappings;
     }
 
     private function addMapping(NodeBuilder $mapping): void

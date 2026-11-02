@@ -7,7 +7,11 @@ use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
+use Intakt\Core\Ai\Infrastructure\CodexLogins;
+use Intakt\Core\Ai\Infrastructure\CodexPlatformFactory;
+use Intakt\Core\Ai\Infrastructure\CodexSettings;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
+use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
@@ -141,8 +145,20 @@ return static function (ContainerConfigurator $container): void {
         return [[], new Reference('intakt.ai.platform.claude_code'.$suffix)];
     };
 
+    // A CLI per account, because each account's call needs its own login and call home (CodexLogins); the pinned model and effort are shared.
+    $codexPlatform = static function (Account $account) use ($container, $catalog): array {
+        $suffix = Account::DEFAULT === $account->name ? '' : '.'.$account->name;
+        $container->services()->set('intakt.ai.codex.cli'.$suffix, IsolatedCodexCli::class)
+            ->args([new ReferenceConfigurator(CodexLogins::class), new ReferenceConfigurator('intakt.ai.codex.settings'), $account->name]);
+        $container->services()->set('intakt.ai.platform.codex'.$suffix, PlatformInterface::class)
+            ->factory([new ReferenceConfigurator(CodexPlatformFactory::class), 'create'])
+            ->args([new ReferenceConfigurator('intakt.ai.codex.cli'.$suffix), $catalog->models(Provider::Codex)]);
+
+        return [[], new Reference('intakt.ai.platform.codex'.$suffix)];
+    };
+
     // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
-    $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform): array {
+    $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform, $codexPlatform): array {
         $variables = array_map($env, $account->variables());
         $default = Account::DEFAULT === $account->name;
         $generic = 'openai_compatible'.($default ? '' : '_'.$account->name);
@@ -160,8 +176,15 @@ return static function (ContainerConfigurator $container): void {
                 new Reference('ai.platform.generic.'.$generic),
             ],
             Provider::ClaudeCode => $claudeCodePlatform($account, $variables[0]),
+            Provider::Codex => $codexPlatform($account),
         };
     };
+
+    if (isset($configuration['codex'])) {
+        $container->services()->set('intakt.ai.codex.settings', CodexSettings::class)
+            ->factory([CodexSettings::class, 'fromConfiguration'])
+            ->args([$configuration['codex']]);
+    }
 
     $platform = [];
     $disabled = [];
@@ -170,6 +193,11 @@ return static function (ContainerConfigurator $container): void {
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
+        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
+        if (Provider::Codex === $provider && !isset($configuration['codex'])) {
+            continue;
+        }
+
         $enabled = [];
         $missingOf = [];
 

@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"0199a213-81c0-7800-8aa1-bbab2a035a58"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"**Checking the change against the open findings**"}}
+{"type":"turn.completed","usage":{"input_tokens":2300,"cached_input_tokens":512,"output_tokens":70}}

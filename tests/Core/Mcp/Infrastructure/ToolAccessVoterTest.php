@@ -53,6 +53,23 @@ final class ToolAccessVoterTest extends TestCase
         self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write, token: $token));
     }
 
+    public function testAToolThatMayWriteIsRefusedForAReviewCredentialEvenWhenTheConfigAllowsWrites(): void
+    {
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write, token: $this->reviewer()));
+    }
+
+    public function testAReadToolIsGrantedForAReviewCredential(): void
+    {
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Read, token: $this->reviewer()));
+    }
+
+    public function testArgumentsThatNameTheOwnerOrAWriteGrantNothingToAReviewCredential(): void
+    {
+        $arguments = ['role' => OwnerTokenHandler::OWNER_ROLE, 'allow_write' => true];
+
+        self::assertSame(VoterInterface::ACCESS_DENIED, new ToolAccessVoter(ToolAccess::Write)->vote($this->reviewer(), $arguments, [ToolAccess::Write->value]));
+    }
+
     public function testAReadToolIsGrantedWithoutAToken(): void
     {
         self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Read));
@@ -75,6 +92,12 @@ final class ToolAccessVoterTest extends TestCase
     private function vote(ToolAccessVoter $voter, ToolAccess $access, ?TokenInterface $token = null): int
     {
         return $voter->vote($token ?? new NullToken(), null, [$access->value]);
+    }
+
+    private function reviewer(): TokenInterface
+    {
+        // The role is spelled out because the Mcp module may not use the Review module's classes.
+        return new UsernamePasswordToken(new InMemoryUser('round', null, ['ROLE_MCP_REVIEWER']), 'mcp_review', ['ROLE_MCP_REVIEWER']);
     }
 
     private function owner(): TokenInterface
