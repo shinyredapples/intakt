@@ -72,7 +72,7 @@ final readonly class DayReplay
     private function read(ScriptedStep $step): string
     {
         [$account, $window, $percent, $resetsAt] = $this->arguments($step, 4);
-        $usageWindow = UsageWindow::tryFrom($window) ?? throw ScriptLineNotUnderstood::because($step->line, 'a window is five-hour or weekly');
+        $usageWindow = UsageWindow::tryFrom($window) ?? throw ScriptLineNotUnderstood::because($step->line, 'a window is one of '.implode(', ', array_column(UsageWindow::cases(), 'value')));
         if (!is_numeric($percent) || (float) $percent < 0) {
             throw ScriptLineNotUnderstood::because($step->line, 'a used percent is a number of zero or more');
         }
@@ -92,7 +92,7 @@ final readonly class DayReplay
     private function hold(ScriptedStep $step): string
     {
         [$hold, $until] = $this->arguments($step, 2);
-        $sharedHold = SharedHold::tryFrom($hold) ?? throw ScriptLineNotUnderstood::because($step->line, 'a hold is drain, pause or back-off');
+        $sharedHold = SharedHold::tryFrom($hold) ?? throw ScriptLineNotUnderstood::because($step->line, 'a hold is one of '.implode(', ', array_column(SharedHold::cases(), 'value')));
         $this->holds->hold($sharedHold, ScriptedStep::momentOf($until, $step->line));
 
         return 'held';

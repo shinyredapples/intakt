@@ -85,27 +85,36 @@ final class BudgetGuardTest extends TestCase
         self::assertSame(StartDecision::Start, $this->guard->decide($this->claude('team'), 1));
     }
 
-    public function testASharedBackOffRefusesStartsOnEveryAccount(): void
+    public function testASharedBudgetBackOffRefusesStartsOnEveryAccount(): void
     {
-        $this->hold(SharedHold::BackOff, '+30 minutes');
+        $this->hold(SharedHold::BudgetBackOff, '+30 minutes');
 
-        self::assertSame(StartDecision::BackedOff, $this->guard->decide($this->claude('main'), 0));
-        self::assertSame(StartDecision::BackedOff, $this->guard->decide(new Account(Provider::Anthropic, 'main'), 0));
+        self::assertSame(StartDecision::BudgetBackedOff, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::BudgetBackedOff, $this->guard->decide(new Account(Provider::Anthropic, 'main'), 0));
     }
 
-    public function testASharedBackOffStillLetsApprovedHeadsMerge(): void
+    public function testASharedBudgetBackOffStillLetsApprovedHeadsMerge(): void
     {
-        $this->hold(SharedHold::BackOff, '+30 minutes');
+        $this->hold(SharedHold::BudgetBackOff, '+30 minutes');
 
         self::assertSame(StartDecision::Start, $this->guard->decideMerge());
     }
 
-    public function testASharedBackOffEndsAtItsEnd(): void
+    public function testASharedBudgetBackOffEndsAtItsEnd(): void
     {
-        $this->hold(SharedHold::BackOff, '+30 minutes');
+        $this->hold(SharedHold::BudgetBackOff, '+30 minutes');
         $this->clock->sleep(30 * 60);
 
         self::assertSame(StartDecision::Start, $this->guard->decide($this->claude('main'), 0));
+    }
+
+    public function testAFailureBackOffRefusesStartsOnEveryAccountAndMerges(): void
+    {
+        $this->hold(SharedHold::FailureBackOff, '+30 minutes');
+
+        self::assertSame(StartDecision::FailureBackedOff, $this->guard->decide($this->claude('team'), 0));
+        self::assertSame(StartDecision::FailureBackedOff, $this->guard->decide(new Account(Provider::Anthropic, 'main'), 0));
+        self::assertSame(StartDecision::FailureBackedOff, $this->guard->decideMerge());
     }
 
     public function testAPauseRefusesStartsAndLetsMergesThrough(): void
@@ -124,22 +133,39 @@ final class BudgetGuardTest extends TestCase
         self::assertSame(StartDecision::Draining, $this->guard->decideMerge());
     }
 
-    public function testADrainWinsOverAPauseAndAPauseOverABackOff(): void
+    public function testAPauseWinsOverABudgetBackOff(): void
     {
-        $this->hold(SharedHold::BackOff, '+1 hour');
+        $this->hold(SharedHold::BudgetBackOff, '+1 hour');
         $this->hold(SharedHold::Pause, '+1 hour');
-        self::assertSame(StartDecision::Paused, $this->guard->decide($this->claude('main'), 0));
 
-        $this->hold(SharedHold::Drain, '+1 hour');
+        self::assertSame(StartDecision::Paused, $this->guard->decide($this->claude('main'), 0));
+    }
+
+    public function testAFailureBackOffWinsOverAPauseAndHoldsTheMergesThePauseLetsThrough(): void
+    {
+        $this->hold(SharedHold::Pause, '+1 hour');
+        $this->hold(SharedHold::FailureBackOff, '+1 hour');
+
+        self::assertSame(StartDecision::FailureBackedOff, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::FailureBackedOff, $this->guard->decideMerge());
+    }
+
+    public function testADrainWinsOverEveryOtherHold(): void
+    {
+        foreach (SharedHold::cases() as $hold) {
+            $this->hold($hold, '+1 hour');
+        }
+
         self::assertSame(StartDecision::Draining, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::Draining, $this->guard->decideMerge());
     }
 
     public function testASharedHoldWinsOverAnAccountsCooldown(): void
     {
         $this->coolDown($this->claude('main'), '+2 hours');
-        $this->hold(SharedHold::BackOff, '+30 minutes');
+        $this->hold(SharedHold::BudgetBackOff, '+30 minutes');
 
-        self::assertSame(StartDecision::BackedOff, $this->guard->decide($this->claude('main'), 0));
+        self::assertSame(StartDecision::BudgetBackedOff, $this->guard->decide($this->claude('main'), 0));
     }
 
     public function testACooldownLetsApprovedHeadsMerge(): void

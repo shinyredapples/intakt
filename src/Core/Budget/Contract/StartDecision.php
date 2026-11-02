@@ -12,8 +12,9 @@ enum StartDecision: string
     case ReadingNotFreshEnough = 'reading-not-fresh-enough';
     case NoMarginForParallelStart = 'no-margin-for-parallel-start';
     case CoolingDown = 'cooling-down';
-    case BackedOff = 'backed-off';
+    case BudgetBackedOff = 'budget-backed-off';
     case Paused = 'paused';
+    case FailureBackedOff = 'failure-backed-off';
     case Draining = 'draining';
 
     public function admits(): bool

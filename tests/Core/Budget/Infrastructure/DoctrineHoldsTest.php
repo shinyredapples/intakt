@@ -107,11 +107,11 @@ final class DoctrineHoldsTest extends KernelTestCase
 
     public function testSharedHoldsInEffectComeInTheOrderTheyWin(): void
     {
-        $this->holds->hold(SharedHold::BackOff, $this->later('+1 hour'));
+        $this->holds->hold(SharedHold::BudgetBackOff, $this->later('+1 hour'));
         $this->holds->hold(SharedHold::Drain, $this->later('+1 hour'));
-        $this->holds->hold(SharedHold::BackOff, $this->later('+2 hours'));
+        $this->holds->hold(SharedHold::BudgetBackOff, $this->later('+2 hours'));
 
-        self::assertSame([SharedHold::Drain, SharedHold::BackOff], $this->holds->sharedInEffect());
+        self::assertSame([SharedHold::Drain, SharedHold::BudgetBackOff], $this->holds->sharedInEffect());
     }
 
     public function testASharedHoldEndsAtItsEnd(): void

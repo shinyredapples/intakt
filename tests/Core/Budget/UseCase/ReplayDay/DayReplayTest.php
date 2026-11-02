@@ -78,10 +78,10 @@ final class DayReplayTest extends TestCase
         yield 'an unknown provider' => ['2026-11-02T08:00 start claude.main 0', 'an account is written as provider.name'];
         yield 'an account without a name' => ['2026-11-02T08:00 start claude_code 0', 'an account is written as provider.name'];
         yield 'an account name the configuration refuses' => ['2026-11-02T08:00 start claude_code.Main 0', 'an account is written as provider.name'];
-        yield 'an unknown window' => ['2026-11-02T08:00 read claude_code.main daily 20 2026-11-02T13:00', 'a window is five-hour or weekly'];
+        yield 'an unknown window' => ['2026-11-02T08:00 read claude_code.main daily 20 2026-11-02T13:00', 'a window is one of five-hour, weekly'];
         yield 'a negative percent' => ['2026-11-02T08:00 read claude_code.main weekly -1 2026-11-02T13:00', 'a used percent is a number of zero or more'];
         yield 'a percent that is no number' => ['2026-11-02T08:00 read claude_code.main weekly lots 2026-11-02T13:00', 'a used percent is a number of zero or more'];
-        yield 'an unknown hold' => ['2026-11-02T08:00 hold stop 2026-11-02T09:00', 'a hold is drain, pause or back-off'];
+        yield 'an unknown hold' => ['2026-11-02T08:00 hold stop 2026-11-02T09:00', 'a hold is one of drain, failure-back-off, pause, budget-back-off'];
         yield 'calls running that are no whole number' => ['2026-11-02T08:00 start claude_code.main -1', 'whole number of zero or more'];
         yield 'a moment that rolls over' => ['2026-11-02T08:00 limit claude_code.main 2026-11-02T25:00', 'a moment is written as 2026-11-02T08:00 in UTC'];
         yield 'a moment with a zone' => ['2026-11-02T08:00+02:00 merge', 'a moment is written as 2026-11-02T08:00 in UTC'];

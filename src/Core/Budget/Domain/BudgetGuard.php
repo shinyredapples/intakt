@@ -42,7 +42,7 @@ final readonly class BudgetGuard implements StartGuard
         };
     }
 
-    // Merging calls no model, so an approved head still lands through a pause, a back-off and any account's cooldown.
+    // Merging calls no model, so an approved head still lands through any account's cooldown and the shared holds that let merges through.
     #[Override]
     public function decideMerge(): StartDecision
     {
