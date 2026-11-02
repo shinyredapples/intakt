@@ -184,10 +184,10 @@ Intakt can keep, for each AI account, the latest use of its five-hour and weekly
 
 From these readings Intakt can decide whether one more call may start on an account:
 
-- No call starts while a window is at or above its ceiling. An old reading still counts until its window resets, since use only grows until then; once the reset time has passed, the reading no longer counts.
+- No call starts while a window is at or above its ceiling. An old reading still counts until its window resets, since use only grows until then; once the reset time has passed, the reading no longer counts. A reading without a reset time stops counting once it is older than its window is long (five hours or a week).
 - The weekly window is paced: the pace is the weekly ceiling times the share of the week that has passed, counting the current five hours as passed. While the weekly use is ahead of the pace, the five-hour ceiling shrinks in the same proportion (for example, a weekly use of twice the pace halves it).
 - With no call running, one call starts below the ceilings, even with no reading or an old one.
-- A second call at the same time needs a reading of both windows taken within the last 5 minutes, and both windows at least 10 points below their ceilings. Without a reading of both windows from the last 30 minutes, only one call runs at a time.
+- A second call at the same time needs a reading of both windows taken within the last 5 minutes, and both windows more than 10 points below their ceilings (at a ceiling of 90%, a use of 80% is not enough). Without a reading of both windows from the last 30 minutes, only one call runs at a time.
 - Only the account's own readings count. Intakt's estimate of what a call will cost plays no part.
 
 Set the ceilings, in percent from 1 to 100, in `config/intakt.yaml` (or the file `INTAKT_CONFIG` names) and run `php bin/console cache:clear`:
@@ -199,7 +199,7 @@ budget:
         weekly: 90
 ```
 
-Both default to 90; a window you leave out keeps it. A value outside 1 to 100, or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
+Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
 
 ### Choosing the database
 

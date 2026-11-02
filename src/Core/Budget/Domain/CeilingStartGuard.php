@@ -57,7 +57,7 @@ final readonly class CeilingStartGuard implements StartGuard
         $uses = [];
         foreach (UsageWindow::cases() as $window) {
             $use = $this->measured->of($account, $window);
-            if ($use instanceof WindowUse && !$this->hasReset($use)) {
+            if ($use instanceof WindowUse && !$this->hasReset($use, $window)) {
                 $uses[$window->value] = $use;
             }
         }
@@ -65,15 +65,19 @@ final readonly class CeilingStartGuard implements StartGuard
         return $uses;
     }
 
-    // A window that reset since its reading starts empty, so that reading says nothing about it any more.
-    private function hasReset(WindowUse $use): bool
+    // A window that reset since its reading starts empty, so that reading says nothing about it any more; without a reset
+    // time, a reading older than its window's length has outlived at least one reset.
+    private function hasReset(WindowUse $use, UsageWindow $window): bool
     {
         $resetsAt = $use->usage->resetsAt;
+        if (!$resetsAt instanceof DateTimeImmutable) {
+            return $use->ageInSeconds >= $window->seconds();
+        }
 
-        return $resetsAt instanceof DateTimeImmutable && $resetsAt <= $this->clock->now();
+        return $resetsAt <= $this->clock->now();
     }
 
-    // Any age counts here, because use only grows until the reset, so an old reading at the ceiling is still at it.
+    // Any age short of the reset counts here, because use only grows until the reset, so an old reading at the ceiling is still at it.
     /**
      * @param array<string, WindowUse> $uses
      */

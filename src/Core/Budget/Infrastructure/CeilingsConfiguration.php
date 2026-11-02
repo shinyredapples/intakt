@@ -22,7 +22,10 @@ final class CeilingsConfiguration implements ConfigurationInterface
 
         foreach (UsageWindow::cases() as $window) {
             // A float node keeps a whole number as an int, and the guard compares floats.
+            // NaN becomes a string before normalization, because Symfony Config skips every check for NaN itself
+            // (upstream/config-nan-skips-validation) and the float type check then refuses it with the node's path.
             $ceilings->floatNode($window->value)->min(1)->max(100)->defaultValue(self::DEFAULT_CEILING)
+                ->beforeNormalization()->ifTrue(static fn (mixed $ceiling): bool => is_float($ceiling) && is_nan($ceiling))->then(static fn (): string => 'NaN')->end()
                 ->validate()->always(static fn (int|float $ceiling): float => (float) $ceiling);
         }
 

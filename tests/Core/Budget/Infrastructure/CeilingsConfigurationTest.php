@@ -35,6 +35,8 @@ final class CeilingsConfigurationTest extends TestCase
         yield 'above a hundred' => [101];
         yield 'below one' => [0.5];
         yield 'not a number' => ['high'];
+        yield 'not a finite number' => [NAN];
+        yield 'infinite' => [INF];
     }
 
     #[DataProvider('refusedCeilings')]

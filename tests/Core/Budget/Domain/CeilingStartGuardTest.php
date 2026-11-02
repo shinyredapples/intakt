@@ -107,6 +107,22 @@ final class CeilingStartGuardTest extends TestCase
         self::assertSame(StartDecision::Start, $this->decide(0));
     }
 
+    public function testAReadingWithoutResetTimeAtTheCeilingRefusesWithinItsWindowLength(): void
+    {
+        $this->readWindow(UsageWindow::FiveHour, 95.0, null);
+        $this->clock->sleep(UsageWindow::FiveHour->seconds() - 1);
+
+        self::assertSame(StartDecision::AtCeiling, $this->decide(0));
+    }
+
+    public function testAReadingWithoutResetTimeOlderThanItsWindowLengthNoLongerRefuses(): void
+    {
+        $this->readWindow(UsageWindow::FiveHour, 95.0, null);
+        $this->clock->sleep(2 * 86400);
+
+        self::assertSame(StartDecision::Start, $this->decide(0));
+    }
+
     public function testWithoutAReadingOneCallStarts(): void
     {
         self::assertSame(StartDecision::Start, $this->decide(0));
@@ -211,7 +227,7 @@ final class CeilingStartGuardTest extends TestCase
         }
     }
 
-    private function readWindow(UsageWindow $window, float $percent, DateTimeImmutable $resetsAt): void
+    private function readWindow(UsageWindow $window, float $percent, ?DateTimeImmutable $resetsAt): void
     {
         $this->readings->record(new WindowReading($this->account(), $window, new Usage($percent, $resetsAt)));
     }
