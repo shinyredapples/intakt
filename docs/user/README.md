@@ -138,6 +138,18 @@ Which plans may be used this way is the vendor's decision, not Intakt's. Anthrop
 
 To decrypt the secrets, Intakt reads `SYMFONY_DECRYPTION_SECRET` the way Symfony does: a base64 value, in the standard or the URL-safe alphabet (`-` and `_`). When it is not set, or decodes to nothing, the vault's own private key file in `config/secrets/<environment>/` is used. A secret that cannot be decrypted (a wrong key, or no key at all) counts as not set, so its provider is switched off and named on standard error as above.
 
+### A Codex subscription login
+
+Codex has no long-lived token, so Intakt keeps each account's login file itself. Log in with the `codex` command-line tool, then copy its `auth.json` (in `~/.codex/`, or in `CODEX_HOME` when you set it) to `var/codex/logins/<account>/auth.json`, for example `var/codex/logins/default/auth.json`; the account name follows the same rule as above. Keep that file readable by Intakt's user only (`chmod 600`). Pin the model and the reasoning effort every call uses in `config/intakt.yaml`, both required once the section is there:
+
+```yaml
+codex: { model: gpt-5.3-codex, effort: high }
+```
+
+The effort is one of `minimal`, `low`, `medium`, `high` and `xhigh`; anything else stops Intakt from starting. Before each call Intakt refreshes the login when it was last refreshed seven days ago or more (the `codex` tool would do so itself after eight), writes the new login back to the same file, and then gives the call a read-only copy in the account's own folder `var/codex/homes/<account>/`, which is also the tool's home and working folder. Whatever the call writes there never reaches the kept login, and the next call gets a fresh copy. Like the Claude tool, it gets your `PATH` and every other variable of Intakt's environment empty. A login that cannot be read or refreshed stops the call with a message saying so.
+
+`php bin/console intakt:codex:probe <account>` (the account defaults to `default`) makes one such call and prints the account, the pinned model and effort, and the answer; it needs the `codex` tool where Intakt runs. No reviewer runs on Codex yet: that comes in a later part.
+
 ### Capability tiers per project
 
 Each project maps three capability tiers (`strong`, `standard`, `light`) to a provider and a model. Copy `config/intakt.example.yaml` to `config/intakt.yaml` (or point `INTAKT_CONFIG` at another file), edit it, and run `php bin/console cache:clear`. Project names are kept exactly as written, dashes included, and a model must be a text value that is valid UTF-8 and not blank (a value made only of whitespace, including Unicode spaces such as a no-break space, counts as blank). Several projects can map the tiers differently; a tier you leave out is reported as not mapped. A model name the provider's built-in list does not know is added to it, so newer models work too. An invalid file stops Intakt from starting and names the bad key. `php bin/console intakt:ai:tiers` lists every project with the provider and model of each tier; a tier whose provider is switched off (see above) shows the reason instead of a model.

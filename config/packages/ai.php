@@ -98,7 +98,7 @@ return static function (ContainerConfigurator $container): void {
     /** @var array{budget: array{ceilings: array<string, float>}} $ceilings */
     $ceilings = new Processor()->processConfiguration(new CeilingsConfiguration(), [$budget]);
 
-    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>} $configuration */
+    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
     $projects = $configuration['projects'];
     $tierProviders = array_map(static fn (array $project): array => array_map(static fn (array $tier): string => $tier['provider'], $project['tiers']), $projects);
@@ -217,6 +217,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
     $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
     $container->parameters()->set('intakt.projects', $projects);
+    $container->parameters()->set('intakt.ai.codex', $configuration['codex'] ?? null);
     $container->parameters()->set('intakt.review.panels', $panels);
     $container->parameters()->set('intakt.shadow.modes', array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set('intakt.budget.ceilings', $ceilings['budget']['ceilings']);

@@ -18,6 +18,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
     {
         $tree = new TreeBuilder('intakt');
         $this->addAccounts($tree);
+        $this->addCodex($tree);
         $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false)->arrayPrototype()->children();
         $tiers = $projects->arrayNode('tiers')->addDefaultsIfNotSet()->children();
 
@@ -34,7 +35,20 @@ final class ProjectsConfiguration implements ConfigurationInterface
     private function addMapping(NodeBuilder $mapping): void
     {
         $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-        $mapping->stringNode('model')->isRequired()->cannotBeEmpty()
+        $this->addModel($mapping);
+    }
+
+    // Optional, since only a Codex subscription account needs it; once present, both are required so neither falls back to the CLI's default.
+    private function addCodex(TreeBuilder $tree): void
+    {
+        $codex = $tree->getRootNode()->children()->arrayNode('codex')->children();
+        $this->addModel($codex);
+        $codex->enumNode('effort')->isRequired()->values(array_column(CodexEffort::cases(), 'value'));
+    }
+
+    private function addModel(NodeBuilder $parent): void
+    {
+        $parent->stringNode('model')->isRequired()->cannotBeEmpty()
             ->validate()->ifTrue(static fn (string $model): bool => !mb_check_encoding($model, 'UTF-8'))->thenInvalid('The "model" key must be valid UTF-8.')->end()
             ->validate()->ifTrue(static fn (string $model): bool => 1 === preg_match('/^\s*$/u', $model))->thenInvalid('The "model" key must not be blank.')->end();
     }

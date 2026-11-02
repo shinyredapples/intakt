@@ -47,6 +47,12 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 |---|---|---|---|---|---|
 | `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ConfinedClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --append-system-prompt <schema> --model <name> -p <prompt>` | only for that provider | a release with those flags (2.1.302 accepts them) | no |
 
+## Called by `intakt:codex:probe`
+
+| Command | Called by | What for | Needed | Version | In the image |
+|---|---|---|---|---|---|
+| `codex` (Codex CLI) | `symfony/ai-codex-platform` through `IsolatedCodexCli` | one call on an account's subscription login, called as `codex exec --json --model <name> --config model_reasoning_effort="<effort>" --sandbox read-only <prompt>` | only for that command | a release with `exec --json` and `--config` | no |
+
 ## Coming with planned parts
 
 | Command | Where | What for |
