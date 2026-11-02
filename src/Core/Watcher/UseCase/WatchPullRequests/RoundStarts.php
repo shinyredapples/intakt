@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use RuntimeException;
@@ -22,7 +23,7 @@ final readonly class RoundStarts
     // Queues the round before the ledger line, so a ledger that is down cannot cost a round; the stored round owes its line until the ledger takes it.
     public function startFor(WatchedProject $project, HeadDecision $decision): void
     {
-        $this->rounds->startOnce($project->name, $decision->change, fn (): string => $this->queue($project, $decision->change));
+        $this->rounds->startOnce($project->name, $decision->change, fn (): QueuedRound => $this->queue($project, $decision->change));
         $this->recordQueued($project->name);
     }
 
@@ -34,10 +35,10 @@ final readonly class RoundStarts
         }
     }
 
-    private function queue(WatchedProject $project, OpenChange $green): string
+    private function queue(WatchedProject $project, OpenChange $green): QueuedRound
     {
-        $roundId = $this->commands->dispatch($project->startAt($green))->last(HandledStamp::class)?->getResult();
+        $queued = $this->commands->dispatch($project->startAt($green))->last(HandledStamp::class)?->getResult();
 
-        return is_string($roundId) ? $roundId : throw new RuntimeException('The review start did not answer the id of the round.');
+        return $queued instanceof QueuedRound ? $queued : throw new RuntimeException('The review start did not answer the queued round.');
     }
 }

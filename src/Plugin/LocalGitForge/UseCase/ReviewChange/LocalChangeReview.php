@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\HeadIdentity;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\ReviewTerms;
@@ -55,10 +56,10 @@ final readonly class LocalChangeReview
     {
         $forge = $this->forgeFor($input);
 
-        return $this->start($forge, $input, $forge->change(new ChangeId($input->change)));
+        return $this->start($forge, $input, $forge->change(new ChangeId($input->change)))->roundId;
     }
 
-    public function startAt(ReviewChangeInput $input, CommitId $head): string
+    public function startAt(ReviewChangeInput $input, CommitId $head): QueuedRound
     {
         $forge = $this->forgeFor($input);
 
@@ -83,14 +84,14 @@ final readonly class LocalChangeReview
         return new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
     }
 
-    // Queues the next round without waiting, so the snapshot outlives this call: RemoveKeptSnapshot removes it once the round is judged, and this call when the round cannot be queued.
-    private function start(LocalGitForge $forge, ReviewChangeInput $input, Change $change): string
+    // Queues the next round without waiting, so the snapshot outlives this call: RemoveKeptSnapshot removes it once the round is judged, DiscardQueuedRoundHandler when the caller's transaction rolls the round back, and this call when the round cannot be queued.
+    private function start(LocalGitForge $forge, ReviewChangeInput $input, Change $change): QueuedRound
     {
         $request = $this->requestFor($input, $change);
         $snapshot = $forge->keepSnapshotOf($change->commits->head);
 
         try {
-            return $this->reviews->start($request($snapshot));
+            return new QueuedRound($this->reviews->start($request($snapshot)), $snapshot);
         } catch (Throwable $failure) {
             $forge->removeSnapshot($snapshot);
 

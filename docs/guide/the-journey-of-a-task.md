@@ -51,6 +51,8 @@ It produces two things, and nothing else leaves the workspace:
 
 Before it finishes, it runs a **self-check**: no merge commits, nothing that looks like a password or key, description not too long. Catching those itself is much cheaper than being refused afterwards.
 
+Planned: the self-check also runs the project's quick checks, ticks off every piece of evidence the task asks for, and looks for documentation the change made wrong. Intakt checks before it asks the reviewers because every round of fixes after a review costs about as much as four reviews, and with one account that comes straight out of new work. When the same kind of problem keeps coming back from the reviewers, Intakt suggests a new automatic check as a task; label it to accept it, and the problem is caught before review from then on.
+
 ## 3. Checking
 
 Intakt never trusts the builder's word that the work passes. It unpacks the change in a **fresh, separate container** and runs the project's own checks there:
@@ -93,9 +95,11 @@ flowchart TD
 
 - **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: becomes a follow-up task, never blocks). From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
 - **A finding keeps its name:** each finding gets a short id (F1, F2, ...). On the next round, every reviewer is shown the findings still open, says which ones are fixed, and a problem that is still there keeps its id, so one problem can be followed from round to round.
+- **All reviewers at once:** the core panel's reviewers read the same version at the same time, and none waits for another to approve first, so the builder gets every finding in one go instead of one extra round per reviewer.
 - **Evidence beats opinion:** a reviewer can write a small test, run it against the change, and attach the result to its finding.
 - **Second chances, but not endless ones:** if the same serious problem comes back twice, a stronger model builds the fix; a third time, the maintainer agent decides. If a task keeps getting sent back, it is re-planned rather than handed to you: split into smaller tasks, made clearer, or tried once more with a stronger model, and you are asked only in four cases: a product choice is needed, the reviewers disagree about what the task asks for, a serious problem touches security, secrets or data integrity, or the task still fails after its last try with a stronger model and cannot be split (planned).
 - **No repeat work:** a review counts only for exactly what it saw: the same code, the same task, the same checks and the same reviewers. Two kinds of new commit keep it: merging main in when git does it by itself with nothing to fix by hand, and a change that only touches the `docs/` folder. The earlier review then still counts for everything else, and only the touched files are looked at again. Intakt can already tell these cases apart, and each review round remembers what it saw so its reviews stop counting once that changes; checking this whenever new commits arrive, and looking again at only the touched files so a review isn't paid for twice, is planned.
+- **Grown too big?** Every new version of the change is measured again (planned). One that has grown too big to review in one go, for example after several rounds of fixes, is not reviewed and not sent back to the builder, who cannot split it; the maintainer agent splits it into smaller tasks. In general, the builder only gets back what it can fix on its own branch.
 - **Stuck for an outside reason?** The task goes on hold and comes back by itself when the reason is gone ([holds](how-intakt-works.md#when-something-gets-stuck)).
 
 ## 6. Merging
@@ -119,6 +123,7 @@ flowchart TD
 - **A finished change goes first.** A change that is approved, has green checks and needs nothing else is merged before Intakt starts reviewing anything new, whatever its priority, because waiting only makes more work.
 - **Changes to the rules** follow the approval rules in [What needs you](how-intakt-works.md#what-needs-you-and-what-doesnt).
 - After merging, it **reads the result back** and only then closes the task.
+- **A merged pull request always shows as merged.** Intakt deletes the branch only after the forge says the pull request is merged, so a merged change never shows as closed without a merge.
 
 ## 7. Afterwards
 
