@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
+use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\RelevantMemory;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
@@ -141,6 +142,33 @@ final class ReviewerMemoryTest extends TestCase
 
         self::assertLessThanOrEqual(4_000, strlen($briefing));
         self::assertGreaterThan(0, substr_count($briefing, 'x'));
+    }
+
+    public function testEntriesJustUnderTheMemoryCapStillGiveABriefingWithinTheByteCap(): void
+    {
+        foreach (range(1, 3) as $number) {
+            $this->remember($number.str_repeat('x', 1_100), 'src/Cart.php');
+        }
+        $this->remember('last'.str_repeat('y', 500), 'src/Cart.php');
+
+        $briefing = $this->briefing(self::DIFF);
+
+        self::assertLessThanOrEqual(4_000, strlen($briefing));
+        self::assertStringContainsString('<<<END fence-', $briefing);
+        self::assertStringContainsString('last', $briefing);
+    }
+
+    public function testAnOversizedTopEntryIsShortenedMarkedAndKeptWithinTheByteCap(): void
+    {
+        $memory = $this->createStub(ProjectMemory::class);
+        $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry(self::PROJECT, str_repeat('é', 2_500), ['src/Cart.php'])], 10_000));
+
+        $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF));
+
+        self::assertLessThanOrEqual(4_000, strlen($briefing));
+        self::assertStringContainsString('[note shortened]', $briefing);
+        self::assertStringContainsString('<<<END fence-', $briefing);
+        self::assertTrue(mb_check_encoding($briefing, 'UTF-8'));
     }
 
     public function testAChangeWithNoRememberedEntriesAddsNoBriefing(): void
