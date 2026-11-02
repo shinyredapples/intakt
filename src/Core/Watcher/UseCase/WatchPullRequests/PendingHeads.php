@@ -60,6 +60,13 @@ final readonly class PendingHeads
         return $due;
     }
 
+    public function stillDue(string $project, OpenChange $open): ?OpenChange
+    {
+        $pending = $this->stored($project, $open);
+
+        return true === $pending?->isDueAt($this->clock->now()) ? $pending->openChange() : null;
+    }
+
     // Left alone when the listing queued a newer head meanwhile, because that head is due now and must not wait for this one's time.
     public function keep(string $project, HeadDecision $decision): void
     {

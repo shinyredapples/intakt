@@ -59,7 +59,6 @@ use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(WatchPullRequestsHandler::class)]
@@ -88,6 +87,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 {
     private const string PENDING = 'a';
     private const string GREEN = 'b';
+    private const string RED = 'c';
     private const string NEXT_GREEN = 'e';
     private const string BASE = 'f';
 
@@ -98,6 +98,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private InMemoryLedger $ledger;
     private MockClock $clock;
     private StandingQueryBus $queries;
+    private BeforeChangeLockStore $locks;
     private WatchPullRequestsHandler $handler;
 
     protected function setUp(): void
@@ -108,12 +109,13 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->listing = new RecordedForge();
-        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
+        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
         $this->commands = new RecordingCommandBus();
         $this->ledger = new InMemoryLedger();
         $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $this->queries = new StandingQueryBus($recorded, $entities);
+        $this->locks = new BeforeChangeLockStore();
         $this->handler = $this->handler();
     }
 
@@ -202,6 +204,33 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
     }
 
+    public function testAHeadThatAnotherTickSettledBeforeThisTickTookItsLockIsNotSettledAgain(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->locks->beforeChangeLock = function (): void {
+            $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:30:00Z'));
+            $this->tick();
+        };
+
+        $this->tick();
+
+        self::assertSame([], $this->commands->started);
+        self::assertSame([LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
+    public function testANewerHeadQueuedBeforeThisTickTookItsLockIsTheHeadThisTickSettles(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->beforeChangeLock = function (): void {
+            new PendingHeads($this->entities, $this->clock)->enqueue('alpha', [RecordedForge::change('7', self::GREEN, '2026-11-02T09:30:00Z')]);
+        };
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+        self::assertEquals(new CommitId(str_repeat(self::GREEN, 40)), $this->commands->started[0]->head);
+    }
+
     public function testAFailedStartIsTriedAgainOnTheNextTickEvenWhenTheListingIsUnchanged(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
@@ -264,7 +293,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->clock->modify('+61 seconds');
         $this->tick();
 
-        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::VerdictsStale, LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadPending, LedgerEventKind::VerdictsStale, LedgerEventKind::HeadPending], $this->ledger->kinds());
     }
 
     public function testAHeadThatMovesWhileItsRoundIsStillStartingMakesThatRoundsVerdictsStaleOnTheNextTick(): void
@@ -280,7 +309,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::VerdictsStale, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadPending, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
         self::assertTrue($this->storedStale(self::GREEN));
     }
 
@@ -304,8 +333,34 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::VerdictsStale, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadPending, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
         self::assertCount(1, $this->commands->started);
+    }
+
+    public function testAMovedHeadNotFetchedYetIsStillRecordedPendingAndWaitsItsInterval(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->fetched = false;
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
+        $this->tickExpectingFailure();
+
+        $this->clock->modify('+59 seconds');
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertCount(2, $this->checks->asked);
+    }
+
+    public function testAMovedHeadNotFetchedYetIsStillRecordedRed(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->fetched = false;
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
+
+        $this->tickExpectingFailure();
+
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed], $this->ledger->kinds());
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
     public function testATickOverOnePendingAndOneGreenPullRequestRecordsEachInTheLedger(): void
@@ -355,7 +410,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
     private function handler(): WatchPullRequestsHandler
     {
-        $locks = new LockFactory(new InMemoryStore());
+        $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
         $pending = new PendingHeads($this->entities, $this->clock);
         $rounds = new StartedRounds($this->entities, $pending);

@@ -31,9 +31,16 @@ final readonly class HeadLocks
                 $lock = $this->lockOf($project, $open);
 
                 // Tried without waiting, because a tick has a time budget and the head stays due for the next tick.
-                if ($lock->acquire(false)) {
-                    $held[] = $lock;
-                    $heads[] = $open;
+                if (!$lock->acquire(false)) {
+                    continue;
+                }
+
+                $held[] = $lock;
+                // Read again under the lock, because another tick may have settled this head or queued a newer one between the read and the acquire.
+                $current = $this->pending->stillDue($project, $open);
+
+                if (null !== $current) {
+                    $heads[] = $current;
                 }
             }
 

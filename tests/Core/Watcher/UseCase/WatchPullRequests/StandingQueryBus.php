@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Plugin\Forge\Contract\CommitRange;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Override;
@@ -24,6 +25,7 @@ final class StandingQueryBus implements MessageBusInterface
     /** @var list<VerdictsOfRound> */
     public array $asked = [];
     public HeadMove $move;
+    public bool $fetched = true;
 
     public function __construct(
         private readonly VerdictIdentity $recorded,
@@ -40,8 +42,13 @@ final class StandingQueryBus implements MessageBusInterface
         return new Envelope($message, [new HandledStamp($answer, 'handler')]);
     }
 
+    // Fails like the local repository does for a commit it lacks.
     private function identityAt(IdentityAtHead $query): HeadIdentity
     {
+        if (!$this->fetched) {
+            throw new ForgeReadFailed('The commit is not in the repository.');
+        }
+
         $commits = new CommitRange($this->recorded->commits->base, $query->round->head);
 
         return new HeadIdentity(new VerdictIdentity($commits, $this->recorded->terms), $this->move);

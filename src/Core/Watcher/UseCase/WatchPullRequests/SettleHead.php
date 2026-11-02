@@ -17,14 +17,15 @@ final readonly class SettleHead
 
     public function settle(WatchedProject $project, HeadDecision $decision): void
     {
-        $this->stale->noteMovedHead($project, $decision->change);
-
         if ($decision->startsRound()) {
+            $this->stale->noteMovedHead($project, $decision->change);
             $this->starts->startFor($project, $decision);
 
             return;
         }
 
+        // Recorded before the stale check, because that check reads the new head from the repository and a commit not fetched yet must not keep a pending head from waiting its interval.
         $this->withoutRound->record($project->name, $decision);
+        $this->stale->noteMovedHead($project, $decision->change);
     }
 }
