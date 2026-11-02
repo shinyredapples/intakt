@@ -161,32 +161,15 @@ jobs:
         if: env.ENGINES == 'true'
         run: .github/ci/build-image.sh
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
-      # The three engines run at once, each in its own container with its own output file; the step fails when any fails.
+      # The three engines run at once (.github/ci/persistence-engines.sh); the step fails when any fails.
       - name: Run the persistence group on mysql 8.4, mariadb 11.4 and postgresql 17
         if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
         env:
           MYSQL_NETWORK: ${{ job.services.mysql.network }}
           MARIADB_NETWORK: ${{ job.services.mariadb.network }}
           POSTGRESQL_NETWORK: ${{ job.services.postgresql.network }}
-        run: |
-          set -u
-          out=$(mktemp -d)
-          run_engine() {
-            docker run --rm --user 1000:1000 --network "$2" --env DATABASE_URL="$3" \
-              --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-              "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence > "$out/$1.log" 2>&1
-            echo $? > "$out/$1.status"
-          }
-          run_engine "mysql 8.4" "$MYSQL_NETWORK" mysql://root@mysql:3306/intakt &
-          run_engine "mariadb 11.4" "$MARIADB_NETWORK" mysql://root@mariadb:3306/intakt &
-          run_engine "postgresql 17" "$POSTGRESQL_NETWORK" postgresql://postgres@postgresql:5432/intakt &
-          wait
-          failed=0
-          for engine in "mysql 8.4" "mariadb 11.4" "postgresql 17"; do
-            status=$(cat "$out/$engine.status" 2>/dev/null || echo missing)
-            echo "::group::persistence on $engine (exit $status)"
-            cat "$out/$engine.log"
-            echo "::endgroup::"
-            if [ "$status" != 0 ]; then echo "::error::persistence on $engine failed (exit $status)"; failed=1; fi
-          done
-          exit "$failed"
+        run: >-
+          .github/ci/persistence-engines.sh
+          "mysql 8.4|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
+          "mariadb 11.4|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
+          "postgresql 17|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
