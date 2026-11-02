@@ -19,8 +19,8 @@ services:
     intakt.test.mcp.review_change:
         class: Intakt\Core\Review\UseCase\ReviewChange\ReviewChange
         autoconfigure: false
+        public: true
         arguments: { $clock: '@Intakt\Tests\Core\Mcp\Contract\Tool\WorkersOnSleep' }
-    Intakt\Core\Review\Contract\ChangeReviews:
-        alias: intakt.test.mcp.review_change
-    Intakt\Core\Review\Contract\Panels:
-        alias: Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel
+    # Public so the SDK client test can take them out of the container; it swaps them in for the contracts itself, so no other test gets them.
+    Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel:
+        public: true
