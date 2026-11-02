@@ -103,6 +103,31 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertStringContainsString('the judge had nothing to mark', $crawler->filter('#round-round-2')->text());
     }
 
+    public function testARoundJudgedBeforeTheFindingTextWasRecordedStillShowsTheMarkedIdsAndTheirCall(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeMarksOnly('round-1', ['F1'], ['F2']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(
+            [['F1', 'not recorded', 'not recorded', JudgeCall::Act->value], ['F2', 'not recorded', 'not recorded', JudgeCall::FollowUp->value]],
+            $this->rowsOf($crawler->filter('#round-round-1 table.findings tbody tr')),
+        );
+        self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1')->text());
+    }
+
+    public function testARoundJudgedBeforeTheFindingTextWasRecordedWithoutMarksDoesNotClaimThereWereNoFindings(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeMarksOnly('round-1', [], []);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1')->text());
+        self::assertStringContainsString('findings were not recorded', $crawler->filter('#round-round-1')->text());
+    }
+
     public function testARoundTheJudgeHasNotJudgedSaysSo(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

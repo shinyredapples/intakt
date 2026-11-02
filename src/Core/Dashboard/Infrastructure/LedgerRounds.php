@@ -34,7 +34,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, list<RoundFinding>> */
+    /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool}> */
     private array $judged = [];
 
     private readonly LedgerTokens $tokens;
@@ -91,7 +91,7 @@ final class LedgerRounds
 
         // The Review module records one judge call per round, so a second one could only be a stray row and the first stays.
         if (LedgerEventKind::JudgeDone === $kind) {
-            $this->judged += [$round => $this->judgedFindings($payload)];
+            $this->judged += [$round => ['findings' => $this->judgedFindings($payload), 'textRecorded' => is_array($payload['findings'] ?? null)]];
 
             return;
         }
@@ -126,25 +126,20 @@ final class LedgerRounds
      *
      * @return list<RoundFinding>
      */
+    // A marked id keeps its row without its text, because the judge's call is recorded even where the finding's text is not (rounds judged before it was, or an unreadable entry).
     private function judgedFindings(array $payload): array
     {
         $act = $this->strings($payload['act'] ?? null);
         $followUps = $this->strings($payload['follow_ups'] ?? null);
-        $findings = [];
+        $readable = array_values(array_filter(array_map($this->readableFinding(...), $this->listOf($payload['findings'] ?? null))));
+        $readableIds = array_map(static fn (RoundFinding $finding): string => $finding->id, $readable);
+        $markedOnly = array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique([...$act, ...$followUps]), $readableIds)));
 
-        foreach ($this->listOf($payload['findings'] ?? null) as $entry) {
-            $finding = $this->readableFinding($entry);
-
-            if ($finding instanceof RoundFinding) {
-                $findings[] = match (true) {
-                    in_array($finding->id, $act, true) => $finding->calledBy(JudgeCall::Act),
-                    in_array($finding->id, $followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
-                    default => $finding,
-                };
-            }
-        }
-
-        return $findings;
+        return array_map(static fn (RoundFinding $finding): RoundFinding => match (true) {
+            in_array($finding->id, $act, true) => $finding->calledBy(JudgeCall::Act),
+            in_array($finding->id, $followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
+            default => $finding,
+        }, [...$readable, ...$markedOnly]);
     }
 
     private function readableFinding(mixed $entry): ?RoundFinding
@@ -212,7 +207,13 @@ final class LedgerRounds
     {
         $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round));
 
-        return array_key_exists($round->round, $this->judged) ? $completed->judgedWith($this->judged[$round->round]) : $completed;
+        $judged = $this->judged[$round->round] ?? null;
+
+        return match (true) {
+            null === $judged => $completed,
+            $judged['textRecorded'] => $completed->judgedWith($judged['findings']),
+            default => $completed->judgedFromMarksOnly($judged['findings']),
+        };
     }
 
     /**

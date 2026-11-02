@@ -10,8 +10,8 @@ final readonly class RoundFinding
 
     public function __construct(
         public string $id,
-        public string $severity,
-        public string $text,
+        public ?string $severity,
+        public ?string $text,
     ) {
         $this->call = JudgeCall::NotActedOn;
     }

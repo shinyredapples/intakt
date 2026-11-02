@@ -78,6 +78,15 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    /**
+     * @param list<string> $act
+     * @param list<string> $followUps
+     */
+    public function judgeMarksOnly(string $round, array $act, array $followUps): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => $act, 'follow_ups' => $followUps]);
+    }
+
     public function useTokens(string $round, int $prompt, int $completion): void
     {
         $call = Uuid::v7()->toRfc4122();

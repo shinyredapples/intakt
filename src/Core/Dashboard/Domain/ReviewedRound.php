@@ -20,6 +20,7 @@ final readonly class ReviewedRound
     /** @var list<RoundFinding> */
     public array $findings;
 
+    public bool $findingTextRecorded;
     public ReviewState $state;
     public TokenCount $tokens;
 
@@ -35,6 +36,7 @@ final readonly class ReviewedRound
         $this->number = $place->number;
         $this->outcomes = [];
         $this->findings = [];
+        $this->findingTextRecorded = true;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenCount::none();
     }
@@ -63,6 +65,15 @@ final readonly class ReviewedRound
     public function judgedWith(array $findings): self
     {
         return clone ($this, ['findings' => $findings, 'state' => ReviewState::Judged]);
+    }
+
+    /**
+     * @param list<RoundFinding> $marked
+     */
+    // Rounds judged before the Review module recorded the findings themselves keep only the ids the judge marked.
+    public function judgedFromMarksOnly(array $marked): self
+    {
+        return clone ($this->judgedWith($marked), ['findingTextRecorded' => false]);
     }
 
     public function withTokens(TokenCount $tokens): self

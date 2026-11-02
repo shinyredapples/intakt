@@ -104,6 +104,39 @@ final class LedgerRoundsTest extends TestCase
         self::assertEquals([new RoundFinding('F2', 'P1', 'Kept.')->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
     }
 
+    public function testAMarkedIdWhoseFindingTextIsUnreadableKeepsItsCall(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1"}]}'),
+        );
+
+        self::assertEquals([new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
+    }
+
+    public function testAJudgeDoneWithoutFindingsLeavesTheFindingTextUnrecorded(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[]}'),
+        );
+
+        self::assertFalse($review?->rounds[0]->findingTextRecorded);
+    }
+
+    public function testAJudgeDoneWithFindingsRecordsTheFindingText(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":[],"follow_ups":[],"findings":[]}'),
+        );
+
+        self::assertTrue($review?->rounds[0]->findingTextRecorded);
+    }
+
     public function testASecondJudgeDoneOfARoundChangesNothing(): void
     {
         $review = $this->reviewOf(

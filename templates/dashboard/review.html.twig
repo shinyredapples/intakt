@@ -34,17 +34,22 @@
     <h3>Findings and the judge's call</h3>
     {% if reviewed.state.name != 'Judged' %}
     <p>The judge has not judged this round yet.</p>
-    {% elseif reviewed.findings is empty %}
+    {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
     <p>The reviewers reported no findings, so the judge had nothing to mark.</p>
+    {% elseif reviewed.findings is empty %}
+    <p>This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
     {% else %}
+    {% if not reviewed.findingTextRecorded %}
+    <p>This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
+    {% endif %}
     <table class="findings">
         <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
         <tbody>
         {% for finding in reviewed.findings %}
             <tr>
                 <td>{{ finding.id }}</td>
-                <td>{{ finding.severity }}</td>
-                <td>{{ finding.text }}</td>
+                <td>{{ finding.severity ?? 'not recorded' }}</td>
+                <td>{{ finding.text ?? 'not recorded' }}</td>
                 <td>{{ finding.call.value }}</td>
             </tr>
         {% endfor %}
