@@ -6,7 +6,7 @@ namespace Intakt\Core\Ai\Contract;
 
 interface EnabledAccounts
 {
-    // In the owner's order; none while the provider has no enabled account.
+    // In the owner's order, because a call tries the accounts in it; empty while the provider has no enabled account.
     /**
      * @return list<Account>
      */

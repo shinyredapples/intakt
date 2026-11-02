@@ -15,7 +15,7 @@ final class ScriptedShadowGuard implements ShadowStartGuard
     /** @var list<string> */
     public array $asked = [];
 
-    // Keyed by Account::key(); an account not named starts.
+    // Keyed by Account::key(), and an account not named starts, because most tests only script the account they hold.
     /**
      * @param array<string, StartDecision> $byAccount
      */
