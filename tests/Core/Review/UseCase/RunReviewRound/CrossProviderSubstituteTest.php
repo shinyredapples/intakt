@@ -23,6 +23,7 @@ use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
@@ -231,7 +232,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
             ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
         ]);
         $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore(), new RecordedRoundUpdates());
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates()));
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $this->limit);
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);

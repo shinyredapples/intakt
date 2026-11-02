@@ -25,9 +25,11 @@ use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
+use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
@@ -58,6 +60,8 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ReviewerPrompt::class)]
 #[CoversClass(FencedToolbox::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(StrictVerdictStreamListener::class)]
+#[CoversClass(ReviewerRuns::class)]
 #[CoversClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(UntrustedSource::class)]
@@ -542,7 +546,7 @@ final class ReviewerVerdictTest extends WebTestCase
         };
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, $this->conversations, $this->updates);
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 

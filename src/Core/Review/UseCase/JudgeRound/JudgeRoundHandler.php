@@ -10,8 +10,6 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\RoundJudged;
-use Intakt\Core\Review\Contract\RoundProgress;
-use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -28,7 +26,6 @@ final readonly class JudgeRoundHandler
         private JudgedRounds $rounds,
         private Vendor $vendor,
         private EventDispatcherInterface $events,
-        private RoundUpdates $updates,
     ) {
     }
 
@@ -40,20 +37,10 @@ final readonly class JudgeRoundHandler
             return;
         }
 
-        $progress = $this->judgedProgressOf($round);
         $findings = $this->rounds->findingsOf($round);
         $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings);
         $this->rounds->record($round, $judged);
-        $this->updates->roundChanged($round->id(), $progress);
         $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
-    }
-
-    // Built first, because the judge call or the recording can clear the entity manager and this copy could no longer load its reviewers; its state would also still show the round as unjudged.
-    private function judgedProgressOf(ReviewRound $round): RoundProgress
-    {
-        $reviewers = count($round->reviewers());
-
-        return new RoundProgress($reviewers, $reviewers, true);
     }
 
     /**

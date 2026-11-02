@@ -31,6 +31,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
@@ -46,10 +47,12 @@ use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandle
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
+use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -73,6 +76,8 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
@@ -95,6 +100,7 @@ final readonly class RoundFixture
     public BufferingLogger $log;
     public EventDispatcher $events;
     public RecordedRoundUpdates $updates;
+    private LockFactory $locks;
     private Ledger $ledger;
     private SerializerInterface $serializer;
 
@@ -113,6 +119,8 @@ final readonly class RoundFixture
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
         $this->updates = new RecordedRoundUpdates();
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
@@ -246,7 +254,13 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->updates);
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->liveProgress($entities));
+    }
+
+    // One lock store for every worker of the fixture, as the workers of one install share theirs.
+    public function liveProgress(EntityManagerInterface $entities): LiveRoundProgress
+    {
+        return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks);
     }
 
     // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
@@ -257,7 +271,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger, $this->modes)), $vendor, $this->events, $this->updates);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger, $this->modes)), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

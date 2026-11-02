@@ -10,7 +10,6 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
-use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -29,7 +28,7 @@ final readonly class ReviewWithReviewerHandler
         private Vendor $vendor,
         private ReviewRounds $rounds,
         private GoalpostRule $goalposts,
-        private RoundUpdates $updates,
+        private LiveRoundProgress $progress,
     ) {
     }
 
@@ -44,7 +43,7 @@ final readonly class ReviewWithReviewerHandler
         }
 
         $this->rounds->completeWhenEveryReviewerIsIn($roundId);
-        $this->updates->roundChanged($roundId, $this->rounds->stored($roundId->toRfc4122())->progress());
+        $this->progress->publishLatest($roundId);
     }
 
     private function review(RoundReviewer $reviewer): void

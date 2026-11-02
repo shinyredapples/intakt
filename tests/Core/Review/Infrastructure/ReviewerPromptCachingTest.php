@@ -16,6 +16,7 @@ use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
@@ -38,6 +39,7 @@ use Symfony\Component\Uid\UuidV7;
 
 // Runs the reviewer over the Anthropic bridge with a scripted HTTP client, so the request the bridge builds and the usage it reads back are the real ones.
 #[CoversClass(ReviewerAgent::class)]
+#[UsesClass(ReviewerRuns::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
@@ -111,7 +113,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             return array_shift($responses) ?? self::fail('The reviewer asked for a third round.');
         });
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore(), new RecordedRoundUpdates());
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates()));
 
         $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
 
