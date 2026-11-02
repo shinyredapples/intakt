@@ -18,14 +18,6 @@ final readonly class StartReviewHandler
     // Returns the id of the queued round, because the caller shows it and the round is judged later by the workers.
     public function __invoke(StartReview $command): string
     {
-        $input = new ReviewChangeInput();
-        $input->project = $command->project;
-        $input->task = $command->task;
-        $input->change = $command->round->change;
-        $input->round = $command->round->number;
-        $input->repository = $command->source->repository;
-        $input->base = $command->source->base;
-
-        return $this->review->startOf($input);
+        return $this->review->startOf(ReviewChangeInput::startedBy($command));
     }
 }

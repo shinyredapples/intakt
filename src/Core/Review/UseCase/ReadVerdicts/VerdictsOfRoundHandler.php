@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
+use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Uid\Uuid;
 
