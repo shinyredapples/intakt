@@ -21,6 +21,20 @@ final class NoPollingTest extends DashboardPageTestCase
         yield 'review page' => ['/reviews/round-1'];
     }
 
+    public function testTheReviewPageWithTheStartButtonHoldsOnlyAPlainForm(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        $this->browser->request('GET', '/reviews/round-1');
+
+        $page = strtolower((string) $this->browser->getResponse()->getContent());
+        self::assertStringContainsString('<form method="post"', $page);
+
+        foreach (['<script', 'http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'eventsource', 'websocket'] as $polling) {
+            self::assertStringNotContainsString($polling, $page);
+        }
+    }
+
     #[DataProvider('pages')]
     public function testNoDashboardPageContainsAScriptARefreshTagOrAPollingCall(string $path): void
     {

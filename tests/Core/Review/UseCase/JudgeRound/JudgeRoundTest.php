@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
@@ -55,6 +56,7 @@ use Throwable;
 #[CoversClass(FindingLedger::class)]
 #[CoversClass(RoundTransition::class)]
 #[UsesClass(JudgedFindings::class)]
+#[UsesClass(RoundJudged::class)]
 #[UsesClass(FollowUp::class)]
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgedFinding::class)]
@@ -116,6 +118,33 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(RoundState::Judged, $this->fixture->round($round->id()->toRfc4122())->state());
+    }
+
+    public function testAJudgedRoundAnnouncesTheCheckoutItsReviewersRead(): void
+    {
+        $round = $this->completedRound();
+        $announced = [];
+        $this->fixture->events->addListener(RoundJudged::class, static function (RoundJudged $judged) use (&$announced): void {
+            $announced[] = $judged;
+        });
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertEquals([new RoundJudged($round->id()->toRfc4122(), $round->checkoutRoot())], $announced);
+    }
+
+    public function testARoundJudgedAlreadyIsNotAnnouncedAgain(): void
+    {
+        $round = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+        $announced = 0;
+        $this->fixture->events->addListener(RoundJudged::class, static function () use (&$announced): void {
+            ++$announced;
+        });
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(0, $announced);
     }
 
     public function testTheJudgeIsAskedAboutTheFindingsOfTheRoundUnderTheLedgerIdsWithItsTask(): void

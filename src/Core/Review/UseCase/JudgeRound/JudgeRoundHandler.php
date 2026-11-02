@@ -9,12 +9,14 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 // Runs after the round's completing transaction, never inside it, because the judge call must not hold the round's lock.
 #[AsCommandHandler]
@@ -23,6 +25,7 @@ final readonly class JudgeRoundHandler
     public function __construct(
         private JudgedRounds $rounds,
         private Vendor $vendor,
+        private EventDispatcherInterface $events,
     ) {
     }
 
@@ -37,6 +40,7 @@ final readonly class JudgeRoundHandler
         $findings = $this->rounds->findingsOf($round);
         $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings);
         $this->rounds->record($round, $judged);
+        $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
     }
 
     /**

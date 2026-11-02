@@ -11,4 +11,5 @@ final readonly class DashboardRoutes
     public const string LIST_PROJECTS = self::PREFIX.'list_projects';
     public const string LIST_REVIEWS = self::PREFIX.'list_reviews';
     public const string SHOW_REVIEW = self::PREFIX.'show_review';
+    public const string START_REVIEW = self::PREFIX.'start_review';
 }

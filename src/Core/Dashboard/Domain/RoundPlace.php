@@ -10,6 +10,7 @@ final readonly class RoundPlace
     public function __construct(
         public string $change,
         public ?int $number,
+        public ?RoundSource $source = null,
     ) {
     }
 }

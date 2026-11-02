@@ -13,6 +13,7 @@ final readonly class ReviewedRound
     public int $reviewers;
     public string $change;
     public ?int $number;
+    public ?RoundSource $source;
 
     /** @var list<ReviewerOutcome> */
     public array $outcomes;
@@ -34,6 +35,7 @@ final readonly class ReviewedRound
         $this->reviewers = $start->reviewers;
         $this->change = $place->change;
         $this->number = $place->number;
+        $this->source = $place->source;
         $this->outcomes = [];
         $this->findings = [];
         $this->findingTextRecorded = true;

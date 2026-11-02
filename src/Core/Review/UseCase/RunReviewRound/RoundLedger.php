@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
@@ -22,7 +23,8 @@ final readonly class RoundLedger
     {
     }
 
-    public function reviewStarted(ReviewRound $round): void
+    // The repository, base and task go with the start, because the dashboard starts the change's next round from the ledger alone and ledger rows are never back-filled.
+    public function reviewStarted(ReviewRound $round, ?ChangeSource $source): void
     {
         $this->append(LedgerEventKind::ReviewStarted, [
             'round' => $round->id()->toRfc4122(),
@@ -30,7 +32,7 @@ final readonly class RoundLedger
             'reviewers' => count($round->reviewers()),
             'change' => $round->change(),
             'number' => $round->number(),
-        ]);
+        ] + $this->sourceOf($round, $source));
     }
 
     public function reviewerStarted(RoundReviewer $reviewer): void
@@ -68,6 +70,16 @@ final readonly class RoundLedger
             'follow_ups' => array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
             'findings' => array_map(static fn (Finding $finding): array => ['id' => $finding->id, 'severity' => $finding->severity->value, 'text' => $finding->text], $judged->findings),
         ]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function sourceOf(ReviewRound $round, ?ChangeSource $source): array
+    {
+        $task = ['task' => $round->task()];
+
+        return $source instanceof ChangeSource ? $task + ['repository' => $source->repository, 'base' => $source->base] : $task;
     }
 
     /**
