@@ -23,7 +23,7 @@ final class StartedRound
     #[ORM\Column(options: ['default' => false])]
     private bool $stale = false;
 
-    // Set only by the statement that records the round's ledger line, in the same transaction as that line.
+    // Kept on the round, because the round commits before its ledger line is appended, so the line stays owed until the ledger takes it.
     #[ORM\Column(name: 'queued_recorded', options: ['default' => false])]
     private bool $queuedRecorded = false;
 
@@ -62,5 +62,10 @@ final class StartedRound
     public function isStale(): bool
     {
         return $this->stale;
+    }
+
+    public function owesQueuedLine(): bool
+    {
+        return !$this->queuedRecorded;
     }
 }

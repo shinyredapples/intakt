@@ -33,13 +33,23 @@ final readonly class StartedRounds
         });
     }
 
-    // Read as filtered by the database, because the statement that records the line decides again whether it is still owed.
     /**
      * @return list<StartedRound>
      */
     public function notYetRecorded(string $project): array
     {
-        return array_values($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'queuedRecorded' => false]));
+        $rounds = [];
+
+        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'queuedRecorded' => false]) as $round) {
+            // Refreshed because a worker keeps its entity manager and another worker may have recorded the line.
+            $this->entities->refresh($round);
+
+            if ($round->owesQueuedLine()) {
+                $rounds[] = $round;
+            }
+        }
+
+        return $rounds;
     }
 
     // Claimed and recorded in one transaction with the ledger's own write, so a failed append leaves the line owed and a second worker that claims the same round finds it taken.

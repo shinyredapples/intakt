@@ -23,7 +23,7 @@ final class WatchConfigurationTest extends TestCase
     public function testABlankTaskIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('The "task" key must not be blank.');
+        $this->expectExceptionMessageMatches('/The "task" key must not be blank\./');
 
         $this->processed(['repository' => '/r', 'base' => 'main', 'task' => '   ']);
     }
