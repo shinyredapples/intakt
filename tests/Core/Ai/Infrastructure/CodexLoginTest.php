@@ -1,0 +1,82 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Ai\Infrastructure;
+
+use DateTimeImmutable;
+use DateTimeZone;
+use Intakt\Core\Ai\Infrastructure\CodexLogin;
+use Intakt\Core\Ai\Infrastructure\CodexLoginUnusable;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(CodexLogin::class)]
+#[UsesClass(CodexLoginUnusable::class)]
+final class CodexLoginTest extends TestCase
+{
+    public function testALoginRefreshedSixDaysAgoIsNotDue(): void
+    {
+        $login = CodexLogin::fromJson(self::json('2026-10-27T12:00:00.123456789Z'));
+
+        self::assertFalse($login->isDueAt(self::moment('2026-11-02T12:00:00Z')));
+    }
+
+    public function testALoginRefreshedSevenDaysAgoIsDue(): void
+    {
+        $login = CodexLogin::fromJson(self::json('2026-10-26T12:00:00Z'));
+
+        self::assertTrue($login->isDueAt(self::moment('2026-11-02T12:00:00Z')));
+    }
+
+    public function testARefreshReplacesTheTokensItGotAndKeepsTheRest(): void
+    {
+        $login = CodexLogin::fromJson(self::json('2026-10-01T00:00:00Z'));
+
+        $refreshed = $login->refreshed(['access_token' => 'access-2', 'id_token' => 'id-2'], self::moment('2026-11-02T12:00:00Z'));
+
+        self::assertSame(
+            ['OPENAI_API_KEY' => null, 'tokens' => ['id_token' => 'id-2', 'access_token' => 'access-2', 'refresh_token' => 'refresh-1', 'account_id' => 'acct'], 'last_refresh' => '2026-11-02T12:00:00Z'],
+            json_decode($refreshed->json(), true),
+        );
+        self::assertSame('refresh-1', $refreshed->refreshToken());
+        self::assertFalse($refreshed->isDueAt(self::moment('2026-11-02T12:00:00Z')));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unusableLogins(): iterable
+    {
+        yield 'no JSON' => ['{'];
+        yield 'no tokens' => ['{"last_refresh": "2026-10-01T00:00:00Z"}'];
+        yield 'an empty refresh token' => [str_replace('refresh-1', '', self::json('2026-10-01T00:00:00Z'))];
+        yield 'a token that is no string' => [str_replace('"access-1"', '5', self::json('2026-10-01T00:00:00Z'))];
+        yield 'no last refresh' => ['{"tokens": {"id_token": "a", "access_token": "b", "refresh_token": "c"}}'];
+        yield 'an unreadable last refresh' => [self::json('yesterday')];
+    }
+
+    #[DataProvider('unusableLogins')]
+    public function testALoginItCannotReadIsRefused(string $json): void
+    {
+        $this->expectException(CodexLoginUnusable::class);
+
+        CodexLogin::fromJson($json);
+    }
+
+    public static function json(string $lastRefresh): string
+    {
+        return json_encode([
+            'OPENAI_API_KEY' => null,
+            'tokens' => ['id_token' => 'id-1', 'access_token' => 'access-1', 'refresh_token' => 'refresh-1', 'account_id' => 'acct'],
+            'last_refresh' => $lastRefresh,
+        ], JSON_THROW_ON_ERROR);
+    }
+
+    private static function moment(string $moment): DateTimeImmutable
+    {
+        return DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:sP', $moment, new DateTimeZone('UTC')) ?: self::fail('Unreadable moment.');
+    }
+}

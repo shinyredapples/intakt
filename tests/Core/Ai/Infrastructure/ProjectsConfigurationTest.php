@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Infrastructure\CodexEffort;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -19,6 +20,7 @@ use Symfony\Component\Config\Definition\Processor;
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(CodexEffort::class)]
 final class ProjectsConfigurationTest extends TestCase
 {
     public function testProjectsKeepTheirTierMappings(): void
@@ -144,6 +146,39 @@ final class ProjectsConfigurationTest extends TestCase
         $this->expectExceptionMessageMatches('/intakt\.projects\.alpha\.tiers\.light\.model.*must be valid UTF-8/');
 
         $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => "\xA0"]]]]]);
+    }
+
+    public function testNoCodexSectionLeavesCodexUnconfigured(): void
+    {
+        self::assertArrayNotHasKey('codex', $this->process([]));
+    }
+
+    public function testTheCodexModelAndEffortAreKept(): void
+    {
+        self::assertSame(['model' => 'gpt-5.3-codex', 'effort' => 'high'], $this->process(['codex' => ['model' => 'gpt-5.3-codex', 'effort' => 'high']])['codex']);
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function refusedCodexSections(): iterable
+    {
+        yield 'no effort' => [['model' => 'gpt-5.3-codex']];
+        yield 'no model' => [['effort' => 'high']];
+        yield 'a blank model' => [['model' => ' ', 'effort' => 'high']];
+        yield 'an unknown effort' => [['model' => 'gpt-5.3-codex', 'effort' => 'huge']];
+        yield 'an unknown key' => [['model' => 'gpt-5.3-codex', 'effort' => 'high', 'sandbox' => 'none']];
+    }
+
+    /**
+     * @param array<string, mixed> $codex
+     */
+    #[DataProvider('refusedCodexSections')]
+    public function testACodexSectionWithoutAPinnedModelAndEffortIsRefused(array $codex): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['codex' => $codex]);
     }
 
     /**
