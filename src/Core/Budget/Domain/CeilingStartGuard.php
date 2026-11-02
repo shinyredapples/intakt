@@ -24,7 +24,7 @@ final readonly class CeilingStartGuard implements StartGuard
     public const float PARALLEL_MARGIN = 10.0;
 
     /**
-     * @param array<string, float> $ceilings the owner's ceiling in percent per UsageWindow value
+     * @param array<string, float> $ceilings
      */
     public function __construct(
         private MeasuredUse $measured,

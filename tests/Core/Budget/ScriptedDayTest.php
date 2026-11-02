@@ -26,7 +26,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 
-// The guard over a day of readings kept by the real store, as a worker sees them, with the default ceilings.
+// Through the Doctrine store, because a worker decides on the readings it keeps, refusals and ages included.
 #[Group('persistence')]
 #[CoversClass(CeilingStartGuard::class)]
 #[UsesClass(DoctrineMeasuredUse::class)]
@@ -111,7 +111,9 @@ final class ScriptedDayTest extends KernelTestCase
     private function recordAll(array $readings): void
     {
         foreach ($readings as [$account, $window, $percent, $resetsAt]) {
-            $usage = new Usage($percent, DateTimeImmutable::createFromFormat('!Y-m-d H:i', $resetsAt, new DateTimeZone('UTC')) ?: null);
+            $moment = DateTimeImmutable::createFromFormat('!Y-m-d H:i', $resetsAt, new DateTimeZone('UTC'));
+            self::assertInstanceOf(DateTimeImmutable::class, $moment);
+            $usage = new Usage($percent, $moment);
             self::assertSame(ReadingOutcome::Recorded, $this->measured->record(new WindowReading($account, $window, $usage)));
         }
     }
