@@ -47,7 +47,7 @@ final readonly class PrometheusSamples
         return is_finite($total) ? (int) round($total) : null;
     }
 
-    // The text format allows NaN and infinities (a summary without observations has NaN quantiles).
+    // Accepted because the text format allows them, so an unrelated series cannot hide the counted ones.
     private static function value(string $text): ?float
     {
         return match (strtolower($text)) {
