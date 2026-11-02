@@ -248,6 +248,41 @@ budget:
 
 Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
 
+### Cooldowns, pauses and outage notices
+
+Besides the ceilings, Intakt can hold work back in these ways (the tables are created by the same `doctrine:migrations:migrate`):
+
+- **Cooldown of one account:** when the AI company answers that an account's usage limit is reached, that account gets no new call until the reset time the answer gave, even if that is days away. Other accounts, of the same company or another, keep working. An answer whose reset time has already passed, or lies more than a week ahead, cools nothing down.
+- **Budget back-off:** no new call starts on any account, but pull requests that are already approved still merge, since merging calls no model.
+- **Pause:** the same as a budget back-off: nothing new starts, approved pull requests still merge.
+- **Failure back-off:** no new call starts on any account and nothing merges.
+- **Drain:** nothing new starts and nothing merges, so work in progress can finish before an update.
+
+When several are in effect, the strictest wins: drain, then failure back-off, then pause, then budget back-off, then an account's cooldown, then the ceilings. Each one ends by itself at the time it was given.
+
+When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; if writing the warning fails, Intakt tries again at the next decision; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
+
+Nothing places a cooldown, a back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes.
+
+To see what Intakt would decide over a day, write a script and replay it:
+
+```
+# one step per line: a UTC moment, then the step
+2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.main weekly 10 2026-11-08T08:00
+2026-11-02T08:00 start claude_code.main 0
+2026-11-02T09:00 limit claude_code.main 2026-11-02T13:00
+2026-11-02T09:00 start claude_code.main 0
+2026-11-02T10:00 hold budget-back-off 2026-11-02T10:30
+2026-11-02T10:00 merge
+```
+
+```bash
+php bin/console intakt:budget:replay my-day.txt
+```
+
+It prints each line with its outcome (`recorded`, `cooling-down`, `start` and so on), and the outage warnings where they happen. The steps are `read <account> <window> <percent> <reset>`, `limit <account> <reset>`, `hold <drain|failure-back-off|pause|budget-back-off> <until>`, `start <account> <calls running>` and `merge`; an account is written as company and name, such as `claude_code.main`. The replay runs on your database and your ceilings with its own clock, starting at the first line, and undoes everything when it ends, so your install keeps nothing of it. A line it does not understand stops it with the reason. `tests/Core/Budget/UseCase/ReplayDay/scripted-day.txt` is a whole example day.
+
 ## Summarizing a branch
 
 `php bin/console intakt:change:summarize <branch> [--repository=.] [--base=main]` prints the change summary of a branch of a local repository against its base branch: the short base and head commits, the number of changed files with the added and removed lines, and one line per file (`added`, `modified` or `deleted`). A control character in a file name is shown in a visible form such as `\x1b`, and a backslash as `\\`. A `--repository` that is not a directory, an empty branch or `--base`, a branch the repository does not have, a repository git cannot read, or a repository whose `.git/info/attributes` file exists, prints an error and exits with 1. The summary is what the branch has gained since it was cut from the base branch, not what the base branch gained afterwards.
