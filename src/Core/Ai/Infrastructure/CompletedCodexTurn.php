@@ -75,7 +75,7 @@ final readonly class CompletedCodexTurn implements RawResultInterface
         $message = $failed[self::ERROR][self::MESSAGE] ?? null;
         $error = is_string($message) ? CodexStructuredError::of($message) : null;
 
-        if (null !== $error) {
+        if ($error instanceof CodexStructuredError) {
             throw $error->failure();
         }
     }
