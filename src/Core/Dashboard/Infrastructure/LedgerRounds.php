@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
+use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -118,7 +119,24 @@ final class LedgerRounds
             return [];
         }
 
-        return [$round => new ReviewedRound(new RoundStart($round, $project, $reviewers), new RoundPlace($change, $number), $startedAt)];
+        return [$round => new ReviewedRound(new RoundStart($round, $project, $reviewers), new RoundPlace($change, $number, $this->sourceOf($payload)), $startedAt)];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    // Null unless all three are non-empty strings, because a start recorded before they existed must not be guessed at.
+    private function sourceOf(array $payload): ?RoundSource
+    {
+        $repository = $payload['repository'] ?? null;
+        $base = $payload['base'] ?? null;
+        $task = $payload['task'] ?? null;
+
+        if (!is_string($repository) || '' === $repository || !is_string($base) || '' === $base || !is_string($task) || '' === $task) {
+            return null;
+        }
+
+        return new RoundSource($repository, $base, $task);
     }
 
     /**

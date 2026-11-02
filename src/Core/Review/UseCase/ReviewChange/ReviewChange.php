@@ -57,7 +57,7 @@ final readonly class ReviewChange implements ChangeReviews
         return $this->conclude($request, $round);
     }
 
-    private function start(ChangeReviewRequest $request): string
+    public function start(ChangeReviewRequest $request): string
     {
         $target = new ReviewTarget(new ReviewSubject($request->project, $request->checkoutRoot, $request->task, $request->diff), $request->identity);
         $handled = $this->dispatched(new RunReviewRound($target, $request->panel, $request->round))->last(HandledStamp::class);
