@@ -84,7 +84,9 @@ final class RemoveKeptSnapshotTest extends TestCase
             new Filesystem()->remove($directory);
         }
 
-        self::assertSame('warning', $this->log->cleanLogs()[0][0] ?? null);
+        $logs = $this->log->cleanLogs();
+        self::assertIsArray($logs[0] ?? null);
+        self::assertSame('warning', $logs[0][0]);
     }
 
     private function head(): CommitId
