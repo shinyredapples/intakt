@@ -73,6 +73,17 @@ final class PendingHeadsTest extends KernelTestCase
         self::assertSame([str_repeat('b', 40)], $this->dueHeads());
     }
 
+    public function testAHeadAnotherWorkerSettledWhileItWasReadIsNotDue(): void
+    {
+        $this->pending->enqueue('alpha', [RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z')]);
+        $this->entities->clear();
+        $this->entities->getEventManager()->addEventListener([Events::postLoad], new DeletedOnFirstLoad($this->entities->getConnection(), 'watcher_pending_head'));
+
+        $due = $this->pending->dueFor('alpha');
+
+        self::assertSame([], $due);
+    }
+
     private function pendingDecision(OpenChange $open): HeadDecision
     {
         return new HeadDecision($open, HeadAdmission::Pending, $this->clock->now()->modify('+60 seconds'));
