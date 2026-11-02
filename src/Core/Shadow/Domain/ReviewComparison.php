@@ -116,18 +116,19 @@ final readonly class ReviewComparison
             }
         }
 
-        $spot = static fn (array $entry): array => [$entry[1]->file ?? '', $entry[1]->line ?? 0];
-        usort($tagged, static fn (array $a, array $b): int => $spot($a) <=> $spot($b));
+        $spot = static fn (LoopFinding|Finding $finding): array => [$finding->file ?? '', $finding->line ?? 0];
+        usort($tagged, static fn (array $a, array $b): int => $spot($a[1]) <=> $spot($b[1]));
 
         $groups = [];
+        $last = -1;
         foreach ($tagged as $entry) {
-            $previous = array_last($groups);
-            if (null !== $previous && $spot($previous[0]) === $spot($entry)) {
-                $groups[array_key_last($groups)][] = $entry;
+            if ($last >= 0 && $spot($groups[$last][0][1]) === $spot($entry[1])) {
+                $groups[$last][] = $entry;
                 continue;
             }
 
             $groups[] = [$entry];
+            ++$last;
         }
 
         return $groups;
