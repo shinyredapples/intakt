@@ -10,7 +10,7 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
-// Answers like FrankenPHP 1.13 with the Mercure hub, from responses recorded on a running server.
+// Answers from responses recorded on FrankenPHP 1.13.1 with the Mercure hub, so no test needs a live server.
 final class RecordedAdminApi
 {
     /** @var array<string, array{body: string, status: int}> */
