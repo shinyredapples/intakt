@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
@@ -44,6 +45,20 @@ final class ReviewCredentialTest extends TestCase
         $this->expectException(BadCredentialsException::class);
 
         $credential->getUserBadgeFrom('0196f5a2-6c3e-7a10-9b2d-3f4e5a6b7c8e.'.$signature);
+    }
+
+    public function testNoCredentialIsIssuedWhileTheSecretIsEmpty(): void
+    {
+        $this->expectException(LogicException::class);
+
+        new ReviewCredential('')->issueFor(self::ROUND);
+    }
+
+    public function testNoCredentialIsAcceptedWhileTheSecretIsEmpty(): void
+    {
+        $this->expectException(BadCredentialsException::class);
+
+        new ReviewCredential('')->getUserBadgeFrom(self::ROUND.'.'.hash_hmac('sha256', 'intakt-review-tools:'.self::ROUND, ''));
     }
 
     public function testATokenThatIsNoRoundIsRefused(): void
