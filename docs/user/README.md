@@ -29,6 +29,19 @@ Intakt serves three pages in the browser, built from the ledger of review events
 
 The pages answer only an address on the computer itself: `localhost`, `127.0.0.1` or `[::1]` with the dashboard's port, which is `DASHBOARD_PORT` (default 7780, set it to the port you publish on the host). Any other address in the request, or another port, gets `400 Bad Request` and no data, so a web page that points its own name at your computer cannot read them. The pages are plain HTML and never refresh themselves: reload the page to see newer rounds. On `/reviews`, two rounds of one change appear as two rows of the same project; both link to the same review page. On a review page, the button "Start the next round on the current head" starts the change's next round from the repository and base recorded when its latest round started, then returns to the page with a line naming the new round (or the reason it could not start). The button asks for the number after the latest round the page knows, so pressing it twice, or pressing it on a page opened before another round started, starts nothing and says that another round took the number. The repository is recorded as an absolute path, so a round started with `--repository=.` restarts from the same repository. Rounds started before Intakt recorded the repository, base and task show a note instead of the button. The round runs in the workers, so reload the page to see it; the page does not refresh itself. Its reviewers read a snapshot of the head in the system's temporary directory (`intakt-kept-review-*`), which Intakt removes once the round is judged; a round that is never judged keeps it, and `git worktree remove --force <path>` removes it. Until the owner login is built, anyone who can reach the dashboard's address on the computer can press the button.
 
+## Checking the server
+
+When Intakt runs under FrankenPHP, `php bin/console intakt:server:status` reads FrankenPHP's admin API and prints how many worker threads are busy and idle, how many requests wait in the queue, how often workers were restarted, and whether the Mercure hub is healthy:
+
+```
+worker threads: 0 busy, 2 idle
+queue depth: 0
+worker restarts: 2
+hub: healthy
+```
+
+Run it inside the container, because the admin API answers only there. It reads `FRANKENPHP_ADMIN_URL` (default `http://localhost:2019`), which must be plain `http` on `localhost`, `127.0.0.1` or `[::1]`; any other address is refused before anything is sent. A value that cannot be read shows `down` with the reason (the server did not answer, answered with an error status, or answered something Intakt cannot use), and the command then exits with a non-zero code. A thread that is starting or restarting counts as neither busy nor idle.
+
 ## Background work
 
 Intakt has two internal message buses, one for commands and one for questions. A command handler cannot answer a question and the reverse.
@@ -234,6 +247,41 @@ budget:
 ```
 
 Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
+
+### Cooldowns, pauses and outage notices
+
+Besides the ceilings, Intakt can hold work back in these ways (the tables are created by the same `doctrine:migrations:migrate`):
+
+- **Cooldown of one account:** when the AI company answers that an account's usage limit is reached, that account gets no new call until the reset time the answer gave, even if that is days away. Other accounts, of the same company or another, keep working. An answer whose reset time has already passed, or lies more than a week ahead, cools nothing down.
+- **Budget back-off:** no new call starts on any account, but pull requests that are already approved still merge, since merging calls no model.
+- **Pause:** the same as a budget back-off: nothing new starts, approved pull requests still merge.
+- **Failure back-off:** no new call starts on any account and nothing merges.
+- **Drain:** nothing new starts and nothing merges, so work in progress can finish before an update.
+
+When several are in effect, the strictest wins: drain, then failure back-off, then pause, then budget back-off, then an account's cooldown, then the ceilings. Each one ends by itself at the time it was given.
+
+When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; if writing the warning fails, Intakt tries again at the next decision; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
+
+Nothing places a cooldown, a back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes.
+
+To see what Intakt would decide over a day, write a script and replay it:
+
+```
+# one step per line: a UTC moment, then the step
+2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.main weekly 10 2026-11-08T08:00
+2026-11-02T08:00 start claude_code.main 0
+2026-11-02T09:00 limit claude_code.main 2026-11-02T13:00
+2026-11-02T09:00 start claude_code.main 0
+2026-11-02T10:00 hold budget-back-off 2026-11-02T10:30
+2026-11-02T10:00 merge
+```
+
+```bash
+php bin/console intakt:budget:replay my-day.txt
+```
+
+It prints each line with its outcome (`recorded`, `cooling-down`, `start` and so on), and the outage warnings where they happen. The steps are `read <account> <window> <percent> <reset>`, `limit <account> <reset>`, `hold <drain|failure-back-off|pause|budget-back-off> <until>`, `start <account> <calls running>` and `merge`; an account is written as company and name, such as `claude_code.main`. The replay runs on your database and your ceilings with its own clock, starting at the first line, and undoes everything when it ends, so your install keeps nothing of it. A line it does not understand stops it with the reason. `tests/Core/Budget/UseCase/ReplayDay/scripted-day.txt` is a whole example day.
 
 ## Summarizing a branch
 
