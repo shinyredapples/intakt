@@ -55,6 +55,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
@@ -80,6 +81,7 @@ final readonly class RoundFixture
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
+    public RecordedRoundUpdates $updates;
     private Ledger $ledger;
     private SerializerInterface $serializer;
 
@@ -95,6 +97,7 @@ final readonly class RoundFixture
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
+        $this->updates = new RecordedRoundUpdates();
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
@@ -179,7 +182,7 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule());
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->updates);
     }
 
     // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
@@ -190,7 +193,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger)), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger)), $vendor, $this->events, $this->updates);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

@@ -120,6 +120,25 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame(RoundState::Judged, $this->fixture->round($round->id()->toRfc4122())->state());
     }
 
+    public function testAReviewerThatFinishesPublishesHowManyOfTheRoundAreIn(): void
+    {
+        $round = $this->fixture->start(2);
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
+
+        self::assertSame([sprintf('round %s 1/2', $round->id()->toRfc4122())], $this->fixture->updates->seen);
+    }
+
+    public function testAJudgedRoundPublishesItsFinalState(): void
+    {
+        $round = $this->completedRound();
+        $this->fixture->updates->seen = [];
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame([sprintf('round %s 2/2 judged', $round->id()->toRfc4122())], $this->fixture->updates->seen);
+    }
+
     public function testAJudgedRoundAnnouncesTheCheckoutItsReviewersRead(): void
     {
         $round = $this->completedRound();

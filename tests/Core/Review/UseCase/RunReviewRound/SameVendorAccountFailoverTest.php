@@ -38,6 +38,7 @@ use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -202,7 +203,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $platforms = [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(300)), 'team' => $team];
         $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger());
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), $this->cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore(), new RecordedRoundUpdates());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $limit);
 

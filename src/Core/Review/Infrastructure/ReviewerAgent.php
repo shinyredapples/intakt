@@ -9,19 +9,24 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\Verdict;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
+use Symfony\AI\Agent\Execution\Update\Progress;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
 
@@ -38,6 +43,7 @@ final readonly class ReviewerAgent implements Reviewer
         #[AutowireCallable(service: ReviewerToolboxFactory::class, method: 'create')]
         private Closure $toolboxes,
         private MessageStoreInterface $conversations,
+        private RoundUpdates $updates,
     ) {
     }
 
@@ -47,7 +53,8 @@ final readonly class ReviewerAgent implements Reviewer
         $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->brief));
         $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
 
-        $verdict = $this->answerOf($this->agent($tools, $platform, $model)->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]));
+        $execution = $this->agent($tools, $platform, $model)->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
+        $verdict = $this->answerOf($this->reporting($execution, $request->conversation));
 
         if ($tools->seen()) {
             return Verdict::invalidOutput('the reviewer made a malformed tool call.');
@@ -93,6 +100,28 @@ final readonly class ReviewerAgent implements Reviewer
         $toolbox = $this->prompt->fenced(new FaultTolerantToolbox($tools));
 
         return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
+    }
+
+    // Reported as it happens and never read back, so the verdict path is the one it was without the live view.
+    private function reporting(ExecutionInterface $execution, ReviewerConversation $reviewer): ExecutionInterface
+    {
+        $round = $reviewer->round;
+
+        if (null === $round) {
+            return $execution;
+        }
+
+        return $execution->onProgress(function (Progress $progress) use ($round, $reviewer): void {
+            $payload = $progress->getPayload();
+
+            if ($payload instanceof ToolCall) {
+                $this->updates->toolCalled($round, $reviewer->id->toRfc4122(), $payload->getName());
+            }
+
+            if ($payload instanceof TextDelta) {
+                $this->updates->textStreamed($round, $reviewer->id->toRfc4122(), $payload->getText());
+            }
+        });
     }
 
     private function answerOf(ExecutionInterface $execution): Verdict

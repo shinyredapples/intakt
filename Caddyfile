@@ -1,0 +1,29 @@
+{
+	# Off until the container image (T22) binds it to localhost; nothing here uses it.
+	admin off
+}
+
+:{$SERVER_PORT:7781} {
+	# The hub's stream must not be compressed, because a compressor buffers it and a client would see events late or in bursts.
+	@compressible not path /.well-known/mercure
+	encode @compressible zstd gzip
+
+	route {
+		mercure {
+			# Modern mode: the issuer block names who may sign a token and the key for each role.
+			issuer {$MERCURE_JWT_ISSUER} {
+				publisher {
+					jwt {$MERCURE_JWT_SECRET} HS256
+				}
+				subscriber {
+					jwt {$MERCURE_JWT_SECRET} HS256
+				}
+			}
+			# Bolt keeps history on disk, so a client that reconnects with Last-Event-ID receives what it missed.
+			transport bolt {
+				path {$MERCURE_BOLT_PATH:var/mercure.db}
+				size {$MERCURE_HISTORY_SIZE:1000}
+			}
+		}
+	}
+}

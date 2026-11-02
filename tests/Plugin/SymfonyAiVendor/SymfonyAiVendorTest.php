@@ -62,6 +62,7 @@ use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -729,7 +730,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore(), new RecordedRoundUpdates());
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

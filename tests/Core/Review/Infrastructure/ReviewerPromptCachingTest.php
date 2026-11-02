@@ -23,6 +23,7 @@ use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
@@ -110,7 +111,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             return array_shift($responses) ?? self::fail('The reviewer asked for a third round.');
         });
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore(), new RecordedRoundUpdates());
 
         $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
 
