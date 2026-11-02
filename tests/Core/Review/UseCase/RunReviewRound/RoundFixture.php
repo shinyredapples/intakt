@@ -150,7 +150,7 @@ final readonly class RoundFixture
         return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $this->ledger))($query);
     }
 
-    // A reader with its own entity manager, and the first reviewer's verdict committed right after the reader's ledger read, the order in which a worker's commit lands between the two reads of the query.
+    // A reader with its own entity manager, because a worker commits the first reviewer's verdict right after the reader's ledger read, the order in which a commit lands between the two reads of the query.
     public function verdictsReadWhileAVerdictCommitsAfterTheLedgerRead(ProjectModes $modes, VerdictsOfRound $query): RoundVerdicts
     {
         $reader = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
