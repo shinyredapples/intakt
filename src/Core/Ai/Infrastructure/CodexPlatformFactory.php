@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Symfony\AI\Platform\Bridge\Codex\Contract\CodexContract;
 use Symfony\AI\Platform\Bridge\Codex\ModelCatalog;
 use Symfony\AI\Platform\Bridge\Codex\ResultConverter;
 use Symfony\AI\Platform\Capability;
+use Symfony\AI\Platform\Contract;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Platform;
 use Symfony\AI\Platform\PlatformInterface;
@@ -34,7 +34,7 @@ final readonly class CodexPlatformFactory
             [new ConfinedCodexClient($cli)],
             [new ResultConverter()],
             new ModelCatalog($models),
-            CodexContract::create(),
+            Contract::create([new CodexMessageBagNormalizer()]),
             $this->events,
         );
 

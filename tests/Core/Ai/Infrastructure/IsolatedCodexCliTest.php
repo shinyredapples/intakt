@@ -85,7 +85,8 @@ final class IsolatedCodexCliTest extends TestCase
     {
         $seen = $this->runOf($this->cli(), ['model' => 'other', 'config' => ['model_reasoning_effort="minimal"']]);
 
-        self::assertSame(['--model', 'gpt-5.3-codex', '--config', 'web_search="disabled"', '--config', 'model_reasoning_effort="high"'], array_slice($seen['arguments'], 2, 6));
+        $model = $this->indexOf('--model', $seen['arguments']);
+        self::assertSame(['--model', 'gpt-5.3-codex', '--config', 'web_search="disabled"', '--config', 'model_reasoning_effort="high"'], array_slice($seen['arguments'], $model, 6));
         self::assertNotContains('other', $seen['arguments']);
         self::assertNotContains('model_reasoning_effort="minimal"', $seen['arguments']);
     }
@@ -112,6 +113,21 @@ final class IsolatedCodexCliTest extends TestCase
         self::assertContains('shell_tool', $arguments);
     }
 
+    public function testACallerCannotAddAFlagThroughItsOptions(): void
+    {
+        $arguments = $this->runOf($this->cli(), ['dangerously_bypass_approvals_and_sandbox' => true, 'add_dir' => '/', 'cd' => '/', 'profile' => 'open'])['arguments'];
+
+        self::assertSame([], array_values(array_intersect(['--dangerously-bypass-approvals-and-sandbox', '--add-dir', '--cd', '--profile'], $arguments)));
+    }
+
+    public function testACallerCannotAddAFlagThroughItsPayload(): void
+    {
+        $arguments = $this->runOf($this->cli(), [], ['prompt' => 'Answer with OK.', 'system_prompt' => 'Be brief.', 'add_dir' => '/'])['arguments'];
+
+        self::assertNotContains('--add-dir', $arguments);
+        self::assertSame("[System]\nBe brief.\n\n[User]\nAnswer with OK.", array_last($arguments));
+    }
+
     /**
      * @param list<string> $arguments
      */
@@ -131,13 +147,14 @@ final class IsolatedCodexCliTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param array<string, mixed>        $options
+     * @param array<string, mixed>|string $payload
      *
      * @return array{arguments: list<string>, cwd: string, environment: array<string, string>, login: ?string, writable: bool}
      */
-    private function runOf(IsolatedCodexCli $cli, array $options = []): array
+    private function runOf(IsolatedCodexCli $cli, array $options = [], array|string $payload = 'Answer with OK.'): array
     {
-        $data = $cli->request(new Codex('gpt-5.3-codex'), 'Answer with OK.', $options)->getData();
+        $data = $cli->request(new Codex('gpt-5.3-codex'), $payload, $options)->getData();
         $item = $data['item'] ?? null;
         self::assertIsArray($item);
         $text = $item['text'] ?? null;

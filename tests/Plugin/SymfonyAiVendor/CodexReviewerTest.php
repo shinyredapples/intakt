@@ -15,6 +15,7 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\CodexEffort;
 use Intakt\Core\Ai\Infrastructure\CodexLogin;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
+use Intakt\Core\Ai\Infrastructure\CodexMessageBagNormalizer;
 use Intakt\Core\Ai\Infrastructure\CodexPlatformFactory;
 use Intakt\Core\Ai\Infrastructure\CodexSettings;
 use Intakt\Core\Ai\Infrastructure\CodexTokenRefresh;
@@ -83,6 +84,7 @@ use Throwable;
 #[CoversClass(ConfinedCodexClient::class)]
 #[CoversClass(CompletedCodexTurn::class)]
 #[CoversClass(CodexPlatformFactory::class)]
+#[CoversClass(CodexMessageBagNormalizer::class)]
 #[CoversClass(SymfonyAiVendor::class)]
 #[UsesClass(IsolatedCodexCli::class)]
 #[UsesClass(CodexLogins::class)]
@@ -195,6 +197,40 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertStringContainsString('"json_schema"', $prompt);
         self::assertNotContains('--response-format', $arguments);
         self::assertNotContains('--allowedTools', $arguments);
+    }
+
+    public function testTheCliGetsTheTaskTheDiffAndTheOpenFindingsInItsPrompt(): void
+    {
+        $this->replaying('complete');
+
+        $this->review();
+
+        $prompt = (string) array_last($this->arguments());
+        self::assertStringContainsString('Review the change.', $prompt);
+        self::assertStringContainsString('diff --git a/a b/a', $prompt);
+        self::assertStringContainsString('Earlier.', $prompt);
+    }
+
+    public function testACompletedTurnWithoutAnAnswerFailsTheReviewer(): void
+    {
+        $this->replaying('no-answer');
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(RuntimeException::class, $failure::class);
+        self::assertStringContainsString('does not contain a text field', $failure->getMessage());
+    }
+
+    public function testACompletedTurnWithoutAnAnswerStillRecordsItsUsageOnce(): void
+    {
+        $this->replaying('no-answer');
+
+        $this->failureOfReview();
+
+        self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+        /** @var list<array<string, int|string|null>> $usages */
+        $usages = $this->ledger->payloads()[1]['usages'];
+        self::assertSame([['codex.team', 2300, 70, 512]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt'], $usage['completion'], $usage['cached']], $usages));
     }
 
     public function testTheReviewerCannotApproveAChangeItNeverRead(): void

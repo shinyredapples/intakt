@@ -13,6 +13,8 @@ use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 // Every option the agent passes is dropped because the bridge turns each into a CLI flag; the instructions travel with the system prompt, which the bridge puts in front of the prompt, since the CLI has an option for neither.
 final readonly class ConfinedCodexClient implements ModelClientInterface
 {
+    private const string PROMPT = 'prompt';
+
     private const string SYSTEM_PROMPT = 'system_prompt';
 
     // Because the reviewer's instructions offer Intakt's tools, which the CLI cannot call (plan T15 serves them over MCP).
@@ -32,7 +34,9 @@ final readonly class ConfinedCodexClient implements ModelClientInterface
     #[Override]
     public function request(Model $model, array|string $payload, array $options = []): RawResultInterface
     {
-        return new CompletedCodexTurn($this->inner->request($model, $payload, [self::SYSTEM_PROMPT => $this->instructions($payload, $options)]));
+        $prompt = is_array($payload) ? (string) ($payload[self::PROMPT] ?? '') : $payload;
+
+        return new CompletedCodexTurn($this->inner->request($model, [self::PROMPT => $prompt, self::SYSTEM_PROMPT => $this->instructions($payload, $options)]));
     }
 
     /**

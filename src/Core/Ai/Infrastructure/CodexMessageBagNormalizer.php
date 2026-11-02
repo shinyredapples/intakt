@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Ai\Infrastructure;
+
+use Override;
+use Symfony\AI\Platform\Bridge\Codex\Codex;
+use Symfony\AI\Platform\Contract\Normalizer\ModelContractNormalizer;
+use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Message\UserMessage;
+use Symfony\AI\Platform\Model;
+
+// The bridge's normalizer keeps only the last user message as the prompt, yet a reviewer gets its task, diff, briefing and open findings as separate ones (upstream/ai-codex-platform-last-user-message).
+final class CodexMessageBagNormalizer extends ModelContractNormalizer
+{
+    private const string SEPARATOR = PHP_EOL.PHP_EOL;
+
+    /**
+     * @param MessageBag $data
+     *
+     * @return array{prompt: string, system_prompt?: string}
+     */
+    #[Override]
+    public function normalize(mixed $data, ?string $format = null, array $context = []): array
+    {
+        $prompt = ['prompt' => $this->userTextOf($data)];
+        $system = $data->getSystemMessage();
+
+        return null === $system ? $prompt : [...$prompt, 'system_prompt' => (string) $system->getContent()];
+    }
+
+    private function userTextOf(MessageBag $bag): string
+    {
+        $users = array_filter($bag->getMessages(), static fn (object $message): bool => $message instanceof UserMessage);
+
+        return implode(self::SEPARATOR, array_map(static fn (UserMessage $message): string => (string) $message->asText(), $users));
+    }
+
+    #[Override]
+    protected function supportedDataClass(): string
+    {
+        return MessageBag::class;
+    }
+
+    #[Override]
+    protected function supportsModel(Model $model): bool
+    {
+        return $model instanceof Codex;
+    }
+}

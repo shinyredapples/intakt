@@ -28,6 +28,8 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
 
     private const string NO_WEB_SEARCH = 'web_search="disabled"';
 
+    private const array PROMPTS = ['prompt' => true, 'system_prompt' => true];
+
     public function __construct(
         private CodexLogins $logins,
         private CodexSettings $settings,
@@ -46,19 +48,28 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
     {
         $home = $this->logins->handOver($this->account);
 
-        return new ModelClient(null, $home, self::TIMEOUT, $this->environment($home))->request($model, $payload, $this->pinned($options));
+        return new ModelClient(null, $home, self::TIMEOUT, $this->environment($home))->request($model, $this->promptOf($payload), $this->pinned());
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param array<string|int, mixed>|string $payload
      *
+     * @return array<string, mixed>|string
+     */
+    // The bridge turns every other payload key and every option into a CLI flag, so only the prompts pass and the options are Intakt's alone.
+    private function promptOf(array|string $payload): array|string
+    {
+        return is_string($payload) ? $payload : array_intersect_key($payload, self::PROMPTS);
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function pinned(array $options): array
+    private function pinned(): array
     {
         $settings = $this->settings->options();
 
-        return [...$options, ...self::CONFINEMENT, ...$settings, 'config' => [self::NO_WEB_SEARCH, ...$settings['config']]];
+        return [...self::CONFINEMENT, ...$settings, 'config' => [self::NO_WEB_SEARCH, ...$settings['config']]];
     }
 
     /**
