@@ -37,7 +37,7 @@ final class PeriodSummaryTest extends TestCase
             ComparisonBuilder::round(Verdict::incompleteStream('cut'), 50),
         ]);
 
-        $summary = (new PeriodSummary())->summarize([$first, $second]);
+        $summary = new PeriodSummary()->summarize([$first, $second]);
 
         self::assertEquals(new ShadowSummary(2, 1, 0, 1, 1, 1, 1, 2, 150), $summary);
     }

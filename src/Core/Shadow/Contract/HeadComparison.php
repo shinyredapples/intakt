@@ -6,7 +6,7 @@ namespace Intakt\Core\Shadow\Contract;
 
 use Intakt\Core\Review\Contract\Finding;
 
-// Counts and findings only: no limits, usage windows or reset times belong in a comparison.
+// Counts and findings only, because a limit or reset time in a comparison would leak account state into the report.
 final readonly class HeadComparison
 {
     /**

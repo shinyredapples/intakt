@@ -29,7 +29,7 @@ final readonly class CompareHeadCommand
         string $file,
     ): int {
         $recorded = RecordedHead::fromFile($file);
-        if (null === $recorded) {
+        if (!$recorded instanceof RecordedHead) {
             $io->error(sprintf('Cannot read a recorded head from %s.', $file));
 
             return Command::INVALID;

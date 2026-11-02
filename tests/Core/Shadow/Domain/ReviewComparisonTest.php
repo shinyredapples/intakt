@@ -30,7 +30,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10 + ReviewComparison::LINE_WINDOW)));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertCount(1, $result->matches);
         self::assertSame([], $result->loopOnly);
@@ -42,7 +42,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 11 + ReviewComparison::LINE_WINDOW)));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertSame([0, 1, 1], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
     }
@@ -52,7 +52,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/B.php', 10)));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertCount(0, $result->matches);
     }
@@ -62,7 +62,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10), ComparisonBuilder::loopFinding('src/A.php', 11));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 11)));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertCount(1, $result->matches);
         self::assertCount(1, $result->loopOnly);
@@ -76,7 +76,7 @@ final class ReviewComparisonTest extends TestCase
             ComparisonBuilder::finding('src/B.php', 5, Severity::P2, 'F2'),
         ));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertCount(2, $result->matches);
         self::assertSame(1, $result->severityDisagreements());
@@ -87,7 +87,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = new LoopReviews([new LoopReview('security', LoopVerdict::Unreadable, [])]);
         $round = ComparisonBuilder::round(new Verdict(Decision::Approve, [], [], []));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertSame(1, $result->unreadableLoopReviews());
         self::assertSame(ReviewOutcome::Unreadable, $result->loopDecisions[0]->outcome);
@@ -98,7 +98,7 @@ final class ReviewComparisonTest extends TestCase
     {
         $round = ComparisonBuilder::round(Verdict::invalidOutput('not json'));
 
-        $result = (new ReviewComparison())->compare('h', new LoopReviews([]), [$round]);
+        $result = new ReviewComparison()->compare('h', new LoopReviews([]), [$round]);
 
         self::assertSame(1, $result->intaktFailedReviews());
         self::assertSame(ReviewOutcome::Failed, $result->intaktDecisions[0]->outcome);
@@ -110,7 +110,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding(null, null), ComparisonBuilder::finding('src/A.php', null, Severity::P2, 'F2')));
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertCount(0, $result->matches);
         self::assertCount(2, $result->intaktOnly);
@@ -121,7 +121,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = new LoopReviews([new LoopReview('style', LoopVerdict::Approve, []), new LoopReview('docs', LoopVerdict::Changes, [])]);
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(), 250);
 
-        $result = (new ReviewComparison())->compare('h', $loop, [$round]);
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertSame([ReviewOutcome::Approve, ReviewOutcome::Changes], array_map(static fn (ReviewerDecision $d): ReviewOutcome => $d->outcome, $result->loopDecisions));
         self::assertSame(ReviewOutcome::Changes, $result->intaktDecisions[0]->outcome);

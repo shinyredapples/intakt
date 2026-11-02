@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Shadow\Contract;
 
-// Counts only: no limits, usage windows or reset times belong in a summary.
+// Counts only, because a limit or reset time in a summary would leak account state into the report.
 final readonly class ShadowSummary
 {
     public function __construct(

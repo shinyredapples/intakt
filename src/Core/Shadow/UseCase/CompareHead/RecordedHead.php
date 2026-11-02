@@ -18,7 +18,7 @@ use JsonException;
 use TypeError;
 use ValueError;
 
-// A head as the evidence door reads it from a file: the pull request comments and Intakt's recorded shadow rounds.
+// Read here, not in the domain, because the file format belongs to the evidence door alone.
 final readonly class RecordedHead
 {
     /**
@@ -69,12 +69,18 @@ final readonly class RecordedHead
         return is_array($data) ? $data : [];
     }
 
-    private static function comment(mixed $comment): PullRequestComment
+    /**
+     * @param array{author: string, head: string, body: string} $comment
+     */
+    private static function comment(array $comment): PullRequestComment
     {
         return new PullRequestComment($comment['author'], $comment['head'], $comment['body']);
     }
 
-    private static function round(mixed $round): ChangeReview
+    /**
+     * @param array{round: int, tokens: array{calls: int, prompt: int, completion: int}, verdicts: list<array<mixed>>} $round
+     */
+    private static function round(array $round): ChangeReview
     {
         $verdicts = array_map(self::verdict(...), array_values($round['verdicts']));
         $tokens = $round['tokens'];
@@ -89,14 +95,20 @@ final readonly class RecordedHead
         );
     }
 
-    private static function verdict(mixed $verdict): PanelVerdict
+    /**
+     * @param array{tier: string, verdict: string, findings: list<array<mixed>>} $verdict
+     */
+    private static function verdict(array $verdict): PanelVerdict
     {
         $findings = array_map(self::finding(...), array_values($verdict['findings']));
 
         return new PanelVerdict(Tier::from($verdict['tier']), new Verdict(Decision::from($verdict['verdict']), $findings, [], []));
     }
 
-    private static function finding(mixed $finding): Finding
+    /**
+     * @param array{id: string, severity: string, file?: string|null, line?: int|null} $finding
+     */
+    private static function finding(array $finding): Finding
     {
         return new Finding(
             id: $finding['id'],
