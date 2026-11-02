@@ -11,7 +11,6 @@ use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowUse;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 // Not the StartGuard itself, because BudgetGuard asks it only once no hold of the account or the install refuses the start.
 final readonly class CeilingStartGuard
@@ -26,7 +25,6 @@ final readonly class CeilingStartGuard
     public function __construct(
         private MeasuredUse $measured,
         private ClockInterface $clock,
-        #[Autowire('%intakt.budget.ceilings%')]
         private array $ceilings,
     ) {
     }
@@ -78,7 +76,7 @@ final readonly class CeilingStartGuard
      */
     private function reachesCeiling(array $uses, float $margin): bool
     {
-        return array_any($uses, fn ($use, $window) => $use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
+        return array_any($uses, fn (WindowUse $use, string $window): bool =>$use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
     }
 
     /**

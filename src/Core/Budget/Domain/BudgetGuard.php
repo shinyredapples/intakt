@@ -10,9 +10,7 @@ use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
 use Override;
-use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 
-#[AsAlias(StartGuard::class)]
 final readonly class BudgetGuard implements StartGuard
 {
     public function __construct(
