@@ -23,7 +23,6 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
-use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\WorkerOnSleep;
@@ -101,14 +100,14 @@ final class ShadowRoundTest extends KernelTestCase
         self::assertSame(['post review on beta '.RoundFixture::CHANGE], $this->forge()->writeLog);
     }
 
-    // Posts the decision the way a forge plugin will once one writes (plan task T18), so the only write a round leads to goes through the container's forge writes.
+    // Posts the decision the way a round will once it posts its outcome, so the only write a round leads to goes through the container's forge writes.
     private function reviewAndPost(string $project): ChangeReview
     {
         $review = $this->reviewChange()->review($this->request($project));
         $forge = self::getContainer()->get(ForgeWrites::class);
         assert($forge instanceof ForgeWrites);
 
-        $forge->postReview($project, new ChangeId(RoundFixture::CHANGE), $review->decision->value);
+        $forge->postReview($project, ReviewToPost::change(RoundFixture::CHANGE), ReviewToPost::comment($review->decision->value));
 
         return $review;
     }
