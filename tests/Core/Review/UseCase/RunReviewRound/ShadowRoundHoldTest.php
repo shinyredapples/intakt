@@ -20,6 +20,7 @@ use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ShadowCeilingReached;
+use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHold;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
@@ -37,6 +38,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 
 #[Group('persistence')]
 #[CoversClass(ShadowRoundHold::class)]
+#[CoversClass(RunReviewRoundHandler::class)]
 #[CoversClass(ShadowCeilingReached::class)]
 #[UsesClass(ReviewChange::class)]
 #[UsesClass(Account::class)]

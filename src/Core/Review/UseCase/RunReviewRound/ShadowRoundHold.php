@@ -9,13 +9,10 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Review\Contract\PanelReviewer;
-use Intakt\Core\Shadow\Contract\ProjectMode;
-use Intakt\Core\Shadow\Contract\ProjectModes;
 
 final readonly class ShadowRoundHold
 {
     public function __construct(
-        private ProjectModes $modes,
         private ShadowStartGuard $guard,
         private RoundLedger $ledger,
         private TierResolver $tiers,
@@ -28,10 +25,6 @@ final readonly class ShadowRoundHold
     public function refuseAboveTheCeiling(RunReviewRound $command): void
     {
         $project = $command->target->subject->project;
-
-        if (ProjectMode::Shadow !== $this->modes->of($project)) {
-            return;
-        }
 
         foreach ($this->providersOf($command) as $provider) {
             $decision = $this->guard->decide($provider);
