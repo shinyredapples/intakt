@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Shadow\Domain;
 
+use Intakt\Core\Review\Contract\ChangeReview;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Shadow\Contract\FindingMatch;
 use Intakt\Core\Shadow\Contract\HeadComparison;
+use Intakt\Core\Shadow\Contract\LoopFinding;
 use Intakt\Core\Shadow\Contract\LoopReview;
 use Intakt\Core\Shadow\Contract\LoopReviews;
 use Intakt\Core\Shadow\Contract\LoopVerdict;
@@ -25,6 +30,14 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(HeadComparison::class)]
 #[UsesClass(FindingMatch::class)]
 #[UsesClass(ReviewerDecision::class)]
+#[UsesClass(LoopReviews::class)]
+#[UsesClass(LoopReview::class)]
+#[UsesClass(LoopFinding::class)]
+#[UsesClass(ChangeReview::class)]
+#[UsesClass(PanelVerdict::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(RoundTokens::class)]
 final class PeriodSummaryTest extends TestCase
 {
     public function testThePeriodSummaryAddsUpTheHeadsMatchesDisagreementsFailuresAndTokens(): void

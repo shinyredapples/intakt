@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Shadow\Domain;
 
+use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Shadow\Contract\FindingMatch;
 use Intakt\Core\Shadow\Contract\HeadComparison;
+use Intakt\Core\Shadow\Contract\LoopFinding;
 use Intakt\Core\Shadow\Contract\LoopReview;
 use Intakt\Core\Shadow\Contract\LoopReviews;
 use Intakt\Core\Shadow\Contract\LoopVerdict;
@@ -23,6 +28,14 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(HeadComparison::class)]
 #[CoversClass(FindingMatch::class)]
 #[UsesClass(ReviewerDecision::class)]
+#[UsesClass(LoopReviews::class)]
+#[UsesClass(LoopReview::class)]
+#[UsesClass(LoopFinding::class)]
+#[UsesClass(ChangeReview::class)]
+#[UsesClass(PanelVerdict::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(RoundTokens::class)]
 final class ReviewComparisonTest extends TestCase
 {
     public function testAFindingOnTheSameFileWithinTheLineWindowIsMatched(): void
@@ -55,6 +68,27 @@ final class ReviewComparisonTest extends TestCase
         $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
         self::assertCount(0, $result->matches);
+    }
+
+    public function testTheSameSpotRaisedByTwoReviewersOnOneSideIsOneFinding(): void
+    {
+        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$round, $round]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+    }
+
+    public function testTheSameLoopFindingRaisedByTwoLoopReviewersIsOneFinding(): void
+    {
+        $finding = ComparisonBuilder::loopFinding('src/A.php', 10);
+        $loop = new LoopReviews([new LoopReview('a', LoopVerdict::Changes, [$finding]), new LoopReview('b', LoopVerdict::Changes, [$finding])]);
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
     }
 
     public function testAnIntaktFindingMatchesOnlyOneLoopFinding(): void

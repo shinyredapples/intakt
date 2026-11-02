@@ -29,8 +29,8 @@ final readonly class ReviewComparison
     #[NoDiscard('a comparison that is not read reports nothing')]
     public function compare(string $head, LoopReviews $loop, array $shadowRounds): HeadComparison
     {
-        $loopFindings = array_merge(...array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews));
-        $intaktFindings = $this->countingFindings($shadowRounds);
+        $loopFindings = $this->distinctLoopFindings(array_merge(...array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews)));
+        $intaktFindings = $this->distinctIntaktFindings($this->countingFindings($shadowRounds));
         [$matches, $loopOnly, $intaktOnly] = $this->match($loopFindings, $intaktFindings);
 
         return new HeadComparison(
@@ -42,6 +42,38 @@ final readonly class ReviewComparison
             intaktOnly: $intaktOnly,
             intaktTokens: array_sum(array_map(static fn (ChangeReview $round): int => $round->tokens->total, $shadowRounds)),
         );
+    }
+
+    /**
+     * @param list<LoopFinding> $findings
+     *
+     * @return list<LoopFinding>
+     */
+    private function distinctLoopFindings(array $findings): array
+    {
+        $distinct = [];
+        foreach ($findings as $finding) {
+            $distinct[json_encode([$finding->file, $finding->line, $finding->severity->value], JSON_THROW_ON_ERROR)] = $finding;
+        }
+
+        return array_values($distinct);
+    }
+
+    /**
+     * @param list<Finding> $findings
+     *
+     * @return list<Finding>
+     */
+    private function distinctIntaktFindings(array $findings): array
+    {
+        // Several reviewers raising the same spot are one finding; one without a file or line has no spot to compare.
+        $distinct = [];
+        foreach ($findings as $index => $finding) {
+            $spot = null === $finding->file || null === $finding->line ? $index : json_encode([$finding->file, $finding->line, $finding->severity->value], JSON_THROW_ON_ERROR);
+            $distinct[$spot] = $finding;
+        }
+
+        return array_values($distinct);
     }
 
     /**
