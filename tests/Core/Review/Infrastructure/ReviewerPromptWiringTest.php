@@ -19,6 +19,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerMemory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\UuidV7;
 
@@ -38,7 +39,7 @@ final class ReviewerPromptWiringTest extends KernelTestCase
 {
     public function testTheContainerWiresTheReviewerPromptWithProjectMemory(): void
     {
-        $memory = $this->createStub(ProjectMemory::class);
+        $memory = self::createStub(ProjectMemory::class);
         $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Cart totals were rounded twice.', ['src/Cart.php'])], 1_000));
         self::getContainer()->set(ProjectMemory::class, $memory);
         $prompt = self::getContainer()->get(ReviewerPrompt::class);
@@ -47,7 +48,9 @@ final class ReviewerPromptWiringTest extends KernelTestCase
 
         $messages = $prompt->messagesFor(new ReviewerConversation('You review.', new UuidV7()), new ReviewBrief(new ChangeUnderReview('alpha', 'Task.', $diff), []))->getMessages();
 
+        $last = array_last($messages);
         self::assertCount(4, $messages);
-        self::assertStringContainsString('<<<UNTRUSTED project memory fence-', (string) array_last($messages)->asText());
+        self::assertInstanceOf(UserMessage::class, $last);
+        self::assertStringContainsString('<<<UNTRUSTED project memory fence-', (string) $last->asText());
     }
 }

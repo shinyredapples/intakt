@@ -160,7 +160,7 @@ final class ReviewerMemoryTest extends TestCase
 
     public function testAnOversizedTopEntryIsShortenedMarkedAndKeptWithinTheByteCap(): void
     {
-        $memory = $this->createStub(ProjectMemory::class);
+        $memory = self::createStub(ProjectMemory::class);
         $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry(self::PROJECT, str_repeat('é', 2_500), ['src/Cart.php'])], 10_000));
 
         $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF));
