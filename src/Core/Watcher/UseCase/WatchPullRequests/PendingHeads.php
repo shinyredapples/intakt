@@ -49,11 +49,10 @@ final readonly class PendingHeads
         $now = $this->clock->now();
         $due = [];
 
-        foreach ($this->entities->getRepository(PendingHead::class)->findBy(['project' => $project]) as $pending) {
-            // Refreshed because a worker keeps its entity manager and another worker may have moved the row.
-            $this->entities->refresh($pending);
+        foreach ($this->entities->getRepository(PendingHead::class)->findBy(['project' => $project]) as $loaded) {
+            $pending = $this->readAgain($loaded);
 
-            if ($pending->isDueAt($now)) {
+            if (true === $pending?->isDueAt($now)) {
                 $due[] = $pending->openChange();
             }
         }
@@ -109,6 +108,14 @@ final readonly class PendingHeads
             ->getQuery()
             ->execute();
         $this->dropLoaded($this->keyOf($project, $settled));
+    }
+
+    // Read again by its key rather than refreshed, because a worker keeps its entity manager, another worker may have moved or settled the row, and a refresh of a deleted row keeps its old values.
+    private function readAgain(PendingHead $loaded): ?PendingHead
+    {
+        $this->entities->detach($loaded);
+
+        return $this->entities->find(PendingHead::class, ['project' => $loaded->project(), 'change' => $loaded->change()]);
     }
 
     private function stored(string $project, OpenChange $open): ?PendingHead
