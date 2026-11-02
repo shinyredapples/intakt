@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Closure;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
-use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -24,19 +24,20 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\KernelHttpClient;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
-use Symfony\AI\Agent\Bridge\Mcp\McpToolbox;
+use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\UuidV7;
-use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 
 #[Group('persistence')]
 #[CoversClass(ReviewerMcpToolboxFactory::class)]
@@ -121,14 +122,14 @@ final class ReviewerOverMcpTest extends KernelTestCase
     {
         $request = new ReviewRequest(new Checkout($this->round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7()));
 
-        $this->expectException(\LogicException::class);
+        $this->expectException(LogicException::class);
 
         $this->mcpToolboxes()->create($request);
     }
 
     private function mcpToolboxes(): ReviewerMcpToolboxFactory
     {
-        $kernel = new KernelHttpClient(self::$kernel ?? throw new \LogicException('No kernel.'));
+        $kernel = new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.'));
         $http = new class($kernel, $this->sent) implements ClientInterface {
             /**
              * @param list<RequestInterface> $sent
@@ -149,10 +150,10 @@ final class ReviewerOverMcpTest extends KernelTestCase
     }
 
     /**
-     * @param array<string, string> $arguments
-     * @param \Closure(ReviewRequest): \Symfony\AI\Agent\Toolbox\ToolboxInterface $toolboxes
+     * @param array<string, string>                    $arguments
+     * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
-    private function review(\Closure $toolboxes, string $tool, array $arguments = ['path' => 'RoundFixture.php']): Verdict
+    private function review(Closure $toolboxes, string $tool, array $arguments = ['path' => 'RoundFixture.php']): Verdict
     {
         $step = 0;
         $script = static function () use (&$step, $tool, $arguments) {

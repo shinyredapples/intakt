@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use LogicException;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ServeReviewToolsCommand;
+use LogicException;
 use Mcp\Client;
 use Mcp\Client\Transport\HttpTransport;
 use Psr\Http\Client\ClientInterface;
