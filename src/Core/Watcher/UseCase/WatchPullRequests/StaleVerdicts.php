@@ -40,8 +40,8 @@ final readonly class StaleVerdicts
         $current = $this->ask(new IdentityAtHead($project->startAt($open), new CommitId($round->head())), HeadIdentity::class);
         $verdicts = $this->ask(new VerdictsOfRound($round->roundId(), $current->identity, $current->move), RoundVerdicts::class);
 
-        if (Standing::Stale === $verdicts->standing->standing && $this->rounds->markStale($round)) {
-            $this->ledger->verdictsStale($round);
+        if (Standing::Stale === $verdicts->standing->standing) {
+            $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
         }
     }
 

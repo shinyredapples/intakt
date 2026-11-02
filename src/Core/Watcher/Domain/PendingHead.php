@@ -47,8 +47,8 @@ final class PendingHead
     public function wait(OpenChange $waiting, DateTimeImmutable $readAgainAt): void
     {
         $this->head = $waiting->head->hash;
-        $this->updatedAt = $this->format($waiting->updatedAt);
-        $this->readAgainAt = $this->format($readAgainAt);
+        $this->updatedAt = self::momentOf($waiting->updatedAt);
+        $this->readAgainAt = self::momentOf($readAgainAt);
     }
 
     public function project(): string
@@ -61,24 +61,20 @@ final class PendingHead
         return $this->change;
     }
 
-    public function isAt(OpenChange $open): bool
+    // Public so a read-again time can be written with one conditional statement in the stored form.
+    public static function momentOf(DateTimeImmutable $moment): string
     {
-        return $this->head === $open->head->hash;
+        return $moment->setTimezone(new DateTimeZone('UTC'))->format(self::MOMENT);
     }
 
     public function isDueAt(DateTimeImmutable $now): bool
     {
-        return $this->readAgainAt <= $this->format($now);
+        return $this->readAgainAt <= self::momentOf($now);
     }
 
     public function openChange(): OpenChange
     {
         return new OpenChange(new ChangeId($this->change), new CommitId($this->head), $this->parse($this->updatedAt));
-    }
-
-    private function format(DateTimeImmutable $moment): string
-    {
-        return $moment->setTimezone(new DateTimeZone('UTC'))->format(self::MOMENT);
     }
 
     private function parse(string $moment): DateTimeImmutable

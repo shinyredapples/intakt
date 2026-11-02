@@ -23,6 +23,9 @@ final readonly class ChangedHeads
      */
     public function enqueue(string $project): void
     {
-        $this->connection->transactional(fn () => $this->pending->enqueue($project, ($this->find)($project)));
+        $this->connection->transactional(function () use ($project): void {
+            $this->pending->enqueue($project, ($this->find)($project));
+            $this->pending->forgetClosed($project);
+        });
     }
 }

@@ -7,6 +7,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\PendingHead;
+use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use LogicException;
 use Symfony\Component\Clock\ClockInterface;
@@ -67,18 +68,33 @@ final readonly class PendingHeads
         return true === $pending?->isDueAt($this->clock->now()) ? $pending->openChange() : null;
     }
 
-    // Left alone when the listing queued a newer head meanwhile, because that head is due now and must not wait for this one's time.
+    // Only while the row still holds this head, in one statement, because a newer head the listing queued meanwhile is due now and must not wait for this one's time.
     public function keep(string $project, HeadDecision $decision): void
     {
         $readAgainAt = $decision->readAgainAt ?? throw new LogicException('Only a pending head is kept.');
-        $pending = $this->stored($project, $decision->change);
+        $this->entities->createQueryBuilder()
+            ->update(PendingHead::class, 'p')
+            ->set('p.readAgainAt', ':readAgainAt')
+            ->where('p.project = :project AND p.change = :change AND p.head = :head')
+            ->setParameter('readAgainAt', PendingHead::momentOf($readAgainAt))
+            ->setParameter('project', $project)
+            ->setParameter('change', $decision->change->id->value)
+            ->setParameter('head', $decision->change->head->hash)
+            ->getQuery()
+            ->execute();
+        $this->dropLoaded($this->keyOf($project, $decision->change));
+    }
 
-        if (true !== $pending?->isAt($decision->change)) {
-            return;
-        }
-
-        $pending->wait($decision->change, $readAgainAt);
-        $this->entities->flush();
+    // Removed with the listing's record, which forgets a closed pull request, because a closed one is never listed again and its CI, often cancelled, would be read every minute for good.
+    public function forgetClosed(string $project): void
+    {
+        $this->entities->createQuery(sprintf(
+            'DELETE FROM %s p WHERE p.project = :project AND NOT EXISTS (SELECT s.change FROM %s s WHERE s.project = p.project AND s.change = p.change)',
+            PendingHead::class,
+            SeenChange::class,
+        ))
+            ->setParameter('project', $project)
+            ->execute();
     }
 
     // Removed only while the row still holds this head, in one statement, because the listing of another worker may have queued a newer head since this one was read.

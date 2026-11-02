@@ -85,23 +85,17 @@ final readonly class StartedRounds
         return $rounds;
     }
 
-    // One statement on the stored row, because the review's queries clear the entity manager and a loaded round would no longer be written; false when another worker marked it first.
-    #[NoDiscard]
-    public function markStale(StartedRound $round): bool
+    // Marked and recorded in one transaction with the ledger's own write, so a failed append leaves the round unmarked for a later tick and a second worker that marks the same round finds it taken.
+    /**
+     * @param Closure(StartedRound): void $record
+     */
+    public function markStaleOnce(StartedRound $round, Closure $record): void
     {
-        $marked = $this->entities->createQueryBuilder()
-            ->update(StartedRound::class, 'r')
-            ->set('r.stale', ':stale')
-            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.stale = :fresh')
-            ->setParameter('stale', true)
-            ->setParameter('fresh', false)
-            ->setParameter('project', $round->project())
-            ->setParameter('change', $round->change())
-            ->setParameter('head', $round->head())
-            ->getQuery()
-            ->execute();
-
-        return 1 === $marked;
+        $this->entities->getConnection()->transactional(function () use ($round, $record): void {
+            if ($this->markStale($round)) {
+                $record($round);
+            }
+        });
     }
 
     private function isStarted(string $project, OpenChange $change): bool
@@ -130,5 +124,24 @@ final readonly class StartedRounds
             ->execute();
 
         return 1 === $claimed;
+    }
+
+    // One statement on the stored row, because the review's queries clear the entity manager and a loaded round would no longer be written; false when another worker marked it first.
+    #[NoDiscard]
+    private function markStale(StartedRound $round): bool
+    {
+        $marked = $this->entities->createQueryBuilder()
+            ->update(StartedRound::class, 'r')
+            ->set('r.stale', ':stale')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.stale = :fresh')
+            ->setParameter('stale', true)
+            ->setParameter('fresh', false)
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->setParameter('head', $round->head())
+            ->getQuery()
+            ->execute();
+
+        return 1 === $marked;
     }
 }
