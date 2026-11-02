@@ -14,8 +14,8 @@ use Intakt\Core\Shadow\Contract\LoopFinding;
 final readonly class MergedSpot
 {
     /**
-     * @param T               $finding
-     * @param array<int, T>   $members
+     * @param T                       $finding
+     * @param non-empty-array<int, T> $members
      */
     private function __construct(
         public LoopFinding|Finding $finding,
