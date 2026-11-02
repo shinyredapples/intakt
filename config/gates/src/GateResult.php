@@ -11,7 +11,7 @@ final readonly class GateResult
 
     /**
      * @param list<string>         $findings
-     * @param array<string, float> $slowest  seconds per test file, shown beside the findings and never counted as one
+     * @param array<string, float> $slowest
      */
     private function __construct(
         public string $gate,

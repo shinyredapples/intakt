@@ -17,12 +17,13 @@ final readonly class TestDurations
     }
 
     /**
-     * @param list<string> $reports JUnit files; a missing or unreadable one adds nothing, the PHPUnit exit status decides the gate
+     * @param list<string> $reports
      *
-     * @return array<string, float> seconds per test file, relative to the root, slowest first
+     * @return array<string, float>
      */
     public function read(array $reports): array
     {
+        // Because a missing or unreadable report adds nothing: the PHPUnit exit status alone decides the gate.
         $seconds = [];
 
         foreach ($reports as $report) {
@@ -52,7 +53,7 @@ final readonly class TestDurations
     }
 
     /**
-     * @param array<string, float> $durations slowest first
+     * @param array<string, float> $durations
      *
      * @return array<string, float>
      */
@@ -78,7 +79,9 @@ final readonly class TestDurations
 
         $cases = [];
 
-        foreach (new DOMXPath($document)->query('//testcase[@file]') ?: [] as $case) {
+        $found = new DOMXPath($document)->query('//testcase[@file]');
+
+        foreach (false === $found ? [] : $found as $case) {
             if ($case instanceof DOMElement) {
                 $cases[] = $case;
             }

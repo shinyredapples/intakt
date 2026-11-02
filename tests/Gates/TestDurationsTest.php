@@ -21,9 +21,7 @@ final class TestDurationsTest extends TestCase
 
     protected function tearDown(): void
     {
-        array_map(unlink(...), glob($this->directory.'/{,tests/}*.{xml,json}', GLOB_BRACE) ?: []);
-        is_dir($this->directory.'/tests') && rmdir($this->directory.'/tests');
-        rmdir($this->directory);
+        $this->removeDirectory($this->directory);
     }
 
     public function testTimesOfTestCasesInOneFileAreSummedUnderThatFile(): void
@@ -78,6 +76,20 @@ final class TestDurationsTest extends TestCase
         $written = json_decode((string) file_get_contents($this->directory.'/tests/durations.json'), true);
 
         self::assertSame(['tests/AlphaTest.php' => 0.75], $written);
+    }
+
+    private function removeDirectory(string $directory): void
+    {
+        foreach (scandir($directory) as $entry) {
+            if (in_array($entry, ['.', '..'], true)) {
+                continue;
+            }
+
+            $path = $directory.'/'.$entry;
+            is_dir($path) ? $this->removeDirectory($path) : unlink($path);
+        }
+
+        rmdir($directory);
     }
 
     /**
