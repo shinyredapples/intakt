@@ -148,7 +148,7 @@ final class CodexLoginsTest extends TestCase
 
     public function testAFailedRefreshKeepsTheStoredLoginAndHandsNothingOver(): void
     {
-        $this->http = new MockHttpClient(new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401]));
+        $this->http = new MockHttpClient(new JsonMockResponse(['error' => 'server_error'], ['http_code' => 500]));
         $logins = $this->logins();
         $this->storeLogin($logins, '2026-10-01T00:00:00Z');
 
@@ -163,7 +163,7 @@ final class CodexLoginsTest extends TestCase
 
     public function testTheLockIsReleasedAfterAFailedRefresh(): void
     {
-        $this->http = new MockHttpClient(new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401]));
+        $this->http = new MockHttpClient(new JsonMockResponse(['error' => 'server_error'], ['http_code' => 500]));
         $logins = $this->logins();
         $this->storeLogin($logins, '2026-10-01T00:00:00Z');
 
