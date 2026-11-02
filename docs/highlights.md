@@ -108,7 +108,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Built-in Mercure hub with `publisher` and `issuer` keys | live updates; symfony/mercure mints the tokens; the hub is excluded from `encode` | planned | T21 (#27) |
 | `mercure_publish()` | web-side publishing, checked at runtime; consumers publish through the hub endpoint | planned | T21 (#27) |
 | Mercure `bolt` transport | event history, so a reconnecting client catches up with `Last-Event-ID` | planned | T21 (#27) |
-| Prometheus metrics, `/frankenphp/threads`, `mercure_health` | the container health check and an infrastructure row on the dashboard | planned | T22 (#28), T34 (#63) |
+| Prometheus metrics, `/frankenphp/threads`, `mercure_health` | the container health check and an infrastructure row on the dashboard; read today by `intakt:server:status` | in progress | T22 (#28), T34 (#63, part #618), `src/Core/Server/Infrastructure/AdminApiServerStatus.php` |
 | Admin API on localhost | never reachable from outside the container | planned | T22 (#28) |
 | `FRANKENPHP_RESET_KERNEL=1` | the leak test runs with and without it; the image ships without it | planned | T29 (#29) |
 | `watch` and hot reload | a development compose override | planned | T35 (#64) |
