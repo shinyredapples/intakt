@@ -51,7 +51,7 @@ services:
     Symfony\Component\Semaphore\SemaphoreFactory:
         arguments: ['@Symfony\Component\Semaphore\Store\LockStore']
 
-    # The App's identity: nothing else is read as a forge credential.
+    # Only the App's identity, because Intakt acts as itself, never with the owner's token (docs/guide/setting-up-intakt.md).
     Intakt\Plugin\GitHubForge\Infrastructure\AppJwt:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'
