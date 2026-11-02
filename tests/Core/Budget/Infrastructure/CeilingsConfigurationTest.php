@@ -27,6 +27,27 @@ final class CeilingsConfigurationTest extends TestCase
         self::assertSame(['five-hour' => 75.0, 'weekly' => 90.0], $this->ceilings(['budget' => ['ceilings' => ['five-hour' => 75]]]));
     }
 
+    public function testWithoutABudgetSectionEveryWindowHasTheDefaultShadowCeilingOfSeventyPercent(): void
+    {
+        self::assertSame(['five-hour' => 70.0, 'weekly' => 70.0], $this->ceilings([], 'shadow_ceilings'));
+    }
+
+    public function testTheOwnerSetsTheShadowCeilingOfOneWindowWithoutMovingTheLiveCeilings(): void
+    {
+        $contents = ['budget' => ['shadow_ceilings' => ['five-hour' => 60]]];
+
+        self::assertSame(['five-hour' => 60.0, 'weekly' => 70.0], $this->ceilings($contents, 'shadow_ceilings'));
+        self::assertSame(['five-hour' => 90.0, 'weekly' => 90.0], $this->ceilings($contents));
+    }
+
+    public function testAShadowCeilingOutsideOneToAHundredPercentIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/intakt\.budget\.shadow_ceilings\.five-hour/');
+
+        $this->ceilings(['budget' => ['shadow_ceilings' => ['five-hour' => 0]]], 'shadow_ceilings');
+    }
+
     /**
      * @return iterable<string, array{mixed}>
      */
@@ -61,11 +82,11 @@ final class CeilingsConfigurationTest extends TestCase
      *
      * @return array<string, float>
      */
-    private function ceilings(array $contents): array
+    private function ceilings(array $contents, string $kind = 'ceilings'): array
     {
-        /** @var array{budget: array{ceilings: array<string, float>}} $configuration */
+        /** @var array{budget: array<string, array<string, float>>} $configuration */
         $configuration = new Processor()->processConfiguration(new CeilingsConfiguration(), [$contents]);
 
-        return $configuration['budget']['ceilings'];
+        return $configuration['budget'][$kind];
     }
 }

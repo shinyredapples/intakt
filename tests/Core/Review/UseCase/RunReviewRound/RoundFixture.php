@@ -13,6 +13,8 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
+use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -53,6 +55,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHold;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\Shadow\Contract\ProjectModes;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
@@ -120,7 +123,20 @@ final readonly class RoundFixture
 
     public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
     {
-        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change)), $queue);
+        return $this->startWith($this->commandFor($change, $reviewers), $queue);
+    }
+
+    public function commandFor(string $change, int $reviewers): RunReviewRound
+    {
+        return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
+    }
+
+    public function startHandlerOn(MessageBusInterface $queue, ShadowStartGuard $guard = new ScriptedShadowGuard()): RunReviewRoundHandler
+    {
+        $ledger = new RoundLedger($this->ledger, $this->modes);
+        $hold = new ShadowRoundHold($this->modes, $guard, new ConfiguredAccounts([Provider::Anthropic->value => ['default', 'team']]), $ledger);
+
+        return new RunReviewRoundHandler($this->rounds($this->entities), $ledger, $queue, $hold);
     }
 
     public function startFromSource(ChangeSource $source): string
@@ -264,7 +280,10 @@ final readonly class RoundFixture
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
-        return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger(), $this->modes), $this->bus)($command);
+        $ledger = new RoundLedger(new InMemoryLedger(), $this->modes);
+        $hold = new ShadowRoundHold($this->modes, new ScriptedShadowGuard(), new ConfiguredAccounts([]), $ledger);
+
+        return new RunReviewRoundHandler($this->rounds($entities), $ledger, $this->bus, $hold)($command);
     }
 
     public function findingStore(): StoredFindings
@@ -335,7 +354,7 @@ final readonly class RoundFixture
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
-        return new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger, $this->modes), $queue)($command);
+        return $this->startHandlerOn($queue)($command);
     }
 
     private function subject(): ReviewSubject

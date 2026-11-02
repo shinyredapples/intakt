@@ -9,7 +9,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Reviewing a branch of a local repository with `intakt:review` (see [below](#reviewing-a-branch)); reviewing a pull request is planned
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, as does the code that reads a head's CI state and decides to wait (CI running, or a run cancelled and not run again), skip (CI red) or review (CI green), but no forge for GitHub and nothing that runs it exists yet, so there is nothing to set up (planned)
-- Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; running its panel on every new pull request head and the lower usage ceiling for shadow work are planned
+- Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; a shadow round starts only below a lower usage ceiling (see [below](#shadow-mode)); running its panel on every new pull request head is planned
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
 
@@ -168,7 +168,18 @@ A `review:` section can also hold `rules`, a list of extra reviewers for bigger 
 
 ### Shadow mode
 
-A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review, for now) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does counting. Any other value stops Intakt from starting and names the key. Every reviewer's verdict is recorded in the ledger with the project's mode at that moment (`"mode":"shadow"` or `"mode":"live"`), so the ledger shows which verdicts were shadow ones. A shadow verdict never counts toward a merge: not while the project is in shadow mode, and not after it is switched to live either; switching a project to shadow also stops its earlier verdicts from counting. Intakt can post a review to GitHub, but no review round posts its outcome yet and nothing merges yet; running the panel on every new pull request head and a lower usage ceiling for shadow work are planned.
+A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review, for now) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does counting. Any other value stops Intakt from starting and names the key. Every reviewer's verdict is recorded in the ledger with the project's mode at that moment (`"mode":"shadow"` or `"mode":"live"`), so the ledger shows which verdicts were shadow ones. A shadow verdict never counts toward a merge: not while the project is in shadow mode, and not after it is switched to live either; switching a project to shadow also stops its earlier verdicts from counting. Intakt can post a review to GitHub, but no review round posts its outcome yet and nothing merges yet; running the panel on every new pull request head is planned.
+
+Shadow work starts only below a lower ceiling, so it never takes capacity the existing loop needs on the same accounts. The shadow ceilings are set like the ceilings above, in percent from 1 to 100, under `budget.shadow_ceilings` (default 70 for both windows; a window you leave out keeps it), and follow the same rules, including the weekly pace, with the shadow weekly ceiling as the pace's base:
+
+```yaml
+budget:
+    shadow_ceilings:
+        five-hour: 70
+        weekly: 70
+```
+
+Before a round of a shadow project starts, Intakt asks for each provider of its panel whether one of that provider's enabled accounts is below the shadow ceilings (an account with no reading counts as below). If a provider has no such account, no round starts: nothing is stored, the command or caller gets the message `The shadow round of project "<name>" was held: ...`, and the ledger gets a `shadow_round_held` event with the project, the change, the provider and the reason (`at-ceiling`), readable with `php bin/console intakt:ledger:events`. A live project is never held by the shadow ceilings. Nothing records readings of the windows yet, so until it does the shadow ceilings hold nothing back.
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
 
@@ -219,7 +230,7 @@ budget:
         weekly: 90
 ```
 
-Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
+Both default to 90; a window you leave out keeps it. Shadow work has its own, lower ceilings (see [Shadow mode](#shadow-mode)). A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
 
 ### Choosing the database
 

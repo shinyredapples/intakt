@@ -15,12 +15,16 @@ final readonly class RunReviewRoundHandler
         private ReviewRounds $rounds,
         private RoundLedger $ledger,
         private MessageBusInterface $commands,
+        private ShadowRoundHold $shadowHold,
     ) {
     }
 
     // Returns the id of the round because it names the rows and ledger events a caller reads back.
     public function __invoke(RunReviewRound $command): string
     {
+        // Before the transaction, because the ledger event of a held round must stay when no round is stored.
+        $this->shadowHold->refuseAboveTheCeiling($command);
+
         // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
         return $this->rounds->inOneTransaction(function () use ($command): string {
             $round = $this->rounds->open($command);

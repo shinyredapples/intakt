@@ -8,6 +8,10 @@ budget:
     ceilings:
         five-hour: 90
         weekly: 90
+    # Optional: shadow rounds start only below these lower ceilings (default 70 each), so they leave capacity to the existing loop.
+    shadow_ceilings:
+        five-hour: 70
+        weekly: 70
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 # A tier on provider codex must name this model: { provider: codex, model: gpt-5.3-codex }.
 codex: { model: gpt-5.3-codex, effort: high }

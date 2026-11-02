@@ -7,6 +7,7 @@ namespace Intakt\Core\Budget\Domain;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\UsageWindow;
@@ -16,8 +17,9 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
+// Built twice: with the owner's ceilings as the start guard, and with the lower shadow ceilings as the shadow start guard (config/services.yaml).
 #[AsAlias(StartGuard::class)]
-final readonly class CeilingStartGuard implements StartGuard
+final readonly class CeilingStartGuard implements StartGuard, ShadowStartGuard
 {
     public const int TRUSTED_FOR_SECONDS = 1800;
     public const int PARALLEL_TRUSTED_FOR_SECONDS = 300;

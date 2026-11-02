@@ -183,6 +183,13 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter('intakt.budget.ceilings'));
     }
 
+    public function testTheShadowCeilingsDefaultToSeventyPercentAndTheOwnerLowersOneWindow(): void
+    {
+        file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertEqualsCanonicalizing(['five-hour' => 70.0, 'weekly' => 50.0], $this->bootedContainer()->getParameter('intakt.budget.shadow_ceilings'));
+    }
+
     public function testACeilingAboveAHundredPercentStopsTheBoot(): void
     {
         file_put_contents($this->file, "budget:\n    ceilings:\n        weekly: 120\n");

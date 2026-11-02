@@ -99,7 +99,7 @@ return static function (ContainerConfigurator $container): void {
     // The ceilings are the owner's for every account, so they sit beside the projects and go to the budget tree only.
     $budget = array_key_exists('budget', $contents) ? ['budget' => $contents['budget']] : [];
     unset($contents['budget']);
-    /** @var array{budget: array{ceilings: array<string, float>}} $ceilings */
+    /** @var array{budget: array{ceilings: array<string, float>, shadow_ceilings: array<string, float>}} $ceilings */
     $ceilings = new Processor()->processConfiguration(new CeilingsConfiguration(), [$budget]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
@@ -249,6 +249,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('intakt.review.panels', $panels);
     $container->parameters()->set('intakt.shadow.modes', array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set('intakt.budget.ceilings', $ceilings['budget']['ceilings']);
+    $container->parameters()->set('intakt.budget.shadow_ceilings', $ceilings['budget']['shadow_ceilings']);
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');
