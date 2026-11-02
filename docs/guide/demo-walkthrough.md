@@ -26,7 +26,7 @@ flowchart LR
 4. **Open the dashboard** in your browser.
 5. **Watch the review:** the sample pull request moves into **In review**. Open its card to see the reviewers working live: the files they read, the small tests they run.
 6. **Read the verdicts:** each reviewer's verdict appears with its findings (P1, P2, P3), and the judge step's list of what to fix now. Compare the findings with the deliberate problems in the sample: the demo is designed so the reviewers find them.
-7. **Try it from your AI assistant:** connect your assistant to Intakt's MCP server and ask it to read the verdicts and the list of things to fix for the sample review, which works today. Asking it to start a review of the sample branch is planned ([how](using-intakt-from-your-assistant.md)).
+7. **Try it from your AI assistant:** connect your assistant to Intakt's MCP server and ask it to start a review of the sample branch, then read the verdicts and the list of things to fix ([how](using-intakt-from-your-assistant.md)).
 
 ## What to point out in a demo
 

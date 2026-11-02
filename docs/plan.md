@@ -145,7 +145,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 ### T15 MCP server for agents
 - **Description:** The MCP Bundle exposes tools to start a review, read its status, read verdicts and the act list, and list projects, plus resources for a round's findings. Read tools are marked read-only.
 - **Acceptance:** an MCP client test (PHP MCP SDK client) calls every tool; starting a review needs the configured token; errors are MCP errors, not stack traces.
-- **Evidence:** an agent CLI connected over MCP starting a review of the sample branch and reading the act list (transcript excerpt).
+- **Evidence:** an agent CLI connected over MCP starting a review of the sample branch and reading the act list (transcript excerpt), with the tool calls scripted in the builder's sandbox, which has no model login; the same transcript with a logged-in model choosing the calls (owner provides).
 - **PHP 8.5:** closures in attributes where an MCP tool's input needs a check.
 - **Tool safety:** every tool carries the MCP SDK's annotations (`readOnlyHint`, `destructiveHint`); whether a tool may write is decided by a Symfony Security voter on Intakt's own config, never by the model's arguments. A contract test checks that a tool without parameters encodes them as `"properties": {}` and that the protocol version is negotiated correctly with Claude Code; a failure is an upstream report under `upstream/`.
 - **MCP:** this is the owner's MCP Bundle server (T16 adds the per-review one), with `session.lock` on. Tool authorization goes through `#[IsGrantedTool]` backed by Intakt's voter; long tools send progress notifications.
@@ -161,10 +161,10 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T7, T15. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ### T17 Project memory with the Store
-- **Description:** After each completed review, resolved findings and their causes are indexed with the Symfony AI Store (an embedded store that works on SQLite); each reviewer's briefing retrieves the entries relevant to the files under review, with a size cap. Indexing uses the `DocumentIndexer`, retrieval the `Retriever`, and the briefing reaches the agent through `MemoryInputProcessor`. A reranker is added only when a configured provider supports reranking.
+- **Description:** After each completed review, resolved findings and their causes are indexed with the Symfony AI Store (an embedded store that works on SQLite); each reviewer's briefing retrieves the entries relevant to the files under review, with a size cap. Indexing uses the `DocumentIndexer`, retrieval the `Retriever`, and the briefing reaches the agent as a fenced user message of its own (not through `MemoryInputProcessor`, whose fixed preamble ranks memory above the system prompt). A reranker is added only when a configured provider supports reranking.
 - **Acceptance:** indexing and retrieval are tested with an in-memory store; the briefing respects its cap; memory is read-only to reviewers.
 - **Evidence:** a second review on the sample repository whose briefing cites an earlier finding.
-- **Store backend:** `symfony/ai-sqlite-store` (SQLite FTS5 plus vector similarity computed in PHP, needs only `pdo_sqlite`) behind Intakt's own small retrieval contract; the in-memory store in tests. It loads all vectors into PHP memory for a query, which is fine at the size of one project's memory; `docs/architecture/` says so.
+- **Store backend:** `symfony/ai-sqlite-store` (SQLite FTS5 plus vector similarity computed in PHP, needs only `pdo_sqlite`) behind Intakt's own small retrieval contract; the in-memory store in tests. It loads all vectors into PHP memory for a query, which is fine at the size of one install's memory (one store for every project, its notes kept apart by project); `docs/architecture/` says so.
 - **Waits for:** T12. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
 ### T18 GitHub forge plugin

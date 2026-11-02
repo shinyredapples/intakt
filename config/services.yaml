@@ -8,6 +8,8 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     intakt.vendor_account_parallel_calls: 3
+    # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
+    intakt.gitleaks: gitleaks
 
 services:
     # default configuration for services in *this* file
@@ -51,11 +53,21 @@ services:
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'
+    # Reviewers get the read side only; the Retriever is the AI bundle's, over the same store.
+    Intakt\Core\Review\Infrastructure\OptionalProjectMemory:
+        arguments:
+            $memory: '@Intakt\Core\Memory\Infrastructure\StoreProjectMemory'
+    Intakt\Core\Memory\Contract\ProjectMemory: '@Intakt\Core\Review\Infrastructure\OptionalProjectMemory'
+    Symfony\AI\Store\Retriever: '@ai.retriever.memory'
 
-    # Read only, because no tool writes yet; the start-review tool of plan T15 part 3 is the first caller that can raise it.
+    # Read only until the owner sets MCP_OWNER_ACCESS to mcp_tool_write; a write also needs the owner's bearer token.
     Intakt\Core\Mcp\Infrastructure\ToolAccessVoter:
         arguments:
-            $highestAllowed: !php/enum Intakt\Core\Mcp\Contract\ToolAccess::Read
+            $highestAllowed: '%env(enum:Intakt\Core\Mcp\Contract\ToolAccess:MCP_OWNER_ACCESS)%'
+
+    Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler:
+        arguments:
+            $configuredToken: '%env(MCP_OWNER_TOKEN)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
@@ -68,3 +80,5 @@ when@test:
         - { resource: '../tests/Core/Mcp/services.yaml', ignore_errors: not_found }
         # No forge writes yet (plan task T18), so the tests give the container one that refuses every write.
         - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }
+        # The secret scan as the container wires it, so its test proves the INTAKT_GITLEAKS binding.
+        - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }

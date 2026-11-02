@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Mcp\Infrastructure;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
+use Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler;
 use Intakt\Core\Mcp\Infrastructure\ToolAccessVoter;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Authentication\Token\NullToken;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
+use Symfony\Component\Security\Core\User\InMemoryUser;
 
 #[CoversClass(ToolAccessVoter::class)]
 #[UsesClass(ToolAccess::class)]
+#[UsesClass(OwnerTokenHandler::class)]
 final class ToolAccessVoterTest extends TestCase
 {
     public function testAReadToolIsGranted(): void
@@ -26,16 +31,38 @@ final class ToolAccessVoterTest extends TestCase
         self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Write));
     }
 
-    public function testAToolThatMayWriteIsGrantedWhenTheConfigAllowsWrites(): void
+    public function testAToolThatMayWriteIsGrantedWhenTheConfigAllowsWritesAndTheOwnerIsAuthenticated(): void
     {
-        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write));
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write, token: $this->owner()));
+    }
+
+    public function testAToolThatMayWriteIsRefusedWithoutTheOwnerTokenEvenWhenTheConfigAllowsWrites(): void
+    {
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write));
+    }
+
+    public function testAToolThatMayWriteIsRefusedForTheOwnerWhileTheConfigForbidsWrites(): void
+    {
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Write, token: $this->owner()));
+    }
+
+    public function testAToolThatMayWriteIsRefusedForAUserWithoutTheOwnerRole(): void
+    {
+        $token = new UsernamePasswordToken(new InMemoryUser('other', null, ['ROLE_USER']), 'mcp_owner', ['ROLE_USER']);
+
+        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Write, token: $token));
+    }
+
+    public function testAReadToolIsGrantedWithoutAToken(): void
+    {
+        self::assertSame(VoterInterface::ACCESS_GRANTED, $this->vote(new ToolAccessVoter(ToolAccess::Write), ToolAccess::Read));
     }
 
     public function testArgumentsThatClaimPermissionDoNotChangeTheDecision(): void
     {
         $arguments = ['allow_write' => true, 'role' => 'admin'];
 
-        self::assertSame(VoterInterface::ACCESS_DENIED, $this->vote(new ToolAccessVoter(ToolAccess::Read), ToolAccess::Write, $arguments));
+        self::assertSame(VoterInterface::ACCESS_DENIED, new ToolAccessVoter(ToolAccess::Read)->vote(new NullToken(), $arguments, [ToolAccess::Write->value]));
     }
 
     public function testItAbstainsOnAnAttributeThatIsNotAToolAccess(): void
@@ -45,11 +72,13 @@ final class ToolAccessVoterTest extends TestCase
         self::assertSame(VoterInterface::ACCESS_ABSTAIN, $result);
     }
 
-    /**
-     * @param array<string, mixed>|null $subject
-     */
-    private function vote(ToolAccessVoter $voter, ToolAccess $access, ?array $subject = null): int
+    private function vote(ToolAccessVoter $voter, ToolAccess $access, ?TokenInterface $token = null): int
     {
-        return $voter->vote(new NullToken(), $subject, [$access->value]);
+        return $voter->vote($token ?? new NullToken(), null, [$access->value]);
+    }
+
+    private function owner(): TokenInterface
+    {
+        return new UsernamePasswordToken(new InMemoryUser('mcp-owner', null, [OwnerTokenHandler::OWNER_ROLE]), 'mcp_owner', [OwnerTokenHandler::OWNER_ROLE]);
     }
 }

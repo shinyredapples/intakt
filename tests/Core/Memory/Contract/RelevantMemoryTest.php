@@ -51,6 +51,6 @@ final class RelevantMemoryTest extends TestCase
 
     private function entry(string $text): MemoryEntry
     {
-        return new MemoryEntry($text, ['a.php']);
+        return new MemoryEntry('alpha', $text, ['a.php']);
     }
 }

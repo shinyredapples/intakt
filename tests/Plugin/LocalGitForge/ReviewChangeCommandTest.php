@@ -33,6 +33,7 @@ use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\CleanupOnStop;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\OutputFormat;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
@@ -57,6 +58,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(RepositoryNotFound::class)]
 #[UsesClass(CleanupOnStop::class)]
+#[UsesClass(LocalChangeReview::class)]
+#[UsesClass(NameStatusParser::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(OutputFormat::class)]
 final class ReviewChangeCommandTest extends TestCase
@@ -214,7 +217,7 @@ final class ReviewChangeCommandTest extends TestCase
         $snapshot = '';
         $exit = null;
         $reviews = self::createStub(ChangeReviews::class);
-        $command = new ReviewChangeCommand($this->onePanel(), $reviews, new NameStatusParser());
+        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $reviews));
         $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($command, $signal, &$snapshot, &$exit): ChangeReview {
             $snapshot = $request->checkoutRoot;
             $exit = $command->handleSignal($signal);
@@ -232,7 +235,7 @@ final class ReviewChangeCommandTest extends TestCase
     // One test for a PHP with and without signal support rather than a skipped one, because the tests gate fails on a skip and the CI image has no pcntl.
     public function testItListensForTheStopSignalsOnlyWherePhpCanHandleThem(): void
     {
-        $command = new ReviewChangeCommand($this->onePanel(), $this->reviewing(Decision::Approve), new NameStatusParser());
+        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)));
 
         $expected = SignalRegistry::isSupported() ? [constant('SIGINT'), constant('SIGTERM')] : [];
 
@@ -382,7 +385,7 @@ final class ReviewChangeCommandTest extends TestCase
      */
     private function whenTheCommandRuns(ChangeReviews $reviews, array $input = [], ?Panels $panels = null): CommandTester
     {
-        return $this->whenTheCommandIsRun(new ReviewChangeCommand($panels ?? $this->onePanel(), $reviews, new NameStatusParser()), $input);
+        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews)), $input);
     }
 
     /**

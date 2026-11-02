@@ -24,7 +24,7 @@
                 <td>{{ outcome.progress.value }}</td>
                 <td>{{ outcome.decision ?? '' }}</td>
                 <td>{{ outcome.findings ?? '' }}</td>
-                <td>{{ outcome.note ?? '' }}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
+                <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>
