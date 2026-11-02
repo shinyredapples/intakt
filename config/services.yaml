@@ -8,6 +8,8 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     intakt.vendor_account_parallel_calls: 3
+    # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
+    intakt.gitleaks: gitleaks
 
 services:
     # default configuration for services in *this* file
@@ -78,3 +80,5 @@ when@test:
         - { resource: '../tests/Core/Mcp/services.yaml', ignore_errors: not_found }
         # No forge writes yet (plan task T18), so the tests give the container one that refuses every write.
         - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }
+        # The secret scan as the container wires it, so its test proves the INTAKT_GITLEAKS binding.
+        - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
