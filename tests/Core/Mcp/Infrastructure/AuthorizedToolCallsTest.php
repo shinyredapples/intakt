@@ -105,10 +105,44 @@ final class AuthorizedToolCallsTest extends TestCase
         $this->assertRefusedWith('This tool needs mcp_tool_write, which is not granted.', $this->handlerLogging($logger, ToolAccess::Read), WriteTool::class);
     }
 
+    public function testAClosureToolIsLoggedAsRefusedForDeclaringNoAccessWithoutItsArguments(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with('Tool call {tool} refused: it declares no access level.', ['tool' => 'closure']);
+        $logger->expects(self::never())->method('info');
+
+        $this->assertReferenceRefusedWith(
+            'This tool declares no access level, so it is not available.',
+            $this->handlerLogging($logger, ToolAccess::Read, ToolAccess::Write),
+            new ElementReference(static fn (): string => 'ran'),
+        );
+    }
+
+    public function testAToolWhoseCheckReadsItsArgumentsIsLoggedAsRefusedWithoutItsArguments(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(
+            'Tool call {tool} refused: its access depends on its arguments.',
+            ['tool' => ArgumentCheckedTool::class.'::__invoke'],
+        );
+        $logger->expects(self::never())->method('info');
+
+        $this->assertRefusedWith(
+            'This tool bases its access on its arguments, which Intakt never allows, so it is not available.',
+            $this->handlerLogging($logger, ToolAccess::Read, ToolAccess::Write),
+            ArgumentCheckedTool::class,
+        );
+    }
+
     private function assertRefusedWith(string $message, AuthorizedToolCalls $handler, string $tool): void
     {
+        $this->assertReferenceRefusedWith($message, $handler, new ElementReference([$tool, '__invoke']));
+    }
+
+    private function assertReferenceRefusedWith(string $message, AuthorizedToolCalls $handler, ElementReference $reference): void
+    {
         try {
-            $handler->handle(new ElementReference([$tool, '__invoke']), ['project' => 'any']);
+            $handler->handle($reference, ['project' => 'secret-argument']);
         } catch (ToolCallException $refusal) {
             self::assertSame($message, $refusal->getMessage());
 
