@@ -44,7 +44,8 @@ final readonly class ReviewerPrompt
     public function __construct(
         private Fence $fence,
         private VerdictParser $parser,
-        private ReviewerMemory $memory,
+        // Optional because memory only helps a review: the container wires it in, and a prompt without it reviews from the task and diff alone.
+        private ?ReviewerMemory $memory = null,
     ) {
     }
 
@@ -57,7 +58,7 @@ final readonly class ReviewerPrompt
         ];
 
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
-        $briefing = $this->memory->briefingOn($brief);
+        $briefing = $this->memory?->briefingOn($brief);
 
         if (null !== $briefing) {
             $messages[] = Message::ofUser($briefing);

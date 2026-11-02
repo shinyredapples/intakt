@@ -180,6 +180,18 @@ final class ReviewerMemoryTest extends TestCase
         self::assertSame($this->briefing(self::DIFF), $last->asText());
     }
 
+    public function testAPromptBuiltWithoutMemorySendsOnlyTheInstructionsTheTaskAndTheDiff(): void
+    {
+        $this->remember('Cart totals were rounded twice.', 'src/Cart.php');
+
+        $messages = $this->messages(new ReviewerPrompt(new Fence(), new VerdictParser()))->getMessages();
+
+        $last = array_last($messages);
+        self::assertCount(3, $messages);
+        self::assertInstanceOf(UserMessage::class, $last);
+        self::assertStringNotContainsString('Cart totals', (string) $last->asText());
+    }
+
     private function remember(string $text, string $file): void
     {
         $this->index->index(new MemoryEntry(self::PROJECT, $text, [$file]));
