@@ -1,0 +1,5 @@
+services:
+    # Public, so the scan test reaches the scan as the container wires it while no service uses the forge yet.
+    intakt.test.secret_scan:
+        alias: Intakt\Plugin\GitHubForge\Infrastructure\SecretScan
+        public: true
