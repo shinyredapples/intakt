@@ -32,6 +32,12 @@ services:
         decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
         decoration_on_invalid: ignore
 
+    # Wired here, because a Domain class carries no container attributes; the owner's ceilings come from config/packages/ai.php.
+    Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
+    Intakt\Core\Budget\Domain\CeilingStartGuard:
+        arguments:
+            $ceilings: '%intakt.budget.ceilings%'
+
     # The same guards with the lower ceilings for shadow work, so the weekly pace, the holds and the cooldowns apply; the scan builds the first ones for the start guard.
     intakt.budget.shadow_ceilings:
         class: Intakt\Core\Budget\Domain\CeilingStartGuard
@@ -107,3 +113,5 @@ when@test:
         - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
         # Recorded pull requests and CI runs, so a tick runs on an install in the test environment while no forge lists them (plan task T18).
         - { resource: '../tests/Core/Watcher/services.yaml', ignore_errors: not_found }
+        # The start guard under a public test name, so its test proves the alias and the ceilings this file wires.
+        - { resource: '../tests/Core/Budget/services.yaml', ignore_errors: not_found }

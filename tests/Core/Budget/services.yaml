@@ -1,0 +1,5 @@
+services:
+    # Public under a test name, because no service takes the start guard yet and a test proves the container builds it with the owner's ceilings.
+    test.intakt.start_guard:
+        alias: Intakt\Core\Budget\Contract\StartGuard
+        public: true
