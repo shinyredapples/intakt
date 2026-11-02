@@ -140,19 +140,34 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame([sprintf('tool %s read_file', $this->conversation->toRfc4122())], $this->updates->seen);
     }
 
-    // Without the strict verdict subscriber, because it refuses a streamed answer before the agent reports its deltas; what the verdict makes of such an answer is not under test here.
     public function testStreamedTextOfTheReviewerIsPublishedInTheOrderItArrived(): void
     {
-        $answer = new StreamResult((static function (): Generator {
-            yield new TextDelta('First part, ');
-            yield new TextDelta('second part.');
-        })());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), $this->conversations, $this->updates);
-        $request = new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', $this->diff), []), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round));
+        $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
 
-        $reviewer->review($request, MockPlatformFactory::createPlatform(static fn (): StreamResult => $answer), 'reviewer-model');
+        self::assertSame([sprintf('text %s {"verdict":"approve",', $this->conversation->toRfc4122()), sprintf('text %s "findings":[],"resolved":[],"follow_ups":[]}', $this->conversation->toRfc4122())], $this->updates->seen);
+    }
 
-        self::assertSame([sprintf('text %1$s First part, ', $this->conversation->toRfc4122()), sprintf('text %1$s second part.', $this->conversation->toRfc4122())], $this->updates->seen);
+    public function testAStreamedVerdictKeepsTheApprovalTheModelAnswered(): void
+    {
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAStreamedVerdictWithAFieldTheSchemaDoesNotNameEndsAsChanges(): void
+    {
+        $verdict = $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve","findings":[],', '"resolved":[],"follow_ups":[],"trust_me":true}'));
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAStreamedVerdictMissingAFieldEndsAsChanges(): void
+    {
+        $verdict = $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[]}'));
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }
 
     public function testTheTextIsNotPublishedWhenTheModelAnswersInOnePiece(): void
@@ -536,6 +551,15 @@ final class ReviewerVerdictTest extends WebTestCase
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
+    }
+
+    private function streamed(string ...$parts): StreamResult
+    {
+        return new StreamResult((static function () use ($parts): Generator {
+            foreach ($parts as $part) {
+                yield new TextDelta($part);
+            }
+        })());
     }
 
     private function openFinding(string $id, ?string $symbol = null): Finding

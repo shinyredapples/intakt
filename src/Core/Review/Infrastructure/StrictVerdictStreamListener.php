@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Review\Infrastructure;
+
+use Closure;
+use Intakt\Core\Review\Contract\Verdict;
+use Override;
+use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
+use Symfony\AI\Platform\Result\Stream\CompleteEvent;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
+use Symfony\AI\Platform\Result\Stream\DeltaEvent;
+
+// Refuses a streamed answer the strict mapping refuses, before Symfony AI's own listener assembles the object the agent returns; that one maps leniently.
+final class StrictVerdictStreamListener extends AbstractStreamListener
+{
+    private string $answer = '';
+
+    private bool $askedForTools = false;
+
+    /**
+     * @param Closure(string): Verdict $verdictFrom
+     */
+    public function __construct(
+        private readonly Closure $verdictFrom,
+    ) {
+    }
+
+    #[Override]
+    public function onDelta(DeltaEvent $event): void
+    {
+        $delta = $event->getDelta();
+
+        if ($delta instanceof ToolCallComplete) {
+            $this->askedForTools = true;
+        }
+
+        if ($delta instanceof TextDelta) {
+            $this->answer .= $delta->getText();
+        }
+    }
+
+    #[Override]
+    public function onComplete(CompleteEvent $event): void
+    {
+        // A round that asks for tools is a step towards the verdict, as in the unstreamed conversion.
+        if ($this->askedForTools) {
+            return;
+        }
+
+        ($this->verdictFrom)($this->answer);
+    }
+}
