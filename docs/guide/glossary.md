@@ -62,7 +62,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Stale (note)** | a memory note whose code changed since it was written | [project memory](project-memory.md) |
 | **Stand-in** | a cheaper reviewer on an in-between version while the usual reviewer's allowance is tight; the usual reviewer still reviews the final version | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Substitute** | a reviewer from another company reviewing in place of one whose every account is over its limit; a catch-up review follows | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
-| **Subscription reviewer** | a reviewer that runs on a Claude subscription; for now it cannot read the project, so it can never pass a change on its own | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-subscription) |
+| **Subscription reviewer** | a reviewer that runs on a Claude or Codex subscription; for now it cannot read the project, so it can never pass a change on its own | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-or-codex-subscription) |
 | **Take-over** | a label that hands Intakt an issue or pull request it did not create (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
 | **Verdict** | a reviewer's answer: approve, changes with findings, or blocked (held for a person) | [journey](the-journey-of-a-task.md#5-reviewing) |

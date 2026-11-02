@@ -1,0 +1,9 @@
+parameters:
+    # Empty unless a run of the tick names a recording, so the container builds without one.
+    env(WATCHER_RECORDING): ''
+
+services:
+    Intakt\Tests\Core\Watcher\RecordedPullRequests:
+        autowire: true
+    Intakt\Plugin\Forge\Contract\OpenChanges: '@Intakt\Tests\Core\Watcher\RecordedPullRequests'
+    Intakt\Plugin\Forge\Contract\HeadChecks: '@Intakt\Tests\Core\Watcher\RecordedPullRequests'

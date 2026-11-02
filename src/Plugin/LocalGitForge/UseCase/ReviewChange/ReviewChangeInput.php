@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Intakt\Core\Review\Contract\StartReview;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -35,4 +36,17 @@ final class ReviewChangeInput
 
     #[Option('The branch the change is measured against')]
     public string $base = 'main';
+
+    public static function startedBy(StartReview $command): self
+    {
+        $input = new self();
+        $input->project = $command->project;
+        $input->task = $command->task;
+        $input->change = $command->round->change;
+        $input->round = $command->round->number;
+        $input->repository = $command->source->repository;
+        $input->base = $command->source->base;
+
+        return $input;
+    }
 }
