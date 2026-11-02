@@ -6,7 +6,6 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\UseCase\AdmitHeads\AdmitHeads;
-use Intakt\Plugin\Forge\Contract\OpenChange;
 use Throwable;
 
 final readonly class LookAtHeads

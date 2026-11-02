@@ -30,7 +30,7 @@ final readonly class PendingHeads
         foreach ($changed as $open) {
             $pending = $this->stored($project, $open);
 
-            if (null === $pending) {
+            if (!$pending instanceof PendingHead) {
                 $this->entities->persist(new PendingHead($project, $open, $now));
             } else {
                 $pending->wait($open, $now);

@@ -76,7 +76,7 @@ final readonly class RecordedPullRequests implements OpenChanges, HeadChecks
      */
     private function read(): array
     {
-        /** @var array{pulls: list<Pull>, workflow_runs: list<Run>} */
+        /* @var array{pulls: list<Pull>, workflow_runs: list<Run>} */
         return json_decode((string) file_get_contents($this->file()), true, flags: JSON_THROW_ON_ERROR);
     }
 
