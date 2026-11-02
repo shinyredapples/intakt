@@ -24,6 +24,8 @@ use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\RoundStale;
+use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
+use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
 use JsonException;
@@ -45,7 +47,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     public function __construct(
         #[Target('github.client')]
         private HttpClientInterface $http,
-        private InstallationTokens $tokens,
+        private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
     ) {
     }
@@ -327,6 +329,8 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted $notMinted) {
             throw new ForgeWriteFailed('No GitHub installation token for a write.', $notMinted->getCode(), previous: $notMinted);
+        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeWriteFailed('No GitHub write before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 
@@ -336,6 +340,8 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             return $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted $notMinted) {
             throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 }

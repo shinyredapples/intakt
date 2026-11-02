@@ -49,6 +49,10 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
+    # Built when first needed, so only the installation check and the forge need the two settings.
+    Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation:
+        factory: ['Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation', 'fromSettings']
+        arguments: ['%env(GITHUB_APP_PERMISSIONS)%', '%env(GITHUB_APP_REPOSITORIES)%']
 
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
@@ -60,10 +64,14 @@ services:
     Intakt\Core\Memory\Contract\ProjectMemory: '@Intakt\Core\Review\Infrastructure\OptionalProjectMemory'
     Symfony\AI\Store\Retriever: '@ai.retriever.memory'
 
-    # Read only, because no tool writes yet; the start-review tool of plan T15 part 3 is the first caller that can raise it.
+    # Read only until the owner sets MCP_OWNER_ACCESS to mcp_tool_write; a write also needs the owner's bearer token.
     Intakt\Core\Mcp\Infrastructure\ToolAccessVoter:
         arguments:
-            $highestAllowed: !php/enum Intakt\Core\Mcp\Contract\ToolAccess::Read
+            $highestAllowed: '%env(enum:Intakt\Core\Mcp\Contract\ToolAccess:MCP_OWNER_ACCESS)%'
+
+    Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler:
+        arguments:
+            $configuredToken: '%env(MCP_OWNER_TOKEN)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

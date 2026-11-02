@@ -45,6 +45,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number]);
     }
 
+    public function startRecordedRoundOf(string $change, string $round, int $number): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number, 'repository' => '/repos/alpha', 'base' => 'main', 'task' => 'Add the thing.']);
+    }
+
     public function startReviewer(string $round, string $role): void
     {
         $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));

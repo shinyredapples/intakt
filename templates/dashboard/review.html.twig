@@ -6,6 +6,15 @@
 <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
 {% set total = review.tokens %}
 <p class="summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: no price, because Intakt has no price table yet.</p>
+{% if review.source is not null and review.nextNumber is not null %}
+<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
+    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
+    <input type="hidden" name="number" value="{{ review.nextNumber }}">
+    <button type="submit">Start the next round on the current head</button>
+</form>
+{% else %}
+<p class="no-start">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
+{% endif %}
 {% for reviewed in review.rounds %}
 <section class="round" id="round-{{ reviewed.round }}">
     <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>

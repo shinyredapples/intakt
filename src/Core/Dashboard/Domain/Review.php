@@ -18,6 +18,20 @@ final readonly class Review
         $this->change = $rounds[0]->change;
     }
 
+    // Only the latest round counts, because the button starts the round after it on the head the change has now.
+    public function source(): ?RoundSource
+    {
+        return array_last($this->rounds)->source;
+    }
+
+    // Sent with the button as the page shows it, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
+    public function nextNumber(): ?int
+    {
+        $latest = array_last($this->rounds)->number;
+
+        return null === $latest ? null : $latest + 1;
+    }
+
     public function tokens(): TokenCount
     {
         return array_reduce($this->rounds, static fn (TokenCount $sum, ReviewedRound $round): TokenCount => $sum->plus($round->tokens), TokenCount::none());

@@ -24,7 +24,7 @@ final readonly class RunReviewRoundHandler
         // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
         return $this->rounds->inOneTransaction(function () use ($command): string {
             $round = $this->rounds->open($command);
-            $this->ledger->reviewStarted($round);
+            $this->ledger->reviewStarted($round, $command->round->source);
             $this->dispatchOneMessagePerReviewer($round);
 
             return $round->id()->toRfc4122();

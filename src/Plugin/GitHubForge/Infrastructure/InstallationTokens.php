@@ -21,7 +21,7 @@ final class InstallationTokens implements ResetInterface
 
     public function __construct(
         private readonly InstallationTokenMinter $minter,
-        private readonly string $installationId,
+        public readonly string $installationId,
         private readonly ClockInterface $clock,
     ) {
     }
