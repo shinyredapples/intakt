@@ -191,6 +191,23 @@ final class ReviewerOverMcpTest extends KernelTestCase
         yield 'internal error of the protocol' => [500, 'application/json', '{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Error while executing tool"}}'];
     }
 
+    public function testTheNextReviewAfterAFailedToolCallAsksTheServerAgainWithoutWaiting(): void
+    {
+        $http = new SeverableHttpClient(new KernelHttpClient($this->server()));
+        $factory = $this->mcpToolboxes($http);
+        self::assertNotSame([], $factory->create($this->request())->getTools());
+        $http->sever(new Response(500, ['Content-Type' => 'text/html'], 'Internal Server Error'));
+        $failed = $this->review($factory->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
+        $http->restore();
+        $sentBefore = count($this->http->sent);
+
+        $verdict = $this->review($factory->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
+
+        self::assertSame(Decision::Blocked, $failed->verdict);
+        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertGreaterThan($sentBefore, count($this->http->sent));
+    }
+
     public function testAToolErrorTheServerAnswersStaysWithTheModel(): void
     {
         $verdict = $this->review($this->mcpToolboxes()->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file', ['path' => 'no-such-file.php']);

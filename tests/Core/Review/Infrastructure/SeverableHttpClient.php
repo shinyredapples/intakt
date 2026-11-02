@@ -26,6 +26,12 @@ final class SeverableHttpClient implements ClientInterface
         $this->answer = $answerInstead;
     }
 
+    public function restore(): void
+    {
+        $this->severed = false;
+        $this->answer = null;
+    }
+
     #[Override]
     public function sendRequest(RequestInterface $request): ResponseInterface
     {
