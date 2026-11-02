@@ -88,9 +88,9 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     public function answered(Account $account, DateTimeImmutable $sentAt): void
     {
-        $reports = array_map(static fn (AccountError $error): string => self::reportKey($account, $error), AccountError::cases());
-
-        $this->pool->deleteItems(array_values(array_filter($reports, fn (string $report): bool => $this->wasReportedBefore($report, $sentAt))));
+        foreach (AccountError::cases() as $error) {
+            $this->rearmIfReportedBefore(self::reportKey($account, $error), $sentAt);
+        }
     }
 
     public function isCoolingDown(Account $account): bool
@@ -158,6 +158,23 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         try {
             $this->reportUnlessReported($account, $error);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    // Under the report's lock, so no other worker reports anew between the comparison and the deletion; a busy lock leaves the report, because a later answer rearms it while a duplicate notice cannot be taken back.
+    private function rearmIfReportedBefore(string $report, DateTimeImmutable $sentAt): void
+    {
+        $lock = $this->locks->createLock($report);
+        if (!$lock->acquire()) {
+            return;
+        }
+
+        try {
+            if ($this->wasReportedBefore($report, $sentAt)) {
+                $this->pool->deleteItem($report);
+            }
         } finally {
             $lock->release();
         }

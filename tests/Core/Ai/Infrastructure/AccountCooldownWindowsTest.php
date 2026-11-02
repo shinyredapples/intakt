@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountError;
@@ -327,6 +328,40 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertTrue($this->cooldowns()->isCoolingDown($this->default()));
     }
 
+    // Forced order: one answer has read the old report and waits to delete it while another answer rearms it and the error comes again.
+    public function testAnAnswerThatReadAnOldReportCannotDeleteTheReportOfANewerError(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $this->pool = $this->poolInterleavingTheFirstDelete(function () use ($locks): void {
+            $anotherWorker = $this->cooldownsSharing($locks);
+            $anotherWorker->answered($this->default(), $this->afterTheReport());
+            $anotherWorker->coolDownUnusable($this->default(), AccountError::LoginLost);
+        });
+        $cooldowns = $this->cooldownsSharing($locks);
+        $cooldowns->coolDownUnusable($this->default(), AccountError::LoginLost);
+        $cooldowns->answered($this->default(), $this->afterTheReport());
+
+        $cooldowns->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertCount(2, $this->reports());
+    }
+
+    // Forced order: another worker holds the report of this account error, so this answer leaves the report to it.
+    public function testAnAnswerWhileAnotherWorkerHoldsTheReportKeepsTheReportedError(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $cooldowns = $this->cooldownsSharing($locks);
+        $cooldowns->coolDownUnusable($this->default(), AccountError::LoginLost);
+        $reporting = $locks->createLock(AccountCooldownWindows::REPORT_LOCK.'login_lost.anthropic.default');
+        $reporting->acquire();
+
+        $cooldowns->answered($this->default(), $this->afterTheReport());
+
+        $reporting->release();
+        $cooldowns->coolDownUnusable($this->default(), AccountError::LoginLost);
+        self::assertCount(1, $this->reports());
+    }
+
     public function testAProviderWithoutAccountsHasNothingToWaitFor(): void
     {
         self::assertSame(0, $this->cooldowns()->secondsUntilAnAccountIsFree(Provider::ClaudeCode));
@@ -348,6 +383,33 @@ final class AccountCooldownWindowsTest extends TestCase
     private function cooldowns(?BufferingLogger $logger = null): AccountCooldownWindows
     {
         return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, $logger ?? new NullLogger(), $this->accounts());
+    }
+
+    private function cooldownsSharing(LockFactory $locks): AccountCooldownWindows
+    {
+        return new AccountCooldownWindows($this->pool, $locks, new NativeClock(), $this->ledger, new NullLogger(), $this->accounts());
+    }
+
+    // The other worker runs right before the first item is deleted, the moment a real one could slip in.
+    private function poolInterleavingTheFirstDelete(Closure $otherWorker): ArrayAdapter
+    {
+        return new class($otherWorker) extends ArrayAdapter {
+            public function __construct(private ?Closure $otherWorker)
+            {
+                parent::__construct();
+            }
+
+            public function deleteItem(mixed $key): bool
+            {
+                $otherWorker = $this->otherWorker;
+                $this->otherWorker = null;
+                if (null !== $otherWorker) {
+                    $otherWorker();
+                }
+
+                return parent::deleteItem($key);
+            }
+        };
     }
 
     /**
