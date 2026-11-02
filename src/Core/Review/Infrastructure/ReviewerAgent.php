@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
-use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -31,11 +30,11 @@ final readonly class ReviewerAgent implements Reviewer
     private const int MAX_ROUNDS = 30;
 
     /**
-     * @param Closure(Checkout): ToolboxInterface $toolboxes
+     * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
     public function __construct(
         private ReviewerPrompt $prompt,
-        #[AutowireCallable(service: ReviewerToolboxFactory::class, method: 'create')]
+        #[AutowireCallable(service: ReviewerMcpToolboxFactory::class, method: 'create')]
         private Closure $toolboxes,
         private MessageStoreInterface $conversations,
     ) {
@@ -45,7 +44,7 @@ final readonly class ReviewerAgent implements Reviewer
     public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
     {
         $conversation = $this->started($this->prompt->messagesFor($request->conversation, $request->brief));
-        $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
+        $tools = new MalformedToolCalls(($this->toolboxes)($request));
 
         $verdict = $this->answerOf($this->agent($tools, $platform, $model)->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]));
 

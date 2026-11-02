@@ -40,6 +40,7 @@ use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
@@ -133,6 +134,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
+#[UsesClass(ReviewerMcpToolboxFactory::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
@@ -669,6 +671,8 @@ final class SymfonyAiVendorTest extends KernelTestCase
     #[Group('persistence')]
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
+        // Port 1 refuses at once, so the reviewer's MCP server is unreachable here and the review runs without tools instead of calling a server.
+        $_SERVER['REVIEW_MCP_BASE_URL'] = 'http://localhost:1';
         $container = self::getContainer();
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
@@ -684,7 +688,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertInstanceOf(MessageStoreInterface::class, $conversations);
         EmptyDatabase::in($container);
         $conversations->setup();
-        $request = $this->request();
+        $request = $this->request(new UuidV7());
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request)->verdict;
 
@@ -692,6 +696,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['big'], $verdict->follow_ups);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
         self::assertCount(1, $verdict->findings);
+        unset($_SERVER['REVIEW_MCP_BASE_URL']);
     }
 
     public function testAReviewerCallMadeForARoundWritesItsRoundIdOnTheStartedRow(): void
