@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Budget\Infrastructure\CeilingsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
@@ -90,6 +91,12 @@ return static function (ContainerConfigurator $container): void {
 
         $contents['projects'] = $contentProjects;
     }
+
+    // The ceilings are the owner's for every account, so they sit beside the projects and go to the budget tree only.
+    $budget = array_key_exists('budget', $contents) ? ['budget' => $contents['budget']] : [];
+    unset($contents['budget']);
+    /** @var array{budget: array{ceilings: array<string, float>}} $ceilings */
+    $ceilings = new Processor()->processConfiguration(new CeilingsConfiguration(), [$budget]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
@@ -212,6 +219,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('intakt.projects', $projects);
     $container->parameters()->set('intakt.review.panels', $panels);
     $container->parameters()->set('intakt.shadow.modes', array_map(static fn (array $project): string => $project['mode'], $projectModes));
+    $container->parameters()->set('intakt.budget.ceilings', $ceilings['budget']['ceilings']);
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');
