@@ -28,8 +28,9 @@ final readonly class SearchFiles
     private const int MAX_ANSWER_BYTES = 100_000;
 
     /**
-     * @param (Closure(int): void)|null $fileSearched receives the number of files searched so far
+     * @param (Closure(int): void)|null $fileSearched
      */
+    // The callback gets the number of files searched so far, because the MCP door turns it into progress.
     public function __construct(private Checkout $checkout, private ?Closure $fileSearched = null)
     {
     }

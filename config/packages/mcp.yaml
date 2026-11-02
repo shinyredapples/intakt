@@ -23,10 +23,3 @@ mcp:
                 lock: true
             registry:
                 tools: ['Intakt\Core\Review\UseCase\ServeReviewTools\']
-
-when@test:
-    mcp:
-        servers:
-            owner:
-                registry:
-                    tools: ['Intakt\Tests\Core\Mcp\']

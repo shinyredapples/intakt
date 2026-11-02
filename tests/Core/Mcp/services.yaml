@@ -24,3 +24,11 @@ services:
         alias: intakt.test.mcp.review_change
     Intakt\Core\Review\Contract\Panels:
         alias: Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel
+
+    # The owner server also serves the test tools, which an install without tests/ lacks, so the pattern comes with them.
+
+mcp:
+    servers:
+        owner:
+            registry:
+                tools: ['Intakt\Tests\Core\Mcp\']

@@ -13,7 +13,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
     name: 'search_files',
-    description: 'Finds the lines of the repository at the head of a review round that contain a text; answers path:line:text. Send a progressToken to get progress notifications.',
+    description: 'Finds the lines of the repository at the head of a review round that contain a text, searching all of it; answers path:line:text. Send a progressToken to get progress notifications.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
@@ -30,13 +30,14 @@ final readonly class SearchFilesTool
         ClientGateway $client,
         #[Schema(description: 'UUID of the review round under review.')] string $roundId,
         #[Schema(description: 'Text to find, matched literally and case-sensitively.')] string $text,
-        #[Schema(description: 'File or directory to search, relative to the repository root; "." is the root.')] string $path = '.',
     ): string {
-        return $this->repository->searchFiles($roundId, $text, $path, static function (int $filesSearched) use ($client): void {
+        $progress = static function (int $filesSearched) use ($client): void {
             // The count only grows, as MCP progress values must.
             if (0 === $filesSearched % self::FILES_PER_NOTIFICATION) {
                 $client->progress($filesSearched, null, sprintf('%d files searched.', $filesSearched));
             }
-        });
+        };
+
+        return $this->repository->reporting($progress)->searchFiles($roundId, $text);
     }
 }

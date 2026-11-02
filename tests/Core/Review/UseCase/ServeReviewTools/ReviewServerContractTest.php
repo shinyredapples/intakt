@@ -115,8 +115,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
     public function testSearchingManyFilesSendsIncreasingProgressNotifications(): void
     {
-        $body = json_encode(['name' => 'search_files', 'arguments' => ['roundId' => $this->roundId, 'text' => 'RoundFixture'], '_meta' => ['progressToken' => 'p1']], JSON_THROW_ON_ERROR);
-        $this->client->call('tools/call', json_decode($body, true, flags: JSON_THROW_ON_ERROR), 5);
+        $this->client->call('tools/call', ['name' => 'search_files', 'arguments' => ['roundId' => $this->roundId, 'text' => 'RoundFixture'], '_meta' => ['progressToken' => 'p1']], 5);
 
         preg_match_all('/^data: (.*)$/m', $this->client->lastBody(), $events);
         $progress = [];
@@ -125,7 +124,7 @@ final class ReviewServerContractTest extends KernelTestCase
             $message = json_decode($event, true, flags: JSON_THROW_ON_ERROR);
 
             if (is_array($message) && 'notifications/progress' === ($message['method'] ?? null)) {
-                $progress[] = $message['params']['progress'];
+                $progress[] = OwnerServerClient::at($message, 'params', 'progress');
             }
         }
 
@@ -133,7 +132,7 @@ final class ReviewServerContractTest extends KernelTestCase
         $sorted = $progress;
         sort($sorted);
         self::assertSame($sorted, $progress);
-        self::assertSame(count($progress), count(array_unique($progress)));
+        self::assertSame($progress, array_values(array_unique($progress, SORT_NUMERIC)));
     }
 
     /**
@@ -156,7 +155,7 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $tools = OwnerServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
         self::assertIsArray($tools);
-        $names = array_column($tools, 'name');
+        $names = array_map(static fn (mixed $tool): string => is_array($tool) && is_string($tool['name'] ?? null) ? $tool['name'] : '', $tools);
         sort($names);
 
         return $names;

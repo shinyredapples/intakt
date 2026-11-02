@@ -16,11 +16,22 @@ use InvalidArgumentException;
 use Mcp\Exception\ToolCallException;
 use RuntimeException;
 
-// The one place that decides which head a call may read: the checkout of one round that is still under review, never a path the client names.
+// Because a client must not name the head, this is the one place that decides it: the checkout of one round that is still under review.
 final readonly class ReviewedRepository
 {
-    public function __construct(private ReadableRounds $rounds)
+    /**
+     * @param (Closure(int): void)|null $fileSearched
+     */
+    public function __construct(private ReadableRounds $rounds, private ?Closure $fileSearched = null)
     {
+    }
+
+    /**
+     * @param Closure(int): void $fileSearched
+     */
+    public function reporting(Closure $fileSearched): self
+    {
+        return clone($this, ['fileSearched' => $fileSearched]);
     }
 
     public function readFile(string $roundId, string $path): string
@@ -33,12 +44,9 @@ final readonly class ReviewedRepository
         return $this->answer(fn (): string => (new ListDirectory($this->head($roundId)))($path));
     }
 
-    /**
-     * @param Closure(int): void $fileSearched
-     */
-    public function searchFiles(string $roundId, string $text, string $path, Closure $fileSearched): string
+    public function searchFiles(string $roundId, string $text): string
     {
-        return $this->answer(fn (): string => (new SearchFiles($this->head($roundId), $fileSearched))($text, $path));
+        return $this->answer(fn (): string => (new SearchFiles($this->head($roundId), $this->fileSearched))($text));
     }
 
     private function head(string $roundId): Checkout
@@ -52,8 +60,8 @@ final readonly class ReviewedRepository
 
         try {
             return new Checkout($round->checkoutRoot());
-        } catch (InvalidArgumentException) {
-            throw new ToolCallException('The head of this round is not available.');
+        } catch (InvalidArgumentException $unavailable) {
+            throw new ToolCallException('The head of this round is not available.', previous: $unavailable);
         }
     }
 
