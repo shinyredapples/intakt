@@ -56,6 +56,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Review cap** | how much finished work may wait for review before builders pause | [engine room](the-engine-room.md#queues-who-is-next) |
 | **Review lane** | the bench where finished work is reviewed and merged | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Review panel** | the reviewers for a change: the core panel plus specialists | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
+| **Shadow mode** | a project setting: Intakt reviews alongside your existing process, never writes to the forge, and its verdicts never count | [costs](accounts-and-costs.md#shadow-mode-trying-intakt-alongside-your-process) |
 | **Share** | a project's part of the week's AI allowance | [several projects](several-projects.md) |
 | **Sidecar** | an extra container a job needs, such as a database | [containers](containers-and-services.md) |
 | **Skill (reviewer)** | a reviewer role's own checklist and test recipes | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
