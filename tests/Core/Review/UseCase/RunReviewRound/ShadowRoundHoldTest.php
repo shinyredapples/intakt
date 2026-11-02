@@ -133,6 +133,41 @@ final class ShadowRoundHoldTest extends KernelTestCase
         self::assertSame(['anthropic.default', 'anthropic.team', 'openai.default'], $guard->asked);
     }
 
+    public function testAShadowRoundIsHeldWhenOnlyItsJudgeProviderIsAboveTheCeiling(): void
+    {
+        $fixture = $this->fixtureOf('shadow');
+        $guard = new ScriptedAccountGuard(['openai.default' => StartDecision::AtCeiling]);
+
+        try {
+            $fixture->startHandlerOn($fixture->bus, $guard, RoundFixture::tiersJudgedOn(Provider::OpenAi))($fixture->commandFor(RoundFixture::CHANGE, 2));
+            self::fail('The round started while the provider its judge runs on is above the shadow ceiling.');
+        } catch (ShadowCeilingReached) {
+            self::assertSame([], $fixture->storedRounds());
+            self::assertSame('openai', $this->heldPayload($fixture)['provider']);
+        }
+    }
+
+    public function testAShadowRoundIsHeldWhenOnlyItsJudgesSubstituteProviderIsAboveTheCeiling(): void
+    {
+        $fixture = $this->fixtureOf('shadow');
+        $guard = new ScriptedAccountGuard(['openai.default' => StartDecision::AtCeiling]);
+
+        $this->expectException(ShadowCeilingReached::class);
+
+        $fixture->startHandlerOn($fixture->bus, $guard, RoundFixture::tiersJudgedOn(Provider::Anthropic, Provider::OpenAi))($fixture->commandFor(RoundFixture::CHANGE, 2));
+    }
+
+    public function testAShadowRoundStartsWhileItsJudgeProviderIsBelowTheCeiling(): void
+    {
+        $fixture = $this->fixtureOf('shadow');
+        $guard = new ScriptedAccountGuard();
+
+        $id = $fixture->startHandlerOn($fixture->bus, $guard, RoundFixture::tiersJudgedOn(Provider::OpenAi))($fixture->commandFor(RoundFixture::CHANGE, 2));
+
+        self::assertSame($id, $fixture->round($id)->id()->toRfc4122());
+        self::assertSame(['anthropic.default', 'anthropic.team', 'openai.default'], $guard->asked);
+    }
+
     public function testALiveRoundStartsAboveTheShadowCeilingWithoutAskingIt(): void
     {
         $fixture = $this->fixtureOf('live');
