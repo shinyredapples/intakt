@@ -57,7 +57,7 @@ final readonly class CodexTokenRefresh
         return $this->validated($answer);
     }
 
-    // The answers the CLI takes for a login only a new sign-in brings back: an unauthorized refresh, or a bad request whose code says the refresh token is no longer granted.
+    // A lost login only for an unauthorized refresh or a bad request coded invalid_grant, because those are the answers the CLI itself takes for a login only a new sign-in brings back.
     private function lostOrUnusable(ClientExceptionInterface $refused): RuntimeException
     {
         $answer = $refused->getResponse();

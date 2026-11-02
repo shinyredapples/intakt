@@ -72,7 +72,8 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     private function refuseAStructuredError(): void
     {
         $failed = array_last(array_filter($this->events(), static fn (array $event): bool => 'turn.failed' === ($event[self::TYPE] ?? null)));
-        $message = $failed[self::ERROR][self::MESSAGE] ?? null;
+        $reported = $failed[self::ERROR] ?? null;
+        $message = is_array($reported) ? $reported[self::MESSAGE] ?? null : null;
         $error = is_string($message) ? CodexStructuredError::of($message) : null;
 
         if ($error instanceof CodexStructuredError) {

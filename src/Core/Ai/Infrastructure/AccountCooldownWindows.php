@@ -29,7 +29,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     public const string POOL = 'intakt.ai.account_cooldowns';
     private const string LIMITER = 'account-cooldown';
 
-    // The key of an account error's report, as the lock while it is reported and in the pool once it was.
+    // One key serves as the lock and as the pool's marker, because both guard the same report; public so a test can hold the lock another worker would.
     public const string REPORT_LOCK = 'account-cooldown-reported-';
 
     // One minute because a provider that sends no reset still gets a pause, and it is the async transport's longest wait between two tries.
@@ -172,7 +172,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->report($account, $error);
     }
 
-    // The ledger event and the error log line are the owner's notice until a notifier sends it (plan T67).
+    // A ledger event and an error log line, because no notifier exists yet to send the owner's notice (plan T67).
     private function report(Account $account, AccountError $error): void
     {
         $notice = ['account' => $account->key(), 'error' => $error->value];
@@ -184,7 +184,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         }
     }
 
-    // The error's value holds no dot, so the first dot ends it and the account key cannot pass for another error's.
+    // The error first, because its value holds no dot: the first dot ends it, and an account key cannot pass for another error's.
     private static function reportKey(Account $account, AccountError $error): string
     {
         return self::REPORT_LOCK.$error->value.'.'.$account->key();

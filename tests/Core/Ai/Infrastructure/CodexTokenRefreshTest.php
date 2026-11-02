@@ -94,7 +94,7 @@ final class CodexTokenRefreshTest extends TestCase
         yield 'a refresh token no longer granted as an error object' => [new JsonMockResponse(['error' => ['code' => 'invalid_grant']], ['http_code' => 400])];
     }
 
-    // The same answers the CLI takes for a login that only a new sign-in brings back.
+    // These answers, because the CLI takes the same ones for a login that only a new sign-in brings back.
     #[DataProvider('lostLogins')]
     public function testARefreshTheEndpointRefusesForGoodIsALostLogin(MockResponse $answer): void
     {

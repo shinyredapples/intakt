@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 
-// The messages are the CLI's own for each error, as Codex CLI 0.160.0 writes them into its turn.failed event.
+// Copied from the CLI's source at 0.160.0, because the exec stream carries only these messages and a live account error cannot be produced in a test.
 #[CoversClass(CodexStructuredError::class)]
 #[CoversClass(AccountUnusable::class)]
 #[CoversClass(AccountError::class)]
