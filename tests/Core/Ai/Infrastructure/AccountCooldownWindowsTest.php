@@ -327,7 +327,7 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertTrue($this->cooldowns()->isCoolingDown($this->default()));
     }
 
-    // Forced order: one answer has read the old report and waits to delete it while another answer rearms it and the error comes again.
+    // Forced order, because the duplicate notice needs another answer and a new error to slip in between one answer's comparison and its deletion.
     public function testAnAnswerThatReadAnOldReportCannotDeleteTheReportOfANewerError(): void
     {
         $locks = new LockFactory(new InMemoryStore());
