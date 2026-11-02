@@ -159,7 +159,18 @@ final class ShadowRoundTest extends KernelTestCase
     {
         $verdicts = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder(), false), static fn (RecordedEvent $recorded): bool => LedgerEventKind::VerdictReceived === $recorded->event->kind);
 
-        return array_values(array_map(static fn (RecordedEvent $recorded): mixed => json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR)['mode'] ?? null, $verdicts));
+        return array_values(array_map(static fn (RecordedEvent $recorded): mixed => self::payloadOf($recorded)['mode'] ?? null, $verdicts));
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function payloadOf(RecordedEvent $recorded): array
+    {
+        $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
+        assert(is_array($payload));
+
+        return $payload;
     }
 
     private function modes(): ProjectModes
