@@ -10,7 +10,11 @@ With Claude Code: `claude mcp add --transport http intakt http://localhost:8000/
 
 ## The review server
 
-Intakt runs a second, narrower MCP server for the reviewers of a review, at `/mcp/review` (for example `http://localhost:8000/mcp/review`). It has three read-only tools, `read_file`, `list_directory` and `search_files`, which show the repository exactly as it is in a review round that is still running. Each takes the `roundId` of that round, and there is no way to name another folder or branch: paths outside the repository, and `.git`, are refused, and so is a round that is unknown or already judged. `search_files` sends progress notifications when the client sent a `progressToken`. Your own agents use the owner server above; the review server does not list its tools there.
+Intakt runs a second, narrower MCP server for the reviewers of a review, at `/mcp/review` (for example `http://localhost:8000/mcp/review`). It has three read-only tools, `read_file`, `list_directory` and `search_files`, which show the repository exactly as it is in one review round that is still running.
+
+Which round a client sees is fixed by its credential, not by what it sends in a call. `php bin/console intakt:review:serve-tools <round>` prints the server's path and a line `Authorization: Bearer <credential>` for that round; the client sends that header with every request. A request without a valid credential is refused (HTTP 401), and a credential only ever shows its own round, whatever a call's arguments name. The command refuses a round that is unknown or already judged, and the tools refuse a round once it is judged. The credential is signed with `APP_SECRET`: while that is empty, no credential is issued or accepted. It is a secret, so keep it out of logs and committed files.
+
+There is no way to name another folder or branch: paths outside the repository, and `.git`, are refused. `search_files` takes the text to find and, optionally, a file or folder to search in, and sends progress notifications when the client sent a `progressToken`. Your own agents use the owner server above; the review server does not list its tools there.
 
 ## Allowing a client to start reviews
 
