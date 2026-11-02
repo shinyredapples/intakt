@@ -86,3 +86,5 @@ when@test:
         - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }
         # The secret scan as the container wires it, so its test proves the INTAKT_GITLEAKS binding.
         - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
+        # Recorded pull requests and CI runs, so a tick runs on an install in the test environment while no forge lists them (plan task T18).
+        - { resource: '../tests/Core/Watcher/services.yaml', ignore_errors: not_found }
