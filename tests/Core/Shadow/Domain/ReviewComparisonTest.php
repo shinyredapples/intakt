@@ -73,7 +73,7 @@ final class ReviewComparisonTest extends TestCase
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10, Severity::P1), ComparisonBuilder::loopFinding('src/B.php', 5, Severity::P2));
         $round = ComparisonBuilder::round(ComparisonBuilder::changes(
             ComparisonBuilder::finding('src/A.php', 10, Severity::P3),
-            ComparisonBuilder::finding('src/B.php', 5, Severity::P2, 'F2'),
+            ComparisonBuilder::finding('src/B.php', 5, Severity::P2),
         ));
 
         $result = new ReviewComparison()->compare('h', $loop, [$round]);
@@ -108,7 +108,7 @@ final class ReviewComparisonTest extends TestCase
     public function testAnIntaktFindingWithoutAFileOrLineStaysIntaktOnly(): void
     {
         $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
-        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding(null, null), ComparisonBuilder::finding('src/A.php', null, Severity::P2, 'F2')));
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding(null, null), ComparisonBuilder::finding('src/A.php', null, Severity::P2)));
 
         $result = new ReviewComparison()->compare('h', $loop, [$round]);
 

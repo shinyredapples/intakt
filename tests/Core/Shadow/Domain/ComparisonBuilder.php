@@ -30,9 +30,9 @@ final class ComparisonBuilder
         return new LoopFinding($file, $line, $severity);
     }
 
-    public static function finding(?string $file, ?int $line, Severity $severity = Severity::P2, string $id = 'F1'): Finding
+    public static function finding(?string $file, ?int $line, Severity $severity = Severity::P2): Finding
     {
-        return new Finding($id, $severity, $file, $line, null, 'text', FixableBy::Builder, false, null, null);
+        return new Finding('F1', $severity, $file, $line, null, 'text', FixableBy::Builder, false, null, null);
     }
 
     public static function round(Verdict $verdict, int $tokens = 100): ChangeReview
