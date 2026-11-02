@@ -79,13 +79,7 @@ final readonly class CeilingStartGuard implements StartGuard
      */
     private function reachesCeiling(array $uses, float $margin): bool
     {
-        foreach ($uses as $window => $use) {
-            if ($use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($uses, fn ($use, $window) => $use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
     }
 
     /**
@@ -102,7 +96,7 @@ final readonly class CeilingStartGuard implements StartGuard
     private function pacedByWeek(float $ceiling, ?WindowUse $weekly): float
     {
         $pace = $this->weeklyPace($weekly);
-        if (null === $pace || null === $weekly || $weekly->usage->usedPercent <= $pace) {
+        if (null === $pace || !$weekly instanceof WindowUse || $weekly->usage->usedPercent <= $pace) {
             return $ceiling;
         }
 

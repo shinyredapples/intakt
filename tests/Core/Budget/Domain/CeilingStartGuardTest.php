@@ -207,13 +207,13 @@ final class CeilingStartGuardTest extends TestCase
     private function readFor(Account $account, float $percent): void
     {
         foreach (UsageWindow::cases() as $window) {
-            (void) $this->readings->record(new WindowReading($account, $window, new Usage($percent, $this->fiveHourReset())));
+            $this->readings->record(new WindowReading($account, $window, new Usage($percent, $this->fiveHourReset())));
         }
     }
 
     private function readWindow(UsageWindow $window, float $percent, DateTimeImmutable $resetsAt): void
     {
-        (void) $this->readings->record(new WindowReading($this->account(), $window, new Usage($percent, $resetsAt)));
+        $this->readings->record(new WindowReading($this->account(), $window, new Usage($percent, $resetsAt)));
     }
 
     private function fiveHourReset(): DateTimeImmutable
