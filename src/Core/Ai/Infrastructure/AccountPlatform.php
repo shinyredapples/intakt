@@ -6,6 +6,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AccountUnusable;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
@@ -15,6 +16,7 @@ use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 
@@ -47,6 +49,7 @@ final readonly class AccountPlatform implements PlatformInterface
         // A provider's limit arrives when the answer is read, not when the call is sent, so the cooldown hangs on the result.
         $result->onError($this->record(...));
         $result->onError($this->coolDownAfter(...));
+        $result->onConvert($this->answered(...));
 
         return $result;
     }
@@ -71,8 +74,16 @@ final readonly class AccountPlatform implements PlatformInterface
             $failure instanceof RateLimitExceededException => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
             // A revoked or wrong key will not work on the next call either, so the account is out like a limited one and the call goes elsewhere; remembered as a rejection so no call waits for it.
             $failure instanceof AuthenticationException => $this->cooldowns->coolDownRejected($this->account),
+            $failure instanceof AccountUnusable => $this->cooldowns->coolDownUnusable($this->account, $failure->error),
             $failure instanceof RetryableExceptionInterface => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
+    }
+
+    private function answered(ResultInterface $answer): ResultInterface
+    {
+        $this->cooldowns->answered($this->account);
+
+        return $answer;
     }
 }

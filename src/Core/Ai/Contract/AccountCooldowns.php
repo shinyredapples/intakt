@@ -11,6 +11,12 @@ interface AccountCooldowns
     // A rejected key is remembered with its cooldown, because a wait for an account that rejected its key brings nothing back.
     public function coolDownRejected(Account $account): void;
 
+    // Reported to the owner once per account and error, because each later call fails the same way until the owner acts.
+    public function coolDownUnusable(Account $account, AccountError $error): void;
+
+    // An account that answers has no account error left, so a later one is reported again.
+    public function answered(Account $account): void;
+
     public function isCoolingDown(Account $account): bool;
 
     public function isRejected(Account $account): bool;

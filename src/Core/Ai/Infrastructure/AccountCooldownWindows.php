@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AccountError;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -27,6 +28,9 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 {
     public const string POOL = 'intakt.ai.account_cooldowns';
     private const string LIMITER = 'account-cooldown';
+
+    // The key of an account error's report, as the lock while it is reported and in the pool once it was.
+    public const string REPORT_LOCK = 'account-cooldown-reported-';
 
     // One minute because a provider that sends no reset still gets a pause, and it is the async transport's longest wait between two tries.
     private const int SECONDS_WITHOUT_RESET = 60;
@@ -73,6 +77,18 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         $marker = $this->pool->getItem($this->rejectionKey($account))->set(true)->expiresAt($this->window($account)->getRetryAfter());
         $this->pool->save($marker);
+    }
+
+    // Cooled down like a limit without a reset, so an account the owner has fixed is used again within the minute; the report keeps the repeated failures from being noise.
+    public function coolDownUnusable(Account $account, AccountError $error): void
+    {
+        $this->coolDown($account, null);
+        $this->reportOnce($account, $error);
+    }
+
+    public function answered(Account $account): void
+    {
+        $this->pool->deleteItems(array_map(static fn (AccountError $error): string => self::reportKey($account, $error), AccountError::cases()));
     }
 
     public function isCoolingDown(Account $account): bool
@@ -128,6 +144,50 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     private function rejectionKey(Account $account): string
     {
         return self::LIMITER.'-rejected-'.$account->key();
+    }
+
+    // Tried without waiting, because a worker that holds the lock is reporting this very error.
+    private function reportOnce(Account $account, AccountError $error): void
+    {
+        $lock = $this->locks->createLock(self::reportKey($account, $error));
+        if (!$lock->acquire()) {
+            return;
+        }
+
+        try {
+            $this->reportUnlessReported($account, $error);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function reportUnlessReported(Account $account, AccountError $error): void
+    {
+        $reported = $this->pool->getItem(self::reportKey($account, $error));
+        if ($reported->isHit()) {
+            return;
+        }
+
+        $this->pool->save($reported->set(true));
+        $this->report($account, $error);
+    }
+
+    // The ledger event and the error log line are the owner's notice until a notifier sends it (plan T67).
+    private function report(Account $account, AccountError $error): void
+    {
+        $notice = ['account' => $account->key(), 'error' => $error->value];
+        $this->logger->error('Account {account} needs the owner: {error}.', $notice);
+
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountErrorReported, json_encode($notice, JSON_THROW_ON_ERROR)));
+        if (!$appended->succeeded()) {
+            $this->logger->error('An account error was not recorded.', [...$notice, 'reason' => $appended->failure]);
+        }
+    }
+
+    // The error's value holds no dot, so the first dot ends it and the account key cannot pass for another error's.
+    private static function reportKey(Account $account, AccountError $error): string
+    {
+        return self::REPORT_LOCK.$error->value.'.'.$account->key();
     }
 
     private function record(Account $account, DateTimeImmutable $until): void

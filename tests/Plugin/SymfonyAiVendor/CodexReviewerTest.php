@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountError;
+use Intakt\Core\Ai\Contract\AccountUnusable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -16,6 +18,7 @@ use Intakt\Core\Ai\Infrastructure\CodexEffort;
 use Intakt\Core\Ai\Infrastructure\CodexLogin;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
 use Intakt\Core\Ai\Infrastructure\CodexMessageBagNormalizer;
+use Intakt\Core\Ai\Infrastructure\CodexStructuredError;
 use Intakt\Core\Ai\Infrastructure\CodexPlatformFactory;
 use Intakt\Core\Ai\Infrastructure\CodexSettings;
 use Intakt\Core\Ai\Infrastructure\CodexTokenRefresh;
@@ -57,11 +60,14 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRefusedTheAccount;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
@@ -86,6 +92,11 @@ use Throwable;
 #[CoversClass(CodexPlatformFactory::class)]
 #[CoversClass(CodexMessageBagNormalizer::class)]
 #[CoversClass(SymfonyAiVendor::class)]
+#[CoversClass(CodexStructuredError::class)]
+#[UsesClass(AccountUnusable::class)]
+#[UsesClass(AccountError::class)]
+#[UsesClass(ProviderRateLimited::class)]
+#[UsesClass(ProviderRefusedTheAccount::class)]
 #[UsesClass(IsolatedCodexCli::class)]
 #[UsesClass(CodexLogins::class)]
 #[UsesClass(CodexLogin::class)]
@@ -310,6 +321,83 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
     }
 
+    public function testAUsageLimitOfTheCliCoolsTheAccountDownInsteadOfFailingTheReview(): void
+    {
+        $this->replaying('usage-limit', 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertInstanceOf(ProviderRateLimited::class, $failure);
+        self::assertTrue($this->cooldowns->isCoolingDown($this->team()));
+        self::assertNotContains(LedgerEventKind::AccountErrorReported, $this->ledger->kinds());
+    }
+
+    #[DataProvider('accountErrors')]
+    public function testAnAccountErrorOfTheCliTakesTheAccountOutInsteadOfFailingTheReview(string $recording, AccountError $error): void
+    {
+        $this->replaying($recording, 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertInstanceOf(ProviderRefusedTheAccount::class, $failure);
+        self::assertInstanceOf(AccountUnusable::class, $failure->getPrevious());
+        self::assertSame($error, $failure->getPrevious()->error);
+        self::assertTrue($this->cooldowns->isCoolingDown($this->team()));
+        self::assertFalse($this->cooldowns->isRejected($this->team()));
+    }
+
+    #[DataProvider('accountErrors')]
+    public function testAnAccountErrorOfTheCliTellsTheOwnerWhichErrorTheAccountHas(string $recording, AccountError $error): void
+    {
+        $this->replaying($recording, 1);
+
+        $this->failureOfReview();
+
+        self::assertSame([['account' => 'codex.team', 'error' => $error->value]], $this->payloadsOf(LedgerEventKind::AccountErrorReported));
+    }
+
+    /**
+     * @return iterable<string, array{string, AccountError}>
+     */
+    public static function accountErrors(): iterable
+    {
+        yield 'a model not on the plan' => ['model-not-on-plan', AccountError::ModelNotOnPlan];
+        yield 'a lost login' => ['login-lost', AccountError::LoginLost];
+    }
+
+    #[DataProvider('structuredErrors')]
+    public function testAStructuredErrorOfTheCliCountsItsCallOnceWithoutUsage(string $recording): void
+    {
+        $this->replaying($recording, 1);
+
+        $this->failureOfReview();
+
+        $usage = $this->payloadsOf(LedgerEventKind::UsageRecorded);
+        self::assertSame(['started', 'unsettled'], array_column($usage, 'phase'));
+        self::assertSame([], $usage[1]['usages']);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function structuredErrors(): iterable
+    {
+        yield 'a usage limit' => ['usage-limit'];
+        yield 'a model not on the plan' => ['model-not-on-plan'];
+        yield 'a lost login' => ['login-lost'];
+    }
+
+    public function testTextThatOnlySaysTheLoginIsLostIsAFailedReviewAndNoAccountError(): void
+    {
+        $this->replaying('login-text');
+
+        $verdict = $this->review()->verdict;
+
+        self::assertTrue($verdict->isFailedReview());
+        self::assertFalse($this->cooldowns->isCoolingDown($this->team()));
+        self::assertNotContains(LedgerEventKind::AccountErrorReported, $this->ledger->kinds());
+    }
+
     public function testAStreamThatEndsBeforeItsTurnCompletedIsAFailedReview(): void
     {
         $this->replaying('truncated');
@@ -345,6 +433,19 @@ final class CodexReviewerTest extends KernelTestCase
     private function arguments(): array
     {
         return explode("\0", rtrim((string) file_get_contents($this->root.'/arguments'), "\0"));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function payloadsOf(LedgerEventKind $kind): array
+    {
+        return array_values(array_filter($this->ledger->payloads(), fn (int $index): bool => $kind === $this->ledger->kinds()[$index], ARRAY_FILTER_USE_KEY));
+    }
+
+    private function team(): Account
+    {
+        return new Account(Provider::Codex, 'team');
     }
 
     private function failureOfReview(): Throwable

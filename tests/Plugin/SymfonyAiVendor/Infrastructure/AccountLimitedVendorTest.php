@@ -25,6 +25,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRefusedTheAccount;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
@@ -50,6 +51,7 @@ use Throwable;
 #[UsesClass(ProviderRateLimited::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
 #[UsesClass(ProviderRejectedTheKey::class)]
+#[UsesClass(ProviderRefusedTheAccount::class)]
 #[UsesClass(TierProviderDisabled::class)]
 #[UsesClass(TierResolutionFailure::class)]
 #[UsesClass(Account::class)]
@@ -139,6 +141,27 @@ final class AccountLimitedVendorTest extends TestCase
         $out = $this->failureOf($this->vendor($this->failing($limited), $this->cooldowns(45), $this->tierWithSubstitutes()));
 
         self::assertInstanceOf(VendorAccountOut::class, $out);
+    }
+
+    public function testAnAccountErrorWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
+    {
+        $refused = new ProviderRefusedTheAccount(new RuntimeException('login lost'));
+
+        $out = $this->failureOf($this->vendor($this->failing($refused), $this->cooldowns(0)));
+
+        self::assertInstanceOf(VendorAccountOut::class, $out);
+        self::assertSame($refused, $out->getPrevious());
+    }
+
+    public function testAnAccountErrorOnTheVendorsOnlyAccountWaitsForItInsteadOfFailingTheReviewer(): void
+    {
+        $refused = new ProviderRefusedTheAccount(new RuntimeException('login lost'));
+
+        $out = $this->failureOf($this->vendor($this->failing($refused), $this->cooldowns(60)));
+
+        self::assertInstanceOf(ProviderRateLimited::class, $out);
+        self::assertSame(60, $out->retryAfterSeconds);
+        self::assertSame($refused, $out->getPrevious());
     }
 
     public function testARejectedKeyWithNoOtherAccountOrSubstituteIsTheReviewersFailure(): void

@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AccountError;
 use Intakt\Core\Ai\Contract\Provider;
 use Override;
 
@@ -19,6 +20,16 @@ final readonly class NoCooldowns implements AccountCooldowns
 
     #[Override]
     public function coolDownRejected(Account $account): void
+    {
+    }
+
+    #[Override]
+    public function coolDownUnusable(Account $account, AccountError $error): void
+    {
+    }
+
+    #[Override]
+    public function answered(Account $account): void
     {
     }
 

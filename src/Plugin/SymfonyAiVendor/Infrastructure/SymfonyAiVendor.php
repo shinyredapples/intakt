@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AccountUnusable;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -22,6 +23,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRefusedTheAccount;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
@@ -151,6 +153,7 @@ final readonly class SymfonyAiVendor implements Vendor
             $failure instanceof RateLimitExceededException => new ProviderRateLimited($failure->getRetryAfter(), $failure),
             $failure instanceof EveryProviderOut => new NoProviderLeft($failure->getMessage(), $failure),
             $failure instanceof AuthenticationException => new ProviderRejectedTheKey($failure),
+            $failure instanceof AccountUnusable => new ProviderRefusedTheAccount($failure),
             $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
             $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
             default => $failure,

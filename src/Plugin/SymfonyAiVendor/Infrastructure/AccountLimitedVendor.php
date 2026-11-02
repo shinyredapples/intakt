@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRefusedTheAccount;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
@@ -56,15 +57,15 @@ final readonly class AccountLimitedVendor implements Vendor
     {
         try {
             return $call();
-        } catch (ProviderRateLimited|ProviderFailedTransiently $out) {
+        } catch (ProviderRateLimited|ProviderFailedTransiently|ProviderRefusedTheAccount $out) {
             throw $this->nextAccountOrWait($project, $tier, $out);
         } catch (ProviderRejectedTheKey $rejected) {
             throw $this->nextAccountOrSubstituteOrFailure($project, $tier, $rejected);
         }
     }
 
-    // The account that failed is cooling down by now, so the wait is until any account of the vendor is free, not until that account's own reset; a transient failure waits too, because its account cools down like a limited one. A tier with substitutes starts again at once instead, in a new conversation on whichever provider is free then, or ends blocked when none is.
-    private function nextAccountOrWait(string $project, Tier $tier, ProviderRateLimited|ProviderFailedTransiently $out): VendorAccountOut|ProviderRateLimited
+    // The account that failed is cooling down by now, so the wait is until any account of the vendor is free, not until that account's own reset; a transient failure and an account error wait too, because their account cools down like a limited one, and an account error is the owner's to fix, never the reviewer's failure. A tier with substitutes starts again at once instead, in a new conversation on whichever provider is free then, or ends blocked when none is.
+    private function nextAccountOrWait(string $project, Tier $tier, ProviderRateLimited|ProviderFailedTransiently|ProviderRefusedTheAccount $out): VendorAccountOut|ProviderRateLimited
     {
         if ($this->resolver->hasSubstitutes($project, $tier)) {
             return new VendorAccountOut($out);

@@ -23,6 +23,8 @@ final readonly class CompletedCodexTurn implements RawResultInterface
 
     private const string MESSAGE = 'message';
 
+    private const string ERROR = 'error';
+
     public function __construct(
         private RawResultInterface $inner,
     ) {
@@ -38,8 +40,12 @@ final readonly class CompletedCodexTurn implements RawResultInterface
         try {
             $data = $this->inner->getData();
         } catch (RuntimeException $processFailed) {
+            $this->refuseAStructuredError();
+
             return $this->failedWithReportedUsage($processFailed);
         }
+
+        $this->refuseAStructuredError();
 
         // The CLI has already run the tools it used, so the bridge's copy of them is not the agent's to run again (upstream/ai-codex-platform-cli-tool-calls).
         unset($data[self::TOOL_CALLS]);
@@ -57,6 +63,21 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     public function getObject(): object
     {
         return $this->inner->getObject();
+    }
+
+    /**
+     * @throws RuntimeException
+     */
+    // Read from the turn's own failure only, so a reviewer whose text names a limit or a login is never an account outcome.
+    private function refuseAStructuredError(): void
+    {
+        $failed = array_last(array_filter($this->events(), static fn (array $event): bool => 'turn.failed' === ($event[self::TYPE] ?? null)));
+        $message = $failed[self::ERROR][self::MESSAGE] ?? null;
+        $error = is_string($message) ? CodexStructuredError::of($message) : null;
+
+        if (null !== $error) {
+            throw $error->failure();
+        }
     }
 
     /**
@@ -101,7 +122,7 @@ final readonly class CompletedCodexTurn implements RawResultInterface
             throw $processFailed;
         }
 
-        return [self::TYPE => 'error', self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
+        return [self::TYPE => self::ERROR, self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
     }
 
     /**
@@ -109,19 +130,21 @@ final readonly class CompletedCodexTurn implements RawResultInterface
      */
     private function reportedUsage(): ?array
     {
+        $completed = array_last(array_filter($this->events(), static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null) && is_array($event[self::USAGE] ?? null)));
+
+        return $completed[self::USAGE] ?? null;
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function events(): array
+    {
         $process = $this->inner->getObject();
         if (!$process instanceof Process) {
-            return null;
+            return [];
         }
 
-        $usage = null;
-        foreach (explode(PHP_EOL, $process->getOutput()) as $line) {
-            $event = json_decode($line, true);
-            if (is_array($event) && 'turn.completed' === ($event['type'] ?? null) && is_array($event[self::USAGE] ?? null)) {
-                $usage = $event[self::USAGE];
-            }
-        }
-
-        return $usage;
+        return array_values(array_filter(array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput())), is_array(...)));
     }
 }

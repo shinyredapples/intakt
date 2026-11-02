@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AccountError;
+use Intakt\Core\Ai\Contract\AccountUnusable;
 use Intakt\Core\Ai\Infrastructure\CodexLogin;
 use Intakt\Core\Ai\Infrastructure\CodexLoginUnusable;
 use Intakt\Core\Ai\Infrastructure\CodexTokenRefresh;
@@ -19,6 +21,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[CoversClass(CodexTokenRefresh::class)]
 #[UsesClass(CodexLogin::class)]
 #[UsesClass(CodexLoginUnusable::class)]
+#[UsesClass(AccountUnusable::class)]
+#[UsesClass(AccountError::class)]
 final class CodexTokenRefreshTest extends TestCase
 {
     public function testTheRefreshTokenIsSentTheWayTheCliSendsIt(): void
@@ -63,7 +67,8 @@ final class CodexTokenRefreshTest extends TestCase
      */
     public static function unusableAnswers(): iterable
     {
-        yield 'a refused refresh' => [new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401])];
+        yield 'a request the endpoint calls invalid' => [new JsonMockResponse(['error' => 'invalid_request'], ['http_code' => 400])];
+        yield 'a server error' => [new JsonMockResponse(['error' => 'server_error'], ['http_code' => 500])];
         yield 'no JSON' => [new MockResponse('<html>')];
         yield 'no access token' => [new JsonMockResponse(['id_token' => 'id-2'])];
         yield 'an empty access token' => [new JsonMockResponse(['access_token' => ''])];
@@ -76,6 +81,29 @@ final class CodexTokenRefreshTest extends TestCase
         $this->expectException(CodexLoginUnusable::class);
 
         $this->refresh($answer)->refreshedIfDue($this->dueLogin());
+    }
+
+    /**
+     * @return iterable<string, array{MockResponse}>
+     */
+    public static function lostLogins(): iterable
+    {
+        yield 'an unauthorized refresh' => [new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401])];
+        yield 'a revoked refresh token' => [new JsonMockResponse(['error' => ['code' => 'refresh_token_invalidated']], ['http_code' => 401])];
+        yield 'a refresh token the endpoint no longer grants' => [new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 400])];
+        yield 'a refresh token no longer granted as an error object' => [new JsonMockResponse(['error' => ['code' => 'invalid_grant']], ['http_code' => 400])];
+    }
+
+    // The same answers the CLI takes for a login that only a new sign-in brings back.
+    #[DataProvider('lostLogins')]
+    public function testARefreshTheEndpointRefusesForGoodIsALostLogin(MockResponse $answer): void
+    {
+        try {
+            $this->refresh($answer)->refreshedIfDue($this->dueLogin());
+            self::fail('The refresh was expected to fail.');
+        } catch (AccountUnusable $lost) {
+            self::assertSame(AccountError::LoginLost, $lost->error);
+        }
     }
 
     private function refresh(MockResponse $answer): CodexTokenRefresh

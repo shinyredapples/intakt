@@ -6,6 +6,9 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AccountError;
+use Intakt\Core\Ai\Contract\AccountUnusable;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
@@ -15,6 +18,7 @@ use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -49,15 +53,20 @@ use Throwable;
 #[CoversClass(EveryKeyRejected::class)]
 #[CoversClass(KeyRejected::class)]
 #[UsesClass(AccountCooldownWindows::class)]
+#[UsesClass(AccountUnusable::class)]
+#[UsesClass(AccountError::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
 final class AccountFailoverPlatformTest extends TestCase
 {
     private AccountCooldownWindows $cooldowns;
 
+    private InMemoryLedger $ledger;
+
     protected function setUp(): void
     {
-        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
+        $this->ledger = new InMemoryLedger();
+        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     public function testACallGoesToTheFirstAccountInTheOwnersOrder(): void
@@ -188,6 +197,33 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->read($this->accounts(new FailingWhenRead(new AuthenticationException('revoked')), $this->answering('second'))->invoke('big', 'Review.'));
 
         self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
+    public function testAnAccountErrorReadFromTheAnswerTakesTheAccountOutAndTheNextCallGoesToTheOtherAccount(): void
+    {
+        $accounts = $this->accounts(new FailingWhenRead(new AccountUnusable(AccountError::LoginLost)), $this->answering('second'));
+
+        $this->read($accounts->invoke('big', 'Review.'));
+
+        self::assertTrue($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+        self::assertSame('second', $accounts->invoke('big', 'Review.')->asText());
+    }
+
+    public function testAnAccountErrorReadFromTheAnswerIsReportedForTheAccountThatServedIt(): void
+    {
+        $this->read($this->accounts(new FailingWhenRead(new AccountUnusable(AccountError::ModelNotOnPlan)), $this->answering('second'))->invoke('big', 'Review.'));
+
+        self::assertSame([LedgerEventKind::AccountCooledDown, LedgerEventKind::AccountErrorReported], $this->ledger->kinds());
+        self::assertSame(['account' => 'anthropic.default', 'error' => 'model_not_on_plan'], $this->ledger->payloads()[1]);
+    }
+
+    public function testAnAnswerReadFromAnAccountTellsTheCooldownsThatTheAccountAnswered(): void
+    {
+        $cooldowns = $this->createMock(AccountCooldowns::class);
+        $cooldowns->expects($this->once())->method('answered')->with($this->account(Account::DEFAULT));
+        $accounts = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering('first'), 'team' => $this->answering('second')], $cooldowns, new NativeClock(), new NullLogger());
+
+        $accounts->invoke('big', 'Review.')->asText();
     }
 
     public function testAnAnswerThatFailsForAnotherReasonLeavesTheAccountFree(): void

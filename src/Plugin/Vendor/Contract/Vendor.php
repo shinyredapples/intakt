@@ -19,6 +19,7 @@ interface Vendor
      * @throws VendorAccountOut
      * @throws NoProviderLeft
      * @throws ProviderRejectedTheKey
+     * @throws ProviderRefusedTheAccount
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview;
@@ -31,6 +32,7 @@ interface Vendor
      * @throws VendorAccountOut
      * @throws NoProviderLeft
      * @throws ProviderRejectedTheKey
+     * @throws ProviderRefusedTheAccount
      */
     #[NoDiscard('a judgement that is not read decides nothing')]
     public function judge(string $project, JudgeRequest $request): Judgement;

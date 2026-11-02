@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountError;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -23,6 +24,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
+#[UsesClass(AccountError::class)]
 final class AccountCooldownWindowsTest extends TestCase
 {
     private ArrayAdapter $pool;
@@ -224,6 +226,94 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertSame('error', $logs[0][0]);
     }
 
+    public function testAnAccountErrorCoolsTheAccountDownForOneMinuteWithoutRememberingARejection(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
+        self::assertFalse($cooldowns->isRejected($this->default()));
+    }
+
+    public function testAnAccountErrorIsReportedToTheOwnerWithItsAccountAndError(): void
+    {
+        $this->cooldowns()->coolDownUnusable($this->team(), AccountError::ModelNotOnPlan);
+
+        self::assertSame([['account' => 'anthropic.team', 'error' => 'model_not_on_plan']], $this->reports());
+    }
+
+    public function testAnAccountErrorIsLoggedForTheOwnerWithItsAccountAndError(): void
+    {
+        $logger = new BufferingLogger();
+
+        $this->cooldowns($logger)->coolDownUnusable($this->team(), AccountError::LoginLost);
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame(['error', ['account' => 'anthropic.team', 'error' => 'login_lost']], [$logs[0][0], $logs[0][2]]);
+    }
+
+    public function testTheSameAccountErrorAgainIsNotReportedASecondTime(): void
+    {
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertCount(1, $this->reports());
+    }
+
+    public function testAnotherErrorOfTheSameAccountIsReportedToo(): void
+    {
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::ModelNotOnPlan);
+
+        self::assertSame(['login_lost', 'model_not_on_plan'], array_column($this->reports(), 'error'));
+    }
+
+    public function testTheSameErrorOfAnotherAccountIsReportedToo(): void
+    {
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        $this->cooldowns()->coolDownUnusable($this->team(), AccountError::LoginLost);
+
+        self::assertSame(['anthropic.default', 'anthropic.team'], array_column($this->reports(), 'account'));
+    }
+
+    public function testAnAccountErrorAfterTheAccountAnsweredAgainIsReportedAgain(): void
+    {
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+        $this->cooldowns()->answered($this->default());
+
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertCount(2, $this->reports());
+    }
+
+    public function testAnAnswerOfAnotherAccountKeepsTheReportedError(): void
+    {
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+        $this->cooldowns()->answered($this->team());
+
+        $this->cooldowns()->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertCount(1, $this->reports());
+    }
+
+    // Forced order: another worker holds the report of this account error, so this one leaves the report to it.
+    public function testAnAccountErrorWhileAnotherWorkerReportsItIsNotReportedASecondTime(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $reporting = $locks->createLock(AccountCooldownWindows::REPORT_LOCK.'login_lost.anthropic.default');
+        $reporting->acquire();
+
+        new AccountCooldownWindows($this->pool, $locks, new NativeClock(), $this->ledger, new NullLogger(), $this->accounts())->coolDownUnusable($this->default(), AccountError::LoginLost);
+
+        self::assertSame([], $this->reports());
+        self::assertTrue($this->cooldowns()->isCoolingDown($this->default()));
+    }
+
     public function testAProviderWithoutAccountsHasNothingToWaitFor(): void
     {
         self::assertSame(0, $this->cooldowns()->secondsUntilAnAccountIsFree(Provider::ClaudeCode));
@@ -236,9 +326,17 @@ final class AccountCooldownWindowsTest extends TestCase
             ->secondsUntilAnAccountIsFree(Provider::Anthropic);
     }
 
-    private function cooldowns(): AccountCooldownWindows
+    private function cooldowns(?BufferingLogger $logger = null): AccountCooldownWindows
     {
-        return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), $this->accounts());
+        return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, $logger ?? new NullLogger(), $this->accounts());
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function reports(): array
+    {
+        return array_values(array_filter($this->ledger->payloads(), fn (int $index): bool => LedgerEventKind::AccountErrorReported === $this->ledger->kinds()[$index], ARRAY_FILTER_USE_KEY));
     }
 
     /**
