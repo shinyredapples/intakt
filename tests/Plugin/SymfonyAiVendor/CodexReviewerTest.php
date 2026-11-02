@@ -80,6 +80,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
@@ -154,8 +155,11 @@ final class CodexReviewerTest extends KernelTestCase
 
     private AccountCooldownWindows $cooldowns;
 
+    private MockHttpClient $tokenEndpoint;
+
     protected function setUp(): void
     {
+        $this->tokenEndpoint = new MockHttpClient();
         $this->root = sys_get_temp_dir().'/intakt-codex-reviewer-'.bin2hex(random_bytes(6));
         new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-11-01T00:00:00Z'));
         $this->path = (string) getenv('PATH');
@@ -387,6 +391,21 @@ final class CodexReviewerTest extends KernelTestCase
         yield 'a lost login' => ['login-lost'];
     }
 
+    // The login is due for its refresh, so the handover asks the token endpoint before the CLI is ever started; the only account is then out, so the reviewer waits for it.
+    public function testALoginWhoseRefreshTheTokenEndpointRefusesCoolsTheAccountDownAndTellsTheOwnerOnce(): void
+    {
+        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-10-01T00:00:00Z'));
+        $this->tokenEndpoint = new MockHttpClient(new JsonMockResponse(['error' => 'invalid_token'], ['http_code' => 401]));
+        $this->replaying('complete');
+
+        $failure = $this->failureOfReview();
+
+        self::assertInstanceOf(ProviderRateLimited::class, $failure);
+        self::assertFileDoesNotExist($this->root.'/arguments');
+        self::assertTrue($this->cooldowns->isCoolingDown($this->team()));
+        self::assertSame([['account' => 'codex.team', 'error' => 'login_lost']], $this->payloadsOf(LedgerEventKind::AccountErrorReported));
+    }
+
     public function testTextThatOnlySaysTheLoginIsLostIsAFailedReviewAndNoAccountError(): void
     {
         $this->replaying('login-text');
@@ -478,7 +497,7 @@ final class CodexReviewerTest extends KernelTestCase
     {
         $resolver = new ConfiguredTierResolver(self::PROJECTS, []);
         $clock = new MockClock(self::NOW);
-        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh(new MockHttpClient(), $clock), new LockFactory(new InMemoryStore()));
+        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh($this->tokenEndpoint, $clock), new LockFactory(new InMemoryStore()));
         $cli = new IsolatedCodexCli($logins, new CodexSettings(self::MODEL, CodexEffort::High), 'team');
         $codex = new CodexPlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, new ProjectModelCatalog(self::PROJECTS)->models(Provider::Codex));
         $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger());
