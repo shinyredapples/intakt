@@ -115,7 +115,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     public function testAShadowVerdictOfAnotherRoundLeavesTheVerdictsOfThisOneCounting(): void
     {
         $round = $this->reviewedRound();
-        $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => Uuid::v7()->toRfc4122(), 'mode' => 'shadow'], JSON_THROW_ON_ERROR)));
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => Uuid::v7()->toRfc4122(), 'mode' => 'shadow'], JSON_THROW_ON_ERROR)))->succeeded());
 
         $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
 
@@ -125,7 +125,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     public function testAShadowVerdictOfThisRoundAmongOtherEventsStopsTheVerdictsCountingOnceTheProjectIsLive(): void
     {
         $round = $this->reviewedRound();
-        $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => $round, 'mode' => 'shadow'], JSON_THROW_ON_ERROR)));
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => $round, 'mode' => 'shadow'], JSON_THROW_ON_ERROR)))->succeeded());
 
         $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
 
