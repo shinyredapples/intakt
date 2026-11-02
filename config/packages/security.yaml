@@ -1,5 +1,5 @@
 security:
-    # MCP tools are authorized by a voter on Intakt's own config (ToolAccessVoter); the only firewall reads the owner's bearer token.
+    # MCP tools are authorized by a voter on Intakt's own config (ToolAccessVoter); the firewalls read bearer tokens, the owner's and a review round's.
     firewalls:
         mcp_owner:
             pattern: ^/mcp/owner
@@ -8,5 +8,15 @@ security:
             access_token:
                 token_handler:
                     id: Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler
+        mcp_review:
+            pattern: ^/mcp/review
+            stateless: true
+            access_token:
+                token_handler:
+                    id: Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential
         main:
             security: false
+
+    # The review server answers only with a credential, because the credential, not the call, names the round whose head it shows.
+    access_control:
+        - { path: ^/mcp/review, roles: ROLE_MCP_REVIEWER }

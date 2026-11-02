@@ -148,7 +148,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Evidence:** an agent CLI connected over MCP starting a review of the sample branch and reading the act list (transcript excerpt), with the tool calls scripted in the builder's sandbox, which has no model login; the same transcript with a logged-in model choosing the calls (owner provides).
 - **PHP 8.5:** closures in attributes where an MCP tool's input needs a check.
 - **Tool safety:** every tool carries the MCP SDK's annotations (`readOnlyHint`, `destructiveHint`); whether a tool may write is decided by a Symfony Security voter on Intakt's own config, never by the model's arguments. A contract test checks that a tool without parameters encodes them as `"properties": {}` and that the protocol version is negotiated correctly with Claude Code; a failure is an upstream report under `upstream/`.
-- **MCP:** this is the owner's MCP Bundle server (T16 adds the per-review one), with `session.lock` on. Tool authorization goes through `#[IsGrantedTool]` backed by Intakt's voter; long tools send progress notifications.
+- **MCP:** the owner's MCP Bundle server and, since T16 part 1, the per-review one, with `session.lock` on. Tool authorization goes through `#[IsGrantedTool]` backed by Intakt's voter; long tools send progress notifications.
 - **Worker:** the MCP server runs in its own named FrankenPHP worker (see T22), so streamed MCP responses can't starve the dashboard's worker threads.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 

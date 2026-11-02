@@ -53,6 +53,10 @@ services:
     Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation:
         factory: ['Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation', 'fromSettings']
         arguments: ['%env(GITHUB_APP_PERMISSIONS)%', '%env(GITHUB_APP_REPOSITORIES)%']
+    # Empty while no maintainer App runs, so no bot but Intakt's own steers.
+    Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities:
+        arguments:
+            $maintainerAppSlug: '%env(GITHUB_MAINTAINER_APP_SLUG)%'
 
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
