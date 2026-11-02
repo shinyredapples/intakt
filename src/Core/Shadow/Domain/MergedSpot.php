@@ -49,7 +49,9 @@ final readonly class MergedSpot
     }
 
     /**
-     * @param self<LoopFinding|Finding> $other
+     * @template O of LoopFinding|Finding
+     *
+     * @param self<O> $other
      */
     public function linesApart(self $other): ?int
     {
@@ -57,7 +59,7 @@ final readonly class MergedSpot
             return null;
         }
 
-        return max(0, (int) $other->firstLine - (int) $this->lastLine, (int) $this->firstLine - (int) $other->lastLine);
+        return max(0, $other->firstLine - (int) $this->lastLine, $this->firstLine - (int) $other->lastLine);
     }
 
     private function outranks(Severity $severity): bool

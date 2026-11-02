@@ -58,7 +58,8 @@ final readonly class ReviewComparison
         foreach ($this->byFileAndLine($findings) as $finding) {
             $last = array_last($spots);
             if (null !== $last && $this->withinWindow($last->linesApart(MergedSpot::of($finding)))) {
-                $spots[array_key_last($spots)] = $last->joinedBy($finding);
+                array_pop($spots);
+                $spots[] = $last->joinedBy($finding);
                 continue;
             }
 
@@ -112,7 +113,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @param MergedSpot<LoopFinding>          $loopSpot
+     * @param MergedSpot<LoopFinding>         $loopSpot
      * @param array<int, MergedSpot<Finding>> $intaktSpots
      */
     private function closest(MergedSpot $loopSpot, array $intaktSpots): ?int
