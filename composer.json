@@ -40,7 +40,7 @@
     "symfony/process": "^8.1",
     "symfony/rate-limiter": "^8.1",
     "symfony/runtime": "^8.1",
-    "symfony/scheduler": "8.1.10",
+    "symfony/scheduler": "^8.1",
     "symfony/security-bundle": "^8.1",
     "symfony/semaphore": "^8.1",
     "symfony/twig-bundle": "^8.1",

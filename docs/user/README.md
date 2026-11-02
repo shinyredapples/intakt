@@ -9,7 +9,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Reviewing a branch of a local repository with `intakt:review` (see [below](#reviewing-a-branch)); reviewing a pull request is planned
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, as does the code that reads a head's CI state and decides to wait (CI running, or a run cancelled and not run again), skip (CI red) or review (CI green), and a `watch` section makes a tick run them every minute (see [Capability tiers per project](#capability-tiers-per-project)), but no forge reads pull requests and CI from GitHub yet, so a tick fails with a clear message until then (planned)
-- Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; running its panel on every new pull request head (waiting for a forge that reads pull requests from GitHub) and the lower usage ceiling for shadow work are planned
+- Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; a shadow round starts only below a lower usage ceiling (see [below](#shadow-mode)); running its panel on every new pull request head (waiting for a forge that reads pull requests from GitHub) is planned
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
 
@@ -28,6 +28,19 @@ Intakt serves three pages in the browser, built from the ledger of review events
 - `/reviews/<round id>`, linked from each round on `/reviews`, shows the whole review the round belongs to: every round of the same change in the same project, in round order. For each round: its number, id, start and state; each reviewer that started, with its role, tier, state (`running`, `verdict`, `failed` or `blocked`), its verdict and number of findings, and why it failed or was blocked, or the substitute that answered for it; once the judge has decided, every finding with its id (`F1`, `F2`, ...), severity and text, and the judge's call on it (`act`, `follow-up`, or `rejected or unmarked`); and the tokens the round's model calls used. The top of the page gives the number of rounds and the tokens of all of them. Cost shows `no price`, because Intakt has no price table yet and never shows an estimate. A round judged before Intakt recorded the findings themselves says so and still lists the ids the judge marked `act` or `follow-up`, with `not recorded` for severity and text; it never claims the reviewers found nothing. A round started before Intakt recorded the change's name in the ledger is shown as a review of its own. An unknown round id gets `404 Not Found`.
 
 The pages answer only an address on the computer itself: `localhost`, `127.0.0.1` or `[::1]` with the dashboard's port, which is `DASHBOARD_PORT` (default 7780, set it to the port you publish on the host). Any other address in the request, or another port, gets `400 Bad Request` and no data, so a web page that points its own name at your computer cannot read them. The pages are plain HTML and never refresh themselves: reload the page to see newer rounds. On `/reviews`, two rounds of one change appear as two rows of the same project; both link to the same review page. On a review page, the button "Start the next round on the current head" starts the change's next round from the repository and base recorded when its latest round started, then returns to the page with a line naming the new round (or the reason it could not start). The button asks for the number after the latest round the page knows, so pressing it twice, or pressing it on a page opened before another round started, starts nothing and says that another round took the number. The repository is recorded as an absolute path, so a round started with `--repository=.` restarts from the same repository. Rounds started before Intakt recorded the repository, base and task show a note instead of the button. The round runs in the workers, so reload the page to see it; the page does not refresh itself. Its reviewers read a snapshot of the head in the system's temporary directory (`intakt-kept-review-*`), which Intakt removes once the round is judged; a round that is never judged keeps it, and `git worktree remove --force <path>` removes it. Until the owner login is built, anyone who can reach the dashboard's address on the computer can press the button.
+
+## Checking the server
+
+When Intakt runs under FrankenPHP, `php bin/console intakt:server:status` reads FrankenPHP's admin API and prints how many worker threads are busy and idle, how many requests wait in the queue, how often workers were restarted, and whether the Mercure hub is healthy:
+
+```
+worker threads: 0 busy, 2 idle
+queue depth: 0
+worker restarts: 2
+hub: healthy
+```
+
+Run it inside the container, because the admin API answers only there. It reads `FRANKENPHP_ADMIN_URL` (default `http://localhost:2019`), which must be plain `http` on `localhost`, `127.0.0.1` or `[::1]`; any other address is refused before anything is sent. A value that cannot be read shows `down` with the reason (the server did not answer, answered with an error status, or answered something Intakt cannot use), and the command then exits with a non-zero code. A thread that is starting or restarting counts as neither busy nor idle.
 
 ## Background work
 
@@ -168,7 +181,18 @@ A `review:` section can also hold `rules`, a list of extra reviewers for bigger 
 
 ### Shadow mode
 
-A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review, for now) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does counting. Any other value stops Intakt from starting and names the key. Every reviewer's verdict is recorded in the ledger with the project's mode at that moment (`"mode":"shadow"` or `"mode":"live"`), so the ledger shows which verdicts were shadow ones. A shadow verdict never counts toward a merge: not while the project is in shadow mode, and not after it is switched to live either; switching a project to shadow also stops its earlier verdicts from counting. Intakt can post a review to GitHub, but no review round posts its outcome yet and nothing merges yet; running the panel on every new pull request head and a lower usage ceiling for shadow work are planned.
+A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review, for now) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does counting. Any other value stops Intakt from starting and names the key. Every reviewer's verdict is recorded in the ledger with the project's mode at that moment (`"mode":"shadow"` or `"mode":"live"`), so the ledger shows which verdicts were shadow ones. A shadow verdict never counts toward a merge: not while the project is in shadow mode, and not after it is switched to live either; switching a project to shadow also stops its earlier verdicts from counting. Intakt can post a review to GitHub, but no review round posts its outcome yet and nothing merges yet; running the panel on every new pull request head is planned.
+
+Shadow work starts only below a lower ceiling, so it never takes capacity the existing loop needs on the same accounts. The shadow ceilings are set like the ceilings above, in percent from 1 to 100, under `budget.shadow_ceilings` (default 70 for both windows; a window you leave out keeps it), and follow the same rules, including the weekly pace, with the shadow weekly ceiling as the pace's base:
+
+```yaml
+budget:
+    shadow_ceilings:
+        five-hour: 70
+        weekly: 70
+```
+
+Before a round of a shadow project starts, Intakt asks for each provider of its panel whether every one of that provider's enabled accounts is below the shadow ceilings (an account with no reading counts as below), because a reviewer runs on the first account and moves on to the next one when that account cools down. The substitute providers of a reviewer's tier are asked the same way, because a reviewer answers on a substitute as soon as its own provider is out. The provider of the project's `light` tier and its substitutes are asked too, because the judge runs on that tier when a reviewer reports findings. If any of them is at or above them, no round starts: nothing is stored, the command or caller gets the message `The shadow round of project "<name>" was held: ...`, and the ledger gets a `shadow_round_held` event with the project, the change, the provider and the reason (`at-ceiling`), readable with `php bin/console intakt:ledger:events`. A paused or draining install, a back-off and an account cooling down hold a shadow round the same way, with their own reason. A live project is never held by the shadow ceilings. Nothing records readings of the windows yet, so until it does the shadow ceilings hold nothing back.
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
 
@@ -233,7 +257,42 @@ budget:
         weekly: 90
 ```
 
-Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
+Both default to 90; a window you leave out keeps it. Shadow work has its own, lower ceilings (see [Shadow mode](#shadow-mode)). A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
+
+### Cooldowns, pauses and outage notices
+
+Besides the ceilings, Intakt can hold work back in these ways (the tables are created by the same `doctrine:migrations:migrate`):
+
+- **Cooldown of one account:** when the AI company answers that an account's usage limit is reached, that account gets no new call until the reset time the answer gave, even if that is days away. Other accounts, of the same company or another, keep working. An answer whose reset time has already passed, or lies more than a week ahead, cools nothing down.
+- **Budget back-off:** no new call starts on any account, but pull requests that are already approved still merge, since merging calls no model.
+- **Pause:** the same as a budget back-off: nothing new starts, approved pull requests still merge.
+- **Failure back-off:** no new call starts on any account and nothing merges.
+- **Drain:** nothing new starts and nothing merges, so work in progress can finish before an update.
+
+When several are in effect, the strictest wins: drain, then failure back-off, then pause, then budget back-off, then an account's cooldown, then the ceilings. Each one ends by itself at the time it was given.
+
+When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; if writing the warning fails, Intakt tries again at the next decision; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
+
+Nothing places a cooldown, a back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes.
+
+To see what Intakt would decide over a day, write a script and replay it:
+
+```
+# one step per line: a UTC moment, then the step
+2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.main weekly 10 2026-11-08T08:00
+2026-11-02T08:00 start claude_code.main 0
+2026-11-02T09:00 limit claude_code.main 2026-11-02T13:00
+2026-11-02T09:00 start claude_code.main 0
+2026-11-02T10:00 hold budget-back-off 2026-11-02T10:30
+2026-11-02T10:00 merge
+```
+
+```bash
+php bin/console intakt:budget:replay my-day.txt
+```
+
+It prints each line with its outcome (`recorded`, `cooling-down`, `start` and so on), and the outage warnings where they happen. The steps are `read <account> <window> <percent> <reset>`, `limit <account> <reset>`, `hold <drain|failure-back-off|pause|budget-back-off> <until>`, `start <account> <calls running>` and `merge`; an account is written as company and name, such as `claude_code.main`. The replay runs on your database and your ceilings with its own clock, starting at the first line, and undoes everything when it ends, so your install keeps nothing of it. A line it does not understand stops it with the reason. `tests/Core/Budget/UseCase/ReplayDay/scripted-day.txt` is a whole example day.
 
 ## Summarizing a branch
 

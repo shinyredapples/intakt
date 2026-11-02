@@ -25,9 +25,7 @@ use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\ReviewChange\ChangeDecision;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
-use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
-use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\Shadow\Contract\ProjectModes;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
@@ -207,7 +205,7 @@ final class ShadowRoundTest extends KernelTestCase
         };
         $serializer = self::getContainer()->get(SerializerInterface::class);
         assert($serializer instanceof SerializerInterface);
-        $handler = new RunReviewRoundHandler($this->fixture->transactions(), new RoundLedger($this->fixture->ledger(), $this->modes()), $this->fixture->bus);
+        $handler = $this->fixture->startHandlerOn($this->fixture->bus);
 
         return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),

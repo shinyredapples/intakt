@@ -41,6 +41,10 @@ flowchart TD
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the maintainer agent tries to fix it first | nothing, unless it also turns up in Waiting on you |
 | A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the maintainer agent could not fix | follow the card: it names the step and the cause |
 
+## Is the server itself busy?
+
+If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
+
 ## Still stuck?
 
 Open the task's card: its timeline shows every step with its reason, and the live log shows what the current job is doing right now. If a card has been somewhere much longer than usual with no reason given, that is a bug in Intakt: the trends on the dashboard and the record behind every card make it easy to report.
