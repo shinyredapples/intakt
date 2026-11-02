@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Symfony\AI\Platform\Message\SystemMessage;
 use Override;
 use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Contract\Normalizer\ModelContractNormalizer;
 use Symfony\AI\Platform\Exception\InvalidArgumentException;
 use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Message\SystemMessage;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Model;
 
