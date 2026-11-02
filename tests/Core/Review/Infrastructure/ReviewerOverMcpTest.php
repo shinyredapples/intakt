@@ -28,9 +28,6 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Psr\Http\Client\ClientInterface;
-use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\ResponseInterface;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Result\ToolCall;
@@ -57,10 +54,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     private ReviewCredential $credential;
 
-    /**
-     * @var list<RequestInterface>
-     */
-    private array $sent = [];
+    private RecordingHttpClient $http;
 
     protected function setUp(): void
     {
@@ -111,9 +105,9 @@ final class ReviewerOverMcpTest extends KernelTestCase
     {
         $this->review($this->mcpToolboxes()->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
 
-        self::assertNotSame([], $this->sent);
+        self::assertNotSame([], $this->http->sent);
 
-        foreach ($this->sent as $request) {
+        foreach ($this->http->sent as $request) {
             self::assertSame('Bearer '.$this->credential->issueFor($this->round->id()->toRfc4122()), $request->getHeaderLine('Authorization'));
         }
     }
@@ -130,23 +124,9 @@ final class ReviewerOverMcpTest extends KernelTestCase
     private function mcpToolboxes(): ReviewerMcpToolboxFactory
     {
         $kernel = new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.'));
-        $http = new class($kernel, $this->sent) implements ClientInterface {
-            /**
-             * @param list<RequestInterface> $sent
-             */
-            public function __construct(private readonly ClientInterface $inner, private array &$sent)
-            {
-            }
+        $this->http = new RecordingHttpClient($kernel);
 
-            public function sendRequest(RequestInterface $request): ResponseInterface
-            {
-                $this->sent[] = $request;
-
-                return $this->inner->sendRequest($request);
-            }
-        };
-
-        return new ReviewerMcpToolboxFactory($this->credential, $http, 'http://localhost');
+        return new ReviewerMcpToolboxFactory($this->credential, $this->http, 'http://localhost');
     }
 
     /**
