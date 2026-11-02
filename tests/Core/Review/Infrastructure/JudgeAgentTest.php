@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(JudgeAgent::class)]
 #[CoversClass(JudgePrompt::class)]
@@ -117,6 +118,6 @@ final class JudgeAgentTest extends KernelTestCase
             $given[] = new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
         }
 
-        return new JudgeAgent(new JudgePrompt(new Fence()))->judge(new JudgeRequest($task, $given), $platform, 'judge-model');
+        return new JudgeAgent(new JudgePrompt(new Fence()))->judge(new JudgeRequest($task, $given, new UuidV7()), $platform, 'judge-model');
     }
 }

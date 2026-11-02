@@ -1,0 +1,25 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Reviews - Intakt{% endblock %}
+
+{% block body %}
+<h1>Reviews{% if project is not null %} of {{ project }}{% endif %}</h1>
+{% if reviews is empty %}
+<p>No review has started{% if project is not null %} for this project{% endif %} yet.</p>
+{% else %}
+<table>
+    <thead><tr><th>Round</th><th>Project</th><th>Reviewers</th><th>Started (UTC)</th><th>State</th></tr></thead>
+    <tbody>
+    {% for review in reviews %}
+        <tr>
+            <td>{{ review.round }}</td>
+            <td>{{ review.project }}</td>
+            <td>{{ review.reviewers }}</td>
+            <td>{{ review.startedAt|date('Y-m-d H:i:s', 'UTC') }}</td>
+            <td class="{{ review.state.name == 'Judged' ? 'state-judged' : 'state-running' }}">{{ review.state.value }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

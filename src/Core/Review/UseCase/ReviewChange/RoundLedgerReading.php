@@ -30,11 +30,10 @@ final readonly class RoundLedgerReading
         return [];
     }
 
-    // Counted from the round's start in ledger order, because a usage row names no round; another round of the project running at once is counted too.
-    public function tokensSince(string $roundId, string $project): RoundTokens
+    public function tokensOf(string $roundId): RoundTokens
     {
-        $payloads = $this->payloadsAfterStartOf($roundId);
-        $calls = $this->callsStartedFor($project, $payloads);
+        $payloads = iterator_to_array($this->payloadsOf(LedgerEventKind::UsageRecorded), false);
+        $calls = $this->callsStartedFor($roundId, $payloads);
         $ended = array_values(array_filter($payloads, static fn (array $payload): bool => in_array($payload['call'] ?? null, $calls, true) && is_array($payload['usages'] ?? null)));
         $rows = array_merge([], ...array_map($this->rowsOf(...), $ended));
 
@@ -46,13 +45,13 @@ final readonly class RoundLedgerReading
      *
      * @return list<string>
      */
-    // Only the started row names the project, so the settled or unsettled row that carries the tokens is tied to it by its call id.
-    private function callsStartedFor(string $project, array $payloads): array
+    // Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id.
+    private function callsStartedFor(string $roundId, array $payloads): array
     {
         $calls = [];
 
         foreach ($payloads as $payload) {
-            if ('started' === ($payload['phase'] ?? null) && $project === ($payload['project'] ?? null) && is_string($payload['call'] ?? null)) {
+            if ('started' === ($payload['phase'] ?? null) && $roundId === ($payload['round'] ?? null) && is_string($payload['call'] ?? null)) {
                 $calls[] = $payload['call'];
             }
         }
@@ -78,26 +77,6 @@ final readonly class RoundLedgerReading
     private function sum(array $rows, string $key): int
     {
         return array_sum(array_map(static fn (array $row): int => is_int($row[$key] ?? null) ? $row[$key] : 0, $rows));
-    }
-
-    /**
-     * @return list<array<array-key, mixed>>
-     */
-    private function payloadsAfterStartOf(string $roundId): array
-    {
-        $after = [];
-        $started = false;
-
-        foreach ($this->ledger->readInOrder() as $event) {
-            $payload = $this->payloadOf($event);
-            $started = $started || (LedgerEventKind::ReviewStarted === $event->event->kind && ($payload['round'] ?? null) === $roundId);
-
-            if ($started && LedgerEventKind::UsageRecorded === $event->event->kind) {
-                $after[] = $payload;
-            }
-        }
-
-        return $after;
     }
 
     /**

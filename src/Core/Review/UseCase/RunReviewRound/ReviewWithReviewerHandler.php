@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
@@ -59,6 +60,10 @@ final readonly class ReviewWithReviewerHandler
             $this->leases->handBack($reviewer);
 
             throw ReviewerRateLimited::after(null);
+        } catch (NoProviderLeft $outage) {
+            $this->leases->recordOutage($reviewer, $outage->getMessage());
+
+            return;
         } catch (VendorAccountOut) {
             $this->leases->handBack($reviewer);
 
@@ -70,6 +75,6 @@ final readonly class ReviewWithReviewerHandler
             return;
         }
 
-        $this->leases->recordVerdict($reviewer, $this->goalposts->applyToVerdict($round->number(), $review->verdict, $brief->open));
+        $this->leases->recordVerdict($reviewer, $this->goalposts->applyToVerdict($round->number(), $review->verdict, $brief->open), $review->substitute);
     }
 }

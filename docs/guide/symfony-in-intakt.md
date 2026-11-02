@@ -62,7 +62,7 @@ flowchart LR
 - **Guardrails:** before any tool runs, Intakt checks the request. A reviewer that asks for a file outside the code under review is refused. *(in progress)*
 - **Fencing:** text that comes from a task or from the code under review is marked as data before the reviewer sees it, so it cannot give the reviewer orders. The mark closes only at a closing marker that repeats its own boundary, so a fake closing marker inside a file stays data. *(in progress)*
 - **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(in progress)*
-- **MCP** is a standard way for AI agents to reach tools. Intakt serves the review tools over MCP, each tool labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides which tools may write. You can also drive Intakt itself from your own AI assistant over MCP: start a review, read a verdict. *(planned)*
+- **MCP** is a standard way for AI agents to reach tools. Intakt serves the review tools over MCP, each tool labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides which tools may write. You can also drive Intakt itself from your own AI assistant over MCP: reading a review's status, verdicts and act list works already; starting a review is planned. *(in progress)*
 
 ## Project memory
 
@@ -81,7 +81,7 @@ These Symfony components keep many jobs running in the right order, without anyo
 | **RateLimiter** | a speed limit | spaces calls out so an account stays within its company's limits | partly built: an AI account that hit its limit rests until the company's reset time, and its reviewers move to the next account of the same company meanwhile; spacing calls out before a limit is planned |
 | **Console** | a remote control | commands such as running the bug reproductions or summarizing a change | in progress |
 | **Uid** | a ticket number | every event gets a unique id that also says when it happened | in progress |
-| **Process** | a helper that runs errands | runs git and test commands safely, with a time limit | in use |
+| **Process** | a helper that runs errands | runs git, test commands and the secret scan safely, with a time limit | in use |
 
 The part that is built, a round and its reviewers (the technical drawing is `docs/architecture/review-round.dot`). A round is complete as soon as every reviewer has a verdict, has failed or is blocked, whichever reviewer is last; the state is stored in the database, so a restarted worker carries on:
 
@@ -117,7 +117,7 @@ stateDiagram-v2
 
 ## Talking to GitHub
 
-- **HttpClient** makes the calls to GitHub, retrying when GitHub hiccups. *(planned)*
+- **HttpClient** makes the calls to GitHub (reading a pull request, posting a review), trying a read again when GitHub hiccups; a review is posted only once, so it never shows up twice.
 - **Webhook and RemoteEvent** are an optional extra for installs that GitHub can reach from outside. They receive GitHub's notifications ("a check finished", "someone commented"), check that they really come from GitHub, and turn them into events Intakt reacts to a little sooner. Without them, Intakt simply asks GitHub often enough, and more often while something is waiting. *(planned, optional)*
 
 ## The live dashboard

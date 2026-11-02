@@ -16,8 +16,14 @@ use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Forge\Contract\ReviewComment;
+use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
+use Intakt\Plugin\Forge\Contract\ReviewToken;
+use Intakt\Plugin\Forge\Contract\RoundStale;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
@@ -25,12 +31,14 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
+use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -53,7 +61,14 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(ForgeReadFailed::class)]
+#[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(HeadMove::class)]
+#[UsesClass(JobCredentials::class)]
+#[UsesClass(ReviewComment::class)]
+#[UsesClass(ReviewTextHoldsSecret::class)]
+#[UsesClass(ReviewToken::class)]
+#[UsesClass(SecretScan::class)]
+#[UsesClass(RoundStale::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenNotMinted::class)]
 #[UsesClass(InstallationTokenMinter::class)]
@@ -65,9 +80,13 @@ final class GitHubForgeTest extends TestCase
     private const string HEAD = '1111111111111111111111111111111111111111';
     private const string MERGE_BASE = '3333333333333333333333333333333333333333';
     private const string API = 'https://api.github.com/repos/acme/widgets';
+    private const string TOKEN = 'round-7-token-0123456789';
+    private const string POST_REVIEW = 'POST '.self::API.'/pulls/7/reviews';
 
     /** @var list<string> */
     private array $requested = [];
+    /** @var array<string, array<mixed>> */
+    private array $sent = [];
     private string $pullFixture = 'pull_request.json';
     private string $compareFixture = 'compare_merge_base.json';
     private string $minted = 'installation-secret';
@@ -292,12 +311,9 @@ final class GitHubForgeTest extends TestCase
     {
         $forge = $this->forge(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 403]));
 
-        try {
-            $forge->change(new ChangeId(self::PULL));
-            self::fail('A 403 must fail the read.');
-        } catch (ForgeReadFailed $failure) {
-            self::assertStringContainsString('403', $failure->getMessage());
-        }
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 403 to a read.'));
+
+        $forge->change(new ChangeId(self::PULL));
     }
 
     public function testItRetriesAFailedReadThroughTheRetryableClient(): void
@@ -344,11 +360,149 @@ final class GitHubForgeTest extends TestCase
             '678',
             new MockClock('2026-11-25 10:00:00 UTC'),
         );
-        $forge = new GitHubForge(new MockHttpClient(), $tokens);
+        $forge = new GitHubForge(new MockHttpClient(), $tokens, $this->secretScan());
 
         $this->expectException(ForgeReadFailed::class);
 
         $forge->change(new ChangeId(self::PULL));
+    }
+
+    public function testItPostsTheOutcomeAsOneCommentReviewCarryingTheRoundToken(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken(self::TOKEN), new JobCredentials()));
+
+        self::assertSame([
+            'commit_id' => self::HEAD,
+            'event' => 'COMMENT',
+            'body' => "Two reviewers approve.\n\n<!-- intakt-review-token: ".self::TOKEN.' -->',
+        ], json_decode($this->postedBody(), true, flags: JSON_THROW_ON_ERROR));
+        self::assertCount(1, array_keys($this->requested, self::POST_REVIEW, true));
+    }
+
+    public function testItPostsNothingWhenTheHeadMovedBeforeThePost(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+        $this->pullFixture = 'pull_request_moved.json';
+
+        $stale = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
+
+        self::assertInstanceOf(RoundStale::class, $stale);
+        self::assertStringContainsString(self::HEAD, $stale->getMessage());
+        self::assertNotContains(self::POST_REVIEW, $this->requested);
+        self::assertSame('GET '.self::API.'/pulls/7', array_last($this->requested));
+    }
+
+    public function testItSendsTheInstallationTokenAsBearerWithThePost(): void
+    {
+        $forge = $this->forge();
+
+        $forge->postReview('widgets', $forge->change(new ChangeId(self::PULL)), new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN), new JobCredentials()));
+
+        self::assertSame('Authorization: Bearer installation-secret', self::header($this->sent[self::POST_REVIEW] ?? [], 'authorization'));
+    }
+
+    public function testItTurnsAnErrorStatusOfThePostIntoAForgeWriteFailure(): void
+    {
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? new MockResponse('{"message":"Unprocessable Entity"}', ['http_code' => 422]) : null);
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered 422 to a write.'));
+
+        $forge->postReview('widgets', $change, new ReviewComment('Changes needed.', new ReviewToken(self::TOKEN), new JobCredentials()));
+    }
+
+    public function testItDoesNotChainTheTransportFailureOfThePostWhoseTraceHoldsTheToken(): void
+    {
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? throw new TransportException('connection dropped') : null);
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Changes needed.'));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertNull($failure->getPrevious());
+        self::assertStringContainsString(TransportException::class, $failure->getMessage());
+    }
+
+    public function testItNeverRetriesThePostAfterA502BecauseGitHubMayHaveStoredTheReview(): void
+    {
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? new MockResponse('', ['http_code' => 502]) : null);
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
+
+        self::assertEquals(new ForgeWriteFailed('GitHub answered 502 to a write.'), $failure);
+        self::assertCount(1, array_keys($this->requested, self::POST_REVIEW, true));
+    }
+
+    /**
+     * @return iterable<string, array{int, class-string}>
+     */
+    public static function failedReadsOfTheHead(): iterable
+    {
+        yield 'a server error' => [500, ForgeReadFailed::class];
+        yield 'a pull request gone' => [404, ChangeNotFound::class];
+    }
+
+    /**
+     * @param class-string $readFailure
+     */
+    #[DataProvider('failedReadsOfTheHead')]
+    public function testItTurnsAFailedReadOfTheHeadBeforeThePostIntoAForgeWriteFailure(int $status, string $readFailure): void
+    {
+        $change = $this->forge()->change(new ChangeId(self::PULL));
+        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/pulls/7') ? new MockResponse('{}', ['http_code' => $status]) : null);
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertInstanceOf($readFailure, $failure->getPrevious());
+        self::assertNotContains(self::POST_REVIEW, $this->requested);
+    }
+
+    public function testItPostsTheReviewWithEveryCredentialOfTheJobRedacted(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+
+        $forge->postReview('widgets', $change, $this->comment('The test prints project-db-pass-42 in its log.', 'project-db-pass-42'));
+
+        self::assertSame([
+            'commit_id' => self::HEAD,
+            'event' => 'COMMENT',
+            'body' => "The test prints [redacted] in its log.\n\n<!-- intakt-review-token: ".self::TOKEN.' -->',
+        ], json_decode($this->postedBody(), true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testItPostsNothingWhenTheRedactedTextStillTripsTheSecretScan(): void
+    {
+        $forge = $this->forge();
+        $change = $forge->change(new ChangeId(self::PULL));
+        $requestsBefore = count($this->requested);
+
+        $failure = $this->failureOfPost($forge, $change, $this->comment("The fixture holds a key:\n".AppKey::generate()->private, 'project-db-pass-42'));
+
+        self::assertEquals(ReviewTextHoldsSecret::afterRedaction(), $failure);
+        self::assertCount($requestsBefore, $this->requested);
+    }
+
+    private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
+    {
+        try {
+            $forge->postReview('widgets', $change, $comment);
+        } catch (RuntimeException $failure) {
+            return $failure;
+        }
+
+        throw new LogicException('The post was expected to fail.');
+    }
+
+    private function comment(string $body, string ...$credentials): ReviewComment
+    {
+        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
     }
 
     private function movedChange(GitHubForge $forge): Change
@@ -366,13 +520,15 @@ final class GitHubForgeTest extends TestCase
      */
     private function forge(?Closure $override = null): GitHubForge
     {
-        return $this->forgeOver(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
+        // Retrying as the scoped client is in the container, so the tests see which requests are tried again.
+        return $this->forgeOver(new RetryableHttpClient(new MockHttpClient(function (string $method, string $url, array $options) use ($override): ResponseInterface {
             $this->requested[] = $method.' '.$url;
+            $this->sent[$method.' '.$url] = $options;
 
             $answer = $override instanceof Closure ? $override($url, $options) : null;
 
             return $answer ?? $this->answer($url, $options);
-        }, 'https://api.github.com'));
+        }, 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2));
     }
 
     private function forgeOver(HttpClientInterface $http): GitHubForge
@@ -384,7 +540,12 @@ final class GitHubForgeTest extends TestCase
         ));
         $tokens = new InstallationTokens(new InstallationTokenMinter(new AppJwt('12345', AppKey::generate()->private, $clock), $minting, new NullLogger()), '678', $clock);
 
-        return new GitHubForge($http, $tokens);
+        return new GitHubForge($http, $tokens, $this->secretScan());
+    }
+
+    private function secretScan(): SecretScan
+    {
+        return new SecretScan(dirname(__DIR__, 3));
     }
 
     /**
@@ -396,6 +557,7 @@ final class GitHubForgeTest extends TestCase
         $path = explode('?', $url)[0];
 
         return match (true) {
+            str_ends_with($path, '/reviews') => new MockResponse(self::fixture('review_posted.json'), ['http_code' => 200]),
             str_contains($url, '/contents/') => new MockResponse(self::fixture('contents_widget.txt')),
             str_contains($path, '/pulls/7') => new MockResponse(self::fixture($this->pullFixture)),
             str_ends_with($accept, 'github.diff') => new MockResponse(self::fixture('pull.diff')),
@@ -409,6 +571,13 @@ final class GitHubForgeTest extends TestCase
     private function isBranchComparison(string $url, array $options): bool
     {
         return str_contains($url, '/compare/main...') && !str_ends_with(self::header($options, 'accept'), 'github.diff');
+    }
+
+    private function postedBody(): string
+    {
+        $body = $this->sent[self::POST_REVIEW]['body'] ?? null;
+
+        return is_string($body) ? $body : throw new LogicException('No review was posted.');
     }
 
     private static function comparison(string $mergeBase, int $files): string

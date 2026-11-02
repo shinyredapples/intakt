@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Shadow\Infrastructure;
 
 use Intakt\Core\Shadow\Contract\ProjectMode;
-use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
+use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 
@@ -23,13 +24,13 @@ final readonly class ShadowGuardedForgeWrites implements ForgeWrites
     ) {
     }
 
-    public function postReview(string $project, ChangeId $change, string $body): void
+    public function postReview(string $project, Change $change, ReviewComment $comment): void
     {
         if ($this->isShadow($project)) {
             return;
         }
 
-        $this->forge->postReview($project, $change, $body);
+        $this->forge->postReview($project, $change, $comment);
     }
 
     private function isShadow(string $project): bool

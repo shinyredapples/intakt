@@ -64,9 +64,9 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 - The **review panel** is the set of reviewers for a change: a fixed core panel plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 - When a reviewer's account is over its limit, the same company's next account takes over, if you added one. That is just a move to another account: the same reviewer, no catch-up owed.
-- A **substitute** steps in only when every account of that company is out: another company's reviewer reviews in its place, so work doesn't stall.
+- A **substitute** steps in only when every account of that company is out: another company's reviewer, one you named as a substitute in your settings, reviews in its place, so work doesn't stall. Without a named substitute the reviewer waits instead. A review never changes company halfway: if a limit cuts it off, it starts again from the beginning, on its own company if that has room again, else on the substitute.
 - A **stand-in** is something else: a cheaper reviewer on an in-between version while a company's allowance is tight. The usual reviewer still reviews the final version, so a stand-in never has the last word.
-- A **catch-up review** is the missing reviewer's review, done later once its company is available again. Intakt runs it by itself and checks the change as it was merged. It never blocks a merge; if it finds a real problem, that becomes a new task, which waits for you to label it before the builders pick it up; smaller suggestions go to the [follow-up inbox](the-journey-of-a-task.md#7-afterwards) like any review's.
+- A **catch-up review** is the missing reviewer's review, done later once its company is available again. Today Intakt only notes that a catch-up is owed, each time a substitute reviews. Planned: Intakt runs it by itself and checks the change as it was merged. It will never block a merge; if it finds a real problem, that becomes a new task, which waits for you to label it before the builders pick it up; smaller suggestions go to the [follow-up inbox](the-journey-of-a-task.md#7-afterwards) like any review's.
 
 ## Cycles and generations: second chances
 

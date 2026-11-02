@@ -13,8 +13,8 @@ use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites;
-use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
+use Intakt\Tests\Core\Shadow\ReviewToPost;
 use Intakt\Tests\Core\Shadow\WriteRefusingForge;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -138,7 +138,7 @@ final class ProjectTiersTest extends KernelTestCase
         $forge = $this->bootedContainer()->get(ForgeWrites::class);
         self::assertInstanceOf(ForgeWrites::class, $forge);
 
-        $forge->postReview('alpha-one', new ChangeId('feature'), 'approve');
+        $forge->postReview('alpha-one', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
 
         self::assertInstanceOf(ShadowGuardedForgeWrites::class, $forge);
         $refusing = self::getContainer()->get(WriteRefusingForge::class);
@@ -153,7 +153,7 @@ final class ProjectTiersTest extends KernelTestCase
 
         $this->expectExceptionObject(new LogicException('The test forge refuses every write.'));
 
-        $forge->postReview('beta', new ChangeId('feature'), 'approve');
+        $forge->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
     }
 
     public function testAnUnknownProjectModeStopsTheBoot(): void

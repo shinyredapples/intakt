@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -32,6 +33,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -103,17 +105,27 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
     }
 
-    public function testTheTokensOfCallsRecordedAfterTheRoundStartedAreAdded(): void
+    public function testTheTokensOfTheCallsMadeForTheRoundAreAddedAndNoOthers(): void
     {
         $this->recordUsage('before', 1000);
-        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120));
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, $this->openRoundId()));
 
         self::assertSame([1, 100, 20, 120], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
     }
 
-    public function testTheTokensOfAnotherProjectsCallsAreLeftOut(): void
+    public function testTheTokensOfTheJudgeCallOfTheRoundAreCounted(): void
     {
-        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, 'beta'));
+        $reviewers = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+        $vendor = new JudgeCallingVendor($reviewers, fn (JudgeRequest $request) => $this->recordUsage('judge', 300, $request->round->toRfc4122()));
+
+        $review = $this->reviewWith($vendor);
+
+        self::assertSame([1, 250, 50, 300], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
+    }
+
+    public function testTheTokensOfACallMadeForAnotherRoundAreLeftOut(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, '0192a000-0000-7000-8000-0000000000ff'));
 
         self::assertSame([0, 0], [$review->tokens->calls, $review->tokens->total]);
     }
@@ -148,7 +160,7 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(2, $second->round);
     }
 
-    private function reviewWith(VerdictPerRole $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
+    private function reviewWith(Vendor $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
         $work = function () use ($vendor, &$delivered, $duringTheRound): void {
@@ -220,10 +232,19 @@ final class ReviewChangeTest extends KernelTestCase
         return new Panel($members, QuorumPolicy::All);
     }
 
-    // Both rows UsageLedger writes, because only the started one names the project and only the settled one carries the tokens.
-    private function recordUsage(string $call, int $total, string $project = 'alpha'): void
+    private function openRoundId(): string
     {
-        $this->append(['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => 'standard']);
+        $round = array_first($this->fixture->storedRounds());
+        self::assertInstanceOf(ReviewRound::class, $round);
+
+        return $round->id()->toRfc4122();
+    }
+
+    // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
+    private function recordUsage(string $call, int $total, ?string $round = null): void
+    {
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
+        $this->append(null === $round ? $started : $started + ['round' => $round]);
         $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
     }
 
