@@ -91,10 +91,75 @@ final class ReviewComparisonTest extends TestCase
         self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
     }
 
+    public function testTheSameSpotAtTwoSeveritiesFromTwoIntaktReviewersIsOneFindingAtTheStricterSeverity(): void
+    {
+        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10, Severity::P2));
+        $p2 = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P2)));
+        $p1 = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P1)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$p2, $p1]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+        self::assertSame(Severity::P1, $result->matches[0]->intakt->severity);
+        self::assertSame(1, $result->severityDisagreements());
+    }
+
+    public function testTwoIntaktReviewersWithinTheLineWindowOfEachOtherRaiseOneFinding(): void
+    {
+        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
+        $a = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10)));
+        $b = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 11)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$a, $b]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+    }
+
+    public function testTheSameSpotAtTwoSeveritiesFromTwoLoopReviewersIsOneFindingAtTheStricterSeverity(): void
+    {
+        $loop = new LoopReviews([
+            new LoopReview('a', LoopVerdict::Changes, [ComparisonBuilder::loopFinding('src/A.php', 10, Severity::P3)]),
+            new LoopReview('b', LoopVerdict::Changes, [ComparisonBuilder::loopFinding('src/A.php', 10, Severity::P1)]),
+        ]);
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P1)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+        self::assertSame(Severity::P1, $result->matches[0]->loop->severity);
+        self::assertSame(0, $result->severityDisagreements());
+    }
+
+    public function testTwoLoopReviewersWithinTheLineWindowOfEachOtherRaiseOneFinding(): void
+    {
+        $loop = new LoopReviews([
+            new LoopReview('a', LoopVerdict::Changes, [ComparisonBuilder::loopFinding('src/A.php', 10)]),
+            new LoopReview('b', LoopVerdict::Changes, [ComparisonBuilder::loopFinding('src/A.php', 10 + ReviewComparison::LINE_WINDOW)]),
+        ]);
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10)));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
+
+        self::assertSame([1, 0, 0], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+    }
+
+    public function testTwoFindingsOnOneSideFurtherApartThanTheLineWindowStayTwo(): void
+    {
+        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10));
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(
+            ComparisonBuilder::finding('src/A.php', 10),
+            ComparisonBuilder::finding('src/A.php', 11 + ReviewComparison::LINE_WINDOW),
+        ));
+
+        $result = new ReviewComparison()->compare('h', $loop, [$round]);
+
+        self::assertSame([1, 0, 1], [count($result->matches), count($result->loopOnly), count($result->intaktOnly)]);
+    }
+
     public function testAnIntaktFindingMatchesOnlyOneLoopFinding(): void
     {
-        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10), ComparisonBuilder::loopFinding('src/A.php', 11));
-        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 11)));
+        $loop = ComparisonBuilder::loop(ComparisonBuilder::loopFinding('src/A.php', 10), ComparisonBuilder::loopFinding('src/A.php', 11 + ReviewComparison::LINE_WINDOW));
+        $round = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10 + ReviewComparison::LINE_WINDOW)));
 
         $result = new ReviewComparison()->compare('h', $loop, [$round]);
 
