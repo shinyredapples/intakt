@@ -60,6 +60,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
@@ -78,6 +79,7 @@ final readonly class RoundFixture
     public RecordingBus $bus;
     public MockClock $clock;
     public BufferingLogger $log;
+    public EventDispatcher $events;
     private Ledger $ledger;
     private SerializerInterface $serializer;
 
@@ -92,6 +94,7 @@ final readonly class RoundFixture
         $this->bus = new RecordingBus();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
+        $this->events = new EventDispatcher();
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
@@ -187,7 +190,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger)), $vendor);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger)), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

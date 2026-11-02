@@ -29,6 +29,10 @@ use Symfony\Component\Process\Process;
 
 final readonly class LocalGitForge implements Forge
 {
+    // Named apart from the snapshots withSnapshotOf() removes itself, so the removal after the judge never races a command that removes its own.
+    public const string KEPT_SNAPSHOT_PREFIX = 'intakt-kept-review-';
+
+    private const string SNAPSHOT_PREFIX = 'intakt-review-';
     private const int TIMEOUT_SECONDS = 60;
     private const int REFERENCE_MISSING = 2;
     private const int REFERENCE_INVALID = 1;
@@ -75,7 +79,7 @@ final readonly class LocalGitForge implements Forge
     #[NoDiscard]
     public function withSnapshotOf(CommitId $head, Closure $work): mixed
     {
-        $snapshot = $this->addWorktree($head);
+        $snapshot = $this->addWorktree($head, self::SNAPSHOT_PREFIX);
 
         try {
             return $work($snapshot);
@@ -88,7 +92,7 @@ final readonly class LocalGitForge implements Forge
     #[NoDiscard]
     public function keepSnapshotOf(CommitId $head): string
     {
-        return $this->addWorktree($head);
+        return $this->addWorktree($head, self::KEPT_SNAPSHOT_PREFIX);
     }
 
     // Skips a snapshot already gone, because a stopped command removes it before the work returns.
@@ -123,9 +127,9 @@ final readonly class LocalGitForge implements Forge
         return new FileContent($path, $head, $this->read(['cat-file', 'blob', $this->blobAt($head, $path)]));
     }
 
-    private function addWorktree(CommitId $head): string
+    private function addWorktree(CommitId $head, string $prefix): string
     {
-        $directory = sys_get_temp_dir().'/intakt-review-'.bin2hex(random_bytes(8));
+        $directory = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(8));
         $this->read([...self::SNAPSHOT_AS_COMMITTED, 'worktree', 'add', '--detach', '--quiet', $directory, $head->hash]);
 
         // Resolved because a worker started elsewhere reads the stored path from its own working directory.

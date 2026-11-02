@@ -14,8 +14,10 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartReviewController;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\StartReview;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -28,6 +30,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
 #[CoversClass(StartReviewController::class)]
+#[CoversClass(ReviewStarts::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerPayload::class)]
@@ -52,7 +55,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $commands = $this->commandBus();
         $commands->expects(self::once())->method('dispatch')
-            ->with(self::equalTo(new StartReview('alpha', 'feat/thing', 'Add the thing.', new ChangeSource('/repos/alpha', 'main'))))
+            ->with(self::equalTo(new StartReview('alpha', 'Add the thing.', new RequestedRound('feat/thing', 2, new ChangeSource('/repos/alpha', 'main')))))
             ->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token()]);
@@ -61,6 +64,20 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertResponseRedirects('/reviews/round-1');
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-success', 'Started round round-2.');
+    }
+
+    public function testTheButtonAsksForTheNumberAfterTheLatestRoundSoAStalePageIsRefused(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+        $commands = $this->commandBus();
+        $commands->expects(self::once())->method('dispatch')
+            ->with(self::callback(static fn (StartReview $command): bool => 3 === $command->round->number))
+            ->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-3', 'handler')]));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token()]);
+
+        self::assertResponseStatusCodeSame(303);
     }
 
     public function testAMissingTokenDispatchesNothing(): void

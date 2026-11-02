@@ -21,7 +21,8 @@ final readonly class StartReviewHandler
         $input = new ReviewChangeInput();
         $input->project = $command->project;
         $input->task = $command->task;
-        $input->change = $command->change;
+        $input->change = $command->round->change;
+        $input->round = $command->round->number;
         $input->repository = $command->source->repository;
         $input->base = $command->source->base;
 

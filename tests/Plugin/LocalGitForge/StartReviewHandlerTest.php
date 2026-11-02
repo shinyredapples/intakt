@@ -14,8 +14,10 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Contract\RoundSourceMissing;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
@@ -32,6 +34,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StartReviewHandler::class)]
 #[CoversClass(LocalChangeReview::class)]
+#[CoversClass(StartReview::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(NameStatusParser::class)]
@@ -65,11 +68,62 @@ final class StartReviewHandlerTest extends TestCase
             return 'round-7';
         });
 
-        $roundId = $this->handler($reviews)(new StartReview('alpha', 'sample', 'Add the thing.', new ChangeSource($this->repository->path, 'main')));
+        $roundId = $this->handler($reviews)($this->startOf(null));
 
         self::assertSame('round-7', $roundId);
         self::assertSame('Add the thing.', $seen?->task);
-        self::assertEquals(new ChangeSource($this->repository->path, 'main'), $seen->round->source);
+        self::assertEquals(new ChangeSource((string) realpath($this->repository->path), 'main'), $seen->round->source);
+        $this->removeSnapshot($seen->checkoutRoot);
+    }
+
+    public function testTheStartAsksForTheRoundNumberTheCallerExpects(): void
+    {
+        $seen = null;
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('start')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen): string {
+            $seen = $request;
+
+            return 'round-3';
+        });
+
+        $this->handler($reviews)($this->startOf(3));
+
+        self::assertSame(3, $seen?->round->number);
+        $this->removeSnapshot($seen->checkoutRoot);
+    }
+
+    public function testASourceGivenRelativeToTheWorkingDirectoryIsRecordedAsAnAbsolutePath(): void
+    {
+        $seen = null;
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('start')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen): string {
+            $seen = $request;
+
+            return 'round-1';
+        });
+        $input = new ReviewChangeInput();
+        $input->project = 'alpha';
+        $input->task = 'Add the thing.';
+        $input->change = 'sample';
+        $input->repository = '.';
+        $before = (string) getcwd();
+        chdir($this->repository->path);
+
+        try {
+            $this->review($reviews)->startOf($input);
+        } finally {
+            chdir($before);
+        }
+
+        self::assertSame(realpath($this->repository->path), $seen?->round->source?->repository);
+        $this->removeSnapshot($seen->checkoutRoot);
+    }
+
+    public function testAStartWithoutASourceIsRefusedBeforeItIsSent(): void
+    {
+        $this->expectException(RoundSourceMissing::class);
+
+        new StartReview('alpha', 'Add the thing.', new RequestedRound('sample'));
     }
 
     public function testTheSnapshotTheRoundReadsStaysUntilTheRoundIsDone(): void
@@ -82,7 +136,7 @@ final class StartReviewHandlerTest extends TestCase
             return 'round-7';
         });
 
-        $this->handler($reviews)(new StartReview('alpha', 'sample', 'Add the thing.', new ChangeSource($this->repository->path, 'main')));
+        $this->handler($reviews)($this->startOf(null));
 
         assert($seen instanceof ChangeReviewRequest);
         self::assertFileExists($seen->checkoutRoot.'/src/Feature.php');
@@ -100,7 +154,7 @@ final class StartReviewHandlerTest extends TestCase
         });
 
         try {
-            $this->handler($reviews)(new StartReview('alpha', 'sample', 'Add the thing.', new ChangeSource($this->repository->path, 'main')));
+            $this->handler($reviews)($this->startOf(null));
             self::fail('The refused round was swallowed.');
         } catch (RoundNotNext) {
             self::assertDirectoryDoesNotExist((string) $seen?->checkoutRoot);
@@ -112,12 +166,22 @@ final class StartReviewHandlerTest extends TestCase
         new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
     }
 
+    private function startOf(?int $number): StartReview
+    {
+        return new StartReview('alpha', 'Add the thing.', new RequestedRound('sample', $number, new ChangeSource($this->repository->path, 'main')));
+    }
+
     private function handler(ChangeReviews $reviews): StartReviewHandler
+    {
+        return new StartReviewHandler($this->review($reviews));
+    }
+
+    private function review(ChangeReviews $reviews): LocalChangeReview
     {
         $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
-        return new StartReviewHandler(new LocalChangeReview($panels, $reviews));
+        return new LocalChangeReview($panels, $reviews);
     }
 }

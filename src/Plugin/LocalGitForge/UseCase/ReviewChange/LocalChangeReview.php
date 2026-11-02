@@ -20,6 +20,7 @@ use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Throwable;
@@ -47,7 +48,7 @@ final readonly class LocalChangeReview
         ));
     }
 
-    // Queues the next round without waiting, so the snapshot outlives this call and is removed only when the round cannot be queued; a removal after the judge is not built yet.
+    // Queues the next round without waiting, so the snapshot outlives this call: RemoveKeptSnapshot removes it once the round is judged, and this call when the round cannot be queued.
     public function startOf(ReviewChangeInput $input): string
     {
         $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
@@ -76,9 +77,17 @@ final readonly class LocalChangeReview
     {
         $panel = $this->panels->panelForChange($input->project, $this->describe($change));
         $identity = new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
-        $round = new RequestedRound($input->change, $input->round, new ChangeSource($input->repository, $input->base));
+        $round = new RequestedRound($input->change, $input->round, new ChangeSource($this->absolute($input->repository), $input->base));
 
         return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
+    }
+
+    // Resolved, because the dashboard starts the next round from its own working directory, where a relative path names another repository.
+    private function absolute(string $repository): string
+    {
+        $resolved = realpath($repository);
+
+        return false === $resolved ? throw RepositoryNotFound::at($repository) : $resolved;
     }
 
     private function describe(Change $change): ChangeDescription

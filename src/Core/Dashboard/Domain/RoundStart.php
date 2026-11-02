@@ -10,7 +10,6 @@ final readonly class RoundStart
         public string $round,
         public string $project,
         public int $reviewers,
-        public ?RoundSource $source = null,
     ) {
     }
 }

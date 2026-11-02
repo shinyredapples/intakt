@@ -24,6 +24,14 @@ final readonly class Review
         return array_last($this->rounds)->source;
     }
 
+    // Asked for by the button, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
+    public function nextNumber(): ?int
+    {
+        $latest = array_last($this->rounds)->number;
+
+        return null === $latest ? null : $latest + 1;
+    }
+
     public function tokens(): TokenCount
     {
         return array_reduce($this->rounds, static fn (TokenCount $sum, ReviewedRound $round): TokenCount => $sum->plus($round->tokens), TokenCount::none());

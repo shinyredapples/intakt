@@ -119,7 +119,7 @@ final class LedgerRounds
             return [];
         }
 
-        return [$round => new ReviewedRound(new RoundStart($round, $project, $reviewers, $this->sourceOf($payload)), new RoundPlace($change, $number), $startedAt)];
+        return [$round => new ReviewedRound(new RoundStart($round, $project, $reviewers), new RoundPlace($change, $number, $this->sourceOf($payload)), $startedAt)];
     }
 
     /**

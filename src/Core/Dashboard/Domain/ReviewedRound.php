@@ -35,7 +35,7 @@ final readonly class ReviewedRound
         $this->reviewers = $start->reviewers;
         $this->change = $place->change;
         $this->number = $place->number;
-        $this->source = $start->source;
+        $this->source = $place->source;
         $this->outcomes = [];
         $this->findings = [];
         $this->findingTextRecorded = true;
