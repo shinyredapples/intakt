@@ -76,7 +76,7 @@ final readonly class CeilingStartGuard
      */
     private function reachesCeiling(array $uses, float $margin): bool
     {
-        return array_any($uses, fn (WindowUse $use, string $window): bool =>$use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
+        return array_any($uses, fn (WindowUse $use, string $window): bool => $use->usage->usedPercent >= $this->ceilingOf(UsageWindow::from($window), $uses, $margin));
     }
 
     /**
