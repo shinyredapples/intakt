@@ -89,7 +89,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     public function answered(Account $account, DateTimeImmutable $sentAt): void
     {
         foreach (AccountError::cases() as $error) {
-            $this->rearmIfReportedBefore(self::reportKey($account, $error), $sentAt);
+            $this->rearmIfReportedBefore($this->reportKey($account, $error), $sentAt);
         }
     }
 
@@ -151,7 +151,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     // Tried without waiting, because a worker that holds the lock is reporting this very error.
     private function reportOnce(Account $account, AccountError $error): void
     {
-        $lock = $this->locks->createLock(self::reportKey($account, $error));
+        $lock = $this->locks->createLock($this->reportKey($account, $error));
         if (!$lock->acquire()) {
             return;
         }
@@ -189,7 +189,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     private function reportUnlessReported(Account $account, AccountError $error): void
     {
-        $reported = $this->pool->getItem(self::reportKey($account, $error));
+        $reported = $this->pool->getItem($this->reportKey($account, $error));
         if ($reported->isHit()) {
             return;
         }
@@ -211,7 +211,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     }
 
     // The error first, because its value holds no dot: the first dot ends it, and an account key cannot pass for another error's.
-    private static function reportKey(Account $account, AccountError $error): string
+    private function reportKey(Account $account, AccountError $error): string
     {
         return self::REPORT_LOCK.$error->value.'.'.$account->key();
     }
