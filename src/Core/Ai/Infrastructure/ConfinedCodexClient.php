@@ -34,7 +34,7 @@ final readonly class ConfinedCodexClient implements ModelClientInterface
     #[Override]
     public function request(Model $model, array|string $payload, array $options = []): RawResultInterface
     {
-        $prompt = is_array($payload) ? (string) ($payload[self::PROMPT] ?? '') : $payload;
+        $prompt = is_array($payload) ? $payload[self::PROMPT] ?? '' : $payload;
 
         return new CompletedCodexTurn($this->inner->request($model, [self::PROMPT => $prompt, self::SYSTEM_PROMPT => $this->instructions($payload, $options)]));
     }

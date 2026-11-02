@@ -70,7 +70,7 @@ final readonly class CompletedCodexTurn implements RawResultInterface
      *
      * @return array<string, mixed>
      */
-    // The bridge drops the usage of a turn that completed without an agent message, yet the account spent those tokens; the missing answer still fails the conversion.
+    // Read from the output because the bridge drops the usage of a turn completed without an agent message, though the account spent it (upstream/ai-codex-platform-usage-without-answer); the missing answer still fails the conversion.
     private function withReportedUsage(array $data): array
     {
         $usage = $this->reportedUsage();
@@ -79,7 +79,7 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array<mixed>|null
      */
     private function reportedUsage(): ?array
     {

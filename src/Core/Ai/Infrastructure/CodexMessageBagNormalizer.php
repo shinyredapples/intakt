@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Override;
 use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Contract\Normalizer\ModelContractNormalizer;
+use Symfony\AI\Platform\Exception\InvalidArgumentException;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Model;
@@ -17,15 +18,14 @@ final class CodexMessageBagNormalizer extends ModelContractNormalizer
     private const string SEPARATOR = PHP_EOL.PHP_EOL;
 
     /**
-     * @param MessageBag $data
-     *
      * @return array{prompt: string, system_prompt?: string}
      */
     #[Override]
     public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
-        $prompt = ['prompt' => $this->userTextOf($data)];
-        $system = $data->getSystemMessage();
+        $bag = $data instanceof MessageBag ? $data : throw new InvalidArgumentException('Only a message bag becomes a Codex prompt.');
+        $prompt = ['prompt' => $this->userTextOf($bag)];
+        $system = $bag->getSystemMessage();
 
         return null === $system ? $prompt : [...$prompt, 'system_prompt' => (string) $system->getContent()];
     }
