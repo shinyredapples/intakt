@@ -8,6 +8,10 @@ The server is served over HTTP at `/mcp/owner` by the same web application as th
 
 With Claude Code: `claude mcp add --transport http intakt http://localhost:8000/mcp/owner`.
 
+## The review server
+
+Intakt runs a second, narrower MCP server for the reviewers of a review, at `/mcp/review` (for example `http://localhost:8000/mcp/review`). It has three read-only tools, `read_file`, `list_directory` and `search_files`, which show the repository exactly as it is in a review round that is still running. Each takes the `roundId` of that round, and there is no way to name another folder or branch: paths outside the repository, and `.git`, are refused, and so is a round that is unknown or already judged. `search_files` sends progress notifications when the client sent a `progressToken`. Your own agents use the owner server above; the review server does not list its tools there.
+
 ## Allowing a client to start reviews
 
 Starting a review changes things, so it is off until you turn it on in `.env.local` (never in a committed file):
