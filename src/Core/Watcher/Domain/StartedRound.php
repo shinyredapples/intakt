@@ -13,10 +13,6 @@ use Intakt\Plugin\Forge\Contract\OpenChange;
 final class StartedRound
 {
     #[ORM\Id]
-    #[ORM\Column(length: 255)]
-    private readonly string $project;
-
-    #[ORM\Id]
     #[ORM\Column(name: 'change_ref', length: 255)]
     private readonly string $change;
 
@@ -28,12 +24,13 @@ final class StartedRound
     private bool $stale = false;
 
     public function __construct(
-        string $project,
+        #[ORM\Id]
+        #[ORM\Column(length: 255)]
+        private readonly string $project,
         OpenChange $started,
         #[ORM\Column(name: 'round_id', length: 36)]
         private readonly string $roundId,
     ) {
-        $this->project = $project;
         $this->change = $started->id->value;
         $this->head = $started->head->hash;
     }

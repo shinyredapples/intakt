@@ -46,7 +46,7 @@ final class Version20261102100000 extends AbstractMigration
                 Column::editor()->setUnquotedName('stale')->setTypeName(Types::BOOLEAN)->setDefaultValue(false)->create(),
             )
             ->setPrimaryKeyConstraint(
-                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('change_ref'), UnqualifiedName::unquoted('head'))->create(),
+                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('change_ref'), UnqualifiedName::unquoted('head'), UnqualifiedName::unquoted('project'))->create(),
             )
             ->create();
     }
@@ -63,7 +63,7 @@ final class Version20261102100000 extends AbstractMigration
                 Column::editor()->setUnquotedName('read_again_at')->setTypeName(Types::STRING)->setLength(26)->create(),
             )
             ->setPrimaryKeyConstraint(
-                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('change_ref'))->create(),
+                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('change_ref'), UnqualifiedName::unquoted('project'))->create(),
             )
             ->create();
     }

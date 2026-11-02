@@ -21,10 +21,6 @@ final class PendingHead
     private const string MOMENT = 'Y-m-d H:i:s.u';
 
     #[ORM\Id]
-    #[ORM\Column(length: 255)]
-    private readonly string $project;
-
-    #[ORM\Id]
     #[ORM\Column(name: 'change_ref', length: 255)]
     private readonly string $change;
 
@@ -38,11 +34,12 @@ final class PendingHead
     private string $readAgainAt;
 
     public function __construct(
-        string $project,
+        #[ORM\Id]
+        #[ORM\Column(length: 255)]
+        private readonly string $project,
         OpenChange $waiting,
         DateTimeImmutable $readAgainAt,
     ) {
-        $this->project = $project;
         $this->change = $waiting->id->value;
         $this->wait($waiting, $readAgainAt);
     }
