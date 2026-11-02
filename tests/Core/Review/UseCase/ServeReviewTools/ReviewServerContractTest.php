@@ -48,7 +48,9 @@ final class ReviewServerContractTest extends KernelTestCase
         self::assertInstanceOf(Kernel::class, $kernel);
         $this->app = $kernel;
         $this->fixture = new RoundFixture(self::getContainer());
-        $this->credential = self::getContainer()->get(ReviewCredential::class);
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
         $this->roundId = $this->fixture->start(1)->id()->toRfc4122();
         $this->client = $this->clientOf($this->roundId);
     }

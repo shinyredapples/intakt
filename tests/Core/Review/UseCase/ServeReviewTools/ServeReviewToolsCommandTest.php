@@ -41,6 +41,7 @@ final class ServeReviewToolsCommandTest extends KernelTestCase
     {
         $round = $this->fixture->start(1)->id()->toRfc4122();
         $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
 
         $exit = $this->command->execute(['round' => $round]);
 
