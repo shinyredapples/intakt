@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Symfony\AI\Platform\Message\SystemMessage;
 use Override;
 use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Contract\Normalizer\ModelContractNormalizer;
@@ -27,7 +28,7 @@ final class CodexMessageBagNormalizer extends ModelContractNormalizer
         $prompt = ['prompt' => $this->userTextOf($bag)];
         $system = $bag->getSystemMessage();
 
-        return null === $system ? $prompt : [...$prompt, 'system_prompt' => (string) $system->getContent()];
+        return $system instanceof SystemMessage ? [...$prompt, 'system_prompt' => (string) $system->getContent()] : $prompt;
     }
 
     private function userTextOf(MessageBag $bag): string
