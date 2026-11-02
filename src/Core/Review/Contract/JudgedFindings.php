@@ -11,10 +11,12 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class JudgedFindings
 {
     /**
+     * @param list<Finding>  $findings
      * @param list<Finding>  $actList
      * @param list<FollowUp> $followUps
      */
     private function __construct(
+        public array $findings,
         public array $actList,
         public array $followUps,
     ) {
@@ -33,6 +35,6 @@ final readonly class JudgedFindings
 
         $marked = static fn (Mark $mark): array => array_values(array_filter($findings, static fn (Finding $finding): bool => ($marks[$finding->id] ?? null) === $mark));
 
-        return new self($marked(Mark::Act), array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $marked(Mark::Defer)));
+        return new self($findings, $marked(Mark::Act), array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $marked(Mark::Defer)));
     }
 }

@@ -82,4 +82,4 @@ Today the predecessor runs the whole loop, and Intakt is the code it builds. Int
 
 - **First the review.** The first release is the review loop: the two-company panel, probes, verdicts and a judge, shown live on a dashboard. Once it lands, Intakt reviews its own pull requests.
 - **Then building and merging.** They come after the first release, as the [design](../design/README.md) describes. From then on, the figures on this page describe Intakt building itself.
-- **Cost becomes visible.** Today Intakt's ledger records the tokens used by each model call. Recording the cost and showing tokens and cost per round on the dashboard are planned for the first release. That is where the figures missing above will live.
+- **Cost becomes visible.** Today Intakt's ledger records the tokens used by each model call, and the dashboard's review page shows the tokens per round. Recording the cost, and showing it there, are planned for the first release. That is where the figures missing above will live.
