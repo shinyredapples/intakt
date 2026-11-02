@@ -77,6 +77,11 @@ services:
         arguments:
             $configuredToken: '%env(MCP_OWNER_TOKEN)%'
 
+    # Read from inside the container only, because the admin API stays bound to localhost.
+    Intakt\Core\Server\Infrastructure\AdminApi:
+        arguments:
+            $baseUrl: '%env(FRANKENPHP_ADMIN_URL)%'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
