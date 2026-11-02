@@ -158,17 +158,43 @@ final class ReviewerMemoryTest extends TestCase
         self::assertStringContainsString('last', $briefing);
     }
 
-    public function testAnOversizedTopEntryIsShortenedMarkedAndKeptWithinTheByteCap(): void
+    public function testAnEntryThatFillsTheMemoryCapExactlyFitsTheBriefingWhole(): void
     {
         $memory = self::createStub(ProjectMemory::class);
-        $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry(self::PROJECT, str_repeat('é', 2_500), ['src/Cart.php'])], 10_000));
+        $memory->method('relevantTo')->willReturnCallback(static fn (MemoryQuery $query): RelevantMemory => RelevantMemory::within(
+            [new MemoryEntry(self::PROJECT, str_repeat('x', $query->maxBytes), ['src/Cart.php'])],
+            $query->maxBytes,
+        ));
 
         $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF));
 
         self::assertLessThanOrEqual(4_000, strlen($briefing));
+        self::assertStringNotContainsString('[note shortened]', $briefing);
+        self::assertStringContainsString('<<<END fence-', $briefing);
+    }
+
+    public function testAnOversizedTopEntryFromTheProjectMemoryIsShortenedMarkedAndKeptWithinTheByteCap(): void
+    {
+        $this->remember(str_repeat('é', 2_500), 'src/Cart.php');
+
+        $briefing = $this->briefing(self::DIFF);
+
+        self::assertLessThanOrEqual(4_000, strlen($briefing));
+        self::assertStringContainsString('éé', $briefing);
         self::assertStringContainsString('[note shortened]', $briefing);
         self::assertStringContainsString('<<<END fence-', $briefing);
         self::assertTrue(mb_check_encoding($briefing, 'UTF-8'));
+    }
+
+    public function testATopEntryJustOverTheMemoryCapIsShortenedNotDropped(): void
+    {
+        $this->remember('Resolved finding: '.str_repeat('x', 3_900), 'src/Cart.php');
+
+        $briefing = $this->briefing(self::DIFF);
+
+        self::assertLessThanOrEqual(4_000, strlen($briefing));
+        self::assertStringContainsString('Resolved finding: xxx', $briefing);
+        self::assertStringContainsString('[note shortened]', $briefing);
     }
 
     public function testAChangeWithNoRememberedEntriesAddsNoBriefing(): void
