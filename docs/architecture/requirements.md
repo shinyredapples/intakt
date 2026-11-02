@@ -47,6 +47,12 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 |---|---|---|---|---|---|
 | `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ConfinedClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --append-system-prompt <schema> --model <name> -p <prompt>` | only for that provider | a release with those flags (2.1.302 accepts them) | no |
 
+## Called when a tier maps to `codex`, and by `intakt:codex:probe`
+
+| Command | Called by | What for | Needed | Version | In the image |
+|---|---|---|---|---|---|
+| `codex` (Codex CLI) | `symfony/ai-codex-platform` through `IsolatedCodexCli` (a reviewer through `ConfinedCodexClient` too) | a reviewer, or the probe's one call, on an account's subscription login, called as `codex exec --json --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check --disable <feature>... --model <name> --config web_search="disabled" --config model_reasoning_effort="<effort>" <prompt>`, the features `shell_tool`, `unified_exec`, `apps`, `plugins`, `browser_use`, `in_app_browser`, `computer_use`, `multi_agent`, `image_generation`, `view_image` and `hooks` | only for that provider or command | a release that knows those flags and feature names (0.160.0 accepts them; it refuses an unknown feature) | no |
+
 ## Coming with planned parts
 
 | Command | Where | What for |

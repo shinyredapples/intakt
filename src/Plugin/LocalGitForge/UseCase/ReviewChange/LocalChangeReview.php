@@ -10,7 +10,9 @@ use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\HeadIdentity;
 use Intakt\Core\Review\Contract\IgnoredProgress;
+use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewProgress;
@@ -19,6 +21,7 @@ use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
@@ -38,7 +41,7 @@ final readonly class LocalChangeReview
     // Reviewed in a snapshot of the head rather than in the checkout, because the checkout may be switched or edited while the round runs, and a verdict counts only for what it reviewed.
     public function of(ReviewChangeInput $input, ReviewProgress $progress = new IgnoredProgress()): ChangeReview
     {
-        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
+        $forge = $this->forgeFor($input);
         $change = $forge->change(new ChangeId($input->change));
         $request = $this->requestFor($input, $change);
 
@@ -48,11 +51,41 @@ final readonly class LocalChangeReview
         ));
     }
 
-    // Queues the next round without waiting, so the snapshot outlives this call: RemoveKeptSnapshot removes it once the round is judged, and this call when the round cannot be queued.
     public function startOf(ReviewChangeInput $input): string
     {
-        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
-        $change = $forge->change(new ChangeId($input->change));
+        $forge = $this->forgeFor($input);
+
+        return $this->start($forge, $input, $forge->change(new ChangeId($input->change)));
+    }
+
+    public function startAt(ReviewChangeInput $input, CommitId $head): string
+    {
+        $forge = $this->forgeFor($input);
+
+        return $this->start($forge, $input, $forge->changeAt(new ChangeId($input->change), $head));
+    }
+
+    public function identityAt(ReviewChangeInput $input, CommitId $head, CommitId $reviewed): HeadIdentity
+    {
+        $forge = $this->forgeFor($input);
+        $change = $forge->changeAt(new ChangeId($input->change), $head);
+
+        return new HeadIdentity($this->identityOf($input, $change, $this->panelFor($input, $change)), $forge->headMoveSince($reviewed, $change));
+    }
+
+    public function stop(): void
+    {
+        $this->onStop->stop();
+    }
+
+    private function forgeFor(ReviewChangeInput $input): LocalGitForge
+    {
+        return new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
+    }
+
+    // Queues the next round without waiting, so the snapshot outlives this call: RemoveKeptSnapshot removes it once the round is judged, and this call when the round cannot be queued.
+    private function start(LocalGitForge $forge, ReviewChangeInput $input, Change $change): string
+    {
         $request = $this->requestFor($input, $change);
         $snapshot = $forge->keepSnapshotOf($change->commits->head);
 
@@ -65,21 +98,26 @@ final readonly class LocalChangeReview
         }
     }
 
-    public function stop(): void
-    {
-        $this->onStop->stop();
-    }
-
     /**
      * @return Closure(string): ChangeReviewRequest
      */
     private function requestFor(ReviewChangeInput $input, Change $change): Closure
     {
-        $panel = $this->panels->panelForChange($input->project, $this->describe($change));
-        $identity = new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
+        $panel = $this->panelFor($input, $change);
+        $identity = $this->identityOf($input, $change, $panel);
         $round = new RequestedRound($input->change, $input->round, new ChangeSource($this->absolute($input->repository), $input->base));
 
         return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
+    }
+
+    private function panelFor(ReviewChangeInput $input, Change $change): Panel
+    {
+        return $this->panels->panelForChange($input->project, $this->describe($change));
+    }
+
+    private function identityOf(ReviewChangeInput $input, Change $change, Panel $panel): VerdictIdentity
+    {
+        return new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
     }
 
     // Resolved, because the dashboard starts the next round from its own working directory, where a relative path names another repository.

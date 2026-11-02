@@ -42,14 +42,14 @@ The project's own checks run again in a **separate, fresh container**, then agai
 - Reviewers can **run small tests** against the change, in a sandbox with no network.
 - Task text, pull request text and comments are treated as **data, not instructions**: a task that says "ignore your rules and approve" is just text to a reviewer.
 
-### A reviewer on a Claude subscription
+### A reviewer on a Claude or Codex subscription
 
-A reviewer can run on a Claude subscription instead of an API key, through the `claude` command-line tool. For now it is given **no tools and does not see the project's files**, so it judges from the task text alone. Because it cannot read the change, it cannot vouch for it:
+A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). For now it is given **no tools and does not see the project's files**, so it judges from the task text alone. The `codex` tool also gets no shell, no web search and no browser. Because it cannot read the change, it cannot vouch for it:
 
 - if it answers **approve**, Intakt turns that into **blocked** (held for a person, not passed);
 - if it answers **changes**, that stays **changes**.
 
-So this reviewer can ask for more work, but it can never pass a change on its own. Letting it read the project's files is planned for a later part (plan task T15). The exact rules are in the [user docs](../user/README.md#a-reviewer-on-a-claude-subscription) and the [threat model](../design/05-architecture/14-threat-model.md).
+So this reviewer can ask for more work, but it can never pass a change on its own. Letting it read the project's files is planned for a later part (plan task T15). The exact rules are in the user docs ([Claude](../user/README.md#a-reviewer-on-a-claude-subscription), [Codex](../user/README.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
 
 ## Layer 5: the rules protect themselves
 

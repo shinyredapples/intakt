@@ -7,13 +7,19 @@ use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
+use Intakt\Core\Ai\Infrastructure\CodexLogins;
+use Intakt\Core\Ai\Infrastructure\CodexPlatformFactory;
+use Intakt\Core\Ai\Infrastructure\CodexSettings;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
+use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Budget\Infrastructure\CeilingsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
@@ -73,11 +79,18 @@ return static function (ContainerConfigurator $container): void {
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the shadow tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $modes = [];
+    $watches = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
+
+            if (is_array($project) && array_key_exists('watch', $project)) {
+                $watches[$name] = $project['watch'];
+                unset($project['watch']);
                 $contentProjects[$name] = $project;
             }
 
@@ -91,13 +104,21 @@ return static function (ContainerConfigurator $container): void {
         $contents['projects'] = $contentProjects;
     }
 
-    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>} $configuration */
+    // The ceilings are the owner's for every account, so they sit beside the projects and go to the budget tree only.
+    $budget = array_key_exists('budget', $contents) ? ['budget' => $contents['budget']] : [];
+    unset($contents['budget']);
+    /** @var array{budget: array{ceilings: array<string, float>}} $ceilings */
+    $ceilings = new Processor()->processConfiguration(new CeilingsConfiguration(), [$budget]);
+
+    /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
     $projects = $configuration['projects'];
     $tierProviders = array_map(static fn (array $project): array => array_map(static fn (array $tier): string => $tier['provider'], $project['tiers']), $projects);
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
+    /** @var array<string, array{repository: string, base: string, task: string}> $projectWatches */
+    $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
     $env = static fn (string $variable): string => '%env('.$variable.')%';
@@ -124,8 +145,20 @@ return static function (ContainerConfigurator $container): void {
         return [[], new Reference('intakt.ai.platform.claude_code'.$suffix)];
     };
 
+    // A CLI per account, because each account's call needs its own login and call home (CodexLogins); the pinned model and effort are shared.
+    $codexPlatform = static function (Account $account) use ($container, $catalog): array {
+        $suffix = Account::DEFAULT === $account->name ? '' : '.'.$account->name;
+        $container->services()->set('intakt.ai.codex.cli'.$suffix, IsolatedCodexCli::class)
+            ->args([new ReferenceConfigurator(CodexLogins::class), new ReferenceConfigurator('intakt.ai.codex.settings'), $account->name]);
+        $container->services()->set('intakt.ai.platform.codex'.$suffix, PlatformInterface::class)
+            ->factory([new ReferenceConfigurator(CodexPlatformFactory::class), 'create'])
+            ->args([new ReferenceConfigurator('intakt.ai.codex.cli'.$suffix), $catalog->models(Provider::Codex)]);
+
+        return [[], new Reference('intakt.ai.platform.codex'.$suffix)];
+    };
+
     // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
-    $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform): array {
+    $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform, $codexPlatform): array {
         $variables = array_map($env, $account->variables());
         $default = Account::DEFAULT === $account->name;
         $generic = 'openai_compatible'.($default ? '' : '_'.$account->name);
@@ -143,8 +176,15 @@ return static function (ContainerConfigurator $container): void {
                 new Reference('ai.platform.generic.'.$generic),
             ],
             Provider::ClaudeCode => $claudeCodePlatform($account, $variables[0]),
+            Provider::Codex => $codexPlatform($account),
         };
     };
+
+    if (isset($configuration['codex'])) {
+        $container->services()->set('intakt.ai.codex.settings', CodexSettings::class)
+            ->factory([CodexSettings::class, 'fromConfiguration'])
+            ->args([$configuration['codex']]);
+    }
 
     $platform = [];
     $disabled = [];
@@ -153,6 +193,11 @@ return static function (ContainerConfigurator $container): void {
     $tierPlatforms = [];
 
     foreach (Provider::cases() as $provider) {
+        // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
+        if (Provider::Codex === $provider && !isset($configuration['codex'])) {
+            continue;
+        }
+
         $enabled = [];
         $missingOf = [];
 
@@ -210,8 +255,11 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
     $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
     $container->parameters()->set('intakt.projects', $projects);
+    $container->parameters()->set('intakt.ai.codex', $configuration['codex'] ?? null);
     $container->parameters()->set('intakt.review.panels', $panels);
+    $container->parameters()->set('intakt.watcher.projects', $projectWatches);
     $container->parameters()->set('intakt.shadow.modes', array_map(static fn (array $project): string => $project['mode'], $projectModes));
+    $container->parameters()->set('intakt.budget.ceilings', $ceilings['budget']['ceilings']);
     $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');

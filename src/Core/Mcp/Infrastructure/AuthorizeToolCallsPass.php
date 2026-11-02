@@ -27,7 +27,7 @@ final class AuthorizeToolCallsPass implements CompilerPassInterface
 
         $handlerId = $builderId.'.authorized_tool_calls';
         $container->register($handlerId, AuthorizedToolCalls::class)
-            ->setArguments([new Definition(ReferenceHandler::class, [$locator]), new Reference('security.authorization_checker')]);
+            ->setArguments([new Definition(ReferenceHandler::class, [$locator]), new Reference('security.authorization_checker'), new Reference('logger')]);
 
         $builder->addMethodCall('setReferenceHandler', [new Reference($handlerId)]);
     }

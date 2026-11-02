@@ -18,6 +18,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
     {
         $tree = new TreeBuilder('intakt');
         $this->addAccounts($tree);
+        $this->addCodex($tree);
         $projects = $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false)->arrayPrototype()->children();
         $tiers = $projects->arrayNode('tiers')->addDefaultsIfNotSet()->children();
 
@@ -28,13 +29,60 @@ final class ProjectsConfiguration implements ConfigurationInterface
             $this->addMapping($mapping->arrayNode('substitutes')->defaultValue([])->arrayPrototype()->children());
         }
 
+        $tree->getRootNode()->validate()->ifTrue($this->leavesThePinnedCodexModel(...))
+            ->thenInvalid('A tier or substitute on provider "codex" must map the model pinned under codex.model, because every Codex call runs on that model.');
+
         return $tree;
+    }
+
+    /**
+     * @param array{projects?: array<string, array{tiers: array<string, array{provider: string, model: string, substitutes: list<array{provider: string, model: string}>}>}>, codex?: array{model: string}} $intakt
+     */
+    private function leavesThePinnedCodexModel(array $intakt): bool
+    {
+        $pinned = $intakt['codex']['model'] ?? null;
+
+        return array_any(
+            $this->mappingsOf($intakt['projects'] ?? []),
+            static fn (array $mapping): bool => Provider::Codex->value === $mapping['provider'] && $pinned !== $mapping['model'],
+        );
+    }
+
+    /**
+     * @param array<string, array{tiers: array<string, array{provider: string, model: string, substitutes: list<array{provider: string, model: string}>}>}> $projects
+     *
+     * @return list<array{provider: string, model: string}>
+     */
+    private function mappingsOf(array $projects): array
+    {
+        $mappings = [];
+
+        foreach ($projects as $project) {
+            foreach ($project['tiers'] as $tier) {
+                $mappings = [...$mappings, ['provider' => $tier['provider'], 'model' => $tier['model']], ...$tier['substitutes']];
+            }
+        }
+
+        return $mappings;
     }
 
     private function addMapping(NodeBuilder $mapping): void
     {
         $mapping->enumNode('provider')->isRequired()->values(array_column(Provider::cases(), 'value'));
-        $mapping->stringNode('model')->isRequired()->cannotBeEmpty()
+        $this->addModel($mapping);
+    }
+
+    // Optional, since only a Codex subscription account needs it; once present, both are required so neither falls back to the CLI's default.
+    private function addCodex(TreeBuilder $tree): void
+    {
+        $codex = $tree->getRootNode()->children()->arrayNode('codex')->children();
+        $this->addModel($codex);
+        $codex->enumNode('effort')->isRequired()->values(array_column(CodexEffort::cases(), 'value'));
+    }
+
+    private function addModel(NodeBuilder $parent): void
+    {
+        $parent->stringNode('model')->isRequired()->cannotBeEmpty()
             ->validate()->ifTrue(static fn (string $model): bool => !mb_check_encoding($model, 'UTF-8'))->thenInvalid('The "model" key must be valid UTF-8.')->end()
             ->validate()->ifTrue(static fn (string $model): bool => 1 === preg_match('/^\s*$/u', $model))->thenInvalid('The "model" key must not be blank.')->end();
     }
