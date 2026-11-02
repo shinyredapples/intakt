@@ -12,6 +12,7 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use InvalidArgumentException;
@@ -25,6 +26,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(InstallationReadBack::class)]
+#[CoversClass(InstallationReader::class)]
 #[CoversClass(ExpectedInstallation::class)]
 #[UsesClass(Installation::class)]
 #[UsesClass(InstallationDoesNotMatchConfiguration::class)]
@@ -117,6 +119,37 @@ final class InstallationReadBackTest extends TestCase
         $this->pages = ['installation_repositories_page_1.json', 'installation_repositories_page_2.json'];
 
         self::assertSame(['acme/widget', 'acme/gadget'], $this->readBack(self::PERMISSIONS, self::REPOSITORIES)->check()->repositories);
+    }
+
+    public function testAnEmptyPageBeforeEveryRepositoryWasListedFailsTheCheck(): void
+    {
+        $this->pages = ['installation_repositories_page_1.json', 'installation_repositories_empty_page.json'];
+        $readBack = $this->readBack(self::PERMISSIONS, 'acme/widget');
+
+        $this->expectException(InstallationNotReadBack::class);
+        $this->expectExceptionMessageMatches('/listed\ 1\ repositories\ of\ the\ installation\ while\ it\ counts\ 2/');
+
+        (void) $readBack->check();
+    }
+
+    public function testMoreRepositoriesThanTheTotalFailsTheCheck(): void
+    {
+        $this->pages = ['installation_repositories_page_1.json', 'installation_repositories.json'];
+        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES);
+
+        $this->expectException(InstallationNotReadBack::class);
+
+        (void) $readBack->check();
+    }
+
+    public function testARepositoryListedTwiceFailsTheCheck(): void
+    {
+        $this->pages = ['installation_repositories_page_1.json', 'installation_repositories_page_1.json'];
+        $readBack = $this->readBack(self::PERMISSIONS, 'acme/widget');
+
+        $this->expectException(InstallationNotReadBack::class);
+
+        (void) $readBack->check();
     }
 
     public function testARefusedReadFailsTheCheckWithTheStatus(): void
@@ -212,7 +245,7 @@ final class InstallationReadBackTest extends TestCase
         $jwt = new AppJwt('12345', $this->key->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, $this->logger), '678', $clock);
 
-        return new InstallationReadBack($jwt, $tokens, $http, ExpectedInstallation::fromSettings($permissions, $repositories), '678', $this->logger);
+        return new InstallationReadBack(new InstallationReader($jwt, $tokens, $http), ExpectedInstallation::fromSettings($permissions, $repositories), $this->logger);
     }
 
     private function recorded(string $fixture): string

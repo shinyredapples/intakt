@@ -25,6 +25,11 @@ final class InstallationNotReadBack extends RuntimeException implements Reportab
         return new self('The installation read back did not complete: '.$transportClass.'.');
     }
 
+    public static function becauseTheListingIsIncomplete(int $read, int $total): self
+    {
+        return new self(sprintf('GitHub listed %d repositories of the installation while it counts %d.', $read, $total));
+    }
+
     public static function becauseTheAnswerIsInvalid(): self
     {
         return new self('GitHub answered the installation read back with permissions or repositories in an unusable shape.');

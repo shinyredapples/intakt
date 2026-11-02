@@ -24,10 +24,17 @@ use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
 use Intakt\Plugin\Forge\Contract\RoundStale;
+use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
+use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
+use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
@@ -74,6 +81,13 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationTokens::class)]
 #[UsesClass(AppJwt::class)]
+#[UsesClass(CheckedInstallationTokens::class)]
+#[UsesClass(InstallationReadBack::class)]
+#[UsesClass(InstallationReader::class)]
+#[UsesClass(ExpectedInstallation::class)]
+#[UsesClass(Installation::class)]
+#[UsesClass(InstallationDoesNotMatchConfiguration::class)]
+#[UsesClass(InstallationNotReadBack::class)]
 final class GitHubForgeTest extends TestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -90,6 +104,7 @@ final class GitHubForgeTest extends TestCase
     private string $pullFixture = 'pull_request.json';
     private string $compareFixture = 'compare_merge_base.json';
     private string $minted = 'installation-secret';
+    private string $expectedPermissions = 'contents:write,pull_requests:write,workflows:write';
 
     public function testItReadsTheHeadBaseDiffAndChangedFilesOfAPullRequest(): void
     {
@@ -355,16 +370,43 @@ final class GitHubForgeTest extends TestCase
 
     public function testItTurnsAnUnmintableTokenIntoAForgeReadFailure(): void
     {
-        $tokens = new InstallationTokens(
-            new InstallationTokenMinter(new AppJwt('12345', AppKey::generate()->private, new MockClock('2026-11-25 10:00:00 UTC')), new MockHttpClient(new MockResponse('{}', ['http_code' => 401])), new NullLogger()),
-            '678',
-            new MockClock('2026-11-25 10:00:00 UTC'),
-        );
-        $forge = new GitHubForge(new MockHttpClient(), $tokens, $this->secretScan());
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
+        $refusing = new MockHttpClient(new MockResponse('{}', ['http_code' => 401]));
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $refusing, new NullLogger()), '678', $clock);
+        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $refusing), ExpectedInstallation::fromSettings('contents:write', 'acme/widget'), new NullLogger());
+        $forge = new GitHubForge(new MockHttpClient(), new CheckedInstallationTokens($readBack, $tokens), $this->secretScan());
 
         $this->expectException(ForgeReadFailed::class);
 
         $forge->change(new ChangeId(self::PULL));
+    }
+
+    public function testItReadsNothingFromAPullRequestWhenTheInstallationDoesNotMatch(): void
+    {
+        $this->expectedPermissions = 'contents:read,pull_requests:write,workflows:write';
+        $forge = $this->forge();
+
+        try {
+            $forge->change(new ChangeId(self::PULL));
+            self::fail('A mismatched installation must refuse the read.');
+        } catch (ForgeReadFailed $refused) {
+            self::assertStringContainsString('permission contents is expected at read but granted at write', $refused->getMessage());
+        }
+
+        self::assertSame([], $this->requested);
+    }
+
+    public function testItPostsNothingWhenTheInstallationDoesNotMatch(): void
+    {
+        $change = $this->forge()->change(new ChangeId(self::PULL));
+        $this->expectedPermissions = 'contents:write';
+        $this->requested = [];
+
+        $failure = $this->failureOfPost($this->forge(), $change, $this->comment('Looks good.'));
+
+        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
+        self::assertNotContains(self::POST_REVIEW, $this->requested);
     }
 
     public function testItPostsTheOutcomeAsOneCommentReviewCarryingTheRoundToken(): void
@@ -534,13 +576,20 @@ final class GitHubForgeTest extends TestCase
     private function forgeOver(HttpClientInterface $http): GitHubForge
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $minting = new MockHttpClient(fn (): ResponseInterface => new MockResponse(
-            json_encode(['token' => $this->minted, 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR),
-            ['http_code' => 201],
-        ));
-        $tokens = new InstallationTokens(new InstallationTokenMinter(new AppJwt('12345', AppKey::generate()->private, $clock), $minting, new NullLogger()), '678', $clock);
+        $identity = new MockHttpClient(fn (string $method, string $url): ResponseInterface => match (true) {
+            str_ends_with($url, '/access_tokens') => new MockResponse(
+                json_encode(['token' => $this->minted, 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR),
+                ['http_code' => 201],
+            ),
+            str_contains($url, '/installation/repositories') => new MockResponse(self::fixture('installation_repositories.json')),
+            default => new MockResponse(self::fixture('installation.json')),
+        });
+        $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
+        $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
+        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $identity), $expected, new NullLogger());
 
-        return new GitHubForge($http, $tokens, $this->secretScan());
+        return new GitHubForge($http, new CheckedInstallationTokens($readBack, $tokens), $this->secretScan());
     }
 
     private function secretScan(): SecretScan
