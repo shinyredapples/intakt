@@ -11,12 +11,13 @@ final readonly class ReviewSummary
     public string $round;
     public string $project;
     public int $reviewers;
+    public ReviewState $state;
 
     public function __construct(
         RoundStart $start,
         public DateTimeImmutable $startedAt,
-        public ReviewState $state = ReviewState::InProgress,
     ) {
+        $this->state = ReviewState::InProgress;
         $this->round = $start->round;
         $this->project = $start->project;
         $this->reviewers = $start->reviewers;

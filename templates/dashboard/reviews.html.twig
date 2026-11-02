@@ -12,7 +12,7 @@
     <tbody>
     {% for review in reviews %}
         <tr>
-            <td><a href="{{ path('dashboard_show_review', {round: review.round}) }}">{{ review.round }}</a></td>
+            <td><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'),{round: review.round}) }}">{{ review.round }}</a></td>
             <td>{{ review.project }}</td>
             <td>{{ review.reviewers }}</td>
             <td>{{ review.startedAt|date('Y-m-d H:i:s', 'UTC') }}</td>

@@ -16,8 +16,8 @@
 </head>
 <body>
 <nav>
-    <a href="{{ path('dashboard_list_projects') }}">Projects</a>
-    <a href="{{ path('dashboard_list_reviews') }}">Reviews</a>
+    <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')) }}">Projects</a>
+    <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Reviews</a>
 </nav>
 <main>
 {% for line in app.flashes('success') %}
