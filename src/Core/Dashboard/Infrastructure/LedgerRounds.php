@@ -237,7 +237,7 @@ final class LedgerRounds
     /**
      * @param array<string, mixed> $payload
      */
-    // A verdict recorded before the field existed, or with a value no mode has, reads as an ordinary one.
+    // Live when the field is absent or unreadable, because a verdict recorded before the field existed was an ordinary one.
     private function modeOf(array $payload): ProjectMode
     {
         $mode = $payload['mode'] ?? null;
