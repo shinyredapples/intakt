@@ -32,7 +32,7 @@ final readonly class StartReviewController
     public function __invoke(Request $request, string $round): Response
     {
         $this->refuseWithoutToken($request);
-        $line = $this->starts->startNextOf($round) ?? throw new NotFoundHttpException('The ledger holds no review with this round that can be started again.');
+        $line = $this->starts->startNextOf($round, $this->expectedNumber($request)) ?? throw new NotFoundHttpException('The ledger holds no review with this round that can be started again.');
         $this->flash($request, $line);
 
         return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $round]), Response::HTTP_SEE_OTHER);
@@ -45,6 +45,14 @@ final readonly class StartReviewController
         if (!is_string($token) || !$this->tokens->isTokenValid(new CsrfToken(self::TOKEN_ID, $token))) {
             throw new BadRequestHttpException('The form token is missing or wrong, so nothing was started.');
         }
+    }
+
+    // The number the page showed and not the ledger's at the time of the post, because only that refuses a second press or a page gone stale after another round started; it is only compared, never used to read anything.
+    private function expectedNumber(Request $request): int
+    {
+        $number = filter_var($request->request->get('number'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return is_int($number) ? $number : throw new BadRequestHttpException('The form names no round number, so nothing was started.');
     }
 
     /**

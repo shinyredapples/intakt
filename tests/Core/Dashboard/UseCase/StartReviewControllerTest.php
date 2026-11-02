@@ -58,7 +58,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
             ->with(self::equalTo(new StartReview('alpha', 'Add the thing.', new RequestedRound('feat/thing', 2, new ChangeSource('/repos/alpha', 'main')))))
             ->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
 
-        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token()]);
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
         self::assertResponseStatusCodeSame(303);
         self::assertResponseRedirects('/reviews/round-1');
@@ -66,18 +66,39 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-success', 'Started round round-2.');
     }
 
-    public function testTheButtonAsksForTheNumberAfterTheLatestRoundSoAStalePageIsRefused(): void
+    public function testTheButtonCarriesTheNumberAfterTheLatestRoundThePageShows(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('3', $crawler->filter('form.start-review input[name=number]')->attr('value'));
+    }
+
+    // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.
+    public function testAStalePageAsksForTheNumberItShowedAndNotTheNextOneInTheLedger(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
         $commands = $this->commandBus();
         $commands->expects(self::once())->method('dispatch')
-            ->with(self::callback(static fn (StartReview $command): bool => 3 === $command->round->number))
+            ->with(self::callback(static fn (StartReview $command): bool => 2 === $command->round->number))
             ->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-3', 'handler')]));
 
-        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token()]);
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
         self::assertResponseStatusCodeSame(303);
+    }
+
+    public function testAPostWithoutARoundNumberDispatchesNothing(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::never())->method('dispatch');
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => 'two']);
+
+        self::assertResponseStatusCodeSame(400);
     }
 
     public function testAMissingTokenDispatchesNothing(): void
@@ -107,7 +128,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $commands = $this->commandBus();
         $commands->expects(self::once())->method('dispatch')->willThrowException(new HandlerFailedException(new Envelope(new stdClass()), [$refusal]));
 
-        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token()]);
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
         self::assertResponseStatusCodeSame(303);
         $this->browser->followRedirect();
@@ -120,7 +141,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->commandBus()->expects(self::never())->method('dispatch');
 
-        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token()]);
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
         self::assertResponseStatusCodeSame(404);
     }

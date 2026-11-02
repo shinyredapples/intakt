@@ -30,7 +30,7 @@ final readonly class ReviewStarts
      * @return array{string, string}|null
      */
     // Null when the ledger holds no source to start from, so the caller answers that nothing could be started.
-    public function startNextOf(string $round): ?array
+    public function startNextOf(string $round, int $number): ?array
     {
         $review = $this->reviews->reviewOf($round);
         $source = $review?->source();
@@ -39,13 +39,13 @@ final readonly class ReviewStarts
             return null;
         }
 
-        return $this->started($this->commandFor($review, $source));
+        return $this->started($this->commandFor($review, $source, $number));
     }
 
-    // Built from the ledger and not from the form, because the repository path of a request would be an input to read the disk with.
-    private function commandFor(Review $review, RoundSource $source): StartReview
+    // Built from the ledger and not from the form, because the repository path of a request would be an input to read the disk with; the number is only checked against the one the round gets.
+    private function commandFor(Review $review, RoundSource $source, int $number): StartReview
     {
-        $round = new RequestedRound($review->change, $review->nextNumber(), new ChangeSource($source->repository, $source->base));
+        $round = new RequestedRound($review->change, $number, new ChangeSource($source->repository, $source->base));
 
         return new StartReview($review->project, $source->task, $round);
     }

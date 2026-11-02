@@ -24,7 +24,7 @@ final readonly class Review
         return array_last($this->rounds)->source;
     }
 
-    // Asked for by the button, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
+    // Sent with the button as the page shows it, so a double submit or a page gone stale after another round started is refused instead of opening one more round.
     public function nextNumber(): ?int
     {
         $latest = array_last($this->rounds)->number;
