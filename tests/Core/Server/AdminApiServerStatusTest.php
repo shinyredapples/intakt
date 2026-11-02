@@ -92,7 +92,7 @@ final class AdminApiServerStatusTest extends TestCase
     {
         $reading = new RecordedAdminApi()->unreachable()->status()->read();
 
-        self::assertEquals(new EndpointDown('/frankenphp/threads did not answer: Failed to connect to localhost port 2019'),$reading->threads);
+        self::assertEquals(new EndpointDown('/frankenphp/threads did not answer: Failed to connect to localhost port 2019'), $reading->threads);
         self::assertInstanceOf(EndpointDown::class, $reading->metrics);
         self::assertInstanceOf(EndpointDown::class, $reading->hub);
     }

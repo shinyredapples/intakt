@@ -55,7 +55,7 @@ final readonly class AdminApiServerStatus implements ServerStatus
             return $body;
         }
         $samples = PrometheusSamples::fromText($body);
-        if (null === $samples || !$samples->has('frankenphp_queue_depth')) {
+        if (!$samples instanceof PrometheusSamples || !$samples->has('frankenphp_queue_depth')) {
             return $this->unusable(self::METRICS);
         }
 
