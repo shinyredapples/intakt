@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\StartReview;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
@@ -88,6 +89,8 @@ final readonly class StartReviewController
      */
     private function flash(Request $request, array $line): void
     {
-        $request->getSession()->getFlashBag()->add(...$line);
+        $session = $request->getSession();
+        assert($session instanceof FlashBagAwareSessionInterface);
+        $session->getFlashBag()->add(...$line);
     }
 }

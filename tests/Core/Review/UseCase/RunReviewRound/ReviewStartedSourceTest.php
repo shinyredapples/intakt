@@ -46,7 +46,7 @@ final class ReviewStartedSourceTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function startPayload(): array
     {
@@ -56,6 +56,9 @@ final class ReviewStartedSourceTest extends KernelTestCase
         ));
         self::assertCount(1, $started);
 
-        return json_decode($started[0]->event->payload, true, flags: JSON_THROW_ON_ERROR);
+        $payload = json_decode($started[0]->event->payload, true, flags: JSON_THROW_ON_ERROR);
+        assert(is_array($payload));
+
+        return $payload;
     }
 }

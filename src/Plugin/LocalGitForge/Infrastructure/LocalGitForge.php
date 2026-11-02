@@ -84,7 +84,7 @@ final readonly class LocalGitForge implements Forge
         }
     }
 
-    // For a round that runs after the caller returns: the caller owns the directory and removes it with removeSnapshot().
+    // Kept for a round that runs after the caller returns, because withSnapshotOf() removes the directory when its work ends; the caller removes it with removeSnapshot().
     #[NoDiscard]
     public function keepSnapshotOf(CommitId $head): string
     {

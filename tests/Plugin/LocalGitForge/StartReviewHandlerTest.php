@@ -25,9 +25,9 @@ use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeInput;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\StartReviewHandler;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use LogicException;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StartReviewHandler::class)]
@@ -84,7 +84,7 @@ final class StartReviewHandlerTest extends TestCase
 
         $this->handler($reviews)(new StartReview('alpha', 'sample', 'Add the thing.', new ChangeSource($this->repository->path, 'main')));
 
-        self::assertDirectoryExists((string) $seen?->checkoutRoot);
+        assert($seen instanceof ChangeReviewRequest);
         self::assertFileExists($seen->checkoutRoot.'/src/Feature.php');
         $this->removeSnapshot($seen->checkoutRoot);
     }
