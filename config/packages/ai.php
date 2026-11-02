@@ -128,7 +128,7 @@ return static function (ContainerConfigurator $container): void {
         return [[], new Reference('intakt.ai.platform.claude_code'.$suffix)];
     };
 
-    // Each account's CLI gets its own login and call home from CodexLogins, and every account the pinned model and effort.
+    // A CLI per account, because each account's call needs its own login and call home (CodexLogins); the pinned model and effort are shared.
     $codexPlatform = static function (Account $account) use ($container, $catalog): array {
         $suffix = Account::DEFAULT === $account->name ? '' : '.'.$account->name;
         $container->services()->set('intakt.ai.codex.cli'.$suffix, IsolatedCodexCli::class)

@@ -185,7 +185,7 @@ final class ProjectsConfigurationTest extends TestCase
     {
         $processed = $this->process(['codex' => ['model' => 'gpt-5.3-codex', 'effort' => 'high'], 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]]);
 
-        self::assertSame('codex', $processed['projects']['alpha']['tiers']['strong']['provider']);
+        self::assertStringContainsString('"strong":{"provider":"codex","model":"gpt-5.3-codex"', json_encode($processed['projects'] ?? null, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -207,7 +207,7 @@ final class ProjectsConfigurationTest extends TestCase
     public function testACodexMappingOffThePinnedModelIsRefused(array $contents): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('must map the model pinned under codex.model');
+        $this->expectExceptionMessageMatches('/must map the model pinned under codex\.model/');
 
         $this->process($contents);
     }

@@ -95,8 +95,7 @@ final class IsolatedCodexCliTest extends TestCase
         $arguments = $this->runOf($this->cli())['arguments'];
 
         foreach (['shell_tool', 'unified_exec', 'apps', 'plugins', 'browser_use', 'in_app_browser', 'computer_use', 'multi_agent', 'image_generation', 'view_image', 'hooks'] as $feature) {
-            self::assertContains($feature, $arguments);
-            self::assertSame('--disable', $arguments[array_search($feature, $arguments, true) - 1]);
+            self::assertSame('--disable', $arguments[$this->indexOf($feature, $arguments) - 1]);
         }
 
         self::assertContains('web_search="disabled"', $arguments);
@@ -107,10 +106,21 @@ final class IsolatedCodexCliTest extends TestCase
     {
         $arguments = $this->runOf($this->cli(), ['sandbox' => 'danger-full-access', 'disable' => [], 'config' => ['web_search="live"']])['arguments'];
 
-        self::assertSame('read-only', $arguments[array_search('--sandbox', $arguments, true) + 1]);
+        self::assertSame('read-only', $arguments[$this->indexOf('--sandbox', $arguments) + 1]);
         self::assertNotContains('danger-full-access', $arguments);
         self::assertNotContains('web_search="live"', $arguments);
         self::assertContains('shell_tool', $arguments);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function indexOf(string $argument, array $arguments): int
+    {
+        $index = array_search($argument, $arguments, true);
+        self::assertIsInt($index);
+
+        return $index;
     }
 
     private function cli(): IsolatedCodexCli

@@ -56,9 +56,6 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
-use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
-use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
-use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
@@ -240,10 +237,7 @@ final class CodexReviewerTest extends KernelTestCase
 
         $failure = $this->failureOfReview();
 
-        self::assertInstanceOf(RuntimeException::class, $failure);
-        self::assertNotInstanceOf(ProviderRateLimited::class, $failure);
-        self::assertNotInstanceOf(NoProviderLeft::class, $failure);
-        self::assertNotInstanceOf(VendorAccountOut::class, $failure);
+        self::assertSame(RuntimeException::class, $failure::class);
         self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
     }
