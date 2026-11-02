@@ -16,6 +16,7 @@ use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
@@ -372,7 +373,7 @@ final class ProjectTiersTest extends KernelTestCase
         $measured = self::getContainer()->get(MeasuredUse::class);
         self::assertInstanceOf(MeasuredUse::class, $measured);
         foreach (UsageWindow::cases() as $window) {
-            $measured->record(new WindowReading(new Account(Provider::Anthropic, 'default'), $window, new Usage($percent, null)));
+            self::assertSame(ReadingOutcome::Recorded, $measured->record(new WindowReading(new Account(Provider::Anthropic, 'default'), $window, new Usage($percent, null))));
         }
     }
 
