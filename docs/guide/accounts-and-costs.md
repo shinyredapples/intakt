@@ -20,6 +20,8 @@ For a subscription, Intakt doesn't use the login you sign in with yourself. Wher
 
 A reviewer can run on a Claude or Codex subscription too; what it can and cannot do is explained in [why the AI can't wreck your project](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-or-codex-subscription). What a Codex reviewer used is written down under the account it ran on, once per review.
 
+When the `codex` tool itself says an account can't be used, Intakt rests that account instead of counting it as a failed review. If the account reached its usage limit, it rests for a minute and is tried again. If its login is lost (you need to sign in again) or its plan doesn't include the model, that is an **account error**: only you can fix it, so Intakt tells you once (for now as a line in its log and an entry in its record, a phone notice comes later), rests the account for a minute at a time until you have fixed it, and doesn't tell you again about the same problem until the account has worked in between. Meanwhile the reviewer moves to another account, or waits. A reviewer that only *writes* that a limit was reached or a login was lost doesn't count: that is a failed review, and the account keeps working.
+
 ## How it decides what to spend
 
 ```mermaid
