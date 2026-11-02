@@ -213,6 +213,41 @@ budget:
 
 Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
 
+### Cooldowns, pauses and outage notices
+
+Besides the ceilings, Intakt can hold work back in these ways (the tables are created by the same `doctrine:migrations:migrate`):
+
+- **Cooldown of one account:** when the AI company answers that an account's usage limit is reached, that account gets no new call until the reset time the answer gave, even if that is days away. Other accounts, of the same company or another, keep working. An answer whose reset time has already passed, or lies more than a week ahead, cools nothing down.
+- **Budget back-off:** no new call starts on any account, but pull requests that are already approved still merge, since merging calls no model.
+- **Pause:** the same as a budget back-off: nothing new starts, approved pull requests still merge.
+- **Failure back-off:** no new call starts on any account and nothing merges.
+- **Drain:** nothing new starts and nothing merges, so work in progress can finish before an update.
+
+When several are in effect, the strictest wins: drain, then failure back-off, then pause, then budget back-off, then an account's cooldown, then the ceilings. Each one ends by itself at the time it was given.
+
+When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
+
+Nothing places a cooldown, a back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes.
+
+To see what Intakt would decide over a day, write a script and replay it:
+
+```
+# one step per line: a UTC moment, then the step
+2026-11-02T08:00 read claude_code.main five-hour 20 2026-11-02T13:00
+2026-11-02T08:00 read claude_code.main weekly 10 2026-11-08T08:00
+2026-11-02T08:00 start claude_code.main 0
+2026-11-02T09:00 limit claude_code.main 2026-11-02T13:00
+2026-11-02T09:00 start claude_code.main 0
+2026-11-02T10:00 hold budget-back-off 2026-11-02T10:30
+2026-11-02T10:00 merge
+```
+
+```bash
+php bin/console intakt:budget:replay my-day.txt
+```
+
+It prints each line with its outcome (`recorded`, `cooling-down`, `start` and so on), and the outage warnings where they happen. The steps are `read <account> <window> <percent> <reset>`, `limit <account> <reset>`, `hold <drain|failure-back-off|pause|budget-back-off> <until>`, `start <account> <calls running>` and `merge`; an account is written as company and name, such as `claude_code.main`. The replay runs on your database and your ceilings with its own clock, starting at the first line, and undoes everything when it ends, so your install keeps nothing of it. A line it does not understand stops it with the reason. `tests/Core/Budget/UseCase/ReplayDay/scripted-day.txt` is a whole example day.
+
 ### Choosing the database
 
 Intakt uses SQLite unless you set `DATABASE_URL` (in `.env.local` or the real environment) to another database; MySQL, MariaDB and PostgreSQL are tested too, for example `DATABASE_URL="postgresql://intakt@localhost:5432/intakt"`. Intakt finds out the MySQL or MariaDB server version itself on the first connection. For PostgreSQL it does not ask the server and always uses its support for PostgreSQL 12 and later, the newest it has. The test environment appends `_test` to the database name, so tests against `intakt` use the database `intakt_test`. In CI, a pull request runs the tests on MySQL, MariaDB and PostgreSQL only when it touches persistence (the ledger, migrations, Doctrine's configuration, the Composer files or the CI definition under `.github/workflows/` and `.github/ci/`, or adds a line naming Doctrine in `src/`); when that check fails, the CI run fails rather than skipping them, and every push to main runs them. SQLite runs on every change.
