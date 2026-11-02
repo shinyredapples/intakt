@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Symfony\Component\Uid\Uuid;
 use Closure;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
-use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\Reviewer;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\Verdict;
@@ -107,7 +108,7 @@ final readonly class ReviewerAgent implements Reviewer
     {
         $round = $reviewer->round;
 
-        if (null === $round) {
+        if (!$round instanceof Uuid) {
             return $execution;
         }
 

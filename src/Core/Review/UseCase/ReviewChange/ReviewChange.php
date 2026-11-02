@@ -13,7 +13,6 @@ use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundNotNext;
-use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
