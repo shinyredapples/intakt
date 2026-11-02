@@ -31,6 +31,16 @@ The image is the box's contents: the language, the tools, the package managers, 
 
 Images are built once per version of the project and cached, and rebuilt when the files they come from change.
 
+## When a job runs out of memory
+
+This part is planned, not built yet ([details](../design/04-constraints.md#security-model)).
+
+Every job has a memory limit, so a test that eats memory without end can't slow down the rest of the machine. Inside the job, each command the AI runs has a limit of its own, so a runaway test is stopped alone: the AI is told which process was stopped and can fix it in the same session. Your language also gets a **memory limit** for the programs a job starts. By default it is 512 MB, or twice what your project's check needed when Intakt first ran it, whichever is larger, so you don't have to set anything. A limit your project already sets (for example in its test settings) wins.
+
+If a whole job still runs out of memory, you see one comment on the task naming the process and the step, and the next try is told about it. If the same task runs out of memory a second time, it goes to the maintainer agent instead of trying again; it only reaches you if the agent can't sort it out. On the dashboard this shows as status on the card, not as something waiting on you, and the project's card shows the limit in use. To raise the limit, set it in the project's settings file in your repository, or in your project's own test settings.
+
+On some machines (some desktop container setups), a command can't get a limit of its own. Setup tells you once; there, a runaway command ends the whole job, and the rest works the same.
+
 ## Services your tests need
 
 Most projects need more than themselves to test: a database, a cache, sometimes another backend such as an auth service. Each one can be provided in one of three ways:

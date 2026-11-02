@@ -377,7 +377,7 @@ Conventions, in addition to the ones above:
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
 | M6 Shadow | Intakt reviews every new green head of the owner's two projects alongside the existing loop, posts nothing that counts, and a report compares the verdicts | T37 to T43 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T44 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T44 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M6 Shadow
@@ -619,6 +619,12 @@ Conventions, in addition to the ones above:
 - **Evidence:** a drained deploy of a new image.
 - **Waits for:** T56, T40. **Size:** M. **Labels:** `class:feature`, `priority:normal`.
 
+### T82 A runaway command fails fast, and a memory kill is told and handed over
+- **Description:** The memory rules of the design ([Security model](design/04-constraints.md#security-model)) for build and check jobs. Inside each job the agent's commands run in a memory group of their own below the job's limit (a nested cgroup v2 group), and a command killed there comes back to the agent as the command's result naming the process. The PHP `language` plugin sets `memory_limit` for the PHP processes a job starts: by default the larger of 512 MB and twice the memory peak of the project's first green check on main, measured when the project is set up; a limit the project sets itself wins, a project-file setting overrides the default, and the status (T68) reports the value in use and where it comes from. A job killed for memory posts one comment on its task naming the process and the step (redacted and scanned like other outbound text), and the next attempt gets that note, with the process's command line fenced; a second memory kill of the same task raises a `maintainer` notice instead of another attempt, shown as status and never as an owner card (it stays parked until the maintainer agent exists). Where the host cannot give a job nested groups, the commands share the job's limit and the install says so once. Updates the threat model's builder inputs.
+- **Acceptance:** forced-order tests with a fake memory kill: a first kill yields one comment naming the process and the step, and the next attempt's prompt carries the note, fenced; a second kill of the same task yields the hand-over and starts no attempt; a crash between the kill and the comment posts the comment once. A measured peak of 200 MB sets 512 MB and one of 400 MB sets 800 MB; a project's own limit and a project-file setting each win over the default. A host without nested groups falls back to the job's limit with one notice.
+- **Evidence:** the forced-order tests' run; the default limit computed from a measured peak of the sample repository's check; a command over its group's limit killed while the agent keeps running, on a host with cgroup v2 delegation `(owner provides)`.
+- **Waits for:** T44, T45, T49, T51, T67, T68, T76 (the `language` plugin kind and the status it builds on). **Size:** M. **Labels:** `class:core`, `priority:normal`.
+
 ## M8 Switch
 
 Each stage starts with the owner's go and can be rolled back to the previous one by config.
@@ -662,5 +668,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
 - The shadow week (after T43) runs while M7 is built.
-- M7: T45 and T46 after T44; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56.
+- M7: T45 and T46 after T44; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
 - M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 after T69; T74 last.
