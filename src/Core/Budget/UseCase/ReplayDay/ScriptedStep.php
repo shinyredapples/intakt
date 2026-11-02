@@ -28,7 +28,8 @@ final readonly class ScriptedStep
      */
     public static function parse(string $line): self
     {
-        $words = preg_split('/\s+/', trim($line)) ?: [];
+        $words = preg_split('/\s+/', trim($line));
+        assert(is_array($words));
         $at = self::momentOf(array_shift($words) ?? '', $line);
 
         return new self(trim($line), $at, $words);

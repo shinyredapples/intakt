@@ -16,7 +16,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Lock\LockFactory;
 
-// The log is the owner's notice until notices go through Plugin/Notifier (plan T67); the row is what makes it once.
+// A log line, because notices reach the owner through Plugin/Notifier only with plan T67; the row keeps it to once.
 #[AsAlias(OutageNotices::class)]
 final readonly class DoctrineOutageNotices implements OutageNotices
 {

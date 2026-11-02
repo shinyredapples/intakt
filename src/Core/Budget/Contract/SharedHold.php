@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Contract;
 
-// Holds every account at once, in the order they win when several are in effect: those that hold merges too come first.
+// In the order they win when several are in effect, so a hold that stops merges too comes before one that lets them through.
 enum SharedHold: string
 {
     case Drain = 'drain';

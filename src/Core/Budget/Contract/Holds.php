@@ -10,7 +10,7 @@ use NoDiscard;
 
 interface Holds
 {
-    // For a vendor's structured usage-limit answer only, never the model's own text; its reset time is untrusted input.
+    // Only for a vendor's structured usage-limit answer, because the model's own text can be steered; the reset time is checked since it is untrusted input.
     #[NoDiscard]
     public function coolDown(Account $account, DateTimeImmutable $resetsAt): ReadingOutcome;
 

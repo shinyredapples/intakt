@@ -56,8 +56,10 @@ final readonly class ReplayDayCommand
      */
     private function stepsOf(string $script): array
     {
+        $lines = preg_split('/\R/', $this->files->readFile($script));
+        assert(is_array($lines));
         $lines = array_filter(
-            preg_split('/\R/', $this->files->readFile($script)) ?: [],
+            $lines,
             static fn (string $line): bool => '' !== trim($line) && !str_starts_with(trim($line), '#'),
         );
         $steps = array_values(array_map(ScriptedStep::parse(...), $lines));

@@ -20,21 +20,21 @@ final class UsageWindowTest extends TestCase
 
     public function testAResetWithinTheWindowIsKept(): void
     {
-        self::assertNull(UsageWindow::FiveHour->refusalOfReset($this->at('13:00'), $this->at('08:00')));
+        self::assertNull(UsageWindow::FiveHour->refusalOfReset(new DateTimeImmutable('2026-11-02T13:00:00Z'), $this->answeredAt()));
     }
 
     public function testAResetAtTheMomentOfTheAnswerHasAlreadyPassed(): void
     {
-        self::assertSame(ReadingOutcome::ResetAlreadyPassed, UsageWindow::FiveHour->refusalOfReset($this->at('08:00'), $this->at('08:00')));
+        self::assertSame(ReadingOutcome::ResetAlreadyPassed, UsageWindow::FiveHour->refusalOfReset($this->answeredAt(), $this->answeredAt()));
     }
 
     public function testAResetOneSecondBeyondTheWindowIsRefused(): void
     {
-        self::assertSame(ReadingOutcome::ResetBeyondWindow, UsageWindow::FiveHour->refusalOfReset($this->at('13:00:01'), $this->at('08:00')));
+        self::assertSame(ReadingOutcome::ResetBeyondWindow, UsageWindow::FiveHour->refusalOfReset(new DateTimeImmutable('2026-11-02T13:00:01Z'), $this->answeredAt()));
     }
 
-    private function at(string $time): DateTimeImmutable
+    private function answeredAt(): DateTimeImmutable
     {
-        return new DateTimeImmutable('2026-11-02T'.$time.'Z');
+        return new DateTimeImmutable('2026-11-02T08:00:00Z');
     }
 }

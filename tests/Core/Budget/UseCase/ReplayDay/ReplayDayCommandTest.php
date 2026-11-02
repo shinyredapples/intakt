@@ -107,7 +107,7 @@ final class ReplayDayCommandTest extends KernelTestCase
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
         self::assertInstanceOf(Connection::class, $connection);
         foreach (['budget_window_reading', 'budget_account_cooldown', 'budget_shared_hold', 'budget_outage_notice'] as $table) {
-            self::assertSame(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM '.$table), $table);
+            self::assertEquals(0, $connection->fetchOne('SELECT COUNT(*) FROM '.$table), $table);
         }
     }
 

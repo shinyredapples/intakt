@@ -92,7 +92,7 @@ final class DayReplayTest extends TestCase
     public function testALineNotUnderstoodIsRefusedWithItsRule(string $line, string $rule): void
     {
         $this->expectException(ScriptLineNotUnderstood::class);
-        $this->expectExceptionMessage($rule);
+        $this->expectExceptionMessageMatches('/'.preg_quote($rule, '/').'/');
 
         $this->play($line);
     }

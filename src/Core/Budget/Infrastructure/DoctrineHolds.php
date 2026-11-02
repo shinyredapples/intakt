@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Budget\Infrastructure;
 
 use DateTimeImmutable;
+use Doctrine\Common\Collections\Criteria;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\Holds;
@@ -70,14 +71,10 @@ final readonly class DoctrineHolds implements Holds
     #[Override]
     public function sharedInEffect(): array
     {
-        $records = $this->entities->createQueryBuilder()
-            ->select('hold')
-            ->from(SharedHoldRecord::class, 'hold')
-            ->where('hold.until > :now')
-            ->setParameter('now', $this->clock->now(), 'utc_datetime_immutable')
-            ->getQuery()
-            ->getResult();
-        $inEffect = array_map(static fn (SharedHoldRecord $record): SharedHold => $record->hold, $records);
+        $ahead = Criteria::create()->where(Criteria::expr()->gt('until', $this->clock->now()));
+        $inEffect = $this->entities->getRepository(SharedHoldRecord::class)->matching($ahead)
+            ->map(static fn (SharedHoldRecord $record): SharedHold => $record->hold)
+            ->toArray();
 
         return array_values(array_filter(SharedHold::cases(), static fn (SharedHold $hold): bool => in_array($hold, $inEffect, true)));
     }

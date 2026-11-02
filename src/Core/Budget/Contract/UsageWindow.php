@@ -29,7 +29,7 @@ enum UsageWindow: string
         return array_last($windows);
     }
 
-    // A reset in the past or further ahead than the window is long is a frozen or wrong answer from the vendor.
+    // Refused because a reset in the past or further ahead than the window is long can only come from a frozen or wrong answer.
     public function refusalOfReset(DateTimeImmutable $resetsAt, DateTimeImmutable $now): ?ReadingOutcome
     {
         $secondsToReset = $resetsAt->getTimestamp() - $now->getTimestamp();

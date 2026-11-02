@@ -13,7 +13,7 @@ use Intakt\Core\Budget\Contract\WindowUse;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// The measured-use rules only; BudgetGuard asks it once no hold of the account or the install refuses the start.
+// Not the StartGuard itself, because BudgetGuard asks it only once no hold of the account or the install refuses the start.
 final readonly class CeilingStartGuard
 {
     public const int TRUSTED_FOR_SECONDS = 1800;
