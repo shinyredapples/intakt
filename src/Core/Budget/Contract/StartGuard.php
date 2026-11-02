@@ -12,4 +12,7 @@ interface StartGuard
 {
     #[NoDiscard]
     public function decide(Account $account, int $callsRunning): StartDecision;
+
+    #[NoDiscard]
+    public function decideMerge(): StartDecision;
 }

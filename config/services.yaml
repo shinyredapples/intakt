@@ -32,11 +32,15 @@ services:
         decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
         decoration_on_invalid: ignore
 
-    # The same guard class with the lower ceilings for shadow work, so the weekly pace applies; the scan builds the first one for the start guard.
-    intakt.budget.shadow_ceiling_guard:
+    # The same guards with the lower ceilings for shadow work, so the weekly pace, the holds and the cooldowns apply; the scan builds the first ones for the start guard.
+    intakt.budget.shadow_ceilings:
         class: Intakt\Core\Budget\Domain\CeilingStartGuard
         arguments:
             $ceilings: '%intakt.budget.shadow_ceilings%'
+    intakt.budget.shadow_ceiling_guard:
+        class: Intakt\Core\Budget\Domain\BudgetGuard
+        arguments:
+            $ceilings: '@intakt.budget.shadow_ceilings'
 
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
     Symfony\Component\Lock\Store\FlockStore:
@@ -82,6 +86,11 @@ services:
     Intakt\Core\Mcp\Infrastructure\OwnerTokenHandler:
         arguments:
             $configuredToken: '%env(MCP_OWNER_TOKEN)%'
+
+    # Read from inside the container only, because the admin API stays bound to localhost.
+    Intakt\Core\Server\Infrastructure\AdminApi:
+        arguments:
+            $baseUrl: '%env(FRANKENPHP_ADMIN_URL)%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

@@ -8,17 +8,13 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\StartDecision;
-use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Budget\Contract\WindowUse;
-use Override;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// Built twice because shadow work needs the same rules over lower ceilings (see config/services.yaml).
-#[AsAlias(StartGuard::class)]
-final readonly class CeilingStartGuard implements StartGuard
+// Not the StartGuard itself, because BudgetGuard asks it only once no hold of the account or the install refuses the start.
+final readonly class CeilingStartGuard
 {
     public const int TRUSTED_FOR_SECONDS = 1800;
     public const int PARALLEL_TRUSTED_FOR_SECONDS = 300;
@@ -35,7 +31,6 @@ final readonly class CeilingStartGuard implements StartGuard
     ) {
     }
 
-    #[Override]
     public function decide(Account $account, int $callsRunning): StartDecision
     {
         $uses = $this->currentUsesOf($account);

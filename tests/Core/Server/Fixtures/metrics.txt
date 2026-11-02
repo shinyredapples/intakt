@@ -1,0 +1,47 @@
+# HELP caddy_http_requests_in_flight Number of requests currently handled by this server.
+# TYPE caddy_http_requests_in_flight gauge
+caddy_http_requests_in_flight{handler="subroute",server="srv0"} 0
+# HELP frankenphp_busy_threads Number of busy PHP threads
+# TYPE frankenphp_busy_threads gauge
+frankenphp_busy_threads 2
+# HELP frankenphp_busy_workers Number of busy PHP workers for this worker
+# TYPE frankenphp_busy_workers gauge
+frankenphp_busy_workers{worker="app"} 0
+# HELP frankenphp_opcache_restarts Number of restarts of opcache's shared memory scheduled, by reason (experimental, should stay at zero)
+# TYPE frankenphp_opcache_restarts counter
+frankenphp_opcache_restarts{reason="hash"} 0
+frankenphp_opcache_restarts{reason="manual"} 0
+frankenphp_opcache_restarts{reason="oom"} 0
+# HELP frankenphp_queue_depth Number of regular queued requests
+# TYPE frankenphp_queue_depth gauge
+frankenphp_queue_depth 0
+# HELP frankenphp_ready_workers Running workers that have successfully called frankenphp_handle_request at least once
+# TYPE frankenphp_ready_workers gauge
+frankenphp_ready_workers{worker="app"} 2
+# HELP frankenphp_total_threads Total number of PHP threads
+# TYPE frankenphp_total_threads gauge
+frankenphp_total_threads 6
+# HELP frankenphp_total_workers Total number of PHP workers for this worker
+# TYPE frankenphp_total_workers gauge
+frankenphp_total_workers{worker="app"} 2
+# HELP frankenphp_worker_request_count 
+# TYPE frankenphp_worker_request_count counter
+frankenphp_worker_request_count{worker="app"} 1
+# HELP frankenphp_worker_request_time 
+# TYPE frankenphp_worker_request_time counter
+frankenphp_worker_request_time{worker="app"} 14.794272409
+# HELP frankenphp_worker_restarts Number of PHP worker restarts for this worker
+# TYPE frankenphp_worker_restarts counter
+frankenphp_worker_restarts{worker="app"} 2
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 20
+# HELP mercure_subscribers_connected The current number of running subscribers
+# TYPE mercure_subscribers_connected gauge
+mercure_subscribers_connected 0
+# HELP mercure_subscribers_total Total number of handled subscribers
+# TYPE mercure_subscribers_total counter
+mercure_subscribers_total 0
+# HELP mercure_updates_total Total number of handled updates
+# TYPE mercure_updates_total counter
+mercure_updates_total 0

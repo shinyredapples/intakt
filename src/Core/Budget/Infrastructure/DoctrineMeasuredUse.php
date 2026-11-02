@@ -60,7 +60,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
         return new WindowUse($latest->usage(), $latest->takenAt, max(0, $age));
     }
 
-    // A reset in the past or further ahead than the window is long is a frozen or wrong reading, so the last good one stays.
+    // A refused reading stores nothing, so the last good one stays.
     private function refusalOf(WindowReading $reading, DateTimeImmutable $now): ?ReadingOutcome
     {
         $resetsAt = $reading->usage->resetsAt;
@@ -68,13 +68,7 @@ final readonly class DoctrineMeasuredUse implements MeasuredUse
             return null;
         }
 
-        $secondsToReset = $resetsAt->getTimestamp() - $now->getTimestamp();
-
-        return match (true) {
-            $secondsToReset <= 0 => ReadingOutcome::ResetAlreadyPassed,
-            $secondsToReset > $reading->window->seconds() => ReadingOutcome::ResetBeyondWindow,
-            default => null,
-        };
+        return $reading->window->refusalOfReset($resetsAt, $now);
     }
 
     // Only the latest reading of a window is ever read, so the older ones are dropped to keep the table at about one row per window.
