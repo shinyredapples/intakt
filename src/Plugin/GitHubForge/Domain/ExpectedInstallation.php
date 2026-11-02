@@ -9,8 +9,8 @@ use InvalidArgumentException;
 final readonly class ExpectedInstallation
 {
     /**
-     * @param array<string, string> $permissions permission name to level
-     * @param list<string>          $repositories full names
+     * @param array<string, string> $permissions
+     * @param list<string>          $repositories
      */
     public function __construct(
         public array $permissions,
@@ -18,7 +18,7 @@ final readonly class ExpectedInstallation
     ) {
     }
 
-    // The settings are "name:level,name:level" and "owner/repo,owner/repo", the shape of an environment variable.
+    // Settings are env-shaped strings, because the container hands them over as such; they are "name:level,name:level" and "owner/repo,owner/repo", parsed here once.
     public static function fromSettings(string $permissions, string $repositories): self
     {
         $levels = [];
@@ -39,7 +39,7 @@ final readonly class ExpectedInstallation
     }
 
     /**
-     * @return list<string> one sentence per difference, none when the installation matches
+     * @return list<string>
      */
     public function differencesFrom(Installation $installation): array
     {

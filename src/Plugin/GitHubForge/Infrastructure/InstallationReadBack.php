@@ -69,12 +69,19 @@ final readonly class InstallationReadBack
     private function permissions(#[SensitiveParameter] string $jwt): array
     {
         $answer = $this->get('/app/installations/'.rawurlencode($this->installationId), $jwt);
-        $permissions = $answer['permissions'] ?? null;
-        if (!is_array($permissions) || array_filter($permissions, static fn (mixed $level, mixed $name): bool => !is_string($level) || !is_string($name), ARRAY_FILTER_USE_BOTH) !== []) {
+        $granted = $answer['permissions'] ?? null;
+        if (!is_array($granted)) {
             throw InstallationNotReadBack::becauseTheAnswerIsInvalid();
         }
 
-        /** @var array<string, string> $permissions */
+        $permissions = [];
+        foreach ($granted as $name => $level) {
+            if (!is_string($name) || !is_string($level)) {
+                throw InstallationNotReadBack::becauseTheAnswerIsInvalid();
+            }
+            $permissions[$name] = $level;
+        }
+
         return $permissions;
     }
 
@@ -84,7 +91,7 @@ final readonly class InstallationReadBack
     private function repositories(#[SensitiveParameter] string $token): array
     {
         $names = [];
-        for ($page = 1; ; ++$page) {
+        for ($page = 1;; ++$page) {
             $answer = $this->get('/installation/repositories?per_page='.self::PAGE_SIZE.'&page='.$page, $token);
             $listed = $answer['repositories'] ?? null;
             $total = $answer['total_count'] ?? null;
@@ -92,7 +99,7 @@ final readonly class InstallationReadBack
                 throw InstallationNotReadBack::becauseTheAnswerIsInvalid();
             }
 
-            $names = [...$names, ...array_map($this->fullName(...), $listed)];
+            $names = [...$names, ...array_values(array_map($this->fullName(...), $listed))];
             if ([] === $listed || count($names) >= $total) {
                 return $names;
             }

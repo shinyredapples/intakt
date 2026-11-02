@@ -39,6 +39,21 @@ final class InstallationReadBackTest extends TestCase
     private const string PERMISSIONS = 'contents:write,pull_requests:write,workflows:write';
     private const string REPOSITORIES = 'acme/widget,acme/gadget';
 
+    /** @var list<string> */
+    private array $pages = ['installation_repositories.json'];
+    private int $installationStatus = 200;
+    private int $tokenStatus = 201;
+    private bool $transportError = false;
+    private ?string $installationBody = null;
+    private AppKey $key;
+    private RecordingLogger $logger;
+
+    protected function setUp(): void
+    {
+        $this->key = AppKey::generate();
+        $this->logger = new RecordingLogger();
+    }
+
     public function testAnInstallationThatMatchesTheConfigurationPasses(): void
     {
         $installation = $this->readBack(self::PERMISSIONS, self::REPOSITORIES)->check();
@@ -52,7 +67,7 @@ final class InstallationReadBackTest extends TestCase
         $readBack = $this->readBack('contents:read,pull_requests:write,workflows:write', self::REPOSITORIES);
 
         $this->expectException(InstallationDoesNotMatchConfiguration::class);
-        $this->expectExceptionMessage('permission contents is expected at read but granted at write');
+        $this->expectExceptionMessageMatches('/permission\ contents\ is\ expected\ at\ read\ but\ granted\ at\ write/');
 
         (void) $readBack->check();
     }
@@ -62,7 +77,7 @@ final class InstallationReadBackTest extends TestCase
         $readBack = $this->readBack(self::PERMISSIONS.',issues:write', self::REPOSITORIES);
 
         $this->expectException(InstallationDoesNotMatchConfiguration::class);
-        $this->expectExceptionMessage('permission issues is expected at write but not granted');
+        $this->expectExceptionMessageMatches('/permission\ issues\ is\ expected\ at\ write\ but\ not\ granted/');
 
         (void) $readBack->check();
     }
@@ -72,7 +87,7 @@ final class InstallationReadBackTest extends TestCase
         $readBack = $this->readBack('contents:write,pull_requests:write', self::REPOSITORIES);
 
         $this->expectException(InstallationDoesNotMatchConfiguration::class);
-        $this->expectExceptionMessage('permission workflows is granted at write but not expected');
+        $this->expectExceptionMessageMatches('/permission\ workflows\ is\ granted\ at\ write\ but\ not\ expected/');
 
         (void) $readBack->check();
     }
@@ -82,7 +97,7 @@ final class InstallationReadBackTest extends TestCase
         $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES.',acme/other');
 
         $this->expectException(InstallationDoesNotMatchConfiguration::class);
-        $this->expectExceptionMessage('repository acme/other is expected but not in the installation');
+        $this->expectExceptionMessageMatches('/repository\ acme\/other\ is\ expected\ but\ not\ in\ the\ installation/');
 
         (void) $readBack->check();
     }
@@ -92,31 +107,33 @@ final class InstallationReadBackTest extends TestCase
         $readBack = $this->readBack(self::PERMISSIONS, 'acme/widget');
 
         $this->expectException(InstallationDoesNotMatchConfiguration::class);
-        $this->expectExceptionMessage('repository acme/gadget is in the installation but not expected');
+        $this->expectExceptionMessageMatches('/repository\ acme\/gadget\ is\ in\ the\ installation\ but\ not\ expected/');
 
         (void) $readBack->check();
     }
 
     public function testRepositoriesOnASecondPageAreReadBack(): void
     {
-        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES, pageFixtures: ['installation_pageFixturespage_1.json', 'installation_pageFixturespage_2.json']);
+        $this->pages = ['installation_repositories_page_1.json', 'installation_repositories_page_2.json'];
 
-        self::assertSame(['acme/widget', 'acme/gadget'], $readBack->check()->repositories);
+        self::assertSame(['acme/widget', 'acme/gadget'], $this->readBack(self::PERMISSIONS, self::REPOSITORIES)->check()->repositories);
     }
 
     public function testARefusedReadFailsTheCheckWithTheStatus(): void
     {
-        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES, installationStatus: 401);
+        $this->installationStatus = 401;
+        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES);
 
         $this->expectException(InstallationNotReadBack::class);
-        $this->expectExceptionMessage('status 401');
+        $this->expectExceptionMessageMatches('/status\ 401/');
 
         (void) $readBack->check();
     }
 
     public function testATransportErrorFailsTheCheck(): void
     {
-        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES, transportError: true);
+        $this->transportError = true;
+        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES);
 
         $this->expectException(InstallationNotReadBack::class);
 
@@ -125,17 +142,19 @@ final class InstallationReadBackTest extends TestCase
 
     public function testAFailedTokenExchangeFailsTheCheck(): void
     {
-        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES, tokenStatus: 401);
+        $this->tokenStatus = 401;
+        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES);
 
         $this->expectException(InstallationNotReadBack::class);
-        $this->expectExceptionMessage('status 401');
+        $this->expectExceptionMessageMatches('/status\ 401/');
 
         (void) $readBack->check();
     }
 
     public function testAnAnswerWithoutPermissionsFailsTheCheck(): void
     {
-        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES, installationBody: '{"id":678}');
+        $this->installationBody = '{"id":678}';
+        $readBack = $this->readBack(self::PERMISSIONS, self::REPOSITORIES);
 
         $this->expectException(InstallationNotReadBack::class);
 
@@ -144,9 +163,9 @@ final class InstallationReadBackTest extends TestCase
 
     public function testNeitherTheKeyNorTheTokenReachesTheLogsOrTheMessage(): void
     {
-        $key = AppKey::generate();
-        $logger = new RecordingLogger();
-        $readBack = $this->readBack('contents:read', self::REPOSITORIES, key: $key, logger: $logger);
+        $key = $this->key;
+        $logger = $this->logger;
+        $readBack = $this->readBack('contents:read', self::REPOSITORIES);
 
         try {
             (void) $readBack->check();
@@ -174,43 +193,29 @@ final class InstallationReadBackTest extends TestCase
         ExpectedInstallation::fromSettings('contents', 'acme/widget');
     }
 
-    /**
-     * @param list<string> $pageFixtures fixtures answered in turn, one per page
-     */
-    private function readBack(
-        string $permissions,
-        string $repositories,
-        array $pageFixtures = [],
-        int $installationStatus = 200,
-        bool $transportError = false,
-        int $tokenStatus = 201,
-        ?string $installationBody = null,
-        ?AppKey $key = null,
-        ?RecordingLogger $logger = null,
-    ): InstallationReadBack {
-        $pages = [] === $pageFixtures ? ['installation_repositories.json'] : $pageFixtures;
+    private function readBack(string $permissions, string $repositories): InstallationReadBack
+    {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $http = new MockHttpClient(function (string $method, string $url) use (&$pages, $installationStatus, $transportError, $tokenStatus, $installationBody): ResponseInterface {
+        $http = new MockHttpClient(function (string $method, string $url): ResponseInterface {
             if (str_ends_with($url, '/access_tokens')) {
-                return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => $tokenStatus]);
+                return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => $this->tokenStatus]);
             }
-            if ($transportError) {
+            if ($this->transportError) {
                 throw new TransportException('connection reset');
             }
             if (str_contains($url, '/installation/repositories')) {
-                return new MockResponse(self::recorded((string) array_shift($pages)));
+                return new MockResponse($this->recorded((string) array_shift($this->pages)));
             }
 
-            return new MockResponse($installationBody ?? self::recorded('installation.json'), ['http_code' => $installationStatus]);
+            return new MockResponse($this->installationBody ?? $this->recorded('installation.json'), ['http_code' => $this->installationStatus]);
         });
-        $jwt = new AppJwt('12345', ($key ?? AppKey::generate())->private, $clock);
-        $logger ??= new RecordingLogger();
-        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, $logger), '678', $clock);
+        $jwt = new AppJwt('12345', $this->key->private, $clock);
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, $this->logger), '678', $clock);
 
-        return new InstallationReadBack($jwt, $tokens, $http, ExpectedInstallation::fromSettings($permissions, $repositories), '678', $logger);
+        return new InstallationReadBack($jwt, $tokens, $http, ExpectedInstallation::fromSettings($permissions, $repositories), '678', $this->logger);
     }
 
-    private static function recorded(string $fixture): string
+    private function recorded(string $fixture): string
     {
         return (string) file_get_contents(__DIR__.'/Fixtures/'.$fixture);
     }

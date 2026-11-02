@@ -7,8 +7,8 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 final readonly class Installation
 {
     /**
-     * @param array<string, string> $permissions permission name to level
-     * @param list<string>          $repositories full names
+     * @param array<string, string> $permissions
+     * @param list<string>          $repositories
      */
     public function __construct(
         public array $permissions,

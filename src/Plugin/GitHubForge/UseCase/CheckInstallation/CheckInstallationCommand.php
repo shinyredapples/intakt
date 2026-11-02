@@ -10,7 +10,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-// The start door: whatever starts Intakt runs this first and stops on a non-zero exit.
+// A command is the start door because no orchestrator start sequence exists yet; it must run first and stop the start on a non-zero exit.
 #[AsCommand(name: 'intakt:forge:installation', description: 'Read the GitHub App installation back and refuse a permission or repository mismatch')]
 final readonly class CheckInstallationCommand
 {
