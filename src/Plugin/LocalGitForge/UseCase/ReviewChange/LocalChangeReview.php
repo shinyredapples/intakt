@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
+use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\RequestedRound;
@@ -21,6 +22,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Throwable;
 
 // Lives in the forge plugin because it reads the change from a local repository, which the core review module may not reach; the command and the MCP tool share it.
 final readonly class LocalChangeReview
@@ -45,6 +47,23 @@ final readonly class LocalChangeReview
         ));
     }
 
+    // Queues the next round without waiting, so the snapshot outlives this call and is removed only when the round cannot be queued; a removal after the judge is not built yet.
+    public function startOf(ReviewChangeInput $input): string
+    {
+        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
+        $change = $forge->change(new ChangeId($input->change));
+        $request = $this->requestFor($input, $change);
+        $snapshot = $forge->keepSnapshotOf($change->commits->head);
+
+        try {
+            return $this->reviews->start($request($snapshot));
+        } catch (Throwable $failure) {
+            $forge->removeSnapshot($snapshot);
+
+            throw $failure;
+        }
+    }
+
     public function stop(): void
     {
         $this->onStop->stop();
@@ -57,7 +76,7 @@ final readonly class LocalChangeReview
     {
         $panel = $this->panels->panelForChange($input->project, $this->describe($change));
         $identity = new VerdictIdentity($change->commits, ReviewTerms::of($input->task, $input->checkCommand, $panel));
-        $round = new RequestedRound($input->change, $input->round);
+        $round = new RequestedRound($input->change, $input->round, new ChangeSource($input->repository, $input->base));
 
         return static fn (string $snapshot): ChangeReviewRequest => new ChangeReviewRequest($input->project, $snapshot, $input->task, $change->diff->patch, $round, $identity, $panel);
     }

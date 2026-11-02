@@ -19,6 +19,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -112,6 +113,11 @@ final readonly class RoundFixture
     public function startFor(string $change, MessageBusInterface $queue, int $reviewers): string
     {
         return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change)), $queue);
+    }
+
+    public function startFromSource(ChangeSource $source): string
+    {
+        return $this->startWith(new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, 1)), $this->panelOf(1), new RequestedRound(self::CHANGE, null, $source)), $this->bus);
     }
 
     // The identity names its own task and panel size, so a test can hand in one that does not describe the round.

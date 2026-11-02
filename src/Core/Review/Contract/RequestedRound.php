@@ -11,6 +11,8 @@ final readonly class RequestedRound
         public string $change,
         // The number the caller expects the round to get, checked once the number is taken under the change's lock, because a round another caller opened first would otherwise take it unnoticed.
         public ?int $number = null,
+        // Null for a round whose change was not read from a repository, for example a shadow round.
+        public ?ChangeSource $source = null,
     ) {
     }
 }

@@ -18,6 +18,12 @@ final readonly class Review
         $this->change = $rounds[0]->change;
     }
 
+    // Only the latest round counts, because the button starts the round after it on the head the change has now.
+    public function source(): ?RoundSource
+    {
+        return array_last($this->rounds)->source;
+    }
+
     public function tokens(): TokenCount
     {
         return array_reduce($this->rounds, static fn (TokenCount $sum, ReviewedRound $round): TokenCount => $sum->plus($round->tokens), TokenCount::none());
