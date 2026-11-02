@@ -118,13 +118,16 @@ final class ReviewServerContractTest extends KernelTestCase
         $this->client->call('tools/call', ['name' => 'search_files', 'arguments' => ['roundId' => $this->roundId, 'text' => 'RoundFixture'], '_meta' => ['progressToken' => 'p1']], 5);
 
         preg_match_all('/^data: (.*)$/m', $this->client->lastBody(), $events);
+        /** @var list<int> $progress */
         $progress = [];
 
         foreach ($events[1] as $event) {
             $message = json_decode($event, true, flags: JSON_THROW_ON_ERROR);
 
             if (is_array($message) && 'notifications/progress' === ($message['method'] ?? null)) {
-                $progress[] = OwnerServerClient::at($message, 'params', 'progress');
+                $step = OwnerServerClient::at($message, 'params', 'progress');
+                self::assertIsInt($step);
+                $progress[] = $step;
             }
         }
 

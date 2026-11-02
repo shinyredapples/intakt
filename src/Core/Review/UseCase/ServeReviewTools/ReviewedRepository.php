@@ -31,7 +31,7 @@ final readonly class ReviewedRepository
      */
     public function reporting(Closure $fileSearched): self
     {
-        return clone($this, ['fileSearched' => $fileSearched]);
+        return clone ($this, ['fileSearched' => $fileSearched]);
     }
 
     public function readFile(string $roundId, string $path): string
@@ -61,7 +61,7 @@ final readonly class ReviewedRepository
         try {
             return new Checkout($round->checkoutRoot());
         } catch (InvalidArgumentException $unavailable) {
-            throw new ToolCallException('The head of this round is not available.', previous: $unavailable);
+            throw new ToolCallException('The head of this round is not available.', $unavailable->getCode(), previous: $unavailable);
         }
     }
 
@@ -73,7 +73,7 @@ final readonly class ReviewedRepository
         try {
             return $read();
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
-            throw new ToolCallException($refused->getMessage(), previous: $refused);
+            throw new ToolCallException($refused->getMessage(), $refused->getCode(), previous: $refused);
         }
     }
 }
