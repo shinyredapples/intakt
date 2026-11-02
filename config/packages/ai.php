@@ -202,6 +202,7 @@ return static function (ContainerConfigurator $container): void {
         'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:%kernel.project_dir%/var/memory_%kernel.environment%.db', 'table_name' => 'project_memory']]],
         'vectorizer' => ['memory' => ['platform' => $embeddings, 'model' => 'text-embedding-3-small']],
         'indexer' => ['memory' => ['vectorizer' => 'ai.vectorizer.memory', 'store' => 'ai.store.sqlite.memory']],
+        'retriever' => ['memory' => ['vectorizer' => 'ai.vectorizer.memory', 'store' => 'ai.store.sqlite.memory']],
     ];
 
     $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations, ...$memory]);

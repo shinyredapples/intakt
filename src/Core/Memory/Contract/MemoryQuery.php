@@ -10,6 +10,7 @@ final readonly class MemoryQuery
      * @param list<string> $files
      */
     public function __construct(
+        public string $project,
         public array $files,
         public int $maxBytes,
     ) {

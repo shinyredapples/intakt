@@ -37,7 +37,7 @@ When nothing is allowed, work waits and the board shows each account's cause (a 
 
 A job that hits a vendor limit (a structured signal, see Limits and accounting) stops at a clean point and its work moves on:
 - Its commits are pushed to its work branch, its conversation is kept in the message store (`symfony/ai-doctrine-message-store`), and a hand-off note (what was done, what is left, the open findings) goes to the [shared project memory](10-shared-project-memory.md#hand-off-at-a-limit). The note is written by the orchestrator only, from its own facts (the pushed commits, the task and the findings it holds).
-- The next account the ranking allows continues it at once, with the history and the note through the agent's memory input (`MemoryInputProcessor`, plan T17). It does not wait for the first account's reset.
+- The next account the ranking allows continues it at once, with the history and the note through the agent's memory input (`MemoryInputProcessor`, plan T43, which still has to replace or avoid the processor's preamble that ranks memory above the system prompt; see [hand-off at a limit](10-shared-project-memory.md#hand-off-at-a-limit)). It does not wait for the first account's reset.
 - The reason: a limit is the account's, not the task's, and waiting for a reset while another account has room wastes both the room and the work already paid for.
 - A build may continue on another vendor's account within the tiers its role allows, and the model change is recorded on the task. A review is never continued by another vendor: it starts again on another account of the same vendor, and when none has room the substitute and catch-up rules of [Reviews](07-reviews.md) apply.
 

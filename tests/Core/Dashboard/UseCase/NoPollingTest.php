@@ -18,6 +18,7 @@ final class NoPollingTest extends DashboardPageTestCase
         yield 'project list' => ['/projects'];
         yield 'review list' => ['/reviews'];
         yield 'review list of one project' => ['/reviews?project=alpha'];
+        yield 'review page' => ['/reviews/round-1'];
     }
 
     #[DataProvider('pages')]

@@ -40,8 +40,70 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => [], 'follow_ups' => []]);
     }
 
+    public function startRoundOf(string $change, string $round, int $number): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number]);
+    }
+
+    public function startReviewer(string $round, string $role): void
+    {
+        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));
+    }
+
+    public function answer(string $round, string $role, int $findings): void
+    {
+        $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
+    }
+
+    public function failReviewer(string $round, string $role, string $failure): void
+    {
+        $this->add(LedgerEventKind::ReviewerFailed, $this->reviewer($round, $role) + ['failure' => $failure]);
+    }
+
+    public function owesCatchUp(string $round, string $role): void
+    {
+        $this->add(LedgerEventKind::CatchUpOwed, $this->reviewer($round, $role) + ['substitute' => 'openai']);
+    }
+
     /**
-     * @param array<string, int|string|list<string>> $payload
+     * @param array<string, 'act'|'defer'|'reject'> $marks
+     */
+    public function judgeFindings(string $round, array $marks): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => array_keys(array_filter($marks, static fn (string $mark): bool => 'act' === $mark)),
+            'follow_ups' => array_keys(array_filter($marks, static fn (string $mark): bool => 'defer' === $mark)),
+            'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], array_keys($marks)),
+        ]);
+    }
+
+    /**
+     * @param list<string> $act
+     * @param list<string> $followUps
+     */
+    public function judgeMarksOnly(string $round, array $act, array $followUps): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => $act, 'follow_ups' => $followUps]);
+    }
+
+    public function useTokens(string $round, int $prompt, int $completion): void
+    {
+        $call = Uuid::v7()->toRfc4122();
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round]);
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'model-a', 'prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]]]);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function reviewer(string $round, string $role): array
+    {
+        return ['round' => $round, 'reviewer' => $round.'-'.$role, 'role' => $role, 'tier' => 'standard'];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
      */
     private function add(LedgerEventKind $kind, array $payload): void
     {

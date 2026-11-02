@@ -46,29 +46,29 @@ final class SqliteMemoryStoreTest extends TestCase
 
     public function testAnEntryIndexedInTheSqliteStoreIsRetrievedForItsFile(): void
     {
-        $this->index->index(new MemoryEntry('Run the migration first.', ['src/Db.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Run the migration first.', ['src/Db.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['src/Db.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['src/Db.php'], 1000));
 
-        self::assertEquals([new MemoryEntry('Run the migration first.', ['src/Db.php'])], $found->entries);
+        self::assertEquals([new MemoryEntry('alpha', 'Run the migration first.', ['src/Db.php'])], $found->entries);
     }
 
     public function testAnEntryForAPathWithAQuoteIsRetrievedFromTheSqliteStore(): void
     {
-        $this->index->index(new MemoryEntry('Note.', ['src/Quote"d.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Note.', ['src/Quote"d.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['src/Quote"d.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['src/Quote"d.php'], 1000));
 
-        self::assertEquals([new MemoryEntry('Note.', ['src/Quote"d.php'])], $found->entries);
+        self::assertEquals([new MemoryEntry('alpha', 'Note.', ['src/Quote"d.php'])], $found->entries);
     }
 
     public function testEntriesForFileListsThatJoinToTheSameTextAreBothKept(): void
     {
-        $this->index->index(new MemoryEntry('Same note.', ['a b.php']));
-        $this->index->index(new MemoryEntry('Same note.', ['a', 'b.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Same note.', ['a b.php']));
+        $this->index->index(new MemoryEntry('alpha', 'Same note.', ['a', 'b.php']));
 
-        $found = $this->memory->relevantTo(new MemoryQuery(['a b.php'], 1000));
+        $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a b.php'], 1000));
 
-        self::assertEquals([new MemoryEntry('Same note.', ['a b.php'])], $found->entries);
+        self::assertEquals([new MemoryEntry('alpha', 'Same note.', ['a b.php'])], $found->entries);
     }
 }

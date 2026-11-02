@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -41,6 +42,7 @@ use Throwable;
 #[UsesClass(Checkout::class)]
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(ReviewBrief::class)]
+#[UsesClass(ChangeUnderReview::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Judgement::class)]
@@ -242,6 +244,6 @@ final class AccountLimitedVendorTest extends TestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief('Review the change.', 'diff --git a/a b/a', []), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 }

@@ -10,7 +10,6 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
-use JsonException;
 
 // Payloads are decoded only here, so the pages need nothing from the Review module that writes them.
 final readonly class LedgerReviews
@@ -88,12 +87,6 @@ final readonly class LedgerReviews
             return [];
         }
 
-        try {
-            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return [];
-        }
-
-        return is_array($payload) ? array_filter($payload, is_string(...), ARRAY_FILTER_USE_KEY) : [];
+        return LedgerPayload::of($recorded);
     }
 }
