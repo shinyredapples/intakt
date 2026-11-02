@@ -10,12 +10,14 @@ final readonly class GateResult
     private const int MAXIMUM_FINDING_LENGTH = 300;
 
     /**
-     * @param list<string> $findings
+     * @param list<string>         $findings
+     * @param array<string, float> $slowest  seconds per test file, shown beside the findings and never counted as one
      */
     private function __construct(
         public string $gate,
         public array $findings,
         private ?string $note = null,
+        private array $slowest = [],
     ) {
     }
 
@@ -44,7 +46,15 @@ final readonly class GateResult
 
     public function noted(string $note): self
     {
-        return new self($this->gate, $this->findings, $note);
+        return new self($this->gate, $this->findings, $note, $this->slowest);
+    }
+
+    /**
+     * @param array<string, float> $slowest
+     */
+    public function withSlowest(array $slowest): self
+    {
+        return new self($this->gate, $this->findings, $this->note, $slowest);
     }
 
     public function isPassing(): bool
@@ -63,7 +73,24 @@ final readonly class GateResult
             'omitted' => count($this->findings) - count($shown),
         ];
 
-        return json_encode(null === $this->note ? $report : $report + ['note' => $this->note], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $report += null === $this->note ? [] : ['note' => $this->note];
+        $report += [] === $this->slowest ? [] : ['slowest' => $this->slowestList()];
+
+        return json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * @return list<array{file: string, seconds: float}>
+     */
+    private function slowestList(): array
+    {
+        $list = [];
+
+        foreach ($this->slowest as $file => $seconds) {
+            $list[] = ['file' => $file, 'seconds' => round($seconds, 3)];
+        }
+
+        return $list;
     }
 
     private function shorten(string $finding): string
