@@ -56,7 +56,7 @@ final readonly class ShadowRoundHold
         return array_values(array_unique($providers, SORT_REGULAR));
     }
 
-    // A provider without an enabled account starts: the vendor names that failure itself.
+    // A provider without an enabled account starts, because the vendor names that failure itself.
     private function bestDecisionFor(Provider $provider): StartDecision
     {
         $accounts = $this->accounts->of($provider);

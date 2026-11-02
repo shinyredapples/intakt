@@ -17,7 +17,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// Built twice: with the owner's ceilings as the start guard, and with the lower shadow ceilings as the shadow start guard (config/services.yaml).
+// Built twice because shadow work needs the same rules over lower ceilings (see config/services.yaml).
 #[AsAlias(StartGuard::class)]
 final readonly class CeilingStartGuard implements StartGuard, ShadowStartGuard
 {

@@ -9,6 +9,7 @@ use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
+use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ChangeDecision;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
@@ -28,7 +29,6 @@ use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Symfony\Component\Serializer\SerializerInterface;
-use Intakt\Core\Review\Contract\RequestedRound;
 
 #[Group('persistence')]
 #[CoversClass(ShadowRoundHold::class)]
@@ -144,6 +144,6 @@ final class ShadowRoundHoldTest extends KernelTestCase
         $payload = json_decode($held[0]->event->payload, true, flags: JSON_THROW_ON_ERROR);
         assert(is_array($payload));
 
-        return $payload;
+        return array_combine(array_map(strval(...), array_keys($payload)), $payload);
     }
 }
