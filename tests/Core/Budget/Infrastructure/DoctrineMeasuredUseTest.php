@@ -32,6 +32,7 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(WindowReadingRecord::class)]
 #[CoversClass(WindowUse::class)]
 #[CoversClass(UsageWindow::class)]
+#[CoversClass(ReadingOutcome::class)]
 #[UsesClass(WindowReading::class)]
 #[UsesClass(Usage::class)]
 #[UsesClass(Account::class)]

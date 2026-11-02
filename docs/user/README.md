@@ -198,6 +198,20 @@ Intakt has a ledger that can store review events (review started, reviewer start
 php bin/console doctrine:migrations:migrate
 ```
 
+### Choosing the database
+
+Intakt uses SQLite unless you set `DATABASE_URL` (in `.env.local` or the real environment) to another database; MySQL, MariaDB and PostgreSQL are tested too, for example `DATABASE_URL="postgresql://intakt@localhost:5432/intakt"`. Intakt finds out the MySQL or MariaDB server version itself on the first connection. For PostgreSQL it does not ask the server and always uses its support for PostgreSQL 12 and later, the newest it has. The test environment appends `_test` to the database name, so tests against `intakt` use the database `intakt_test`. In CI, a pull request runs the tests on MySQL, MariaDB and PostgreSQL only when it touches persistence (the ledger, migrations, Doctrine's configuration, the Composer files or the CI definition under `.github/workflows/` and `.github/ci/`, or adds a line naming Doctrine in `src/`); when that check fails, the CI run fails rather than skipping them, and every push to main runs them. SQLite runs on every change.
+
+Stored events cannot be changed or removed. Intakt refuses to update or delete one with a `LedgerEventsAreAppendOnly` error, and on SQLite the same migration adds database triggers that abort any `UPDATE` or `DELETE` on the table, and any insert that would replace a stored event (for example `INSERT OR REPLACE` with the position or id of an existing event), even from another tool. On other database engines only the refusal inside Intakt applies.
+
+Read the events back, oldest first, with:
+
+```
+php bin/console intakt:ledger:events
+```
+
+It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
+
 ## Measured use of subscription windows
 
 Intakt can keep, for each AI account, the latest use of its five-hour and weekly windows as the AI company measured it, with the time the window resets and how old the reading is. A reading belongs to its account only: another account, of the same company or another one, never sees it. A reading whose reset time has already passed, or lies further ahead than the window is long, is not kept, and the previous reading stays. The table is created with `php bin/console doctrine:migrations:migrate`.
@@ -220,20 +234,6 @@ budget:
 ```
 
 Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
-
-### Choosing the database
-
-Intakt uses SQLite unless you set `DATABASE_URL` (in `.env.local` or the real environment) to another database; MySQL, MariaDB and PostgreSQL are tested too, for example `DATABASE_URL="postgresql://intakt@localhost:5432/intakt"`. Intakt finds out the MySQL or MariaDB server version itself on the first connection. For PostgreSQL it does not ask the server and always uses its support for PostgreSQL 12 and later, the newest it has. The test environment appends `_test` to the database name, so tests against `intakt` use the database `intakt_test`. In CI, a pull request runs the tests on MySQL, MariaDB and PostgreSQL only when it touches persistence (the ledger, migrations, Doctrine's configuration, the Composer files or the CI definition under `.github/workflows/` and `.github/ci/`, or adds a line naming Doctrine in `src/`); when that check fails, the CI run fails rather than skipping them, and every push to main runs them. SQLite runs on every change.
-
-Stored events cannot be changed or removed. Intakt refuses to update or delete one with a `LedgerEventsAreAppendOnly` error, and on SQLite the same migration adds database triggers that abort any `UPDATE` or `DELETE` on the table, and any insert that would replace a stored event (for example `INSERT OR REPLACE` with the position or id of an existing event), even from another tool. On other database engines only the refusal inside Intakt applies.
-
-Read the events back, oldest first, with:
-
-```
-php bin/console intakt:ledger:events
-```
-
-It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
 
 ## Summarizing a branch
 
