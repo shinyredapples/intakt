@@ -17,6 +17,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -29,6 +30,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[Group('persistence')]
 #[CoversClass(RunReviewRoundHandler::class)]
+#[CoversClass(RoundOpening::class)]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(ReviewerLeases::class)]

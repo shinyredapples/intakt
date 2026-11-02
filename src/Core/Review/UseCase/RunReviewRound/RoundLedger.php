@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -36,6 +37,17 @@ final readonly class RoundLedger
             'change' => $round->change(),
             'number' => $round->number(),
         ] + $this->sourceOf($round, $source));
+    }
+
+    // No round exists yet, so the event names the change and the number asked for; the decision is the reason, in the words the guard uses.
+    public function shadowRoundHeld(RunReviewRound $command, Provider $provider, StartDecision $decision): void
+    {
+        $this->append(LedgerEventKind::ShadowRoundHeld, [
+            'project' => $command->target->subject->project,
+            'change' => $command->round->change,
+            'provider' => $provider->value,
+            'reason' => $decision->value,
+        ]);
     }
 
     public function reviewerStarted(RoundReviewer $reviewer): void
