@@ -66,7 +66,7 @@ final readonly class ReviewComparison
      */
     private function distinctIntaktFindings(array $findings): array
     {
-        // Several reviewers raising the same spot are one finding; one without a file or line has no spot to compare.
+        // Counted once because the panel's reviewers often raise the same spot; a finding without a file or line has no spot, so it stays alone.
         $distinct = [];
         foreach ($findings as $index => $finding) {
             $spot = null === $finding->file || null === $finding->line ? $index : json_encode([$finding->file, $finding->line, $finding->severity->value], JSON_THROW_ON_ERROR);
