@@ -58,11 +58,7 @@ final class CheckInstallationCommandTest extends TestCase
     private function execute(string $permissions): CommandTester
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $http = new MockHttpClient(static fn (string $method, string $url): ResponseInterface => new MockResponse(match (true) {
-            str_ends_with($url, '/access_tokens') => '{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}',
-            str_contains($url, '/installation/repositories') => (string) file_get_contents(__DIR__.'/Fixtures/installation_repositories.json'),
-            default => (string) file_get_contents(__DIR__.'/Fixtures/installation.json'),
-        }, ['http_code' => str_ends_with($url, '/access_tokens') ? 201 : 200]));
+        $http = new RecordedInstallation()->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $http), ExpectedInstallation::fromSettings($permissions, 'acme/widget,acme/gadget'), new NullLogger());

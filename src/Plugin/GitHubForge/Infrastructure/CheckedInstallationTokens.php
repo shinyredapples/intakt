@@ -9,11 +9,11 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use NoDiscard;
+use Symfony\Contracts\Service\ResetInterface;
 
 // The forge's only token door, so no call reaches GitHub before the installation was read back and matched.
-final class CheckedInstallationTokens
+final class CheckedInstallationTokens implements ResetInterface
 {
-    // Kept for the whole process and not reset between messages, because the check guards the start, not each call.
     private bool $checked = false;
 
     public function __construct(
@@ -36,5 +36,10 @@ final class CheckedInstallationTokens
         }
 
         return $this->tokens->current();
+    }
+
+    public function reset(): void
+    {
+        $this->checked = false;
     }
 }

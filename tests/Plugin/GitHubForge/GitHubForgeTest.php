@@ -96,6 +96,7 @@ final class GitHubForgeTest extends TestCase
     private const string API = 'https://api.github.com/repos/acme/widgets';
     private const string TOKEN = 'round-7-token-0123456789';
     private const string POST_REVIEW = 'POST '.self::API.'/pulls/7/reviews';
+    private const string MINTED = 'installation-secret';
 
     /** @var list<string> */
     private array $requested = [];
@@ -103,7 +104,6 @@ final class GitHubForgeTest extends TestCase
     private array $sent = [];
     private string $pullFixture = 'pull_request.json';
     private string $compareFixture = 'compare_merge_base.json';
-    private string $minted = 'installation-secret';
     private string $expectedPermissions = 'contents:write,pull_requests:write,workflows:write';
 
     public function testItReadsTheHeadBaseDiffAndChangedFilesOfAPullRequest(): void
@@ -576,14 +576,7 @@ final class GitHubForgeTest extends TestCase
     private function forgeOver(HttpClientInterface $http): GitHubForge
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $identity = new MockHttpClient(fn (string $method, string $url): ResponseInterface => match (true) {
-            str_ends_with($url, '/access_tokens') => new MockResponse(
-                json_encode(['token' => $this->minted, 'expires_at' => '2026-11-25T11:00:00Z'], JSON_THROW_ON_ERROR),
-                ['http_code' => 201],
-            ),
-            str_contains($url, '/installation/repositories') => new MockResponse(self::fixture('installation_repositories.json')),
-            default => new MockResponse(self::fixture('installation.json')),
-        });
+        $identity = new RecordedInstallation(self::MINTED)->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');

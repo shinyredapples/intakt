@@ -72,23 +72,45 @@ final readonly class InstallationReader
         $names = [];
         $total = null;
         for ($page = 1;; ++$page) {
-            $answer = $this->get('/installation/repositories?per_page='.self::PAGE_SIZE.'&page='.$page, $token);
-            $listed = $answer['repositories'] ?? null;
-            $pageTotal = $answer['total_count'] ?? null;
-            if (!is_array($listed) || !is_int($pageTotal)) {
-                throw InstallationNotReadBack::becauseTheAnswerIsInvalid();
-            }
-
-            $total ??= $pageTotal;
-            $names = [...$names, ...array_values(array_map($this->fullName(...), $listed))];
-            if ($pageTotal === $total && count($names) === $total) {
+            $listing = $this->page($page, $token);
+            $total ??= $listing['total'];
+            $names = [...$names, ...$listing['names']];
+            if ($this->isComplete($names, $total, $listing)) {
                 return $this->distinct($names);
             }
-            // A short or shifting listing could hide a repository the installation reaches beyond the configuration.
-            if ($pageTotal !== $total || [] === $listed || count($names) > $total) {
-                throw InstallationNotReadBack::becauseTheListingIsIncomplete(count($names), $pageTotal);
-            }
         }
+    }
+
+    /**
+     * @return array{names: list<string>, total: int}
+     */
+    private function page(int $page, #[SensitiveParameter] string $token): array
+    {
+        $answer = $this->get('/installation/repositories?per_page='.self::PAGE_SIZE.'&page='.$page, $token);
+        $listed = $answer['repositories'] ?? null;
+        $total = $answer['total_count'] ?? null;
+        if (!is_array($listed) || !is_int($total)) {
+            throw InstallationNotReadBack::becauseTheAnswerIsInvalid();
+        }
+
+        return ['names' => array_values(array_map($this->fullName(...), $listed)), 'total' => $total];
+    }
+
+    /**
+     * @param list<string>                             $names
+     * @param array{names: list<string>, total: int} $listing
+     */
+    private function isComplete(array $names, int $total, array $listing): bool
+    {
+        if ($listing['total'] === $total && count($names) === $total) {
+            return true;
+        }
+        // Refused, because a short or shifting listing could hide a repository beyond the configuration.
+        if ($listing['total'] !== $total || [] === $listing['names'] || count($names) > $total) {
+            throw InstallationNotReadBack::becauseTheListingIsIncomplete(count($names), $listing['total']);
+        }
+
+        return false;
     }
 
     /**
