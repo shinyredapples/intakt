@@ -33,8 +33,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Http\Client\ClientInterface;
-use Psr\Http\Message\RequestInterface;
-use Psr\Http\Message\ResponseInterface;
 use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -155,10 +153,10 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     public function testAReviewThatLosesItsServerAfterListingTheToolsIsBlockedInsteadOfApproved(): void
     {
-        $alive = true;
-        $factory = $this->mcpToolboxes($this->cutOffWhen($alive));
+        $http = new SeverableHttpClient(new KernelHttpClient($this->server()));
+        $factory = $this->mcpToolboxes($http);
         self::assertNotSame([], $factory->create($this->request())->getTools());
-        $alive = false;
+        $http->sever();
 
         $verdict = $this->review($factory->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
 
@@ -193,17 +191,6 @@ final class ReviewerOverMcpTest extends KernelTestCase
         self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
 
         return $factory;
-    }
-
-    private function cutOffWhen(bool &$alive): ClientInterface
-    {
-        $served = new KernelHttpClient($this->server());
-        $http = self::createStub(ClientInterface::class);
-        $http->method('sendRequest')->willReturnCallback(static function (RequestInterface $request) use ($served, &$alive): ResponseInterface {
-            return $alive ? $served->sendRequest($request) : throw new RuntimeException('Connection refused.');
-        });
-
-        return $http;
     }
 
     // A kernel of its own, as the web server is a process of its own: the kernel under test resets its services before each request it handles, which would end the reviewer's call mid-way.
