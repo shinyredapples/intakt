@@ -12,7 +12,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
     name: 'list_directory',
-    description: 'Lists the entries of one directory of the repository at the head of a review round that is under review; directories end with a slash.',
+    description: 'Lists the entries of one directory of the repository at the head under review; directories end with a slash.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
@@ -23,9 +23,8 @@ final readonly class ListDirectoryTool
     }
 
     public function __invoke(
-        #[Schema(description: 'UUID of the review round under review.')] string $roundId,
         #[Schema(description: 'Path of the directory, relative to the repository root; "." is the root.')] string $path = '.',
     ): string {
-        return $this->repository->listDirectory($roundId, $path);
+        return $this->repository->listDirectory($path);
     }
 }

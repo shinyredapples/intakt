@@ -12,7 +12,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
     name: 'read_file',
-    description: 'Reads one file of the repository at the head of a review round that is under review.',
+    description: 'Reads one file of the repository at the head under review.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
@@ -23,9 +23,8 @@ final readonly class ReadFileTool
     }
 
     public function __invoke(
-        #[Schema(description: 'UUID of the review round under review.')] string $roundId,
         #[Schema(description: 'Path of the file, relative to the repository root.')] string $path,
     ): string {
-        return $this->repository->readFile($roundId, $path);
+        return $this->repository->readFile($path);
     }
 }

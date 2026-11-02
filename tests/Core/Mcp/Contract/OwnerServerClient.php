@@ -19,6 +19,7 @@ final class OwnerServerClient
     public function __construct(
         private readonly HttpKernelInterface $kernel,
         private readonly string $path = '/mcp/owner',
+        private readonly ?string $bearer = null,
     ) {
     }
 
@@ -34,6 +35,10 @@ final class OwnerServerClient
 
         if (null !== $this->session) {
             $server['HTTP_MCP_SESSION_ID'] = $this->session;
+        }
+
+        if (null !== $this->bearer) {
+            $server['HTTP_AUTHORIZATION'] = 'Bearer '.$this->bearer;
         }
 
         $response = $this->kernel->handle(Request::create('http://localhost'.$this->path, 'POST', server: $server, content: $body));

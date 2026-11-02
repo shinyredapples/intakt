@@ -7,39 +7,60 @@ namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\ChangeRound;
+use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\ReviewSubject;
+use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\OwnerServerClient;
+use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Uid\Uuid;
 
 // Covers nothing because the contract is the review server as a client meets it over HTTP.
 #[Group('persistence')]
 #[CoversNothing]
 final class ReviewServerContractTest extends KernelTestCase
 {
-    private OwnerServerClient $client;
+    private Kernel $app;
 
-    private OwnerServerClient $owner;
+    private OwnerServerClient $client;
 
     private RoundFixture $fixture;
 
+    private ReviewCredential $credential;
+
     private string $roundId;
+
+    private ?string $otherRoot = null;
 
     protected function setUp(): void
     {
         $kernel = self::bootKernel();
         self::assertInstanceOf(Kernel::class, $kernel);
+        $this->app = $kernel;
         $this->fixture = new RoundFixture(self::getContainer());
+        $this->credential = self::getContainer()->get(ReviewCredential::class);
         $this->roundId = $this->fixture->start(1)->id()->toRfc4122();
-        $this->client = new OwnerServerClient($kernel, '/mcp/review');
-        $this->client->initialize('2025-11-25');
-        $this->owner = new OwnerServerClient($kernel);
-        $this->owner->initialize('2025-11-25');
+        $this->client = $this->clientOf($this->roundId);
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->otherRoot) {
+            unlink($this->otherRoot.'/marker.txt');
+            rmdir($this->otherRoot);
+        }
+
+        parent::tearDown();
     }
 
     public function testTheReviewServerListsTheThreeRepositoryToolsOnly(): void
@@ -49,7 +70,10 @@ final class ReviewServerContractTest extends KernelTestCase
 
     public function testTheOwnerServerDoesNotListTheRepositoryTools(): void
     {
-        self::assertSame([], array_intersect(['list_directory', 'read_file', 'search_files'], $this->toolNames($this->owner)));
+        $owner = new OwnerServerClient($this->app);
+        $owner->initialize('2025-11-25');
+
+        self::assertSame([], array_intersect(['list_directory', 'read_file', 'search_files'], $this->toolNames($owner)));
     }
 
     public function testEveryToolOfTheReviewServerIsReadOnlyAndNotDestructive(): void
@@ -65,9 +89,14 @@ final class ReviewServerContractTest extends KernelTestCase
         }
     }
 
-    public function testAToolReadsAFileAtTheHeadOfARoundUnderReview(): void
+    public function testNoToolTakesARoundBecauseTheCredentialNamesIt(): void
     {
-        $result = $this->call('read_file', ['roundId' => $this->roundId, 'path' => 'RoundFixture.php']);
+        self::assertStringNotContainsString('roundId', json_encode($this->client->call('tools/list', [], 2), JSON_THROW_ON_ERROR));
+    }
+
+    public function testAToolReadsAFileAtTheHeadOfTheRoundOfItsCredential(): void
+    {
+        $result = $this->call('read_file', ['path' => 'RoundFixture.php']);
 
         self::assertFalse(OwnerServerClient::at($result, 'isError'));
         self::assertStringContainsString('final readonly class RoundFixture', json_encode($result, JSON_THROW_ON_ERROR));
@@ -75,7 +104,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
     public function testAToolListsADirectoryAtTheHead(): void
     {
-        $result = $this->call('list_directory', ['roundId' => $this->roundId]);
+        $result = $this->call('list_directory', []);
 
         self::assertFalse(OwnerServerClient::at($result, 'isError'));
         self::assertStringContainsString('RoundFixture.php', json_encode($result, JSON_THROW_ON_ERROR));
@@ -84,19 +113,58 @@ final class ReviewServerContractTest extends KernelTestCase
     public function testAPathThatLeavesTheHeadIsRefusedAsAToolError(): void
     {
         foreach (['../ScriptedJudgement.php', '/etc/passwd', '.git/config'] as $path) {
-            $result = $this->call('read_file', ['roundId' => $this->roundId, 'path' => $path]);
+            $result = $this->call('read_file', ['path' => $path]);
 
             self::assertTrue(OwnerServerClient::at($result, 'isError'), $path);
             self::assertStringContainsString('outside the repository under review', json_encode($result, JSON_THROW_ON_ERROR), $path);
         }
     }
 
-    public function testAnUnknownRoundIsRefusedAsAToolError(): void
+    public function testOneSessionReadsOnlyTheRoundOfItsCredentialWhateverTheArgumentsName(): void
     {
-        $result = $this->call('read_file', ['roundId' => 'not-a-round', 'path' => 'RoundFixture.php']);
+        $other = $this->otherRound();
+
+        $result = $this->call('read_file', ['roundId' => $other, 'path' => 'marker.txt']);
 
         self::assertTrue(OwnerServerClient::at($result, 'isError'));
-        self::assertStringNotContainsString('#0', $this->client->lastBody());
+        self::assertStringNotContainsString('the other head', json_encode($result, JSON_THROW_ON_ERROR));
+    }
+
+    public function testTheCredentialOfAnotherRoundReadsThatRoundsHead(): void
+    {
+        $other = $this->clientOf($this->otherRound());
+
+        $result = OwnerServerClient::at($other->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'marker.txt']], 3), 'result');
+
+        self::assertStringContainsString('the other head', json_encode($result, JSON_THROW_ON_ERROR));
+    }
+
+    public function testARequestWithoutACredentialIsRefused(): void
+    {
+        self::assertSame(401, $this->initializeStatus(null));
+    }
+
+    public function testACredentialWhoseSignatureBelongsToAnotherRoundIsRefused(): void
+    {
+        $signature = explode('.', $this->credential->issueFor($this->roundId))[1];
+
+        self::assertSame(401, $this->initializeStatus(Uuid::v4()->toRfc4122().'.'.$signature));
+    }
+
+    public function testTheOwnerTokenIsNoReviewCredential(): void
+    {
+        self::assertSame(401, $this->initializeStatus('owner-token'));
+    }
+
+    public function testAnUnknownRoundIsRefusedAsAToolError(): void
+    {
+        $unknown = $this->clientOf(Uuid::v4()->toRfc4122());
+
+        $result = OwnerServerClient::at($unknown->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'RoundFixture.php']], 3), 'result');
+
+        self::assertIsArray($result);
+        self::assertTrue(OwnerServerClient::at($result, 'isError'));
+        self::assertStringNotContainsString('#0', $unknown->lastBody());
     }
 
     public function testAJudgedRoundIsRefusedBecauseItsHeadIsNoLongerUnderReview(): void
@@ -107,7 +175,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($this->roundId));
 
-        $result = $this->call('read_file', ['roundId' => $this->roundId, 'path' => 'RoundFixture.php']);
+        $result = $this->call('read_file', ['path' => 'RoundFixture.php']);
 
         self::assertTrue(OwnerServerClient::at($result, 'isError'));
         self::assertStringContainsString('no longer under review', json_encode($result, JSON_THROW_ON_ERROR));
@@ -115,7 +183,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
     public function testSearchingManyFilesSendsIncreasingProgressNotifications(): void
     {
-        $this->client->call('tools/call', ['name' => 'search_files', 'arguments' => ['roundId' => $this->roundId, 'text' => 'RoundFixture'], '_meta' => ['progressToken' => 'p1']], 5);
+        $this->client->call('tools/call', ['name' => 'search_files', 'arguments' => ['text' => 'RoundFixture'], '_meta' => ['progressToken' => 'p1']], 5);
 
         preg_match_all('/^data: (.*)$/m', $this->client->lastBody(), $events);
         /** @var list<int> $progress */
@@ -136,6 +204,48 @@ final class ReviewServerContractTest extends KernelTestCase
         sort($sorted);
         self::assertSame($sorted, $progress);
         self::assertSame($progress, array_values(array_unique($progress, SORT_NUMERIC)));
+    }
+
+    public function testASearchStaysInsideThePathItNames(): void
+    {
+        $result = $this->call('search_files', ['text' => 'final readonly class', 'path' => 'RoundFixture.php']);
+
+        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertStringNotContainsString('VerdictPerRole.php', json_encode($result, JSON_THROW_ON_ERROR));
+    }
+
+    private function clientOf(string $roundId): OwnerServerClient
+    {
+        $client = new OwnerServerClient($this->app, '/mcp/review', $this->credential->issueFor($roundId));
+        $client->initialize('2025-11-25');
+
+        return $client;
+    }
+
+    // A round of its own folder, so what one credential reads cannot come from the other's head by chance.
+    private function otherRound(): string
+    {
+        $this->otherRoot = sys_get_temp_dir().'/review-server-'.Uuid::v4()->toRfc4122();
+        mkdir($this->otherRoot);
+        file_put_contents($this->otherRoot.'/marker.txt', 'the other head');
+        $id = Uuid::v4();
+        $this->fixture->entities->persist(new ReviewRound($id, new ReviewTarget(new ReviewSubject('beta', $this->otherRoot, 'Task', ''), SampleIdentity::any()), new ChangeRound('other', 1, null)));
+        $this->fixture->entities->flush();
+
+        return $id->toRfc4122();
+    }
+
+    private function initializeStatus(?string $bearer): int
+    {
+        $server = ['HTTP_HOST' => 'localhost', 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json, text/event-stream'];
+
+        if (null !== $bearer) {
+            $server['HTTP_AUTHORIZATION'] = 'Bearer '.$bearer;
+        }
+
+        $body = json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-11-25', 'capabilities' => [], 'clientInfo' => ['name' => 'claude-code', 'version' => '1.0.0']]], JSON_THROW_ON_ERROR);
+
+        return $this->app->handle(Request::create('http://localhost/mcp/review', 'POST', server: $server, content: $body))->getStatusCode();
     }
 
     /**

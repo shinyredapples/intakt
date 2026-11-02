@@ -15,14 +15,15 @@ use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
 use InvalidArgumentException;
 use Mcp\Exception\ToolCallException;
 use RuntimeException;
+use Symfony\Bundle\SecurityBundle\Security;
 
-// Because a client must not name the head, this is the one place that decides it: the checkout of one round that is still under review.
+// Because a client must not name the head, this is the one place that decides it: the checkout of the round its credential was issued for, while that round is under review.
 final readonly class ReviewedRepository
 {
     /**
      * @param (Closure(int): void)|null $fileSearched
      */
-    public function __construct(private ReadableRounds $rounds, private ?Closure $fileSearched = null)
+    public function __construct(private ReadableRounds $rounds, private Security $security, private ?Closure $fileSearched = null)
     {
     }
 
@@ -34,24 +35,24 @@ final readonly class ReviewedRepository
         return clone ($this, ['fileSearched' => $fileSearched]);
     }
 
-    public function readFile(string $roundId, string $path): string
+    public function readFile(string $path): string
     {
-        return $this->answer(fn (): string => (new ReadFile($this->head($roundId)))($path));
+        return $this->answer(fn (): string => (new ReadFile($this->head()))($path));
     }
 
-    public function listDirectory(string $roundId, string $path): string
+    public function listDirectory(string $path): string
     {
-        return $this->answer(fn (): string => (new ListDirectory($this->head($roundId)))($path));
+        return $this->answer(fn (): string => (new ListDirectory($this->head()))($path));
     }
 
-    public function searchFiles(string $roundId, string $text): string
+    public function searchFiles(string $text, string $path): string
     {
-        return $this->answer(fn (): string => (new SearchFiles($this->head($roundId), $this->fileSearched))($text));
+        return $this->answer(fn (): string => (new SearchFiles($this->head(), $this->fileSearched))($text, $path));
     }
 
-    private function head(string $roundId): Checkout
+    private function head(): Checkout
     {
-        $round = $this->rounds->forTool($roundId);
+        $round = $this->rounds->forTool($this->credentialRound());
 
         // The snapshot of a judged round is removed, so it is refused before the filesystem is asked.
         if (RoundState::Judged === $round->state()) {
@@ -63,6 +64,17 @@ final readonly class ReviewedRepository
         } catch (InvalidArgumentException $unavailable) {
             throw new ToolCallException('The head of this round is not available.', $unavailable->getCode(), previous: $unavailable);
         }
+    }
+
+    private function credentialRound(): string
+    {
+        $reviewer = $this->security->getUser();
+
+        if (null === $reviewer || !$this->security->isGranted(ReviewCredential::REVIEWER_ROLE)) {
+            throw new ToolCallException('The request carries no review credential.');
+        }
+
+        return $reviewer->getUserIdentifier();
     }
 
     /**
