@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
+namespace Intakt\Tests\Core\Budget;
 
 use Intakt\Core\Ai\Contract\Account;
-use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Budget\Contract\StartDecision;
+use Intakt\Core\Budget\Contract\StartGuard;
 use Override;
 
 // Answers by account name, and records the accounts asked, so a test sees which accounts the hold looked at.
-final class ScriptedShadowGuard implements ShadowStartGuard
+final class ScriptedAccountGuard implements StartGuard
 {
     /** @var list<string> */
     public array $asked = [];

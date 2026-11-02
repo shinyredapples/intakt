@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Contract;
 
-use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\Provider;
 use NoDiscard;
 
-// The same decision as the start guard, against the lower ceilings the owner sets for shadow work, so shadow work leaves the capacity the existing loop needs.
+// Per provider, because a call runs on the first account outside cooldown and fails over to the next, so shadow work starts only while every account it may reach leaves the capacity the existing loop needs.
 interface ShadowStartGuard
 {
     #[NoDiscard]
-    public function decide(Account $account, int $callsRunning): StartDecision;
+    public function decide(Provider $provider): StartDecision;
 }

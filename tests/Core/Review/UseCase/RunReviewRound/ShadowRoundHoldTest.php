@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Budget\Contract\StartDecision;
+use Intakt\Core\Budget\Domain\EveryAccountShadowGuard;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -19,6 +20,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ShadowCeilingReached;
 use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHold;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
+use Intakt\Tests\Core\Budget\ScriptedAccountGuard;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\WorkerOnSleep;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -35,6 +37,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ShadowCeilingReached::class)]
 #[UsesClass(ReviewChange::class)]
 #[UsesClass(Account::class)]
+#[UsesClass(EveryAccountShadowGuard::class)]
 final class ShadowRoundHoldTest extends KernelTestCase
 {
     public function testAShadowRoundAboveTheShadowCeilingDoesNotStart(): void
@@ -67,21 +70,34 @@ final class ShadowRoundHoldTest extends KernelTestCase
     {
         $fixture = $this->fixtureOf('shadow');
 
-        $id = $fixture->startHandlerOn($fixture->bus, new ScriptedShadowGuard())($fixture->commandFor(RoundFixture::CHANGE, 2));
+        $id = $fixture->startHandlerOn($fixture->bus, new ScriptedAccountGuard())($fixture->commandFor(RoundFixture::CHANGE, 2));
 
         self::assertSame($id, $fixture->round($id)->id()->toRfc4122());
         self::assertSame([LedgerEventKind::ReviewStarted], $fixture->ledgerKinds());
     }
 
-    public function testAShadowRoundStartsWhileAnotherAccountOfTheProviderIsBelowTheCeiling(): void
+    public function testAShadowRoundIsHeldWhileTheAccountItWouldRunOnIsAboveTheCeilingAndAnotherIsBelow(): void
     {
         $fixture = $this->fixtureOf('shadow');
-        $guard = new ScriptedShadowGuard(['anthropic.default' => StartDecision::AtCeiling]);
+        $guard = new ScriptedAccountGuard(['anthropic.default' => StartDecision::AtCeiling]);
 
-        $id = $fixture->startHandlerOn($fixture->bus, $guard)($fixture->commandFor(RoundFixture::CHANGE, 2));
+        try {
+            $fixture->startHandlerOn($fixture->bus, $guard)($fixture->commandFor(RoundFixture::CHANGE, 2));
+            self::fail('The round started on an account above the shadow ceiling.');
+        } catch (ShadowCeilingReached) {
+            self::assertSame([], $fixture->storedRounds());
+            self::assertSame([LedgerEventKind::ShadowRoundHeld], $fixture->ledgerKinds());
+        }
+    }
 
-        self::assertSame(['anthropic.default', 'anthropic.team'], $guard->asked);
-        self::assertSame($id, $fixture->round($id)->id()->toRfc4122());
+    public function testAShadowRoundIsHeldWhileTheAccountItWouldFailOverToIsAboveTheCeiling(): void
+    {
+        $fixture = $this->fixtureOf('shadow');
+        $guard = new ScriptedAccountGuard(['anthropic.team' => StartDecision::AtCeiling]);
+
+        $this->expectException(ShadowCeilingReached::class);
+
+        $fixture->startHandlerOn($fixture->bus, $guard)($fixture->commandFor(RoundFixture::CHANGE, 2));
     }
 
     public function testALiveRoundStartsAboveTheShadowCeilingWithoutAskingIt(): void
@@ -113,9 +129,9 @@ final class ShadowRoundHoldTest extends KernelTestCase
         return new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => $mode]));
     }
 
-    private function everyAccountAt(StartDecision $decision): ScriptedShadowGuard
+    private function everyAccountAt(StartDecision $decision): ScriptedAccountGuard
     {
-        return new ScriptedShadowGuard(['anthropic.default' => $decision, 'anthropic.team' => $decision]);
+        return new ScriptedAccountGuard(['anthropic.default' => $decision, 'anthropic.team' => $decision]);
     }
 
     private function reviewChange(RoundFixture $fixture, MessageBus $bus): ReviewChange

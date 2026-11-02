@@ -14,7 +14,8 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
-use Intakt\Core\Budget\Contract\ShadowStartGuard;
+use Intakt\Core\Budget\Contract\StartGuard;
+use Intakt\Core\Budget\Domain\EveryAccountShadowGuard;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -53,6 +54,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
+use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHold;
@@ -61,6 +63,7 @@ use Intakt\Core\Shadow\Contract\ProjectModes;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Budget\ScriptedAccountGuard;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
@@ -131,12 +134,12 @@ final readonly class RoundFixture
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
-    public function startHandlerOn(MessageBusInterface $queue, ShadowStartGuard $guard = new ScriptedShadowGuard()): RunReviewRoundHandler
+    public function startHandlerOn(MessageBusInterface $queue, StartGuard $guard = new ScriptedAccountGuard()): RunReviewRoundHandler
     {
         $ledger = new RoundLedger($this->ledger, $this->modes);
-        $hold = new ShadowRoundHold($this->modes, $guard, new ConfiguredAccounts([Provider::Anthropic->value => ['default', 'team']]), $ledger);
+        $shadowGuard = new EveryAccountShadowGuard($guard, new ConfiguredAccounts([Provider::Anthropic->value => ['default', 'team']]));
 
-        return new RunReviewRoundHandler($this->rounds($this->entities), $ledger, $queue, $hold);
+        return new RunReviewRoundHandler(new ShadowRoundHold($this->modes, $shadowGuard, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue));
     }
 
     public function startFromSource(ChangeSource $source): string
@@ -281,9 +284,9 @@ final readonly class RoundFixture
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
         $ledger = new RoundLedger(new InMemoryLedger(), $this->modes);
-        $hold = new ShadowRoundHold($this->modes, new ScriptedShadowGuard(), new ConfiguredAccounts([]), $ledger);
+        $hold = new ShadowRoundHold($this->modes, new EveryAccountShadowGuard(new ScriptedAccountGuard(), new ConfiguredAccounts([])), $ledger);
 
-        return new RunReviewRoundHandler($this->rounds($entities), $ledger, $this->bus, $hold)($command);
+        return new RunReviewRoundHandler($hold, new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
     }
 
     public function findingStore(): StoredFindings
