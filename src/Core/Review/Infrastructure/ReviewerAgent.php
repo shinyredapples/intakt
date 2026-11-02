@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Symfony\Component\Uid\Uuid;
 use Closure;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
@@ -30,6 +29,7 @@ use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
+use Symfony\Component\Uid\Uuid;
 
 final readonly class ReviewerAgent implements Reviewer
 {

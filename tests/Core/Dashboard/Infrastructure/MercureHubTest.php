@@ -34,7 +34,7 @@ final class MercureHubTest extends TestCase
 
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
 
-    // The hub's own value for the whole history; asking with it makes the hub answer at once, which tells the test the subscriber is registered before it publishes.
+    // The hub's own value for the whole history, used because it makes the hub answer at once, which tells the test the subscriber is registered before it publishes.
     private const string FROM_THE_START = 'earliest';
 
     private const int SECONDS_TO_WAIT = 10;
@@ -87,7 +87,7 @@ final class MercureHubTest extends TestCase
         }
 
         if (isset($this->storage)) {
-            array_map(unlink(...), glob($this->storage.'/*') ?: []);
+            array_map(unlink(...), glob($this->storage.'/*') ?? []);
             rmdir($this->storage);
         }
     }

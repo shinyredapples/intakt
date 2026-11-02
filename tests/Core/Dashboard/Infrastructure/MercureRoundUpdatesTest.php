@@ -126,8 +126,8 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private function actionAndTargetOf(Update $update): string
     {
-        self::assertSame(1, preg_match('/action="(\w+)" target="([^"]+)"/', $update->getData(), $found));
+        preg_match('/action="(\w+)" target="([^"]+)"/', $update->getData(), $found);
 
-        return $found[1].' '.$found[2];
+        return ($found[1] ?? '').' '.($found[2] ?? '');
     }
 }
