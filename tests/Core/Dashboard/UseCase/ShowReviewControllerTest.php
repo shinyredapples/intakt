@@ -20,6 +20,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Shadow\Contract\ProjectMode;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -34,6 +35,7 @@ use Symfony\Component\DomCrawler\Crawler;
 #[CoversClass(RoundFinding::class)]
 #[CoversClass(TokenCount::class)]
 #[UsesClass(LedgerPayload::class)]
+#[UsesClass(ProjectMode::class)]
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(ListReviewsController::class)]
 #[UsesClass(ReviewSummary::class)]
@@ -67,6 +69,20 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
             [['correctness', 'standard', 'verdict', 'approve', '0', ''], ['security', 'standard', 'verdict', 'approve', '0', 'answered by the substitute openai, a catch-up review is owed']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
+    }
+
+    public function testTheReviewPageMarksAShadowVerdictAndLeavesAnOrdinaryOneUnmarked(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answerInShadow('round-1', 'correctness');
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->answer('round-1', 'security', 0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
+        self::assertSame(['approve (shadow)', 'approve'], [$rows[0][3], $rows[1][3]]);
     }
 
     public function testAFailedReviewerAnsweredByASubstituteShowsBothNotesSeparated(): void
