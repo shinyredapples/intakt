@@ -324,7 +324,7 @@ Plan task T20, part 1 (design: [Dashboard](../design/05-architecture/13-dashboar
 - Routes (Symfony attributes, `GET` only): `dashboard_list_projects` at `/projects` (`UseCase/ListProjects/ListProjectsController`) and `dashboard_list_reviews` at `/reviews` with the optional query parameter `project` (`UseCase/ListReviews/ListReviewsController`). `/` has no route on purpose: the instance check requests it on a database that is not migrated, and a page reading the ledger would answer 500 there. Templates auto-escape every ledger value; none uses `|raw`.
 - No page polls: there is no script, refresh tag or request from the page. Live updates are plan task T21.
 - Not yet: the page of one review (part 2) and the button that starts a review (part 3). Nothing links rounds of one change, so the pages show rounds, not changes.
-- Tests: `tests/Core/Dashboard/` has a functional test per page (the ledger in the test container is a double), `NoPollingTest` (no `<script`, `http-equiv`, timer, `fetch(` or event source on any page) `LedgerReviewsTest` for the skipped payloads and `RefuseForeignHostTest` for the hosts each page refuses and answers.
+- Tests: `tests/Core/Dashboard/` has a functional test per page (the ledger in the test container is a double), `NoPollingTest` (no `<script`, `http-equiv`, timer, `fetch(` or event source on any page), `LedgerReviewsTest` for the skipped payloads and `RefuseForeignHostTest` for the hosts each page refuses and answers.
 
 ## Persistence
 
