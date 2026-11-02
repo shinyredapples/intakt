@@ -41,6 +41,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(StartReviewTool::class)]
 #[CoversClass(StartedReview::class)]
 #[UsesClass(LocalChangeReview::class)]
+#[UsesClass(NameStatusParser::class)]
 #[UsesClass(ForwardedProgress::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(CleanupOnStop::class)]
@@ -120,7 +121,7 @@ final class StartReviewToolTest extends TestCase
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
-        return new StartReviewTool(new LocalChangeReview($panels, $reviews, new NameStatusParser()));
+        return new StartReviewTool(new LocalChangeReview($panels, $reviews));
     }
 
     private function reviewing(?ChangeReviewRequest &$seen): ChangeReviews

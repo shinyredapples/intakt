@@ -59,6 +59,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(RepositoryNotFound::class)]
 #[UsesClass(CleanupOnStop::class)]
 #[UsesClass(LocalChangeReview::class)]
+#[UsesClass(NameStatusParser::class)]
 #[UsesClass(ReviewChangeInput::class)]
 #[UsesClass(OutputFormat::class)]
 final class ReviewChangeCommandTest extends TestCase
@@ -216,7 +217,7 @@ final class ReviewChangeCommandTest extends TestCase
         $snapshot = '';
         $exit = null;
         $reviews = self::createStub(ChangeReviews::class);
-        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $reviews, new NameStatusParser()));
+        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $reviews));
         $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($command, $signal, &$snapshot, &$exit): ChangeReview {
             $snapshot = $request->checkoutRoot;
             $exit = $command->handleSignal($signal);
@@ -234,7 +235,7 @@ final class ReviewChangeCommandTest extends TestCase
     // One test for a PHP with and without signal support rather than a skipped one, because the tests gate fails on a skip and the CI image has no pcntl.
     public function testItListensForTheStopSignalsOnlyWherePhpCanHandleThem(): void
     {
-        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve), new NameStatusParser()));
+        $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)));
 
         $expected = SignalRegistry::isSupported() ? [constant('SIGINT'), constant('SIGTERM')] : [];
 
@@ -384,7 +385,7 @@ final class ReviewChangeCommandTest extends TestCase
      */
     private function whenTheCommandRuns(ChangeReviews $reviews, array $input = [], ?Panels $panels = null): CommandTester
     {
-        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews, new NameStatusParser())), $input);
+        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews)), $input);
     }
 
     /**

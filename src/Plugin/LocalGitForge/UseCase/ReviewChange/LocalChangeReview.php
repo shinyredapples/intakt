@@ -28,7 +28,6 @@ final readonly class LocalChangeReview
     public function __construct(
         private Panels $panels,
         private ChangeReviews $reviews,
-        private NameStatusParser $nameStatus,
         private CleanupOnStop $onStop = new CleanupOnStop(),
     ) {
     }
@@ -36,7 +35,7 @@ final readonly class LocalChangeReview
     // Reviewed in a snapshot of the head rather than in the checkout, because the checkout may be switched or edited while the round runs, and a verdict counts only for what it reviewed.
     public function of(ReviewChangeInput $input, ReviewProgress $progress = new IgnoredProgress()): ChangeReview
     {
-        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), $this->nameStatus);
+        $forge = new LocalGitForge(LocalRepository::existingAt($input->repository, $input->base), new NameStatusParser());
         $change = $forge->change(new ChangeId($input->change));
         $request = $this->requestFor($input, $change);
 
