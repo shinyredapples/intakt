@@ -65,8 +65,7 @@ final readonly class CeilingStartGuard implements StartGuard
         return $uses;
     }
 
-    // A window that reset since its reading starts empty, so that reading says nothing about it any more; without a reset
-    // time, a reading older than its window's length has outlived at least one reset.
+    // A reset window starts empty, so its reading says nothing any more; without a reset time, one window's length is when it reset at the latest.
     private function hasReset(WindowUse $use, UsageWindow $window): bool
     {
         $resetsAt = $use->usage->resetsAt;
