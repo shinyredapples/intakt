@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Infrastructure;
 
+use Closure;
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Mcp\Infrastructure\AuthorizedToolCalls;
 use Mcp\Capability\Registry\ElementReference;
@@ -114,7 +115,7 @@ final class AuthorizedToolCallsTest extends TestCase
         $this->assertReferenceRefusedWith(
             'This tool declares no access level, so it is not available.',
             $this->handlerLogging($logger, ToolAccess::Read, ToolAccess::Write),
-            new ElementReference(static fn (): string => 'ran'),
+            static fn (): string => 'ran',
         );
     }
 
@@ -136,13 +137,16 @@ final class AuthorizedToolCallsTest extends TestCase
 
     private function assertRefusedWith(string $message, AuthorizedToolCalls $handler, string $tool): void
     {
-        $this->assertReferenceRefusedWith($message, $handler, new ElementReference([$tool, '__invoke']));
+        $this->assertReferenceRefusedWith($message, $handler, [$tool, '__invoke']);
     }
 
-    private function assertReferenceRefusedWith(string $message, AuthorizedToolCalls $handler, ElementReference $reference): void
+    /**
+     * @param Closure|array{0: string, 1: string} $tool
+     */
+    private function assertReferenceRefusedWith(string $message, AuthorizedToolCalls $handler, Closure|array $tool): void
     {
         try {
-            $handler->handle($reference, ['project' => 'secret-argument']);
+            $handler->handle(new ElementReference($tool), ['project' => 'secret-argument']);
         } catch (ToolCallException $refusal) {
             self::assertSame($message, $refusal->getMessage());
 
