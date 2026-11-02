@@ -31,9 +31,9 @@ final readonly class WatcherLedger
         }
     }
 
-    public function roundQueued(string $project, HeadDecision $decision, string $round): void
+    public function roundQueued(StartedRound $round): void
     {
-        $this->append(LedgerEventKind::RoundQueued, $this->headOf($project, $decision) + ['round' => $round]);
+        $this->append(LedgerEventKind::RoundQueued, ['project' => $round->project(), 'change' => $round->change(), 'head' => $round->head(), 'round' => $round->roundId()]);
     }
 
     public function verdictsStale(StartedRound $round): void

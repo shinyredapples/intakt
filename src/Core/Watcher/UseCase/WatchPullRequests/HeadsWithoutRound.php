@@ -21,10 +21,13 @@ final readonly class HeadsWithoutRound
 
         if (HeadAdmission::Pending === $decision->admission) {
             $this->pending->keep($project, $decision);
-
-            return;
         }
+    }
 
-        $this->pending->forget($project, $decision->change);
+    public function endIfRed(string $project, HeadDecision $decision): void
+    {
+        if (HeadAdmission::Red === $decision->admission) {
+            $this->pending->forget($project, $decision->change);
+        }
     }
 }

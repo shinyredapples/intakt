@@ -19,13 +19,18 @@ final readonly class RoundStarts
     ) {
     }
 
-    // Queues the round before the ledger line, so a ledger that is down cannot cost a round that the record then hides.
+    // Queues the round before the ledger line, so a ledger that is down cannot cost a round; the stored round owes its line until the ledger takes it.
     public function startFor(WatchedProject $project, HeadDecision $decision): void
     {
-        $round = $this->rounds->startOnce($project->name, $decision->change, fn (): string => $this->queue($project, $decision->change));
+        $this->rounds->startOnce($project->name, $decision->change, fn (): string => $this->queue($project, $decision->change));
+        $this->recordQueued($project->name);
+    }
 
-        if (null !== $round) {
-            $this->ledger->roundQueued($project->name, $decision, $round);
+    // Every round of the project still owing its line, so a line whose append failed is written by a later tick even when no head is due.
+    public function recordQueued(string $project): void
+    {
+        foreach ($this->rounds->notYetRecorded($project) as $round) {
+            $this->rounds->recordOnce($round, $this->ledger->roundQueued(...));
         }
     }
 

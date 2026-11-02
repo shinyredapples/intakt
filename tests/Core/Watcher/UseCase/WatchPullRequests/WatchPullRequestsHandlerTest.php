@@ -351,7 +351,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertCount(2, $this->checks->asked);
     }
 
-    public function testAMovedHeadNotFetchedYetIsStillRecordedRed(): void
+    public function testAMovedHeadNotFetchedYetIsStillRecordedRedAndStaysDue(): void
     {
         $this->startRoundOnGreenHead();
         $this->queries->fetched = false;
@@ -360,7 +360,58 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tickExpectingFailure();
 
         self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed], $this->ledger->kinds());
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testARedMovedHeadIsCheckedAgainForStaleVerdictsOnceItsCommitArrives(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->fetched = false;
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
+        $this->tickExpectingFailure();
+        $this->queries->fetched = true;
+
+        $this->tick();
+
+        self::assertTrue($this->storedStale(self::GREEN));
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testARedHeadWhoseStaleCheckSucceedsIsNoLongerWaitedOn(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testARoundWhoseLedgerLineFailedIsRecordedByALaterTickWithoutASecondRound(): void
+    {
+        $this->useLedger(new InMemoryLedger(0));
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tickExpectingFailure();
+        $this->useLedger(new InMemoryLedger());
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame('7', $this->ledger->payloads()[0]['change']);
+    }
+
+    public function testARoundsLedgerLineIsRecordedOnlyOnceOverLaterTicks(): void
+    {
+        $this->startRoundOnGreenHead();
+
+        $this->tick();
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
     }
 
     public function testATickOverOnePendingAndOneGreenPullRequestRecordsEachInTheLedger(): void
@@ -378,6 +429,12 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
         $this->tick();
+    }
+
+    private function useLedger(InMemoryLedger $ledger): void
+    {
+        $this->ledger = $ledger;
+        $this->handler = $this->handler();
     }
 
     private function tick(): void

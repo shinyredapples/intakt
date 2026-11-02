@@ -18,17 +18,40 @@ final readonly class StartedRounds
     ) {
     }
 
-    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done; null when this head already has its round.
+    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done.
     /**
      * @param Closure(): string $start
      */
-    public function startOnce(string $project, OpenChange $change, Closure $start): ?string
+    public function startOnce(string $project, OpenChange $change, Closure $start): void
     {
-        return $this->entities->getConnection()->transactional(function () use ($project, $change, $start): ?string {
-            $roundId = $this->isStarted($project, $change) ? null : $this->record($project, $change, $start());
-            $this->pending->forget($project, $change);
+        $this->entities->getConnection()->transactional(function () use ($project, $change, $start): void {
+            if (!$this->isStarted($project, $change)) {
+                $this->record($project, $change, $start());
+            }
 
-            return $roundId;
+            $this->pending->forget($project, $change);
+        });
+    }
+
+    // Read as filtered by the database, because the statement that records the line decides again whether it is still owed.
+    /**
+     * @return list<StartedRound>
+     */
+    public function notYetRecorded(string $project): array
+    {
+        return array_values($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'queuedRecorded' => false]));
+    }
+
+    // Claimed and recorded in one transaction with the ledger's own write, so a failed append leaves the line owed and a second worker that claims the same round finds it taken.
+    /**
+     * @param Closure(StartedRound): void $record
+     */
+    public function recordOnce(StartedRound $round, Closure $record): void
+    {
+        $this->entities->getConnection()->transactional(function () use ($round, $record): void {
+            if ($this->claim($round)) {
+                $record($round);
+            }
         });
     }
 
@@ -76,11 +99,26 @@ final readonly class StartedRounds
         return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
     }
 
-    private function record(string $project, OpenChange $change, string $roundId): string
+    private function record(string $project, OpenChange $change, string $roundId): void
     {
         $this->entities->persist(new StartedRound($project, $change, $roundId));
         $this->entities->flush();
+    }
 
-        return $roundId;
+    private function claim(StartedRound $round): bool
+    {
+        $claimed = $this->entities->createQueryBuilder()
+            ->update(StartedRound::class, 'r')
+            ->set('r.queuedRecorded', ':recorded')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.queuedRecorded = :owed')
+            ->setParameter('recorded', true)
+            ->setParameter('owed', false)
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->setParameter('head', $round->head())
+            ->getQuery()
+            ->execute();
+
+        return 1 === $claimed;
     }
 }

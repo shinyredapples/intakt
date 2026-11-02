@@ -23,6 +23,10 @@ final class StartedRound
     #[ORM\Column(options: ['default' => false])]
     private bool $stale = false;
 
+    // Set only by the statement that records the round's ledger line, in the same transaction as that line.
+    #[ORM\Column(name: 'queued_recorded', options: ['default' => false])]
+    private bool $queuedRecorded = false;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]

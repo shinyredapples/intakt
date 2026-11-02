@@ -44,6 +44,7 @@ final class Version20261102100000 extends AbstractMigration
                 Column::editor()->setUnquotedName('head')->setTypeName(Types::STRING)->setLength(64)->create(),
                 Column::editor()->setUnquotedName('round_id')->setTypeName(Types::STRING)->setLength(36)->create(),
                 Column::editor()->setUnquotedName('stale')->setTypeName(Types::BOOLEAN)->setDefaultValue(false)->create(),
+                Column::editor()->setUnquotedName('queued_recorded')->setTypeName(Types::BOOLEAN)->setDefaultValue(false)->create(),
             )
             ->setPrimaryKeyConstraint(
                 PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('change_ref'), UnqualifiedName::unquoted('head'), UnqualifiedName::unquoted('project'))->create(),
