@@ -51,6 +51,8 @@ final class TrustOnTheContainerTest extends KernelTestCase
         'GITHUB_MAINTAINER_APP_SLUG' => RecordedTrust::MAINTAINER_SLUG,
     ];
 
+    private const string PRIVATE_KEY = 'GITHUB_APP_PRIVATE_KEY';
+
     /** @var array<string, mixed> */
     private array $savedServer = [];
 
@@ -61,7 +63,7 @@ final class TrustOnTheContainerTest extends KernelTestCase
     {
         $this->savedServer = [];
         $this->savedEnv = [];
-        foreach ([...self::SETTINGS, 'GITHUB_APP_PRIVATE_KEY' => AppKey::generate()->private] as $name => $value) {
+        foreach ([...self::SETTINGS, self::PRIVATE_KEY => AppKey::generate()->private] as $name => $value) {
             if (array_key_exists($name, $_SERVER)) {
                 $this->savedServer[$name] = $_SERVER[$name];
             }
@@ -74,7 +76,7 @@ final class TrustOnTheContainerTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        foreach (array_keys([...self::SETTINGS, 'GITHUB_APP_PRIVATE_KEY' => '']) as $name) {
+        foreach ([...array_keys(self::SETTINGS), self::PRIVATE_KEY] as $name) {
             unset($_SERVER[$name], $_ENV[$name]);
         }
         $_SERVER = [...$_SERVER, ...$this->savedServer];
