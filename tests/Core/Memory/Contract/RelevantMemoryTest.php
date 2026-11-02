@@ -35,18 +35,30 @@ final class RelevantMemoryTest extends TestCase
         self::assertCount(1, $memory->entries);
     }
 
-    public function testAnEntryLargerThanTheWholeCapIsNeverReturned(): void
+    public function testTheMostRelevantEntryIsKeptWholeEvenWhenItAloneIsOverTheCap(): void
     {
-        $memory = RelevantMemory::within([$this->entry('abcdefgh')], 4);
+        $memory = RelevantMemory::within([$this->entry('abcdefgh'), $this->entry('a')], 4);
 
-        self::assertSame([], $memory->entries);
+        self::assertSame(['abcdefgh'], array_map(static fn (MemoryEntry $entry): string => $entry->text, $memory->entries));
+    }
+
+    public function testALessRelevantEntryOverTheCapIsNeverReturned(): void
+    {
+        $memory = RelevantMemory::within([$this->entry('ab'), $this->entry('abcdefgh')], 4);
+
+        self::assertSame(['ab'], array_map(static fn (MemoryEntry $entry): string => $entry->text, $memory->entries));
+    }
+
+    public function testNoEntriesGiveNoMemory(): void
+    {
+        self::assertSame([], RelevantMemory::within([], 4)->entries);
     }
 
     public function testTheCapCountsBytesNotCharacters(): void
     {
-        $memory = RelevantMemory::within([$this->entry('éé')], 3);
+        $memory = RelevantMemory::within([$this->entry('a'), $this->entry('éé')], 4);
 
-        self::assertSame([], $memory->entries);
+        self::assertCount(1, $memory->entries);
     }
 
     private function entry(string $text): MemoryEntry

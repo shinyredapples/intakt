@@ -16,6 +16,8 @@ final readonly class ReviewerMemory
     // A fixed cap, because every byte is resent with each round of the conversation; about a page of notes is enough to cite earlier findings.
     private const int MAX_BYTES = 4_000;
 
+    private const string SHORTENED = ' [note shortened]';
+
     public function __construct(
         private ProjectMemory $memory,
         private Fence $fence,
@@ -25,12 +27,13 @@ final readonly class ReviewerMemory
 
     public function briefingOn(ReviewBrief $brief): ?string
     {
-        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), self::MAX_BYTES))->entries;
+        $room = self::MAX_BYTES - strlen($this->wrapped(''));
+        $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), $room))->entries;
 
         return $this->briefingWithin($entries);
     }
 
-    // The memory caps the entry texts only, so the least relevant entries are dropped until the whole briefing, separators, fence and introduction included, fits.
+    // The separators still add bytes the memory does not count, so the least relevant entries are dropped until the whole briefing fits; a lone top entry is shortened instead, because the most relevant note is worth more than none.
     /**
      * @param list<MemoryEntry> $entries
      */
@@ -43,10 +46,22 @@ final readonly class ReviewerMemory
                 return $briefing;
             }
 
+            if (1 === count($entries)) {
+                return $this->shortened($entries[0]);
+            }
+
             array_pop($entries);
         }
 
         return null;
+    }
+
+    private function shortened(MemoryEntry $entry): string
+    {
+        $room = self::MAX_BYTES - strlen($this->wrapped('')) - strlen(self::SHORTENED);
+
+        // mb_strcut cuts at a character boundary, so the text stays valid UTF-8.
+        return $this->wrapped(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
     }
 
     /**
@@ -54,8 +69,11 @@ final readonly class ReviewerMemory
      */
     private function briefingOf(array $entries): string
     {
-        $notes = implode("\n\n", array_map(static fn (MemoryEntry $entry): string => $entry->text, $entries));
+        return $this->wrapped(implode("\n\n", array_map(static fn (MemoryEntry $entry): string => $entry->text, $entries)));
+    }
 
+    private function wrapped(string $notes): string
+    {
         return "Project memory, notes earlier reviews left about the files under review:\n\n".$this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
     }
 }
