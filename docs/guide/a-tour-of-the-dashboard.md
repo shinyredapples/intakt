@@ -91,6 +91,7 @@ flowchart TD
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
+- **Rework** (planned): per project, how many tokens one merged change costs and how much of them went into fixing changes the reviewers sent back, so you can see whether the checks before review pay off.
 - **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.
 
 ## Steering budgets and pauses
