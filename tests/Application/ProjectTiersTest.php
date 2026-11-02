@@ -195,6 +195,23 @@ final class ProjectTiersTest extends KernelTestCase
         $this->bootedContainer();
     }
 
+    public function testTheOwnersCeilingsBesideTheProjectsReachTheBudgetWithTheDefaultForAWindowLeftOut(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter('intakt.budget.ceilings'));
+    }
+
+    public function testACeilingAboveAHundredPercentStopsTheBoot(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        weekly: 120\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/intakt\.budget\.ceilings\.weekly/');
+
+        $this->bootedContainer();
+    }
+
     public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void
     {
         $platforms = $this->bootedContainer()->get(TierPlatform::PLATFORMS);

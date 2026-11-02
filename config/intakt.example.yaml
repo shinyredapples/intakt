@@ -3,6 +3,11 @@
 # any other name reads them with its name appended (ANTHROPIC_API_KEY_TEAM). A provider not listed has its default account only.
 accounts:
     anthropic: [default, team]
+# Optional: no call starts on an account while a window's measured use is at its ceiling, in percent from 1 to 100 (default 90 each).
+budget:
+    ceilings:
+        five-hour: 90
+        weekly: 90
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 codex: { model: gpt-5.3-codex, effort: high }
 # Each project maps the capability tiers to a provider (anthropic, openai, openai_compatible) and a model name.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Shadow\Infrastructure;
 
+use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ShadowGuardedForgeWrites::class)]
+#[UsesClass(ConfiguredProjectModes::class)]
 #[UsesClass(Change::class)]
 #[UsesClass(ChangedFiles::class)]
 #[UsesClass(ChangeId::class)]
@@ -36,7 +38,7 @@ final class ShadowGuardedForgeWritesTest extends TestCase
     public function testAShadowProjectsReviewNeverReachesTheForge(): void
     {
         $forge = new WriteRefusingForge();
-        $guard = new ShadowGuardedForgeWrites($forge, ['alpha' => 'shadow']);
+        $guard = new ShadowGuardedForgeWrites($forge, new ConfiguredProjectModes(['alpha' => 'shadow']));
 
         $guard->postReview('alpha', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
 
@@ -46,7 +48,7 @@ final class ShadowGuardedForgeWritesTest extends TestCase
     public function testAProjectWithoutAModeWritesToTheForge(): void
     {
         $forge = new WriteRefusingForge();
-        $guard = new ShadowGuardedForgeWrites($forge, ['alpha' => 'shadow']);
+        $guard = new ShadowGuardedForgeWrites($forge, new ConfiguredProjectModes(['alpha' => 'shadow']));
 
         $this->expectException(LogicException::class);
 
@@ -56,7 +58,7 @@ final class ShadowGuardedForgeWritesTest extends TestCase
     public function testALiveProjectWritesToTheForge(): void
     {
         $forge = new WriteRefusingForge();
-        $guard = new ShadowGuardedForgeWrites($forge, ['alpha' => 'live']);
+        $guard = new ShadowGuardedForgeWrites($forge, new ConfiguredProjectModes(['alpha' => 'live']));
 
         $this->expectExceptionObject(new LogicException('The test forge refuses every write.'));
 

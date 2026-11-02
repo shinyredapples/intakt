@@ -9,7 +9,7 @@ Only the install check and the provider configuration below exist so far. The ot
 - Reviewing a branch of a local repository with `intakt:review` (see [below](#reviewing-a-branch)); reviewing a pull request is planned
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, as does the code that reads a head's CI state and decides to wait (CI running, or a run cancelled and not run again), skip (CI red) or review (CI green), and a `watch` section makes a tick run them every minute (see [Capability tiers per project](#capability-tiers-per-project)), but no forge reads pull requests and CI from GitHub yet, so a tick fails with a clear message until then (planned)
-- Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); running its panel on every new pull request head, marking its verdicts as shadow and the lower usage ceiling for shadow work are planned
+- Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; running its panel on every new pull request head (waiting for a forge that reads pull requests from GitHub) and the lower usage ceiling for shadow work are planned
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
 
@@ -160,7 +160,7 @@ A `review:` section can also hold `rules`, a list of extra reviewers for bigger 
 
 ### Shadow mode
 
-A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review, for now) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does counting. Any other value stops Intakt from starting and names the key. Intakt can post a review to GitHub, but no review round posts its outcome yet, so today the setting changes nothing visible; running the panel on every new pull request head, marking the verdicts as shadow in the ledger and a lower usage ceiling for shadow work are planned too.
+A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review, for now) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does counting. Any other value stops Intakt from starting and names the key. Every reviewer's verdict is recorded in the ledger with the project's mode at that moment (`"mode":"shadow"` or `"mode":"live"`), so the ledger shows which verdicts were shadow ones. A shadow verdict never counts toward a merge: not while the project is in shadow mode, and not after it is switched to live either; switching a project to shadow also stops its earlier verdicts from counting. Intakt can post a review to GitHub, but no review round posts its outcome yet and nothing merges yet; running the panel on every new pull request head and a lower usage ceiling for shadow work are planned.
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
 
@@ -192,7 +192,26 @@ php bin/console doctrine:migrations:migrate
 
 ## Measured use of subscription windows
 
-Intakt can keep, for each AI account, the latest use of its five-hour and weekly windows as the AI company measured it, with the time the window resets and how old the reading is. A reading belongs to its account only: another account, of the same company or another one, never sees it. A reading whose reset time has already passed, or lies further ahead than the window is long, is not kept, and the previous reading stays. Nothing records or uses these readings yet: reading them from Claude and Codex and holding back new work near a window's ceiling come in later changes. The table is created with `php bin/console doctrine:migrations:migrate`.
+Intakt can keep, for each AI account, the latest use of its five-hour and weekly windows as the AI company measured it, with the time the window resets and how old the reading is. A reading belongs to its account only: another account, of the same company or another one, never sees it. A reading whose reset time has already passed, or lies further ahead than the window is long, is not kept, and the previous reading stays. The table is created with `php bin/console doctrine:migrations:migrate`.
+
+From these readings Intakt can decide whether one more call may start on an account:
+
+- No call starts while a window is at or above its ceiling. An old reading still counts until its window resets, since use only grows until then; once the reset time has passed, the reading no longer counts. A reading without a reset time stops counting once it is older than its window is long (five hours or a week).
+- The weekly window is paced: the pace is the weekly ceiling times the share of the week that has passed, counting the current five hours as passed. While the weekly use is ahead of the pace, the five-hour ceiling shrinks in the same proportion (for example, a weekly use of twice the pace halves it).
+- With no call running, one call starts below the ceilings, even with no reading or an old one.
+- A second call at the same time needs a reading of both windows taken within the last 5 minutes, and both windows more than 10 points below their ceilings (at a ceiling of 90%, a use of 80% is not enough). Without a reading of both windows from the last 30 minutes, only one call runs at a time.
+- Only the account's own readings count. Intakt's estimate of what a call will cost plays no part.
+
+Set the ceilings, in percent from 1 to 100, in `config/intakt.yaml` (or the file `INTAKT_CONFIG` names) and run `php bin/console cache:clear`:
+
+```yaml
+budget:
+    ceilings:
+        five-hour: 90
+        weekly: 90
+```
+
+Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
 
 ### Choosing the database
 

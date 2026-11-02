@@ -41,6 +41,7 @@ use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandle
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
+use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -53,6 +54,8 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Core\Shadow\Contract\ProjectModes;
+use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -83,8 +86,10 @@ final readonly class RoundFixture
     private Ledger $ledger;
     private SerializerInterface $serializer;
 
-    public function __construct(private ContainerInterface $container)
-    {
+    public function __construct(
+        private ContainerInterface $container,
+        private ProjectModes $modes = new ConfiguredProjectModes([]),
+    ) {
         $entities = $container->get('doctrine.orm.entity_manager');
         assert($entities instanceof EntityManagerInterface);
         $this->entities = $entities;
@@ -136,7 +141,22 @@ final readonly class RoundFixture
 
     public function verdictsOf(VerdictsOfRound $query): RoundVerdicts
     {
-        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer))($query);
+        return $this->verdictsReadWith($this->modes, $query);
+    }
+
+    // The modes come with the read, so a test can switch a project's mode between recording its verdicts and counting them.
+    public function verdictsReadWith(ProjectModes $modes, VerdictsOfRound $query): RoundVerdicts
+    {
+        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $this->ledger))($query);
+    }
+
+    // A reader with its own entity manager, because a worker commits the first reviewer's verdict right after the reader's ledger read, the order in which a commit lands between the two reads of the query.
+    public function verdictsReadWhileAVerdictCommitsAfterTheLedgerRead(ProjectModes $modes, VerdictsOfRound $query): RoundVerdicts
+    {
+        $reader = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
+        $ledger = new AfterLedgerRead($this->ledger, fn () => $this->deliver($this->bus->messages[0], new ScriptedVendor()));
+
+        return new VerdictsOfRoundHandler($reader, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $ledger))($query);
     }
 
     /**
@@ -190,7 +210,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger)), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger, $this->modes)), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -244,7 +264,7 @@ final readonly class RoundFixture
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
-        return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger()), $this->bus)($command);
+        return new RunReviewRoundHandler($this->rounds($entities), new RoundLedger(new InMemoryLedger(), $this->modes), $this->bus)($command);
     }
 
     public function findingStore(): StoredFindings
@@ -308,14 +328,14 @@ final readonly class RoundFixture
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger));
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
-        return new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger), $queue)($command);
+        return new RunReviewRoundHandler($this->rounds($this->entities), new RoundLedger($this->ledger, $this->modes), $queue)($command);
     }
 
     private function subject(): ReviewSubject
