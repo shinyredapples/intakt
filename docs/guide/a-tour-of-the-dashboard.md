@@ -4,12 +4,13 @@ The dashboard is a board in your browser that shows everything Intakt is doing, 
 
 ## What you can open today
 
-Two plain pages are built. They list what Intakt has written down about its reviews, and they never refresh by themselves: reload the page to see news.
+Three plain pages are built. They show what Intakt has written down about its reviews, and they never refresh by themselves: reload the page to see news.
 
 - **Projects** (`/projects`): one row per project that has had a review, with how many review rounds it has had and how many of them reached the judge.
-- **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only.
+- **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only. Click a round to open its review.
+- **One review** (`/reviews/` and the round's id): every round of that change, one after the other. For each round you see the reviewers and what each one said (approve, changes or blocked, and how many problems it found, or why it failed), the problems themselves with their short ids (`F1`, `F2`, ...), what the judge decided about each one (fix it now, a follow-up for later, or not acted on), and how many tokens the AI calls of the round used. The cost says "no price" for now, because Intakt has no price list yet and never guesses one. A round reviewed before Intakt started keeping the text of the problems says so, and still shows the ids the judge picked and what it decided about them.
 
-Both pages only answer when you open them on the computer Intakt runs on (`localhost` and the dashboard's port, 7780 unless you changed it); any other address gets an error page and none of your data. A change that is reviewed twice shows as two rows of the same project. The page for a single review (rounds, verdicts, findings) and the board below are still planned.
+The pages only answer when you open them on the computer Intakt runs on (`localhost` and the dashboard's port, 7780 unless you changed it); any other address gets an error page and none of your data. A change that is reviewed twice shows as two rows on the review list, and both open the same review. The board below is still planned.
 
 ## The board (planned)
 
