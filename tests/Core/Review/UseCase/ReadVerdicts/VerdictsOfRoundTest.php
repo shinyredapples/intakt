@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReadVerdicts;
 
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -31,6 +33,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(VerdictsOfRoundHandler::class)]
@@ -42,6 +45,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversClass(IdentityNotOfRound::class)]
 #[CoversClass(ReviewRound::class)]
 #[CoversClass(ReviewRounds::class)]
+#[UsesClass(LedgerEvent::class)]
 #[UsesClass(VerdictIdentity::class)]
 #[UsesClass(VerdictStanding::class)]
 #[UsesClass(ReviewTerms::class)]
@@ -104,6 +108,26 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $round = $this->fixture->start(1)->id()->toRfc4122();
 
         $verdicts = $this->fixture->verdictsReadWhileAVerdictCommitsAfterTheLedgerRead(new ConfiguredProjectModes([]), new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 1), new HeadMove(HeadMoveKind::Unmoved, [])));
+
+        self::assertSame([], $verdicts->counting);
+    }
+
+    public function testAShadowVerdictOfAnotherRoundLeavesTheVerdictsOfThisOneCounting(): void
+    {
+        $round = $this->reviewedRound();
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => Uuid::v7()->toRfc4122(), 'mode' => 'shadow'], JSON_THROW_ON_ERROR)))->succeeded());
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
+
+        self::assertCount(2, $verdicts->counting);
+    }
+
+    public function testAShadowVerdictOfThisRoundAmongOtherEventsStopsTheVerdictsCountingOnceTheProjectIsLive(): void
+    {
+        $round = $this->reviewedRound();
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => $round, 'mode' => 'shadow'], JSON_THROW_ON_ERROR)))->succeeded());
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
 
         self::assertSame([], $verdicts->counting);
     }
