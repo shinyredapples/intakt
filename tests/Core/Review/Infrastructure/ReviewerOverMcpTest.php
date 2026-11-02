@@ -65,6 +65,8 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     private RecordingHttpClient $http;
 
+    private ?Kernel $server = null;
+
     protected function setUp(): void
     {
         $kernel = self::bootKernel();
@@ -73,6 +75,12 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $credential = self::getContainer()->get(ReviewCredential::class);
         self::assertInstanceOf(ReviewCredential::class, $credential);
         $this->credential = $credential;
+    }
+
+    protected function tearDown(): void
+    {
+        $this->server?->shutdown();
+        parent::tearDown();
     }
 
     public function testAReviewWithToolsOverMcpReachesTheSameVerdictAsWithTheToolsInProcess(): void
@@ -132,7 +140,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     public function testAReviewWhoseServerCannotBeReachedIsBlockedInsteadOfJudgedWithoutTools(): void
     {
-        $refused = $this->createStub(ClientInterface::class);
+        $refused = self::createStub(ClientInterface::class);
         $refused->method('sendRequest')->willThrowException(new RuntimeException('Connection refused.'));
 
         $verdict = $this->review($this->mcpToolboxes($refused)->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
@@ -155,12 +163,21 @@ final class ReviewerOverMcpTest extends KernelTestCase
     // Through the container, so the configured mcp_server entry and its connection are what the test exercises.
     private function mcpToolboxes(?ClientInterface $http = null): ReviewerMcpToolboxFactory
     {
-        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.')));
+        $this->http = new RecordingHttpClient($http ?? new KernelHttpClient($this->server()));
         self::getContainer()->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($this->credential, $this->http));
         $factory = self::getContainer()->get(ReviewerMcpToolboxFactory::class);
         self::assertInstanceOf(ReviewerMcpToolboxFactory::class, $factory);
 
         return $factory;
+    }
+
+    // A kernel of its own, as the web server is a process of its own: the kernel under test resets its services before each request it handles, which would end the reviewer's call mid-way.
+    private function server(): Kernel
+    {
+        $this->server = new Kernel('test', false);
+        $this->server->boot();
+
+        return $this->server;
     }
 
     /**

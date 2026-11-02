@@ -11,7 +11,7 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\Uid\Uuid;
 
-// Built per review by ReviewerMcpToolboxFactory.
+// Excluded from the container because ReviewerMcpToolboxFactory builds one per review, holding its round.
 #[Exclude]
 final readonly class ToolsOfRound implements ToolboxInterface
 {

@@ -68,7 +68,6 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use JsonException;
-use LogicException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -680,10 +679,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
         $container = self::getContainer();
-        // The kernel under test serves the review server, so the reviewer lists its tools without a web server.
+        // A second kernel serves the review server, so the reviewer lists its tools without a web server; not this one, which resets its services before each request it handles.
+        $server = new Kernel('test', false);
+        $server->boot();
         $credential = $container->get(ReviewCredential::class);
         self::assertInstanceOf(ReviewCredential::class, $credential);
-        $container->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, new KernelHttpClient(self::$kernel ?? throw new LogicException('No kernel.'))));
+        $container->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, new KernelHttpClient($server)));
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
         $container->set(TierResolver::class, new ConfiguredTierResolver([
@@ -701,6 +702,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $request = $this->request(new UuidV7());
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request)->verdict;
+        $server->shutdown();
 
         self::assertCount(5, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);

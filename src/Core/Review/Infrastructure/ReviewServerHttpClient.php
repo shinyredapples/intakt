@@ -13,9 +13,10 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Contracts\Service\ResetInterface;
 
-// The HTTP client of the configured reviewer MCP connection: a configured connection takes fixed headers, and the credential names one round. No reset: the round is set only for the length of one call.
-final class ReviewServerHttpClient implements ClientInterface
+// The configured reviewer MCP connection sends through this client, because a configured connection takes fixed headers and the credential names one round.
+final class ReviewServerHttpClient implements ClientInterface, ResetInterface
 {
     private ?Uuid $round = null;
 
@@ -26,9 +27,8 @@ final class ReviewServerHttpClient implements ClientInterface
     ) {
     }
 
+    // Set for one call only, so a request outside a review carries no credential and a worker never sends one round's credential for the next.
     /**
-     * Scoped to one call, so a request outside a review carries no credential and a worker never sends one round's credential for the next.
-     *
      * @template T
      *
      * @param Closure(): T $call
@@ -52,5 +52,11 @@ final class ReviewServerHttpClient implements ClientInterface
         $round = $this->round ?? throw new LogicException('The review server is reached only during a review, with the credential of its round.');
 
         return $this->http->sendRequest($request->withHeader('Authorization', 'Bearer '.$this->credential->issueFor($round->toRfc4122())));
+    }
+
+    #[Override]
+    public function reset(): void
+    {
+        $this->round = null;
     }
 }
