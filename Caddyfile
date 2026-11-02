@@ -1,6 +1,6 @@
 {
-	# Off until the container image (T22) binds it to localhost; nothing here uses it.
-	admin off
+	# On localhost only, because intakt:server:status reads it (FRANKENPHP_ADMIN_URL) and it can change the whole server; CADDY_ADMIN moves it, so the hub tests do not take the port of a running install.
+	admin {$CADDY_ADMIN:localhost:2019}
 }
 
 :{$SERVER_PORT:7781} {

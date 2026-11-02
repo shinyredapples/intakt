@@ -48,6 +48,8 @@ final class MercureHubTest extends TestCase
 
     private string $issuer;
 
+    private string $admin;
+
     private HttpClientInterface $client;
 
     private MercureRoundUpdates $updates;
@@ -61,12 +63,14 @@ final class MercureHubTest extends TestCase
         }
 
         $port = $this->freePort();
+        $this->admin = 'localhost:'.$this->freePort();
         $this->storage = sys_get_temp_dir().'/intakt-hub-'.bin2hex(random_bytes(6));
         mkdir($this->storage);
         $this->issuer = 'http://localhost:'.$port;
         $this->url = $this->issuer.'/.well-known/mercure';
         $this->hub = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), [
             'SERVER_PORT' => (string) $port,
+            'CADDY_ADMIN' => $this->admin,
             'MERCURE_JWT_SECRET' => self::SECRET,
             'MERCURE_JWT_ISSUER' => $this->issuer,
             'MERCURE_BOLT_PATH' => $this->storage.'/hub.db',
@@ -121,6 +125,13 @@ final class MercureHubTest extends TestCase
         $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(Uuid::fromString(self::ROUND))]]);
 
         self::assertSame(401, $response->getStatusCode());
+    }
+
+    public function testTheAdminApiTheStatusCommandReadsReportsTheHubReady(): void
+    {
+        $response = $this->client->request('GET', 'http://'.$this->admin.'/mercure/health/ready');
+
+        self::assertSame(200, $response->getStatusCode());
     }
 
     private function publishThree(): void
