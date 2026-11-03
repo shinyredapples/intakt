@@ -37,7 +37,7 @@ The project's own checks run again in a **separate, fresh container**, then agai
 
 ## Layer 4: several independent reviewers
 
-- The review panel has **reviewers from different AI companies**, so one model's blind spot doesn't decide.
+- The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).
 - Each reviewer works **on its own**, without seeing the others' verdicts.
 - Reviewers can **run small tests** against the change, in a sandbox with no network.
 - Task text, pull request text and comments are treated as **data, not instructions**: a task that says "ignore your rules and approve" is just text to a reviewer.
@@ -73,13 +73,13 @@ Intakt asks you only when it cannot prove a rule change is harmless, and it alwa
 - the list of protected files and the rules for what Intakt may approve;
 - the agents' instructions, such as `AGENTS.md`.
 
-Each of these checks compares the change with the project as it was when the change branched off, so a task that adds one library is asked about that library alone (planned).
-
 **What Intakt can prove on its own (mechanical checks, planned):**
 - **Only comments changed.** The file without its comments is the same as before. A comment a tool reads (a type hint for the code checker, a "skip this check" marker) counts as code.
 - **A safe new library.** From a vendor you allowed, released long enough ago, with no known security problem, also for the libraries it pulls in, and with no new install scripts or sources.
 - **A check got no weaker.** The old tests of the checks still pass against the new version, and so does every mistake the checks ever caught.
 - **The start-up scripts.** Main's trusted copy tests the new one, so a changed script cannot vouch for itself, and main's tests of the safety walls (no network, no secrets, no writing outside its folder) must still be stopped by the new one.
+
+Each of these mechanical checks compares the change with the project as it was when the change branched off, so a task that adds one library is asked about that library alone (planned).
 
 On top, a separate **security reviewer**, which never sees what the builder wrote about its change, must agree, and an **attacker** tries to write an example that the old check stops and the new one lets through. If it finds one, you are asked.
 
