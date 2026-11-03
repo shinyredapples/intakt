@@ -55,14 +55,11 @@ final class OptionalProjectMemoryTest extends TestCase
         new OptionalProjectMemory($this->failing(), $logger)->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
 
         rewind($output);
+        /** @var array{context: array{project: string, exception: array{class: string, message: string, trace: string}}} $record */
         $record = json_decode((string) stream_get_contents($output), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($record);
-        self::assertSame(['alpha', LogicException::class, 'the store is not set up'], [
-            $record['context']['project'] ?? null,
-            $record['context']['exception']['class'] ?? null,
-            $record['context']['exception']['message'] ?? null,
-        ]);
-        self::assertStringContainsString(self::class, $record['context']['exception']['trace'] ?? '');
+        $failure = $record['context']['exception'];
+        self::assertSame(['alpha', LogicException::class, 'the store is not set up'], [$record['context']['project'], $failure['class'], $failure['message']]);
+        self::assertStringContainsString(self::class, $failure['trace']);
     }
 
     private function failing(): ProjectMemory
