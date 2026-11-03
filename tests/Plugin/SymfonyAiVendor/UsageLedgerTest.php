@@ -31,11 +31,12 @@ final class UsageLedgerTest extends TestCase
     public function testACallWhoseAnswerIsAStreamSettlesWithOnlyItsFinalUsageOnce(): void
     {
         $ledger = new InMemoryLedger();
-        $round = $this->roundAnswering($this->streamWithSeveralUsages());
-        iterator_to_array($round->getResult()->getContent());
+        $round = $this->roundAnswering($stream = $this->streamWithSeveralUsages());
+        iterator_to_array($stream->getContent());
 
         $this->settle($ledger, $round);
 
+        /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[0]['usages'];
         self::assertCount(1, $usages);
         self::assertSame([100, 20, 120], [$usages[0]['prompt'], $usages[0]['completion'], $usages[0]['total']]);
@@ -44,8 +45,8 @@ final class UsageLedgerTest extends TestCase
     public function testTheSameAnswerUnstreamedSettlesWithTheSameUsageRow(): void
     {
         $streamed = new InMemoryLedger();
-        $round = $this->roundAnswering($this->streamWithSeveralUsages());
-        iterator_to_array($round->getResult()->getContent());
+        $round = $this->roundAnswering($stream = $this->streamWithSeveralUsages());
+        iterator_to_array($stream->getContent());
         $this->settle($streamed, $round);
         $unstreamed = new InMemoryLedger();
         $text = new TextResult('{}');
