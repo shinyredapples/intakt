@@ -153,6 +153,20 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(RoundState::Complete, $stored->state());
     }
 
+    public function testAFailedReviewerIsLoggedWithItsExceptionItsReviewerAndItsRound(): void
+    {
+        $round = $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $failure = new RuntimeException('Reviewer mapping failed.');
+
+        $this->fixture->deliver($message, new ScriptedVendor($failure));
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $this->fixture->log->cleanLogs();
+        [[$level, , $context]] = $logs;
+        self::assertSame(['error', $message->reviewerId, $round->id()->toRfc4122(), $failure], [$level, $context['reviewer'], $context['round'], $context['exception']]);
+    }
+
     public function testTheStartOfARoundNamesItsChangeAndItsNumberInTheLedger(): void
     {
         $round = $this->fixture->start(2);

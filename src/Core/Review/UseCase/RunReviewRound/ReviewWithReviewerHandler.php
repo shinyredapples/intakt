@@ -18,6 +18,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
+use Psr\Log\LoggerInterface;
 use Throwable;
 
 #[AsCommandHandler]
@@ -29,6 +30,7 @@ final readonly class ReviewWithReviewerHandler
         private ReviewRounds $rounds,
         private GoalpostRule $goalposts,
         private LiveRoundProgress $progress,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -71,8 +73,9 @@ final readonly class ReviewWithReviewerHandler
 
             throw ReviewerMovesToAnotherAccount::now();
         } catch (Throwable $failure) {
-            // Every failure, because one left uncaught would leave the reviewer running until its hold ends; the class only, because a provider's message can echo a key.
+            // Every failure, because one left uncaught would leave the reviewer running until its hold ends; the ledger keeps the class only, because a provider's message can echo a key and only the log is redacted.
             $this->leases->recordFailure($reviewer, $failure::class);
+            $this->logger->error('A reviewer failed; it counts as finished without a verdict.', ['reviewer' => $reviewer->id()->toRfc4122(), 'round' => $round->id()->toRfc4122(), 'exception' => $failure]);
 
             return;
         }
