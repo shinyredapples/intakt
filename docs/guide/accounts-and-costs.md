@@ -53,6 +53,19 @@ This part is planned, not built yet ([details](../design/05-architecture/06-budg
 
 You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses). Billing stays with the AI company: Intakt keeps only whether an account bills past its plan, its own cap below the company's limit, and a link to the company's billing page.
 
+## Shadow mode: trying Intakt alongside your process
+
+A project can be set to **shadow mode** (`mode: shadow` in its configuration). Intakt then reviews its changes with the whole panel, as it would for real, but nothing it does counts: it never writes to the forge (no review is posted), and its verdicts are marked as shadow ones and never count toward a merge, even after you switch the project back to live. Use it to see how Intakt's reviews compare with the reviews you already have, before you trust it ([details](../user/README.md#shadow-mode)).
+
+Shadow work must never take room your existing work needs on the same accounts. So it has its own, lower **shadow ceiling** that you set (70% of each window unless you change it), and a shadow review starts only while every account it could run on is below it: the accounts of each reviewer's company, of any company that could stand in for one, and of the judge's. If one of them is at or above it, the review is **held**: it doesn't start, and nothing is stored. The same happens while Intakt is paused or draining, backing off, or while one of those accounts cools down.
+
+When a shadow review is held, you see a message that names the project, the company and the reason, for example:
+
+- `The shadow round of project "alpha" was held: an account of provider "anthropic" is not below the shadow ceiling (at-ceiling).`
+- `The shadow round of project "alpha" was held: an account of provider "anthropic" is not available for a start, because Intakt is paused (paused).`
+
+The same reason is written in the ledger, Intakt's record of events (`php bin/console intakt:ledger:events` shows it). Until Intakt records how much of each window is used, the shadow ceiling holds nothing back. A project in live mode is never held by it.
+
 ## Several projects on one install
 
 Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 pauses the project: once a running job finishes, nothing is built or reviewed for it, not even its open pull requests. Its work waits and carries on when you raise the share again.

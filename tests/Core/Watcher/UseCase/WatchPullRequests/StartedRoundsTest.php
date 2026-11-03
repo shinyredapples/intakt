@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -65,21 +68,37 @@ final class StartedRoundsTest extends KernelTestCase
     public function testARoundQueuedBeforeItsRecordFailedToFlushIsDiscardedAndLeavesNoRecord(): void
     {
         $connection = $this->entities->getConnection();
-        $green = $this->green();
 
         try {
-            // The same head stored inside the open transaction, never a dropped table, because MySQL and MariaDB commit a transaction on DDL and the failure would no longer be the flush's.
-            $this->rounds->startOnce('alpha', $green, static function () use ($connection, $green): QueuedRound {
-                $connection->insert('watcher_started_round', ['project' => 'alpha', 'change_ref' => $green->id->value, 'head' => $green->head->hash, 'round_id' => 'round-0']);
+            $this->rounds->startOnce('alpha', $this->green(), function () use ($connection): QueuedRound {
+                $this->insertConflictingRound($connection);
 
                 return RecordingCommandBus::queued(1);
             });
             self::fail('The failed record of the round was swallowed.');
-        } catch (Exception) {
+        } catch (UniqueConstraintViolationException) {
         }
 
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
         self::assertSame(0, $this->storedRounds());
+    }
+
+    public function testARoundQueuedBeforeARollbackThatItselfFailsIsStillDiscardedAndTheOriginalFailureIsRethrown(): void
+    {
+        $connection = $this->entities->getConnection();
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), function () use ($connection): QueuedRound {
+                $this->insertConflictingRound($connection);
+                $connection->commit();
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The failed record of the round was swallowed.');
+        } catch (UniqueConstraintViolationException) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
     }
 
     public function testAStartThatFailsItselfLeavesTheDiscardToTheStart(): void
@@ -134,6 +153,19 @@ final class StartedRoundsTest extends KernelTestCase
     private function green(): OpenChange
     {
         return RecordedForge::change('7', 'b', '2026-11-02T09:00:00Z');
+    }
+
+    // Plain DML, because DDL commits the open transaction on MySQL and MariaDB; the flush then meets the same key.
+    private function insertConflictingRound(Connection $connection): void
+    {
+        $connection->insert('watcher_started_round', [
+            'project' => 'alpha',
+            'change_ref' => '7',
+            'head' => $this->green()->head->hash,
+            'round_id' => 'round-0',
+            'stale' => false,
+            'queued_recorded' => false,
+        ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
     }
 
     private function deleteRoundsOnNextLoad(): void
