@@ -155,8 +155,8 @@ final readonly class ReviewRounds
 
                 return $result;
             });
+            // Boundary: clears the entity manager and rethrows because rolled-back entities and their database ids would collide with the next transaction.
         } catch (Throwable $failure) {
-            // Cleared because the rolled-back changes, and the ids the database gave them, are still in memory and would collide with the next transaction.
             $this->entities->clear();
 
             throw $failure;
