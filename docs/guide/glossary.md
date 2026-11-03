@@ -54,8 +54,10 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Pull request (PR)** | a finished change waiting to be merged | |
 | **Queue** | the tasks waiting to be built, and the work waiting to be reviewed | [engine room](the-engine-room.md#queues-who-is-next) |
 | **Review cap** | how much finished work may wait for review before builders pause | [engine room](the-engine-room.md#queues-who-is-next) |
+| **Review credential** | a secret made for one review round; it lets a reviewer read that round and nothing else, and stops working once the round is judged | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Review lane** | the bench where finished work is reviewed and merged | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Review panel** | the reviewers for a change: the core panel plus specialists | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
+| **Review server** | the read-only server through which a reviewer reads the head under review | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Shadow mode** | a project setting: Intakt reviews alongside your existing process, never writes to the forge, and its verdicts never count | [costs](accounts-and-costs.md#shadow-mode-trying-intakt-alongside-your-process) |
 | **Share** | a project's part of the week's AI allowance | [several projects](several-projects.md) |
 | **Sidecar** | an extra container a job needs, such as a database | [containers](containers-and-services.md) |

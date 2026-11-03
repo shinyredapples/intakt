@@ -19,25 +19,25 @@ final class ProtocolVersionContractTest extends KernelTestCase
     {
         $answer = $this->client()->initialize(self::CLAUDE_CODE_VERSION);
 
-        self::assertSame(self::CLAUDE_CODE_VERSION, OwnerServerClient::at($answer, 'result', 'protocolVersion'));
-        self::assertSame('intakt', OwnerServerClient::at($answer, 'result', 'serverInfo', 'name'));
+        self::assertSame(self::CLAUDE_CODE_VERSION, McpServerClient::at($answer, 'result', 'protocolVersion'));
+        self::assertSame('intakt', McpServerClient::at($answer, 'result', 'serverInfo', 'name'));
     }
 
     public function testInitializeWithAnUnknownVersionGetsAVersionTheServerSpeaks(): void
     {
         $answer = $this->client()->initialize('1999-01-01');
-        $version = OwnerServerClient::at($answer, 'result', 'protocolVersion');
+        $version = McpServerClient::at($answer, 'result', 'protocolVersion');
 
         self::assertIsString($version);
         self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $version);
         self::assertNotSame('1999-01-01', $version);
     }
 
-    private function client(): OwnerServerClient
+    private function client(): McpServerClient
     {
         $kernel = self::bootKernel();
         self::assertInstanceOf(Kernel::class, $kernel);
 
-        return new OwnerServerClient($kernel);
+        return new McpServerClient($kernel);
     }
 }
