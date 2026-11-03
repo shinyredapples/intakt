@@ -57,7 +57,7 @@ flowchart LR
     B --> C[Server shows only that round's head, read-only]
 ```
 
-The server and its credentials are built (task #578). Intakt's own reviewers use it too; letting the reviewers' tool client reach it is plan task T16, part 3, and the architecture notes still list that part as open.
+This is built: the server and its credentials (task #578), and Intakt's reviewers reading the change through it, each request carrying the credential of its own round (task #580). If a reviewer cannot reach the server, its review ends as blocked, with the reason, instead of being judged without reading the change.
 
 ### A reviewer on a Claude or Codex subscription
 
