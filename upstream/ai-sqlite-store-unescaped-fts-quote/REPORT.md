@@ -1,6 +1,6 @@
 # [SQLite Store] A text query term with a double quote breaks the FTS5 query
 
-Draft, not posted. Versions: `symfony/ai-sqlite-store` v1.0.0-BETA1, `symfony/ai-store` v1.0.0-BETA1, PHP 8.5.12 with SQLite FTS5.
+Filed upstream as a pull request: https://github.com/symfony/ai/pull/2874. Versions: `symfony/ai-sqlite-store` v1.0.0-BETA1, `symfony/ai-store` v1.0.0-BETA1, PHP 8.5.12 with SQLite FTS5.
 
 ## What happens
 
@@ -26,7 +26,7 @@ A quote inside a term is escaped as two quotes (`""`), as FTS5 phrases require, 
 
 ## Upstream status
 
-Checked on 2026-11-02.
+Checked on 2026-11-02; filed and updated on 2026-11-03.
 
 - **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-sqlite-store-unescaped-fts-quote`.
 - **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-sqlite-store` 295e2b27233c, `symfony/ai-store` 71ecd035324e): `still fails  ai-sqlite-store-unescaped-fts-quote`, with the same FTS5 syntax error.
