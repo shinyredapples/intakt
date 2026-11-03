@@ -22,3 +22,13 @@ While a failed platform's limiter has no room, the next call skips it and goes t
 ## Effect in Intakt
 
 `src/Core/Ai/Infrastructure/AccountFailoverPlatform.php` picks the accounts that are not cooling down itself and builds a `FailoverPlatform` over only those for each call, with a limiter that never limits.
+
+## Upstream status
+
+Checked on 2026-11-02.
+
+- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-failover-platform-retries-a-failed-platform`.
+- **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-failover-platform` 8ae86c0c7624, `symfony/ai-platform` 17c452fa350f): `still fails  ai-failover-platform-retries-a-failed-platform`, the failing platform still called 2 times.
+- **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #1953 (open issue, a `FailoverProvider` to replace `FailoverPlatform`; does not mention the limiter), #1126 (closed pull request that added `FailoverPlatform`), #1391 (closed issue, HTTP 403 not passed to the next platform), #1808 and #1864 (open pull requests, model override and model failover).
+- **Searches** (`symfony/ai` issues and pull requests, open and closed): `FailoverPlatform`, `failover rate limiter`, `failedPlatforms`.
+- **Decision:** `ready to file`.

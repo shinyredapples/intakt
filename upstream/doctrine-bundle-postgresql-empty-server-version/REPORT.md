@@ -19,3 +19,13 @@ The connection is built, and the server version is detected on the first connect
 ## Effect in Intakt
 
 `config/packages/doctrine.yaml` sets `server_version` through `src/Core/Platform/Infrastructure/PostgreSqlServerVersion.php`: a PostgreSQL URL gets version 12 (DBAL 4 has no newer PostgreSQL platform), any other URL none, so MySQL, MariaDB and SQLite keep detecting the server.
+
+## Upstream status
+
+Checked on 2026-11-02.
+
+- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `doctrine/doctrine-bundle` 3.3.3 and `doctrine/dbal` 4.5.0: `still fails  doctrine-bundle-postgresql-empty-server-version`.
+- **Development branch:** still fails on every branch that installs. Neither repository has a `main` branch: their default branches are 3.3.x (bundle) and 4.5.x (DBAL). The same run in a scratch copy with the bundle at `3.3.x-dev` (7b914210c91f) and DBAL at `4.5.x-dev` (93469c115cb1): `still fails  doctrine-bundle-postgresql-empty-server-version`. The newer branches conflict with Intakt's ORM and migrations bundle, so `reproduce.php` ran with the runner's command line in a scratch project holding only the bundle and DBAL: bundle `3.4.x-dev` (5d12c353e103) with DBAL `4.6.x-dev` (a5dc1fa93c3d), and bundle `4.0.x-dev` (cc3f9d740f3c) with DBAL `4.6.x-dev`, each exit 1 with the same message. DBAL `5.0.x-dev` installs with no bundle branch (4.0.x requires `doctrine/dbal` ^4.0).
+- **Existing issue or pull request:** none found for the bundle. Candidates, none the same bug: doctrine/dbal#6530 (closed issue, the same message for a PostgreSQL URL without `serverVersion`; closed after the maintainers asked for a reproduction with DBAL alone, and the reporter traced it to the application's setup), doctrine/DoctrineBundle#2325 (merged into 2.19.x on 2026-10-28, resolves the platform only when no `charset` is configured; the same code path, but this reproduction sets no `charset`, so it still fails), doctrine/DoctrineBundle#2170, #2251, #2252, #2261 and #2263 (`doctrine:database:create` without `server_version`; #2252 was reverted by #2263).
+- **Searches** (issues and pull requests, open and closed): `doctrine/DoctrineBundle`: `server_version postgresql`, `server_version`, `"Invalid platform version"`, `StaticServerVersionProvider`, `dbname_suffix serverVersion`, `ConnectionFactory charset platform`, `getDatabasePlatform serverVersion`; `doctrine/dbal`: `"Invalid platform version"`.
+- **Decision:** `ready to file` against doctrine/DoctrineBundle, naming #2325 and doctrine/dbal#6530.

@@ -18,3 +18,13 @@ A `TextResult` with the CLI's final result, since no tool call is left for the c
 ## Effect in Intakt
 
 `src/Core/Ai/Infrastructure/FinishedProcessResult.php` drops `tool_calls` from the raw result before the converter sees it.
+
+## Upstream status
+
+Checked on 2026-11-02.
+
+- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-claude-code-platform-cli-tool-calls`.
+- **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-claude-code-platform` 83819ce82d64, `symfony/ai-platform` 17c452fa350f): `still fails  ai-claude-code-platform-cli-tool-calls`.
+- **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #2015 (closed pull request, adds tool-call trace metadata from the same CLI events), #2063 (closed pull request, tool-use deltas in the stream), #2603 (closed pull request, restricts the CLI's tools with the `tools` option), #2712 and #2713 (open, JSON Lines split on `PHP_EOL` in `RawProcessResult`).
+- **Searches** (`symfony/ai` issues and pull requests, open and closed): `ClaudeCode tool_calls`, `"Claude Code" tool_use`, `RawProcessResult`, `label:Platform ClaudeCode`.
+- **Decision:** `ready to file`.
