@@ -23,6 +23,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PDO;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -97,6 +98,30 @@ final class StartedRoundsTest extends KernelTestCase
         try {
             $this->rounds->startOnce('alpha', $green, static function () use ($connection): QueuedRound {
                 $connection->close();
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The lost transaction was swallowed.');
+        } catch (RoundTransactionLost) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
+        self::assertSame(0, $this->storedRounds());
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    // A commit past DBAL (native, or implicit as on MySQL's DDL) leaves DBAL's own count of transactions at one, so the record and the end of the wait would be written in autocommit.
+    public function testARoundQueuedBeforeACommitPastDbalIsDiscardedAndLeavesTheHeadDue(): void
+    {
+        $connection = $this->entities->getConnection();
+        $green = $this->green();
+        $this->pending->enqueue('alpha', [$green]);
+
+        try {
+            $this->rounds->startOnce('alpha', $green, static function () use ($connection): QueuedRound {
+                $native = $connection->getNativeConnection();
+                self::assertInstanceOf(PDO::class, $native);
+                $native->commit();
 
                 return RecordingCommandBus::queued(1);
             });
