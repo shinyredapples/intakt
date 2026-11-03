@@ -23,6 +23,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
 use Intakt\Core\Review\Infrastructure\ReviewServerLost;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\ToolsOfRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
@@ -31,12 +32,14 @@ use Intakt\Tests\Core\Mcp\Contract\KernelHttpClient;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Http\Client\ClientInterface;
+use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -260,7 +263,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
             return 0 === $step++ ? new ToolCallResult([new ToolCall('1', $tool, $arguments)]) : self::APPROVE;
         };
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates()));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
 
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
     }

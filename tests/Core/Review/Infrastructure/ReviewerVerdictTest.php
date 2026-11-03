@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
@@ -30,28 +31,38 @@ use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Core\Review\Infrastructure\StreamAcceptance;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\AiBundle\Profiler\DataCollector;
 use Symfony\AI\AiBundle\Test\AiAssertionsTrait;
+use Symfony\AI\Platform\Exception\BadRequestException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Message\UserMessage;
+use Symfony\AI\Platform\ModelCatalog\FallbackModelCatalog;
+use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -68,6 +79,8 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(StrictVerdictStreamListener::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]
+#[CoversClass(StreamAcceptance::class)]
+#[CoversClass(StreamingFallbacks::class)]
 #[CoversClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(UntrustedSource::class)]
@@ -85,6 +98,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReadFile::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
+#[UsesClass(UnstreamedModelCatalog::class)]
 final class ReviewerVerdictTest extends WebTestCase
 {
     use AiAssertionsTrait;
@@ -100,6 +114,13 @@ final class ReviewerVerdictTest extends WebTestCase
     private UuidV7 $conversation;
 
     private UuidV7 $round;
+
+    private ModelCatalogInterface $catalog;
+
+    private InMemoryLedger $ledger;
+
+    // A count, not a flag, because a provider may accept a streamed round and refuse a later one, which must not count as unable to stream; null never refuses.
+    private ?int $streamsAccepted = null;
 
     private RecordedRoundUpdates $updates;
 
@@ -122,12 +143,77 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->conversation = new UuidV7();
         $this->round = new UuidV7();
         $this->updates = new RecordedRoundUpdates();
+        $this->catalog = new UnstreamedModelCatalog();
+        $this->ledger = new InMemoryLedger();
     }
 
     protected function tearDown(): void
     {
         $this->fixture->remove();
         parent::tearDown();
+    }
+
+    public function testAProviderThatStreamsOnlyWhenAskedPublishesTheTextAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $reads = [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])];
+
+        $streamed = $this->review('Add a cart.', $reads, self::APPROVE);
+        $published = implode('', array_map(static fn (string $update): string => explode(' ', $update, 3)[2], array_filter($this->updates->seen, static fn (string $update): bool => str_starts_with($update, 'text '))));
+        $this->catalog = new UnstreamedModelCatalog();
+        $this->conversation = new UuidV7();
+        $unstreamed = $this->review('Add a cart.', $reads, self::APPROVE);
+
+        self::assertSame(self::APPROVE, $published);
+        self::assertEquals($unstreamed, $streamed, json_encode($streamed->findings, JSON_THROW_ON_ERROR));
+        self::assertSame(Decision::Approve, $streamed->verdict);
+        self::assertSame([], $this->ledger->kinds());
+    }
+
+    public function testAProviderThatRefusesToStreamFallsBackToTheUnstreamedCallAndTheRoundRecordsIt(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $this->streamsAccepted = 0;
+
+        $verdict = $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertCount(1, $this->sent);
+        self::assertSame([], $this->updates->seen);
+        self::assertEquals([LedgerEventKind::StreamingFellBack], $this->ledger->kinds());
+        self::assertSame([['round' => $this->round->toRfc4122(), 'reviewer' => $this->conversation->toRfc4122()]], $this->ledger->payloads());
+    }
+
+    public function testARefusalAfterTheProviderAcceptedAStreamedRoundIsNeitherRecordedAsAFallbackNorRetried(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $this->streamsAccepted = 1;
+
+        try {
+            $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+            self::fail('A refused later round gave a verdict.');
+        } catch (BadRequestException) {
+            self::assertCount(1, $this->sent);
+            self::assertSame([], $this->ledger->kinds());
+        }
+    }
+
+    public function testAStreamCutOffMidAnswerIsNotRetriedUnstreamed(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $cutOff = new StreamResult((static function (): Generator {
+            yield new TextDelta('{"verdict":"approve",');
+
+            throw new IncompleteStreamException('The stream ended before its last event.');
+        })());
+
+        try {
+            $this->review('Add a cart.', [], $cutOff);
+            self::fail('A cut-off stream gave a verdict.');
+        } catch (IncompleteStreamException) {
+            self::assertCount(1, $this->sent);
+            self::assertSame([], $this->ledger->kinds());
+        }
     }
 
     public function testTheAgentReadsAFileAtTheHeadAndReturnsTheVerdictTheModelAnswered(): void
@@ -688,23 +774,63 @@ final class ReviewerVerdictTest extends WebTestCase
     // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round.
     private function reviewRounds(string $task, array $rounds, string|ResultInterface $answer): Verdict
     {
-        $script = function (mixed $model, mixed $input) use (&$rounds, $answer): string|ResultInterface {
+        $script = function (mixed $model, mixed $input, array $options) use (&$rounds, $answer): string|ResultInterface {
+            $this->refuseToStreamIfConfigured($options);
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
             $next = array_shift($rounds);
 
-            return null === $next ? $answer : new ToolCallResult($next);
+            return $this->streamedWhenAsked(null === $next ? $answer : new ToolCallResult($next), $options);
         };
-        $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
+        $mock = MockPlatformFactory::createPlatform($script, $this->catalog, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
+        $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates, new StreamingFallbacks($this->ledger, new NullLogger())));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 
-        $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
+        $collector = new DataCollector($platform instanceof TraceablePlatform ? [$platform] : [], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function refuseToStreamIfConfigured(array $options): void
+    {
+        if (null === $this->streamsAccepted || true !== ($options['stream'] ?? false)) {
+            return;
+        }
+
+        if (0 === $this->streamsAccepted) {
+            throw new BadRequestException('This request is refused.');
+        }
+
+        --$this->streamsAccepted;
+    }
+
+    // Like a provider that answers in one piece unless the request asks for a stream.
+    /**
+     * @param array<mixed> $options
+     */
+    private function streamedWhenAsked(string|ResultInterface $result, array $options): string|ResultInterface
+    {
+        if (true !== ($options['stream'] ?? false) || $result instanceof StreamResult) {
+            return $result;
+        }
+
+        if ($result instanceof ToolCallResult) {
+            return new StreamResult((static function () use ($result): Generator {
+                yield new ToolCallComplete($result->getContent());
+            })());
+        }
+
+        $text = $result instanceof TextResult ? $result->getContent() : $result;
+
+        return is_string($text) ? $this->streamed(...str_split($text, 40)) : $result;
     }
 
     private function streamed(string ...$parts): StreamResult

@@ -12,6 +12,7 @@ use Override;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
+use Throwable;
 
 // Runs code while a start is in flight because that forces the order of two ticks.
 final class RecordingCommandBus implements MessageBusInterface
@@ -21,12 +22,17 @@ final class RecordingCommandBus implements MessageBusInterface
     /** @var list<QueuedRound> */
     public array $discarded = [];
     public ?Closure $whileStarting = null;
+    public ?Throwable $discardFailure = null;
 
     #[Override]
     public function dispatch(object $message, array $stamps = []): Envelope
     {
         if ($message instanceof DiscardQueuedRound) {
             $this->discarded[] = $message->round;
+
+            if ($this->discardFailure instanceof Throwable) {
+                throw $this->discardFailure;
+            }
 
             return new Envelope($message);
         }

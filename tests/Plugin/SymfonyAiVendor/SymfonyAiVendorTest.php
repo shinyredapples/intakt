@@ -47,6 +47,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
@@ -84,6 +85,7 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\BadRequestException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
@@ -246,8 +248,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $unstreamedLedger = new InMemoryLedger();
         $streamedLedger = new InMemoryLedger();
 
-        $unstreamed = $this->vendor(static fn (): TextResult => self::withUsage($answer), $unstreamedLedger)->review('alpha', Tier::Strong, $this->request())->verdict;
-        $streamed = $this->vendor(static fn (): StreamResult => self::streamed($answer), $streamedLedger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $refusesToStream = static fn (mixed $model, mixed $input, array $options): TextResult => true === ($options['stream'] ?? false) ? throw new BadRequestException('This account cannot stream.') : self::withUsage($answer);
+        $streamsWhenAsked = static fn (mixed $model, mixed $input, array $options): ResultInterface => true === ($options['stream'] ?? false) ? self::streamed($answer) : self::withUsage($answer);
+
+        $unstreamed = $this->vendor($refusesToStream, $unstreamedLedger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $streamed = $this->vendor($streamsWhenAsked, $streamedLedger)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertEquals($unstreamed, $streamed);
         self::assertSame(['started', 'settled'], array_column($streamedLedger->payloads(), 'phase'));
@@ -791,7 +796,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates()));
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
