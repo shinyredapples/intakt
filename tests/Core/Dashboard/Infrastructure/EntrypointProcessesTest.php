@@ -123,7 +123,7 @@ final class EntrypointProcessesTest extends TestCase
     /**
      * @param array<string, int> $expected
      *
-     * @return array<int, string> the role of each child process by its id
+     * @return array<int, string>
      */
     private function waitForProcesses(array $expected, ?int $gone = null): array
     {
@@ -160,7 +160,7 @@ final class EntrypointProcessesTest extends TestCase
     }
 
     /**
-     * @return array<int, list<string>> the arguments of each child process by its id
+     * @return array<int, list<string>>
      */
     private function childArguments(): array
     {
@@ -168,7 +168,7 @@ final class EntrypointProcessesTest extends TestCase
         $children = null === $pid ? false : @file_get_contents(sprintf('/proc/%d/task/%d/children', $pid, $pid));
         $arguments = [];
 
-        foreach (array_map(intval(...), array_filter(explode(' ', trim((string) $children)))) as $child) {
+        foreach (array_map(intval(...), array_filter(explode(' ', trim((string) $children)), static fn (string $part): bool => '' !== $part)) as $child) {
             $commandLine = @file_get_contents('/proc/'.$child.'/cmdline');
 
             if (is_string($commandLine) && '' !== $commandLine) {
