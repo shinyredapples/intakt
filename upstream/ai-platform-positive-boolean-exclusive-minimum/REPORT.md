@@ -20,3 +20,13 @@ exclusiveMinimum is not a number
 ## Effect in Intakt
 
 `src/Core/Review/Contract/Finding.php` uses `#[GreaterThanOrEqual(1)]` on `line` instead of `#[Positive]`, which describes as `"minimum": 1`.
+
+## Upstream status
+
+Checked on 2026-11-02.
+
+- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-platform-positive-boolean-exclusive-minimum`.
+- **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-platform` 17c452fa350f): `still fails  ai-platform-positive-boolean-exclusive-minimum`, still `"exclusiveMinimum":true`.
+- **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #1722 (closed pull request that added the Validator metadata describer), #2527 (open pull request, configurable validation groups for structured output), #2552 and #2765 (open, reuse `mcp/sdk` `#[Schema]` constraints for agent tools).
+- **Searches** (`symfony/ai` issues and pull requests, open and closed): `exclusiveMinimum`, `ValidatorConstraintsDescriber`, `Positive constraint schema`.
+- **Decision:** `ready to file`.

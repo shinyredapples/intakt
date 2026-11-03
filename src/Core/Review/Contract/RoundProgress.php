@@ -16,4 +16,9 @@ final readonly class RoundProgress
         public bool $judged,
     ) {
     }
+
+    public function isSameAs(?self $other): bool
+    {
+        return $other instanceof self && $other->reviewersFinished === $this->reviewersFinished && $other->reviewers === $this->reviewers && $other->judged === $this->judged;
+    }
 }

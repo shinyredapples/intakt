@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
@@ -24,7 +25,7 @@ final readonly class StartedRounds
     ) {
     }
 
-    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done; a round queued before the rollback is discarded, because its checkout lives outside the database.
+    // One transaction for the round, its record and the end of the wait, so a crash or a failed start leaves the head due and nothing half done; a round queued before the rollback is discarded even when the rollback fails, because its checkout lives outside the database.
     /**
      * @param Closure(): QueuedRound $start
      */
@@ -41,7 +42,8 @@ final readonly class StartedRounds
             $this->pending->forget($project, $change);
             $connection->commit();
         } catch (Throwable $failure) {
-            $this->rollBackAndDiscard($connection, $queued);
+            $this->undo($connection);
+            $this->discard($queued);
 
             throw $failure;
         }
@@ -145,15 +147,12 @@ final readonly class StartedRounds
         return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
     }
 
-    // Discarded even when the rollback fails, because MySQL's implicit commit before DDL leaves no transaction to roll back, and the round's checkout would stay behind; a lost connection is not rolled back, so its failure stays the one thrown.
-    private function rollBackAndDiscard(Connection $connection, ?QueuedRound $queued): void
+    // A rollback that fails (the server already ended the transaction) must not hide the original failure or skip the discard.
+    private function undo(Connection $connection): void
     {
         try {
-            if ($connection->isTransactionActive()) {
-                $connection->rollBack();
-            }
-        } finally {
-            $this->discard($queued);
+            $connection->rollBack();
+        } catch (Exception) {
         }
     }
 

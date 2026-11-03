@@ -10,12 +10,13 @@ final readonly class GateResult
     private const int MAXIMUM_FINDING_LENGTH = 300;
 
     /**
-     * @param list<string> $findings
+     * @param list<string>                                         $findings
+     * @param array{note?: string, slowest?: array<string, float>} $extras
      */
     private function __construct(
         public string $gate,
         public array $findings,
-        private ?string $note = null,
+        private array $extras = [],
     ) {
     }
 
@@ -26,7 +27,7 @@ final readonly class GateResult
 
     public static function passedBecause(string $gate, string $note): self
     {
-        return new self($gate, [], $note);
+        return new self($gate, [], ['note' => $note]);
     }
 
     /**
@@ -44,7 +45,15 @@ final readonly class GateResult
 
     public function noted(string $note): self
     {
-        return new self($this->gate, $this->findings, $note);
+        return new self($this->gate, $this->findings, ['note' => $note] + $this->extras);
+    }
+
+    /**
+     * @param array<string, float> $slowest
+     */
+    public function withSlowest(array $slowest): self
+    {
+        return new self($this->gate, $this->findings, ['slowest' => $slowest] + $this->extras);
     }
 
     public function isPassing(): bool
@@ -63,7 +72,24 @@ final readonly class GateResult
             'omitted' => count($this->findings) - count($shown),
         ];
 
-        return json_encode(null === $this->note ? $report : $report + ['note' => $this->note], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $report += isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
+        $report += [] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()];
+
+        return json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * @return list<array{file: string, seconds: float}>
+     */
+    private function slowestList(): array
+    {
+        $list = [];
+
+        foreach ($this->extras['slowest'] ?? [] as $file => $seconds) {
+            $list[] = ['file' => $file, 'seconds' => round($seconds, 3)];
+        }
+
+        return $list;
     }
 
     private function shorten(string $finding): string

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Generator;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
@@ -25,12 +26,15 @@ use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
+use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\Exception\ConflictException;
@@ -43,6 +47,8 @@ use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -54,6 +60,8 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ReviewerPrompt::class)]
 #[CoversClass(FencedToolbox::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(StrictVerdictStreamListener::class)]
+#[CoversClass(ReviewerRuns::class)]
 #[CoversClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(UntrustedSource::class)]
@@ -85,6 +93,10 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private UuidV7 $conversation;
 
+    private UuidV7 $round;
+
+    private RecordedRoundUpdates $updates;
+
     /**
      * @var list<Finding>
      */
@@ -102,6 +114,8 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->fixture = new ReviewCheckout();
         $this->conversations = new InMemoryMessageStore();
         $this->conversation = new UuidV7();
+        $this->round = new UuidV7();
+        $this->updates = new RecordedRoundUpdates();
     }
 
     protected function tearDown(): void
@@ -121,6 +135,50 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertToolCalled('read_file');
         self::assertToolCallCount(1);
         self::assertStringContainsString('final class Cart', $this->sent[1]);
+    }
+
+    public function testEachToolCallOfTheReviewerIsPublishedWithTheReviewerThatMadeIt(): void
+    {
+        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame([sprintf('tool %s read_file', $this->conversation->toRfc4122())], $this->updates->seen);
+    }
+
+    public function testStreamedTextOfTheReviewerIsPublishedInTheOrderItArrived(): void
+    {
+        $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
+
+        self::assertSame([sprintf('text %s {"verdict":"approve",', $this->conversation->toRfc4122()), sprintf('text %s "findings":[],"resolved":[],"follow_ups":[]}', $this->conversation->toRfc4122())], $this->updates->seen);
+    }
+
+    public function testAStreamedVerdictKeepsTheApprovalTheModelAnswered(): void
+    {
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAStreamedVerdictWithAFieldTheSchemaDoesNotNameEndsAsChanges(): void
+    {
+        $verdict = $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve","findings":[],', '"resolved":[],"follow_ups":[],"trust_me":true}'));
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAStreamedVerdictMissingAFieldEndsAsChanges(): void
+    {
+        $verdict = $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[]}'));
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testTheTextIsNotPublishedWhenTheModelAnswersInOnePiece(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertSame([], $this->updates->seen);
     }
 
     public function testTheFirstRoundPromptHasNoOpenFindingsMessage(): void
@@ -469,7 +527,7 @@ final class ReviewerVerdictTest extends WebTestCase
      * @param list<ToolCall> $toolCalls
      */
     // Because the script asks for one tool call per round, the answer follows the last call.
-    private function review(string $task, array $toolCalls, string $answer): Verdict
+    private function review(string $task, array $toolCalls, string|ResultInterface $answer): Verdict
     {
         return $this->reviewRounds($task, array_map(static fn (ToolCall $call): array => [$call], $toolCalls), $answer);
     }
@@ -478,7 +536,7 @@ final class ReviewerVerdictTest extends WebTestCase
      * @param list<list<ToolCall>> $rounds
      */
     // Because one model answer can ask for several tools at once, a round is a list of calls, and the verdict follows the last round.
-    private function reviewRounds(string $task, array $rounds, string $answer): Verdict
+    private function reviewRounds(string $task, array $rounds, string|ResultInterface $answer): Verdict
     {
         $script = function (mixed $model, mixed $input) use (&$rounds, $answer): string|ResultInterface {
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
@@ -488,15 +546,24 @@ final class ReviewerVerdictTest extends WebTestCase
         };
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, $this->conversations);
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates));
 
-        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation)), $platform, 'reviewer-model');
+        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 
         $collector = new DataCollector([$platform], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
+    }
+
+    private function streamed(string ...$parts): StreamResult
+    {
+        return new StreamResult((static function () use ($parts): Generator {
+            foreach ($parts as $part) {
+                yield new TextDelta($part);
+            }
+        })());
     }
 
     private function openFinding(string $id, ?string $symbol = null): Finding
