@@ -2,6 +2,9 @@
 
 {% block title %}Review {{ review.change ?: round }} - Intakt{% endblock %}
 
+{# Only a page the hub can reach is told to listen; the plain page below shows the ledger's state either way. #}
+{% block importmap %}{% if live %}{{ importmap('app') }}{% endif %}{% endblock %}
+
 {% block body %}
 <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
 {% set total = review.tokens %}
@@ -15,10 +18,16 @@
 {% else %}
 <p class="no-start">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
 {% endif %}
+{# One listener for every unfinished round, because the hub's subscriber cookie can be set only once per response. #}
+{% set listened = review.rounds|filter(r => r.state.name != 'Judged')|map(r => 'review/rounds/' ~ r.round) %}
+{% if live and listened is not empty %}{{ turbo_stream_from(listened, true) }}{% endif %}
 {% for reviewed in review.rounds %}
 <section class="round" id="round-{{ reviewed.round }}">
     <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
     <p>Round <code>{{ reviewed.round }}</code>, started {{ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') }} UTC, <span class="{{ reviewed.state.name == 'Judged' ? 'state-judged' : 'state-running' }}">{{ reviewed.state.value }}</span>.</p>
+
+    {% set unfinished = reviewed.state.name != 'Judged' %}
+    <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
 
     <h3>Reviewers</h3>
     <p>{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
@@ -38,6 +47,13 @@
         {% endfor %}
         </tbody>
     </table>
+    {% endif %}
+    {% if unfinished %}
+    <div id="round-{{ reviewed.round }}-live">
+    {% for outcome in reviewed.outcomes %}
+        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
+    {% endfor %}
+    </div>
     {% endif %}
 
     <h3>Findings and the judge's call</h3>

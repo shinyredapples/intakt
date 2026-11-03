@@ -1,7 +1,8 @@
 # The base image must be pinned by digest (tag@sha256:<digest>), which #705 does; 1.13.4 is the first release with every worker-mode state-leak fix.
 FROM dunglas/frankenphp:1.13.4-php8.5 AS base
 
-RUN install-php-extensions intl pdo_sqlite opcache zip
+# pcntl lets a consumer finish its message on SIGTERM instead of being cut off.
+RUN install-php-extensions intl pdo_sqlite opcache zip pcntl
 
 WORKDIR /app
 
@@ -13,6 +14,8 @@ RUN composer install --no-dev --no-scripts --no-autoloader --no-interaction
 
 COPY . .
 RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
+    && APP_ENV=prod php bin/console importmap:install --no-debug \
+    && APP_ENV=prod php bin/console asset-map:compile --no-debug \
     && APP_ENV=prod php bin/console cache:warmup --no-debug
 
 FROM base
@@ -23,6 +26,7 @@ ENV APP_ENV=prod \
     DASHBOARD_PORT=7781 \
     FRANKENPHP_LOOP_MAX=500 \
     WORKER_MEMORY_CEILING_MB=256 \
+    MESSENGER_CONSUMERS=3 \
     DATABASE_URL="sqlite:///%kernel.project_dir%/var/data/intakt.db" \
     MERCURE_BOLT_PATH=var/data/mercure.db \
     XDG_CONFIG_HOME=/app/var/data/config \

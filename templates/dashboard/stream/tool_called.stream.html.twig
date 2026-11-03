@@ -1,1 +1,1 @@
-<turbo-stream action="append" target="reviewer-{{ reviewer }}-activity"><template><li>{{ tool }}</li></template></turbo-stream>
+{{ include('dashboard/stream/_reviewer_placed.stream.html.twig') }}<turbo-stream action="append" target="reviewer-{{ reviewer }}-activity"><template><li>{{ tool }}</li></template></turbo-stream>
