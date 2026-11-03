@@ -11,10 +11,20 @@ final readonly class Redaction
 {
     public const string REDACTED = '[redacted]';
 
+    private const string CREDENTIAL_NAMES = '(?:proxy-)?authorization|x-api-key|api-key';
+
+    private const string HEADER = '\b('.self::CREDENTIAL_NAMES.')(["\']?\s*[:=]\s*\[?)';
+
+    private const string SCHEME = '((?:basic|bearer|digest|token|bot)\s+)?';
+
     // Known places and shapes too, because a credential Intakt does not hold (a minted token, a password in a DSN) can still reach a text.
     private const array PATTERNS = [
-        '~(?<=://)[^\s/?#@"\'<>]+@~' => self::REDACTED.'@',
-        '~\b((?:proxy-)?authorization|x-api-key|api-key)(["\']?\s*[:=]\s*\[?["\']?)((?:basic|bearer|digest|token|bot)\s+)?[^\s"\',;\]]+~i' => '$1$2$3'.self::REDACTED,
+        // Up to the last @ before the host, because a raw password can hold an @ or a quote.
+        '~(?<=://)[^\s/?#<>]+@~' => self::REDACTED.'@',
+        // A quoted value up to its closing quote, or the end of the line when it has none.
+        '~'.self::HEADER.'(["\'])'.self::SCHEME.'(?:(?!\3)[^\r\n])+\3?~i' => '$1$2$3$4'.self::REDACTED.'$3',
+        // With the name="value" parameters that follow, because a Digest header holds its response in them; the scheme is possessive and a value never starts with a bracket, so a value redacted already stays as it is.
+        '~'.self::HEADER.self::SCHEME.'+[^\s"\'\[,;\]](?:[^\s"\',;\]]|"[^"\r\n]*")*(?:\s*,\s*[\w-]+=(?:"[^"\r\n]*"|[^\s"\',;\]]+))*~i' => '$1$2$3'.self::REDACTED,
         '~-----BEGIN[A-Z ]*PRIVATE KEY-----.*?-----END[A-Z ]*PRIVATE KEY-----~s' => self::REDACTED,
         '~\b(?:gh[opsur]_[A-Za-z0-9]{36,}|github_pat_\w{22,}|sk-[\w-]{20,}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+)~' => self::REDACTED,
     ];
@@ -32,6 +42,12 @@ final readonly class Redaction
         return $text
             |> $this->withoutCredentials(...)
             |> $this->withoutSecretShapes(...);
+    }
+
+    // For a value stored under a name, such as a header in a map, where no text pattern sees the name beside the value.
+    public function namesACredential(string $name): bool
+    {
+        return 1 === preg_match('~^(?:'.self::CREDENTIAL_NAMES.')$~i', $name);
     }
 
     private function withoutCredentials(string $text): string

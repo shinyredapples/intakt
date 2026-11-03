@@ -35,6 +35,13 @@ final class RedactionTest extends TestCase
         yield 'a basic proxy authorization header' => ['proxy-authorization: Basic dXNlcjpwYXNz', 'proxy-authorization: Basic [redacted]'];
         yield 'an authorization header without a scheme' => ['Authorization: abcdef', 'Authorization: [redacted]'];
         yield 'an authorization header in JSON' => ['{"authorization":["Bearer abc"]}', '{"authorization":["Bearer [redacted]"]}'];
+        yield 'a URL with a quote in its password' => ['https://alice:p"assword@example.com/repo', 'https://[redacted]@example.com/repo'];
+        yield 'a URL with an @ in its password' => ['https://alice:p@ss@example.com/repo', 'https://[redacted]@example.com/repo'];
+        yield 'an authorization header on its own line' => ["GET /repos\r\nAuthorization: token abc123\r\n", "GET /repos\r\nAuthorization: token [redacted]\r\n"];
+        yield 'a quoted authorization header' => ['Authorization: "Bearer abc123"', 'Authorization: "Bearer [redacted]"'];
+        yield 'an authorization header without a closing quote' => ['Authorization: "Bearer abc123', 'Authorization: "Bearer [redacted]"'];
+        yield 'an authorization header in a JSON object' => ['{"Authorization":"Bearer abc123","Accept":"json"}', '{"Authorization":"Bearer [redacted]","Accept":"json"}'];
+        yield 'a Digest authorization header' => ['Authorization: Digest username="alice", nonce="n0nce", response="r3sponse"', 'Authorization: Digest [redacted]'];
         yield 'an API key header' => ['x-api-key: some-value', 'x-api-key: [redacted]'];
         yield 'a GitHub installation token' => ['token ghs_'.str_repeat('a1', 18).' expired', 'token [redacted] expired'];
         yield 'a fine-grained GitHub token' => ['github_pat_'.str_repeat('Ab1', 10), '[redacted]'];
@@ -65,5 +72,15 @@ final class RedactionTest extends TestCase
     public function testItLeavesATextWithoutSecretsUnchanged(string $text): void
     {
         self::assertSame($text, new Redaction('key-one')->of($text));
+    }
+
+    public function testAnAuthorizationHeaderNamesACredentialInAnyCase(): void
+    {
+        self::assertTrue(new Redaction()->namesACredential('Proxy-Authorization'));
+    }
+
+    public function testAnotherHeaderNamesNoCredential(): void
+    {
+        self::assertFalse(new Redaction()->namesACredential('authorization-step'));
     }
 }

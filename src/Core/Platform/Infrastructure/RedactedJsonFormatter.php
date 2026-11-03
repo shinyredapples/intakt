@@ -11,9 +11,10 @@ use Monolog\LogRecord;
 use Monolog\Utils;
 use Override;
 use SensitiveParameter;
+use stdClass;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// Redacts the written line rather than the record, because a processor cannot reach an exception's message and trace, which the formatter writes.
+// Redacts what the formatter writes rather than the record, because a processor cannot reach an exception's message and trace.
 final readonly class RedactedJsonFormatter implements FormatterInterface
 {
     private JsonFormatter $json;
@@ -33,16 +34,13 @@ final readonly class RedactedJsonFormatter implements FormatterInterface
     ) {
         // One line per record with the trace, so a failure is one journal entry.
         $this->json = new JsonFormatter(includeStacktraces: true);
-        $held = array_values(array_filter([...$credentials, ...$accountCredentials], static fn (?string $credential): bool => null !== $credential && '' !== $credential));
-        // Also as JSON writes them, because a credential with a quote, a backslash or a line break is escaped inside the line.
-        $escaped = array_map(static fn (string $credential): string => substr((string) json_encode($credential, Utils::DEFAULT_JSON_FLAGS), 1, -1), $held);
-        $this->redaction = new Redaction(...$held, ...$escaped);
+        $this->redaction = new Redaction(...array_filter([...$credentials, ...$accountCredentials], static fn (?string $credential): bool => null !== $credential && '' !== $credential));
     }
 
     #[Override]
     public function format(LogRecord $record): string
     {
-        return $this->redaction->of($this->json->format($record));
+        return $this->redacted($this->json->format($record))."\n";
     }
 
     /**
@@ -51,6 +49,39 @@ final readonly class RedactedJsonFormatter implements FormatterInterface
     #[Override]
     public function formatBatch(array $records): string
     {
-        return $this->redaction->of($this->json->formatBatch($records));
+        return $this->redacted($this->json->formatBatch($records));
+    }
+
+    // Each decoded string, because in the written line a JSON escape (a \n before a header, a \" around a value) hides where a secret starts and ends.
+    private function redacted(string $json): string
+    {
+        return json_decode($json, flags: JSON_THROW_ON_ERROR)
+            |> $this->redactedValue(...)
+            |> (static fn (mixed $value): string => Utils::jsonEncode($value, Utils::DEFAULT_JSON_FLAGS, true));
+    }
+
+    private function redactedValue(mixed $value): mixed
+    {
+        return match (true) {
+            is_string($value) => $this->redaction->of($value),
+            is_array($value) => $this->redactedFields($value),
+            $value instanceof stdClass => (object) $this->redactedFields(get_object_vars($value)),
+            default => $value,
+        };
+    }
+
+    /**
+     * @param array<array-key, mixed> $fields
+     *
+     * @return array<array-key, mixed>
+     */
+    private function redactedFields(array $fields): array
+    {
+        $redacted = [];
+        foreach ($fields as $name => $value) {
+            $redacted[$name] = is_string($name) && $this->redaction->namesACredential($name) ? Redaction::REDACTED : $this->redactedValue($value);
+        }
+
+        return $redacted;
     }
 }
