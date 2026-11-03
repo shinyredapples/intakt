@@ -24,7 +24,7 @@ final class CaddyfileWorkersTest extends TestCase
     // Longer than the hub test waits, because the workers boot the kernel and may warm its cache first.
     private const int SECONDS_TO_WAIT = 60;
 
-    // Below what a worker holds once the kernel is booted (about 5 MB), above what a new worker holds before its first request (about 0.5 MB).
+    // One megabyte, because a worker holding its booted kernel (about 5 MB) is past it and a new worker before its first request (about 0.5 MB) is not.
     private const int CEILING_MEGABYTES = 1;
 
     private const int CEILING_BYTES = self::CEILING_MEGABYTES * 1_048_576;
