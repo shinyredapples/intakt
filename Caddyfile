@@ -1,6 +1,11 @@
 {
 	# On localhost only, because intakt:server:status reads it (FRANKENPHP_ADMIN_URL) and it can change the whole server; CADDY_ADMIN moves it, so the hub tests do not take the port of a running install.
 	admin {$CADDY_ADMIN:localhost:2019}
+
+	frankenphp {
+		# 1.13.4 has max_wait_time only here, for every worker; a worker block has no such key.
+		max_wait_time {$MAX_WAIT_TIME:30s}
+	}
 }
 
 :{$SERVER_PORT:7781} {
@@ -24,6 +29,26 @@
 				path {$MERCURE_BOLT_PATH:var/mercure.db}
 				size {$MERCURE_HISTORY_SIZE:1000}
 			}
+		}
+	}
+
+	root public/
+	php_server {
+		# FRANKENPHP_WORKER makes Symfony Runtime pick FrankenPhpWorkerRunner.
+		worker {
+			name app
+			file public/index.php
+			num {$APP_WORKERS:2}
+			env FRANKENPHP_WORKER 1
+		}
+		# Own threads, so a streamed MCP response cannot starve the dashboard; the paths are in config/packages/mcp.yaml.
+		worker {
+			name mcp
+			file public/mcp.php
+			match /mcp/*
+			num {$MCP_WORKERS:2}
+			max_threads {$MCP_MAX_THREADS:8}
+			env FRANKENPHP_WORKER 1
 		}
 	}
 }

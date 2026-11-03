@@ -31,7 +31,24 @@ The pages answer only an address on the computer itself: `localhost`, `127.0.0.1
 
 ### Live updates (in progress)
 
-While a review runs, Intakt sends each reviewer's tool calls and each round's progress ("1 of 2 reviewers finished", "Judged") to the live-update hub built into FrankenPHP. A reviewer's text as it is written is not sent yet; that comes with #644. The review page does not show them yet, so it still needs a reload; showing them without a reload is the next part. To run the hub, set `MERCURE_JWT_SECRET` (at least 32 characters) in `.env.local` and start FrankenPHP from the repository with `frankenphp run --config Caddyfile --envfile .env.local --envfile .env`. FrankenPHP does not read the `.env` files on its own, and the first file that sets a value wins, so `.env.local` comes first. FrankenPHP's admin API answers on `localhost:2019` only, where `intakt:server:status` reads it. If the hub is not running, reviews are not affected: the update is dropped and a warning is logged.
+While a review runs, Intakt sends each reviewer's tool calls and each round's progress ("1 of 2 reviewers finished", "Judged") to the live-update hub built into FrankenPHP. A reviewer's text as it is written is not sent yet; that comes with #644. The review page does not show them yet, so it still needs a reload; showing them without a reload is the next part. To run the hub, set `MERCURE_JWT_SECRET` (at least 32 characters) in `.env.local` and start FrankenPHP from the repository with `frankenphp run --config Caddyfile --envfile .env.local --envfile .env`. FrankenPHP does not read the `.env` files on its own, and the first file that sets a value wins, so `.env.local` comes first. The same command also serves the dashboard in worker mode on port 7781 (`SERVER_PORT`), in the `dev` environment `.env` sets; because `.env` sets `DASHBOARD_PORT=7780`, its pages answer `400 Bad Request` there until `.env.local` sets `DASHBOARD_PORT=7781`. FrankenPHP's admin API answers on `localhost:2019` only, where `intakt:server:status` reads it. If the hub is not running, reviews are not affected: the update is dropped and a warning is logged.
+
+## Running the container image
+
+The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. Once #704 lands, the image is built and smoke-tested in CI.
+
+```
+docker build -t intakt .
+docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data \
+  --env-file intakt.env intakt
+```
+
+- The secrets are never in the image. `intakt.env` (yours, not in the repository, and left out of the build like `.env.local` and `.env.local.php`) must set `APP_SECRET` and `MERCURE_JWT_SECRET` (at least 32 bytes); the container refuses to start without them. Set `MERCURE_JWT_ISSUER` and `MERCURE_PUBLIC_URL` to the address your browser uses.
+- Publish the port on `127.0.0.1` only (`-p 127.0.0.1:7781:7781`): the dashboard has no login yet, and a plain `-p 7781:7781` opens it to every network the host is on, where a client can send `Host: localhost:7781` itself. Keep the same port inside and outside: the dashboard answers only `localhost`, `127.0.0.1` or `[::1]` with its own port (see [the dashboard](#the-dashboard)), and the image sets `DASHBOARD_PORT` and `SERVER_PORT` to 7781.
+- The database (SQLite) and the hub's history live in the volume `/app/var/data`. The container runs as the user with id 10001, so a bind-mounted folder must belong to that user. It applies the migrations on every start, then serves `/projects`.
+- Two worker pools serve requests: `app` for the dashboard, and `mcp` for `/mcp/*` with its own thread limits (`MCP_WORKERS`, `MCP_MAX_THREADS`), so a streamed MCP answer cannot take the dashboard's threads. `APP_WORKERS` sets the dashboard's pool, `MAX_WAIT_TIME` how long a request waits for a free thread.
+- FrankenPHP's admin API listens on `localhost:2019` inside the container and nothing publishes it; read it with `docker exec intakt php bin/console intakt:server:status`.
+- Not built yet: worker restarts after a number of requests, a memory ceiling, a restart policy, a health check, the queue consumers and the scheduler; the base image is named by tag, and #705 pins it by digest.
 
 ## Checking the server
 
@@ -328,7 +345,7 @@ A project without a review panel, a `--repository` that is not a directory, a br
 
 `php bin/console intakt:upstream:run` runs every reproduction in `upstream/` and prints the installed Symfony AI versions, then `passes` (the bug seems fixed) or `still fails` for each reproduction, and a count. Add `-v` to see why a reproduction fails. The exit code is 1 while any reproduction still fails. A reproduction counts as `passes` only when its PHPUnit tests ran and asserted something, or when its `reproduce.php` script exits with 0 and prints `REPRODUCTION PASSES` as its last line. One without tests or script, with a skipped or incomplete test, or that runs longer than 5 minutes is reported as `still fails`, and the other reproductions still run. A folder that does not exist, cannot be read or cannot be opened (no execute permission) is an error (exit code 2).
 
-For a bug in Symfony AI, a reproduction folder can also hold a prepared fix for the owner to approve: `fix.patch` (one commit for `symfony/ai`) and `PR.md` (the pull request text as it will be posted), or `COMMENT.md` (a comment for an upstream pull request that already fixes the bug). The folder's `REPORT.md` says in `## Upstream status` whether a fix pull request is ready or only an issue is right, and why. Intakt posts nothing upstream: the owner approves each one first. `intakt:upstream:run` ignores these files.
+For a bug in Symfony AI, a reproduction folder can also hold a prepared fix for the owner to approve: `fix.patch` (one commit for `symfony/ai`) and `PR.md` (the pull request text as it will be posted), or `COMMENT.md` (a comment for an upstream pull request that already fixes the bug, or for an upstream issue that already covers it). A bug that needs a new upstream issue, in Symfony AI, Symfony or Doctrine, holds `ISSUE.md`: the issue text as it will be filed. The folder's `REPORT.md` says in `## Upstream status` whether a fix pull request is ready or only an issue is right, and why, and ends with a `Status` line after the owner's review (`not filed`, with the reason, for a report that is not sent). Intakt posts nothing upstream: the owner approves each one first. `intakt:upstream:run` ignores these files.
 
 ## Asking a model for a verdict
 

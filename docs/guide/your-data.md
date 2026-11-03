@@ -23,6 +23,8 @@ flowchart TD
 
 **What is not in Intakt:** your code, issues, pull requests, reviews and approvals all live on GitHub (or Gitea). Intakt never holds the only copy of anything of yours.
 
+In the container image, all of this lives in the volume `/app/var/data` (see [Running the container image](../user/README.md#running-the-container-image)).
+
 ## Backing up
 
 Back up the data volume. Two ways:
