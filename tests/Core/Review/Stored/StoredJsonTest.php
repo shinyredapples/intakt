@@ -35,7 +35,9 @@ final class StoredJsonTest extends KernelTestCase
     {
         $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], [], ['later']), 'json');
 
-        $keys = array_keys(json_decode($json, true, flags: JSON_THROW_ON_ERROR));
+        /** @var array<string, mixed> $stored */
+        $stored = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+        $keys = array_keys($stored);
         self::assertSame(['verdict', 'findings', 'resolved', 'follow_ups'], $keys);
         self::assertStringContainsString('"fixable_by":"builder"', $json);
     }

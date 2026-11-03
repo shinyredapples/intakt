@@ -15,6 +15,7 @@ final class FindingSchemaTest extends TestCase
 {
     public function testTheStructuredOutputSchemaOfAFindingNamesTheFieldFixableBy(): void
     {
+        /** @var array<string, mixed> $properties */
         $properties = new ResponseFormatFactory()->create(Finding::class)['json_schema']['schema']['properties'];
 
         self::assertArrayHasKey('fixable_by', $properties);

@@ -40,7 +40,6 @@ final readonly class Verdict
     }
 
     // By the finding ids the failure verdicts carry, because a reviewer that uses one of them itself gains nothing: its verdict then adds no finding and closes none.
-    // Ignored, because the serializer would store the answer as a field the reader does not know.
     #[Ignore]
     public function isFailedReview(): bool
     {
