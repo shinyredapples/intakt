@@ -54,8 +54,9 @@ final class StreamedTextBatchTest extends TestCase
 
         $batch->flush();
 
-        // 2 seconds of deltas at 4 publishes a second, plus the first and the last.
-        self::assertLessThanOrEqual(10, count($this->updates->seen));
+        $secondsOfDeltas = 2;
+        $publishesPerSecond = 4;
+        self::assertLessThanOrEqual($secondsOfDeltas * $publishesPerSecond + 2, count($this->updates->seen));
         self::assertSame($answer, $this->publishedText('r1'));
     }
 

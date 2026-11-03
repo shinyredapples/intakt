@@ -6,11 +6,13 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use DateTimeImmutable;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Override;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Contracts\Service\ResetInterface;
 
 // One per reviewer call and never shared, because the readonly runs service must keep no text of its own and two reviewers at once must not mix.
-final class StreamedTextBatch
+final class StreamedTextBatch implements ResetInterface
 {
     // A few times a second, because a publish per delta floods the hub while a slower pace makes the text look stuck.
     public const string INTERVAL = '250 milliseconds';
@@ -48,8 +50,15 @@ final class StreamedTextBatch
         $this->updates->textStreamed($this->round, $this->reviewer, $text);
     }
 
+    #[Override]
+    public function reset(): void
+    {
+        $this->waiting = '';
+        $this->lastPublished = null;
+    }
+
     private function due(): bool
     {
-        return null === $this->lastPublished || $this->clock->now() >= $this->lastPublished->modify('+'.self::INTERVAL);
+        return !$this->lastPublished instanceof DateTimeImmutable || $this->clock->now() >= $this->lastPublished->modify('+'.self::INTERVAL);
     }
 }
