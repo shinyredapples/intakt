@@ -19,8 +19,8 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\Toolbox;
-use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\AssistantMessage;
+use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Message\UserMessage;
@@ -137,14 +137,15 @@ final class WorkerModeTest extends TestCase
         $second = new UuidV7();
 
         $this->runReviewer($kernel, $first, 'Review the first change.');
-        $this->nextRequestSees($kernel);
+        $reset = $this->nextRequestSees($kernel);
         $this->runReviewer($kernel, $second, 'Review the second change.');
 
+        self::assertSame(0, $reset->loadedEntities);
         self::assertSame(['Review the second change.', 'Answer to Review the second change.'], $this->storedTexts($kernel, $second));
         self::assertSame(['Review the first change.', 'Answer to Review the first change.'], $this->storedTexts($kernel, $first));
     }
 
-    // The call FrankenPHP's worker loop makes between two requests: the kernel resets its services when it is booted again after a terminate.
+    // Booting after a terminate is what the next handle() does first, so this reads the state a new request starts with.
     #[NoDiscard]
     private function nextRequestSees(KernelInterface $kernel): WorkerState
     {

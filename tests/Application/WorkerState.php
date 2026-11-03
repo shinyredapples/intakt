@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 
-// What the services of one kernel hold at a moment, read from the container without starting anything.
+// Read from the container without starting a request, because a probe that ran one would reset the state it looks for.
 final readonly class WorkerState
 {
     public function __construct(
