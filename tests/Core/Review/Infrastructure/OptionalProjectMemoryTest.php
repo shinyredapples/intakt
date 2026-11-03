@@ -52,7 +52,7 @@ final class OptionalProjectMemoryTest extends TestCase
         self::assertIsResource($output);
         $logger = new Logger('warning', $output, new RedactedJsonFormatter(new Redaction(), new MockClock(), new HeldCredentials([])));
 
-        $_ = new OptionalProjectMemory($this->failing(), $logger)->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        new OptionalProjectMemory($this->failing(), $logger)->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
 
         rewind($output);
         $record = json_decode((string) stream_get_contents($output), true, flags: JSON_THROW_ON_ERROR);
@@ -62,7 +62,7 @@ final class OptionalProjectMemoryTest extends TestCase
             $record['context']['exception']['class'] ?? null,
             $record['context']['exception']['message'] ?? null,
         ]);
-        self::assertStringContainsString(__CLASS__, $record['context']['exception']['trace'] ?? '');
+        self::assertStringContainsString(self::class, $record['context']['exception']['trace'] ?? '');
     }
 
     private function failing(): ProjectMemory
