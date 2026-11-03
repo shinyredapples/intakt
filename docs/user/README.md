@@ -29,6 +29,10 @@ Intakt serves three pages in the browser, built from the ledger of review events
 
 The pages answer only an address on the computer itself: `localhost`, `127.0.0.1` or `[::1]` with the dashboard's port, which is `DASHBOARD_PORT` (default 7780, set it to the port you publish on the host). Any other address in the request, or another port, gets `400 Bad Request` and no data, so a web page that points its own name at your computer cannot read them. The pages are plain HTML and never refresh themselves: reload the page to see newer rounds. On `/reviews`, two rounds of one change appear as two rows of the same project; both link to the same review page. On a review page, the button "Start the next round on the current head" starts the change's next round from the repository and base recorded when its latest round started, then returns to the page with a line naming the new round (or the reason it could not start). The button asks for the number after the latest round the page knows, so pressing it twice, or pressing it on a page opened before another round started, starts nothing and says that another round took the number. The repository is recorded as an absolute path, so a round started with `--repository=.` restarts from the same repository. Rounds started before Intakt recorded the repository, base and task show a note instead of the button. The round runs in the workers, so reload the page to see it; the page does not refresh itself. Its reviewers read a snapshot of the head in the system's temporary directory (`intakt-kept-review-*`), which Intakt removes once the round is judged; a round that is never judged keeps it, and `git worktree remove --force <path>` removes it. Until the owner login is built, anyone who can reach the dashboard's address on the computer can press the button.
 
+### Live updates (in progress)
+
+While a review runs, Intakt sends each reviewer's tool calls and each round's progress ("1 of 2 reviewers finished", "Judged") to the live-update hub built into FrankenPHP. A reviewer's text as it is written is not sent yet; that comes with #644. The review page does not show them yet, so it still needs a reload; showing them without a reload is the next part. To run the hub, set `MERCURE_JWT_SECRET` (at least 32 characters) in `.env.local` and start FrankenPHP from the repository with `frankenphp run --config Caddyfile --envfile .env.local --envfile .env`. FrankenPHP does not read the `.env` files on its own, and the first file that sets a value wins, so `.env.local` comes first. FrankenPHP's admin API answers on `localhost:2019` only, where `intakt:server:status` reads it. If the hub is not running, reviews are not affected: the update is dropped and a warning is logged.
+
 ## Checking the server
 
 When Intakt runs under FrankenPHP, `php bin/console intakt:server:status` reads FrankenPHP's admin API and prints how many worker threads are busy and idle, how many requests wait in the queue, how often workers were restarted, and whether the Mercure hub is healthy:
@@ -69,6 +73,16 @@ php bin/instance 3>&1 >/dev/null
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
 
 Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
+
+## Finding the slowest tests
+
+When the `tests` gate of `bin/check` runs, its line also lists the ten slowest test files under `slowest`, slowest first, each with its `file` and its `seconds` (the times of all its tests added up, over both test passes). For example:
+
+```
+{"gate":"tests","ok":true,"findings":[],"omitted":0,"slowest":[{"file":"tests/Application/InstanceTest.php","seconds":45.722},...]}
+```
+
+The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
 
 ## When `bin/check` reports a missing tool
 

@@ -28,6 +28,7 @@ final readonly class ReviewWithReviewerHandler
         private Vendor $vendor,
         private ReviewRounds $rounds,
         private GoalpostRule $goalposts,
+        private LiveRoundProgress $progress,
     ) {
     }
 
@@ -42,6 +43,7 @@ final readonly class ReviewWithReviewerHandler
         }
 
         $this->rounds->completeWhenEveryReviewerIsIn($roundId);
+        $this->progress->publishLatest($roundId);
     }
 
     private function review(RoundReviewer $reviewer): void
