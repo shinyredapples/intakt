@@ -36,6 +36,7 @@ final readonly class StartedRounds
 
         try {
             $queued = $this->startUnlessStarted($project, $change, $start);
+            $this->ensureStillInTransaction($connection, $queued);
             $this->record($project, $change, $queued);
             $this->pending->forget($project, $change);
             $connection->commit();
@@ -121,6 +122,14 @@ final readonly class StartedRounds
         return $start();
     }
 
+    // A lost connection ends the transaction and DBAL reconnects in autocommit, so the record and the end of the wait would be written for real and the discarded round's head would never be due again.
+    private function ensureStillInTransaction(Connection $connection, ?QueuedRound $queued): void
+    {
+        if ($queued instanceof QueuedRound && !$connection->isTransactionActive()) {
+            throw RoundTransactionLost::for($queued->roundId);
+        }
+    }
+
     private function record(string $project, OpenChange $change, ?QueuedRound $queued): void
     {
         if (!$queued instanceof QueuedRound) {
@@ -136,11 +145,13 @@ final readonly class StartedRounds
         return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
     }
 
-    // Discarded even when the rollback fails, because a lost connection or MySQL's implicit commit before DDL leaves no transaction to roll back, and the round's checkout would stay behind.
+    // Discarded even when the rollback fails, because MySQL's implicit commit before DDL leaves no transaction to roll back, and the round's checkout would stay behind; a lost connection is not rolled back, so its failure stays the one thrown.
     private function rollBackAndDiscard(Connection $connection, ?QueuedRound $queued): void
     {
         try {
-            $connection->rollBack();
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
         } finally {
             $this->discard($queued);
         }

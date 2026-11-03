@@ -14,12 +14,14 @@ use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundTransactionLost;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PDO;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -30,12 +32,14 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(StartedRound::class)]
 #[CoversClass(QueuedRound::class)]
 #[CoversClass(DiscardQueuedRound::class)]
+#[CoversClass(RoundTransactionLost::class)]
 #[UsesClass(PendingHeads::class)]
 #[UsesClass(PendingHead::class)]
 final class StartedRoundsTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
     private RecordingCommandBus $commands;
+    private PendingHeads $pending;
     private StartedRounds $rounds;
 
     protected function setUp(): void
@@ -46,7 +50,8 @@ final class StartedRoundsTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->commands = new RecordingCommandBus();
-        $this->rounds = new StartedRounds($entities, new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00')), $this->commands);
+        $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
+        $this->rounds = new StartedRounds($entities, $this->pending, $this->commands);
     }
 
     public function testARoundQueuedBeforeItsRecordRolledBackIsDiscardedAndLeavesNoRecord(): void
@@ -82,14 +87,38 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(0, $this->storedRounds());
     }
 
-    // The connection is lost while the round is queued, which ends its transaction as MySQL's implicit commit before a DROP does, so the rollback fails too.
-    public function testARoundQueuedBeforeItsTransactionWasLostIsDiscardedWhenTheRollbackFails(): void
+    // The connection is lost while the round is queued, so DBAL would write the record and the end of the wait in autocommit.
+    public function testARoundQueuedBeforeItsTransactionWasLostIsDiscardedAndLeavesTheHeadDue(): void
+    {
+        $connection = $this->entities->getConnection();
+        $green = $this->green();
+        $this->pending->enqueue('alpha', [$green]);
+
+        try {
+            $this->rounds->startOnce('alpha', $green, static function () use ($connection): QueuedRound {
+                $connection->close();
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The lost transaction was swallowed.');
+        } catch (RoundTransactionLost) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
+        self::assertSame(0, $this->storedRounds());
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    // MySQL commits implicitly before DDL, so the transaction DBAL still counts is gone and the rollback fails.
+    public function testARoundQueuedBeforeItsTransactionWasCommittedImplicitlyIsDiscardedWhenTheRollbackFails(): void
     {
         $connection = $this->entities->getConnection();
 
         try {
             $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
-                $connection->close();
+                $native = $connection->getNativeConnection();
+                self::assertInstanceOf(PDO::class, $native);
+                $native->commit();
 
                 return RecordingCommandBus::queued(1);
             });
