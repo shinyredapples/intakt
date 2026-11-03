@@ -47,7 +47,7 @@ final class OptionalProjectMemoryTest extends TestCase
         self::assertSame([], $found->entries);
     }
 
-    // The reviewer's probe: the failure was once logged by its class alone.
+    // Kept from a reviewer's probe, because the failure was once logged by its class alone.
     public function testAMemoryThatCannotBeReadIsLoggedWithTheProjectAndTheFailuresTrace(): void
     {
         $inner = self::createStub(ProjectMemory::class);

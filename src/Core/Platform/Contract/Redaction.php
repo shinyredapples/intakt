@@ -21,7 +21,7 @@ final readonly class Redaction
     private const array PATTERNS = [
         // Up to the last @ before the host, because a raw password can hold an @ or a quote.
         '~(?<=://)[^\s/?#<>]+@~' => self::REDACTED.'@',
-        // A quoted value up to its closing quote, or the end of the line when it has none.
+        // Up to the closing quote or the end of the line, because a cut-off text can lose the closing quote.
         '~'.self::HEADER.'(["\'])'.self::SCHEME.'(?:(?!\3)[^\r\n])+\3?~i' => '$1$2$3$4'.self::REDACTED.'$3',
         // With the name="value" parameters that follow, because a Digest header holds its response in them; the scheme is possessive and a value never starts with a bracket, so a value redacted already stays as it is.
         '~'.self::HEADER.self::SCHEME.'+[^\s"\'\[,;\]](?:[^\s"\',;\]]|"[^"\r\n]*")*(?:\s*,\s*[\w-]+=(?:"[^"\r\n]*"|[^\s"\',;\]]+))*~i' => '$1$2$3'.self::REDACTED,
@@ -44,7 +44,7 @@ final readonly class Redaction
             |> $this->withoutSecretShapes(...);
     }
 
-    // For a value stored under a name, such as a header in a map, where no text pattern sees the name beside the value.
+    // Public because a value stored under a name (a header in a map) has no name beside it for a text pattern to see.
     public function namesACredential(string $name): bool
     {
         return 1 === preg_match('~^(?:'.self::CREDENTIAL_NAMES.')$~i', $name);

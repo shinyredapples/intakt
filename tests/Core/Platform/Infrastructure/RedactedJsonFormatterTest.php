@@ -65,7 +65,7 @@ final class RedactedJsonFormatterTest extends TestCase
         yield 'a URL with a quote in its password' => ['https://alice:p"SECRETVALUE0123@example.com/repo'];
     }
 
-    // The reviewers' probes: a JSON escape in the written line once hid these from the patterns.
+    // Kept from the reviewers' probes, because a JSON escape in the written line once hid these from the patterns.
     #[DataProvider('failureMessagesWithSecrets')]
     public function testASecretInAFailureMessageIsWrittenRedacted(string $message): void
     {
