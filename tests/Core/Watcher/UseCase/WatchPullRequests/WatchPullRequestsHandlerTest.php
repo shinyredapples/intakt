@@ -567,9 +567,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
-        $pending = new PendingHeads($this->entities, $this->clock);
-        $rounds = new StartedRounds($this->entities, $pending, $this->commands);
         $logger = new RecordingLogger();
+        $pending = new PendingHeads($this->entities, $this->clock);
+        $rounds = new StartedRounds($this->entities, $pending, $this->commands, $logger);
         $find = new FindChangedPullRequests($this->listing, new SeenListings($this->entities, $locks), $logger);
         $admit = new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger);
         $settle = new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), new RoundStarts($this->commands, $rounds, $ledger));

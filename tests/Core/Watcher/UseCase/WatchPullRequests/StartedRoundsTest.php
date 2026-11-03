@@ -21,6 +21,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
+use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
+use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(StartedRounds::class)]
@@ -42,6 +44,7 @@ final class StartedRoundsTest extends KernelTestCase
     private EntityManagerInterface $entities;
     private RecordingCommandBus $commands;
     private PendingHeads $pending;
+    private RecordingLogger $logger;
     private StartedRounds $rounds;
 
     protected function setUp(): void
@@ -53,7 +56,8 @@ final class StartedRoundsTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->commands = new RecordingCommandBus();
         $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
-        $this->rounds = new StartedRounds($entities, $this->pending, $this->commands);
+        $this->logger = new RecordingLogger();
+        $this->rounds = new StartedRounds($entities, $this->pending, $this->commands, $this->logger);
     }
 
     public function testARoundQueuedBeforeItsRecordRolledBackIsDiscardedAndLeavesNoRecord(): void
@@ -150,6 +154,29 @@ final class StartedRoundsTest extends KernelTestCase
         }
 
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
+    }
+
+    public function testADiscardThatFailsIsLoggedAndTheOriginalFailureIsRethrown(): void
+    {
+        $discardFailure = new RuntimeException('the discard failed');
+        $this->commands->discardFailure = $discardFailure;
+        $connection = $this->entities->getConnection();
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), function () use ($connection): QueuedRound {
+                $this->insertConflictingRound($connection);
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The failed record of the round was swallowed.');
+        } catch (Throwable $thrown) {
+            self::assertInstanceOf(UniqueConstraintViolationException::class, $thrown);
+        }
+
+        self::assertCount(1, $this->logger->logged);
+        self::assertSame($discardFailure, $this->logger->logged[0][1]['exception']);
+        self::assertSame('round-1', $this->logger->logged[0][1]['round']);
+        self::assertSame(0, $this->storedRounds());
     }
 
     public function testAStartThatFailsItselfLeavesTheDiscardToTheStart(): void
