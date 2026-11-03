@@ -29,11 +29,13 @@ flowchart TD
   q --> order[Ordered: urgent first,<br/>then milestone, then age]
 ```
 
-One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first.
+One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first. Each time a task joins the queue, Intakt looks its pull request up on GitHub, so a task that comes back after a decision is still treated as a fix to its open pull request, never started over.
 
 - **Waiting on another task:** a task can say `Waits for #12`. It isn't picked until #12 is done, so nothing gets built on a missing foundation.
 - **Too big:** large tasks are split into parts that each work on their own, with their own tests.
-- **Two tasks touching the same files** are built one after the other, so they don't trip over each other; everything else can run in parallel.
+- **Two new tasks touching the same files** are usually built one after the other, so they don't trip over each other; everything else can run in parallel.
+- **A task with an open pull request never waits** because another task is changing the same files.
+- **A task held back for files only lets a task of the same priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway.
 - **Pace:** how many builders run at once depends on how much of the week's AI allowance is left (see [Spending wisely](how-intakt-works.md#spending-wisely)).
 
 ## 2. Building
@@ -57,7 +59,7 @@ Planned: the self-check also runs the project's quick checks, ticks off every pi
 
 Intakt never trusts the builder's word that the work passes. It unpacks the change in a **fresh, separate container** and runs the project's own checks there:
 
-- **The quality gates** (`bin/check`): tests, static analysis, code style and the project's own rules.
+- **The quality gates** (`bin/check`): tests, static analysis, code style and the project's own rules. The test check also lists the ten slowest test files, so slow tests are easy to spot.
 - **Dependencies:** a new package from a trusted publisher (such as `symfony/` or `doctrine/`) is routine; anything else, or a change to how packages are installed, waits for the owner.
 - **The boot check:** does the changed project still start up?
 

@@ -1,0 +1,29 @@
+{
+	# On localhost only, because intakt:server:status reads it (FRANKENPHP_ADMIN_URL) and it can change the whole server; CADDY_ADMIN moves it, so the hub tests do not take the port of a running install.
+	admin {$CADDY_ADMIN:localhost:2019}
+}
+
+:{$SERVER_PORT:7781} {
+	# The hub's stream must not be compressed, because a compressor buffers it and a client would see events late or in bursts.
+	@compressible not path /.well-known/mercure
+	encode @compressible zstd gzip
+
+	route {
+		mercure {
+			# Modern mode: the issuer block names who may sign a token and the key for each role.
+			issuer {$MERCURE_JWT_ISSUER} {
+				publisher {
+					jwt {$MERCURE_JWT_SECRET} HS256
+				}
+				subscriber {
+					jwt {$MERCURE_JWT_SECRET} HS256
+				}
+			}
+			# Bolt keeps history on disk, so a client that reconnects with Last-Event-ID receives what it missed.
+			transport bolt {
+				path {$MERCURE_BOLT_PATH:var/mercure.db}
+				size {$MERCURE_HISTORY_SIZE:1000}
+			}
+		}
+	}
+}

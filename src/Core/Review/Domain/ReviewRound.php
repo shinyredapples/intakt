@@ -9,6 +9,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -141,6 +142,13 @@ final class ReviewRound implements HasPlace
     public function everyReviewerFinished(): bool
     {
         return array_all($this->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished());
+    }
+
+    public function progress(): RoundProgress
+    {
+        $finished = count(array_filter($this->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished()));
+
+        return new RoundProgress($finished, count($this->reviewers()), RoundState::Judged === $this->state);
     }
 
     public function state(): RoundState
