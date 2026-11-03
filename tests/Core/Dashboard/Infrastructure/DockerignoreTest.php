@@ -15,12 +15,12 @@ final class DockerignoreTest extends TestCase
     #[DataProvider('runtimeEnvFiles')]
     public function testTheBuildContextLeavesOutAFileThatHoldsRuntimeSecrets(string $file): void
     {
-        self::assertContains($file, self::excludedPaths());
+        self::assertContains($file, $this->excludedPaths());
     }
 
     public function testTheBuildContextKeepsTheCommittedEnvDefaults(): void
     {
-        self::assertNotContains('.env', self::excludedPaths());
+        self::assertNotContains('.env', $this->excludedPaths());
     }
 
     /**
@@ -36,7 +36,7 @@ final class DockerignoreTest extends TestCase
     /**
      * @return list<string>
      */
-    private static function excludedPaths(): array
+    private function excludedPaths(): array
     {
         $paths = file(__DIR__.'/../../../../.dockerignore', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         self::assertIsArray($paths);
