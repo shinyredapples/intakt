@@ -112,7 +112,7 @@ Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,.
 
 Two entry points let reviewers and the boot gate exercise a running Intakt without network access, after `composer install` (plan task T31). Both exist.
 
-- `bin/instance` boots the app from a clean checkout with the plain Symfony runtime (PHP's built-in web server on a free port of `127.0.0.1`, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly. FrankenPHP is a binary, not a Composer package: worker mode comes with the container image (see Container image); `bin/instance` itself still uses PHP's built-in server, and booting it in worker mode inside the image waits for a change to that protected file.
+- `bin/instance` boots the app from a clean checkout with the plain Symfony runtime (PHP's built-in web server on a free port of `127.0.0.1`, SQLite in a scratch directory), prints one JSON status line, `ready` or `failed` with the reason, and stops cleanly. FrankenPHP is a binary, not a Composer package: worker mode comes with the container image (see Container image); `bin/instance` itself still uses PHP's built-in server; booting it in worker mode inside the image is #703.
 - `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code.
 
 How `bin/instance` works:
@@ -137,13 +137,13 @@ How `bin/probe` works:
 
 ## Container image
 
-Plan task T22, part 1. `Dockerfile` (multi-stage) builds on `dunglas/frankenphp:1.13.4-php8.5` (ZTS), installs with `composer install --no-dev`, warms the `prod` cache and runs as user 10001. `docker/entrypoint.sh` requires `APP_SECRET` and `MERCURE_JWT_SECRET` from the environment (nothing secret is in an `ENV` line or a layer), runs `doctrine:migrations:migrate`, then `exec frankenphp run --config /app/Caddyfile`. `.dockerignore` keeps `.git`, `var/`, `vendor/` and every `.env.local` out of the context. SQLite and the hub's Bolt file are in the volume `/app/var/data`.
+Plan task T22, part 1. `Dockerfile` (multi-stage) builds on `dunglas/frankenphp:1.13.4-php8.5` (ZTS), installs with `composer install --no-dev`, warms the `prod` cache and runs as user 10001. `docker/entrypoint.sh` requires `APP_SECRET` and `MERCURE_JWT_SECRET` from the environment (nothing secret is in an `ENV` line or a layer), runs `doctrine:migrations:migrate`, then `exec frankenphp run --config /app/Caddyfile`. `.dockerignore` keeps `.git`, `var/`, `vendor/`, `.env.local`, `.env.local.php`, every `.env.*.local` and `intakt.env` out of the context. SQLite and the hub's Bolt file are in the volume `/app/var/data`.
 
 - **Workers:** the Caddyfile's `php_server` declares `app` (`public/index.php`) and `mcp` (`public/mcp.php`, `match /mcp/*`, `max_threads`). Both set `FRANKENPHP_WORKER=1`, which makes Symfony Runtime pick `FrankenPhpWorkerRunner`. `public/mcp.php` only returns `public/index.php`, because FrankenPHP refuses two workers on one file.
 - **Per-worker limits:** FrankenPHP 1.13.4 has `max_wait_time` only in the global `frankenphp` block, so it is shared by both workers; `num` and `max_threads` are the mcp worker's own. A `match` worker can only be declared inside `php_server`.
 - **Admin API:** `localhost:2019` (the `CADDY_ADMIN` default), unpublished.
-- **Tests:** `tests/Core/Dashboard/Infrastructure/CaddyfileTest.php` adapts the Caddyfile and checks both workers.
-- **Not built yet:** the base image digest pin, the image build in CI, worker restarts and health check (part 2), consumers and the scheduler (part 3).
+- **Tests:** `tests/Core/Dashboard/Infrastructure/CaddyfileTest.php` adapts the Caddyfile and checks both workers; `CaddyfileWorkersTest.php` beside it (group `hub`) runs FrankenPHP on the Caddyfile with a migrated scratch database and reads the request counts per worker file from the admin API's `/frankenphp/threads`: `GET /projects` answers 200 from the `app` worker, `POST /mcp/owner` is served by the `mcp` worker. `DockerignoreTest.php` checks that the env files stay out of the build.
+- **Not built yet:** `bin/instance` in worker mode inside the image (#703), the image build and smoke test in CI (#704), the base image digest pin (#705), worker restarts and health check (part 2), consumers and the scheduler (part 3).
 
 ## Review verdicts
 

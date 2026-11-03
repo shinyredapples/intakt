@@ -1,4 +1,4 @@
-# The tag must become tag@sha256:<digest> before a release (the sandbox that wrote this file could not reach the registry); 1.13.4 is the first release with every worker-mode state-leak fix.
+# The base image must be pinned by digest (tag@sha256:<digest>), which #705 does; 1.13.4 is the first release with every worker-mode state-leak fix.
 FROM dunglas/frankenphp:1.13.4-php8.5 AS base
 
 RUN install-php-extensions intl pdo_sqlite opcache zip

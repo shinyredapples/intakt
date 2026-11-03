@@ -35,7 +35,7 @@ While a review runs, Intakt sends each reviewer's tool calls and each round's pr
 
 ## Running the container image
 
-The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. The build was not run on the machine that wrote it (no Docker there); the Caddyfile it uses was run with the same FrankenPHP version.
+The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. Once #704 lands, the image is built and smoke-tested in CI.
 
 ```
 docker build -t intakt .
@@ -48,7 +48,7 @@ docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data 
 - The database (SQLite) and the hub's history live in the volume `/app/var/data`. The container runs as the user with id 10001, so a bind-mounted folder must belong to that user. It applies the migrations on every start, then serves `/projects`.
 - Two worker pools serve requests: `app` for the dashboard, and `mcp` for `/mcp/*` with its own thread limits (`MCP_WORKERS`, `MCP_MAX_THREADS`), so a streamed MCP answer cannot take the dashboard's threads. `APP_WORKERS` sets the dashboard's pool, `MAX_WAIT_TIME` how long a request waits for a free thread.
 - FrankenPHP's admin API listens on `localhost:2019` inside the container and nothing publishes it; read it with `docker exec intakt php bin/console intakt:server:status`.
-- Not built yet: worker restarts after a number of requests, a memory ceiling, a restart policy, a health check, the queue consumers and the scheduler; the base image is named by tag and gets its digest before a release.
+- Not built yet: worker restarts after a number of requests, a memory ceiling, a restart policy, a health check, the queue consumers and the scheduler; the base image is named by tag, and #705 pins it by digest.
 
 ## Checking the server
 
