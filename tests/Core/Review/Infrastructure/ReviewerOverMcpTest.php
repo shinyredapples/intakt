@@ -20,6 +20,8 @@ use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Psr\Log\NullLogger;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
 use Intakt\Core\Review\Infrastructure\ReviewServerLost;
@@ -260,7 +262,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
             return 0 === $step++ ? new ToolCallResult([new ToolCall('1', $tool, $arguments)]) : self::APPROVE;
         };
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates()));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new InMemoryLedger(), new NullLogger()));
 
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
     }

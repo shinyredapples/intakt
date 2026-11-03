@@ -12,16 +12,26 @@ use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Override;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
+use Symfony\AI\Platform\Capability;
+use Symfony\AI\Platform\Exception\BadRequestException;
+use Symfony\AI\Platform\Exception\InvalidRequestException;
+use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
 
 final readonly class ReviewerAgent implements Reviewer
 {
+    private const array UNSTREAMED = [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class];
+
+    private const array STREAMED = self::UNSTREAMED + ['stream' => true];
+
     /**
      * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
@@ -47,8 +57,7 @@ final readonly class ReviewerAgent implements Reviewer
         $fenced = $this->prompt->fenced(new FaultTolerantToolbox($tools));
         $agent = $this->runs->agent($fenced, $platform, $model);
 
-        $execution = $agent->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
-        $verdict = $this->answerOf($this->runs->reporting($execution, $request->conversation));
+        $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
         if ($tools->seen()) {
             return Verdict::invalidOutput('the reviewer made a malformed tool call.');
@@ -82,6 +91,29 @@ final readonly class ReviewerAgent implements Reviewer
         $contradicted = array_unique(array_intersect($verdict->resolved, $repeated));
 
         return [] === $contradicted ? $verdict : Verdict::invalidOutput(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
+    }
+
+    // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
+    private function canStream(PlatformInterface $platform, string $model): bool
+    {
+        return $platform->getModelCatalog()->getModel($model)->supports(Capability::OUTPUT_STREAMING);
+    }
+
+    // Retried unstreamed only on a refused request, because a provider reports that before its first delta, so no text was published and no usage was spent; a stream cut off mid-answer is a different exception and is never retried.
+    private function answeredStreaming(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
+    {
+        try {
+            return $this->answerOf($this->runs->reporting($agent->call($conversation, self::STREAMED), $reviewer));
+        } catch (BadRequestException|InvalidRequestException) {
+            $this->runs->fellBackToUnstreamed($reviewer);
+        }
+
+        return $this->answeredUnstreamed($agent, $conversation, $reviewer);
+    }
+
+    private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
+    {
+        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer));
     }
 
     private function answerOf(ExecutionInterface $execution): Verdict

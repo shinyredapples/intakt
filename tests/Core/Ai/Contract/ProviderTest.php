@@ -21,6 +21,14 @@ final class ProviderTest extends TestCase
         self::assertSame([true, true, true], [Provider::Anthropic->readsTheCheckout(), Provider::OpenAi->readsTheCheckout(), Provider::OpenAiCompatible->readsTheCheckout()]);
     }
 
+    public function testOnlyTheApiProvidersStream(): void
+    {
+        self::assertSame(
+            [true, true, true, false, false],
+            [Provider::Anthropic->streams(), Provider::OpenAi->streams(), Provider::OpenAiCompatible->streams(), Provider::ClaudeCode->streams(), Provider::Codex->streams()],
+        );
+    }
+
     public function testCodexNeedsNoVariableBecauseItsLoginIsAFile(): void
     {
         self::assertSame([], Provider::Codex->variables());

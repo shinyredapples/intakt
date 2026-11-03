@@ -18,6 +18,8 @@ use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Psr\Log\NullLogger;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
@@ -108,12 +110,18 @@ final class ReviewerPromptCachingTest extends KernelTestCase
         ];
         $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$responses): JsonMockResponse {
             self::assertIsString($options['body']);
+
+            // The reviewer asks to stream first, and this provider refuses, so it asks again unstreamed.
+            if (str_contains($options['body'], '"stream":true')) {
+                return new JsonMockResponse(['error' => ['message' => 'stream refused']], ['http_code' => 400]);
+            }
+
             $this->requests[] = $options['body'];
 
             return array_shift($responses) ?? self::fail('The reviewer asked for a third round.');
         });
         $platform = new TraceablePlatform(Factory::createPlatform('placeholder', $http, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates()));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new InMemoryLedger(), new NullLogger()));
 
         $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'claude-sonnet-5-5');
 
@@ -142,6 +150,8 @@ final class ReviewerPromptCachingTest extends KernelTestCase
      */
     private function usagesOf(TraceablePlatform $platform): array
     {
+        $answered = array_filter($platform->getCalls(), static fn (array $call): bool => !($call['options']['stream'] ?? false));
+
         return array_values(array_map(static function (array $call): TokenUsageInterface {
             $result = $call['result'];
             self::assertInstanceOf(DeferredResult::class, $result);
@@ -149,6 +159,6 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             self::assertInstanceOf(TokenUsageInterface::class, $usage);
 
             return $usage;
-        }, $platform->getCalls()));
+        }, $answered));
     }
 }
