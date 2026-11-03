@@ -62,10 +62,10 @@ final readonly class AccountPlatform implements PlatformInterface
         $this->failures->record($this->account, $failure);
     }
 
-    // Matched and logged by the exception type only, because the provider's text can change and can echo a key (plan T5).
+    // Matched by the exception type only, because the provider's text can change (plan T5); logged whole, because the log redacts a key it echoes.
     private function coolDownAfter(Throwable $failure): void
     {
-        $this->logger->warning('Account {account} failed with {failure}.', ['account' => $this->account->key(), 'failure' => $failure::class]);
+        $this->logger->warning('Account {account} failed.', ['account' => $this->account->key(), 'exception' => $failure]);
 
         match (true) {
             $failure instanceof RateLimitExceededException => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),

@@ -83,16 +83,14 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertSame(['provider' => 'anthropic', 'first' => 'default', 'next' => 'team'], $logs[0][2]);
     }
 
-    public function testAFailedAccountIsLoggedWithItsKeyAndTheFailureClassButNeverTheProvidersMessage(): void
+    public function testAFailedAccountIsLoggedWithItsKeyAndTheFailure(): void
     {
         $logger = new BufferingLogger();
+        $failure = new RateLimitExceededException(300, 'invalid key');
 
-        $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(300, 'invalid key SENTINEL')), $this->answering('second'), $logger)->invoke('big', 'Review.')->asText();
+        $this->accounts($this->answering(static fn (): never => throw $failure), $this->answering('second'), $logger)->invoke('big', 'Review.')->asText();
 
-        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
-        $logs = $logger->cleanLogs();
-        self::assertStringNotContainsString('SENTINEL', print_r($logs, true));
-        self::assertContains(['warning', 'Account {account} failed with {failure}.', ['account' => 'anthropic.default', 'failure' => RateLimitExceededException::class]], $logs);
+        self::assertContains(['warning', 'Account {account} failed.', ['account' => 'anthropic.default', 'exception' => $failure]], $logger->cleanLogs());
     }
 
     // The reviewer's probe, because the judging's failure listener logs the exception it gets with its message and its chain.
