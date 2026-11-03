@@ -8,7 +8,7 @@ framework:
     #esi: true
     #fragments: true
 
-    # Reads and review posts of the GitHub API; retry_failed wraps the client in RetryableHttpClient, so a failed read is tried again (the review post turns it off for itself).
+    # Reads and review posts of the GitHub API; retry_failed wraps the client in RetryableHttpClient, so a failed read is tried again (the review post turns it off for itself). A 429 is not retried here, because the forge raises it as a rate limit and waits for the reset it names.
     http_client:
         scoped_clients:
             github.client:
@@ -17,6 +17,7 @@ framework:
                     X-GitHub-Api-Version: '2022-11-28'
                 retry_failed:
                     max_retries: 3
+                    http_codes: [423, 425, 500, 502, 503, 504, 507, 510]
 
 when@test:
     framework:
