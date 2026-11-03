@@ -34,7 +34,7 @@ final readonly class Redaction
 
     public function __construct(#[SensitiveParameter] string ...$credentials)
     {
-        $this->credentials = array_values(array_unique(array_merge(...array_map(self::spellings(...), array_values($credentials)))));
+        $this->credentials = array_values(array_unique(array_merge(...array_map($this->spellings(...), array_values($credentials)))));
     }
 
     public function of(string $text): string
@@ -54,7 +54,7 @@ final readonly class Redaction
     /**
      * @return list<string>
      */
-    private static function spellings(#[SensitiveParameter] string $credential): array
+    private function spellings(#[SensitiveParameter] string $credential): array
     {
         return [
             $credential,

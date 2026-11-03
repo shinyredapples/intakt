@@ -50,7 +50,7 @@ final class RedactionTest extends TestCase
         yield 'an authorization header in a JSON object' => ['{"Authorization":"Bearer abc123","Accept":"json"}', '{"Authorization":"Bearer [redacted]","Accept":"json"}'];
         yield 'a Digest authorization header' => ['Authorization: Digest username="alice", nonce="n0nce", response="r3sponse"', 'Authorization: Digest [redacted]'];
         yield 'a Digest authorization header with spaces around its equals signs' => ['Authorization: Digest username = "alice", response = "r3sponse"', 'Authorization: Digest [redacted]'];
-        yield 'an API key header' =>['x-api-key: some-value', 'x-api-key: [redacted]'];
+        yield 'an API key header' => ['x-api-key: some-value', 'x-api-key: [redacted]'];
         yield 'a GitHub installation token' => ['token ghs_'.str_repeat('a1', 18).' expired', 'token [redacted] expired'];
         yield 'a fine-grained GitHub token' => ['github_pat_'.str_repeat('Ab1', 10), '[redacted]'];
         yield 'a provider API key' => ['key sk-ant-api03-'.str_repeat('x', 24), 'key [redacted]'];
