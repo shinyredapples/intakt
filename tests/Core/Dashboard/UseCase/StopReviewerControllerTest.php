@@ -17,8 +17,12 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StopReviewer\ReviewerStops;
 use Intakt\Core\Dashboard\UseCase\StopReviewer\StopReviewerController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(StopReviewerController::class)]
 #[CoversClass(ReviewerStops::class)]
@@ -34,7 +38,13 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(ShowReviewController::class)]
 final class StopReviewerControllerTest extends DashboardPageTestCase
 {
+    use AssertsLoggedErrors;
+
     private const string STOP = '/reviews/round-1/reviewers/round-1-security/stop';
+
+    private const string NOT_RUNNING = 'The ledger shows no running reviewer with this id in this round.';
+
+    private const string BAD_TOKEN = 'The form token is missing or wrong, so nothing was stopped.';
 
     // The browser keeps the session across the page that hands out the token and the post that uses it.
     protected function setUp(): void
@@ -86,6 +96,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', self::STOP);
 
         self::assertResponseStatusCodeSame(400);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "%s"', BadRequestHttpException::class, self::BAD_TOKEN));
         self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested)));
     }
 
@@ -96,6 +107,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', self::STOP, ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "%s"', BadRequestHttpException::class, self::BAD_TOKEN));
         self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested)));
     }
 
@@ -108,6 +120,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', self::STOP, ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "%s"', NotFoundHttpException::class, self::NOT_RUNNING));
         self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested)));
     }
 
@@ -120,6 +133,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', self::STOP, ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "%s"', NotFoundHttpException::class, self::NOT_RUNNING));
     }
 
     public function testStoppingAReviewerOfAJudgedRoundIsNotFound(): void
@@ -131,6 +145,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', self::STOP, ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "%s"', NotFoundHttpException::class, self::NOT_RUNNING));
     }
 
     public function testStoppingAReviewerOfAnotherRoundIsNotFound(): void
@@ -140,6 +155,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-9-security/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "%s"', NotFoundHttpException::class, self::NOT_RUNNING));
     }
 
     public function testAStoppedReviewerShowsAsStoppedAfterAReload(): void
@@ -160,6 +176,7 @@ final class StopReviewerControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', self::STOP);
 
         self::assertResponseStatusCodeSame(405);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780%s": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class, self::STOP));
     }
 
     private function givenARunningReviewer(): void
