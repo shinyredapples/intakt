@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -27,7 +28,7 @@ final readonly class GitHubCalls
      * @throws ForgeRateLimited
      * @throws ExceptionInterface
      */
-    public function asInstallation(string $method, string $url, array $options): ResponseInterface
+    public function asInstallation(string $method, string $url, #[SensitiveParameter] array $options): ResponseInterface
     {
         $installationId = $this->tokens->installationId;
         $this->readings->refuseWhileLimited($installationId);
@@ -44,7 +45,7 @@ final readonly class GitHubCalls
      *
      * @throws ExceptionInterface
      */
-    public function asApp(string $url, array $options): ResponseInterface
+    public function asApp(string $url, #[SensitiveParameter] array $options): ResponseInterface
     {
         return $this->http->request('GET', $url, $options);
     }
