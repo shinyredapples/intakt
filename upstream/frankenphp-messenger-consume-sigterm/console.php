@@ -13,7 +13,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Kernel;
+use Symfony\Component\Messenger\Event\WorkerStartedEvent;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
@@ -36,6 +38,16 @@ final class SlowHandler
         }
 
         touch($directory.'/done');
+    }
+}
+
+// An idle consumer has no handler to mark readiness, so the test waits for the worker loop itself.
+final class WorkerStartedMarker
+{
+    #[AsEventListener]
+    public function __invoke(WorkerStartedEvent $event): void
+    {
+        touch(getenv('PROBE_DIR').'/worker-started');
     }
 }
 
@@ -97,6 +109,7 @@ final class ProbeKernel extends Kernel
         $container->services()
             ->defaults()->autowire()->autoconfigure()
             ->set(SlowHandler::class)->tag('messenger.message_handler')
+            ->set(WorkerStartedMarker::class)
             ->set(DispatchCommand::class);
     }
 }
