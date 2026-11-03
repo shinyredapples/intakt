@@ -85,7 +85,7 @@ final class StreamedTextBatchTest extends TestCase
 
     private function batch(string $reviewer): StreamedTextBatch
     {
-        return new StreamedTextBatch($this->updates, $this->clock, Uuid::fromString(self::ROUND), $reviewer);
+        return new StreamedTextBatch(fn (string $text) => $this->updates->textStreamed(Uuid::fromString(self::ROUND), $reviewer, $text), $this->clock);
     }
 
     private function publishedText(string $reviewer): string

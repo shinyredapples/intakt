@@ -6,19 +6,13 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\ReviewerConversation;
-use Intakt\Core\Review\Contract\RoundUpdates;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
-use Symfony\AI\Agent\Execution\Update\Progress;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
-use Symfony\AI\Platform\Result\ToolCall;
-use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\Uid\Uuid;
 
 // Apart from ReviewerAgent, because how the agent runs (its stored conversation, its cap, its live progress) changes for other reasons than what a review asks and checks.
 final readonly class ReviewerRuns
@@ -28,9 +22,8 @@ final readonly class ReviewerRuns
 
     public function __construct(
         private MessageStoreInterface $conversations,
-        private RoundUpdates $updates,
         private StreamingFallbacks $fallbacks,
-        private ClockInterface $clock,
+        private LiveProgress $progress,
     ) {
     }
 
@@ -59,27 +52,8 @@ final readonly class ReviewerRuns
         $this->fallbacks->record($reviewer);
     }
 
-    // Reported as it happens and never read back, so the verdict path is the one it was without the live view.
     public function reporting(ExecutionInterface $execution, ReviewerConversation $reviewer): ExecutionInterface
     {
-        $round = $reviewer->round;
-
-        if (!$round instanceof Uuid) {
-            return $execution;
-        }
-
-        $text = new StreamedTextBatch($this->updates, $this->clock, $round, $reviewer->id->toRfc4122());
-
-        return $execution->onProgress(function (Progress $progress) use ($round, $reviewer, $text): void {
-            $payload = $progress->getPayload();
-
-            if ($payload instanceof ToolCall) {
-                $this->updates->toolCalled($round, $reviewer->id->toRfc4122(), $payload->getName());
-            }
-
-            if ($payload instanceof TextDelta) {
-                $text->add($payload->getText());
-            }
-        })->onResult($text->flush(...));
+        return $this->progress->reporting($execution, $reviewer);
     }
 }

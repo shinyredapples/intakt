@@ -29,6 +29,7 @@ use Intakt\Core\Review\Infrastructure\PromptCut;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StreamAcceptance;
@@ -80,6 +81,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(StrictVerdictStreamListener::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]
+#[CoversClass(LiveProgress::class)]
 #[CoversClass(StreamAcceptance::class)]
 #[CoversClass(StreamingFallbacks::class)]
 #[CoversClass(MalformedToolCalls::class)]
@@ -786,7 +788,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates, new StreamingFallbacks($this->ledger, new NullLogger()), new MockClock()));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, new MockClock())));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 

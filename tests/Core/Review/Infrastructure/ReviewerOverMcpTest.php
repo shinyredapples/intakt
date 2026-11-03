@@ -19,6 +19,7 @@ use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
@@ -264,7 +265,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
             return 0 === $step++ ? new ToolCallResult([new ToolCall('1', $tool, $arguments)]) : self::APPROVE;
         };
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new MockClock()));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock())));
 
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
     }
