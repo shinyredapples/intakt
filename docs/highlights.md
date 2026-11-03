@@ -162,4 +162,5 @@ Each entry is an isolated reproduction under `upstream/<slug>/` at pinned versio
 - Closures in constant expressions for the built-in quorum policies, and `#[NoDiscard]` on `QuorumPolicy::isMet()`: `src/Core/Review/Contract/QuorumPolicy.php` (in progress, T8 (#13, part #222)).
 - `array_first()` and `array_last()` for the first and latest round of a finding: `src/Core/Review/Domain/TrackedFinding.php` (in progress, T10 (#15, part #410)).
 - `Uri\Rfc3986\Uri` for the pull request URL that the reads and the review post go to: `src/Plugin/GitHubForge/Infrastructure/PullRequestAddress.php` (in progress, T18 (#23, parts #540, #541)).
-- Planned: the pipe operator (T5, T28, T30), `Uri\Rfc3986\Uri` (T19).
+- The pipe operator for cutting an oversized prompt text before it is fenced: `src/Core/Review/Infrastructure/PromptCut.php` (in progress, T28 (#35, part #711)).
+- Planned: the pipe operator (T5, T30), `Uri\Rfc3986\Uri` (T19).
