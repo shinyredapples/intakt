@@ -145,6 +145,20 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertSame(['headers' => ['authorization' => '[redacted]']], $this->decoded($line)['context'] ?? null);
     }
 
+    public function testAHeaderValueInterpolatedIntoTheMessageIsWrittenRedacted(): void
+    {
+        $line = $this->format('warning', 'Rejected header {Authorization}', ['Authorization' => 'Basic abc123xyz']);
+
+        self::assertSame('Rejected header [redacted]', $this->decoded($line)['message'] ?? null);
+    }
+
+    public function testAPlaceholderThatNamesNoHeaderIsInterpolated(): void
+    {
+        $line = $this->format('warning', 'Review by {author} failed.', ['author' => 'octocat']);
+
+        self::assertSame('Review by octocat failed.', $this->decoded($line)['message'] ?? null);
+    }
+
     public function testAContextKeyThatNamesNoHeaderKeepsItsValue(): void
     {
         $line = $this->format('error', 'Review failed.', ['author' => 'octocat']);

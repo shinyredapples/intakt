@@ -43,7 +43,7 @@ final readonly class RedactedJsonFormatter
         $replacements = [];
         foreach ($context as $key => $value) {
             if (is_scalar($value) || $value instanceof Stringable) {
-                $replacements['{'.$key.'}'] = (string) $value;
+                $replacements['{'.$key.'}'] = $this->namesHeader($key) ? Redaction::MARKER : (string) $value;
             }
         }
 

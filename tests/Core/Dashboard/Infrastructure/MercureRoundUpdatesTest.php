@@ -105,15 +105,17 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $this->published[0]->getData());
     }
 
-    public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedWithoutItsMessage(): void
+    public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedWithItsRoundAndFailure(): void
     {
-        $updates = $this->updates(static fn (Update $update): string => throw new RuntimeException('token secret-value was refused'));
+        $refusal = new RuntimeException('the hub refused the update');
+        $updates = $this->updates(static fn (Update $update): string => throw $refusal);
 
         $updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
 
-        $logged = json_encode($this->log->cleanLogs(), JSON_THROW_ON_ERROR);
-        self::assertStringContainsString('RuntimeException', $logged);
-        self::assertStringNotContainsString('secret-value', $logged);
+        self::assertSame(
+            [['warning', 'A live round update was not published.', ['round' => self::ROUND, 'stream' => 'round_changed', 'exception' => $refusal]]],
+            $this->log->cleanLogs(),
+        );
     }
 
     /**

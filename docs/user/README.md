@@ -88,11 +88,11 @@ php bin/instance 3>&1 >/dev/null
 
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
 
+Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
+
 ## The log
 
-Intakt writes its warnings and errors to the service output (the journal, or `docker logs`), one JSON line per record: `time`, `level`, `message` and `context`. The context names the item a failure belongs to (for example `reviewer`, `round` or `call`), and a failure carries the exception's `class`, `message`, the `at` line and the `trace`, with the earlier exception it wraps under `previous`. Before a line is written, the credentials Intakt holds, whether set in the environment or in Symfony secrets (`APP_SECRET`, `MERCURE_JWT_SECRET`, `MCP_OWNER_TOKEN`, `GITHUB_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, and the same names with an account name appended, such as `ANTHROPIC_API_KEY_TEAM`), the userinfo of a URL (`https://user:pass@host` is written `https://[redacted]@host`), the values of authorization and cookie headers, and secret-shaped strings are replaced with `[redacted]`.
-
-Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
+Intakt writes its warnings and errors to the service output (the journal, or `docker logs`), one JSON line per record: `time`, `level`, `message` and `context`. The context names the item a failure belongs to (for example `reviewer`, `round`, `call`, `project` or `account`), and a failure carries the exception's `class`, `message`, the `at` line and the `trace`, with the earlier exception it wraps under `previous`. Before a line is written, the credentials Intakt holds, whether set in the environment or in Symfony secrets (`APP_SECRET`, `MERCURE_JWT_SECRET`, `MCP_OWNER_TOKEN`, `GITHUB_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, and the same names with an account name appended, such as `ANTHROPIC_API_KEY_TEAM`), the userinfo of a URL (`https://user:pass@host` is written `https://[redacted]@host`), the values of authorization and cookie headers, and secret-shaped strings are replaced with `[redacted]`.
 
 ## Finding the slowest tests
 
