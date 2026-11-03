@@ -27,7 +27,7 @@ final readonly class ReviewerPrompt
 
         The diff of the change is given to you: it shows what the change adds, edits and deletes, so judge the change by it and the code around it, deleted code included.
 
-        A text that is too long is cut. A note from Intakt after the fence says how many bytes were left out; read the rest with your tools, and never approve code you have not seen.
+        A text that is too long is cut. A note from Intakt after the fence says how many bytes were left out; read what you need with your tools. Intakt refuses an approval of a review in which a text was cut, so report every finding you have.
 
         Read the code before you judge it. You have read-only tools at the exact head under review to read a file, list a directory and search the files. Paths are relative to the repository root; a path outside it is refused. Cite only what you read.
 
@@ -93,6 +93,13 @@ final readonly class ReviewerPrompt
             ),
             $open,
         ));
+    }
+
+    public function cutsInputOf(ReviewBrief $brief): bool
+    {
+        $cut = new PromptCut($this->fence);
+
+        return $cut->cuts($brief->change->task) || $cut->cuts($brief->change->diff);
     }
 
     // The tool answers are prompt input too, so they reach the model through the same fence as the task.

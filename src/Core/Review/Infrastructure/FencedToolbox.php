@@ -11,13 +11,17 @@ use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Agent\Toolbox\ToolResult;
 use Symfony\AI\Agent\Toolbox\ToolResultConverter;
 use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Every tool answer is repository text, which the code under review controls, so it reaches the model only inside a fence.
-final readonly class FencedToolbox implements ToolboxInterface
+// Every tool answer is repository text, which the code under review controls, so it reaches the model only inside a fence; excluded from the container because one is built per review, so its mark of a cut answer never outlives the review.
+#[Exclude]
+final class FencedToolbox implements ToolboxInterface
 {
+    private bool $cutAnAnswer = false;
+
     public function __construct(
-        private ToolboxInterface $inner,
-        private Fence $fence,
+        private readonly ToolboxInterface $inner,
+        private readonly Fence $fence,
     ) {
     }
 
@@ -32,7 +36,14 @@ final readonly class FencedToolbox implements ToolboxInterface
     {
         $result = $this->inner->execute($toolCall);
         $answer = new ToolResultConverter()->convert($result) ?? '';
+        $cut = new PromptCut($this->fence);
+        $this->cutAnAnswer = $cut->cuts($answer) || $this->cutAnAnswer;
 
-        return new ToolResult($toolCall, new PromptCut($this->fence)->fenced(UntrustedSource::ToolResult, $answer), $result->getSources());
+        return new ToolResult($toolCall, $cut->fenced(UntrustedSource::ToolResult, $answer), $result->getSources());
+    }
+
+    public function cutAnAnswer(): bool
+    {
+        return $this->cutAnAnswer;
     }
 }

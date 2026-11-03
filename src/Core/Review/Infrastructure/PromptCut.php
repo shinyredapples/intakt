@@ -26,6 +26,11 @@ final readonly class PromptCut
         return $fenced.$this->noteFor($text);
     }
 
+    public function cuts(string $text): bool
+    {
+        return strlen($text) > self::CEILING_BYTES;
+    }
+
     // Cutting by bytes at a character boundary, so a multibyte character is never split.
     private function head(string $text): string
     {
@@ -34,18 +39,14 @@ final readonly class PromptCut
 
     private function noteFor(string $text): string
     {
-        $size = strlen($text);
-
-        if ($size <= self::CEILING_BYTES) {
+        if (!$this->cuts($text)) {
             return '';
         }
 
-        $shown = strlen($this->head($text));
-
         return sprintf(
-            "\n\nIntakt cut this text: %d of %d bytes are shown and the rest is left out. Read the rest with your tools and do not approve code you have not seen.",
-            $shown,
-            $size,
+            "\n\nIntakt cut this text: %d of %d bytes are shown and the rest is left out. Read what you need with your tools; an approval of a review with a cut text is refused.",
+            strlen($this->head($text)),
+            strlen($text),
         );
     }
 }

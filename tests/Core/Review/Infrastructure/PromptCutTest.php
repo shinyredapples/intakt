@@ -26,6 +26,16 @@ final class PromptCutTest extends TestCase
         self::assertStringNotContainsString('Intakt cut', $fenced);
     }
 
+    public function testATextAtTheCeilingIsNotCut(): void
+    {
+        self::assertFalse($this->cut()->cuts(str_repeat('a', PromptCut::CEILING_BYTES)));
+    }
+
+    public function testATextOneByteOverTheCeilingIsCut(): void
+    {
+        self::assertTrue($this->cut()->cuts(str_repeat('a', PromptCut::CEILING_BYTES + 1)));
+    }
+
     public function testATextOverTheCeilingIsCutAndTheNoteNamesTheBytesLeftOut(): void
     {
         $text = str_repeat('q', PromptCut::CEILING_BYTES + 500);
