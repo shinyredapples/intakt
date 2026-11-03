@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
@@ -31,8 +32,10 @@ use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
+use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StreamAcceptance;
+use Intakt\Core\Review\Infrastructure\StopPace;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
@@ -82,6 +85,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]
 #[CoversClass(LiveProgress::class)]
+#[CoversClass(ReviewerStopping::class)]
+#[CoversClass(StopPace::class)]
 #[CoversClass(StreamAcceptance::class)]
 #[CoversClass(StreamingFallbacks::class)]
 #[CoversClass(MalformedToolCalls::class)]
@@ -122,6 +127,11 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private InMemoryLedger $ledger;
 
+    private MockClock $clock;
+
+    // Appended while the first model request is answered, so the stop is in the ledger before the progress that follows it.
+    private ?LedgerEvent $requestWhileAsking = null;
+
     // A count, not a flag, because a provider may accept a streamed round and refuse a later one, which must not count as unable to stream; null never refuses.
     private ?int $streamsAccepted = null;
 
@@ -147,7 +157,8 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->round = new UuidV7();
         $this->updates = new RecordedRoundUpdates();
         $this->catalog = new UnstreamedModelCatalog();
-        $this->ledger = new InMemoryLedger();
+        $this->clock = new MockClock('2026-11-03 12:00:00 UTC');
+        $this->ledger = new InMemoryLedger(recordedAt: $this->clock->now());
     }
 
     protected function tearDown(): void
@@ -753,6 +764,54 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('interface CartRepository', $this->sent[2]);
     }
 
+    public function testAStopRequestedWhileTheReviewerWorksCancelsItAndItGivesNoApproval(): void
+    {
+        $this->requestStopOf($this->conversation);
+
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::STOPPED, $verdict->findings[0]->id);
+        self::assertTrue($verdict->isFailedReview());
+        self::assertCount(1, $this->sent);
+        self::assertSame([LedgerEventKind::ReviewerStopRequested, LedgerEventKind::ReviewerStopped], $this->ledger->kinds());
+        self::assertSame(['round' => $this->round->toRfc4122(), 'reviewer' => $this->conversation->toRfc4122()], $this->ledger->payloads()[1]);
+        self::assertSame(['stopped '.$this->conversation->toRfc4122()], $this->updates->seen);
+    }
+
+    public function testAStopRequestedWhileTheReviewerStreamsCancelsTheStreamedRunToo(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $this->requestStopOf($this->conversation);
+
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame(Verdict::STOPPED, $verdict->findings[0]->id);
+        self::assertCount(1, $this->sent);
+        self::assertContains(LedgerEventKind::ReviewerStopped, $this->ledger->kinds());
+    }
+
+    public function testAStopRequestedForAnotherReviewerLeavesThisOneRunningToItsVerdict(): void
+    {
+        $this->requestStopOf(new UuidV7());
+
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertSame([LedgerEventKind::ReviewerStopRequested], $this->ledger->kinds());
+    }
+
+    // A reviewer started again after a stopped worker must not be cancelled by the press that ended the earlier run.
+    public function testAStopRequestedBeforeThisRunBeganIsLeftAlone(): void
+    {
+        $this->ledger = new InMemoryLedger(recordedAt: $this->clock->now()->modify('-1 minute'));
+        $this->requestStopOf($this->conversation);
+
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
     // Because the toolbox is built per review and the platform per test, the collector is built from this run's platform instead of a profiled request.
     protected static function getAiDataCollector(): DataCollector
     {
@@ -780,6 +839,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $script = function (mixed $model, mixed $input, array $options) use (&$rounds, $answer): string|ResultInterface {
             $this->refuseToStreamIfConfigured($options);
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
+            $this->pressStopWhileAsking();
             $next = array_shift($rounds);
 
             return $this->streamedWhenAsked(null === $next ? $answer : new ToolCallResult($next), $options);
@@ -788,7 +848,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, new MockClock())));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, $this->clock), new ReviewerStopping($this->ledger, $this->updates, $this->clock, new NullLogger())));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 
@@ -797,6 +857,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::getContainer()->set(self::COLLECTOR, $collector);
 
         return $verdict;
+    }
+
+    private function requestStopOf(UuidV7 $reviewer): void
+    {
+        $this->requestWhileAsking = new LedgerEvent(LedgerEventKind::ReviewerStopRequested, json_encode(['round' => $this->round->toRfc4122(), 'reviewer' => $reviewer->toRfc4122()], JSON_THROW_ON_ERROR));
+    }
+
+    // The clock moves on with it, because the reviewer looks for a request at most once a second.
+    private function pressStopWhileAsking(): void
+    {
+        if (!$this->requestWhileAsking instanceof LedgerEvent) {
+            return;
+        }
+
+        self::assertTrue($this->ledger->append($this->requestWhileAsking)->succeeded());
+        $this->requestWhileAsking = null;
+        $this->clock->sleep(2);
     }
 
     /**

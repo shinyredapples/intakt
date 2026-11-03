@@ -14,7 +14,8 @@ final readonly class Verdict
     public const string UNREAD_APPROVAL = 'unread-approval';
     public const string NO_TOOLS = 'no-tools';
     public const string CUT_APPROVAL = 'cut-approval';
-    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL];
+    public const string STOPPED = 'reviewer-stopped';
+    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL, self::STOPPED];
 
     /**
      * @param list<Finding> $findings
@@ -110,6 +111,24 @@ final readonly class Verdict
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that was shown the whole change.',
+            evidence: null,
+        );
+
+        return new self(Decision::Blocked, [$finding], [], []);
+    }
+
+    public static function stopped(): self
+    {
+        $finding = new Finding(
+            id: self::STOPPED,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'A person stopped this reviewer before it gave its verdict, so it did not review and the review is blocked.',
+            fixable_by: FixableBy::Owner,
+            repeat: false,
+            requirement: 'A stopped reviewer gave no verdict, so it never counts as approval or changes.',
             evidence: null,
         );
 

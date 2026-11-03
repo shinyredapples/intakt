@@ -15,7 +15,9 @@ use Intakt\Core\Review\Contract\Verdict;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
+use Symfony\AI\Agent\Exception\RuntimeException as AgentRuntimeException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
+use Symfony\AI\Agent\Execution\ExecutionStatus;
 use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Capability;
@@ -138,6 +140,9 @@ final readonly class ReviewerAgent implements Reviewer
             return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
         } catch (ReviewServerLost) {
             return Verdict::noTools();
+        } catch (AgentRuntimeException $failure) {
+            // The execution reports itself cancelled only after a stop, so any other agent failure still surfaces as a failed reviewer.
+            return ExecutionStatus::Cancelled === $execution->getStatus() ? Verdict::stopped() : throw $failure;
         }
     }
 }

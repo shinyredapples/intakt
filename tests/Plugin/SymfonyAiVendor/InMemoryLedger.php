@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 use Symfony\Component\Uid\Uuid;
@@ -17,8 +19,14 @@ final class InMemoryLedger implements Ledger
     /** @var list<LedgerEvent> */
     private array $events = [];
 
-    public function __construct(private readonly int $accepted = PHP_INT_MAX)
+    /** @var list<RecordedEvent> */
+    private array $recorded = [];
+
+    private readonly DateTimeImmutable $recordedAt;
+
+    public function __construct(private readonly int $accepted = PHP_INT_MAX, ?DateTimeImmutable $recordedAt = null)
     {
+        $this->recordedAt = $recordedAt ?? new DateTimeImmutable('@0');
     }
 
     #[Override]
@@ -29,6 +37,7 @@ final class InMemoryLedger implements Ledger
         }
 
         $this->events[] = $event;
+        $this->recorded[] = new RecordedEvent(Uuid::v7(), $event, $this->recordedAt);
 
         return AppendResult::appended(Uuid::v7());
     }
@@ -42,7 +51,7 @@ final class InMemoryLedger implements Ledger
     #[Override]
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
-        return new RecordedEvents([]);
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
     public function count(): int
