@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
@@ -23,6 +24,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\Uid\Uuid;
 
 // Covers nothing because the contract is the review server as a client meets it over HTTP.
@@ -30,6 +32,8 @@ use Symfony\Component\Uid\Uuid;
 #[CoversNothing]
 final class ReviewServerContractTest extends KernelTestCase
 {
+    use AssertsLoggedErrors;
+
     private Kernel $app;
 
     private McpServerClient $client;
@@ -144,6 +148,7 @@ final class ReviewServerContractTest extends KernelTestCase
     public function testARequestWithoutACredentialIsRefused(): void
     {
         self::assertSame(401, $this->initializeStatus(null));
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "Full authentication is required to access this resource."', HttpException::class));
     }
 
     public function testACredentialWhoseSignatureBelongsToAnotherRoundIsRefused(): void

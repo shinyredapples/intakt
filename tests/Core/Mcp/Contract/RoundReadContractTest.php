@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Mcp\Contract;
 
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -26,6 +27,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversNothing]
 final class RoundReadContractTest extends KernelTestCase
 {
+    use AssertsLoggedErrors;
+
     private McpServerClient $client;
 
     private string $roundId;
@@ -140,6 +143,7 @@ final class RoundReadContractTest extends KernelTestCase
 
         self::assertIsInt(McpServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', $this->client->lastBody());
+        self::assertLoggedError('error', 'Resource not found');
     }
 
     /**

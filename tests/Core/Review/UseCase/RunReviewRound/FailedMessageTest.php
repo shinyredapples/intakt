@@ -110,6 +110,7 @@ final class FailedMessageTest extends KernelTestCase
 
         self::assertCount(1, $failed->getSent());
         self::assertCount(1, $incoming->getRejected());
+        self::assertSame(['error'], array_column($this->fixture->log->cleanLogs(), 0));
     }
 
     public function testAFailedMessageThatWillStillBeRetriedLeavesTheReviewerAsItWas(): void
