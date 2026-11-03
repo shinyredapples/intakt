@@ -10,6 +10,11 @@ parameters:
     intakt.vendor_account_parallel_calls: 3
     # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
     intakt.gitleaks: gitleaks
+    # The install's own credentials, redacted from every log line; the enabled accounts' keys come from config/packages/ai.php. Unset ones are skipped.
+    intakt.credentials:
+        - '%env(default::APP_SECRET)%'
+        - '%env(default::GITHUB_APP_PRIVATE_KEY)%'
+        - '%env(default::MCP_OWNER_TOKEN)%'
 
 services:
     # default configuration for services in *this* file

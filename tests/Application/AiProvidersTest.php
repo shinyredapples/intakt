@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use DateTimeImmutable;
+use Monolog\Handler\StreamHandler;
+use Monolog\Level;
+use Monolog\LogRecord;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
@@ -104,6 +108,18 @@ final class AiProvidersTest extends KernelTestCase
             ['openai' => 'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.'],
             $container->getParameter('intakt.ai.disabled_providers'),
         );
+    }
+
+    public function testTheKeyOfAnEnabledAccountIsRedactedFromTheLog(): void
+    {
+        $container = $this->bootWith(['ANTHROPIC_API_KEY' => 'anthropic-key-for-the-log-test']);
+        $handler = $container->get('monolog.handler.main');
+        self::assertInstanceOf(StreamHandler::class, $handler);
+
+        $line = $handler->getFormatter()->format(new LogRecord(new DateTimeImmutable('2026-11-03T10:00:00+00:00'), 'app', Level::Error, 'Refused anthropic-key-for-the-log-test.'));
+
+        self::assertIsString($line);
+        self::assertStringContainsString('Refused [redacted].', $line);
     }
 
     public function testAnEmptyKeyCountsAsMissing(): void

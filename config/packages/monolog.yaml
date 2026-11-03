@@ -1,0 +1,16 @@
+# Every record goes to the service's output (the journal under systemd), one redacted JSON line each, so a failure keeps its class and trace (docs/architecture/README.md#conventions).
+monolog:
+    handlers:
+        main:
+            type: stream
+            path: php://stderr
+            level: info
+            channels: ['!event']
+            formatter: Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter
+
+when@test:
+    monolog:
+        handlers:
+            main:
+                # Warnings and worse only, as Symfony's fallback logger wrote before, so a test run's output stays readable.
+                level: warning

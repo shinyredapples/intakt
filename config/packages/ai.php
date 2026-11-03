@@ -191,6 +191,7 @@ return static function (ContainerConfigurator $container): void {
     $disabledAccounts = [];
     $enabledAccounts = [];
     $tierPlatforms = [];
+    $credentials = [];
 
     foreach (Provider::cases() as $provider) {
         // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
@@ -230,6 +231,8 @@ return static function (ContainerConfigurator $container): void {
         foreach ($enabled as $name => $account) {
             [$bundleConfig, $platforms[$name]] = $accountPlatform($account);
             $platform = array_replace_recursive($platform, $bundleConfig);
+            // Every variable of the account, a base URL too, because a URL can carry a key in its query.
+            $credentials = [...$credentials, ...array_map($env, $account->variables())];
         }
 
         $container->services()->set('intakt.ai.accounts.'.$provider->value, AccountFailoverPlatform::class)
@@ -254,6 +257,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
     $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
     $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
+    $container->parameters()->set('intakt.ai.credentials', $credentials);
     $container->parameters()->set('intakt.projects', $projects);
     $container->parameters()->set('intakt.ai.codex', $configuration['codex'] ?? null);
     $container->parameters()->set('intakt.review.panels', $panels);
