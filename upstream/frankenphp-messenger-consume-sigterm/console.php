@@ -14,7 +14,6 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\HttpKernel\Kernel;
-use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 require dirname(__DIR__, 2).'/vendor/autoload.php';
@@ -24,7 +23,6 @@ final class Slow
 }
 
 // The handler is in flight between the "started" and the "done" marker; the test sends SIGTERM while it waits for "release".
-#[AsMessageHandler]
 final class SlowHandler
 {
     public function __invoke(Slow $message): void
@@ -98,7 +96,7 @@ final class ProbeKernel extends Kernel
         ]);
         $container->services()
             ->defaults()->autowire()->autoconfigure()
-            ->set(SlowHandler::class)
+            ->set(SlowHandler::class)->tag('messenger.message_handler')
             ->set(DispatchCommand::class);
     }
 }

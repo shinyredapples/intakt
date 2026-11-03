@@ -76,6 +76,21 @@ final class MessengerConsumeSigtermTest extends TestCase
         self::assertTrue($finished || $queued, 'the message must be handled or still queued, never lost');
     }
 
+    public function testTheConsumerKeepsRunningAfterTheMessageWhenNoSignalIsSent(): void
+    {
+        $this->runToEnd([PHP_BINARY], ['probe:dispatch']);
+        $consumer = $this->consume([PHP_BINARY]);
+        $this->waitFor('started', $consumer);
+
+        touch($this->directory.'/release');
+        $this->waitFor('done', $consumer);
+        usleep(500_000);
+
+        $stillRunning = $consumer->isRunning();
+        $consumer->stop(0, SIGKILL);
+        self::assertTrue($stillRunning, 'only SIGTERM may stop the consumer, so a clean exit proves the signal handling');
+    }
+
     private static function frankenphp(): string
     {
         return new ExecutableFinder()->find('frankenphp') ?? throw new RuntimeException('frankenphp is not installed');
@@ -86,7 +101,7 @@ final class MessengerConsumeSigtermTest extends TestCase
      */
     private function consume(array $runtime): Process
     {
-        $consumer = $this->process($runtime, ['messenger:consume', 'async', '--limit=1', '--time-limit=60']);
+        $consumer = $this->process($runtime, ['messenger:consume', 'async']);
         $consumer->start();
 
         return $consumer;
