@@ -118,7 +118,7 @@ final class EntrypointProcessesTest extends TestCase
         $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         $workers = $this->inEntrypointOrder(array_keys($before), (int) array_search('web', $before, true));
         // The entrypoint checks its children in this order, so the first one is already found alive when the last two are started again.
-        $victim = array_first($workers);
+        $victim = (int) array_first($workers);
         $killedFirst = array_slice($workers, -2);
         $this->entrypoint->signal(self::STOP);
         foreach ($killedFirst as $pid) {
@@ -218,8 +218,6 @@ final class EntrypointProcessesTest extends TestCase
     }
 
     /**
-     * The same keys inserted in the same order give bash's associative array the order the entrypoint checks its children in.
-     *
      * @param list<int> $pids
      *
      * @return list<int>
@@ -227,6 +225,7 @@ final class EntrypointProcessesTest extends TestCase
     private function inEntrypointOrder(array $pids, int $web): array
     {
         sort($pids);
+        // Bash orders the keys of an associative array the same way for the same keys inserted in the same order, so this is the order the entrypoint checks its children in.
         $order = new Process(['bash', '-c', 'declare -A running=(); for pid in "$@"; do running[$pid]=x; done; printf "%s\n" "${!running[@]}"', 'bash', ...array_map(strval(...), $pids)]);
         $order->mustRun();
 
@@ -265,7 +264,7 @@ final class EntrypointProcessesTest extends TestCase
 
             $parts = explode("\0", rtrim($commandLine, "\0"));
 
-            // The entrypoint's poll sleeps in a child of its own, which is no process it supervises.
+            // Left out because the entrypoint's poll sleeps in a child of its own, which it does not supervise.
             if ('sleep' !== basename($parts[0])) {
                 $arguments[$child] = $parts;
             }
