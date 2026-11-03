@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
-use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\HighlightsGate;
 use Intakt\Gates\HighlightsRow;
 use Intakt\Gates\HighlightsRows;
 use Intakt\Gates\HighlightStatus;
+use Intakt\Gates\MarkdownBlock;
+use Intakt\Gates\MarkdownBlocks;
 use Intakt\Gates\PathsOnBranch;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
-#[UsesClass(FencedCodeBlocks::class)]
+#[UsesClass(MarkdownBlock::class)]
+#[UsesClass(MarkdownBlocks::class)]
 #[UsesClass(HighlightsRows::class)]
 #[UsesClass(HighlightsRow::class)]
 #[UsesClass(PathsOnBranch::class)]
@@ -459,6 +461,39 @@ final class HighlightsGateTest extends SandboxTestCase
         self::assertStringNotContainsString('cannot be checked', $run->findingsOf('highlights'));
         self::assertStringContainsString('cites a pull request ("PR12")', $run->findingsOf('highlights'));
         self::assertStringContainsString('Where names `aaaa', $run->findingsOf('highlights'));
+    }
+
+    public function testARowInsideAnHtmlCommentIsStillLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "## Tooling\n\n<!--\n| Feature | Status | Where |\n|---|---|---|\n| A | planed | PR #12, `src/Missing.php` |\n-->\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md:6: status "planed"', $run->findingsOf('highlights'));
+        self::assertStringContainsString('cites a pull request ("PR #12")', $run->findingsOf('highlights'));
+        self::assertStringContainsString('Where names `src/Missing.php`, which does not exist', $run->findingsOf('highlights'));
+    }
+
+    public function testARowInsideAnHtmlCommentThatFollowsTheRulesPasses(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "<!--\n".self::HEADER."| A | a | planned | T1 (#5), `src/Kernel.php` |\n-->\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testATableAfterACommentHoldingAFenceIsLinted(): void
+    {
+        $sandbox = $this->sandboxWithKernel();
+        $sandbox->write('docs/highlights.md', "<!--\n```markdown\n-->\n\n| Status | Where |\n|---|---|\n| open | x |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertStringContainsString('docs/highlights.md:7: status "open"', $run->findingsOf('highlights'));
     }
 
     public function testAMissingHighlightsFilePasses(): void

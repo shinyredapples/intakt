@@ -119,8 +119,8 @@ final readonly class CheckCommand
             new HistorySecretsGate(),
             new CommitSubjectsGate($testMerge),
             new LongDashesGate(),
-            new HighlightsGate(new HighlightsRows(new FencedCodeBlocks())),
-            new HighlightsUpToDateGate(new HighlightsRows(new FencedCodeBlocks())),
+            new HighlightsGate(new HighlightsRows(new MarkdownBlocks())),
+            new HighlightsUpToDateGate(new HighlightsRows(new MarkdownBlocks())),
         ];
     }
 

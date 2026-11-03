@@ -20,6 +20,7 @@ final readonly class HighlightsRow
     public function __construct(
         public int $line,
         public array $headings,
+        public bool $rendered,
         public ?string $status,
         public ?string $where,
     ) {

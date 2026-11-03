@@ -37,7 +37,8 @@ final readonly class HighlightsUpToDateGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $rows = $this->rows->of($contents);
+        // A commented-out row is not rendered, so it neither names a reproduction nor is stale.
+        $rows = array_values(array_filter($this->rows->of($contents), static fn (HighlightsRow $row): bool => $row->rendered));
         $branch = PathsOnBranch::of($workspace->root, $tracked);
         $findings = [
             ...$this->reproductionsWithoutRow($this->reproductionsOn($workspace->root, $tracked), $rows, $branch),

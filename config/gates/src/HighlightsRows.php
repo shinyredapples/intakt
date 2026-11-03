@@ -8,15 +8,12 @@ final readonly class HighlightsRows
 {
     private const string HEADING = '/^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/';
 
-    // Skipped because a commented-out row is not rendered; as in CommonMark, the block runs to the line holding -->.
-    private const string COMMENT_OPENER = '/^ {0,3}<!--/';
-
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
     private const string OUTER_PIPES = '/^\||(?<!\\\\)\|$/';
 
     public function __construct(
-        private FencedCodeBlocks $codeBlocks,
+        private MarkdownBlocks $blocks,
     ) {
     }
 
@@ -25,15 +22,25 @@ final readonly class HighlightsRows
      */
     public function of(string $contents): array
     {
-        $lines = explode("\n", $contents)
-            |> $this->codeBlocks->blanked(...)
-            |> $this->uncommented(...);
+        $lines = explode("\n", $contents);
+        $blocks = $this->blocks->of($lines);
         $rows = [];
         $headings = [];
         $columns = null;
 
         foreach ($lines as $index => $line) {
-            $headings = $this->headingsAfter($line, $headings);
+            $block = $blocks[$index];
+
+            // A block boundary ends the table around it, as a blank line does; a fenced table is an example and is skipped.
+            if ($block !== ($blocks[$index - 1] ?? MarkdownBlock::Text)) {
+                $columns = null;
+            }
+
+            if (MarkdownBlock::Fence === $block) {
+                continue;
+            }
+
+            $headings = $this->headingsAfter($line, $block, $headings);
             $cells = $this->cellsOf($line);
 
             if (null === $cells || null === $columns) {
@@ -43,7 +50,7 @@ final readonly class HighlightsRows
             }
 
             if (!$this->isSeparator($cells)) {
-                $rows[] = new HighlightsRow($index + 1, array_values($headings), ...$this->valuesOf($cells, $columns));
+                $rows[] = new HighlightsRow($index + 1, array_values($headings), MarkdownBlock::Text === $block, ...$this->valuesOf($cells, $columns));
             }
         }
 
@@ -51,34 +58,14 @@ final readonly class HighlightsRows
     }
 
     /**
-     * @param list<string> $lines
-     *
-     * @return list<string>
-     */
-    private function uncommented(array $lines): array
-    {
-        $inComment = false;
-
-        foreach ($lines as $index => $line) {
-            $inComment = $inComment || 1 === preg_match(self::COMMENT_OPENER, $line);
-
-            if ($inComment) {
-                $lines[$index] = '';
-                $inComment = !str_contains($line, '-->');
-            }
-        }
-
-        return $lines;
-    }
-
-    /**
      * @param array<int, string> $headings
      *
      * @return array<int, string>
      */
-    private function headingsAfter(string $line, array $headings): array
+    private function headingsAfter(string $line, MarkdownBlock $block, array $headings): array
     {
-        if (1 !== preg_match(self::HEADING, $line, $heading)) {
+        // A commented-out heading is not rendered, so it opens no section for the rows after the comment.
+        if (MarkdownBlock::Text !== $block || 1 !== preg_match(self::HEADING, $line, $heading)) {
             return $headings;
         }
 
