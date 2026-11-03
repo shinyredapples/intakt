@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Runs the persistence group on several database engines at once, each in its own CI image container on its service's
-# network, and reports every engine: its output in its own log group headed with its exit code. Fails when any engine
-# failed or none was given. Arguments: one "name|network|database URL" per engine. Needs CI_IMAGE and GITHUB_WORKSPACE.
+# Engines run at once because one after another took 13.6 minutes, the longest CI job (docs/architecture/README.md).
 set -uo pipefail
 
 if [ "$#" -eq 0 ]; then
