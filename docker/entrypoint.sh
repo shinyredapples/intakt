@@ -30,20 +30,23 @@ start() {
 
 stop_all() {
     trap - TERM INT
-    kill -TERM "${!running[@]}" 2>/dev/null || true
+    # The job table, not running: bash runs this trap between the two commands of start, so a child can be started and not yet recorded, and the final wait would hang on it.
+    local -a children
+    mapfile -t children < <(jobs -p)
+    kill -TERM "${children[@]}" 2>/dev/null || true
     # A consumer ignores SIGTERM until its worker exists (upstream/messenger-consume-ignores-early-sigterm), so what still runs after a grace period inside Docker's 10 s stop timeout is killed.
     for _ in {1..80}; do
-        any_running || break
+        any_running "${children[@]}" || break
         sleep 0.1
     done
-    kill -KILL "${!running[@]}" 2>/dev/null || true
+    kill -KILL "${children[@]}" 2>/dev/null || true
     wait
     exit "$1"
 }
 
 any_running() {
     local pid
-    for pid in "${!running[@]}"; do
+    for pid in "$@"; do
         kill -0 "$pid" 2>/dev/null && return 0
     done
     return 1

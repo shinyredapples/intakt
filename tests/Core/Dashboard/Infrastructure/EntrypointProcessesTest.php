@@ -28,9 +28,15 @@ final class EntrypointProcessesTest extends TestCase
     private const int CONTINUE = 18;
     private const int TERMINATE = 15;
 
+    // The entrypoint's grace period between SIGTERM and SIGKILL, in docker/entrypoint.sh.
+    private const int GRACE_SECONDS = 8;
+
     private Process $entrypoint;
 
     private string $directory;
+
+    /** @var array<string, string> */
+    private array $environment;
 
     protected function setUp(): void
     {
@@ -41,7 +47,7 @@ final class EntrypointProcessesTest extends TestCase
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->directory);
         $port = (string) $this->freePort();
-        $this->entrypoint = new Process(['docker/entrypoint.sh'], dirname(__DIR__, 4), [
+        $this->environment = [
             'SERVER_PORT' => $port,
             'DASHBOARD_PORT' => $port,
             'CADDY_ADMIN' => 'localhost:'.$this->freePort(),
@@ -52,20 +58,23 @@ final class EntrypointProcessesTest extends TestCase
             'MERCURE_JWT_SECRET' => self::SECRET,
             'MERCURE_JWT_ISSUER' => 'http://localhost:'.$port,
             'MERCURE_BOLT_PATH' => $this->directory.'/hub.db',
-        ]);
-        $this->entrypoint->setTimeout(null);
-        $this->entrypoint->start();
+        ];
     }
 
     protected function tearDown(): void
     {
         // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
         $this->entrypoint->stop(15);
+        // A child left behind by an entrypoint that ended without stopping it, the defect the forced-order test proves absent.
+        foreach ($this->childrenStartedBeforeTheStop() as $pid) {
+            posix_kill($pid, self::KILL);
+        }
         new Filesystem()->remove($this->directory);
     }
 
     public function testTheConsumersAndTheSchedulerRunBesideTheWebServer(): void
     {
+        $this->startEntrypoint();
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
         self::assertSame(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], array_count_values($processes));
@@ -73,6 +82,7 @@ final class EntrypointProcessesTest extends TestCase
 
     public function testTheConsumersAndTheSchedulerRunWithPlainPhp(): void
     {
+        $this->startEntrypoint();
         $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
         $programs = array_map(
@@ -86,6 +96,7 @@ final class EntrypointProcessesTest extends TestCase
     #[DataProvider('longRunningConsumers')]
     public function testAKilledConsumerIsStartedAgain(string $transport): void
     {
+        $this->startEntrypoint();
         $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         $killed = (int) array_search($transport, $before, true);
 
@@ -98,6 +109,7 @@ final class EntrypointProcessesTest extends TestCase
 
     public function testTwoConsumersEndingTogetherAreBothStartedAgain(): void
     {
+        $this->startEntrypoint();
         $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         $killed = array_keys($before, 'async', true);
         // Held stopped while both die, because only then are both exits in before it waits again, the order that lost one.
@@ -115,6 +127,7 @@ final class EntrypointProcessesTest extends TestCase
 
     public function testAConsumerKilledWhileOthersAreStartedAgainIsStartedAgainToo(): void
     {
+        $this->startEntrypoint();
         $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         $workers = $this->inEntrypointOrder(array_keys($before), (int) array_search('web', $before, true));
         // The entrypoint checks its children in this order, so the first one is already found alive when the last two are started again.
@@ -145,6 +158,7 @@ final class EntrypointProcessesTest extends TestCase
 
     public function testStoppingTheEntrypointStopsEveryProcess(): void
     {
+        $this->startEntrypoint();
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
         $this->entrypoint->signal(self::TERMINATE);
@@ -154,8 +168,29 @@ final class EntrypointProcessesTest extends TestCase
         self::assertSame([], array_filter(array_keys($processes), static fn (int $pid): bool => file_exists('/proc/'.$pid)));
     }
 
+    public function testStoppingTheEntrypointBetweenStartingAChildAndRecordingItStopsThatChildToo(): void
+    {
+        // Bash runs a pending trap between two commands, so a SIGTERM sent by this DEBUG trap lands after "$1" & and before running[$!]=$1 of the first child, whose pid the trap notes: the order in which a stop that only knew recorded children left it running.
+        $forcedOrder = <<<'BASH'
+            set -T
+            trap 'if [[ "$BASH_COMMAND" == "running[\$!]=\$1" ]]; then trap - DEBUG; echo "$!" >> "$CHILD_STARTED_BEFORE_THE_STOP"; kill -TERM "$$"; fi' DEBUG
+            source docker/entrypoint.sh
+            BASH;
+        $this->startEntrypoint(['bash', '-c', $forcedOrder], [
+            'PATH' => $this->stubProgramsThatSleep().':'.getenv('PATH'),
+            'CHILD_STARTED_BEFORE_THE_STOP' => $this->childrenStartedBeforeTheStopFile(),
+        ]);
+
+        $this->waitForTheEntrypointToEnd(self::GRACE_SECONDS);
+
+        self::assertSame(0, $this->entrypoint->getExitCode(), $this->entrypoint->getErrorOutput());
+        self::assertCount(1, $this->childrenStartedBeforeTheStop());
+        self::assertSame([], array_filter($this->childrenStartedBeforeTheStop(), static fn (int $pid): bool => file_exists('/proc/'.$pid)));
+    }
+
     public function testAConsumerThatDoesNotStopOnSigtermIsKilledSoTheEntrypointEnds(): void
     {
+        $this->startEntrypoint();
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         // A stopped process cannot act on SIGTERM, like a consumer whose SIGTERM arrived before its worker existed (upstream/messenger-consume-ignores-early-sigterm).
         posix_kill((int) array_search('async', $processes, true), self::STOP);
@@ -171,6 +206,7 @@ final class EntrypointProcessesTest extends TestCase
 
     public function testTheWebServerEndingStopsTheOthersSoTheContainerIsRestarted(): void
     {
+        $this->startEntrypoint();
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
         posix_kill((int) array_search('web', $processes, true), self::KILL);
@@ -178,6 +214,57 @@ final class EntrypointProcessesTest extends TestCase
 
         self::assertSame(137, $this->entrypoint->getExitCode());
         self::assertSame([], array_filter(array_keys($processes), static fn (int $pid): bool => file_exists('/proc/'.$pid)));
+    }
+
+    /**
+     * @param list<string>          $command
+     * @param array<string, string> $environment
+     */
+    private function startEntrypoint(array $command = ['docker/entrypoint.sh'], array $environment = []): void
+    {
+        $this->entrypoint = new Process($command, dirname(__DIR__, 4), [...$this->environment, ...$environment]);
+        $this->entrypoint->setTimeout(null);
+        $this->entrypoint->start();
+    }
+
+    // Stand-ins for php and frankenphp that end at once on SIGTERM, so the entrypoint's own stop is what the forced order measures, not a consumer's.
+    private function stubProgramsThatSleep(): string
+    {
+        $programs = $this->directory.'/stubs';
+        $filesystem = new Filesystem();
+
+        foreach (['php', 'frankenphp'] as $name) {
+            $filesystem->dumpFile($programs.'/'.$name, "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\nexec sleep 300\n");
+            $filesystem->chmod($programs.'/'.$name, 0755);
+        }
+
+        return $programs;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function childrenStartedBeforeTheStop(): array
+    {
+        $noted = @file_get_contents($this->childrenStartedBeforeTheStopFile());
+
+        return is_string($noted) ? array_map(intval(...), array_filter(explode("\n", $noted))) : [];
+    }
+
+    private function childrenStartedBeforeTheStopFile(): string
+    {
+        return $this->directory.'/children-started-before-the-stop';
+    }
+
+    private function waitForTheEntrypointToEnd(int $seconds): void
+    {
+        $deadline = hrtime(true) + $seconds * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && $this->entrypoint->isRunning()) {
+            usleep(50_000);
+        }
+
+        self::assertFalse($this->entrypoint->isRunning(), sprintf('The entrypoint still runs %d seconds after SIGTERM, with %d children left.', $seconds, count(array_filter($this->childrenStartedBeforeTheStop(), static fn (int $pid): bool => file_exists('/proc/'.$pid)))));
     }
 
     /**
