@@ -37,14 +37,14 @@ final readonly class RateLimitReadings
     {
         $until = $this->pool->getItem($this->key('limited', $installationId));
 
-        // Compared with the clock, not left to the cache expiry, which runs on system time.
+        // Compared with the clock because the cache expiry runs on system time.
         if ($until->isHit() && is_int($until->get()) && $this->at($until->get()) > $this->clock->now()) {
             throw new ForgeRateLimited($this->at($until->get()));
         }
     }
 
     /**
-     * @param array<string, list<string>> $headers lower-cased names, as the HTTP client returns them
+     * @param array<string, list<string>> $headers
      *
      * @throws ForgeRateLimited
      */
@@ -56,7 +56,7 @@ final readonly class RateLimitReadings
             $this->remember($installationId, $remaining, $reset);
         }
 
-        $until = $this->limitedUntil($status, $headers, $remaining, $reset);
+        $until = $this->limitedUntil($status, $headers);
         if ($until instanceof DateTimeImmutable) {
             $this->pause($installationId, $until);
 
@@ -81,9 +81,9 @@ final readonly class RateLimitReadings
     /**
      * @param array<string, list<string>> $headers
      */
-    private function limitedUntil(int $status, array $headers, ?int $remaining, ?int $reset): ?DateTimeImmutable
+    private function limitedUntil(int $status, array $headers): ?DateTimeImmutable
     {
-        // A 403 without these headers is an ordinary refusal, such as a missing permission.
+        // Any other 403 stays an ordinary refusal, because a missing permission answers it too.
         if (!in_array($status, self::LIMITED_STATUSES, true)) {
             return null;
         }
@@ -93,9 +93,11 @@ final readonly class RateLimitReadings
             return $this->after($retryAfter);
         }
 
-        if (0 !== $remaining) {
+        if (0 !== $this->number($headers, 'x-ratelimit-remaining')) {
             return null;
         }
+
+        $reset = $this->number($headers, 'x-ratelimit-reset');
 
         return null === $reset ? $this->after(self::SECONDS_WITHOUT_RESET) : $this->capped($this->at($reset));
     }

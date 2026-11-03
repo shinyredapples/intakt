@@ -15,7 +15,6 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
-use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -38,7 +37,6 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
-use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
@@ -58,7 +56,6 @@ use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
-use Symfony\Component\Yaml\Yaml;
 
 #[CoversClass(GitHubForge::class)]
 #[CoversClass(PullRequestAddress::class)]
@@ -73,9 +70,7 @@ use Symfony\Component\Yaml\Yaml;
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(ForgeReadFailed::class)]
-#[UsesClass(ForgeRateLimited::class)]
 #[UsesClass(RateLimitReadings::class)]
-#[UsesClass(RateLimitReading::class)]
 #[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(HeadMove::class)]
 #[UsesClass(JobCredentials::class)]
@@ -112,14 +107,7 @@ final class GitHubForgeTest extends TestCase
     private array $sent = [];
     private string $pullFixture = 'pull_request.json';
     private string $compareFixture = 'compare_merge_base.json';
-    private MockClock $clock;
-    private RateLimitReadings $readings;
     private string $expectedPermissions = 'contents:write,pull_requests:write,workflows:write';
-
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
 
     public function testItReadsTheHeadBaseDiffAndChangedFilesOfAPullRequest(): void
     {
@@ -554,119 +542,6 @@ final class GitHubForgeTest extends TestCase
         self::assertCount($requestsBefore, $this->requested);
     }
 
-    public function testItRaisesTheRateLimitWithTheResetOfAPrimaryLimitAnd403(): void
-    {
-        $reset = $this->clock->now()->getTimestamp() + 1200;
-        $forge = $this->forge(static fn (): ResponseInterface => self::limited(403, ['x-ratelimit-remaining' => '0', 'x-ratelimit-reset' => (string) $reset]));
-
-        $limited = $this->rateLimitOf(static fn () => $forge->change(new ChangeId(self::PULL)));
-
-        self::assertSame($reset, $limited->resetsAt->getTimestamp());
-        self::assertCount(1, $this->requested);
-    }
-
-    public function testItMakesNoCallBeforeTheResetOfARateLimit(): void
-    {
-        $reset = $this->clock->now()->getTimestamp() + 1800;
-        $forge = $this->forge(static fn (): ResponseInterface => self::limited(403, ['x-ratelimit-remaining' => '0', 'x-ratelimit-reset' => (string) $reset]));
-        $this->rateLimitOf(static fn () => $forge->change(new ChangeId(self::PULL)));
-
-        $this->clock->modify('+10 minutes');
-        $again = $this->rateLimitOf(static fn () => $forge->change(new ChangeId(self::PULL)));
-
-        self::assertSame($reset, $again->resetsAt->getTimestamp());
-        self::assertCount(1, $this->requested);
-    }
-
-    public function testItCallsGitHubAgainOnceTheResetHasPassed(): void
-    {
-        $limit = true;
-        $forge = $this->forge(function () use (&$limit): ?ResponseInterface {
-            return $limit ? self::limited(429, ['retry-after' => '30']) : null;
-        });
-        $this->rateLimitOf(static fn () => $forge->change(new ChangeId(self::PULL)));
-        $limit = false;
-        $this->clock->modify('+31 seconds');
-
-        self::assertSame(self::HEAD, $forge->change(new ChangeId(self::PULL))->commits->head->hash);
-    }
-
-    public function testItRaisesTheRateLimitOfA429WithRetryAfterAndNeverRetriesIt(): void
-    {
-        $forge = $this->forge(static fn (): ResponseInterface => self::limited(429, ['retry-after' => '45']));
-
-        $limited = $this->rateLimitOf(static fn () => $forge->change(new ChangeId(self::PULL)));
-
-        self::assertSame($this->clock->now()->getTimestamp() + 45, $limited->resetsAt->getTimestamp());
-        self::assertCount(1, $this->requested);
-    }
-
-    public function testItTreatsA403WithRetryAfterAsARateLimit(): void
-    {
-        $forge = $this->forge(static fn (): ResponseInterface => self::limited(403, ['retry-after' => '60']));
-
-        $limited = $this->rateLimitOf(static fn () => $forge->change(new ChangeId(self::PULL)));
-
-        self::assertSame($this->clock->now()->getTimestamp() + 60, $limited->resetsAt->getTimestamp());
-    }
-
-    public function testItKeepsA403WithoutRateLimitHeadersAnOrdinaryRefusal(): void
-    {
-        $forge = $this->forge(static fn (): ResponseInterface => self::limited(403, ['x-ratelimit-remaining' => '4999', 'x-ratelimit-reset' => '1795601400']));
-
-        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 403 to a read.'));
-
-        $forge->change(new ChangeId(self::PULL));
-    }
-
-    public function testItRaisesTheRateLimitForAWriteAndDoesNotRetryIt(): void
-    {
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? self::limited(403, ['retry-after' => '20']) : null);
-        $change = $forge->change(new ChangeId(self::PULL));
-
-        $failure = $this->failureOfPost($forge, $change, $this->comment('Two reviewers approve.'));
-
-        self::assertInstanceOf(ForgeRateLimited::class, $failure);
-        self::assertCount(1, array_keys($this->requested, self::POST_REVIEW, true));
-    }
-
-    public function testItRecordsTheBudgetOfEveryAnswerForTheInstallation(): void
-    {
-        $reset = $this->clock->now()->getTimestamp() + 900;
-        $forge = $this->forge(static fn (): ResponseInterface => new MockResponse(self::fixture('pull_request.json'), ['response_headers' => ['x-ratelimit-remaining' => '4321', 'x-ratelimit-reset' => (string) $reset]]));
-
-        $forge->hasHeadMoved($this->aChange());
-
-        $reading = $this->readings->latest('678');
-        self::assertSame(4321, $reading?->remaining);
-        self::assertSame($reset, $reading->resetsAt->getTimestamp());
-    }
-
-    private function rateLimitOf(Closure $call): ForgeRateLimited
-    {
-        try {
-            $call();
-        } catch (ForgeRateLimited $limited) {
-            return $limited;
-        }
-
-        throw new LogicException('The call was expected to be rate limited.');
-    }
-
-    private function aChange(): Change
-    {
-        $head = new CommitId(self::HEAD);
-
-        return new Change(new ChangeId(self::PULL), new CommitRange(new CommitId(self::MERGE_BASE), $head), new Diff('', new ChangedFiles()));
-    }
-
-    /**
-     * @param array<string, string> $headers
-     */
-    private static function limited(int $status, array $headers): MockResponse
-    {
-        return new MockResponse('{"message":"rate limit"}', ['http_code' => $status, 'response_headers' => $headers]);
-    }
     private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
     {
         try {
@@ -706,21 +581,19 @@ final class GitHubForgeTest extends TestCase
             $answer = $override instanceof Closure ? $override($url, $options) : null;
 
             return $answer ?? $this->answer($url, $options);
-        }, 'https://api.github.com'), new GenericRetryStrategy(self::configuredRetryCodes(), delayMs: 0), 2));
+        }, 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2));
     }
 
     private function forgeOver(HttpClientInterface $http): GitHubForge
     {
-        $clock = $this->clock;
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation(self::MINTED)->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $identity), $expected, new NullLogger());
 
-        $this->readings = new RateLimitReadings(new ArrayAdapter(), $clock);
-
-        return new GitHubForge($http, new CheckedInstallationTokens($readBack, $tokens), $this->secretScan(), $this->readings);
+        return new GitHubForge($http, new CheckedInstallationTokens($readBack, $tokens), $this->secretScan(), new RateLimitReadings(new ArrayAdapter(), $clock));
     }
 
     private function secretScan(): SecretScan
@@ -767,16 +640,6 @@ final class GitHubForgeTest extends TestCase
             'merge_base_commit' => ['sha' => $mergeBase],
             'files' => array_map(static fn (int $number): array => ['filename' => 'docs/F'.$number.'.md', 'status' => 'added'], range(1, $files)),
         ], JSON_THROW_ON_ERROR);
-    }
-
-    /**
-     * @return list<int>
-     */
-    private static function configuredRetryCodes(): array
-    {
-        $config = Yaml::parseFile(dirname(__DIR__, 3).'/config/packages/framework.yaml');
-
-        return $config['framework']['http_client']['scoped_clients']['github.client']['retry_failed']['http_codes'];
     }
 
     private static function fixture(string $name): string
