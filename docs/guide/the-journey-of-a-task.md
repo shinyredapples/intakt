@@ -59,7 +59,7 @@ Planned: the self-check also runs the project's quick checks, ticks off every pi
 
 Intakt never trusts the builder's word that the work passes. It unpacks the change in a **fresh, separate container** and runs the project's own checks there:
 
-- **The quality gates** (`bin/check`): tests, static analysis, code style and the project's own rules.
+- **The quality gates** (`bin/check`): tests, static analysis, code style and the project's own rules. The test check also lists the ten slowest test files, so slow tests are easy to spot.
 - **Dependencies:** a new package from a trusted publisher (such as `symfony/` or `doctrine/`) is routine; anything else, or a change to how packages are installed, waits for the owner.
 - **The boot check:** does the changed project still start up?
 

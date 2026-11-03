@@ -42,6 +42,16 @@ final readonly class CheckRun
         return $this->gateLine($gate)?->get('note')->text() ?? '';
     }
 
+    /**
+     * @return list<string>
+     */
+    public function slowestFilesOf(string $gate): array
+    {
+        $line = $this->gateLine($gate);
+
+        return $line instanceof JsonNode ? array_map(static fn (JsonNode $entry): string => $entry->get('file')->text(), $line->get('slowest')->items()) : [];
+    }
+
     public function output(): string
     {
         return $this->result->output."\n".$this->result->errors;
