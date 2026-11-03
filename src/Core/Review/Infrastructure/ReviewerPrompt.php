@@ -97,7 +97,6 @@ final readonly class ReviewerPrompt
 
     public function cutsInputOf(ReviewBrief $brief): bool
     {
-
         return $this->cut->cuts($brief->change->task) || $this->cut->cuts($brief->change->diff);
     }
 
