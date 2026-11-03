@@ -98,6 +98,20 @@ final class TestDurationsTest extends TestCase
         self::assertDirectoryExists($this->directory.'/tests/durations.json');
     }
 
+    public function testACacheDirectoryWithoutSearchPermissionIsSkippedWithoutAWarning(): void
+    {
+        mkdir($this->directory.'/tests', 0o200);
+
+        try {
+            $warnings = $this->warningsOf(fn () => new TestDurations('/work')->write(['tests/AlphaTest.php' => 0.75], $this->directory));
+        } finally {
+            chmod($this->directory.'/tests', 0o700);
+        }
+
+        self::assertSame([], $warnings);
+        self::assertFileDoesNotExist($this->directory.'/tests/durations.json');
+    }
+
     /**
      * @param callable(): void $write
      *
