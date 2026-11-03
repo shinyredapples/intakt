@@ -33,8 +33,7 @@ final readonly class Redaction
     public function redact(string $text, #[SensitiveParameter] string ...$heldCredentials): string
     {
         $text = $this->redactHeldCredentials($text, array_values($heldCredentials));
-        $text = $this->redactHeaderLists($text);
-        $text = $this->redactHeaderValues($text);
+        $text = $this->redactHeaders($text);
         $text = $this->redactUserinfo($text);
 
         return $this->redactSecretShapes($text);
@@ -99,10 +98,12 @@ final readonly class Redaction
         return implode('', array_map(static fn (string $unit): string => '\\\\+u(?i:'.$unit.')', $units));
     }
 
-    private function redactHeaderLists(string $text): string
+    // Values are redacted only between the lists, because a value pass over a replaced list would take the marker and the rest of its line as a value.
+    private function redactHeaders(string $text): string
     {
         // The print_r form is told apart because it alone breaks the line between Array and its parenthesis.
-        $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|\[)~i';
+        // A held credential's marker is no list, so the value after it is still redacted.
+        $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|(?!'.preg_quote(self::MARKER, '~').')\[)~i';
 
         $result = '';
         $offset = 0;
@@ -117,11 +118,11 @@ final readonly class Redaction
             };
 
             // A missing end takes the rest of the text because stopping early would leak.
-            $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0])).self::MARKER;
+            $result .= $this->redactHeaderValues(substr($text, $offset, $matchStart - $offset)).substr($match[0][0], 0, -strlen($match['open'][0])).self::MARKER;
             $offset = $end;
         }
 
-        return $result.substr($text, $offset);
+        return $result.$this->redactHeaderValues(substr($text, $offset));
     }
 
     private function endOfQuotedList(string $text, int $from, string $brackets): int

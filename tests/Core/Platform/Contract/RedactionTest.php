@@ -262,7 +262,21 @@ final class RedactionTest extends TestCase
     {
         $redacted = new Redaction()->redact("['Authorization' => ['Bearer abc123xyz', 'x]y'], 'Accept' => ['text/html']]");
 
-        self::assertSame("['Authorization' => [redacted]'Accept' => ['text/html']]", $redacted);
+        self::assertSame("['Authorization' => [redacted], 'Accept' => ['text/html']]", $redacted);
+    }
+
+    public function testItKeepsTheFieldsAfterARedactedHeaderListOnTheSameLine(): void
+    {
+        $redacted = new Redaction()->redact('{"authorization": ["Bearer abc123xyz"], "status": 200}');
+
+        self::assertSame('{"authorization": [redacted], "status": 200}', $redacted);
+    }
+
+    public function testItRedactsAHeaderValueThatStartsWithAHeldCredential(): void
+    {
+        $redacted = new Redaction()->redact('Cookie: held-session-value; other=second-secret', 'held-session-value');
+
+        self::assertStringNotContainsString('second-secret', $redacted);
     }
 
     public function testItRedactsToTheEndOfTheTextWhenAHeaderListNeverCloses(): void
