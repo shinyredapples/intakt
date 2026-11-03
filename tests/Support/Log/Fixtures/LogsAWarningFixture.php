@@ -13,8 +13,9 @@ final class LogsAWarningFixture extends TestCase
 {
     public function testItLogsOnlyAWarning(): void
     {
-        new RecordingLogger()->warning('Disk is warm.');
+        $logger = new RecordingLogger();
+        $logger->warning('Disk is warm.');
 
-        self::assertTrue(true);
+        self::assertInstanceOf(RecordingLogger::class, $logger);
     }
 }

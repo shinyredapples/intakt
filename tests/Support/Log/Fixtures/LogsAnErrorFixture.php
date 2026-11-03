@@ -13,8 +13,9 @@ final class LogsAnErrorFixture extends TestCase
 {
     public function testItLogsAnErrorNobodyAsserts(): void
     {
-        new RecordingLogger()->error('Disk on fire.');
+        $logger = new RecordingLogger();
+        $logger->error('Disk on fire.');
 
-        self::assertTrue(true);
+        self::assertInstanceOf(RecordingLogger::class, $logger);
     }
 }
