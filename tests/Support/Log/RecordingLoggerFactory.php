@@ -13,6 +13,6 @@ final class RecordingLoggerFactory
     {
         $records = LogRecords::ofThisRun();
 
-        return null === $records ? $fallback : new RecordingLogger($records);
+        return $records instanceof LogRecords ? new RecordingLogger($records) : $fallback;
     }
 }

@@ -44,7 +44,7 @@ final readonly class LogRecords
 
     public function add(string $level, string $message): void
     {
-        file_put_contents($this->file, self::encoded(['level' => $level, 'message' => $message]), FILE_APPEND | LOCK_EX);
+        file_put_contents($this->file, $this->encoded(['level' => $level, 'message' => $message]), FILE_APPEND | LOCK_EX);
     }
 
     public function remove(string $level, string $message): bool
@@ -89,7 +89,7 @@ final readonly class LogRecords
     {
         $lines = is_file($this->file) ? file($this->file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : false;
 
-        return array_map(self::decoded(...), false === $lines ? [] : $lines);
+        return array_map($this->decoded(...), false === $lines ? [] : $lines);
     }
 
     /**
@@ -97,13 +97,13 @@ final readonly class LogRecords
      */
     private function write(array $records): void
     {
-        file_put_contents($this->file, implode('', array_map(self::encoded(...), $records)), LOCK_EX);
+        file_put_contents($this->file, implode('', array_map($this->encoded(...), $records)), LOCK_EX);
     }
 
     /**
      * @param Record $record
      */
-    private static function encoded(array $record): string
+    private function encoded(array $record): string
     {
         return json_encode($record, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE).PHP_EOL;
     }
@@ -111,7 +111,7 @@ final readonly class LogRecords
     /**
      * @return Record
      */
-    private static function decoded(string $line): array
+    private function decoded(string $line): array
     {
         /** @var Record $record */
         $record = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
