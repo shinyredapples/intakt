@@ -8,8 +8,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
 
-// Runs at kernel.terminate, after the response is sent, so the request that crossed the ceiling is answered before the worker ends.
-// Outside a FrankenPHP worker (FRANKENPHP_WORKER is unset) it does nothing, because exiting there would end the whole process.
+// Runs after the response is sent, so the request that crossed the ceiling is answered; outside a worker it does nothing, because exiting would end the whole process.
 #[AsEventListener(priority: -1024)]
 final readonly class EndWorkerOnMemoryCeiling
 {
