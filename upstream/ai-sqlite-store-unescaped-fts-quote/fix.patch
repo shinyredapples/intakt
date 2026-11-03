@@ -1,0 +1,178 @@
+From 716e660ce6f008264f93eafbf72ca284bbed1956 Mon Sep 17 00:00:00 2001
+From: Intakt Builder <builder@localhost>
+Date: Tue, 3 Nov 2026 05:01:43 +0000
+Subject: [PATCH] [Store][Sqlite] Escape full-text search terms
+
+Both stores wrap each text query term in double quotes to make it an FTS5 phrase, but a double quote inside the term ended the phrase early, so the term could add FTS5 syntax or make the query fail. A NUL byte ended the query text and left the phrase unterminated. A quote is now doubled, as FTS5 phrases require, and a NUL byte is dropped, so a term is always one phrase.
+---
+ src/store/src/Bridge/Sqlite/Store.php         |  3 +-
+ .../src/Bridge/Sqlite/Tests/StoreTest.php     | 47 ++++++++++++++
+ .../src/Bridge/Sqlite/Tests/VecStoreTest.php  | 65 +++++++++++++++++++
+ src/store/src/Bridge/Sqlite/VecStore.php      |  3 +-
+ 4 files changed, 116 insertions(+), 2 deletions(-)
+
+diff --git a/src/store/src/Bridge/Sqlite/Store.php b/src/store/src/Bridge/Sqlite/Store.php
+index e7f0efb4..a4b35d92 100644
+--- a/src/store/src/Bridge/Sqlite/Store.php
++++ b/src/store/src/Bridge/Sqlite/Store.php
+@@ -259,7 +259,8 @@ final class Store implements ManagedStoreInterface, StoreInterface
+     private function queryText(TextQuery $query, array $options): iterable
+     {
+         $searchTerms = $query->getTexts();
+-        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.$term.'"', $searchTerms));
++        // FTS5 ends the query text at a NUL byte, which would leave the phrase unterminated
++        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.str_replace(['"', "\0"], ['""', ''], $term).'"', $searchTerms));
+ 
+         $sql = \sprintf(
+             'SELECT id, rank FROM %s_fts WHERE %s_fts MATCH :query ORDER BY rank',
+diff --git a/src/store/src/Bridge/Sqlite/Tests/StoreTest.php b/src/store/src/Bridge/Sqlite/Tests/StoreTest.php
+index b59240b6..af08f617 100644
+--- a/src/store/src/Bridge/Sqlite/Tests/StoreTest.php
++++ b/src/store/src/Bridge/Sqlite/Tests/StoreTest.php
+@@ -331,6 +331,53 @@ final class StoreTest extends TestCase
+         $this->assertCount(0, $results);
+     }
+ 
++    public function testQueryTextEscapesDoubleQuotesInTerms()
++    {
++        $store = $this->createStore();
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'quoted']);
++        $metadata->setText('The file src/Quote"d.php is edited');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery('src/Quote"d.php')));
++
++        $this->assertCount(1, $results);
++        $this->assertSame('doc-1', $results[0]->getId());
++    }
++
++    public function testQueryTextIgnoresNulBytesInTerms()
++    {
++        $store = $this->createStore();
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'test']);
++        $metadata->setText('The quick brown fox');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery("fo\0x")));
++
++        $this->assertCount(1, $results);
++        $this->assertSame('doc-1', $results[0]->getId());
++    }
++
++    public function testQueryTextKeepsQuotedOperatorsInsideThePhrase()
++    {
++        $store = $this->createStore();
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'secret']);
++        $metadata->setText('The secret plan');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery('alpha" OR "secret')));
++
++        $this->assertCount(0, $results);
++    }
++
+     public function testQueryHybrid()
+     {
+         $store = $this->createStore();
+diff --git a/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php b/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php
+index a1befddd..8ed06e33 100644
+--- a/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php
++++ b/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php
+@@ -353,6 +353,71 @@ final class VecStoreTest extends TestCase
+         $this->assertSame('doc-2', $results[0]->getId());
+     }
+ 
++    public function testQueryTextEscapesDoubleQuotesInTerms()
++    {
++        $pdo = $this->createPdo();
++
++        if (!VecStore::isExtensionAvailable($pdo)) {
++            $this->markTestSkipped('sqlite-vec extension is not available.');
++        }
++
++        $store = new VecStore($pdo, 'test_vectors', Metric::Cosine, 3);
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'quoted']);
++        $metadata->setText('The file src/Quote"d.php is edited');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery('src/Quote"d.php')));
++
++        $this->assertCount(1, $results);
++        $this->assertSame('doc-1', $results[0]->getId());
++    }
++
++    public function testQueryTextIgnoresNulBytesInTerms()
++    {
++        $pdo = $this->createPdo();
++
++        if (!VecStore::isExtensionAvailable($pdo)) {
++            $this->markTestSkipped('sqlite-vec extension is not available.');
++        }
++
++        $store = new VecStore($pdo, 'test_vectors', Metric::Cosine, 3);
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'test']);
++        $metadata->setText('The quick brown fox');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery("fo\0x")));
++
++        $this->assertCount(1, $results);
++        $this->assertSame('doc-1', $results[0]->getId());
++    }
++
++    public function testQueryTextKeepsQuotedOperatorsInsideThePhrase()
++    {
++        $pdo = $this->createPdo();
++
++        if (!VecStore::isExtensionAvailable($pdo)) {
++            $this->markTestSkipped('sqlite-vec extension is not available.');
++        }
++
++        $store = new VecStore($pdo, 'test_vectors', Metric::Cosine, 3);
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'secret']);
++        $metadata->setText('The secret plan');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery('alpha" OR "secret')));
++
++        $this->assertCount(0, $results);
++    }
++
+     public function testQueryHybrid()
+     {
+         $pdo = $this->createPdo();
+diff --git a/src/store/src/Bridge/Sqlite/VecStore.php b/src/store/src/Bridge/Sqlite/VecStore.php
+index 5cf16fc5..53bd87c2 100644
+--- a/src/store/src/Bridge/Sqlite/VecStore.php
++++ b/src/store/src/Bridge/Sqlite/VecStore.php
+@@ -321,7 +321,8 @@ final class VecStore implements ManagedStoreInterface, StoreInterface
+     private function queryText(TextQuery $query, array $options): iterable
+     {
+         $searchTerms = $query->getTexts();
+-        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.$term.'"', $searchTerms));
++        // FTS5 ends the query text at a NUL byte, which would leave the phrase unterminated
++        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.str_replace(['"', "\0"], ['""', ''], $term).'"', $searchTerms));
+ 
+         $sql = \sprintf(
+             'SELECT id, rank FROM %s_fts WHERE %s_fts MATCH :query ORDER BY rank',
+-- 
+2.47.3
+
