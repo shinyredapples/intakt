@@ -21,9 +21,11 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowReviewController::class)]
 #[CoversClass(LedgerReviewPages::class)]
@@ -43,6 +45,8 @@ use Symfony\Component\DomCrawler\Crawler;
 #[UsesClass(RoundStart::class)]
 final class ShowReviewControllerTest extends DashboardPageTestCase
 {
+    use AssertsLoggedErrors;
+
     public function testTheReviewPageShowsEveryRoundOfTheChangeInOrder(): void
     {
         $this->givenACompletedTwoRoundReview();
@@ -216,6 +220,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-unknown');
 
         self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round."', NotFoundHttpException::class));
     }
 
     public function testAFindingTextWithMarkupIsEscaped(): void

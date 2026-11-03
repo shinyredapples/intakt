@@ -43,5 +43,6 @@
     </source>
 
     <extensions>
+        <bootstrap class="Intakt\Tests\Support\Log\UnassertedErrorLogExtension"/>
     </extensions>
 </phpunit>

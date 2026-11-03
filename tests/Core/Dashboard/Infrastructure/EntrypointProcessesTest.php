@@ -31,6 +31,8 @@ final class EntrypointProcessesTest extends TestCase
     // The same 8 seconds as the entrypoint's grace period between SIGTERM and SIGKILL, because a stop that takes longer is cut off by Docker's 10 second stop timeout.
     private const int GRACE_SECONDS = 8;
 
+    private const string CADDYFILE_REJECTED = 'parsing caddyfile tokens: wrong argument count, at Caddyfile:19';
+
     private Process $entrypoint;
 
     private string $directory;
@@ -216,6 +218,18 @@ final class EntrypointProcessesTest extends TestCase
         self::assertSame([], array_filter(array_keys($processes), static fn (int $pid): bool => file_exists('/proc/'.$pid)));
     }
 
+    public function testACaddyfileFrankenPhpRejectsStopsTheEntrypointWithTheReasonBeforeAnythingStarts(): void
+    {
+        $this->startEntrypoint(environment: ['PATH' => $this->stubProgramsWithARejectedCaddyfile().':'.getenv('PATH')]);
+        $this->entrypoint->setTimeout(self::SECONDS_TO_WAIT);
+
+        $this->entrypoint->wait();
+
+        self::assertNotSame(0, $this->entrypoint->getExitCode());
+        self::assertStringContainsString(self::CADDYFILE_REJECTED, $this->entrypoint->getErrorOutput());
+        self::assertStringNotContainsString('started:', $this->entrypoint->getErrorOutput());
+    }
+
     /**
      * @param list<string>          $command
      * @param array<string, string> $environment
@@ -234,9 +248,21 @@ final class EntrypointProcessesTest extends TestCase
         $filesystem = new Filesystem();
 
         foreach (['php', 'frankenphp'] as $name) {
-            $filesystem->dumpFile($programs.'/'.$name, "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\nexec sleep 300\n");
+            $filesystem->dumpFile($programs.'/'.$name, "#!/bin/bash\ncase \"\$*\" in *migrate*|*validate*) exit 0;; esac\nexec sleep 300\n");
             $filesystem->chmod($programs.'/'.$name, 0755);
         }
+
+        return $programs;
+    }
+
+    // Stand-ins that note every start, so a web server or consumer started after the rejection shows in the output.
+    private function stubProgramsWithARejectedCaddyfile(): string
+    {
+        $programs = $this->directory.'/rejecting-stubs';
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\necho \"started: php \$*\" >&2\nexec sleep 300\n");
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) echo '".self::CADDYFILE_REJECTED."' >&2; exit 1;; esac\necho \"started: frankenphp \$*\" >&2\nexec sleep 300\n");
+        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
 
         return $programs;
     }
