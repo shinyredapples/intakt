@@ -37,10 +37,11 @@ final readonly class StartedRounds
         $queued = null;
 
         try {
-            $queued = $this->startUnlessStarted($project, $change, $start);
+            $stored = $this->storedRound($project, $change);
+            $queued = $this->startUnlessStarted($stored, $start);
             $this->ensureStillInTransaction($connection, $queued);
             $this->record($project, $change, $queued);
-            $this->endTheWait($project, $change, $queued);
+            $this->endTheWait($project, $change, $stored);
             $connection->commit();
         } catch (Throwable $failure) {
             $this->undo($connection);
@@ -116,9 +117,9 @@ final readonly class StartedRounds
     /**
      * @param Closure(): QueuedRound $start
      */
-    private function startUnlessStarted(string $project, OpenChange $change, Closure $start): ?QueuedRound
+    private function startUnlessStarted(?StartedRound $stored, Closure $start): ?QueuedRound
     {
-        if ($this->isStarted($project, $change)) {
+        if ($this->isStarted($stored)) {
             return null;
         }
 
@@ -152,10 +153,10 @@ final readonly class StartedRounds
         $this->entities->flush();
     }
 
-    // A returning head whose stale round still owes its queued line stays due, so a later tick starts its fresh round once that line is recorded.
-    private function endTheWait(string $project, OpenChange $change, ?QueuedRound $queued): void
+    // Decided from the same read as the start, because another tick records the owed line without the change lock: a second read could find the line taken and forget the head whose start was just suppressed. The head then stays due, so a later tick starts its fresh round.
+    private function endTheWait(string $project, OpenChange $change, ?StartedRound $stored): void
     {
-        if (!$queued instanceof QueuedRound && $this->awaitsReplacement($project, $change)) {
+        if ($stored instanceof StartedRound && $this->awaitsReplacement($stored)) {
             return;
         }
 
@@ -163,20 +164,17 @@ final readonly class StartedRounds
     }
 
     // A stale round whose queued line is still owed keeps the head started, so the line is recorded before a returning head replaces the row.
-    private function isStarted(string $project, OpenChange $change): bool
+    private function isStarted(?StartedRound $stored): bool
     {
-        $round = $this->storedRound($project, $change);
-
-        return $round instanceof StartedRound && !$this->isReplaceable($round);
+        return $stored instanceof StartedRound && !$this->isReplaceable($stored);
     }
 
-    private function awaitsReplacement(string $project, OpenChange $change): bool
+    private function awaitsReplacement(StartedRound $round): bool
     {
-        $round = $this->storedRound($project, $change);
-
-        return true === $round?->isStale() && $round->owesQueuedLine();
+        return $round->isStale() && $round->owesQueuedLine();
     }
 
+    // Read once per start, so the row this read returns decides both whether the round starts and whether the head stays due.
     private function storedRound(string $project, OpenChange $change): ?StartedRound
     {
         $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);

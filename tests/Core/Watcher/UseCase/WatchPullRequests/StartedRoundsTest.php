@@ -230,6 +230,26 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertCount(1, $this->pending->dueFor('alpha'));
     }
 
+    // The listing lock is released before the heads are looked at, so a second tick records the owed line while the first is inside the start.
+    public function testALineRecordedBetweenTheStartedCheckAndTheEndOfTheWaitKeepsTheHeadDue(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $old = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->markStaleOnce($old, static function (): void {});
+        $this->pending->enqueue('alpha', [$this->green()]);
+        $this->entities->getEventManager()->addEventListener([Events::postLoad], new RecordedOnFirstLoad($this->rounds, $old));
+        $started = 0;
+
+        $this->rounds->startOnce('alpha', $this->green(), static function () use (&$started): QueuedRound {
+            ++$started;
+
+            return RecordingCommandBus::queued(2);
+        });
+
+        self::assertSame(0, $started);
+        self::assertCount(1, $this->pending->dueFor('alpha'));
+    }
+
     public function testADelayedRecorderOfAReplacedRoundDoesNotClaimTheFreshRoundsQueuedLine(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
