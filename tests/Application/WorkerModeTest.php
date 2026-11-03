@@ -177,7 +177,7 @@ final class WorkerModeTest extends TestCase
         self::assertCount(0, $again->filter('.flash-success'));
     }
 
-    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, also after work that was not a request.
+    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request.
     #[NoDiscard]
     private function nextRequestSees(KernelInterface $kernel): WorkerState
     {
