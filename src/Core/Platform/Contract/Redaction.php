@@ -25,17 +25,18 @@ final readonly class Redaction
         // Up to the closing quote, escaped as the opening one is, or the end of the line, because a cut-off text can lose the closing quote; a quote behind more backslashes than the opening one has is part of the value, because a Digest header inside a JSON text holds its response between escaped quotes.
         '~'.self::HEADER.'([\\\\"\']*["\'])'.self::SCHEME.'(?:(?!\3)(?:\\\\+["\']|[^\r\n]))+(?:\3)?~i' => '$1$2$3$4'.self::REDACTED.'$3',
         // To the end of the line, because a Digest header holds its response in the parameters that follow and a value can hold a comma; the scheme is possessive and a value never starts with a bracket, a quote or the > of an arrow, so a value redacted already stays as it is.
-        '~'.self::HEADER.self::SCHEME.'+[^\s"\'\\\\\[,;\]>][^\r\n]*~i' => '$1$2$3'.self::REDACTED,
+        '~'.self::HEADER.self::SCHEME.'+(?!array\s*\()[^\s"\'\\\\\[,;\]>][^\r\n]*~i' => '$1$2$3'.self::REDACTED,
+        // A list value up to the ) indented as its (, or the end of the text, because its credentials are on the lines below the arrow and a value can hold a ).
+        '~\b('.self::CREDENTIAL_NAMES.')((?:[\\\\"\']+|\])?\s*=>\h*)(?|\h*\R(\h*)array\h*|Array\h*\R(\h*)|()array\h*)\((?:.*?\R\3\)|.*)~is' => '$1$2'.self::REDACTED,
         '~-----BEGIN[A-Z ]*PRIVATE KEY-----.*?-----END[A-Z ]*PRIVATE KEY-----~s' => self::REDACTED,
         '~\b(?:gh[opsur]_[A-Za-z0-9]{36,}|github_pat_\w{22,}|sk-[\w-]{20,}|eyJ[\w-]+\.eyJ[\w-]+\.[\w-]+)~' => self::REDACTED,
     ];
 
-    /** @var list<string> */
-    private array $credentials;
+    private ?string $credentials;
 
     public function __construct(#[SensitiveParameter] string ...$credentials)
     {
-        $this->credentials = array_values(array_unique(array_merge(...array_map($this->spellings(...), array_values($credentials)))));
+        $this->credentials = $this->patternOf(array_values($credentials));
     }
 
     public function of(string $text): string
@@ -51,23 +52,45 @@ final readonly class Redaction
         return 1 === preg_match('~^(?:'.self::CREDENTIAL_NAMES.')$~i', $name);
     }
 
-    // Escaped too, because a credential inside a JSON text (a logged request body) is written with its quotes and slashes escaped.
     /**
-     * @return list<string>
+     * @param list<string> $credentials
      */
-    private function spellings(#[SensitiveParameter] string $credential): array
+    private function patternOf(#[SensitiveParameter] array $credentials): ?string
     {
-        return [
-            $credential,
-            substr(json_encode($credential, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), 1, -1),
-            substr(json_encode($credential, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 1, -1),
-        ];
+        $credentials = array_unique(array_filter($credentials, static fn (string $credential): bool => '' !== $credential));
+        if ([] === $credentials) {
+            return null;
+        }
+        // Longest first, so a credential that contains another is redacted whole.
+        usort($credentials, static fn (string $one, string $other): int => strlen($other) <=> strlen($one));
+
+        return '~'.implode('|', array_map($this->atAnyEscapingDepth(...), $credentials)).'~';
+    }
+
+    // Each character JSON escapes may follow any run of backslashes, because a credential inside JSON inside JSON (a logged request body) is escaped once more at each level.
+    private function atAnyEscapingDepth(#[SensitiveParameter] string $credential): string
+    {
+        return implode('', array_map($this->characterAtAnyEscapingDepth(...), mb_str_split($credential, 1, 'UTF-8')));
+    }
+
+    private function characterAtAnyEscapingDepth(#[SensitiveParameter] string $character): string
+    {
+        $escaped = substr(json_encode($character, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE), 1, -1);
+        if ($escaped === $character) {
+            return preg_quote($character, '~');
+        }
+
+        return '(?:'.preg_quote($character, '~').'|\\\\+'.preg_quote(substr($escaped, 1), '~').')';
     }
 
     private function withoutCredentials(string $text): string
     {
-        // strtr replaces the longest value first, so a credential that contains another is redacted whole.
-        return strtr($text, array_fill_keys($this->credentials, self::REDACTED));
+        if (null === $this->credentials) {
+            return $text;
+        }
+
+        // Redacted whole when the pattern fails, because such a text could still hold a credential.
+        return preg_replace($this->credentials, self::REDACTED, $text) ?? self::REDACTED;
     }
 
     private function withoutSecretShapes(string $text): string

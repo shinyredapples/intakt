@@ -32,6 +32,23 @@ final class RedactionTest extends TestCase
     }
 
     /**
+     * @return iterable<string, array{int}>
+     */
+    public static function encodingDepths(): iterable
+    {
+        yield 'JSON inside JSON' => [2];
+        yield 'JSON inside JSON inside JSON' => [3];
+    }
+
+    #[DataProvider('encodingDepths')]
+    public function testItRedactsACredentialItHoldsAtAnyJsonEncodingDepth(int $depth): void
+    {
+        $credential = "pri\"vate/cre\\dential\nkey";
+
+        self::assertSame($this->encoded('[redacted]', $depth), new Redaction($credential)->of($this->encoded($credential, $depth)));
+    }
+
+    /**
      * @return iterable<string, array{string, string}>
      */
     public static function textsWithSecrets(): iterable
@@ -60,6 +77,10 @@ final class RedactionTest extends TestCase
         yield 'a Digest authorization header in a JSON text' => [json_encode(['Authorization' => 'Digest username="alice", response="r3sponse"'], JSON_THROW_ON_ERROR), '{"Authorization":"Digest [redacted]"}'];
         yield 'a header value with an escaped quote in a JSON text' => [json_encode(['Authorization' => 'Bearer ab"c123'], JSON_THROW_ON_ERROR), '{"Authorization":"Bearer [redacted]"}'];
         yield 'a header in JSON inside JSON inside JSON' => ['{\\\"Authorization\\\":\\\"Bearer abc123\\\",\\\"Accept\\\":\\\"json\\\"}', '{\\\"Authorization\\\":\\\"Bearer [redacted]\\\",\\\"Accept\\\":\\\"json\\\"}'];
+        yield 'a header with a list value in print_r output' => [print_r(['Authorization' => ['Bearer abc123'], 'Accept' => 'json'], true), "Array\n(\n    [Authorization] => [redacted]\n\n    [Accept] => json\n)\n"];
+        yield 'a header with a list value in var_export output' => [var_export(['Authorization' => ['Bearer abc123'], 'Accept' => 'json'], true), "array (\n  'Authorization' => [redacted],\n  'Accept' => 'json',\n)"];
+        yield 'a header with a nested list value in print_r output' => [print_r(['Authorization' => [['Bearer abc)123'], 'Bearer def456']], true), "Array\n(\n    [Authorization] => [redacted]\n\n)\n"];
+        yield 'a header with a list value in print_r output that was cut off' => ["[Authorization] => Array\n    (\n        [0] => Bearer abc123\n", '[Authorization] => [redacted]'];
         yield 'a URL with a slash in its password' => ['https://alice:pa/ss@example.com/r', 'https://[redacted]@example.com/r'];
         yield 'a URL with a # in its password' => ['https://alice:pa#ss@example.com/r', 'https://[redacted]@example.com/r'];
         yield 'a URL with escaped slashes in JSON' => ['{"url":"https:\/\/alice:hunter2@example.com\/repo"}', '{"url":"https:\/\/[redacted]@example.com\/repo"}'];
@@ -103,5 +124,15 @@ final class RedactionTest extends TestCase
     public function testAnotherHeaderNamesNoCredential(): void
     {
         self::assertFalse(new Redaction()->namesACredential('authorization-step'));
+    }
+
+    private function encoded(string $password, int $depth): string
+    {
+        $text = ['password' => $password];
+        for ($level = 0; $level < $depth; ++$level) {
+            $text = json_encode($text, JSON_THROW_ON_ERROR);
+        }
+
+        return $text;
     }
 }
