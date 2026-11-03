@@ -1,0 +1,31 @@
+{
+    "interactions": [
+        {
+            "request": {
+                "method": "POST",
+                "url": "https://localhost/v1/chat/completions",
+                "signature": "d65298aeb9509cfa77472184b042f5d5",
+                "signature_v2": "476e6806a39755db57cd64f4e74239a9",
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ],
+                    "authorization": [
+                        "[redacted]"
+                    ]
+                },
+                "body": "{\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"Plan\",\"schema\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]},\"steps\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]}},\"required\":[\"title\",\"priority\"],\"additionalProperties\":false}}},\"required\":[\"name\",\"priority\",\"steps\"],\"additionalProperties\":false},\"strict\":true}},\"messages\":[{\"role\":\"user\",\"content\":\"Plan the release.\"}],\"model\":\"local-model\"}"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ]
+                },
+                "body_format": "json",
+                "body": "{\"id\":\"chatcmpl-probe\",\"object\":\"chat.completion\",\"model\":\"local-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"name\\\":\\\"ship\\\",\\\"priority\\\":\\\"high\\\",\\\"steps\\\":[{\\\"title\\\":\\\"build\\\",\\\"priority\\\":\\\"low\\\"},{\\\"title\\\":\\\"test\\\",\\\"priority\\\":\\\"high\\\"}]}\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":40,\"total_tokens\":52}}"
+            }
+        }
+    ]
+}
