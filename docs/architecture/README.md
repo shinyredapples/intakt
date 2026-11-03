@@ -14,9 +14,14 @@ src/
     UseCase/<Name>/     one use case and its doors (command, controller, handler, MCP tool)
     Infrastructure/     adapters
 config/modules.php      the module list; a test keeps it equal to the directories
+fixtures/sample-repository/   plain files for the demo, see below
 ```
 
 The Notifier, WorkSource and Gate contracts are empty for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)). The Forge contract has the methods for reading a change and, apart from them, the one write so far; see below.
+
+## Sample repository
+
+`fixtures/sample-repository/` is data, not code, and no module uses it yet. `base/` is the tree of the base commit; `pull-request/` holds only the files the branch adds or changes. `issues.json` lists each deliberate issue (`id`, `kind` of bug, missing-test or security, `file`, `description`, and an `evidence` line that appears as an added line in the change). `SampleRepositoryTest` builds the repository with the test `TemporaryRepository` (base on `main`, then the overlay on `sample-change`) and checks that every listed issue is in the diff. It is JavaScript so the PHP gates do not scan it.
 
 ## Forge contract and the local git forge
 
