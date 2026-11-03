@@ -12,8 +12,8 @@ final class PersistenceEnginesTest extends SandboxTestCase
 {
     private const string SCRIPT = __DIR__.'/../../.github/ci/persistence-engines.sh';
 
-    // The fake docker stands in for one engine's test run: it notes when it started and ended, keyed by the network it
-    // was given, and exits with the code a fail.<network> file names.
+    // A fake docker, because the real engines need the runner's service containers: it notes when each engine started
+    // and ended so the test can prove they overlap, and exits with the code a fail.<network> file names.
     private const string FAKE_DOCKER = <<<'BASH'
         #!/usr/bin/env bash
         while [ "$#" -gt 0 ]; do
@@ -69,7 +69,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
         return $sandbox;
     }
 
-    // Under the runner's own shell options (bash -e with pipefail), as the workflow step runs it.
+    // Under the runner's own shell options (bash -e with pipefail), because under -e a failing engine once lost its exit code.
     private function runEngines(Sandbox $sandbox): ProcessResult
     {
         return $sandbox->runScript(
