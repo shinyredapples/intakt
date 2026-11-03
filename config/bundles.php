@@ -10,6 +10,8 @@ use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\MercureBundle\MercureBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
+use Symfony\UX\StimulusBundle\StimulusBundle;
+use Symfony\UX\Turbo\TurboBundle;
 
 return [
     FrameworkBundle::class => ['all' => true],
@@ -20,4 +22,6 @@ return [
     SecurityBundle::class => ['all' => true],
     TwigBundle::class => ['all' => true],
     MercureBundle::class => ['all' => true],
+    StimulusBundle::class => ['all' => true],
+    TurboBundle::class => ['all' => true],
 ];

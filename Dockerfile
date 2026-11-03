@@ -14,6 +14,8 @@ RUN composer install --no-dev --no-scripts --no-autoloader --no-interaction
 
 COPY . .
 RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
+    && APP_ENV=prod php bin/console importmap:install --no-debug \
+    && APP_ENV=prod php bin/console asset-map:compile --no-debug \
     && APP_ENV=prod php bin/console cache:warmup --no-debug
 
 FROM base

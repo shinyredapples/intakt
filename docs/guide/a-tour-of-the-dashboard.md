@@ -4,7 +4,7 @@ The dashboard is a board in your browser that shows everything Intakt is doing, 
 
 ## What you can open today
 
-Three plain pages are built. They show what Intakt has written down about its reviews, and they never refresh by themselves: reload the page to see news.
+Three pages are built. They show what Intakt has written down about its reviews. The lists never refresh by themselves: reload them to see news. The page of a review that is still running updates by itself while the round goes on, and if the live connection is down it simply shows what is written down when you reload.
 
 - **Projects** (`/projects`): one row per project that has had a review, with how many review rounds it has had and how many of them reached the judge.
 - **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only. Click a round to open its review.
@@ -48,7 +48,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 | CI | GitHub hasn't finished the checks yet |
 | on hold | it needs something outside the task; it comes back by itself |
 
-**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. *(in progress: Intakt already sends a running review's tool calls, its progress and the judge's result live; each reviewer's text shows up as they write it, a few times a second, with the last bit as soon as they finish, and the page that shows all this without a reload is planned)* Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
+**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. *(in progress: a running review's page already shows its progress, the reviewers' tool calls and their text as they write it live, and keeps working from a reload when the live updates are down; the buttons are planned)* Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
 
 ## Waiting on you
 

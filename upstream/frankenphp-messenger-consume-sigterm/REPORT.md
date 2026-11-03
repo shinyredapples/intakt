@@ -14,7 +14,7 @@ Run: `vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php upst
 ## Actual
 
 - Plain `php`: exit code 0, the message is handled.
-- `frankenphp php-cli`: exit code 139 (SIGSEGV) after SIGTERM, with the handler in flight and also with an idle consumer (no message at all; three of three runs by hand). The message in flight is still handled before the crash in the test, so nothing is lost, but a supervisor sees a crash.
+- `frankenphp php-cli`: exit code 139 (SIGSEGV) after SIGTERM, with the handler in flight and also with an idle consumer (no message at all; the test case `testTheIdleConsumerStopsWithExitCodeZeroOnSigterm`). The message in flight is still handled before the crash in the test, so nothing is lost, but a supervisor sees a crash.
 
 ## Expected
 
