@@ -68,6 +68,71 @@ final class CaddyfileTest extends TestCase
         self::assertSame(['localhost:2019'], (array) $this->at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'admin', 'listen'));
     }
 
+    public function testTheAppWorkerRunsTheFrontControllerInWorkerMode(): void
+    {
+        $worker = $this->worker('app');
+
+        self::assertSame('public/index.php', $worker['file_name'] ?? null);
+        self::assertSame('1', $this->at($worker, 'env', 'FRANKENPHP_WORKER'));
+        self::assertArrayNotHasKey('match_path', $worker);
+    }
+
+    public function testTheMcpWorkerMatchesTheMcpRoutesWithItsOwnThreadLimits(): void
+    {
+        $worker = $this->worker('mcp');
+
+        self::assertSame(['/mcp/*'], $worker['match_path'] ?? null);
+        self::assertSame(8, $worker['max_threads'] ?? null);
+        self::assertSame(2, $worker['num'] ?? null);
+        self::assertSame('1', $this->at($worker, 'env', 'FRANKENPHP_WORKER'));
+    }
+
+    public function testTheWorkersUseDifferentFilesBecauseFrankenphpRefusesTwoOnOne(): void
+    {
+        self::assertNotSame($this->worker('app')['file_name'] ?? null, $this->worker('mcp')['file_name'] ?? null);
+    }
+
+    public function testRequestsWaitForAWorkerForAtMostThirtySeconds(): void
+    {
+        self::assertSame(30_000_000_000, $this->at($this->adapted('--envfile', '.env.local', '--envfile', '.env'), 'apps', 'frankenphp', 'max_wait_time'));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function worker(string $name): array
+    {
+        $found = $this->workerIn($this->adapted('--envfile', '.env.local', '--envfile', '.env'), $name);
+        self::assertNotNull($found, sprintf('No worker named %s.', $name));
+
+        return $found;
+    }
+
+    /**
+     * @param array<mixed> $config
+     *
+     * @return array<mixed>|null
+     */
+    // Searched, because the route nesting is Caddy's choice.
+    private function workerIn(array $config, string $name): ?array
+    {
+        foreach (array_filter((array) ($config['workers'] ?? []), is_array(...)) as $worker) {
+            if (($worker['name'] ?? null) === $name) {
+                return $worker;
+            }
+        }
+
+        foreach (array_filter($config, is_array(...)) as $nested) {
+            $worker = $this->workerIn($nested, $name);
+
+            if (null !== $worker) {
+                return $worker;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @return array<mixed>
      */
