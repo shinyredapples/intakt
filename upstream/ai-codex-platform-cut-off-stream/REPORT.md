@@ -28,3 +28,4 @@ Checked on 2026-11-02.
 - **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #2475 (closed pull request, adds the usage of `turn.completed` to streamed results only), #2579 (open question about a commentary channel), #1826 (closed pull request that added the bridge).
 - **Searches** (`symfony/ai` issues and pull requests, open and closed): `turn.completed`, `Codex agent_message`, `label:Platform Codex`, `IncompleteStreamException`.
 - **Decision:** `ready to file`.
+- **Fix pull request:** `issue only`. The change breaks backward compatibility: the bridge's converter tests hand it a bare `agent_message` without `turn.completed` and expect a `TextResult`, and the streamed path needs the same rule, so the maintainers should choose where the check lives. Open pull requests (checked 2026-11-03 against `main` 17d320e7beee): none fixes it; #2713 and #2719 edit the bridge's `RawProcessResult` and `ModelClient` for other reasons.

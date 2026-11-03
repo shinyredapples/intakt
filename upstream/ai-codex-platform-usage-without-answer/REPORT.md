@@ -28,3 +28,4 @@ Checked on 2026-11-02.
 - **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #2475 (closed pull request, usage of `turn.completed` for streamed results), #2625 (closed issue, usage summed twice in Generic chat-completions streams), #2343 (closed pull request, cached tokens for Mistral).
 - **Searches** (`symfony/ai` issues and pull requests, open and closed): `Codex TokenUsageExtractor`, `Codex usage`, `turn.completed`, `label:Platform Codex`.
 - **Decision:** `ready to file`.
+- **Fix pull request:** `issue only`. The expected behavior is in doubt: the converter must still fail on a turn without an answer, and it throws before the usage extractor runs, so the usage is reachable only for a caller that handles that failure itself. Open pull requests (checked 2026-11-03 against `main` 17d320e7beee): none fixes it; #2713 and #2719 edit the bridge's `RawProcessResult` and `ModelClient` for other reasons.

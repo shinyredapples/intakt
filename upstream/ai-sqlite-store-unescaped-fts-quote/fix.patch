@@ -1,0 +1,100 @@
+From 31bc5c7a933593870ff6cb69818e5b7d590d2c89 Mon Sep 17 00:00:00 2001
+From: Intakt Builder <builder@localhost>
+Date: Tue, 3 Nov 2026 00:51:11 +0000
+Subject: [PATCH] [Store][Sqlite] Escape double quotes in full-text search
+ terms
+
+Both stores wrap each text query term in double quotes to make it an FTS5 phrase, but a double quote inside the term ended the phrase early and made the query fail with a syntax error. A quote is now doubled, as FTS5 phrases require.
+---
+ src/store/src/Bridge/Sqlite/Store.php         |  2 +-
+ .../src/Bridge/Sqlite/Tests/StoreTest.php     | 16 ++++++++++++++
+ .../src/Bridge/Sqlite/Tests/VecStoreTest.php  | 22 +++++++++++++++++++
+ src/store/src/Bridge/Sqlite/VecStore.php      |  2 +-
+ 4 files changed, 40 insertions(+), 2 deletions(-)
+
+diff --git a/src/store/src/Bridge/Sqlite/Store.php b/src/store/src/Bridge/Sqlite/Store.php
+index e7f0efb4b546..5fae79d82d45 100644
+--- a/src/store/src/Bridge/Sqlite/Store.php
++++ b/src/store/src/Bridge/Sqlite/Store.php
+@@ -259,7 +259,7 @@ final class Store implements ManagedStoreInterface, StoreInterface
+     private function queryText(TextQuery $query, array $options): iterable
+     {
+         $searchTerms = $query->getTexts();
+-        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.$term.'"', $searchTerms));
++        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.str_replace('"', '""', $term).'"', $searchTerms));
+ 
+         $sql = \sprintf(
+             'SELECT id, rank FROM %s_fts WHERE %s_fts MATCH :query ORDER BY rank',
+diff --git a/src/store/src/Bridge/Sqlite/Tests/StoreTest.php b/src/store/src/Bridge/Sqlite/Tests/StoreTest.php
+index b59240b633b3..3c8e0a28d977 100644
+--- a/src/store/src/Bridge/Sqlite/Tests/StoreTest.php
++++ b/src/store/src/Bridge/Sqlite/Tests/StoreTest.php
+@@ -331,6 +331,22 @@ final class StoreTest extends TestCase
+         $this->assertCount(0, $results);
+     }
+ 
++    public function testQueryTextEscapesDoubleQuotesInTerms()
++    {
++        $store = $this->createStore();
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'quoted']);
++        $metadata->setText('The file src/Quote"d.php is edited');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery('src/Quote"d.php')));
++
++        $this->assertCount(1, $results);
++        $this->assertSame('doc-1', $results[0]->getId());
++    }
++
+     public function testQueryHybrid()
+     {
+         $store = $this->createStore();
+diff --git a/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php b/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php
+index a1befddd0f63..59910f1a0797 100644
+--- a/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php
++++ b/src/store/src/Bridge/Sqlite/Tests/VecStoreTest.php
+@@ -353,6 +353,28 @@ final class VecStoreTest extends TestCase
+         $this->assertSame('doc-2', $results[0]->getId());
+     }
+ 
++    public function testQueryTextEscapesDoubleQuotesInTerms()
++    {
++        $pdo = $this->createPdo();
++
++        if (!VecStore::isExtensionAvailable($pdo)) {
++            $this->markTestSkipped('sqlite-vec extension is not available.');
++        }
++
++        $store = new VecStore($pdo, 'test_vectors', Metric::Cosine, 3);
++        $store->setup();
++
++        $metadata = new Metadata(['name' => 'quoted']);
++        $metadata->setText('The file src/Quote"d.php is edited');
++
++        $store->add(new VectorDocument('doc-1', new Vector([0.1, 0.2, 0.3]), $metadata));
++
++        $results = iterator_to_array($store->query(new TextQuery('src/Quote"d.php')));
++
++        $this->assertCount(1, $results);
++        $this->assertSame('doc-1', $results[0]->getId());
++    }
++
+     public function testQueryHybrid()
+     {
+         $pdo = $this->createPdo();
+diff --git a/src/store/src/Bridge/Sqlite/VecStore.php b/src/store/src/Bridge/Sqlite/VecStore.php
+index 5cf16fc5e7d5..c9406fabccee 100644
+--- a/src/store/src/Bridge/Sqlite/VecStore.php
++++ b/src/store/src/Bridge/Sqlite/VecStore.php
+@@ -321,7 +321,7 @@ final class VecStore implements ManagedStoreInterface, StoreInterface
+     private function queryText(TextQuery $query, array $options): iterable
+     {
+         $searchTerms = $query->getTexts();
+-        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.$term.'"', $searchTerms));
++        $ftsQuery = implode(' OR ', array_map(static fn (string $term): string => '"'.str_replace('"', '""', $term).'"', $searchTerms));
+ 
+         $sql = \sprintf(
+             'SELECT id, rank FROM %s_fts WHERE %s_fts MATCH :query ORDER BY rank',
