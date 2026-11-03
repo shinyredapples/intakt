@@ -58,8 +58,9 @@ jobs:
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
           # The home directory (the working copy, vendor/) and /tmp are tmpfs: the copy and the tests' files never touch the
           # runner's disk. Composer's cache (COMPOSER_CACHE_DIR) is the runner's intakt-composer-cache volume, mounted read-only
-          # (COMPOSER_CACHE_READ_ONLY) so a pull request's job cannot plant archives for a later job: empty unless the runner's
-          # clean state provides it filled for the default branch's lock, so Composer downloads what it lacks, as before.
+          # (COMPOSER_CACHE_READ_ONLY) so main's own jobs never write to it by accident; a pull request runs its own ci.yml and
+          # could drop :ro, so only the runner's clean state per job keeps a planted archive from a later job. Empty unless
+          # that clean state provides it filled for the default branch's lock, so Composer downloads what it lacks, as before.
           docker run --rm --user 1000:1000 \
             --security-opt seccomp=.github/ci/seccomp-userns.json \
             --security-opt systempaths=unconfined \
