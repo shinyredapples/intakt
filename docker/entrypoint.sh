@@ -31,8 +31,22 @@ start() {
 stop_all() {
     trap - TERM INT
     kill -TERM "${!running[@]}" 2>/dev/null || true
+    # A consumer ignores SIGTERM until its worker exists (upstream/messenger-consume-ignores-early-sigterm), so what still runs after a grace period inside Docker's 10 s stop timeout is killed.
+    for _ in {1..80}; do
+        any_running || break
+        sleep 0.1
+    done
+    kill -KILL "${!running[@]}" 2>/dev/null || true
     wait
     exit "$1"
+}
+
+any_running() {
+    local pid
+    for pid in "${!running[@]}"; do
+        kill -0 "$pid" 2>/dev/null && return 0
+    done
+    return 1
 }
 
 trap 'stop_all 0' TERM INT

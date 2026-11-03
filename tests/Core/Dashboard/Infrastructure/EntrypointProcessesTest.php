@@ -53,6 +53,7 @@ final class EntrypointProcessesTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
         $this->entrypoint->stop(15);
         new Filesystem()->remove($this->directory);
     }
@@ -101,6 +102,21 @@ final class EntrypointProcessesTest extends TestCase
     public function testStoppingTheEntrypointStopsEveryProcess(): void
     {
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
+
+        $this->entrypoint->signal(SIGTERM);
+        $this->entrypoint->wait();
+
+        self::assertSame(0, $this->entrypoint->getExitCode());
+        self::assertSame([], array_filter(array_keys($processes), static fn (int $pid): bool => file_exists('/proc/'.$pid)));
+    }
+
+    public function testAConsumerThatDoesNotStopOnSigtermIsKilledSoTheEntrypointEnds(): void
+    {
+        $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
+        // A stopped process cannot act on SIGTERM, like a consumer whose SIGTERM arrived before its worker existed (upstream/messenger-consume-ignores-early-sigterm).
+        posix_kill((int) array_search('async', $processes, true), SIGSTOP);
+        // Without the grace period the entrypoint waits for that consumer forever; the timeout turns this into a failure.
+        $this->entrypoint->setTimeout(self::SECONDS_TO_WAIT * 2);
 
         $this->entrypoint->signal(SIGTERM);
         $this->entrypoint->wait();
