@@ -15,7 +15,7 @@ final class UnassertedErrorLogExtension implements ChildProcessExtension
     public function bootstrap(Configuration $configuration, Facade $facade, ParameterCollection $parameters): void
     {
         $records = LogRecords::startRun();
-        $facade->registerSubscribers(new WarnOnUnassertedErrors($records), new DiscardLogRecords($records));
+        $facade->registerSubscribers(new WarnOnUnassertedErrors($records), new WarnOnErrorsAfterASuite($records), new WarnOnErrorsAfterTheRun($records));
     }
 
     // An isolated test logs in its own process, so that process checks its own records.

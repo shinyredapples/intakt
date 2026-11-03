@@ -110,7 +110,9 @@ final class FailedMessageTest extends KernelTestCase
 
         self::assertCount(1, $failed->getSent());
         self::assertCount(1, $incoming->getRejected());
-        self::assertSame(['error'], array_column($this->fixture->log->cleanLogs(), 0));
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $this->fixture->log->cleanLogs();
+        self::assertSame([['error', 'The reviewer of a failed message was not blocked; its message stays in the failure transport.']], array_map(static fn (array $log): array => [$log[0], $log[1]], $logs));
     }
 
     public function testAFailedMessageThatWillStillBeRetriedLeavesTheReviewerAsItWas(): void

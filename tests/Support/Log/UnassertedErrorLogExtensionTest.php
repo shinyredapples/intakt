@@ -11,6 +11,8 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(UnassertedErrorLogExtension::class)]
 #[CoversClass(WarnOnUnassertedErrors::class)]
+#[CoversClass(WarnOnErrorsAfterASuite::class)]
+#[CoversClass(WarnOnErrorsAfterTheRun::class)]
 #[UsesClass(LogRecords::class)]
 #[UsesClass(RecordingLogger::class)]
 final class UnassertedErrorLogExtensionTest extends TestCase
@@ -40,10 +42,40 @@ final class UnassertedErrorLogExtensionTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $run->getOutput());
     }
 
-    private function runFixture(string $file): Process
+    public function testAnErrorLoggedAfterTheLastTestOfAClassFailsTheRunNamingTheRecordAndTheClass(): void
+    {
+        $run = $this->runFixture('LogsAnErrorAfterItsTestsFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('Unasserted error log record after the tests of Intakt\Tests\Support\Log\Fixtures\LogsAnErrorAfterItsTestsFixture: "Disk on fire after the tests."', $run->getOutput());
+    }
+
+    public function testAnErrorLoggedAfterTheLastTestOfAClassIsNotBlamedOnTheNextClass(): void
+    {
+        $run = $this->runFixture('LogsAnErrorAfterItsTestsFixture.php', 'LogsAWarningFixture.php');
+
+        self::assertStringContainsString('after the tests of Intakt\Tests\Support\Log\Fixtures\LogsAnErrorAfterItsTestsFixture', $run->getOutput());
+        self::assertStringNotContainsString('LogsAWarningFixture::testItLogsOnlyAWarning', $run->getOutput());
+    }
+
+    public function testAnErrorLoggedAfterTheLastTestSuiteFailsTheRunNamingTheRecord(): void
+    {
+        $run = $this->runFixtureWith('phpunit-logs-after-the-last-suite.xml', 'LogsAWarningFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('Unasserted error log record after the last test suite: "Disk on fire after the last suite."', $run->getOutput());
+    }
+
+    private function runFixture(string ...$files): Process
+    {
+        return $this->runFixtureWith('phpunit.xml', ...$files);
+    }
+
+    private function runFixtureWith(string $configuration, string ...$files): Process
     {
         $root = dirname(__DIR__, 3);
-        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--configuration', __DIR__.'/Fixtures/phpunit.xml', __DIR__.'/Fixtures/'.$file], $root);
+        $tests = array_map(static fn (string $file): string => __DIR__.'/Fixtures/'.$file, $files);
+        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--configuration', __DIR__.'/Fixtures/'.$configuration, ...$tests], $root);
         $run->run();
 
         return $run;
