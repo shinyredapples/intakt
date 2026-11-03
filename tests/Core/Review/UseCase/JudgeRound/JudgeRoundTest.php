@@ -26,7 +26,9 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeLimited;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\QueueJudgingOfCompletedRound;
+use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -46,6 +48,8 @@ use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(JudgeRoundHandler::class)]
+#[CoversClass(PublishJudgedRound::class)]
+#[UsesClass(LiveRoundProgress::class)]
 #[CoversClass(JudgeRound::class)]
 #[CoversClass(JudgedRounds::class)]
 #[CoversClass(JudgeLimited::class)]
@@ -118,6 +122,36 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(RoundState::Judged, $this->fixture->round($round->id()->toRfc4122())->state());
+    }
+
+    public function testAReviewerThatFinishesPublishesHowManyOfTheRoundAreIn(): void
+    {
+        $round = $this->fixture->start(2);
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
+
+        self::assertSame([sprintf('round %s 1/2', $round->id()->toRfc4122())], $this->fixture->updates->seen);
+    }
+
+    public function testAJudgedRoundPublishesItsFinalState(): void
+    {
+        $round = $this->completedRound();
+        $this->fixture->updates->seen = [];
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame([sprintf('round %s 2/2 judged', $round->id()->toRfc4122())], $this->fixture->updates->seen);
+    }
+
+    public function testAReviewerMessageDeliveredAgainAfterTheJudgeStillShowsTheRoundJudged(): void
+    {
+        $round = $this->completedRound();
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+        $this->fixture->updates->seen = [];
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
+
+        self::assertSame([sprintf('round %s 2/2 judged', $round->id()->toRfc4122())], $this->fixture->updates->seen);
     }
 
     public function testAJudgedRoundAnnouncesTheCheckoutItsReviewersRead(): void

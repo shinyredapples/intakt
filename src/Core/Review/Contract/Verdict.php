@@ -12,7 +12,9 @@ final readonly class Verdict
     public const string INVALID_OUTPUT = 'invalid-output';
     public const string INCOMPLETE_STREAM = 'incomplete-stream';
     public const string UNREAD_APPROVAL = 'unread-approval';
-    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL];
+    public const string NO_TOOLS = 'no-tools';
+    public const string CUT_APPROVAL = 'cut-approval';
+    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL];
 
     /**
      * @param list<Finding> $findings
@@ -90,6 +92,42 @@ final readonly class Verdict
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that could read the change.',
+            evidence: null,
+        );
+
+        return new self(Decision::Blocked, [$finding], [], []);
+    }
+
+    public static function cutApproval(): self
+    {
+        $finding = new Finding(
+            id: self::CUT_APPROVAL,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'The reviewer approved a change whose task, diff or a tool answer Intakt cut to its size limit, and nothing shows that it read the part left out, so the approval is refused and the review is blocked.',
+            fixable_by: FixableBy::Owner,
+            repeat: false,
+            requirement: 'An approval counts only from a reviewer that was shown the whole change.',
+            evidence: null,
+        );
+
+        return new self(Decision::Blocked, [$finding], [], []);
+    }
+
+    public static function noTools(): self
+    {
+        $finding = new Finding(
+            id: self::NO_TOOLS,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'The reviewer had no tools to read the change (the review server could not be reached, listed none or was lost during the review), so it did not review and the review is blocked.',
+            fixable_by: FixableBy::Owner,
+            repeat: false,
+            requirement: 'A reviewer judges only a change it can read.',
             evidence: null,
         );
 

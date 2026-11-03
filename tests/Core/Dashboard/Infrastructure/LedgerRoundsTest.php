@@ -20,7 +20,9 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Shadow\Contract\ProjectMode;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
@@ -37,6 +39,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(TokenCount::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(LedgerEvent::class)]
+#[UsesClass(ProjectMode::class)]
 final class LedgerRoundsTest extends TestCase
 {
     private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
@@ -80,6 +83,30 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
+    }
+
+    #[DataProvider('modes')]
+    public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::VerdictReceived, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard","decision":"approve","findings":0'.$field.'}'),
+        );
+
+        self::assertSame($expected, $review?->rounds[0]->outcomes[0]->mode);
+    }
+
+    /**
+     * @return iterable<string, array{string, ProjectMode}>
+     */
+    public static function modes(): iterable
+    {
+        yield 'shadow' => [',"mode":"shadow"', ProjectMode::Shadow];
+        yield 'live' => [',"mode":"live"', ProjectMode::Live];
+        yield 'recorded before the field existed' => ['', ProjectMode::Live];
+        yield 'unknown value' => [',"mode":"other"', ProjectMode::Live];
+        yield 'not a string' => [',"mode":3', ProjectMode::Live];
     }
 
     public function testAnEventOfAnotherKindWithReviewerFieldsAddsNoReviewer(): void

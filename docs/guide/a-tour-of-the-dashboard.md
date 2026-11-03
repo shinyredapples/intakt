@@ -8,7 +8,7 @@ Three plain pages are built. They show what Intakt has written down about its re
 
 - **Projects** (`/projects`): one row per project that has had a review, with how many review rounds it has had and how many of them reached the judge.
 - **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only. Click a round to open its review.
-- **One review** (`/reviews/` and the round's id): every round of that change, one after the other. For each round you see the reviewers and what each one said (approve, changes or blocked, and how many problems it found, or why it failed), the problems themselves with their short ids (`F1`, `F2`, ...), what the judge decided about each one (fix it now, a follow-up for later, or not acted on), and how many tokens the AI calls of the round used. The cost says "no price" for now, because Intakt has no price list yet and never guesses one. A round reviewed before Intakt started keeping the text of the problems says so, and still shows the ids the judge picked and what it decided about them.
+- **One review** (`/reviews/` and the round's id): every round of that change, one after the other. For each round you see the reviewers and what each one said (approve, changes or blocked, and how many problems it found, or why it failed; a verdict from a project in shadow mode carries a "(shadow)" label, because it never counts toward a merge), the problems themselves with their short ids (`F1`, `F2`, ...), what the judge decided about each one (fix it now, a follow-up for later, or not acted on), and how many tokens the AI calls of the round used. The cost says "no price" for now, because Intakt has no price list yet and never guesses one. A round reviewed before Intakt started keeping the text of the problems says so, and still shows the ids the judge picked and what it decided about them.
 
 The pages only answer when you open them on the computer Intakt runs on (`localhost` and the dashboard's port, 7780 unless you changed it); any other address gets an error page and none of your data. A change that is reviewed twice shows as two rows on the review list, and both open the same review. A review page has a button that starts the change's next round on its newest commit, using the repository and task Intakt noted when the last round started; for rounds from before it noted them, the page says so instead. Pressing it twice, or on a page that is out of date, starts only one round and tells you so. The copy of your code the reviewers read is deleted once the round is judged. Today the button needs no login (the owner login is planned), so only reach the dashboard from the computer itself. The board below is still planned.
 
@@ -48,7 +48,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 | CI | GitHub hasn't finished the checks yet |
 | on hold | it needs something outside the task; it comes back by itself |
 
-**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
+**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. *(in progress: Intakt already sends a running review's tool calls, its progress and the judge's result live; the reviewers' text as they write it comes with #644, and the page that shows all this without a reload is planned)* Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
 
 ## Waiting on you
 
@@ -91,6 +91,7 @@ flowchart TD
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
+- **Rework** (planned): per project, how many tokens one merged change costs and how much of them went into fixing changes the reviewers sent back, so you can see whether the checks before review pay off.
 - **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.
 
 ## Steering budgets and pauses

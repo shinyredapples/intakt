@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Generator;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
@@ -36,14 +37,22 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
+use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\Infrastructure\ToolsOfRound;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Kernel;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
@@ -59,9 +68,11 @@ use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Mcp\Contract\KernelHttpClient;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -74,6 +85,8 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\BadRequestException;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
@@ -83,6 +96,8 @@ use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
@@ -130,9 +145,16 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Evidence::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(StrictVerdictConverter::class)]
+#[UsesClass(StrictVerdictStreamListener::class)]
+#[UsesClass(FinalStreamedUsage::class)]
 #[UsesClass(ReviewerAgent::class)]
+#[UsesClass(ReviewerRuns::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
+#[UsesClass(ReviewerMcpToolboxFactory::class)]
+#[UsesClass(ReviewServerHttpClient::class)]
+#[UsesClass(ToolsOfRound::class)]
+#[UsesClass(ReviewCredential::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewerConversation::class)]
@@ -218,6 +240,44 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $settled['usages'];
         self::assertSame([100, 20, 60, 5000], [$usages[0]['prompt'], $usages[0]['completion'], $usages[0]['cached'], $usages[0]['remaining']]);
+    }
+
+    public function testAStreamedAnswerGivesTheVerdictAndRecordsTheUsageOnceAsTheSameAnswerUnstreamed(): void
+    {
+        $answer = VerdictDocument::fromTheDesign()->json();
+        $unstreamedLedger = new InMemoryLedger();
+        $streamedLedger = new InMemoryLedger();
+
+        $refusesToStream = static fn (mixed $model, mixed $input, array $options): TextResult => true === ($options['stream'] ?? false) ? throw new BadRequestException('This account cannot stream.') : self::withUsage($answer);
+        $streamsWhenAsked = static fn (mixed $model, mixed $input, array $options): ResultInterface => true === ($options['stream'] ?? false) ? self::streamed($answer) : self::withUsage($answer);
+
+        $unstreamed = $this->vendor($refusesToStream, $unstreamedLedger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $streamed = $this->vendor($streamsWhenAsked, $streamedLedger)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertEquals($unstreamed, $streamed);
+        self::assertSame(['started', 'settled'], array_column($streamedLedger->payloads(), 'phase'));
+        self::assertSame($unstreamedLedger->payloads()[1]['usages'], $streamedLedger->payloads()[1]['usages']);
+    }
+
+    public function testAStreamCutOffMidAnswerFailsTheReviewAsAnIncompleteAnswerAndLeavesItsUsageUnsettledOnce(): void
+    {
+        $ledger = new InMemoryLedger();
+        $cutOff = static fn (): StreamResult => new StreamResult((static function (): Generator {
+            yield new TokenUsage(promptTokens: 100, model: 'big');
+            yield new TextDelta('{"verdict":"approve",');
+
+            throw new IncompleteStreamException('The stream ended before its last event.');
+        })());
+
+        $verdict = $this->vendor($cutOff, $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
+        [, $unsettled] = $ledger->payloads();
+        self::assertSame(2, $ledger->count());
+        self::assertSame(['unsettled', IncompleteStreamException::class], [$unsettled['phase'], $unsettled['failure']]);
+        /** @var list<array<string, int>> $usages */
+        $usages = $unsettled['usages'];
+        self::assertSame([100], array_column($usages, 'prompt'));
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void
@@ -670,6 +730,12 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testTheContainerWiresTheVendorToTheTierPlatform(): void
     {
         $container = self::getContainer();
+        // A second kernel serves the review server, so the reviewer lists its tools without a web server; not this one, which resets its services before each request it handles.
+        $server = new Kernel('test', false);
+        $server->boot();
+        $credential = $container->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $container->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, new KernelHttpClient($server)));
         $answer = static fn (Model $model): string => VerdictDocument::fromTheDesign()->with('follow_ups', [$model->getName()])->json();
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in($container)->dispatcher);
         $container->set(TierResolver::class, new ConfiguredTierResolver([
@@ -684,9 +750,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertInstanceOf(MessageStoreInterface::class, $conversations);
         EmptyDatabase::in($container);
         $conversations->setup();
-        $request = $this->request();
+        $request = $this->request(new UuidV7());
 
         $verdict = $vendor->review('alpha', Tier::Strong, $request)->verdict;
+        $server->shutdown();
 
         self::assertCount(5, $conversations->load($request->conversation->id));
         self::assertSame(['big'], $verdict->follow_ups);
@@ -729,12 +796,24 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
     {
         return self::carrying(new TextResult($json), $usage);
+    }
+
+    // Two usage events, because a provider reports usage when the stream starts and again, whole, when it ends.
+    private static function streamed(string $json): StreamResult
+    {
+        return new StreamResult((static function () use ($json): Generator {
+            yield new TokenUsage(promptTokens: 100, model: 'big');
+            foreach (str_split($json, 40) as $part) {
+                yield new TextDelta($part);
+            }
+            yield new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big');
+        })());
     }
 
     /**

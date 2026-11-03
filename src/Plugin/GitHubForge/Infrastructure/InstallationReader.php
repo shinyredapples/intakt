@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
+use Closure;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use NoDiscard;
 use SensitiveParameter;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 final readonly class InstallationReader
 {
@@ -21,7 +22,7 @@ final readonly class InstallationReader
     public function __construct(
         private AppJwt $jwt,
         private InstallationTokens $tokens,
-        private HttpClientInterface $http,
+        private GitHubCalls $calls,
     ) {
     }
 
@@ -47,7 +48,8 @@ final readonly class InstallationReader
      */
     private function permissions(#[SensitiveParameter] string $jwt): array
     {
-        $answer = $this->get('/app/installations/'.rawurlencode($this->tokens->installationId), $jwt);
+        $url = self::API.'/app/installations/'.rawurlencode($this->tokens->installationId);
+        $answer = $this->answerTo(fn (): ResponseInterface => $this->calls->asApp($url, $this->options($jwt)));
         $granted = $answer['permissions'] ?? null;
         if (!is_array($granted)) {
             throw InstallationNotReadBack::becauseTheAnswerIsInvalid();
@@ -86,7 +88,8 @@ final readonly class InstallationReader
      */
     private function page(int $page, #[SensitiveParameter] string $token): array
     {
-        $answer = $this->get('/installation/repositories?per_page='.self::PAGE_SIZE.'&page='.$page, $token);
+        $url = self::API.'/installation/repositories?per_page='.self::PAGE_SIZE.'&page='.$page;
+        $answer = $this->answerTo(fn (): ResponseInterface => $this->calls->asInstallation('GET', $url, $this->options($token)));
         $listed = $answer['repositories'] ?? null;
         $total = $answer['total_count'] ?? null;
         if (!is_array($listed) || !is_int($total)) {
@@ -138,12 +141,14 @@ final readonly class InstallationReader
     }
 
     /**
+     * @param Closure(): ResponseInterface $request
+     *
      * @return array<mixed>
      */
-    private function get(string $path, #[SensitiveParameter] string $credential): array
+    private function answerTo(Closure $request): array
     {
         try {
-            $response = $this->http->request('GET', self::API.$path, ['auth_bearer' => $credential, 'headers' => self::HEADERS]);
+            $response = $request();
             $status = $response->getStatusCode();
             $body = 200 === $status ? $response->toArray(false) : [];
         } catch (ExceptionInterface $failure) {
@@ -151,5 +156,13 @@ final readonly class InstallationReader
         }
 
         return 200 === $status ? $body : throw InstallationNotReadBack::becauseGitHubRefused($status);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function options(#[SensitiveParameter] string $credential): array
+    {
+        return ['auth_bearer' => $credential, 'headers' => self::HEADERS];
     }
 }

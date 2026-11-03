@@ -53,6 +53,19 @@ This part is planned, not built yet ([details](../design/05-architecture/06-budg
 
 You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses). Billing stays with the AI company: Intakt keeps only whether an account bills past its plan, its own cap below the company's limit, and a link to the company's billing page.
 
+## Shadow mode: trying Intakt alongside your process
+
+A project can be set to **shadow mode** (`mode: shadow` in its configuration). Intakt then reviews its changes with the whole panel, as it would for real, but nothing it does counts: it never writes to the forge (no review is posted), and its verdicts are marked as shadow ones and never count toward a merge, even after you switch the project back to live. Use it to see how Intakt's reviews compare with the reviews you already have, before you trust it ([details](../user/README.md#shadow-mode)).
+
+Shadow work must never take room your existing work needs on the same accounts. So it has its own, lower **shadow ceiling** that you set (70% of each window unless you change it), and a shadow review starts only while every account it could run on is below it: the accounts of each reviewer's company, of any company that could stand in for one, and of the judge's. If one of them is at or above it, the review is **held**: it doesn't start, and nothing is stored. The same happens while Intakt is paused or draining, backing off, or while one of those accounts cools down.
+
+When a shadow review is held, you see a message that names the project, the company and the reason, for example:
+
+- `The shadow round of project "alpha" was held: an account of provider "anthropic" is not below the shadow ceiling (at-ceiling).`
+- `The shadow round of project "alpha" was held: an account of provider "anthropic" is not available for a start, because Intakt is paused (paused).`
+
+The same reason is written in the ledger, Intakt's record of events (`php bin/console intakt:ledger:events` shows it). Until Intakt records how much of each window is used, the shadow ceiling holds nothing back. A project in live mode is never held by it.
+
 ## Several projects on one install
 
 Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 pauses the project: once a running job finishes, nothing is built or reviewed for it, not even its open pull requests. Its work waits and carries on when you raise the share again.
@@ -62,6 +75,12 @@ Each project gets a **share** of the week, for example 70% and 30%. A project wi
 The dashboard shows the cost of every job, every task and every project, and where it went: building, reviewing, checks, retries.
 
 What costs the most is **repeating work**: a task built three times because it was unclear, or reviewed again because it waited too long. Intakt avoids that on its own (short descriptions and reviews, no repeat reviews of unchanged work, holds instead of retries, pausing the builders when reviews fall behind). The biggest saving you control is [writing clear tasks](writing-a-good-task.md).
+
+## The smallest setup
+
+With one account, a second reviewer from another company is not possible, and a second review of every change by the same company would double the review cost in the same time window. So Intakt starts with one builder and one reviewer. Only changes to protected files, security-relevant changes and large changes get a second review, by another model of the same company; docs-only and tests-only changes get one. It also splits big tasks earlier, because redoing a big change is where the money goes. This is planned, not built yet. Setup details are in [setting up Intakt](setting-up-intakt.md#the-smallest-setup).
+
+To grow, add an account; Intakt picks it up on its own at the next start, and you can raise the build slots further (see the table below). A second account of another company also lets the second reviewer come back.
 
 ## Giving it more or less room
 

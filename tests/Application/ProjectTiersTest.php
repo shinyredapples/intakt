@@ -7,6 +7,7 @@ namespace Intakt\Tests\Application;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierProviderDisabled;
@@ -14,9 +15,15 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Budget\Contract\Holds;
+use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\ReadingOutcome;
 use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
+use Intakt\Core\Budget\Contract\StartGuard;
+use Intakt\Core\Budget\Contract\Usage;
+use Intakt\Core\Budget\Contract\UsageWindow;
+use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites;
@@ -209,6 +216,26 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter('intakt.budget.ceilings'));
     }
 
+    public function testTheStartGuardOfTheContainerRefusesAStartAtTheOwnersCeiling(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\n");
+        $guard = $this->bootedStartGuard();
+
+        $this->measureBothWindowsAt(85.0);
+
+        self::assertSame(StartDecision::AtCeiling, $guard->decide(new Account(Provider::Anthropic, 'default'), 0));
+    }
+
+    public function testTheStartGuardOfTheContainerStartsBelowTheOwnersCeiling(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\n");
+        $guard = $this->bootedStartGuard();
+
+        $this->measureBothWindowsAt(75.0);
+
+        self::assertSame(StartDecision::Start, $guard->decide(new Account(Provider::Anthropic, 'default'), 0));
+    }
+
     public function testTheShadowCeilingsDefaultToSeventyPercentAndTheOwnerLowersOneWindow(): void
     {
         file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
@@ -330,6 +357,24 @@ final class ProjectTiersTest extends KernelTestCase
         $holds = self::getContainer()->get(Holds::class);
         self::assertInstanceOf(Holds::class, $holds);
         $holds->hold(SharedHold::Pause, new DateTimeImmutable('2999-01-01T00:00:00Z'));
+    }
+
+    private function bootedStartGuard(): StartGuard
+    {
+        $guard = $this->bootedContainer()->get('test.intakt.start_guard');
+        self::assertInstanceOf(StartGuard::class, $guard);
+        $this->emptyDatabase();
+
+        return $guard;
+    }
+
+    private function measureBothWindowsAt(float $percent): void
+    {
+        $measured = self::getContainer()->get(MeasuredUse::class);
+        self::assertInstanceOf(MeasuredUse::class, $measured);
+        foreach (UsageWindow::cases() as $window) {
+            self::assertSame(ReadingOutcome::Recorded, $measured->record(new WindowReading(new Account(Provider::Anthropic, 'default'), $window, new Usage($percent, null))));
+        }
     }
 
     private function emptyDatabase(): void

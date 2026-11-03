@@ -61,8 +61,9 @@ flowchart LR
 
 - **Guardrails:** before any tool runs, Intakt checks the request. A reviewer that asks for a file outside the code under review is refused. *(in progress)*
 - **Fencing:** text that comes from a task or from the code under review is marked as data before the reviewer sees it, so it cannot give the reviewer orders. The mark closes only at a closing marker that repeats its own boundary, so a fake closing marker inside a file stays data. *(in progress)*
-- **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(in progress)*
-- **MCP** is a standard way for AI agents to reach tools. You can drive Intakt from your own AI assistant over MCP: list your projects, start a review of a branch, and read a review's status, verdicts and list of things to fix. Each tool is labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides whether a tool may write: starting a review needs your own key and a setting that allows it, whatever the assistant asks. *(built)* Handing the reviewers their own tools over MCP during a review is planned.
+- **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(in progress)* Losing the whole toolbox is different: when the reviewer cannot reach its tools at all, or loses them partway through, the review stops and is marked `no-tools` instead of guessing without them. *(built)*
+- **Too much text is cut, and then the reviewer cannot say yes:** a task, a change or a file answer longer than about 100 kilobytes is cut, with a note from Intakt saying how much was left out. A reviewer that then still says "approve" is overruled: the review is marked `blocked`, because nobody can show it read the part it was not shown. *(built)*
+- **MCP** is a standard way for AI agents to reach tools. You can drive Intakt from your own AI assistant over MCP: list your projects, start a review of a branch, and read a review's status, verdicts and list of things to fix. Each tool is labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides whether a tool may write: starting a review needs your own key and a setting that allows it, whatever the assistant asks. *(built)* The reviewers reach their own tools the same way during a review: each review gets a private MCP door that only shows the code under review, and only that review's reviewers hold its key. *(built)*
 
 ## Project memory
 
@@ -122,8 +123,8 @@ stateDiagram-v2
 
 ## The live dashboard
 
-- **FrankenPHP worker mode** keeps Intakt loaded in memory between requests, so pages answer fast. *(decided; planned in the image)*
-- **Mercure**, built into FrankenPHP, pushes updates to your browser as they happen, and **Turbo** (part of Symfony UX) updates just the part of the page that changed: a review finishing shows up without a reload. *(planned)*
+- **FrankenPHP worker mode** keeps Intakt loaded in memory between requests, so pages answer fast. *(built in the container image's configuration; the image is not published yet)*
+- **Mercure**, built into FrankenPHP, pushes updates to your browser as they happen, and **Turbo** (part of Symfony UX) updates just the part of the page that changed: a review finishing shows up without a reload. *(in progress: Intakt already sends the updates to the hub as a review runs; the page does not listen to them yet, and the page that shows them without a reload is planned)*
 
 Keeping the application loaded has one catch: anything a part remembers would leak into the next request. Symfony's **reset** mechanism clears that memory between requests, and Intakt has a check that refuses any part that remembers things without a way to be cleared. *(in progress)*
 
@@ -135,4 +136,4 @@ Keeping the application loaded has one catch: anything a part remembers would le
 
 ## Finding bugs in the beta
 
-Symfony AI is new, and Intakt uses it hard on purpose. When something looks like a bug in Symfony AI itself, Intakt writes the smallest possible test that shows it, keeps it under `upstream/`, and, with the owner's OK, reports it to the Symfony AI project. `intakt:upstream:run` re-runs all of them against the pinned versions, so it is obvious when a bug has been fixed upstream. The current list is in the "Found in the beta" section of [highlights](../highlights.md).
+Symfony AI is new, and Intakt uses it hard on purpose. When something looks like a bug in Symfony AI itself (or in Symfony or Doctrine), Intakt writes the smallest possible test that shows it, keeps it under `upstream/`, and, with the owner's OK, reports it to that project. The report text waits in the same folder until the owner approves it. When a Symfony AI bug is small and clear (the fix stays in one package, the right behavior is not in doubt, nothing that others rely on breaks, and nobody upstream is already fixing it), Intakt can also prepare the fix itself: a patch and the pull request text, waiting in the same folder for the owner to approve and send. `intakt:upstream:run` re-runs all of them against the pinned versions, so it is obvious when a bug has been fixed upstream. Each report also notes whether the bug is still there in the next version being built upstream, whether someone already reported it there, and what to do next (file it, point to the existing report, or drop it). The current list is in the "Found in the beta" section of [highlights](../highlights.md).

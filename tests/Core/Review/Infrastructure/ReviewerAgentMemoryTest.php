@@ -25,13 +25,18 @@ use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMemory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Result\VectorResult;
@@ -47,6 +52,7 @@ use Symfony\Component\Uid\UuidV7;
 
 // Runs a whole review through the agent, so what reaches the model is what the platform is really sent, not what the prompt builder returns.
 #[CoversClass(ReviewerAgent::class)]
+#[UsesClass(ReviewerRuns::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerMemory::class)]
 #[UsesClass(DiffPaths::class)]
@@ -145,7 +151,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         };
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $prompt = new ReviewerPrompt(new Fence(), new VerdictParser(), new ReviewerMemory($memory, new Fence(), new DiffPaths()));
-        $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
 
         $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
     }

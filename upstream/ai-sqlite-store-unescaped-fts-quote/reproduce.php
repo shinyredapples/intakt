@@ -12,19 +12,21 @@ $store = Store::fromPdo(new PDO('sqlite::memory:'), 'documents');
 $store->setup();
 $store->add(new VectorDocument('one', new Vector([1.0, 0.0]), new Metadata([Metadata::KEY_TEXT => 'src/Quote"d.php'])));
 
-try {
-    $found = iterator_to_array($store->query(new TextQuery(['src/Quote"d.php'])));
-} catch (PDOException $exception) {
-    echo 'a search term with a double quote breaks the FTS5 query: ', $exception->getMessage(), PHP_EOL;
+// Each term is a phrase, so a quote inside it should be escaped as two quotes and a NUL byte, which the tokenizer never indexes, dropped.
+foreach (['src/Quote"d.php', "src/Quo\0te\"d.php"] as $term) {
+    try {
+        $found = iterator_to_array($store->query(new TextQuery([$term])));
+    } catch (PDOException $exception) {
+        echo sprintf('the search term %s breaks the FTS5 query: ', json_encode($term)), $exception->getMessage(), PHP_EOL;
 
-    exit(1);
-}
+        exit(1);
+    }
 
-// The term is a phrase, so a quote inside it should be escaped as two quotes and the document found.
-if (1 !== count($found)) {
-    echo sprintf('the document was not found (%d results)', count($found)), PHP_EOL;
+    if (1 !== count($found)) {
+        echo sprintf('the document was not found for %s (%d results)', json_encode($term), count($found)), PHP_EOL;
 
-    exit(1);
+        exit(1);
+    }
 }
 
 echo 'REPRODUCTION PASSES', PHP_EOL;

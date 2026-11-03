@@ -13,7 +13,7 @@ Think of it as a small software team that works around the clock:
 | **You (the owner)** | a person | decide what gets built and settle the few questions only a person can |
 | **The orchestrator** | Intakt itself | runs everything: picks the next task, starts the workers, keeps score, merges |
 | **Builder** | an AI agent | writes the code for one task |
-| **Reviewers** | a panel of AI agents you configure (by default two, from different companies) | check the builder's work, independently of each other, each with its own focus |
+| **Reviewers** | a panel of AI agents you configure (by default two, from different companies when available) | check the builder's work, independently of each other, each with its own focus |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
 | **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
 
@@ -56,7 +56,7 @@ In words:
 3. **It waits its turn.** Urgent tasks go first, then the rest by milestone and age.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
-6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies, so one company's blind spot doesn't decide. A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
+6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies when you have both, so one company's blind spot doesn't decide; with one account it is one reviewer, plus a second model of the same company for protected, security-relevant and large changes (planned: not built yet). A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
 7. **It is merged** into your project, or sent back with the reviewers' notes, and the builder tries again.
 
 ## Which reviewers look at a change
@@ -113,11 +113,16 @@ A task can stall for a reason the builder can't fix, for example it needs anothe
 flowchart LR
   w[Work can't continue] --> h[On hold]
   h -- "the task it waits for is done" --> go[Back in the queue]
-  h -- "Intakt was updated or the project moved on" --> retry[One more review]
+  h -- "the project moved on" --> rebuild[Rebuilt with the newest project]
+  h -- "Intakt was updated" --> retry[One more review]
+  rebuild -- fixed --> go
   retry -- fixed --> go
+  rebuild -- still stuck --> h
   retry -- still stuck --> h
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
+
+(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the builder names it as the thing to wait for, Intakt does not hold the task but hands it over with the builder's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
 
 Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks (planned: until this is built, you split it).
 

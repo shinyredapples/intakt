@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
@@ -18,6 +19,8 @@ use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Budget\Infrastructure\CeilingsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
+use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
+use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
@@ -250,7 +253,14 @@ return static function (ContainerConfigurator $container): void {
         'retriever' => ['memory' => ['vectorizer' => 'ai.vectorizer.memory', 'store' => 'ai.store.sqlite.memory']],
     ];
 
-    $container->extension('ai', ['platform' => $platform, 'message_store' => $conversations, ...$memory]);
+    // Configured for its MCP toolbox, which ReviewerMcpToolboxFactory hands to ReviewerAgent; that one builds the Agent per review, because the platform and model come with the tier of each call.
+    $agents = ['reviewer' => [
+        'platform' => PlatformChosenPerReview::class,
+        'model' => Tier::Strong->value,
+        'tools' => [['mcp_server' => 'reviewer.review', 'prefix' => ReviewerMcpToolboxFactory::TOOL_PREFIX]],
+    ]];
+
+    $container->extension('ai', ['platform' => $platform, 'agent' => $agents, 'message_store' => $conversations, ...$memory]);
     $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
     $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
     $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);

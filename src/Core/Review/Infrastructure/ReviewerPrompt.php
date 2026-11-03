@@ -27,7 +27,9 @@ final readonly class ReviewerPrompt
 
         The diff of the change is given to you: it shows what the change adds, edits and deletes, so judge the change by it and the code around it, deleted code included.
 
-        Read the code before you judge it. You have read-only tools at the exact head under review: read_file, list_directory and search_files. Paths are relative to the repository root; a path outside it is refused. Cite only what you read.
+        A text that is too long is cut. A note from Intakt after the fence says how many bytes were left out; read what you need with your tools. Intakt refuses an approval of a review in which a text was cut, so report every finding you have.
+
+        Read the code before you judge it. You have read-only tools at the exact head under review to read a file, list a directory and search the files. Paths are relative to the repository root; a path outside it is refused. Cite only what you read.
 
         Check the change against the rules of how code reads. Report a finding for each rule it breaks, and put the name of the rule in the finding's requirement field:
         - Storytelling: an entry method reads as a short story of named steps in domain words, the public method first, then its helpers in the order they are called.
@@ -51,10 +53,11 @@ final readonly class ReviewerPrompt
 
     public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
     {
+        $cut = new PromptCut($this->fence);
         $messages = [
             Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
-            Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->change->task)),
-            Message::ofUser("The diff of the change:\n\n".$this->fence->wrap(UntrustedSource::Diff, $brief->change->diff)),
+            Message::ofUser("The task of the change:\n\n".$cut->fenced(UntrustedSource::Task, $brief->change->task)),
+            Message::ofUser("The diff of the change:\n\n".$cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
         ];
 
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
@@ -92,6 +95,13 @@ final readonly class ReviewerPrompt
         ));
     }
 
+    public function cutsInputOf(ReviewBrief $brief): bool
+    {
+        $cut = new PromptCut($this->fence);
+
+        return $cut->cuts($brief->change->task) || $cut->cuts($brief->change->diff);
+    }
+
     // The tool answers are prompt input too, so they reach the model through the same fence as the task.
     public function fenced(ToolboxInterface $toolbox): FencedToolbox
     {
@@ -102,7 +112,7 @@ final readonly class ReviewerPrompt
     public function verdictIn(ExecutionInterface $execution): Verdict
     {
         return $this->parser->parseWith(static function () use ($execution): Verdict {
-            $answer = $execution->getContent();
+            $answer = $execution->getResult()->getContent();
 
             return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
         });

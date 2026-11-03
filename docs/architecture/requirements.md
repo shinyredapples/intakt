@@ -4,7 +4,7 @@ Every program outside PHP's own code that Intakt or its checks call, who calls i
 
 ## To run Intakt
 
-Only **Docker or Podman**. The container image ships everything below that Intakt needs at runtime (planned with the image, plan task T22).
+Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) ships everything below that Intakt needs at runtime; building it calls `docker build`, which needs the same Docker CLI and daemon as above.
 
 ## To work on Intakt
 
@@ -15,7 +15,8 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 | `git` | the local git forge (`src/Plugin/LocalGitForge/`); the commit-subject, history-secrets, long-dashes and scope gates; the highlights gate, which lists tracked files with `git ls-files --cached` | reading changes and history; telling how a head moved (`merge-base --is-ancestor`, `merge-tree --write-tree`); a detached worktree of the head for `intakt:review` (`worktree add --detach` with `core.autocrlf`, `core.eol`, `core.sparseCheckout` and `core.sparseCheckoutCone` set so the files are the head's bytes, `worktree remove --force`) | yes | 2.45 or later (`--no-lazy-fetch`) | yes |
 | `sh` | `bin/instance`, `bin/probe`, the gate runner; `/bin/sh` in the tools preflight of `bin/check` when `PATH` is unset | closing an inherited file descriptor before handing over; bringing up loopback; reading the shell's default path | yes (POSIX) | any | yes |
 | `gitleaks` | the secrets gates (files and history); the GitHub forge before it posts a review (`src/Plugin/GitHubForge/Infrastructure/SecretScan.php`, `gitleaks stdin` with its built-in rules) | secret scanning | for `bin/check`, and to post reviews to GitHub (a missing one fails the post); it reserves a large block of address space when it starts (8.30.1 panics with `failed to reserve memory` under a 4 GiB `ulimit -v` and runs under 8 GiB), so a runtime with a tight memory cap makes it fail, and with it every review post fails closed (nothing is posted) | exactly 8.30.1 for the gates, or point `INTAKT_GITLEAKS` at that version; the review post runs `INTAKT_GITLEAKS` too (`gitleaks` from the path when it is unset or empty) and does not check its version | yes |
-| `frankenphp` | planned: the Mercure hub tests (plan task T21) | starting the built-in Mercure hub in the tests gate | only for those tests once they land; the CI image already ships it | exactly 1.13.4 in the CI image, pinned by version and SHA-256; the image build runs `frankenphp version`, so a binary that cannot run fails it | yes (the CI image; the release image follows with T22) |
+| `frankenphp` | `tests/Core/Dashboard/Infrastructure/MercureHubTest.php`, `CaddyfileTest.php` and `CaddyfileWorkersTest.php` beside it (group `hub`) | `frankenphp run` starts the built-in Mercure hub and the `app` and `mcp` workers from the `Caddyfile` on a free port, its admin API on another; `frankenphp adapt --envfile` reads the `Caddyfile` with the env files the user docs name, in the tests gate | for those tests (skipped when missing, and the tests gate counts a skip as a failure); the CI image ships it | 1.13 or later; exactly 1.13.4 in the CI image, pinned by version and SHA-256; the image build runs `frankenphp version`, so a binary that cannot run fails it | yes (the CI image and the `Dockerfile`'s image, where `docker/entrypoint.sh` runs `frankenphp run`) |
+| `curl` | the image's `HEALTHCHECK` (`Dockerfile`) | asking FrankenPHP's admin API for `/metrics` | in the image | any | yes (base image) |
 | `unshare` (util-linux) | the gate runner (contained test runs), `bin/probe` | running tests and probes in their own namespaces | for `bin/check` and probes | with user namespaces enabled | development only |
 | `env` (coreutils) | the gitleaks gate | running gitleaks in the scanned directory (`env --chdir`) | for `bin/check` | coreutils 8.28 or later | development only |
 | `true` | the gate runner | probing once whether `unshare` may create namespaces | for `bin/check` | any | development only |
@@ -24,7 +25,7 @@ Only **Docker or Podman**. The container image ships everything below that Intak
 | `jq` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`, its fake `gh`), `docs/showcase/figures.sh` | computing the showcase figures from the API's JSON | for `bin/check` | 1.7 or later | development only |
 | `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner | reading pull requests and comments from the GitHub API; labeling a pull request | only for the showcase figures | any | no |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
-| `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe` | tests, static analysis, code style | yes | as locked in `composer.lock` | development only |
+| `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe` | tests, static analysis, code style; the tests gate also asks PHPUnit for a JUnit report of each pass (`--log-junit`) to record per-file test durations | yes | as locked in `composer.lock` | development only |
 
 `unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
 

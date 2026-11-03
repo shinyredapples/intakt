@@ -48,7 +48,9 @@ use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
@@ -61,6 +63,7 @@ use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
@@ -116,6 +119,7 @@ use Throwable;
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(StrictVerdictConverter::class)]
 #[UsesClass(ReviewerAgent::class)]
+#[UsesClass(ReviewerRuns::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(Fence::class)]
@@ -382,7 +386,7 @@ final class CodexReviewerTest extends KernelTestCase
         $codex = new CodexPlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, new ProjectModelCatalog(self::PROJECTS)->models(Provider::Codex));
         $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger());
         $platforms = new ServiceLocator([Provider::Codex->value => static fn (): PlatformInterface => $accounts]);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new InMemoryMessageStore());
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger()), $limit);

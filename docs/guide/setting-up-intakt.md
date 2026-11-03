@@ -4,7 +4,7 @@ This page explains what happens when you install Intakt, and what changes when y
 
 ## Installing
 
-Intakt is one container, and Docker or Podman is all you need: the image ships everything else ([requirements](../architecture/requirements.md)). You start it, open the dashboard, and a wizard does the rest.
+Intakt is one container, and Docker or Podman is all you need: the image ships everything else ([requirements](../architecture/requirements.md)). Once the wizard is built, you start the container, open the dashboard, and the wizard does the rest.
 
 The wizard is planned, not built yet. For now you create the GitHub App yourself and give Intakt its identity through three environment variables: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` ([the user guide](../user/README.md) explains each). The planned flow:
 
@@ -57,6 +57,12 @@ flowchart LR
 ```
 
 The checks the foundation creates become **protected**: you approve them once, and from then on no builder can weaken them ([why](why-the-ai-cant-wreck-your-project.md)).
+
+## The smallest setup
+
+One subscription and one modest machine is enough. This part is planned, not built yet. Intakt looks at what the install has each time it starts work, and with one account it runs one builder and one reviewer. It does not run two builds at once, because one build can need about 5 GB of memory. A change to protected files, a security-relevant change or a large change gets a second review by another model of the same vendor; a change that only touches docs or tests gets one review. Tasks that would be big are split earlier, because redoing a large change costs the most.
+
+Intakt works out how many builders and reviewers fit each time it starts work, so adding an account or memory is picked up on its own; a second account from another company brings back the second reviewer from that company. Only if you want more than that default do you raise the numbers yourself. See [accounts and costs](accounts-and-costs.md#the-smallest-setup).
 
 ## Updating
 

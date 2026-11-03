@@ -50,6 +50,6 @@ final class TierRoutedPlatform implements PlatformInterface
     #[Override]
     public function getModelCatalog(): ModelCatalogInterface
     {
-        return new FallbackModelCatalog();
+        return $this->answering->provider->streams() ? new FallbackModelCatalog() : new UnstreamedModelCatalog();
     }
 }

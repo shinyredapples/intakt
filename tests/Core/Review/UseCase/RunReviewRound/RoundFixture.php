@@ -31,6 +31,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
@@ -46,10 +47,12 @@ use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandle
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
+use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -66,12 +69,15 @@ use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Budget\ScriptedAccountGuard;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
@@ -93,6 +99,8 @@ final readonly class RoundFixture
     public MockClock $clock;
     public BufferingLogger $log;
     public EventDispatcher $events;
+    public RecordedRoundUpdates $updates;
+    private LockFactory $locks;
     private Ledger $ledger;
     private SerializerInterface $serializer;
 
@@ -110,6 +118,9 @@ final readonly class RoundFixture
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
         $this->events = new EventDispatcher();
+        $this->updates = new RecordedRoundUpdates();
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
@@ -243,7 +254,13 @@ final readonly class RoundFixture
 
     public function worker(EntityManagerInterface $entities, Vendor $vendor, Ledger $ledger): ReviewWithReviewerHandler
     {
-        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule());
+        return new ReviewWithReviewerHandler($this->leases($entities, $ledger), $vendor, $this->rounds($entities), new GoalpostRule(), $this->liveProgress($entities));
+    }
+
+    // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
+    public function liveProgress(EntityManagerInterface $entities): LiveRoundProgress
+    {
+        return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks);
     }
 
     // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
