@@ -1,0 +1,14 @@
+.git
+.github
+.evidence
+.env.local
+.env.*.local
+var
+vendor
+tests
+docs
+upstream
+mate
+Dockerfile
+.dockerignore
+PR.md

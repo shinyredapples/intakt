@@ -33,6 +33,23 @@ The pages answer only an address on the computer itself: `localhost`, `127.0.0.1
 
 While a review runs, Intakt sends each reviewer's tool calls and each round's progress ("1 of 2 reviewers finished", "Judged") to the live-update hub built into FrankenPHP. A reviewer's text as it is written is not sent yet; that comes with #644. The review page does not show them yet, so it still needs a reload; showing them without a reload is the next part. To run the hub, set `MERCURE_JWT_SECRET` (at least 32 characters) in `.env.local` and start FrankenPHP from the repository with `frankenphp run --config Caddyfile --envfile .env.local --envfile .env`. FrankenPHP does not read the `.env` files on its own, and the first file that sets a value wins, so `.env.local` comes first. FrankenPHP's admin API answers on `localhost:2019` only, where `intakt:server:status` reads it. If the hub is not running, reviews are not affected: the update is dropped and a warning is logged.
 
+## Running the container image
+
+The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. The build was not run on the machine that wrote it (no Docker there); the Caddyfile it uses was run with the same FrankenPHP version.
+
+```
+docker build -t intakt .
+docker run -d --name intakt -p 7781:7781 -v intakt-data:/app/var/data \
+  --env-file intakt.env intakt
+```
+
+- The secrets are never in the image. `intakt.env` (yours, not in the repository) must set `APP_SECRET` and `MERCURE_JWT_SECRET` (at least 32 bytes); the container refuses to start without them. Set `MERCURE_JWT_ISSUER` and `MERCURE_PUBLIC_URL` to the address your browser uses.
+- Publish the same port inside and outside (`-p 7781:7781`): the dashboard answers only `localhost`, `127.0.0.1` or `[::1]` with its own port (see [the dashboard](#the-dashboard)), and the image sets `DASHBOARD_PORT` and `SERVER_PORT` to 7781.
+- The database (SQLite) and the hub's history live in the volume `/app/var/data`. The container runs as the user with id 10001, so a bind-mounted folder must belong to that user. It applies the migrations on every start, then serves `/projects`.
+- Two worker pools serve requests: `app` for the dashboard, and `mcp` for `/mcp/*` with its own thread limits (`MCP_WORKERS`, `MCP_MAX_THREADS`), so a streamed MCP answer cannot take the dashboard's threads. `APP_WORKERS` sets the dashboard's pool, `MAX_WAIT_TIME` how long a request waits for a free thread.
+- FrankenPHP's admin API listens on `localhost:2019` inside the container and nothing publishes it; read it with `docker exec intakt php bin/console intakt:server:status`.
+- Not built yet: worker restarts after a number of requests, a memory ceiling, a restart policy, a health check, the queue consumers and the scheduler; the base image is named by tag and gets its digest before a release.
+
 ## Checking the server
 
 When Intakt runs under FrankenPHP, `php bin/console intakt:server:status` reads FrankenPHP's admin API and prints how many worker threads are busy and idle, how many requests wait in the queue, how often workers were restarted, and whether the Mercure hub is healthy:
