@@ -9,7 +9,7 @@ use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
-use Intakt\Core\Review\UseCase\ServeReviewTools\ServeReviewToolsCommand;
+use Intakt\Core\Review\UseCase\ServeReviewTools\IssueReviewCredentialCommand;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -23,9 +23,9 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
-#[CoversClass(ServeReviewToolsCommand::class)]
+#[CoversClass(IssueReviewCredentialCommand::class)]
 #[UsesClass(ReviewCredential::class)]
-final class ServeReviewToolsCommandTest extends KernelTestCase
+final class IssueReviewCredentialCommandTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
@@ -33,7 +33,7 @@ final class ServeReviewToolsCommandTest extends KernelTestCase
 
     protected function setUp(): void
     {
-        $this->command = new CommandTester(new Application(self::bootKernel())->find('intakt:review:serve-tools'));
+        $this->command = new CommandTester(new Application(self::bootKernel())->find('intakt:review:issue-credential'));
         $this->fixture = new RoundFixture(self::getContainer());
     }
 

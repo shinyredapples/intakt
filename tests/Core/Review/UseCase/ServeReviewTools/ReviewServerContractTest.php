@@ -14,7 +14,7 @@ use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Kernel;
-use Intakt\Tests\Core\Mcp\Contract\OwnerServerClient;
+use Intakt\Tests\Core\Mcp\Contract\McpServerClient;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
@@ -32,7 +32,7 @@ final class ReviewServerContractTest extends KernelTestCase
 {
     private Kernel $app;
 
-    private OwnerServerClient $client;
+    private McpServerClient $client;
 
     private RoundFixture $fixture;
 
@@ -72,7 +72,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
     public function testTheOwnerServerDoesNotListTheRepositoryTools(): void
     {
-        $owner = new OwnerServerClient($this->app);
+        $owner = new McpServerClient($this->app);
         $owner->initialize('2025-11-25');
 
         self::assertSame([], array_intersect(['list_directory', 'read_file', 'search_files'], $this->toolNames($owner)));
@@ -80,14 +80,14 @@ final class ReviewServerContractTest extends KernelTestCase
 
     public function testEveryToolOfTheReviewServerIsReadOnlyAndNotDestructive(): void
     {
-        $tools = OwnerServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
+        $tools = McpServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
         self::assertIsArray($tools);
         self::assertCount(3, $tools);
 
         foreach ($tools as $tool) {
             self::assertIsArray($tool);
-            self::assertTrue(OwnerServerClient::at($tool, 'annotations', 'readOnlyHint'));
-            self::assertFalse(OwnerServerClient::at($tool, 'annotations', 'destructiveHint'));
+            self::assertTrue(McpServerClient::at($tool, 'annotations', 'readOnlyHint'));
+            self::assertFalse(McpServerClient::at($tool, 'annotations', 'destructiveHint'));
         }
     }
 
@@ -100,7 +100,7 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $result = $this->call('read_file', ['path' => 'RoundFixture.php']);
 
-        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertFalse(McpServerClient::at($result, 'isError'));
         self::assertStringContainsString('final readonly class RoundFixture', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
@@ -108,7 +108,7 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $result = $this->call('list_directory', []);
 
-        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertFalse(McpServerClient::at($result, 'isError'));
         self::assertStringContainsString('RoundFixture.php', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
@@ -117,7 +117,7 @@ final class ReviewServerContractTest extends KernelTestCase
         foreach (['../ScriptedJudgement.php', '/etc/passwd', '.git/config'] as $path) {
             $result = $this->call('read_file', ['path' => $path]);
 
-            self::assertTrue(OwnerServerClient::at($result, 'isError'), $path);
+            self::assertTrue(McpServerClient::at($result, 'isError'), $path);
             self::assertStringContainsString('outside the repository under review', json_encode($result, JSON_THROW_ON_ERROR), $path);
         }
     }
@@ -128,7 +128,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
         $result = $this->call('read_file', ['roundId' => $other, 'path' => 'marker.txt']);
 
-        self::assertTrue(OwnerServerClient::at($result, 'isError'));
+        self::assertTrue(McpServerClient::at($result, 'isError'));
         self::assertStringNotContainsString('the other head', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
@@ -136,7 +136,7 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $other = $this->clientOf($this->otherRound());
 
-        $result = OwnerServerClient::at($other->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'marker.txt']], 3), 'result');
+        $result = McpServerClient::at($other->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'marker.txt']], 3), 'result');
 
         self::assertStringContainsString('the other head', json_encode($result, JSON_THROW_ON_ERROR));
     }
@@ -162,10 +162,10 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $unknown = $this->clientOf(Uuid::v4()->toRfc4122());
 
-        $result = OwnerServerClient::at($unknown->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'RoundFixture.php']], 3), 'result');
+        $result = McpServerClient::at($unknown->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'RoundFixture.php']], 3), 'result');
 
         self::assertIsArray($result);
-        self::assertTrue(OwnerServerClient::at($result, 'isError'));
+        self::assertTrue(McpServerClient::at($result, 'isError'));
         self::assertStringNotContainsString('#0', $unknown->lastBody());
     }
 
@@ -179,7 +179,7 @@ final class ReviewServerContractTest extends KernelTestCase
 
         $result = $this->call('read_file', ['path' => 'RoundFixture.php']);
 
-        self::assertTrue(OwnerServerClient::at($result, 'isError'));
+        self::assertTrue(McpServerClient::at($result, 'isError'));
         self::assertStringContainsString('no longer under review', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
@@ -195,7 +195,7 @@ final class ReviewServerContractTest extends KernelTestCase
             $message = json_decode($event, true, flags: JSON_THROW_ON_ERROR);
 
             if (is_array($message) && 'notifications/progress' === ($message['method'] ?? null)) {
-                $step = OwnerServerClient::at($message, 'params', 'progress');
+                $step = McpServerClient::at($message, 'params', 'progress');
                 self::assertIsInt($step);
                 $progress[] = $step;
             }
@@ -212,7 +212,7 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $result = $this->call('search_files', ['text' => 'final readonly class', 'path' => 'RoundFixture.php']);
 
-        self::assertFalse(OwnerServerClient::at($result, 'isError'));
+        self::assertFalse(McpServerClient::at($result, 'isError'));
         self::assertStringNotContainsString('VerdictPerRole.php', json_encode($result, JSON_THROW_ON_ERROR));
     }
 
@@ -220,13 +220,13 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         $answer = $this->freshClient()->initialize('2025-11-25');
 
-        self::assertSame('2025-11-25', OwnerServerClient::at($answer, 'result', 'protocolVersion'));
-        self::assertSame('intakt-review', OwnerServerClient::at($answer, 'result', 'serverInfo', 'name'));
+        self::assertSame('2025-11-25', McpServerClient::at($answer, 'result', 'protocolVersion'));
+        self::assertSame('intakt-review', McpServerClient::at($answer, 'result', 'serverInfo', 'name'));
     }
 
     public function testInitializeWithAnUnknownVersionGetsAVersionTheServerSpeaks(): void
     {
-        $version = OwnerServerClient::at($this->freshClient()->initialize('1999-01-01'), 'result', 'protocolVersion');
+        $version = McpServerClient::at($this->freshClient()->initialize('1999-01-01'), 'result', 'protocolVersion');
 
         self::assertIsString($version);
         self::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $version);
@@ -242,14 +242,14 @@ final class ReviewServerContractTest extends KernelTestCase
         self::assertStringNotContainsString('"properties":[]', $this->client->lastBody());
     }
 
-    private function freshClient(): OwnerServerClient
+    private function freshClient(): McpServerClient
     {
-        return new OwnerServerClient($this->app, '/mcp/review', $this->credential->issueFor($this->roundId));
+        return new McpServerClient($this->app, '/mcp/review', $this->credential->issueFor($this->roundId));
     }
 
-    private function clientOf(string $roundId): OwnerServerClient
+    private function clientOf(string $roundId): McpServerClient
     {
-        $client = new OwnerServerClient($this->app, '/mcp/review', $this->credential->issueFor($roundId));
+        $client = new McpServerClient($this->app, '/mcp/review', $this->credential->issueFor($roundId));
         $client->initialize('2025-11-25');
 
         return $client;
@@ -288,7 +288,7 @@ final class ReviewServerContractTest extends KernelTestCase
      */
     private function call(string $tool, array $arguments): array
     {
-        $result = OwnerServerClient::at($this->client->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3), 'result');
+        $result = McpServerClient::at($this->client->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3), 'result');
         self::assertIsArray($result);
 
         return $result;
@@ -297,9 +297,9 @@ final class ReviewServerContractTest extends KernelTestCase
     /**
      * @return list<string>
      */
-    private function toolNames(OwnerServerClient $client): array
+    private function toolNames(McpServerClient $client): array
     {
-        $tools = OwnerServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
+        $tools = McpServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
         self::assertIsArray($tools);
         $names = array_map(static fn (mixed $tool): string => is_array($tool) && is_string($tool['name'] ?? null) ? $tool['name'] : '', $tools);
         sort($names);

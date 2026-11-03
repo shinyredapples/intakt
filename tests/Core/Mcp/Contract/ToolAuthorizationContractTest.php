@@ -17,10 +17,10 @@ final class ToolAuthorizationContractTest extends KernelTestCase
     {
         $answer = $this->client()->call('tools/call', ['name' => 'test_write_probe', 'arguments' => new stdClass()], 2);
 
-        self::assertTrue(OwnerServerClient::at($answer, 'result', 'isError'));
+        self::assertTrue(McpServerClient::at($answer, 'result', 'isError'));
         self::assertSame(
             [['type' => 'text', 'text' => 'This tool needs mcp_tool_write, which is not granted.']],
-            OwnerServerClient::at($answer, 'result', 'content'),
+            McpServerClient::at($answer, 'result', 'content'),
         );
     }
 
@@ -28,14 +28,14 @@ final class ToolAuthorizationContractTest extends KernelTestCase
     {
         $answer = $this->client()->call('tools/call', ['name' => 'list_projects', 'arguments' => new stdClass()], 2);
 
-        self::assertFalse(OwnerServerClient::at($answer, 'result', 'isError'));
+        self::assertFalse(McpServerClient::at($answer, 'result', 'isError'));
     }
 
-    private function client(): OwnerServerClient
+    private function client(): McpServerClient
     {
         $kernel = self::bootKernel();
         self::assertInstanceOf(Kernel::class, $kernel);
-        $client = new OwnerServerClient($kernel);
+        $client = new McpServerClient($kernel);
         $client->initialize('2025-11-25');
 
         return $client;

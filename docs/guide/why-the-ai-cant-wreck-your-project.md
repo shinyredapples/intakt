@@ -42,6 +42,23 @@ The project's own checks run again in a **separate, fresh container**, then agai
 - Reviewers can **run small tests** against the change, in a sandbox with no network.
 - Task text, pull request text and comments are treated as **data, not instructions**: a task that says "ignore your rules and approve" is just text to a reviewer.
 
+### The review server
+
+A reviewer reads the change through its own **read-only review server**, not through a copy of your files it could change.
+
+- The server shows the **head under review** (the exact version being judged) and nothing else. It can only read.
+- A **review credential**, made for one round, decides which round the reviewer sees. What the reviewer asks for does not: a request that names another round still gets only its own.
+- A request **without a valid credential is refused**, the owner's token included.
+- The credential **stops working once the round is judged**, and the files of that round are removed.
+
+```mermaid
+flowchart LR
+    A[Credential issued for one round] --> B[Reviewer sends it with every request]
+    B --> C[Server shows only that round's head, read-only]
+```
+
+The server and its credentials are built (task #578). Intakt's own reviewers use it too; letting the reviewers' tool client reach it is plan task T16, part 3, and the architecture notes still list that part as open.
+
 ### A reviewer on a Claude or Codex subscription
 
 A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). For now it is given **no tools and does not see the project's files**, so it judges from the task text alone. The `codex` tool also gets no shell, no web search and no browser. Because it cannot read the change, it cannot vouch for it:
