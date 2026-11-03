@@ -15,16 +15,12 @@ final class DockerignoreTest extends TestCase
     #[DataProvider('runtimeEnvFiles')]
     public function testTheBuildContextLeavesOutAFileThatHoldsRuntimeSecrets(string $file): void
     {
-        $excluded = file(__DIR__.'/../../../../.dockerignore', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-        self::assertContains($file, $excluded);
+        self::assertContains($file, self::excludedPaths());
     }
 
     public function testTheBuildContextKeepsTheCommittedEnvDefaults(): void
     {
-        $excluded = file(__DIR__.'/../../../../.dockerignore', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-
-        self::assertNotContains('.env', $excluded);
+        self::assertNotContains('.env', self::excludedPaths());
     }
 
     /**
@@ -35,5 +31,16 @@ final class DockerignoreTest extends TestCase
         yield 'the env file the user guide names' => ['intakt.env'];
         yield 'the local overrides' => ['.env.local'];
         yield 'the compiled env of composer dump-env' => ['.env.local.php'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function excludedPaths(): array
+    {
+        $paths = file(__DIR__.'/../../../../.dockerignore', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        self::assertIsArray($paths);
+
+        return $paths;
     }
 }
