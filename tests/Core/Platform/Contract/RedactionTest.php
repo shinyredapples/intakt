@@ -52,6 +52,7 @@ final class RedactionTest extends TestCase
         yield 'a Digest authorization header with spaces around its equals signs' => ['Authorization: Digest username = "alice", response = "r3sponse"', 'Authorization: Digest [redacted]'];
         yield 'an API key header' => ['x-api-key: some-value', 'x-api-key: [redacted]'];
         yield 'a header in var_export output' => ["'Authorization' => 'Bearer abc123',", "'Authorization' => 'Bearer [redacted]',"];
+        yield 'a shell-quoted header in var_export output' => ["'\\''Authorization'\\'' => '\\''Bearer abc123'\\''", "'\\''Authorization'\\'' => '\\''Bearer [redacted]'\\''"];
         yield 'a header in print_r output' => ["[Authorization] => Bearer abc123\n[Accept] => json", "[Authorization] => Bearer [redacted]\n[Accept] => json"];
         yield 'a header value with a comma' => ['Authorization: Bearer abc,def', 'Authorization: Bearer [redacted]'];
         yield 'a header in JSON inside JSON' => ['{\"Authorization\":\"Bearer abc123\",\"Accept\":\"json\"}', '{\"Authorization\":\"Bearer [redacted]\",\"Accept\":\"json\"}'];
