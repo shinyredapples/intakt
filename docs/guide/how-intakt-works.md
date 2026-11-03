@@ -113,11 +113,16 @@ A task can stall for a reason the builder can't fix, for example it needs anothe
 flowchart LR
   w[Work can't continue] --> h[On hold]
   h -- "the task it waits for is done" --> go[Back in the queue]
-  h -- "Intakt was updated or the project moved on" --> retry[One more review]
+  h -- "the project moved on" --> rebuild[Rebuilt with the newest project]
+  h -- "Intakt was updated" --> retry[One more review]
+  rebuild -- fixed --> go
   retry -- fixed --> go
+  rebuild -- still stuck --> h
   retry -- still stuck --> h
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
+
+A task never waits for its own pull request: if the builder names it as the thing to wait for, Intakt does not hold the task but hands it over with the builder's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. (Planned: until this is built, a held task gets one more review.) When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
 
 Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks (planned: until this is built, you split it).
 
