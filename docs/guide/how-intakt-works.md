@@ -13,7 +13,7 @@ Think of it as a small software team that works around the clock:
 | **You (the owner)** | a person | decide what gets built and settle the few questions only a person can |
 | **The orchestrator** | Intakt itself | runs everything: picks the next task, starts the workers, keeps score, merges |
 | **Builder** | an AI agent | writes the code for one task |
-| **Reviewers** | a panel of AI agents you configure (by default two, from different companies) | check the builder's work, independently of each other, each with its own focus |
+| **Reviewers** | a panel of AI agents you configure (by default two, from different companies when available) | check the builder's work, independently of each other, each with its own focus |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
 | **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
 
@@ -56,7 +56,7 @@ In words:
 3. **It waits its turn.** Urgent tasks go first, then the rest by milestone and age.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
-6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies, so one company's blind spot doesn't decide. A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
+6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies when you have both, so one company's blind spot doesn't decide; with one account it is one reviewer, plus a second model of the same company for protected, security-relevant and large changes (planned: not built yet). A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
 7. **It is merged** into your project, or sent back with the reviewers' notes, and the builder tries again.
 
 ## Which reviewers look at a change

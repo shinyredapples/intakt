@@ -58,6 +58,12 @@ flowchart LR
 
 The checks the foundation creates become **protected**: you approve them once, and from then on no builder can weaken them ([why](why-the-ai-cant-wreck-your-project.md)).
 
+## The smallest setup
+
+One subscription and one modest machine is enough. This part is planned, not built yet. Intakt looks at what the install has each time it starts work, and with one account it runs one builder and one reviewer. It does not run two builds at once, because one build can need about 5 GB of memory. A change to protected files, a security-relevant change or a large change gets a second review by another model of the same vendor; a change that only touches docs or tests gets one review. Tasks that would be big are split earlier, because redoing a large change costs the most.
+
+Intakt works out how many builders and reviewers fit each time it starts work, so adding an account or memory is picked up on its own; a second account from another company brings back the second reviewer from that company. Only if you want more than that default do you raise the numbers yourself. See [accounts and costs](accounts-and-costs.md#the-smallest-setup).
+
 ## Updating
 
 New versions install themselves safely: Intakt stops starting new jobs, lets the running ones finish, swaps in the new version, checks it starts and works, and resumes. If anything fails, it rolls back and tells you ([draining](the-engine-room.md#draining-and-updates)).

@@ -21,6 +21,8 @@ ENV APP_ENV=prod \
     APP_DEBUG=0 \
     SERVER_PORT=7781 \
     DASHBOARD_PORT=7781 \
+    FRANKENPHP_LOOP_MAX=500 \
+    WORKER_MEMORY_CEILING_MB=256 \
     DATABASE_URL="sqlite:///%kernel.project_dir%/var/data/intakt.db" \
     MERCURE_BOLT_PATH=var/data/mercure.db \
     XDG_CONFIG_HOME=/app/var/data/config \
@@ -38,5 +40,9 @@ RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin intakt \
 USER intakt
 VOLUME /app/var/data
 EXPOSE 7781
+
+# The admin API answers on localhost only; its metrics endpoint stops answering when the server is stuck, so Docker marks the container unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD curl --fail --silent --show-error --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || exit 1
 
 ENTRYPOINT ["intakt-entrypoint"]
