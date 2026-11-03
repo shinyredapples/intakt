@@ -1,0 +1,31 @@
+{
+    "interactions": [
+        {
+            "request": {
+                "method": "POST",
+                "url": "https://api.openai.com/v1/responses",
+                "signature": "a1186cdff133692d9546227673e356d2",
+                "signature_v2": "55d17778edeae534953b8ec562d478b9",
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ],
+                    "authorization": [
+                        "[redacted]"
+                    ]
+                },
+                "body": "{\"text\":{\"format\":{\"name\":\"Plan\",\"schema\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]},\"steps\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]}},\"required\":[\"title\",\"priority\"],\"additionalProperties\":false}}},\"required\":[\"name\",\"priority\",\"steps\"],\"additionalProperties\":false},\"strict\":true,\"type\":\"json_schema\"}},\"model\":\"gpt-4o\",\"input\":[{\"role\":\"user\",\"content\":\"Plan the release.\"}]}"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ]
+                },
+                "body_format": "json",
+                "body": "{\"id\":\"resp_probe\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"id\":\"msg_probe\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"{\\\"name\\\":\\\"ship\\\",\\\"priority\\\":\\\"high\\\",\\\"steps\\\":[{\\\"title\\\":\\\"build\\\",\\\"priority\\\":\\\"low\\\"},{\\\"title\\\":\\\"test\\\",\\\"priority\\\":\\\"high\\\"}]}\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":12,\"output_tokens\":40,\"total_tokens\":52}}"
+            }
+        }
+    ]
+}

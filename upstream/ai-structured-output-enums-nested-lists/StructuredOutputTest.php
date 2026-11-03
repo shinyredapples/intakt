@@ -11,13 +11,16 @@ use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\Generic\Factory as GenericFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\Exception\ExceptionInterface;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\MaxOutputTokensException;
+use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
+use Symfony\AI\Platform\Test\Replay\CassetteHttpClient;
+use Symfony\AI\Platform\Test\Replay\HttpCassette;
 use Symfony\Component\EventDispatcher\EventDispatcher;
-use Symfony\Component\HttpClient\MockHttpClient;
-use Symfony\Component\HttpClient\Response\MockResponse;
 
 enum Priority: string
 {
@@ -42,33 +45,38 @@ final class Plan
     public array $steps = [];
 }
 
-// The provider answers come from the real bridges' wire formats through a mock HTTP client: no network, no credentials.
+// Each answer is replayed from a redacted cassette in cassettes/, which also checks that the request matches the recorded one; no network, no credentials.
 #[CoversNothing]
 final class StructuredOutputTest extends TestCase
 {
-    private const string PLAN = '{"name":"ship","priority":"high","steps":[{"title":"build","priority":"low"},{"title":"test","priority":"high"}]}';
-
     #[DataProvider('providers')]
     public function testAnEnumAndANestedListFillTheTypedObject(string $provider, string $model): void
     {
-        $platform = $this->platform($provider, new MockResponse($this->whole($provider, self::PLAN), ['response_headers' => ['content-type: application/json']]));
+        $platform = $this->platform($provider, 'whole');
 
         $plan = $platform->invoke($model, $this->messages(), ['response_format' => Plan::class])->asObject();
 
-        self::assertInstanceOf(Plan::class, $plan);
-        self::assertSame(Priority::High, $plan->priority);
-        self::assertCount(2, $plan->steps);
-        self::assertContainsOnlyInstancesOf(Step::class, $plan->steps);
-        self::assertSame(Priority::Low, $plan->steps[0]->priority);
-        self::assertSame('test', $plan->steps[1]->title);
+        $this->assertWholePlan($plan);
     }
 
+    // The control for the cut below: the same closed stream carrying the whole plan fills the object, so the exception there comes from the cut.
     #[DataProvider('providers')]
-    public function testAStreamTruncatedMidArrayThrowsATypedExceptionAndReturnsNoObject(string $provider, string $model): void
+    public function testAClosedStreamOfTheWholePlanFillsTheTypedObject(string $provider, string $model): void
     {
-        $cut = '{"name":"ship","priority":"high","steps":[{"title":"build","priority":"low"},{"title":"te';
-        $platform = $this->platform($provider, new MockResponse($this->truncatedStream($provider, $cut), ['response_headers' => ['content-type: text/event-stream']]));
-        $result = $platform->invoke($model, $this->messages(), ['response_format' => Plan::class, 'stream' => true]);
+        $platform = $this->platform($provider, 'stream-whole');
+
+        $plan = $platform->invoke($model, $this->messages(), ['response_format' => Plan::class, 'stream' => true])->asObject();
+
+        $this->assertWholePlan($plan);
+    }
+
+    /**
+     * @param class-string<ExceptionInterface> $expected
+     */
+    #[DataProvider('truncations')]
+    public function testAStreamStoppedByTheTokenLimitMidArrayThrowsATypedExceptionAndReturnsNoObject(string $provider, string $model, string $expected): void
+    {
+        $result = $this->platform($provider, 'stream-cut')->invoke($model, $this->messages(), ['response_format' => Plan::class, 'stream' => true]);
         $object = null;
         $thrown = null;
 
@@ -79,7 +87,8 @@ final class StructuredOutputTest extends TestCase
         }
 
         self::assertNull($object, 'a truncated stream must not give back an object');
-        self::assertInstanceOf(ExceptionInterface::class, $thrown, 'a truncated stream must end in a typed platform exception');
+        self::assertInstanceOf($expected, $thrown, 'a truncated stream must end in a typed platform exception');
+        self::assertNotInstanceOf(IncompleteStreamException::class, $thrown, 'the stream is closed, so the exception must come from the cut, not from a missing end');
     }
 
     /**
@@ -92,16 +101,27 @@ final class StructuredOutputTest extends TestCase
         yield 'generic' => ['generic', 'local-model'];
     }
 
-    private function platform(string $provider, MockResponse $response): PlatformInterface
+    // The generic bridge raises MaxOutputTokensException for a cut tool call only; a cut text reaches the structured-output decoder, which refuses the broken JSON.
+    /**
+     * @return iterable<string, array{string, string, class-string<ExceptionInterface>}>
+     */
+    public static function truncations(): iterable
+    {
+        yield 'anthropic' => ['anthropic', 'claude-haiku-4-5', MaxOutputTokensException::class];
+        yield 'openai' => ['openai', 'gpt-4o', MaxOutputTokensException::class];
+        yield 'generic' => ['generic', 'local-model', RuntimeException::class];
+    }
+
+    private function platform(string $provider, string $case): PlatformInterface
     {
         $events = new EventDispatcher();
         $events->addSubscriber(new PlatformSubscriber());
-        $http = new MockHttpClient($response, 'https://localhost');
+        $http = new CassetteHttpClient(new HttpCassette(__DIR__.'/cassettes/'.$provider.'-'.$case.'.json'), record: false);
 
         return match ($provider) {
-            'anthropic' => AnthropicFactory::createPlatform('key', $http, eventDispatcher: $events),
-            'openai' => OpenAiFactory::createPlatform('sk-test', $http, eventDispatcher: $events),
-            'generic' => GenericFactory::createPlatform('https://localhost', 'key', $http, eventDispatcher: $events),
+            'anthropic' => AnthropicFactory::createPlatform('probe-key', $http, eventDispatcher: $events),
+            'openai' => OpenAiFactory::createPlatform('sk-probe', $http, eventDispatcher: $events),
+            'generic' => GenericFactory::createPlatform('https://localhost', 'probe-key', $http, eventDispatcher: $events),
         };
     }
 
@@ -110,35 +130,13 @@ final class StructuredOutputTest extends TestCase
         return new MessageBag(Message::ofUser('Plan the release.'));
     }
 
-    private function whole(string $provider, string $text): string
+    private function assertWholePlan(mixed $plan): void
     {
-        return json_encode(match ($provider) {
-            'anthropic' => ['id' => 'm1', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-4-5', 'content' => [['type' => 'text', 'text' => $text]], 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]],
-            'openai' => ['id' => 'r1', 'status' => 'completed', 'output' => [['type' => 'message', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => $text]]]]],
-            default => ['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => $text], 'finish_reason' => 'stop']]],
-        }, JSON_THROW_ON_ERROR);
-    }
-
-    // The stream stops after the last text delta, with no closing event, as a dropped connection leaves it.
-    private function truncatedStream(string $provider, string $text): string
-    {
-        $events = match ($provider) {
-            'anthropic' => [
-                ['message_start', ['type' => 'message_start', 'message' => ['id' => 'm1', 'model' => 'claude-haiku-4-5', 'usage' => ['input_tokens' => 1]]]],
-                ['content_block_start', ['type' => 'content_block_start', 'index' => 0, 'content_block' => ['type' => 'text', 'text' => '']]],
-                ['content_block_delta', ['type' => 'content_block_delta', 'index' => 0, 'delta' => ['type' => 'text_delta', 'text' => $text]]],
-            ],
-            'openai' => [
-                ['response.output_text.delta', ['type' => 'response.output_text.delta', 'delta' => $text]],
-            ],
-            default => [
-                ['message', ['choices' => [['index' => 0, 'delta' => ['content' => $text], 'finish_reason' => null]]]],
-            ],
-        };
-
-        return implode('', array_map(
-            static fn (array $event): string => sprintf("event: %s\ndata: %s\n\n", $event[0], json_encode($event[1], JSON_THROW_ON_ERROR)),
-            $events,
-        ));
+        self::assertInstanceOf(Plan::class, $plan);
+        self::assertSame(Priority::High, $plan->priority);
+        self::assertCount(2, $plan->steps);
+        self::assertContainsOnlyInstancesOf(Step::class, $plan->steps);
+        self::assertSame(Priority::Low, $plan->steps[0]->priority);
+        self::assertSame('test', $plan->steps[1]->title);
     }
 }
