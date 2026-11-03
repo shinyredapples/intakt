@@ -150,7 +150,7 @@ Each entry is an isolated reproduction under `upstream/<slug>/` at pinned versio
 | Structured output with enums and nested lists per provider, a stream truncated mid-array | in progress | T28 (#35, part #712), `upstream/ai-structured-output-enums-nested-lists/` | passes, nothing to file |
 | MCP: initialize with protocol 2025-11-25 and an unknown version, empty parameters as `{}` (done in `tests/Core/Mcp/Contract/`, T15, #508) | in progress | T15 (#20) | |
 | MCP: three parallel `tools/call` on one session, with and without `session.lock`, protocol 2025-11-25, empty parameters as `{}` | in progress | T28 (#35, part #712), `upstream/mcp-parallel-tools-call-one-session/` | passes, nothing to file |
-| FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 stops cleanly on SIGTERM; a Symfony reproduction if it still crashes | planned | T28 (#35) | php/frankenphp#2479 (existing) |
+| FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 stops cleanly on SIGTERM; a Symfony reproduction if it still crashes | in progress | T28 (#35, part #713), `upstream/frankenphp-messenger-consume-sigterm/` | still crashes (exit 139) at 1.13.4, plain `php` stops cleanly; already reported in php/frankenphp#2479, `COMMENT.md` waits for the owner |
 | Reset in worker mode: Symfony AI services with mutable state but no `ResetInterface` (first candidate: the Platform `Provider` keeps `$resolvedModel`), found by running one kernel for two different requests | planned | T29 (#29) | |
 
 ## PHP 8.5 in use
