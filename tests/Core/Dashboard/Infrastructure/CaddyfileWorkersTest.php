@@ -21,7 +21,7 @@ final class CaddyfileWorkersTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
 
-    // Booting a worker warms the kernel cache, which takes longer than the hub alone.
+    // Longer than the hub test waits, because the workers boot the kernel and may warm its cache first.
     private const int SECONDS_TO_WAIT = 60;
 
     private Process $server;
@@ -110,10 +110,11 @@ final class CaddyfileWorkersTest extends TestCase
         $counts = ['index.php' => 0, 'mcp.php' => 0];
 
         foreach (array_filter($threads, is_array(...)) as $thread) {
-            $file = basename((string) ($thread['Name'] ?? ''));
+            $name = $thread['Name'] ?? null;
+            $requests = $thread['RequestCount'] ?? null;
 
-            if (str_starts_with((string) ($thread['Name'] ?? ''), 'Worker') && isset($counts[$file])) {
-                $counts[$file] += (int) ($thread['RequestCount'] ?? 0);
+            if (is_string($name) && is_int($requests) && str_starts_with($name, 'Worker') && isset($counts[basename($name)])) {
+                $counts[basename($name)] += $requests;
             }
         }
 
