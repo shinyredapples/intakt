@@ -61,8 +61,8 @@ flowchart LR
 
 - **Guardrails:** before any tool runs, Intakt checks the request. A reviewer that asks for a file outside the code under review is refused. *(in progress)*
 - **Fencing:** text that comes from a task or from the code under review is marked as data before the reviewer sees it, so it cannot give the reviewer orders. The mark closes only at a closing marker that repeats its own boundary, so a fake closing marker inside a file stays data. *(in progress)*
-- **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(in progress)*
-- **MCP** is a standard way for AI agents to reach tools. You can drive Intakt from your own AI assistant over MCP: list your projects, start a review of a branch, and read a review's status, verdicts and list of things to fix. Each tool is labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides whether a tool may write: starting a review needs your own key and a setting that allows it, whatever the assistant asks. *(built)* Handing the reviewers their own tools over MCP during a review is planned.
+- **A failing tool is not a crash:** the reviewer gets an error message and carries on. *(in progress)* Losing the whole toolbox is different: when the reviewer cannot reach its tools at all, or loses them partway through, the review stops and is marked `no-tools` instead of guessing without them. *(built)*
+- **MCP** is a standard way for AI agents to reach tools. You can drive Intakt from your own AI assistant over MCP: list your projects, start a review of a branch, and read a review's status, verdicts and list of things to fix. Each tool is labeled with what it does ("only reads", "changes something"), and Symfony's Security component decides whether a tool may write: starting a review needs your own key and a setting that allows it, whatever the assistant asks. *(built)* The reviewers reach their own tools the same way during a review: each review gets a private MCP door that only shows the code under review, and only that review's reviewers hold its key. *(built)*
 
 ## Project memory
 
