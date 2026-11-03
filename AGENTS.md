@@ -21,6 +21,10 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Small methods, early returns, no flag parameters, at most three parameters (unless a vendor method's signature fixes more), no `else` after a jump, no nested `try` (enforced).
+- Arguments are positional by default. Name one only where its value does not explain itself at the call site: a bare boolean, `null`, an unclear number or string literal, several scalars of the same type in a row, or skipped optional parameters; not when the variable name or type already says it.
+- A call with one named argument may stay on one line; with two or more, every argument goes on its own line with a trailing comma (the code style gate will enforce this once its fixer lands; until then, review).
+- Named arguments are no fix for a long parameter list: past the limit, split the method, or group values that form a real concept into a readonly value object (never an artificial parameter object).
+- Calls into a `Contract/` interface or across a plugin boundary use no named arguments: the parameter name would become public API, and an implementation that renames it would break callers.
 - Classes are imported, never fully qualified; global functions and constants are written plain (`count()`, `PHP_EOL`), with neither a backslash nor a `use function`/`use const` (enforced). A class alias only where two classes share a short name, plus Doctrine's `ORM`.
 - Names: commands imperative, events past tense, queries nouns or questions; exceptions named after the broken rule.
 - A closed set of values is a backed enum; a single named value stays a constant.
