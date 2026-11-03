@@ -12,18 +12,22 @@ final class PersistenceEnginesTest extends SandboxTestCase
 {
     private const string SCRIPT = __DIR__.'/../../.github/ci/persistence-engines.sh';
 
-    // A fake docker, because the real engines need the runner's service containers; it records start and end times.
+    // A barrier, because wall-clock times prove nothing: each fake engine waits until all three started, so a serial run times out.
     private const string FAKE_DOCKER = <<<'BASH'
         #!/usr/bin/env bash
         while [ "$#" -gt 0 ]; do
           if [ "$1" = --network ]; then network=$2; fi
           shift
         done
-        date +%s.%N > "$MARKS/start.$network"
-        sleep 1
+        : > "$MARKS/start.$network"
+        for _ in $(seq 1 100); do [ "$(ls "$MARKS" | grep -c '^start\.')" -ge 3 ] && break; sleep 0.1; done
+        [ "$(ls "$MARKS" | grep -c '^start\.')" -ge 3 ] || { echo "not all engines started"; exit 99; }
+        if [ -f "$MARKS/fail.$network" ]; then : > "$MARKS/end.$network"; exit "$(cat "$MARKS/fail.$network")"; fi
+        if [ -f "$MARKS/first-to-end" ]; then
+          for _ in $(seq 1 100); do [ -f "$MARKS/end.$(cat "$MARKS/first-to-end")" ] && break; sleep 0.1; done
+        fi
         echo "tests ran on $network"
-        date +%s.%N > "$MARKS/end.$network"
-        if [ -f "$MARKS/fail.$network" ]; then exit "$(cat "$MARKS/fail.$network")"; fi
+        : > "$MARKS/end.$network"
         exit 0
         BASH;
 
@@ -37,15 +41,14 @@ final class PersistenceEnginesTest extends SandboxTestCase
         foreach (['one', 'two', 'three'] as $network) {
             self::assertStringContainsString("::group::persistence on engine {$network} (exit 0)\ntests ran on {$network}\n::endgroup::", $result->output);
         }
-        $starts = array_map(fn (string $network): float => $this->mark($sandbox, 'start', $network), ['one', 'two', 'three']);
-        $ends = array_map(fn (string $network): float => $this->mark($sandbox, 'end', $network), ['one', 'two', 'three']);
-        self::assertLessThan(min($ends), max($starts), 'every engine started before any engine finished');
+        self::assertStringNotContainsString('not all engines started', $result->output);
     }
 
     public function testAFailingEngineFailsTheStepWithItsExitCodeWhileTheOthersFinish(): void
     {
         $sandbox = $this->sandboxWithFakeDocker();
         $sandbox->write('marks/fail.two', '3');
+        $sandbox->write('marks/first-to-end', 'two');
 
         $result = $this->runEngines($sandbox);
 
@@ -78,8 +81,4 @@ final class PersistenceEnginesTest extends SandboxTestCase
         );
     }
 
-    private function mark(Sandbox $sandbox, string $kind, string $network): float
-    {
-        return (float) trim((string) file_get_contents($sandbox->root."/marks/{$kind}.{$network}"));
-    }
 }
