@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Platform\Infrastructure;
 
 use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Infrastructure\HeldCredentials;
 use Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,13 +17,14 @@ use Symfony\Component\Clock\MockClock;
 
 #[CoversClass(RedactedJsonFormatter::class)]
 #[UsesClass(Redaction::class)]
+#[UsesClass(HeldCredentials::class)]
 final class RedactedJsonFormatterTest extends TestCase
 {
     private const string CREDENTIAL = 'INTAKT_TEST_HELD_CREDENTIAL';
 
     protected function tearDown(): void
     {
-        unset($_SERVER[self::CREDENTIAL]);
+        unset($_SERVER[self::CREDENTIAL], $_SERVER[self::CREDENTIAL.'_TEAM']);
     }
 
     public function testALoggedExceptionCarriesItsClassMessageAndTrace(): void
@@ -120,13 +122,53 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertStringContainsString('[redacted]', $line);
     }
 
+    public function testAnAccountKeyWithItsNameAppendedIsWrittenRedacted(): void
+    {
+        $_SERVER[self::CREDENTIAL.'_TEAM'] = 'team-key-0123456789abcdef';
+
+        $line = $this->format('error', 'Account key {k} rejected', ['k' => 'team-key-0123456789abcdef']);
+
+        self::assertStringNotContainsString('team-key-0123', $line);
+    }
+
+    public function testAnAuthorizationHeaderListInTheContextIsRedactedAndTheLineStaysJson(): void
+    {
+        $line = $this->format('error', 'Request failed.', ['headers' => ['Authorization' => ['Bearer abc123xyz']], 'reviewer' => 'r1']);
+
+        self::assertSame(['headers' => ['Authorization' => '[redacted]'], 'reviewer' => 'r1'], $this->decoded($line)['context'] ?? null);
+    }
+
+    public function testAnAuthorizationHeaderValueInAContextMapIsWrittenRedacted(): void
+    {
+        $line = $this->format('error', 'Request failed.', ['headers' => ['authorization' => 'Basic abc123xyz']]);
+
+        self::assertSame(['headers' => ['authorization' => '[redacted]']], $this->decoded($line)['context'] ?? null);
+    }
+
+    public function testAContextKeyThatNamesNoHeaderKeepsItsValue(): void
+    {
+        $line = $this->format('error', 'Review failed.', ['author' => 'octocat']);
+
+        self::assertSame(['author' => 'octocat'], $this->decoded($line)['context'] ?? null);
+    }
+
+    public function testAnUnterminatedPrivateKeyInAFailureKeepsItsClassAndTrace(): void
+    {
+        $line = $this->format('error', 'It failed.', ['exception' => new RuntimeException("Bad key -----BEGIN RSA PRIVATE KEY-----\nMIIEabc")]);
+
+        $failure = $this->loggedFailure($line);
+        self::assertSame('Bad key [redacted]', $failure['message']);
+        self::assertSame(RuntimeException::class, $failure['class']);
+        self::assertStringContainsString(__FUNCTION__, $failure['trace']);
+    }
+
     /**
      * @param array<string, mixed> $context
      */
     private function format(string $level, string $message, array $context): string
     {
         $_SERVER[self::CREDENTIAL] ??= 'held-secret-1';
-        $formatter = new RedactedJsonFormatter(new Redaction(), new MockClock('2026-11-03 10:00:00 UTC'), [self::CREDENTIAL, 'INTAKT_TEST_UNSET_CREDENTIAL']);
+        $formatter = new RedactedJsonFormatter(new Redaction(), new MockClock('2026-11-03 10:00:00 UTC'), new HeldCredentials([self::CREDENTIAL, 'INTAKT_TEST_UNSET_CREDENTIAL']));
 
         return $formatter($level, $message, $context);
     }

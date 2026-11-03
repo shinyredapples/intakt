@@ -10,16 +10,13 @@ use Stringable;
 use Symfony\Component\Clock\ClockInterface;
 use Throwable;
 
-// The log line formatter of the service's logger: one JSON line per record, redacted last so every escaping of a secret is covered.
+// The log line formatter of the service's logger: one JSON line per record, each value redacted before encoding, so a redaction never cuts into the JSON or another field.
 final readonly class RedactedJsonFormatter
 {
-    /**
-     * @param list<string> $credentialNames
-     */
     public function __construct(
         private Redaction $redaction,
         private ClockInterface $clock,
-        private array $credentialNames,
+        private HeldCredentials $heldCredentials,
     ) {
     }
 
@@ -35,17 +32,7 @@ final readonly class RedactedJsonFormatter
             'context' => array_map($this->loggable(...), $context),
         ];
 
-        return $this->redaction->redact($this->encoded($record), ...$this->heldCredentials());
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function heldCredentials(): array
-    {
-        $values = array_map(static fn (string $name): mixed => $_SERVER[$name] ?? $_ENV[$name] ?? getenv($name), $this->credentialNames);
-
-        return array_values(array_filter($values, static fn (mixed $value): bool => is_string($value) && '' !== $value));
+        return $this->encoded($this->redacted($record, $this->heldCredentials->values()));
     }
 
     /**
@@ -92,9 +79,39 @@ final readonly class RedactedJsonFormatter
     }
 
     /**
-     * @param array<string, mixed> $record
+     * @param list<string> $credentials
      */
-    private function encoded(array $record): string
+    private function redacted(mixed $value, array $credentials): mixed
+    {
+        if (is_string($value)) {
+            return $this->redaction->redact($value, ...$credentials);
+        }
+
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        $redacted = [];
+        foreach ($value as $key => $item) {
+            $name = is_string($key) ? $this->redaction->redact($key, ...$credentials) : $key;
+            $redacted[$name] = $this->namesHeader($key) ? Redaction::MARKER : $this->redacted($item, $credentials);
+        }
+
+        return $redacted;
+    }
+
+    // A map holds a header's value apart from its name, so the redaction is asked whether it would redact a value written after this name.
+    private function namesHeader(int|string $key): bool
+    {
+        $sample = $key.': value';
+
+        return is_string($key) && $this->redaction->redact($sample) !== $sample;
+    }
+
+    /**
+     * @param mixed $record
+     */
+    private function encoded(mixed $record): string
     {
         $line = json_encode($record, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
 
