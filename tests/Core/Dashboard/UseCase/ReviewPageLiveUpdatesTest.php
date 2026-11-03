@@ -34,7 +34,12 @@ use Twig\Environment;
 #[UsesClass(RoundProgress::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
+    private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];
+
     private ?string $secretBefore = null;
+
+    /** @var list<string> */
+    private array $placeholders = [];
 
     #[Override]
     protected function setUp(): void
@@ -43,6 +48,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->secretBefore = is_string($before) ? $before : null;
         // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        $this->givenTheDownloadedScriptsExist();
         parent::setUp();
     }
 
@@ -51,7 +57,23 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $secret = $this->secretBefore ?? '';
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        array_map(unlink(...), $this->placeholders);
         parent::tearDown();
+    }
+
+    // The scripts are downloaded by importmap:install, which needs the network; the page only maps their paths, so empty stand-ins make it listen.
+    private function givenTheDownloadedScriptsExist(): void
+    {
+        foreach (self::VENDOR_ASSETS as $asset) {
+            $path = dirname(__DIR__, 4).'/assets/vendor/'.$asset;
+            if (is_file($path)) {
+                continue;
+            }
+
+            is_dir(dirname($path)) || mkdir(dirname($path), 0o777, true);
+            file_put_contents($path, '');
+            $this->placeholders[] = $path;
+        }
     }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
