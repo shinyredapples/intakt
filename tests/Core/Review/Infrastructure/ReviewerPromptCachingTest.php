@@ -18,8 +18,6 @@ use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
-use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
-use Psr\Log\NullLogger;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
@@ -27,8 +25,10 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory;
 use Symfony\AI\Platform\Result\DeferredResult;
@@ -150,7 +150,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
      */
     private function usagesOf(TraceablePlatform $platform): array
     {
-        $answered = array_filter($platform->getCalls(), static fn (array $call): bool => !($call['options']['stream'] ?? false));
+        $answered = array_filter($platform->getCalls(), static fn (array $call): bool => true !== ($call['options']['stream'] ?? false));
 
         return array_values(array_map(static function (array $call): TokenUsageInterface {
             $result = $call['result'];

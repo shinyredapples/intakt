@@ -21,14 +21,14 @@ final class TierRoutedPlatformTest extends TestCase
 {
     public function testAnApiProviderModelCanStream(): void
     {
-        $platform = new TierRoutedPlatform($this->createStub(TierInvoker::class), new ResolvedModel(Provider::Anthropic, 'big'));
+        $platform = new TierRoutedPlatform(self::createStub(TierInvoker::class), new ResolvedModel(Provider::Anthropic, 'big'));
 
         self::assertTrue($platform->getModelCatalog()->getModel('big')->supports(Capability::OUTPUT_STREAMING));
     }
 
     public function testASubscriptionCliModelCannotStreamButKeepsItsOtherCapabilities(): void
     {
-        $platform = new TierRoutedPlatform($this->createStub(TierInvoker::class), new ResolvedModel(Provider::ClaudeCode, 'big'));
+        $platform = new TierRoutedPlatform(self::createStub(TierInvoker::class), new ResolvedModel(Provider::ClaudeCode, 'big'));
 
         $model = $platform->getModelCatalog()->getModel('big');
 

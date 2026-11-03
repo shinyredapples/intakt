@@ -9,7 +9,7 @@ use Symfony\AI\Platform\Capability;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\FallbackModelCatalog;
 
-// Tells a caller that asks the catalog whether to stream that this provider answers in one piece.
+// Because a caller asks the catalog whether to stream, and a provider that answers in one piece must say it cannot.
 final class UnstreamedModelCatalog extends FallbackModelCatalog
 {
     #[Override]

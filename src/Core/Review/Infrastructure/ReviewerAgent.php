@@ -9,10 +9,10 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Override;
-use Intakt\Core\Review\Contract\ReviewerConversation;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
@@ -94,6 +94,9 @@ final readonly class ReviewerAgent implements Reviewer
     }
 
     // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
+    /**
+     * @param non-empty-string $model
+     */
     private function canStream(PlatformInterface $platform, string $model): bool
     {
         return $platform->getModelCatalog()->getModel($model)->supports(Capability::OUTPUT_STREAMING);

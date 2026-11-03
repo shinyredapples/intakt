@@ -30,8 +30,6 @@ use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
-use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
-use Psr\Log\NullLogger;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
@@ -41,8 +39,10 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
@@ -52,14 +52,15 @@ use Symfony\AI\AiBundle\Test\AiAssertionsTrait;
 use Symfony\AI\Platform\Exception\BadRequestException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\ModelCatalog\FallbackModelCatalog;
-use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Message\UserMessage;
+use Symfony\AI\Platform\ModelCatalog\FallbackModelCatalog;
+use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -755,17 +756,11 @@ final class ReviewerVerdictTest extends WebTestCase
     private function reviewRounds(string $task, array $rounds, string|ResultInterface $answer): Verdict
     {
         $script = function (mixed $model, mixed $input, array $options) use (&$rounds, $answer): string|ResultInterface {
-            $asked = true === ($options['stream'] ?? false);
-
-            if ($asked && $this->refusesStream) {
-                throw new BadRequestException('This account cannot stream.');
-            }
-
+            $this->refuseToStreamIfConfigured($options);
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
             $next = array_shift($rounds);
-            $result = null === $next ? $answer : new ToolCallResult($next);
 
-            return $asked ? $this->streamedWhenAsked($result) : $result;
+            return $this->streamedWhenAsked(null === $next ? $answer : new ToolCallResult($next), $options);
         };
         $mock = MockPlatformFactory::createPlatform($script, $this->catalog, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
@@ -782,10 +777,23 @@ final class ReviewerVerdictTest extends WebTestCase
         return $verdict;
     }
 
-    // Like a provider that answers in one piece unless the request asks for a stream.
-    private function streamedWhenAsked(string|ResultInterface $result): ResultInterface
+    /**
+     * @param array<mixed> $options
+     */
+    private function refuseToStreamIfConfigured(array $options): void
     {
-        if ($result instanceof StreamResult) {
+        if ($this->refusesStream && true === ($options['stream'] ?? false)) {
+            throw new BadRequestException('This account cannot stream.');
+        }
+    }
+
+    // Like a provider that answers in one piece unless the request asks for a stream.
+    /**
+     * @param array<mixed> $options
+     */
+    private function streamedWhenAsked(string|ResultInterface $result, array $options): string|ResultInterface
+    {
+        if (true !== ($options['stream'] ?? false) || $result instanceof StreamResult) {
             return $result;
         }
 
@@ -795,7 +803,9 @@ final class ReviewerVerdictTest extends WebTestCase
             })());
         }
 
-        return $this->streamed(...str_split(is_string($result) ? $result : (string) $result->getContent(), 40));
+        $text = $result instanceof TextResult ? $result->getContent() : $result;
+
+        return is_string($text) ? $this->streamed(...str_split($text, 40)) : $result;
     }
 
     private function streamed(string ...$parts): StreamResult

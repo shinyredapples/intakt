@@ -45,7 +45,6 @@ use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
-use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
