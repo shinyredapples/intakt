@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
@@ -13,13 +14,12 @@ use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
-use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
-use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
-use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
@@ -74,7 +74,7 @@ final class SteeringTrustCheckTest extends TestCase
         $this->pauseTheInstallation();
 
         try {
-            (void) $this->answers()->ofInstallation('/repos/acme/widget/collaborators/alice/permission', 'minted-value');
+            $this->answers()->ofInstallation('/repos/acme/widget/collaborators/alice/permission', 'minted-value');
             self::fail('The permission was read while the installation waits for its reset.');
         } catch (ForgeRateLimited $limited) {
             self::assertEquals($this->clock->now()->modify('+600 seconds'), $limited->resetsAt);

@@ -92,7 +92,7 @@ final readonly class SteeringTrustCheck
         [$owner, $name] = explode('/', $repository, 2);
         $path = sprintf('/repos/%s/%s/collaborators/%s/permission', rawurlencode($owner), rawurlencode($name), rawurlencode($login));
 
-        return $this->permissionFrom($this->github->ofInstallation($path,$this->installationToken()), $login);
+        return $this->permissionFrom($this->github->ofInstallation($path, $this->installationToken()), $login);
     }
 
     /**
