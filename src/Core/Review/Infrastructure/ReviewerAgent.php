@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
@@ -43,7 +44,8 @@ final readonly class ReviewerAgent implements Reviewer
         }
 
         $conversation = $this->runs->started($this->prompt->messagesFor($request->conversation, $request->brief));
-        $agent = $this->runs->agent($this->prompt->fenced(new FaultTolerantToolbox($tools)), $platform, $model);
+        $fenced = $this->prompt->fenced(new FaultTolerantToolbox($tools));
+        $agent = $this->runs->agent($fenced, $platform, $model);
 
         $execution = $agent->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
         $verdict = $this->answerOf($this->runs->reporting($execution, $request->conversation));
@@ -52,7 +54,17 @@ final readonly class ReviewerAgent implements Reviewer
             return Verdict::invalidOutput('the reviewer made a malformed tool call.');
         }
 
+        if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
+            return Verdict::cutApproval();
+        }
+
         return $this->checkedAgainst($request->brief, $verdict);
+    }
+
+    // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
+    private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
+    {
+        return Decision::Approve === $verdict->verdict && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
     }
 
     // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
