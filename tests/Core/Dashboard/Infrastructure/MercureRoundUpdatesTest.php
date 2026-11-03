@@ -91,6 +91,17 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('1 of 2 reviewers finished.', $this->published[0]->getData());
     }
 
+    public function testAStoppedReviewerReplacesItsStateAndLosesItsStopButtonOnTheRoundsPrivateTopic(): void
+    {
+        $this->updates()->reviewerStopped(Uuid::fromString(self::ROUND), self::REVIEWER);
+
+        $data = $this->published[0]->getData();
+        self::assertStringContainsString(sprintf('<turbo-stream action="replace" target="reviewer-%1$s-state"><template><span id="reviewer-%1$s-state">stopped</span>', self::REVIEWER), $data);
+        self::assertStringContainsString(sprintf('<turbo-stream action="remove" target="reviewer-%s-stop">', self::REVIEWER), $data);
+        self::assertSame(['review/rounds/'.self::ROUND], $this->published[0]->getTopics());
+        self::assertTrue($this->published[0]->isPrivate());
+    }
+
     public function testAJudgedRoundShowsItIsJudged(): void
     {
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));

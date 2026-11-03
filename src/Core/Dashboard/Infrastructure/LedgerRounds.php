@@ -28,6 +28,7 @@ final class LedgerRounds
         LedgerEventKind::ReviewerFailed,
         LedgerEventKind::ReviewerBlocked,
         LedgerEventKind::CatchUpOwed,
+        LedgerEventKind::ReviewerStopped,
     ];
 
     /** @var array<string, ReviewedRound> */
@@ -187,6 +188,12 @@ final class LedgerRounds
      */
     private function addReviewerEvent(LedgerEventKind $kind, string $round, array $payload): void
     {
+        if (LedgerEventKind::ReviewerStopped === $kind) {
+            $this->stopReviewer($round, $payload);
+
+            return;
+        }
+
         $outcome = $this->outcomeOf($round, $payload);
 
         if (!$outcome instanceof ReviewerOutcome) {
@@ -194,6 +201,20 @@ final class LedgerRounds
         }
 
         $this->outcomes[$round][$outcome->id] = $this->moved($outcome, $kind, $payload) ?? $outcome;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    // Only a reviewer the ledger saw start can be stopped, because the stop names no role or tier of its own.
+    private function stopReviewer(string $round, array $payload): void
+    {
+        $reviewer = $payload['reviewer'] ?? null;
+        $outcome = is_string($reviewer) ? $this->outcomes[$round][$reviewer] ?? null : null;
+
+        if ($outcome instanceof ReviewerOutcome) {
+            $this->outcomes[$round][$outcome->id] = $outcome->stopped();
+        }
     }
 
     /**
@@ -226,6 +247,7 @@ final class LedgerRounds
 
         return match (true) {
             LedgerEventKind::ReviewerStarted === $kind => $outcome->restarted(),
+            $outcome->isStopped() => null,
             LedgerEventKind::VerdictReceived === $kind && is_string($decision) && is_int($findings) => $outcome->answered($decision, $findings, $this->modeOf($payload)),
             LedgerEventKind::ReviewerFailed === $kind && is_string($failure) => $outcome->failed($failure),
             LedgerEventKind::ReviewerBlocked === $kind && is_string($reason) => $outcome->blocked($reason),

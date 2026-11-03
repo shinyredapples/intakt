@@ -70,6 +70,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 'approve', 'findings' => 0, 'mode' => 'shadow']);
     }
 
+    public function stopReviewer(string $round, string $role): void
+    {
+        $this->add(LedgerEventKind::ReviewerStopped, ['round' => $round, 'reviewer' => $round.'-'.$role]);
+    }
+
     public function failReviewer(string $round, string $role, string $failure): void
     {
         $this->add(LedgerEventKind::ReviewerFailed, $this->reviewer($round, $role) + ['failure' => $failure]);

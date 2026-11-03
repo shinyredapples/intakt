@@ -107,7 +107,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'standard', 'running', '', '', '']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'standard', 'running Stop', '', '', '']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
         self::assertSelectorTextContains('section.round', '1 of 2 reviewers started.');
     }
 

@@ -39,7 +39,13 @@
             <tr>
                 <td>{{ outcome.role }}</td>
                 <td>{{ outcome.tier }}</td>
-                <td>{{ outcome.progress.value }}</td>
+                <td><span id="reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</span>
+                {% if unfinished and outcome.progress.name == 'Running' %}
+                    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEWER'), {round: reviewed.round, reviewer: outcome.id}) }}" id="reviewer-{{ outcome.id }}-stop" class="stop-reviewer">
+                        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReviewer\\StopReviewerController::TOKEN_ID')) }}">
+                        <button type="submit">Stop</button>
+                    </form>
+                {% endif %}</td>
                 <td>{{ outcome.decision ?? '' }}{% if outcome.decision is not null and outcome.mode.name == 'Shadow' %} (shadow){% endif %}</td>
                 <td>{{ outcome.findings ?? '' }}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>

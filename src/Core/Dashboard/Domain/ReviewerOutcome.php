@@ -49,6 +49,17 @@ final readonly class ReviewerOutcome
         return clone ($this, ['progress' => ReviewerProgress::Blocked, 'note' => $reason]);
     }
 
+    public function stopped(): self
+    {
+        return clone ($this, ['progress' => ReviewerProgress::Stopped]);
+    }
+
+    // What follows a stop (the blocked verdict the stopped reviewer returns) is the stop's own consequence, so the row keeps saying stopped.
+    public function isStopped(): bool
+    {
+        return ReviewerProgress::Stopped === $this->progress;
+    }
+
     public function substitutedBy(string $provider): self
     {
         return clone ($this, ['substitute' => $provider]);

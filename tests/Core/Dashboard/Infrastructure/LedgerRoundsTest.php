@@ -85,6 +85,39 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
     }
 
+    public function testAStoppedReviewerStaysStoppedWhenItsBlockedVerdictFollows(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}'),
+            $this->event(LedgerEventKind::ReviewerStopped, '{"round":"r1","reviewer":"x"}'),
+            $this->event(LedgerEventKind::VerdictReceived, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard","decision":"blocked","findings":1}'),
+        );
+
+        self::assertSame(ReviewerProgress::Stopped, $review?->rounds[0]->outcomes[0]->progress);
+    }
+
+    public function testAReviewerStartedAgainAfterAStopRunsAnew(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}'),
+            $this->event(LedgerEventKind::ReviewerStopped, '{"round":"r1","reviewer":"x"}'),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}'),
+        );
+
+        self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
+    }
+
+    public function testAStopOfAReviewerThatNeverStartedAddsNoRow(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->event(LedgerEventKind::ReviewerStopped, '{"round":"r1","reviewer":"x"}'));
+
+        self::assertSame([], $review?->rounds[0]->outcomes);
+    }
+
     #[DataProvider('modes')]
     public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
     {
