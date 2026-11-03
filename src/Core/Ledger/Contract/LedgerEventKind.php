@@ -13,6 +13,7 @@ enum LedgerEventKind: string
     case ReviewerFailed = 'reviewer_failed';
     case ReviewerBlocked = 'reviewer_blocked';
     case CatchUpOwed = 'catch_up_owed';
+    case StreamingFellBack = 'streaming_fell_back';
     case JudgeDone = 'judge_done';
     case UsageRecorded = 'usage_recorded';
     case AccountCooledDown = 'account_cooled_down';
