@@ -116,8 +116,8 @@ final class CaddyfileTest extends TestCase
     // Searched, because the route nesting is Caddy's choice.
     private function workerIn(array $config, string $name): ?array
     {
-        foreach ($config['workers'] ?? [] as $worker) {
-            if (is_array($worker) && ($worker['name'] ?? null) === $name) {
+        foreach (array_filter((array) ($config['workers'] ?? []), is_array(...)) as $worker) {
+            if (($worker['name'] ?? null) === $name) {
                 return $worker;
             }
         }
