@@ -98,6 +98,27 @@ services:
         arguments:
             $baseUrl: '%env(FRANKENPHP_ADMIN_URL)%'
 
+    # The credentials Intakt holds, read from the environment or the secrets vault; an unset one is null and redacts nothing.
+    Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter:
+        arguments:
+            $heldCredentials:
+                - '%env(default::APP_SECRET)%'
+                - '%env(default::MERCURE_JWT_SECRET)%'
+                - '%env(default::MCP_OWNER_TOKEN)%'
+                - '%env(default::GITHUB_APP_PRIVATE_KEY)%'
+                - '%env(default::ANTHROPIC_API_KEY)%'
+                - '%env(default::OPENAI_API_KEY)%'
+                - '%env(default::OPENAI_COMPATIBLE_API_KEY)%'
+                - '%env(default::CLAUDE_CODE_OAUTH_TOKEN)%'
+
+    # Replaces the framework's fallback logger so every record is a redacted JSON line with the failure's class and trace on the service output (the journal).
+    logger:
+        class: Symfony\Component\HttpKernel\Log\Logger
+        arguments:
+            $minLevel: warning
+            $output: 'php://stderr'
+            $formatter: '@Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter'
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
