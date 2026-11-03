@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
+use Intakt\Gates\HighlightsRow;
+use Intakt\Gates\HighlightsRows;
 use Intakt\Gates\HighlightStatus;
 use Intakt\Gates\HighlightsUpToDateGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsUpToDateGate::class)]
+#[CoversClass(HighlightsRows::class)]
+#[CoversClass(HighlightsRow::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(HighlightStatus::class)]
 final class HighlightsUpToDateGateTest extends SandboxTestCase
@@ -182,7 +186,9 @@ final class HighlightsUpToDateGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('docs/highlights.md', (string) file_get_contents($root.'/docs/highlights.md'));
 
-        foreach (glob($root.'/upstream/*', GLOB_ONLYDIR) ?: [] as $reproduction) {
+        $reproductions = glob($root.'/upstream/*', GLOB_ONLYDIR);
+
+        foreach (false === $reproductions ? [] : $reproductions as $reproduction) {
             $sandbox->write('upstream/'.basename($reproduction).'/REPORT.md', "x\n");
         }
 

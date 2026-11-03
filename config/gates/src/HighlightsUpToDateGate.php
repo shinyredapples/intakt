@@ -14,24 +14,8 @@ final readonly class HighlightsUpToDateGate implements Gate
 
     private const string FOUND_IN_THE_BETA = 'Found in the beta';
 
-    private const string HEADING = '/^#{1,6}\s+(.*?)\s*#*\s*$/';
-
-    // Matches CommonMark, because ``a`b`` is one span and an escaped backtick opens none.
-    private const string BACKTICKED = '/\\\\.(*SKIP)(*FAIL)|(`+)(?!`)(?:(.+?)(?<!`)\1(?!`)|(*SKIP)(*FAIL))/';
-
-    // One space on each side is padding, so a span can start or end with a backtick (CommonMark).
-    private const string PADDED_SPAN = '/^ (.*[^ ].*) $/';
-
-    private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
-
-    private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
-
-    private const string CELL_BORDER = '/(?<!\\\\)\|/';
-
-    private const string OUTER_PIPES = '/^\||(?<!\\\\)\|$/';
-
     public function __construct(
-        private FencedCodeBlocks $codeBlocks,
+        private HighlightsRows $rows,
     ) {
     }
 
@@ -55,7 +39,7 @@ final readonly class HighlightsUpToDateGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $rows = $this->rowsOf($contents);
+        $rows = $this->rows->of($contents);
         $findings = [
             ...$this->reproductionsWithoutRow($this->reproductionsOn($workspace->root, $tracked), $rows),
             ...$this->plannedRowsAlreadyBuilt($this->existenceOn($workspace->root, $tracked), $rows),
@@ -65,27 +49,18 @@ final readonly class HighlightsUpToDateGate implements Gate
     }
 
     /**
-     * @param list<string>                                                                  $reproductions
-     * @param list<array{line: int, section: string, status: ?string, paths: list<string>}> $rows
+     * @param list<string>        $reproductions
+     * @param list<HighlightsRow> $rows
      *
      * @return list<string>
      */
     private function reproductionsWithoutRow(array $reproductions, array $rows): array
     {
-        $named = [];
-
-        foreach ($rows as $row) {
-            if (self::FOUND_IN_THE_BETA === $row['section']) {
-                $named = [...$named, ...$row['paths']];
-            }
-        }
-
+        $beta = array_filter($rows, static fn (HighlightsRow $row): bool => self::FOUND_IN_THE_BETA === $row->section);
         $findings = [];
 
         foreach ($reproductions as $reproduction) {
-            $isNamed = [] !== array_filter($named, static fn (string $path): bool => $path === $reproduction || str_starts_with($path, $reproduction.'/'));
-
-            if (!$isNamed) {
+            if ([] === array_filter($beta, static fn (HighlightsRow $row): bool => $row->names($reproduction))) {
                 $findings[] = self::FILE.': `'.$reproduction.'/` has no row in "'.self::FOUND_IN_THE_BETA.'" whose Where names it, add one';
             }
         }
@@ -94,8 +69,8 @@ final readonly class HighlightsUpToDateGate implements Gate
     }
 
     /**
-     * @param Closure(string): bool                                                         $exists
-     * @param list<array{line: int, section: string, status: ?string, paths: list<string>}> $rows
+     * @param Closure(string): bool $exists
+     * @param list<HighlightsRow>   $rows
      *
      * @return list<string>
      */
@@ -104,10 +79,11 @@ final readonly class HighlightsUpToDateGate implements Gate
         $findings = [];
 
         foreach ($rows as $row) {
-            $missing = array_filter($row['paths'], static fn (string $path): bool => !$exists($path));
+            $missing = array_filter($row->paths, static fn (string $path): bool => !$exists($path));
 
-            if (HighlightStatus::Planned->value === $row['status'] && [] !== $row['paths'] && [] === $missing) {
-                $findings[] = self::FILE.':'.$row['line'].': status "planned", but every path in Where exists ('.implode(', ', array_map(static fn (string $path): string => '`'.$path.'`', $row['paths'])).'), update its status to in progress or done';
+            if (HighlightStatus::Planned->value === $row->status && [] !== $row->paths && [] === $missing) {
+                $named = implode(', ', array_map(static fn (string $path): string => '`'.$path.'`', $row->paths));
+                $findings[] = self::FILE.':'.$row->line.': status "planned", but every path in Where exists ('.$named.'), update its status to in progress or done';
             }
         }
 
@@ -158,108 +134,5 @@ final readonly class HighlightsUpToDateGate implements Gate
         }
 
         return static fn (string $path): bool => isset($known[$path]);
-    }
-
-    /**
-     * @return list<array{line: int, section: string, status: ?string, paths: list<string>}>
-     */
-    private function rowsOf(string $contents): array
-    {
-        $lines = $this->codeBlocks->blanked(explode("\n", $contents));
-        $rows = [];
-        $section = '';
-        $columns = null;
-
-        foreach ($lines as $index => $line) {
-            if (1 === preg_match(self::HEADING, $line, $heading)) {
-                $section = $heading[1];
-            }
-
-            $cells = $this->cellsOf($line);
-
-            if (null === $cells) {
-                $columns = null;
-
-                continue;
-            }
-
-            if (null === $columns) {
-                $columns = $this->columnsOf($cells, $lines[$index + 1] ?? '');
-
-                continue;
-            }
-
-            if (!$this->isSeparator($cells)) {
-                $rows[] = [
-                    'line' => $index + 1,
-                    'section' => $section,
-                    'status' => false === $columns['status'] ? null : ($cells[$columns['status']] ?? ''),
-                    'paths' => false === $columns['where'] ? [] : $this->pathsIn($cells[$columns['where']] ?? ''),
-                ];
-            }
-        }
-
-        return $rows;
-    }
-
-    /**
-     * @param list<string> $cells
-     *
-     * @return array{status: int|false, where: int|false}|null
-     */
-    private function columnsOf(array $cells, string $next): ?array
-    {
-        $separator = $this->cellsOf($next);
-
-        // Only a separator row makes a header, because outer pipes are optional and prose may hold a pipe.
-        if (null === $separator || !$this->isSeparator($separator)) {
-            return null;
-        }
-
-        return ['status' => array_search('Status', $cells, true), 'where' => array_search('Where', $cells, true)];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function pathsIn(string $where): array
-    {
-        preg_match_all(self::BACKTICKED, $where, $matches);
-        $paths = [];
-
-        foreach ($matches[2] ?? [] as $span) {
-            $path = preg_replace(self::PADDED_SPAN, '$1', $span) ?? $span;
-
-            if (1 === preg_match(self::PATH_LIKE, $path)) {
-                $paths[] = rtrim(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path, '/');
-            }
-        }
-
-        return $paths;
-    }
-
-    /**
-     * @param list<string> $cells
-     */
-    private function isSeparator(array $cells): bool
-    {
-        return [] === array_filter($cells, static fn (string $cell): bool => 1 !== preg_match('/^:?-+:?$/', $cell));
-    }
-
-    /**
-     * @return list<string>|null
-     */
-    private function cellsOf(string $line): ?array
-    {
-        $line = trim($line);
-
-        if (1 !== preg_match(self::CELL_BORDER, $line)) {
-            return null;
-        }
-
-        $cells = preg_split(self::CELL_BORDER, (string) preg_replace(self::OUTER_PIPES, '', $line));
-
-        // A table decodes an escaped pipe before inline parsing, also inside a code span (GFM), so `a\|b.md` names a|b.md.
-        return false === $cells ? null : array_map(static fn (string $cell): string => str_replace('\|', '|', trim($cell)), $cells);
     }
 }
