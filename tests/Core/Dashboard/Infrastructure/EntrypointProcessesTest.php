@@ -113,9 +113,9 @@ final class EntrypointProcessesTest extends TestCase
     public function testAConsumerThatDoesNotStopOnSigtermIsKilledSoTheEntrypointEnds(): void
     {
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
-        // Stopped, because a stopped process cannot act on SIGTERM, like a consumer whose SIGTERM arrived before its worker existed (upstream/messenger-consume-ignores-early-sigterm).
+        // A stopped process cannot act on SIGTERM, like a consumer whose SIGTERM arrived before its worker existed (upstream/messenger-consume-ignores-early-sigterm).
         posix_kill((int) array_search('async', $processes, true), SIGSTOP);
-        // Without the grace period the entrypoint waits for that consumer forever; the timeout turns this into a failure.
+        // A timeout, so an entrypoint without the grace period fails here instead of waiting for that consumer forever.
         $this->entrypoint->setTimeout(self::SECONDS_TO_WAIT * 2);
 
         $this->entrypoint->signal(SIGTERM);
