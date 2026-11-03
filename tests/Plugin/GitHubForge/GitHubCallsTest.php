@@ -61,7 +61,8 @@ final class GitHubCallsTest extends TestCase
     {
         $sent = [];
         $calls = $this->callsAnswering(static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
-            $sent[] = $options['normalized_headers']['authorization'][0] ?? '';
+            /** @var array{normalized_headers: array{authorization: list<string>}} $options */
+            $sent[] = $options['normalized_headers']['authorization'][0];
 
             return new MockResponse('{}');
         });
@@ -100,7 +101,7 @@ final class GitHubCallsTest extends TestCase
      */
     private function optionValues(Throwable $failure): array
     {
-        // Only the frames of this class: the HTTP client's own frames below it are not this class's to redact.
+        // Only this class's frames, because the HTTP client's own frames below them are not this class's to redact.
         $frames = array_filter($failure->getTrace(), static fn (array $frame): bool => GitHubCalls::class === ($frame['class'] ?? null));
         self::assertNotSame([], $frames);
 
