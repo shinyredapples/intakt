@@ -85,7 +85,10 @@ final class SampleRepositoryTest extends TestCase
      */
     private static function listedIssues(): array
     {
-        return json_decode(file_get_contents(self::SAMPLE.'/issues.json') ?: '', true, flags: JSON_THROW_ON_ERROR);
+        /** @var list<array{id: string, kind: string, file: string, description: string, evidence: string}> $issues */
+        $issues = json_decode(new Filesystem()->readFile(self::SAMPLE.'/issues.json'), true, flags: JSON_THROW_ON_ERROR);
+
+        return $issues;
     }
 
     /**
@@ -93,7 +96,7 @@ final class SampleRepositoryTest extends TestCase
      */
     private function lineContaining(array $issue): string
     {
-        foreach (file(self::SAMPLE.'/pull-request/'.$issue['file'], FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+        foreach (explode("\n", new Filesystem()->readFile(self::SAMPLE.'/pull-request/'.$issue['file'])) as $line) {
             if (str_contains($line, $issue['evidence'])) {
                 return $line;
             }
