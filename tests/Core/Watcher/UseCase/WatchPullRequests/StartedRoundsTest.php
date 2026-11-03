@@ -65,10 +65,12 @@ final class StartedRoundsTest extends KernelTestCase
     public function testARoundQueuedBeforeItsRecordFailedToFlushIsDiscardedAndLeavesNoRecord(): void
     {
         $connection = $this->entities->getConnection();
+        $green = $this->green();
 
         try {
-            $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
-                $connection->executeStatement('DROP TABLE watcher_started_round');
+            // The same head stored inside the open transaction, never a dropped table, because MySQL and MariaDB commit a transaction on DDL and the failure would no longer be the flush's.
+            $this->rounds->startOnce('alpha', $green, static function () use ($connection, $green): QueuedRound {
+                $connection->insert('watcher_started_round', ['project' => 'alpha', 'change_ref' => $green->id->value, 'head' => $green->head->hash, 'round_id' => 'round-0']);
 
                 return RecordingCommandBus::queued(1);
             });
