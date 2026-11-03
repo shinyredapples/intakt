@@ -7,7 +7,7 @@
 
 ## Reproduction
 
-`MessengerConsumeSigtermTest.php` runs `console.php`, a small kernel with FrameworkBundle, DoctrineBundle and one handler. The test dispatches one message, starts `messenger:consume async --limit=1`, waits until the handler is in flight (a marker file), sends SIGTERM, releases the handler and reads the exit code and the transport. Plain `php` runs the same scenario as the control.
+`MessengerConsumeSigtermTest.php` runs `console.php`, a small kernel with FrameworkBundle, DoctrineBundle and one handler. The test dispatches one message, starts `messenger:consume async` (no limit, so only SIGTERM stops it), waits until the handler is in flight (a marker file), sends SIGTERM, releases the handler and reads the exit code and the transport. Plain `php` runs the same scenario as the control.
 
 Run: `vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php upstream/frankenphp-messenger-consume-sigterm`
 
