@@ -61,7 +61,7 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     /**
-     * @param array<string, list<LedgerEventKind>> $criteria
+     * @param array<string, array<LedgerEventKind>> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {

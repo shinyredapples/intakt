@@ -42,7 +42,7 @@ final class ReviewerStoppingTest extends TestCase
         $this->ledger = new InMemoryLedger(recordedAt: $this->clock->now());
     }
 
-    // The dashboard names the reviewer by the id the ledger records, which differs from the conversation the worker holds.
+    // A conversation id of its own, because the dashboard names the reviewer by the id the ledger records, never by the conversation the worker holds.
     public function testAStopRequestNamingTheReviewerCancelsItsRunWhoseConversationHasAnotherId(): void
     {
         $this->given(LedgerEventKind::ReviewerStopRequested);

@@ -123,7 +123,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private UuidV7 $round;
 
-    // Apart from the conversation, as in a real round, where the dashboard names the reviewer and a restart begins a new conversation.
+    // Apart from the conversation, because in a real round the dashboard names the reviewer and a restart begins a new conversation.
     private UuidV7 $reviewer;
 
     private ModelCatalogInterface $catalog;
