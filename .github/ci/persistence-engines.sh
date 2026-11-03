@@ -9,6 +9,8 @@ out=$(mktemp -d)
 run_engine() {
   local name=$1 network=$2 url=$3 status
   if docker run --rm --user 1000:1000 --network "$network" --env DATABASE_URL="$url" \
+      --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=2g --tmpfs /tmp:rw,exec,size=512m \
+      --volume intakt-composer-cache:/composer-cache --env COMPOSER_CACHE_DIR=/composer-cache \
       --volume "$GITHUB_WORKSPACE:/workspace:ro" \
       "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh vendor/bin/phpunit --group persistence > "$out/$name.log" 2>&1; then
     status=0

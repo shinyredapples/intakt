@@ -56,10 +56,18 @@ jobs:
           fi
           apparmor=
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          # The home directory (the working copy, vendor/) and /tmp are tmpfs: the copy and the tests' files never touch the
+          # runner's disk. Composer's cache (COMPOSER_CACHE_DIR) is the runner's intakt-composer-cache volume, which a self-hosted runner fills
+          # from main's lock before the job (on GitHub's runners it starts empty). INTAKT_TEST_WORKERS caps the tests gate's
+          # parallel workers at 3 of the runner's 4 cores, so CI and the builders on the same host do not oversubscribe it.
           docker run --rm --user 1000:1000 \
             --security-opt seccomp=.github/ci/seccomp-userns.json \
             --security-opt systempaths=unconfined \
             $apparmor \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume intakt-composer-cache:/composer-cache --env COMPOSER_CACHE_DIR=/composer-cache \
+            --env INTAKT_TEST_WORKERS=3 \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
