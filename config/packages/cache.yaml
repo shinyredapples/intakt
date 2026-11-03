@@ -21,6 +21,9 @@ framework:
             # On this host's filesystem, so every worker sees an account's cooldown; a cleared cache ends the cooldowns, and the next limit starts them again.
             intakt.ai.account_cooldowns:
                 adapter: cache.app
+            # On this host's filesystem, so every worker and the scheduler read one installation's latest forge budget; a cleared cache only forgets a reading, and the next answer records it again.
+            intakt.github.rate_limits:
+                adapter: cache.app
 
 when@test:
     framework:
@@ -28,4 +31,7 @@ when@test:
             pools:
                 # In memory, so no cooldown outlives the test that started it.
                 intakt.ai.account_cooldowns:
+                    adapter: cache.adapter.array
+                # In memory, so no reading outlives the test that recorded it.
+                intakt.github.rate_limits:
                     adapter: cache.adapter.array

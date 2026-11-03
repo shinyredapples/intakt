@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
@@ -11,10 +12,12 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -36,6 +39,9 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationTokens::class)]
 #[UsesClass(AppJwt::class)]
+#[UsesClass(GitHubCalls::class)]
+#[UsesClass(RateLimitReadings::class)]
+#[UsesClass(ForgeRateLimited::class)]
 final class InstallationReadBackTest extends TestCase
 {
     private const string PERMISSIONS = 'contents:write,pull_requests:write,workflows:write';
@@ -49,11 +55,15 @@ final class InstallationReadBackTest extends TestCase
     private ?string $installationBody = null;
     private AppKey $key;
     private RecordingLogger $logger;
+    private MockClock $clock;
+    private RateLimitReadings $readings;
 
     protected function setUp(): void
     {
         $this->key = AppKey::generate();
         $this->logger = new RecordingLogger();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     public function testAnInstallationThatMatchesTheConfigurationPasses(): void
@@ -243,9 +253,26 @@ final class InstallationReadBackTest extends TestCase
         self::assertSame(['contents' => 'read', 'issues' => 'write'], $expected->permissions);
     }
 
+    public function testTheRepositoryListingWaitsForTheResetOfTheInstallation(): void
+    {
+        try {
+            $this->readings->observe('678', 429, ['retry-after' => ['600']]);
+        } catch (ForgeRateLimited) {
+        }
+
+        try {
+            (void) $this->readBack(self::PERMISSIONS, self::REPOSITORIES)->check();
+            self::fail('The listing was read while the installation waits for its reset.');
+        } catch (ForgeRateLimited $limited) {
+            self::assertEquals($this->clock->now()->modify('+600 seconds'), $limited->resetsAt);
+        }
+
+        self::assertSame(['installation_repositories.json'], $this->pages);
+    }
+
     private function readBack(string $permissions, string $repositories): InstallationReadBack
     {
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $clock = $this->clock;
         $http = new MockHttpClient(function (string $method, string $url): ResponseInterface {
             if (str_ends_with($url, '/access_tokens')) {
                 return new MockResponse('{"token":"minted-value","expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => $this->tokenStatus]);
@@ -262,7 +289,7 @@ final class InstallationReadBackTest extends TestCase
         $jwt = new AppJwt('12345', $this->key->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, $this->logger), '678', $clock);
 
-        return new InstallationReadBack(new InstallationReader($jwt, $tokens, $http), ExpectedInstallation::fromSettings($permissions, $repositories), $this->logger);
+        return new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($http, $this->readings, $tokens)), ExpectedInstallation::fromSettings($permissions, $repositories), $this->logger);
     }
 
     private function recorded(string $fixture): string

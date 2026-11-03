@@ -30,9 +30,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
 use JsonException;
 use NoDiscard;
-use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final readonly class GitHubForge implements Forge, ForgeWrites
 {
@@ -45,8 +43,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private const int NOT_FOUND = 404;
 
     public function __construct(
-        #[Target('github.client')]
-        private HttpClientInterface $http,
+        private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
     ) {
@@ -276,7 +273,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $options = ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => ['Accept' => $accept]];
 
         try {
-            $response = $this->http->request('GET', $path, $options);
+            $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
@@ -299,7 +296,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => self::JSON], 'max_retries' => 0];
 
         try {
-            $response = $this->http->request('POST', $path, $options);
+            $response = $this->calls->asInstallation('POST', $path, $options);
             $status = $response->getStatusCode();
             $response->getContent(false);
         } catch (ExceptionInterface $failure) {
