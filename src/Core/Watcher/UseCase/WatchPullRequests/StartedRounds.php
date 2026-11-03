@@ -8,14 +8,11 @@ use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
-use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use NoDiscard;
 use PDO;
-use Psr\Log\LoggerInterface;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Throwable;
 
 final readonly class StartedRounds
@@ -23,8 +20,7 @@ final readonly class StartedRounds
     public function __construct(
         private EntityManagerInterface $entities,
         private PendingHeads $pending,
-        private MessageBusInterface $commands,
-        private LoggerInterface $logger,
+        private DiscardedRounds $discarded,
     ) {
     }
 
@@ -47,7 +43,7 @@ final readonly class StartedRounds
             $connection->commit();
         } catch (Throwable $failure) {
             $this->undo($connection);
-            $this->discard($queued);
+            $this->discarded->discard($queued);
 
             throw $failure;
         }
@@ -215,23 +211,6 @@ final readonly class StartedRounds
         try {
             $connection->rollBack();
         } catch (Exception) {
-        }
-    }
-
-    private function discard(?QueuedRound $queued): void
-    {
-        if ($queued instanceof QueuedRound) {
-            $this->dispatchDiscard($queued);
-        }
-    }
-
-    // A failed discard must not replace the failure that caused it, so it is logged and the caller rethrows the original.
-    private function dispatchDiscard(QueuedRound $queued): void
-    {
-        try {
-            $this->commands->dispatch(new DiscardQueuedRound($queued));
-        } catch (Throwable $discardFailure) {
-            $this->logger->error('The kept snapshot of a round that was not recorded could not be discarded.', ['round' => $queued->roundId, 'exception' => $discardFailure]);
         }
     }
 

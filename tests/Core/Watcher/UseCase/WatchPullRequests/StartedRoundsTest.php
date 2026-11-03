@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\StartedRound;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundTransactionLost;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
@@ -33,6 +34,7 @@ use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(StartedRounds::class)]
+#[CoversClass(DiscardedRounds::class)]
 #[CoversClass(StartedRound::class)]
 #[CoversClass(QueuedRound::class)]
 #[CoversClass(DiscardQueuedRound::class)]
@@ -57,7 +59,7 @@ final class StartedRoundsTest extends KernelTestCase
         $this->commands = new RecordingCommandBus();
         $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
         $this->logger = new RecordingLogger();
-        $this->rounds = new StartedRounds($entities, $this->pending, $this->commands, $this->logger);
+        $this->rounds = new StartedRounds($entities, $this->pending, new DiscardedRounds($this->commands, $this->logger));
     }
 
     public function testARoundQueuedBeforeItsRecordRolledBackIsDiscardedAndLeavesNoRecord(): void
