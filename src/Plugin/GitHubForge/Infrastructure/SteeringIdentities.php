@@ -51,7 +51,7 @@ final readonly class SteeringIdentities
             throw TrustNotChecked::becauseNoCredential($failure->getMessage());
         }
 
-        $slug = $this->github->get('/app', $jwt)['slug'] ?? null;
+        $slug = $this->github->ofApp('/app', $jwt)['slug'] ?? null;
 
         return is_string($slug) && 1 === preg_match(self::SLUG, $slug) ? $slug : throw TrustNotChecked::becauseTheAnswerIsInvalid();
     }

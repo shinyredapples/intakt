@@ -10,7 +10,9 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\UseCase\CheckInstallation\CheckInstallationCommand;
@@ -26,6 +28,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(CheckInstallationCommand::class)]
 #[UsesClass(InstallationReadBack::class)]
 #[UsesClass(InstallationReader::class)]
+#[UsesClass(GitHubCalls::class)]
+#[UsesClass(RateLimitReadings::class)]
 #[UsesClass(ExpectedInstallation::class)]
 #[UsesClass(Installation::class)]
 #[UsesClass(InstallationDoesNotMatchConfiguration::class)]
@@ -58,7 +62,7 @@ final class CheckInstallationCommandTest extends TestCase
         $http = new RecordedInstallation()->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);
-        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $http), ExpectedInstallation::fromSettings($permissions, 'acme/widget,acme/gadget'), new NullLogger());
+        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($http, FreshReadings::at($clock), $tokens)), ExpectedInstallation::fromSettings($permissions, 'acme/widget,acme/gadget'), new NullLogger());
 
         $application = new Application();
         $application->addCommand(new CheckInstallationCommand($readBack));

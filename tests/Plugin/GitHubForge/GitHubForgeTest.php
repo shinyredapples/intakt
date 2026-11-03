@@ -34,6 +34,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
@@ -47,7 +48,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use RuntimeException;
-use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -87,6 +87,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(CheckedInstallationTokens::class)]
 #[UsesClass(InstallationReadBack::class)]
 #[UsesClass(InstallationReader::class)]
+#[UsesClass(GitHubCalls::class)]
 #[UsesClass(ExpectedInstallation::class)]
 #[UsesClass(Installation::class)]
 #[UsesClass(InstallationDoesNotMatchConfiguration::class)]
@@ -378,11 +379,11 @@ final class GitHubForgeTest extends TestCase
         $identity = new RecordedInstallation(self::MINTED)->client();
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
-        $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, $identity), $expected, new NullLogger()), $tokens);
+        $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, FreshReadings::at($clock), $tokens)), $expected, new NullLogger()), $tokens);
         (void) $checked->current();
         // Past the recorded expiry, so the next mint answers with a token that already lapsed.
         $clock->modify('+2 hours');
-        $forge = new GitHubForge(new MockHttpClient(), $checked, $this->secretScan(), new RateLimitReadings(new ArrayAdapter(), $clock));
+        $forge = new GitHubForge(new GitHubCalls(new MockHttpClient(), FreshReadings::at($clock), $tokens), $checked, $this->secretScan());
 
         try {
             $forge->change(new ChangeId(self::PULL));
@@ -591,9 +592,10 @@ final class GitHubForgeTest extends TestCase
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings($this->expectedPermissions, 'acme/widget,acme/gadget');
-        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $identity), $expected, new NullLogger());
+        $readings = FreshReadings::at($clock);
+        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubForge($http, new CheckedInstallationTokens($readBack, $tokens), $this->secretScan(), new RateLimitReadings(new ArrayAdapter(), $clock));
+        return new GitHubForge(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), $this->secretScan());
     }
 
     private function secretScan(): SecretScan

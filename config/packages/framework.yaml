@@ -8,7 +8,8 @@ framework:
     #esi: true
     #fragments: true
 
-    # Reads and review posts of the GitHub API; retry_failed wraps the client in RetryableHttpClient, so a failed read is tried again (the review post turns it off for itself). A 429 is not retried here, because the forge raises it as a rate limit and waits for the reset it names.
+    # Reads and review posts of the GitHub API; retry_failed wraps the client in RetryableHttpClient, so a failed read is tried again (the review post turns it off for itself).
+    # The http_codes are Symfony's defaults without 429, because the forge raises a 429 as a rate limit and waits for the reset it names; 0 is a dropped connection.
     http_client:
         scoped_clients:
             github.client:
@@ -17,7 +18,16 @@ framework:
                     X-GitHub-Api-Version: '2022-11-28'
                 retry_failed:
                     max_retries: 3
-                    http_codes: [423, 425, 500, 502, 503, 504, 507, 510]
+                    http_codes:
+                        0: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
+                        423: true
+                        425: true
+                        500: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
+                        502: true
+                        503: true
+                        504: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
+                        507: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
+                        510: [GET, HEAD, PUT, DELETE, OPTIONS, TRACE]
 
 when@test:
     framework:

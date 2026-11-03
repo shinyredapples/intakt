@@ -23,6 +23,7 @@ use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -36,7 +37,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -47,6 +47,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(GitHubForge::class)]
 #[CoversClass(RateLimitReadings::class)]
+#[CoversClass(GitHubCalls::class)]
 #[UsesClass(RateLimitReading::class)]
 #[UsesClass(ForgeRateLimited::class)]
 #[UsesClass(ForgeReadFailed::class)]
@@ -86,7 +87,7 @@ final class GitHubForgeRateLimitTest extends TestCase
     protected function setUp(): void
     {
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = new RateLimitReadings(new ArrayAdapter(), $this->clock);
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     public function testItRaisesTheResetOfAPrimaryLimitAnswered403(): void
@@ -165,6 +166,23 @@ final class GitHubForgeRateLimitTest extends TestCase
         self::assertCount(1, $this->requested);
     }
 
+    public function testItStillRetriesADroppedConnectionOfARead(): void
+    {
+        $this->limited = false;
+        $dropped = false;
+        $forge = $this->forgeAnswering(static function () use (&$dropped): ?MockResponse {
+            if ($dropped) {
+                return null;
+            }
+            $dropped = true;
+
+            return new MockResponse('', ['error' => 'connection dropped']);
+        });
+
+        self::assertSame(self::HEAD, $forge->change(new ChangeId(self::PULL))->commits->head->hash);
+        self::assertSame($this->requested[0], $this->requested[1]);
+    }
+
     public function testItRecordsTheBudgetOfEveryAnswerForTheInstallation(): void
     {
         $reset = $this->clock->now()->getTimestamp() + 900;
@@ -207,9 +225,9 @@ final class GitHubForgeRateLimitTest extends TestCase
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $this->clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
-        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, $identity), $expected, new NullLogger());
+        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $this->readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubForge($http, new CheckedInstallationTokens($readBack, $tokens), new SecretScan(dirname(__DIR__, 3), 'gitleaks'), $this->readings);
+        return new GitHubForge(new GitHubCalls($http, $this->readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new SecretScan(dirname(__DIR__, 3), 'gitleaks'));
     }
 
     private function plain(string $url): MockResponse
@@ -235,14 +253,25 @@ final class GitHubForgeRateLimitTest extends TestCase
     }
 
     /**
-     * @return list<int>
+     * @return array<int, int|list<string>>
      */
     private function configuredRetryCodes(): array
     {
-        /** @var array{framework: array{http_client: array{scoped_clients: array{'github.client': array{retry_failed: array{http_codes: list<int>}}}}}} $config */
+        /** @var array{framework: array{http_client: array{scoped_clients: array{'github.client': array{retry_failed: array{http_codes: array<int, true|list<string>>}}}}}} $config */
         $config = Yaml::parseFile(dirname(__DIR__, 3).'/config/packages/framework.yaml');
 
-        return $config['framework']['http_client']['scoped_clients']['github.client']['retry_failed']['http_codes'];
+        // Built as FrameworkBundle builds the strategy: a code with methods keeps them, any other is retried for every method.
+        $codes = [];
+        foreach ($config['framework']['http_client']['scoped_clients']['github.client']['retry_failed']['http_codes'] as $code => $methods) {
+            if (is_array($methods)) {
+                $codes[$code] = $methods;
+
+                continue;
+            }
+            $codes[] = $code;
+        }
+
+        return $codes;
     }
 
     private static function fixture(string $name): string

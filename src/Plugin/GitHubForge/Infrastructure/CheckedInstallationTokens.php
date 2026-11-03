@@ -38,11 +38,6 @@ final class CheckedInstallationTokens implements ResetInterface
         return $this->tokens->current();
     }
 
-    public function installationId(): string
-    {
-        return $this->tokens->installationId;
-    }
-
     public function reset(): void
     {
         $this->checked = false;

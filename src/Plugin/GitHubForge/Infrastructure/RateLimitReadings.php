@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
+use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Lock\LockFactory;
 
 // In a cache every worker and the scheduler share, so all processes of one installation see its latest budget and its pause.
 final readonly class RateLimitReadings
@@ -17,16 +20,17 @@ final readonly class RateLimitReadings
     public const string POOL = 'intakt.github.rate_limits';
     private const array LIMITED_STATUSES = [403, 429];
 
-    // One minute because GitHub named no reset, which is also the shortest wait its secondary limits ask for.
-    private const int SECONDS_WITHOUT_RESET = 60;
+    // Written out, because PHP 8.5 deprecates DATE_RFC7231; HTTP dates are always in GMT.
+    private const string HTTP_DATE = '!D, d M Y H:i:s \G\M\T';
 
-    // At most an hour, because the primary limit resets hourly and a header must not park the installation for longer.
-    private const int LONGEST_SECONDS = 3600;
+    // One minute because GitHub named no reset still ahead, which is also the shortest wait its secondary limits ask for.
+    private const int SECONDS_WITHOUT_RESET = 60;
 
     public function __construct(
         #[Autowire(service: self::POOL)]
         private CacheItemPoolInterface $pool,
         private ClockInterface $clock,
+        private LockFactory $locks,
     ) {
     }
 
@@ -35,11 +39,11 @@ final readonly class RateLimitReadings
      */
     public function refuseWhileLimited(string $installationId): void
     {
-        $until = $this->pool->getItem($this->key('limited', $installationId));
+        $until = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId)));
 
         // Compared with the clock because the cache expiry runs on system time.
-        if ($until->isHit() && is_int($until->get()) && $this->at($until->get()) > $this->clock->now()) {
-            throw new ForgeRateLimited($this->at($until->get()));
+        if ($until instanceof DateTimeImmutable && $until > $this->clock->now()) {
+            throw new ForgeRateLimited($until);
         }
     }
 
@@ -58,9 +62,7 @@ final readonly class RateLimitReadings
 
         $until = $this->limitedUntil($status, $headers);
         if ($until instanceof DateTimeImmutable) {
-            $this->pause($installationId, $until);
-
-            throw new ForgeRateLimited($until);
+            throw new ForgeRateLimited($this->pause($installationId, $until));
         }
     }
 
@@ -88,9 +90,8 @@ final readonly class RateLimitReadings
             return null;
         }
 
-        $retryAfter = $this->number($headers, 'retry-after');
-        if (null !== $retryAfter) {
-            return $this->after($retryAfter);
+        if (isset($headers['retry-after'])) {
+            return $this->ahead($this->retryAfter($headers['retry-after'][0] ?? ''));
         }
 
         if (0 !== $this->number($headers, 'x-ratelimit-remaining')) {
@@ -99,7 +100,27 @@ final readonly class RateLimitReadings
 
         $reset = $this->number($headers, 'x-ratelimit-reset');
 
-        return null === $reset ? $this->after(self::SECONDS_WITHOUT_RESET) : $this->capped($this->at($reset));
+        return $this->ahead(null === $reset ? null : $this->at($reset));
+    }
+
+    // Seconds or an HTTP date, the two forms HTTP allows for Retry-After.
+    private function retryAfter(string $value): ?DateTimeImmutable
+    {
+        if (ctype_digit($value) && strlen($value) < 12) {
+            return $this->clock->now()->modify(sprintf('+%d seconds', (int) $value));
+        }
+
+        $moment = DateTimeImmutable::createFromFormat(self::HTTP_DATE, $value, new DateTimeZone('UTC'));
+
+        return false === $moment || false !== DateTimeImmutable::getLastErrors() ? null : $moment;
+    }
+
+    // A reset that has already passed (a skewed clock) counts as none, because waiting on it would send the next call at once.
+    private function ahead(?DateTimeImmutable $moment): DateTimeImmutable
+    {
+        $now = $this->clock->now();
+
+        return $moment instanceof DateTimeImmutable && $moment > $now ? $moment : $now->modify(sprintf('+%d seconds', self::SECONDS_WITHOUT_RESET));
     }
 
     private function remember(string $installationId, int $remaining, int $reset): void
@@ -113,21 +134,28 @@ final readonly class RateLimitReadings
         $this->pool->save($item);
     }
 
-    private function pause(string $installationId, DateTimeImmutable $until): void
+    private function pause(string $installationId, DateTimeImmutable $until): DateTimeImmutable
     {
-        $this->pool->save($this->pool->getItem($this->key('limited', $installationId))->set($until->getTimestamp())->expiresAt($until));
+        // Under the lock every process takes, because two answers in flight could otherwise replace a longer pause with a shorter one.
+        $lock = $this->locks->createLock($this->key('pause', $installationId));
+        $lock->acquire(true);
+
+        try {
+            $item = $this->pool->getItem($this->key('limited', $installationId));
+            $longest = max($until, $this->pausedUntil($item) ?? $until);
+            $this->pool->save($item->set($longest->getTimestamp())->expiresAt($longest));
+
+            return $longest;
+        } finally {
+            $lock->release();
+        }
     }
 
-    private function after(int $seconds): DateTimeImmutable
+    private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
     {
-        return $this->clock->now()->modify(sprintf('+%d seconds', min(max($seconds, 1), self::LONGEST_SECONDS)));
-    }
+        $value = $item->get();
 
-    private function capped(DateTimeImmutable $moment): DateTimeImmutable
-    {
-        $latest = $this->clock->now()->modify(sprintf('+%d seconds', self::LONGEST_SECONDS));
-
-        return min($moment, $latest);
+        return $item->isHit() && is_int($value) ? $this->at($value) : null;
     }
 
     private function at(int $epoch): DateTimeImmutable

@@ -30,9 +30,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
 use JsonException;
 use NoDiscard;
-use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
-use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 final readonly class GitHubForge implements Forge, ForgeWrites
 {
@@ -45,11 +43,9 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private const int NOT_FOUND = 404;
 
     public function __construct(
-        #[Target('github.client')]
-        private HttpClientInterface $http,
+        private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
-        private RateLimitReadings $readings,
     ) {
     }
 
@@ -274,20 +270,15 @@ final readonly class GitHubForge implements Forge, ForgeWrites
      */
     private function get(string $path, string $accept, array $query = []): ?string
     {
-        $installation = $this->tokens->installationId();
-        $this->readings->refuseWhileLimited($installation);
         $options = ['auth_bearer' => $this->bearer(), 'query' => $query, 'headers' => ['Accept' => $accept]];
 
         try {
-            $response = $this->http->request('GET', $path, $options);
+            $response = $this->calls->asInstallation('GET', $path, $options);
             $status = $response->getStatusCode();
-            $headers = $response->getHeaders(false);
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
-
-        $this->readings->observe($installation, $status, $headers);
 
         if (self::NOT_FOUND === $status) {
             return null;
@@ -302,20 +293,15 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private function post(string $path, array $payload): void
     {
         // Never retried, because GitHub can store a review and still answer 502, and a retry would post it twice.
-        $installation = $this->tokens->installationId();
-        $this->readings->refuseWhileLimited($installation);
         $options = ['auth_bearer' => $this->writeBearer(), 'json' => $payload, 'headers' => ['Accept' => self::JSON], 'max_retries' => 0];
 
         try {
-            $response = $this->http->request('POST', $path, $options);
+            $response = $this->calls->asInstallation('POST', $path, $options);
             $status = $response->getStatusCode();
-            $headers = $response->getHeaders(false);
             $response->getContent(false);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachableForWrite($failure::class);
         }
-
-        $this->readings->observe($installation, $status, $headers);
 
         if ($status < 200 || $status >= 300) {
             throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));

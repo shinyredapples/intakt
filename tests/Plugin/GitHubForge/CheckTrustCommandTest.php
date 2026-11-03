@@ -14,7 +14,9 @@ use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
@@ -43,6 +45,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(InstallationNotReadBack::class)]
 #[UsesClass(InstallationReadBack::class)]
 #[UsesClass(InstallationReader::class)]
+#[UsesClass(GitHubCalls::class)]
+#[UsesClass(RateLimitReadings::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationTokenNotMinted::class)]
@@ -80,8 +84,9 @@ final class CheckTrustCommandTest extends TestCase
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
-        $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, $http), $expected, new NullLogger()), $tokens);
-        $answers = new TrustAnswers($http);
+        $calls = new GitHubCalls($http, FreshReadings::at($clock), $tokens);
+        $checked = new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($jwt, $tokens, $calls), $expected, new NullLogger()), $tokens);
+        $answers = new TrustAnswers($calls);
 
         $application = new Application();
         $application->addCommand(new CheckTrustCommand(new SteeringTrustCheck(new SteeringIdentities($answers, $jwt, RecordedTrust::MAINTAINER_SLUG), $answers, $checked)));

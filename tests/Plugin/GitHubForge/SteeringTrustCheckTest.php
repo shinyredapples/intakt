@@ -14,7 +14,10 @@ use Intakt\Plugin\GitHubForge\Domain\SteeringTrust;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
@@ -26,6 +29,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 #[CoversClass(SteeringTrustCheck::class)]
 #[CoversClass(SteeringIdentities::class)]
@@ -39,6 +43,9 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(InstallationNotReadBack::class)]
 #[UsesClass(InstallationReadBack::class)]
 #[UsesClass(InstallationReader::class)]
+#[UsesClass(GitHubCalls::class)]
+#[UsesClass(RateLimitReadings::class)]
+#[UsesClass(ForgeRateLimited::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationTokenNotMinted::class)]
@@ -50,12 +57,39 @@ final class SteeringTrustCheckTest extends TestCase
     private RecordedTrust $github;
     private RecordingLogger $logger;
     private AppKey $key;
+    private MockClock $clock;
+    private RateLimitReadings $readings;
 
     protected function setUp(): void
     {
         $this->github = new RecordedTrust();
         $this->logger = new RecordingLogger();
         $this->key = AppKey::generate();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
+    }
+
+    public function testAPermissionReadWaitsForTheResetOfTheInstallation(): void
+    {
+        $this->pauseTheInstallation();
+
+        try {
+            (void) $this->answers()->ofInstallation('/repos/acme/widget/collaborators/alice/permission', 'minted-value');
+            self::fail('The permission was read while the installation waits for its reset.');
+        } catch (ForgeRateLimited $limited) {
+            self::assertEquals($this->clock->now()->modify('+600 seconds'), $limited->resetsAt);
+        }
+
+        self::assertSame([], $this->github->requested);
+    }
+
+    public function testTheAppsOwnReadIsNotHeldByThePauseOfTheInstallation(): void
+    {
+        $this->pauseTheInstallation();
+
+        $answer = $this->answers()->ofApp('/app', $this->jwt()->sign());
+
+        self::assertSame('acme-intakt', $answer['slug'] ?? null);
     }
 
     public function testAnAccountWithWriteAccessSteers(): void
@@ -221,8 +255,8 @@ final class SteeringTrustCheckTest extends TestCase
     public function testAKeyThatCannotSignFailsTheCheckOfABot(): void
     {
         $trust = new SteeringTrustCheck(
-            new SteeringIdentities(new TrustAnswers($this->github->client()), new AppJwt('12345', 'not a key', new MockClock('2026-11-25 10:00:00 UTC')), ''),
-            new TrustAnswers($this->github->client()),
+            new SteeringIdentities($this->answers(), new AppJwt('12345', 'not a key', $this->clock), ''),
+            $this->answers(),
             $this->tokens(),
         );
 
@@ -290,23 +324,42 @@ final class SteeringTrustCheckTest extends TestCase
 
     private function trust(string $maintainerSlug): SteeringTrustCheck
     {
-        $answers = new TrustAnswers($this->github->client());
+        $answers = $this->answers();
 
         return new SteeringTrustCheck(new SteeringIdentities($answers, $this->jwt(), $maintainerSlug), $answers, $this->tokens());
+    }
+
+    private function answers(): TrustAnswers
+    {
+        $http = $this->github->client();
+
+        return new TrustAnswers(new GitHubCalls($http, $this->readings, $this->installationTokens($http)));
     }
 
     private function tokens(): CheckedInstallationTokens
     {
         $http = $this->github->client();
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $tokens = new InstallationTokens(new InstallationTokenMinter($this->jwt(), $http, $this->logger), '678', $clock);
+        $tokens = $this->installationTokens($http);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
 
-        return new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($this->jwt(), $tokens, $http), $expected, $this->logger), $tokens);
+        return new CheckedInstallationTokens(new InstallationReadBack(new InstallationReader($this->jwt(), $tokens, new GitHubCalls($http, $this->readings, $tokens)), $expected, $this->logger), $tokens);
+    }
+
+    private function installationTokens(HttpClientInterface $http): InstallationTokens
+    {
+        return new InstallationTokens(new InstallationTokenMinter($this->jwt(), $http, $this->logger), '678', $this->clock);
+    }
+
+    private function pauseTheInstallation(): void
+    {
+        try {
+            $this->readings->observe('678', 429, ['retry-after' => ['600']]);
+        } catch (ForgeRateLimited) {
+        }
     }
 
     private function jwt(): AppJwt
     {
-        return new AppJwt('12345', $this->key->private, new MockClock('2026-11-25 10:00:00 UTC'));
+        return new AppJwt('12345', $this->key->private, $this->clock);
     }
 }
