@@ -203,7 +203,7 @@ final class RedactionTest extends TestCase
     public function testItRedactsATruncatedPrintRHeaderListPastAForgedClosingLine(): void
     {
         $dump = print_r(['Authorization' => ["first\n        )\ncredential-tail"]], true);
-        $truncated = substr($dump, 0, strpos($dump, 'credential-tail') + strlen('credential-tail'));
+        $truncated = explode('credential-tail', $dump)[0].'credential-tail';
 
         $redacted = new Redaction()->redact($truncated);
 
