@@ -41,7 +41,16 @@ final readonly class HighlightsGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $branch = PathsOnBranch::of($workspace->root, $tracked);
+        $findings = $this->findingsOf($contents, PathsOnBranch::of($workspace->root, $tracked));
+
+        return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function findingsOf(string $contents, PathsOnBranch $branch): array
+    {
         $findings = [];
 
         foreach ($this->rows->of($contents) as $row) {
@@ -50,7 +59,7 @@ final readonly class HighlightsGate implements Gate
             }
         }
 
-        return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
+        return $findings;
     }
 
     /**

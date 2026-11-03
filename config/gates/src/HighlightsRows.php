@@ -8,7 +8,7 @@ final readonly class HighlightsRows
 {
     private const string HEADING = '/^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/';
 
-    // CommonMark lets an HTML comment open a block indented up to three spaces; it runs to the line holding -->.
+    // Skipped because a commented-out row is not rendered; as in CommonMark, the block runs to the line holding -->.
     private const string COMMENT_OPENER = '/^ {0,3}<!--/';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
