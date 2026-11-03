@@ -545,7 +545,7 @@ final class ReviewerVerdictTest extends WebTestCase
             return null === $next ? $answer : new ToolCallResult($next);
         };
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher));
-        $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout));
+        $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');

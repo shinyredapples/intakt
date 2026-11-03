@@ -277,6 +277,7 @@ final class FindingLedgerTest extends TestCase
         yield 'invalid output' => [Verdict::invalidOutput('the reviewer made a malformed tool call.')];
         yield 'incomplete stream' => [Verdict::incompleteStream('the stream ended.')];
         yield 'unread approval' => [Verdict::unreadApproval()];
+        yield 'no tools' => [Verdict::noTools()];
     }
 
     #[DataProvider('failedReviews')]

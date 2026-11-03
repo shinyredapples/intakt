@@ -16,10 +16,12 @@ use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundTransactionLost;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
+use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -32,12 +34,14 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(StartedRound::class)]
 #[CoversClass(QueuedRound::class)]
 #[CoversClass(DiscardQueuedRound::class)]
+#[CoversClass(RoundTransactionLost::class)]
 #[UsesClass(PendingHeads::class)]
 #[UsesClass(PendingHead::class)]
 final class StartedRoundsTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
     private RecordingCommandBus $commands;
+    private PendingHeads $pending;
     private StartedRounds $rounds;
 
     protected function setUp(): void
@@ -48,7 +52,8 @@ final class StartedRoundsTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->commands = new RecordingCommandBus();
-        $this->rounds = new StartedRounds($entities, new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00')), $this->commands);
+        $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
+        $this->rounds = new StartedRounds($entities, $this->pending, $this->commands);
     }
 
     public function testARoundQueuedBeforeItsRecordRolledBackIsDiscardedAndLeavesNoRecord(): void
@@ -83,19 +88,65 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(0, $this->storedRounds());
     }
 
+    // The connection is lost while the round is queued, so DBAL would write the record and the end of the wait in autocommit.
+    public function testARoundQueuedBeforeItsTransactionWasLostIsDiscardedAndLeavesTheHeadDue(): void
+    {
+        $connection = $this->entities->getConnection();
+        $green = $this->green();
+        $this->pending->enqueue('alpha', [$green]);
+
+        try {
+            $this->rounds->startOnce('alpha', $green, static function () use ($connection): QueuedRound {
+                $connection->close();
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The lost transaction was swallowed.');
+        } catch (RoundTransactionLost) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
+        self::assertSame(0, $this->storedRounds());
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    // A commit past DBAL (native, or implicit as on MySQL's DDL) leaves DBAL's own count of transactions at one, so the record and the end of the wait would be written in autocommit.
+    public function testARoundQueuedBeforeACommitPastDbalIsDiscardedAndLeavesTheHeadDue(): void
+    {
+        $connection = $this->entities->getConnection();
+        $green = $this->green();
+        $this->pending->enqueue('alpha', [$green]);
+
+        try {
+            $this->rounds->startOnce('alpha', $green, static function () use ($connection): QueuedRound {
+                $native = $connection->getNativeConnection();
+                self::assertInstanceOf(PDO::class, $native);
+                $native->commit();
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The lost transaction was swallowed.');
+        } catch (RoundTransactionLost) {
+        }
+
+        self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
+        self::assertSame(0, $this->storedRounds());
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    // A commit past the native connection would make the record's flush open a savepoint outside a transaction, which PostgreSQL refuses before the rollback is reached, so the transaction ends through DBAL and the rollback fails for want of one.
     public function testARoundQueuedBeforeARollbackThatItselfFailsIsStillDiscardedAndTheOriginalFailureIsRethrown(): void
     {
         $connection = $this->entities->getConnection();
 
         try {
-            $this->rounds->startOnce('alpha', $this->green(), function () use ($connection): QueuedRound {
-                $this->insertConflictingRound($connection);
+            $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
                 $connection->commit();
 
                 return RecordingCommandBus::queued(1);
             });
-            self::fail('The failed record of the round was swallowed.');
-        } catch (UniqueConstraintViolationException) {
+            self::fail('The lost transaction was swallowed.');
+        } catch (RoundTransactionLost) {
         }
 
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
