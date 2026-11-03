@@ -19,6 +19,7 @@ use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
+use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
@@ -56,6 +57,7 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Lock\LockFactory;
@@ -206,7 +208,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $platforms = [Account::DEFAULT => new FailingWhenRead(new RateLimitExceededException(300)), 'team' => $team];
         $accounts = new AccountFailoverPlatform(Provider::Anthropic, $platforms, $this->cooldowns, new NativeClock(), new NullLogger());
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $accounts]), $this->cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock())));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 3);
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $limit);
 

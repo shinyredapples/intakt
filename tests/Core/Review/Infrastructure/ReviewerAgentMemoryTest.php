@@ -21,6 +21,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMemory;
@@ -48,6 +49,7 @@ use Symfony\AI\Store\Indexer\DocumentProcessor;
 use Symfony\AI\Store\InMemory\Store;
 use Symfony\AI\Store\Retriever;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
 // Runs a whole review through the agent, so what reaches the model is what the platform is really sent, not what the prompt builder returns.
@@ -151,7 +153,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
         };
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $prompt = new ReviewerPrompt(new Fence(), new VerdictParser(), new ReviewerMemory($memory, new Fence(), new DiffPaths()));
-        $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
+        $reviewer = new ReviewerAgent($prompt, new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock())));
 
         $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', 'Fix the cart.', self::DIFF), []), new ReviewerConversation('You review for correctness.', new UuidV7())), $platform, 'reviewer-model');
     }

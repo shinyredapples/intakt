@@ -33,6 +33,7 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
+use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -263,7 +264,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
         $platform = $this->claudeCodePlatform($cli);
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock())));
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
