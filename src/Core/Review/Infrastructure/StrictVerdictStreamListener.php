@@ -7,11 +7,13 @@ namespace Intakt\Core\Review\Infrastructure;
 use Closure;
 use Intakt\Core\Review\Contract\Verdict;
 use Override;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\CompleteEvent;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\Stream\DeltaEvent;
+use Symfony\AI\Platform\StructuredOutput\Streaming\PartialJsonParser;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Needed because Symfony AI's own listener, which assembles the object the agent returns from a stream, maps leniently; excluded from the container because one is built per stream, so its text never outlives the answer.
@@ -52,6 +54,16 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
             return;
         }
 
+        // A stream that ended without the provider noticing still leaves its document unfinished, and that is a cut-off answer, never a verdict.
+        if ($this->unfinished()) {
+            throw new IncompleteStreamException('The reviewer stream ended before its answer was complete.');
+        }
+
         ($this->verdictFrom)($this->answer);
+    }
+
+    private function unfinished(): bool
+    {
+        return !json_validate($this->answer) && null !== PartialJsonParser::parse($this->answer);
     }
 }

@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
@@ -43,6 +44,7 @@ use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\TraceableToolbox;
 use Symfony\AI\AiBundle\Profiler\DataCollector;
 use Symfony\AI\AiBundle\Test\AiAssertionsTrait;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\MessageInterface;
 use Symfony\AI\Platform\Message\UserMessage;
@@ -61,6 +63,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(FencedToolbox::class)]
 #[CoversClass(StrictVerdictConverter::class)]
 #[CoversClass(StrictVerdictStreamListener::class)]
+#[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]
 #[CoversClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
@@ -169,6 +172,34 @@ final class ReviewerVerdictTest extends WebTestCase
     public function testAStreamedVerdictMissingAFieldEndsAsChanges(): void
     {
         $verdict = $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[]}'));
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAStreamCutOffMidAnswerFailsTheCallAsAnIncompleteAnswer(): void
+    {
+        $cutOff = new StreamResult((static function (): Generator {
+            yield new TextDelta('{"verdict":"approve",');
+
+            throw new IncompleteStreamException('The stream ended before its last event.');
+        })());
+
+        $this->expectException(IncompleteStreamException::class);
+
+        $this->review('Add a cart.', [], $cutOff);
+    }
+
+    public function testAStreamThatEndsInsideItsAnswerFailsTheCallAsAnIncompleteAnswer(): void
+    {
+        $this->expectException(IncompleteStreamException::class);
+
+        $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[]'));
+    }
+
+    public function testAStreamedAnswerThatIsNotAVerdictEndsAsChanges(): void
+    {
+        $verdict = $this->review('Add a cart.', [], $this->streamed('Looks good ', 'to me.'));
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
