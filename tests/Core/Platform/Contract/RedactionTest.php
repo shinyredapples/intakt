@@ -48,11 +48,56 @@ final class RedactionTest extends TestCase
         self::assertStringContainsString('[redacted]', $redacted);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function heldCredentialsJsonEscapes(): iterable
+    {
+        yield 'newline' => ["held\ncredential-tail"];
+        yield 'tab and carriage return' => ["held\t\rcredential-tail"];
+        yield 'other control character' => ["held\x01credential-tail"];
+        yield 'accented letter' => ['held-é-credential-tail'];
+        yield 'character outside the basic plane' => ["held-\u{1F511}-credential-tail"];
+    }
+
+    #[DataProvider('heldCredentialsJsonEscapes')]
+    public function testItRedactsAHeldCredentialWhoseCharactersJsonEscapes(string $credential): void
+    {
+        $once = json_encode($credential, JSON_THROW_ON_ERROR);
+        $twice = json_encode($once, JSON_THROW_ON_ERROR);
+
+        $redacted = new Redaction()->redact($once.' '.$twice, $credential);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialWrittenWithHexEscapes(): void
+    {
+        $credential = 'pa<ss>&\'"word';
+        $encoded = json_encode($credential, JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
+        self::assertSame('[redacted]', trim(new Redaction()->redact($encoded, $credential), '"'));
+    }
+
     public function testItKeepsTheHostOfAUrlWithUserinfo(): void
     {
         $redacted = new Redaction()->redact('clone https://deploy:hunter2@example.com/org/repo.git now');
 
         self::assertSame('clone https://[redacted]@example.com/org/repo.git now', $redacted);
+    }
+
+    public function testItRedactsTheUserinfoOfAUrlInJsonText(): void
+    {
+        $text = json_encode(['remote' => 'https://deploy:hunter2pass@example.com/r.git'], JSON_THROW_ON_ERROR);
+
+        self::assertSame('{"remote":"https:\/\/[redacted]@example.com\/r.git"}', new Redaction()->redact($text));
+    }
+
+    public function testItRedactsTheUserinfoOfAUrlInJsonTextEncodedTwice(): void
+    {
+        $text = json_encode(json_encode(['remote' => 'https://deploy:hunter2pass@example.com/r.git'], JSON_THROW_ON_ERROR), JSON_THROW_ON_ERROR);
+
+        self::assertStringNotContainsString('hunter2pass', new Redaction()->redact($text));
     }
 
     /**
@@ -73,6 +118,66 @@ final class RedactionTest extends TestCase
         yield 'digest in text' => ['Authorization: Digest username="alice", response="deadbeef01"', 'Authorization: [redacted]'];
         yield 'cookie' => ["Cookie: session=abc123xyz\nnext", "Cookie: [redacted]\nnext"];
         yield 'print_r scalar' => ['[Authorization] => Bearer abc123xyz', '[Authorization] => [redacted]'];
+        yield 'single quotes around a double quote' => ["'Authorization'=>'Bearer \"x\" secretvalue1'", "'Authorization'=>'[redacted]'"];
+        yield 'double quotes around a single quote' => ['{"Authorization":"Basic it\'s-secret"}', '{"Authorization":"[redacted]"}'];
+    }
+
+    public function testItRedactsADigestHeaderExportedWithVarExport(): void
+    {
+        $dump = var_export(['Authorization' => 'Digest username="alice", response="deadbeef01"', 'Accept' => 'text/html'], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('deadbeef01', $redacted);
+        self::assertStringContainsString("'Authorization' => '[redacted]'", $redacted);
+        self::assertStringContainsString('text/html', $redacted);
+    }
+
+    public function testItRedactsAScalarHeaderWithADoubleQuoteExportedWithVarExport(): void
+    {
+        $dump = var_export(['Authorization' => 'Basic abc"def-secret'], true);
+
+        self::assertStringNotContainsString('def-secret', new Redaction()->redact($dump));
+    }
+
+    public function testItRedactsAVarExportHeaderListPastANestedArray(): void
+    {
+        $dump = var_export(['Authorization' => [['first'], 'credential-tail'], 'Accept' => ['text/html']], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringContainsString('text/html', $redacted);
+    }
+
+    public function testItRedactsAVarExportHeaderListPastAParenthesisInsideAValue(): void
+    {
+        $dump = var_export(['Authorization' => ["first\n  ),\n)", 'credential-tail'], 'Accept' => ['text/html']], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringContainsString('text/html', $redacted);
+    }
+
+    public function testItRedactsAPrintRHeaderListPastAParenthesisLineInsideAValue(): void
+    {
+        $dump = print_r(['Authorization' => ["first\n)\ncredential-tail"], 'Accept' => ['text/html']], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringContainsString('text/html', $redacted);
+    }
+
+    public function testItRedactsAPrintRHeaderListPastANestedArray(): void
+    {
+        $dump = print_r(['Authorization' => [['first'], 'credential-tail'], 'Accept' => ['text/html']], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringContainsString('text/html', $redacted);
     }
 
     #[DataProvider('headerForms')]

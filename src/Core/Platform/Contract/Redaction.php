@@ -15,7 +15,10 @@ final readonly class Redaction
     private const string HEADER_NAMES = 'proxy-authorization|authorization|set-cookie|cookie|x-api-key|x-auth-token';
 
     // The closing quote or bracket and the separator vary because a header appears in log lines, JSON, shell flags and dumps.
-    private const string HEADER_HEAD = '(?<![\w-])(?:'.self::HEADER_NAMES.')[\\\\"\'\]]*\s*(?:=>|:|=)\s*';
+    // Possessive spaces, so that a value that fails to match cannot hand back a space to be redacted in its place.
+    private const string HEADER_HEAD = '(?<![\w-])(?:'.self::HEADER_NAMES.')[\\\\"\'\]]*\s*+(?:=>|:|=)\s*+';
+
+    private const array JSON_SHORT_ESCAPES = ["\x08" => 'b', "\f" => 'f', "\n" => 'n', "\r" => 'r', "\t" => 't'];
 
     private const string SECRET_SHAPES = '~'
         .'-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)'
@@ -59,29 +62,48 @@ final readonly class Redaction
 
     private function heldCredentialPattern(string $credential): string
     {
-        $parts = array_map(
-            // JSON escapes these three with a backslash, so every further encoding adds more of them.
-            static fn (string $char): string => in_array($char, ['"', '\\', '/'], true)
-                ? '\\\\*'.preg_quote($char, '~')
-                : preg_quote($char, '~'),
-            str_split($credential),
-        );
+        $chars = mb_str_split($credential, 1, 'UTF-8');
 
-        return '~'.implode('', $parts).'~';
+        return '~'.implode('', array_map($this->jsonSpellings(...), $chars)).'~';
+    }
+
+    // JSON writes a character as itself, a short escape or a \u escape, and every further encoding adds backslashes before it.
+    private function jsonSpellings(string $char): string
+    {
+        $spellings = [in_array($char, ['"', '\\', '/'], true) ? '\\\\*'.preg_quote($char, '~') : preg_quote($char, '~')];
+        if (isset(self::JSON_SHORT_ESCAPES[$char])) {
+            $spellings[] = '\\\\+'.self::JSON_SHORT_ESCAPES[$char];
+        }
+        if (mb_check_encoding($char, 'UTF-8')) {
+            $spellings[] = $this->unicodeEscape($char);
+        }
+
+        return '(?:'.implode('|', $spellings).')';
+    }
+
+    private function unicodeEscape(string $char): string
+    {
+        // A character outside the basic plane is written as two \u escapes, one per UTF-16 unit.
+        $units = str_split(bin2hex(mb_convert_encoding($char, 'UTF-16BE', 'UTF-8')), 4);
+
+        return implode('', array_map(static fn (string $unit): string => '\\\\+u(?i:'.$unit.')', $units));
     }
 
     private function redactHeaderLists(string $text): string
     {
-        $pattern = '~'.self::HEADER_HEAD.'(?<open>array\s*\(|\[)~i';
+        // print_r breaks the line between Array and its parenthesis; var_export writes "array (" on one line.
+        $pattern = '~'.self::HEADER_HEAD.'(?<open>array\R(?<indent>[ \t]*)\(|array\s*\(|\[)~i';
 
         $result = '';
         $offset = 0;
         while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $matchStart = $match[0][1];
             $afterOpen = $matchStart + strlen($match[0][0]);
-            $end = str_ends_with($match['open'][0], '(')
-                ? $this->endOfParenthesisList($text, $afterOpen)
-                : $this->endOfBracketList($text, $afterOpen);
+            $end = match (true) {
+                -1 !== ($match['indent'][1] ?? -1) => $this->endOfPrintRList($text, $afterOpen, $match['indent'][0]),
+                str_ends_with($match['open'][0], '(') => $this->endOfQuotedList($text, $afterOpen, '()'),
+                default => $this->endOfQuotedList($text, $afterOpen, '[]'),
+            };
 
             // A missing end takes the rest of the text because stopping early would leak.
             $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0])).self::MARKER;
@@ -91,26 +113,27 @@ final readonly class Redaction
         return $result.substr($text, $offset);
     }
 
-    private function endOfParenthesisList(string $text, int $from): int
+    private function endOfPrintRList(string $text, int $from, string $indent): int
     {
-        // The closing parenthesis sits on a line of its own because print_r and var_export both print it so.
-        if (1 === preg_match('~\R\s*\)~', $text, $close, PREG_OFFSET_CAPTURE, $from)) {
+        // print_r does not quote values, so only the indentation of the opening parenthesis tells its own closing one apart.
+        if (1 === preg_match('~\R'.preg_quote($indent, '~').'\)(?=\R|\z)~', $text, $close, PREG_OFFSET_CAPTURE, $from)) {
             return $close[0][1] + strlen($close[0][0]);
         }
 
         return strlen($text);
     }
 
-    private function endOfBracketList(string $text, int $from): int
+    private function endOfQuotedList(string $text, int $from, string $brackets): int
     {
+        [$open, $close] = str_split($brackets);
         // Quoted strings are skipped whole because a bracket inside a header value must not close the list.
-        $tokens = '~\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\])*"|[\[\]]~s';
+        $tokens = '~\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\])*"|['.preg_quote($brackets, '~').']~s';
         preg_match_all($tokens, $text, $matches, PREG_OFFSET_CAPTURE, $from);
 
         $depth = 1;
         foreach ($matches[0] as [$token, $position]) {
-            $depth += '[' === $token ? 1 : 0;
-            $depth -= ']' === $token ? 1 : 0;
+            $depth += $open === $token ? 1 : 0;
+            $depth -= $close === $token ? 1 : 0;
             if (0 === $depth) {
                 return $position + 1;
             }
@@ -121,8 +144,8 @@ final readonly class Redaction
 
     private function redactHeaderValues(string $text): string
     {
-        // A quoted value takes a backslash run and a quote as part of itself, so an escaped quote does not end it.
-        $quoted = '(?<open>\\\\*["\'])(?:(?!\k<open>)(?:\\\\+["\']|[^"\'\\\\]|\\\\))*+(?:\k<open>|\z)';
+        // A quoted value takes a backslash run and a quote as part of itself, so an escaped quote does not end it, and the other quote character is plain text in it.
+        $quoted = '(?<open>\\\\*["\'])(?:(?!\k<open>)(?:\\\\+["\']|[^\\\\]|\\\\))*+(?:\k<open>|\z)';
         // Quoted Digest parameters stay inside so that the value ends at the line or at the closing quote of a shell word.
         $unquoted = '(?:[^\r\n"\']|"[^"\r\n]*")+';
 
@@ -135,7 +158,8 @@ final readonly class Redaction
 
     private function redactUserinfo(string $text): string
     {
-        return preg_replace('~(?<scheme>\b[a-z][a-z0-9+.-]*://)[^\s/?#"\'<>]+@~i', '$1'.self::MARKER.'@', $text) ?? self::MARKER;
+        // JSON writes each slash of the separator as \/, once more per encoding.
+        return preg_replace('~(?<scheme>\b[a-z][a-z0-9+.-]*:(?:\\\\*/){2})[^\s/?#"\'<>]+@~i', '$1'.self::MARKER.'@', $text) ?? self::MARKER;
     }
 
     private function redactSecretShapes(string $text): string
