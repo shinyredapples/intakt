@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support\Log;
 
+use Closure;
 use Psr\Log\LogLevel;
 use RuntimeException;
 
@@ -49,19 +50,21 @@ final readonly class LogRecords
 
     public function remove(string $level, string $message): bool
     {
-        $records = $this->records();
-        foreach ($records as $index => $record) {
-            // Symfony ends an uncaught exception's message with its source line, which a test must not pin.
-            $logged = preg_replace('/ at \S+ line \d+$/', '', $record['message']);
-            if ($record['level'] === $level && $logged === $message) {
-                array_splice($records, $index, 1);
-                $this->write($records);
+        return $this->whileLocked(function ($handle) use ($level, $message): bool {
+            $records = $this->records($handle);
+            foreach ($records as $index => $record) {
+                // Symfony ends an uncaught exception's message with its source line, which a test must not pin.
+                $logged = preg_replace('/ at \S+ line \d+$/', '', $record['message']);
+                if ($record['level'] === $level && $logged === $message) {
+                    array_splice($records, $index, 1);
+                    $this->write($handle, $records);
 
-                return true;
+                    return true;
+                }
             }
-        }
 
-        return false;
+            return false;
+        });
     }
 
     /**
@@ -69,10 +72,12 @@ final readonly class LogRecords
      */
     public function takeErrors(): array
     {
-        $records = $this->records();
-        $this->write([]);
+        return $this->whileLocked(function ($handle): array {
+            $records = $this->records($handle);
+            $this->write($handle, []);
 
-        return array_values(array_filter($records, static fn (array $record): bool => in_array($record['level'], self::ERROR_AND_ABOVE, true)));
+            return array_values(array_filter($records, static fn (array $record): bool => in_array($record['level'], self::ERROR_AND_ABOVE, true)));
+        });
     }
 
     public function discard(): void
@@ -83,21 +88,49 @@ final readonly class LogRecords
     }
 
     /**
-     * @return list<Record>
+     * @template T
+     *
+     * @param Closure(resource): T $change
+     *
+     * @return T
      */
-    private function records(): array
+    private function whileLocked(Closure $change): mixed
     {
-        $lines = is_file($this->file) ? file($this->file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) : false;
+        // One lock from the read to the rewrite, or a record another process appends in between is lost.
+        $handle = fopen($this->file, 'c+');
+        if (false === $handle || !flock($handle, LOCK_EX)) {
+            throw new RuntimeException('The test log records file could not be locked.');
+        }
 
-        return array_map($this->decoded(...), false === $lines ? [] : $lines);
+        try {
+            return $change($handle);
+        } finally {
+            fclose($handle);
+        }
     }
 
     /**
+     * @param resource $handle
+     *
+     * @return list<Record>
+     */
+    private function records($handle): array
+    {
+        $lines = explode(PHP_EOL, (string) stream_get_contents($handle, offset: 0));
+
+        return array_map($this->decoded(...), array_values(array_filter($lines, static fn (string $line): bool => '' !== $line)));
+    }
+
+    /**
+     * @param resource     $handle
      * @param list<Record> $records
      */
-    private function write(array $records): void
+    private function write($handle, array $records): void
     {
-        file_put_contents($this->file, implode('', array_map($this->encoded(...), $records)), LOCK_EX);
+        ftruncate($handle, 0);
+        rewind($handle);
+        fwrite($handle, implode('', array_map($this->encoded(...), $records)));
+        fflush($handle);
     }
 
     /**

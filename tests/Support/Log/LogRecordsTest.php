@@ -17,11 +17,14 @@ final class LogRecordsTest extends TestCase
 {
     use AssertsLoggedErrors;
 
+    private string $file;
+
     private LogRecords $records;
 
     protected function setUp(): void
     {
-        $this->records = new LogRecords((string) tempnam(sys_get_temp_dir(), 'intakt-log-records-test-'));
+        $this->file = (string) tempnam(sys_get_temp_dir(), 'intakt-log-records-test-');
+        $this->records = new LogRecords($this->file);
     }
 
     protected function tearDown(): void
@@ -85,8 +88,66 @@ final class LogRecordsTest extends TestCase
         self::assertSame([], $records->takeErrors());
     }
 
+    public function testAnErrorAnotherProcessLogsWhileAnAssertedOneIsRemovedStaysInTheRecord(): void
+    {
+        $this->runLogger()->error('Disk on fire.');
+        $lock = $this->lockTheRecords();
+        $removal = $this->removeInAnotherProcess($lock, 'Disk on fire.');
+        $this->waitUntilItWaitsForTheLock($removal);
+
+        fwrite($lock, '{"level":"error","message":"Smoke in the hall."}'.PHP_EOL);
+        fclose($lock);
+        pcntl_waitpid($removal, $status);
+
+        self::assertSame(0, pcntl_wexitstatus($status));
+        self::assertSame([['level' => LogLevel::ERROR, 'message' => 'Smoke in the hall.']], $this->records->takeErrors());
+    }
+
     private function runLogger(): RecordingLogger
     {
         return new RecordingLogger($this->records);
+    }
+
+    /**
+     * @return resource
+     */
+    private function lockTheRecords()
+    {
+        $lock = fopen($this->file, 'a');
+        self::assertNotFalse($lock);
+        self::assertTrue(flock($lock, LOCK_EX));
+
+        return $lock;
+    }
+
+    /**
+     * @param resource $lock
+     */
+    private function removeInAnotherProcess($lock, string $message): int
+    {
+        $pid = pcntl_fork();
+        if (0 !== $pid) {
+            return $pid;
+        }
+
+        // A started process would inherit the locked handle and wait for itself, so the child closes it before it becomes the removal.
+        fclose($lock);
+        pcntl_exec(PHP_BINARY, [__DIR__.'/Fixtures/remove-a-record.php', $this->file, $message]);
+
+        exit(1);
+    }
+
+    // The kernel names what a process sleeps on, which forces the order without guessing a delay: the removal has started and waits for the lock.
+    private function waitUntilItWaitsForTheLock(int $removal): void
+    {
+        for ($attempt = 0; $attempt < 500; ++$attempt) {
+            if (str_contains((string) @file_get_contents('/proc/'.$removal.'/wchan'), 'lock')) {
+                return;
+            }
+
+            usleep(10_000);
+        }
+
+        self::fail('The removal never waited for the lock.');
     }
 }
