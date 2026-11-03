@@ -57,7 +57,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** none. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T3 Persistence tests on MySQL, MariaDB and PostgreSQL in CI
-- **Description:** A CI job with service containers runs the `persistence` group on each engine (built as a matrix; since merged into one job with a service and a step per engine, as each job costs an ephemeral runner a full reset). Protected path: the owner approves the merge of the workflow change; it is pushed without a separate approval only when the workflow scan finds it not risky (see Merge).
+- **Description:** A CI job with service containers runs the `persistence` group on each engine (built as a matrix; since merged into one job with a service per engine, as each job costs an ephemeral runner a full reset; the engines run at once in one step, on tmpfs data directories). Protected path: the owner approves the merge of the workflow change; it is pushed without a separate approval only when the workflow scan finds it not risky (see Merge).
 - **Acceptance:** the matrix runs on the branch and is green on all three engines; the SQLite run in `bin/check` stays unchanged.
 - **Evidence:** the CI run link with the three jobs.
 - **Waits for:** T2. **Size:** S. **Labels:** `class:tooling`, `priority:normal`.

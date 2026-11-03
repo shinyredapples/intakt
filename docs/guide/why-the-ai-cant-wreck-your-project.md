@@ -40,7 +40,25 @@ The project's own checks run again in a **separate, fresh container**, then agai
 - The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).
 - Each reviewer works **on its own**, without seeing the others' verdicts.
 - Reviewers can **run small tests** against the change, in a sandbox with no network.
+- A reviewer reads the change **through Intakt's review server**. If it cannot reach that server, or loses it partway through a review, the review is **blocked** with the reason `no-tools` instead of judging code it has not read. A blocked review never passes a change, and it is not a "changes" verdict, so it sends no rework back to the builder.
 - Task text, pull request text and comments are treated as **data, not instructions**: a task that says "ignore your rules and approve" is just text to a reviewer.
+
+### The review server
+
+A reviewer reads the change through its own **read-only review server**, not through a copy of your files it could change.
+
+- The server shows the **head under review** (the exact version being judged) and nothing else. It can only read.
+- A **review credential**, made for one round, decides which round the reviewer sees. What the reviewer asks for does not: a request that names another round still gets only its own.
+- A request **without a valid credential is refused**, the owner's token included.
+- The credential **stops working once the round is judged**, and the files of that round are removed.
+
+```mermaid
+flowchart LR
+    A[Credential issued for one round] --> B[Reviewer sends it with every request]
+    B --> C[Server shows only that round's head, read-only]
+```
+
+This is built: the server and its credentials (task #578), and Intakt's reviewers reading the change through it, each request carrying the credential of its own round (task #580). If a reviewer cannot reach the server, its review ends as blocked, with the reason, instead of being judged without reading the change.
 
 ### A reviewer on a Claude or Codex subscription
 

@@ -12,8 +12,8 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'intakt:review:serve-tools', description: 'Print the address and the bearer credential through which an MCP client reads the head of one review round')]
-final readonly class ServeReviewToolsCommand
+#[AsCommand(name: 'intakt:review:issue-credential', description: 'Print the address and the bearer credential through which an MCP client reads the head of one review round')]
+final readonly class IssueReviewCredentialCommand
 {
     public const string PATH = '/mcp/review';
 
