@@ -234,7 +234,7 @@ final class EntrypointProcessesTest extends TestCase
         $filesystem = new Filesystem();
 
         foreach (['php', 'frankenphp'] as $name) {
-            $filesystem->dumpFile($programs.'/'.$name, "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\nexec sleep 300\n");
+            $filesystem->dumpFile($programs.'/'.$name, "#!/bin/bash\ncase \"\$*\" in *migrate*|*validate*) exit 0;; esac\nexec sleep 300\n");
             $filesystem->chmod($programs.'/'.$name, 0755);
         }
 
