@@ -41,6 +41,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Every test class declares `#[CoversClass]` (or `#[CoversNothing]`), `#[UsesClass]` where it exercises other classes; strict coverage metadata waits until CI collects coverage.
 - `createStub` by default; `createMock` only to assert a call on an outside boundary. A mock without expectations fails the `tests` gate; `#[AllowMockObjectsWithoutExpectations]` is refused.
 - SQLite by default; persistence tests in the `persistence` group. Races proven by forced order, never repetition. No shipped config, real credentials or live providers in tests.
+- An expected error log is asserted with `AssertsLoggedErrors`, never printed; the `UnassertedErrorLogExtension` fails a test that ends with an unasserted error record.
 
 ## Symfony AI
 

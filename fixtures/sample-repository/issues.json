@@ -1,0 +1,23 @@
+[
+  {
+    "id": "discount-boundary",
+    "kind": "bug",
+    "file": "src/discount.js",
+    "description": "The discount starts above 100 instead of at 100, so a cart of exactly 100 loses it; the existing test for 100 would fail.",
+    "evidence": "if (amount > 100) {"
+  },
+  {
+    "id": "shipping-untested",
+    "kind": "missing-test",
+    "file": "src/shipping.js",
+    "description": "shippingCost is new and no test file changes with it.",
+    "evidence": "export function shippingCost(weightInKilograms) {"
+  },
+  {
+    "id": "shell-injection",
+    "kind": "security",
+    "file": "src/report.js",
+    "description": "The customer name is concatenated into a shell command, so a crafted name runs other commands.",
+    "evidence": "execSync('grep ' + customerName + ' orders.log')"
+  }
+]

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="../../../../vendor/phpunit/phpunit/phpunit.xsd"
+         failOnWarning="true"
+         bootstrap="../../../../vendor/autoload.php"
+         cacheDirectory="../../../../var/cache/unasserted-error-log-fixture"
+>
+    <extensions>
+        <bootstrap class="Intakt\Tests\Support\Log\UnassertedErrorLogExtension"/>
+        <bootstrap class="Intakt\Tests\Support\Log\Fixtures\LogsAnErrorAfterTheLastSuiteExtension"/>
+    </extensions>
+</phpunit>
