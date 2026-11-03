@@ -49,6 +49,32 @@ any_running() {
     return 1
 }
 
+restart() {
+    local name=${running[$1]}
+    unset "running[$1]"
+
+    # The web server is not started again here, because FrankenPHP restarts its own workers and Docker's restart policy restarts the container.
+    if [[ $name == web ]]; then
+        echo "intakt: the web server ended with status $2, stopping" >&2
+        stop_all "$2"
+    fi
+
+    echo "intakt: $name ended with status $2, starting it again" >&2
+    sleep 1
+    start "$name"
+}
+
+# A child that ends while another is handled is reaped by bash and unknown to the next wait -n ("no such job"), so it is found by pid and its status taken with a plain wait.
+restart_ended() {
+    local pid status
+    for pid in "${!running[@]}"; do
+        kill -0 "$pid" 2>/dev/null && continue
+        status=0
+        wait "$pid" 2>/dev/null || status=$?
+        restart "$pid" "$status"
+    done
+}
+
 trap 'stop_all 0' TERM INT
 
 start web
@@ -60,17 +86,9 @@ start scheduler_watcher
 while :; do
     ended=''
     status=0
-    wait -n -p ended "${!running[@]}" || status=$?
-    name=${running[$ended]}
-    unset "running[$ended]"
-
-    # The web server is not started again here, because FrankenPHP restarts its own workers and Docker's restart policy restarts the container.
-    if [[ $name == web ]]; then
-        echo "intakt: the web server ended with status $status, stopping" >&2
-        stop_all "$status"
+    wait -n -p ended "${!running[@]}" 2>/dev/null || status=$?
+    if [[ -n $ended ]]; then
+        restart "$ended" "$status"
     fi
-
-    echo "intakt: $name ended with status $status, starting it again" >&2
-    sleep 1
-    start "$name"
+    restart_ended
 done

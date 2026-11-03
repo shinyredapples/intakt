@@ -25,6 +25,7 @@ final class EntrypointProcessesTest extends TestCase
     // POSIX numbers rather than SIGKILL, SIGSTOP and SIGTERM, because those constants exist only with pcntl and the CI image has none.
     private const int KILL = 9;
     private const int STOP = 19;
+    private const int CONTINUE = 18;
     private const int TERMINATE = 15;
 
     private Process $entrypoint;
@@ -89,10 +90,27 @@ final class EntrypointProcessesTest extends TestCase
         $killed = (int) array_search($transport, $before, true);
 
         posix_kill($killed, self::KILL);
-        $after = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], $killed);
+        $after = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], [$killed]);
 
         self::assertArrayNotHasKey($killed, $after);
         self::assertStringContainsString($transport.' ended with status 137, starting it again', $this->entrypoint->getErrorOutput());
+    }
+
+    public function testTwoConsumersEndingTogetherAreBothStartedAgain(): void
+    {
+        $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
+        $killed = array_keys($before, 'async', true);
+        // The entrypoint is held stopped while both die, which forces the order in which their exits are already in when it next waits.
+        $this->entrypoint->signal(self::STOP);
+        foreach ($killed as $pid) {
+            posix_kill($pid, self::KILL);
+        }
+        usleep(200_000);
+        $this->entrypoint->signal(self::CONTINUE);
+
+        $after = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], $killed);
+
+        self::assertSame([], array_intersect($killed, array_keys($after)));
     }
 
     /**
@@ -143,10 +161,11 @@ final class EntrypointProcessesTest extends TestCase
 
     /**
      * @param array<string, int> $expected
+     * @param list<int>          $gone
      *
      * @return array<int, string>
      */
-    private function waitForProcesses(array $expected, ?int $gone = null): array
+    private function waitForProcesses(array $expected, array $gone = []): array
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
 
@@ -156,7 +175,7 @@ final class EntrypointProcessesTest extends TestCase
             ksort($counted);
             ksort($expected);
 
-            if ($counted === $expected && !isset($processes[$gone ?? 0])) {
+            if ($counted === $expected && [] === array_intersect($gone, array_keys($processes))) {
                 return $processes;
             }
 
