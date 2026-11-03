@@ -54,7 +54,7 @@ final class OptionalProjectMemoryTest extends TestCase
         $inner->method('relevantTo')->willThrowException(new LogicException('Retrieval failed.'));
         $handler = new TestHandler();
 
-        (void) new OptionalProjectMemory($inner, new Logger('app', [$handler]))->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        new OptionalProjectMemory($inner, new Logger('app', [$handler]))->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
 
         /** @var array{context: array{project: string, exception: array{class: string, message: string, trace: list<string>}}} $line */
         $line = json_decode(new RedactedJsonFormatter([], [])->format($handler->getRecords()[0]), true, flags: JSON_THROW_ON_ERROR);
