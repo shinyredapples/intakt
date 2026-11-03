@@ -42,7 +42,7 @@ A dependency change is decided by the build loop's composer policy, as `AGENTS.m
 
 ## A bug in Symfony AI or another dependency
 
-Intakt uses the Symfony AI beta hard on purpose. If you find a bug in a dependency, don't work around it silently: add the smallest reproduction under `upstream/` (see the existing ones) and say so in the pull request. The owner decides whether it is reported upstream.
+Intakt uses the Symfony AI beta hard on purpose. If you find a bug in a dependency, don't work around it silently: add the smallest reproduction under `upstream/` (see the existing ones), give it a row in "Found in the beta" of `docs/highlights.md` (the `highlights-up-to-date` gate of `bin/check` checks it), and say so in the pull request. The owner decides whether it is reported upstream.
 
 ## Code of conduct
 
