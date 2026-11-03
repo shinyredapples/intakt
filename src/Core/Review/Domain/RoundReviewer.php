@@ -10,7 +10,6 @@ use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
-use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\Uid\UuidV7;
 
 #[ORM\Entity]
@@ -79,9 +78,9 @@ final class RoundReviewer implements HasPlace
         ++$this->restarts;
     }
 
-    public function recordVerdict(Verdict $verdict, ?Provider $substitute): void
+    public function recordVerdict(string $verdictJson, ?Provider $substitute): void
     {
-        $this->verdict = json_encode($verdict, JSON_THROW_ON_ERROR);
+        $this->verdict = $verdictJson;
         $this->substitute = $substitute;
     }
 

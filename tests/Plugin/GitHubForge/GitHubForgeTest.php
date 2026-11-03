@@ -537,7 +537,7 @@ final class GitHubForgeTest extends TestCase
         $change = $forge->change(new ChangeId(self::PULL));
         $requestsBefore = count($this->requested);
 
-        $failure = $this->failureOfPost($forge, $change, $this->comment("The fixture holds a key:\n".AppKey::generate()->private, 'project-db-pass-42'));
+        $failure = $this->failureOfPost($forge, $change, $this->comment("The fixture holds a key:\nsk_live_".str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2), 'project-db-pass-42'));
 
         self::assertEquals(ReviewTextHoldsSecret::afterRedaction(), $failure);
         self::assertCount($requestsBefore, $this->requested);

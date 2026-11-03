@@ -17,6 +17,7 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -26,6 +27,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversNothing]
 final class RoundReadContractTest extends KernelTestCase
 {
+    use AssertsLoggedErrors;
+
     private McpServerClient $client;
 
     private string $roundId;
@@ -140,6 +143,7 @@ final class RoundReadContractTest extends KernelTestCase
 
         self::assertIsInt(McpServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', $this->client->lastBody());
+        self::assertLoggedError('error', 'Resource not found');
     }
 
     /**
