@@ -91,16 +91,14 @@ final class LogRecordsTest extends TestCase
     public function testAnErrorAnotherProcessLogsWhileAnAssertedOneIsRemovedStaysInTheRecord(): void
     {
         $this->runLogger()->error('Disk on fire.');
-        $lock = $this->lockTheRecords();
-        $removal = $this->removeInAnotherProcess($lock, 'Disk on fire.');
-        $this->waitUntilItWaitsForTheLock($removal);
+        $holder = $this->holdTheRecordsInAnotherProcess('{"level":"error","message":"Smoke in the hall."}');
+        $removal = $this->startProcess([__DIR__.'/Fixtures/remove-a-record.php', $this->file, 'Disk on fire.']);
+        $this->waitUntilItWaitsForTheLock($removal['process']);
 
-        fwrite($lock, '{"level":"error","message":"Smoke in the hall."}'.PHP_EOL);
-        fclose($lock);
-        pcntl_waitpid($removal, $status);
+        fwrite($holder['pipes'][0], 'append'.PHP_EOL);
 
-        self::assertIsInt($status);
-        self::assertSame(0, pcntl_wexitstatus($status));
+        self::assertSame(0, proc_close($holder['process']));
+        self::assertSame(0, proc_close($removal['process']));
         self::assertSame([['level' => LogLevel::ERROR, 'message' => 'Smoke in the hall.']], $this->records->takeErrors());
     }
 
@@ -110,39 +108,38 @@ final class LogRecordsTest extends TestCase
     }
 
     /**
-     * @return resource
+     * @return array{process: resource, pipes: array<int, resource>}
      */
-    private function lockTheRecords()
+    private function holdTheRecordsInAnotherProcess(string $line): array
     {
-        $lock = fopen($this->file, 'a');
-        self::assertNotFalse($lock);
-        self::assertTrue(flock($lock, LOCK_EX));
+        $holder = $this->startProcess([__DIR__.'/Fixtures/hold-the-records.php', $this->file, $line]);
+        self::assertSame('locked'.PHP_EOL, fgets($holder['pipes'][1]));
 
-        return $lock;
+        return $holder;
     }
 
     /**
-     * @param resource $lock
+     * @param list<string> $arguments
+     *
+     * @return array{process: resource, pipes: array<int, resource>}
      */
-    private function removeInAnotherProcess($lock, string $message): int
+    private function startProcess(array $arguments): array
     {
-        $pid = pcntl_fork();
-        if (0 !== $pid) {
-            return $pid;
-        }
+        $process = proc_open([PHP_BINARY, ...$arguments], [0 => ['pipe', 'r'], 1 => ['pipe', 'w']], $pipes);
+        self::assertNotFalse($process);
 
-        // A started process would inherit the locked handle and wait for itself, so the child closes it before it becomes the removal.
-        fclose($lock);
-        pcntl_exec(PHP_BINARY, [__DIR__.'/Fixtures/remove-a-record.php', $this->file, $message]);
-
-        exit(1);
+        return ['process' => $process, 'pipes' => $pipes];
     }
 
-    // Asks the kernel what the removal sleeps on, because that forces the order without guessing a delay.
-    private function waitUntilItWaitsForTheLock(int $removal): void
+    /**
+     * @param resource $removal
+     */
+    // Asks the kernel's list of waiting locks, because that forces the order without guessing a delay.
+    private function waitUntilItWaitsForTheLock($removal): void
     {
+        $waiting = '/^\d+: -> FLOCK\s+ADVISORY\s+WRITE\s+'.proc_get_status($removal)['pid'].'\s/m';
         for ($attempt = 0; $attempt < 500; ++$attempt) {
-            if (str_contains((string) @file_get_contents('/proc/'.$removal.'/wchan'), 'lock')) {
+            if (1 === preg_match($waiting, (string) file_get_contents('/proc/locks'))) {
                 return;
             }
 
