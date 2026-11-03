@@ -28,8 +28,7 @@ final class LogRecords
             // Symfony ends an uncaught exception's message with its source line, which a test must not pin.
             $logged = preg_replace('/ at \S+ line \d+$/', '', $record['message']);
             if ($record['level'] === $level && $logged === $message) {
-                unset(self::$records[$index]);
-                self::$records = array_values(self::$records);
+                array_splice(self::$records, $index, 1);
 
                 return true;
             }
