@@ -23,9 +23,9 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowReviewController::class)]
 #[CoversClass(LedgerReviewPages::class)]

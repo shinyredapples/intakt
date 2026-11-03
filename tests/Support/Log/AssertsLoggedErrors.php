@@ -8,9 +8,7 @@ use PHPUnit\Framework\Assert;
 
 trait AssertsLoggedErrors
 {
-    /**
-     * Removes the record, so the extension does not fail the test for it.
-     */
+    // Removes the record, so the extension does not fail the test for it.
     private static function assertLoggedError(string $level, string $message): void
     {
         Assert::assertTrue(LogRecords::remove($level, $message), sprintf('Expected a %s log record "%s", none was logged.', $level, $message));

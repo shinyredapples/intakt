@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support\Log;
 
+use PHPUnit\Framework\AssertionFailedError;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use PHPUnit\Framework\AssertionFailedError;
 use Psr\Log\LogLevel;
 
 #[CoversClass(LogRecords::class)]

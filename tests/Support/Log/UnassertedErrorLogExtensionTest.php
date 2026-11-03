@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UnassertedErrorLogExtension::class)]
+#[CoversClass(WarnOnUnassertedErrors::class)]
 #[UsesClass(LogRecords::class)]
 #[UsesClass(RecordingLogger::class)]
 final class UnassertedErrorLogExtensionTest extends TestCase
