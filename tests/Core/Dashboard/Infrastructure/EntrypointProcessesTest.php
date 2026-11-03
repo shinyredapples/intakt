@@ -100,7 +100,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         $killed = array_keys($before, 'async', true);
-        // The entrypoint is held stopped while both die, which forces the order in which their exits are already in when it next waits.
+        // Held stopped while both die, because only then are both exits in before it waits again, the order that lost one.
         $this->entrypoint->signal(self::STOP);
         foreach ($killed as $pid) {
             posix_kill($pid, self::KILL);
