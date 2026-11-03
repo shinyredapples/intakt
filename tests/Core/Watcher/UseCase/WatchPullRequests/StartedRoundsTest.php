@@ -230,7 +230,7 @@ final class StartedRoundsTest extends KernelTestCase
         }
 
         self::assertSame('round-1', $this->storedRoundId());
-        self::assertTrue($this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round') > 0);
+        self::assertSame(1, $this->entities->getRepository(StartedRound::class)->count(['stale' => true]));
     }
 
     private function green(): OpenChange
@@ -267,7 +267,7 @@ final class StartedRoundsTest extends KernelTestCase
     {
         $this->entities->clear();
 
-        return (string) $this->entities->getConnection()->fetchOne('SELECT round_id FROM watcher_started_round');
+        return $this->entities->getRepository(StartedRound::class)->findOneBy([])?->roundId() ?? '';
     }
 
     private function storedRounds(): int
