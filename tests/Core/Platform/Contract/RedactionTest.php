@@ -128,8 +128,8 @@ final class RedactionTest extends TestCase
 
     private function encoded(string $password, int $depth): string
     {
-        $text = ['password' => $password];
-        for ($level = 0; $level < $depth; ++$level) {
+        $text = json_encode(['password' => $password], JSON_THROW_ON_ERROR);
+        for ($level = 1; $level < $depth; ++$level) {
             $text = json_encode($text, JSON_THROW_ON_ERROR);
         }
 
