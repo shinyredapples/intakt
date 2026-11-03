@@ -479,6 +479,50 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame('1', $this->ledger->payloads()[1]['change']);
     }
 
+    public function testAHeadThatReturnsToAnEarlierHeadWhoseRoundIsStaleStartsAFreshRound(): void
+    {
+        $this->moveFromGreenToNextGreenAndBack();
+
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::VerdictsStale, LedgerEventKind::RoundQueued, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertCount(3, $this->commands->started);
+        self::assertFalse($this->storedStale(self::GREEN));
+    }
+
+    public function testARoundRestartedOnAReturningHeadIsReportedStaleAgainWhenTheHeadMovesAwayOnceMore(): void
+    {
+        $this->moveFromGreenToNextGreenAndBack();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:15:00Z'));
+
+        $this->tick();
+
+        self::assertSame(LedgerEventKind::VerdictsStale, $this->ledger->kinds()[4]);
+        self::assertTrue($this->storedStale(self::GREEN));
+    }
+
+    public function testAHeadThatReturnsToAnEarlierHeadWhoseRoundStandsStartsNoSecondRound(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['docs/feature.md']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+
+        self::assertCount(2, $this->commands->started);
+    }
+
+    private function moveFromGreenToNextGreenAndBack(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+    }
+
     private function startRoundOnGreenHead(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));

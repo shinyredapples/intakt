@@ -201,6 +201,38 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(['round-1'], array_map(static fn (StartedRound $round): string => $round->roundId(), $open));
     }
 
+    public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStartsNoRound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $this->markStored(stale: true, recorded: false);
+        $started = 0;
+
+        $this->rounds->startOnce('alpha', $this->green(), static function () use (&$started): QueuedRound {
+            ++$started;
+
+            return RecordingCommandBus::queued(2);
+        });
+
+        self::assertSame(0, $started);
+        self::assertSame('round-1', $this->storedRoundId());
+    }
+
+    public function testAFailedStartOnAReturningHeadKeepsItsStaleRound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $this->markStored(stale: true, recorded: true);
+        $this->entities->getConnection()->executeStatement('DROP TABLE watcher_pending_head');
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+            self::fail('The failed end of the wait was swallowed.');
+        } catch (Exception) {
+        }
+
+        self::assertSame('round-1', $this->storedRoundId());
+        self::assertTrue($this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round') > 0);
+    }
+
     private function green(): OpenChange
     {
         return RecordedForge::change('7', 'b', '2026-11-02T09:00:00Z');
@@ -223,6 +255,19 @@ final class StartedRoundsTest extends KernelTestCase
     {
         $this->entities->clear();
         $this->entities->getEventManager()->addEventListener([Events::postLoad], new DeletedOnFirstLoad($this->entities->getConnection(), 'watcher_started_round'));
+    }
+
+    private function markStored(bool $stale, bool $recorded): void
+    {
+        $this->entities->getConnection()->executeStatement('UPDATE watcher_started_round SET stale = ?, queued_recorded = ?', [$stale, $recorded], [Types::BOOLEAN, Types::BOOLEAN]);
+        $this->entities->clear();
+    }
+
+    private function storedRoundId(): string
+    {
+        $this->entities->clear();
+
+        return (string) $this->entities->getConnection()->fetchOne('SELECT round_id FROM watcher_started_round');
     }
 
     private function storedRounds(): int

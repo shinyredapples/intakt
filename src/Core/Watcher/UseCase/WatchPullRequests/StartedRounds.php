@@ -147,13 +147,44 @@ final readonly class StartedRounds
             return;
         }
 
+        $this->replaceStaleRound($project, $change);
         $this->entities->persist(new StartedRound($project, $change, $queued->roundId));
         $this->entities->flush();
     }
 
+    // A stale round whose queued line is still owed keeps the head started, so the line is recorded before a returning head replaces the row.
     private function isStarted(string $project, OpenChange $change): bool
     {
-        return 0 < $this->entities->getRepository(StartedRound::class)->count(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+        $round = $this->entities->getRepository(StartedRound::class)->find(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+
+        return $round instanceof StartedRound && !$this->isReplaceable($round);
+    }
+
+    private function isReplaceable(StartedRound $round): bool
+    {
+        $stored = $this->readAgain($round);
+
+        return true === $stored?->isStale() && false === $stored->owesQueuedLine();
+    }
+
+    // The key holds one row per head, and the verdicts of a stale round no longer count, so a head that returns gets a fresh round in the place of the old row; inside the start transaction a failed start restores it.
+    private function replaceStaleRound(string $project, OpenChange $change): void
+    {
+        $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+
+        if ($loaded instanceof StartedRound) {
+            $this->entities->detach($loaded);
+        }
+
+        $this->entities->createQueryBuilder()
+            ->delete(StartedRound::class, 'r')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.stale = :stale')
+            ->setParameter('project', $project)
+            ->setParameter('change', $change->id->value)
+            ->setParameter('head', $change->head->hash)
+            ->setParameter('stale', true)
+            ->getQuery()
+            ->execute();
     }
 
     // A rollback that fails (the server already ended the transaction) must not hide the original failure or skip the discard.
