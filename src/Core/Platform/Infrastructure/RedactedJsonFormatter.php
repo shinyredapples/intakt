@@ -6,7 +6,6 @@ namespace Intakt\Core\Platform\Infrastructure;
 
 use DateTimeInterface;
 use Intakt\Core\Platform\Contract\Redaction;
-use SensitiveParameter;
 use Stringable;
 use Symfony\Component\Clock\ClockInterface;
 use Throwable;
@@ -14,25 +13,20 @@ use Throwable;
 // The log line formatter of the service's logger: one JSON line per record, redacted last so every escaping of a secret is covered.
 final readonly class RedactedJsonFormatter
 {
-    /** @var list<string> */
-    private array $heldCredentials;
-
     /**
-     * @param array<array-key, string|null> $heldCredentials values of the credentials this install holds; unset ones are null
+     * @param list<string> $credentialNames
      */
     public function __construct(
         private Redaction $redaction,
         private ClockInterface $clock,
-        #[SensitiveParameter]
-        array $heldCredentials,
+        private array $credentialNames,
     ) {
-        $this->heldCredentials = array_values(array_filter($heldCredentials, static fn (?string $value): bool => null !== $value && '' !== $value));
     }
 
     /**
      * @param array<array-key, mixed> $context
      */
-    public function __invoke(string $level, string|Stringable $message, array $context, bool $prefixDate = true): string
+    public function __invoke(string $level, string|Stringable $message, array $context): string
     {
         $record = [
             'time' => $this->clock->now()->format(DateTimeInterface::RFC3339_EXTENDED),
@@ -41,7 +35,17 @@ final readonly class RedactedJsonFormatter
             'context' => array_map($this->loggable(...), $context),
         ];
 
-        return $this->redaction->redact($this->encoded($record), ...$this->heldCredentials);
+        return $this->redaction->redact($this->encoded($record), ...$this->heldCredentials());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function heldCredentials(): array
+    {
+        $values = array_map(static fn (string $name): mixed => $_SERVER[$name] ?? $_ENV[$name] ?? getenv($name), $this->credentialNames);
+
+        return array_values(array_filter($values, static fn (mixed $value): bool => is_string($value) && '' !== $value));
     }
 
     /**
@@ -92,6 +96,8 @@ final readonly class RedactedJsonFormatter
      */
     private function encoded(array $record): string
     {
-        return json_encode($record, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES) ?: '{"level":"error","message":"A log record could not be encoded."}';
+        $line = json_encode($record, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
+
+        return false === $line ? '{"level":"error","message":"A log record could not be encoded."}' : $line;
     }
 }

@@ -18,33 +18,39 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(Redaction::class)]
 final class RedactedJsonFormatterTest extends TestCase
 {
+    private const string CREDENTIAL = 'INTAKT_TEST_HELD_CREDENTIAL';
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::CREDENTIAL]);
+    }
+
     public function testALoggedExceptionCarriesItsClassMessageAndTrace(): void
     {
         $line = $this->format('error', 'It failed.', ['reviewer' => 'r1', 'exception' => new RuntimeException('boom')]);
 
-        $record = $this->decoded($line);
-        self::assertSame(RuntimeException::class, $record['context']['exception']['class']);
-        self::assertSame('boom', $record['context']['exception']['message']);
-        self::assertStringContainsString(__FUNCTION__, $record['context']['exception']['trace']);
+        $failure = $this->loggedFailure($line);
+        self::assertSame(RuntimeException::class, $failure['class']);
+        self::assertSame('boom', $failure['message']);
+        self::assertStringContainsString(__FUNCTION__, $failure['trace']);
     }
 
     public function testAPreviousExceptionIsWrittenWithItsOwnClass(): void
     {
         $line = $this->format('error', 'It failed.', ['exception' => new RuntimeException('outer', 0, new LogicException('inner'))]);
 
-        self::assertSame(LogicException::class, $this->decoded($line)['context']['exception']['previous']['class']);
+        self::assertSame(LogicException::class, $this->loggedFailure($line)['previous']['class'] ?? null);
     }
 
     public function testEachRecordIsOneJsonLineHoldingItsContextItem(): void
     {
         $line = $this->format('warning', 'Round {round} stalled.', ['round' => 'R7']);
 
-        $record = $this->decoded($line);
         self::assertStringNotContainsString("\n", $line);
-        self::assertSame('Round R7 stalled.', $record['message']);
-        self::assertSame('R7', $record['context']['round']);
-        self::assertSame('warning', $record['level']);
-        self::assertSame('2026-11-03T10:00:00.000+00:00', $record['time']);
+        self::assertSame(
+            ['time' => '2026-11-03T10:00:00.000+00:00', 'level' => 'warning', 'message' => 'Round R7 stalled.', 'context' => ['round' => 'R7']],
+            $this->decoded($line),
+        );
     }
 
     public function testAHeldCredentialInTheMessageIsWrittenRedacted(): void
@@ -74,7 +80,7 @@ final class RedactedJsonFormatterTest extends TestCase
     {
         $line = $this->format('error', 'Plain text.', [], null);
 
-        self::assertSame('Plain text.', $this->decoded($line)['message']);
+        self::assertSame('Plain text.', $this->decoded($line)['message'] ?? null);
     }
 
     public function testAUrlWithUserinfoIsWrittenRedacted(): void
@@ -115,9 +121,24 @@ final class RedactedJsonFormatterTest extends TestCase
      */
     private function format(string $level, string $message, array $context, ?string $credential = 'held-secret-1'): string
     {
-        $formatter = new RedactedJsonFormatter(new Redaction(), new MockClock('2026-11-03 10:00:00 UTC'), [$credential, null, '']);
+        $_SERVER[self::CREDENTIAL] = $credential;
+        $formatter = new RedactedJsonFormatter(new Redaction(), new MockClock('2026-11-03 10:00:00 UTC'), [self::CREDENTIAL, 'INTAKT_TEST_UNSET_CREDENTIAL']);
 
         return $formatter($level, $message, $context);
+    }
+
+    /**
+     * @return array{class: string, message: string, trace: string, previous?: array{class: string}}
+     */
+    private function loggedFailure(string $line): array
+    {
+        $context = $this->decoded($line)['context'] ?? [];
+        self::assertIsArray($context);
+        $failure = $context['exception'] ?? null;
+        self::assertIsArray($failure);
+
+        /* @var array{class: string, message: string, trace: string, previous?: array{class: string}} $failure */
+        return $failure;
     }
 
     /**

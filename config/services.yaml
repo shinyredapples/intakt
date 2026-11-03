@@ -98,18 +98,10 @@ services:
         arguments:
             $baseUrl: '%env(FRANKENPHP_ADMIN_URL)%'
 
-    # The credentials Intakt holds, read from the environment or the secrets vault; an unset one is null and redacts nothing.
+    # Names only: the values are read from the environment when a record is written, so no secret enters the compiled container and an unopenable vault cannot stop the logger.
     Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter:
         arguments:
-            $heldCredentials:
-                - '%env(default::APP_SECRET)%'
-                - '%env(default::MERCURE_JWT_SECRET)%'
-                - '%env(default::MCP_OWNER_TOKEN)%'
-                - '%env(default::GITHUB_APP_PRIVATE_KEY)%'
-                - '%env(default::ANTHROPIC_API_KEY)%'
-                - '%env(default::OPENAI_API_KEY)%'
-                - '%env(default::OPENAI_COMPATIBLE_API_KEY)%'
-                - '%env(default::CLAUDE_CODE_OAUTH_TOKEN)%'
+            $credentialNames: [APP_SECRET, MERCURE_JWT_SECRET, MCP_OWNER_TOKEN, GITHUB_APP_PRIVATE_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENAI_COMPATIBLE_API_KEY, CLAUDE_CODE_OAUTH_TOKEN]
 
     # Replaces the framework's fallback logger so every record is a redacted JSON line with the failure's class and trace on the service output (the journal).
     logger:
