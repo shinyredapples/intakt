@@ -80,5 +80,4 @@ final class PersistenceEnginesTest extends SandboxTestCase
             ['CI_IMAGE' => 'intakt-ci:test', 'GITHUB_WORKSPACE' => $sandbox->root, 'MARKS' => $sandbox->root.'/marks'],
         );
     }
-
 }
