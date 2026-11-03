@@ -4,13 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use Intakt\Core\Ledger\Contract\Ledger;
-use Intakt\Core\Ledger\Contract\LedgerEvent;
-use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\RoundUpdates;
-use Psr\Log\LoggerInterface;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
@@ -32,8 +28,7 @@ final readonly class ReviewerRuns
     public function __construct(
         private MessageStoreInterface $conversations,
         private RoundUpdates $updates,
-        private Ledger $ledger,
-        private LoggerInterface $logger,
+        private StreamingFallbacks $fallbacks,
     ) {
     }
 
@@ -57,22 +52,9 @@ final readonly class ReviewerRuns
         return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
     }
 
-    // Written to the ledger with the reviewer's id, because the dashboard and the owner then see which reviews ran without live text; outside a round there is nothing to attach it to.
     public function fellBackToUnstreamed(ReviewerConversation $reviewer): void
     {
-        $round = $reviewer->round;
-
-        if (!$round instanceof Uuid) {
-            return;
-        }
-
-        $payload = json_encode(['round' => $round->toRfc4122(), 'reviewer' => $reviewer->id->toRfc4122()], JSON_THROW_ON_ERROR);
-        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::StreamingFellBack, $payload));
-
-        // Logged, not thrown, because the review goes on unstreamed without its record.
-        if (!$appended->succeeded()) {
-            $this->logger->error('A streaming fallback was not recorded.', ['fallback' => $payload, 'reason' => $appended->failure]);
-        }
+        $this->fallbacks->record($reviewer);
     }
 
     // Reported as it happens and never read back, so the verdict path is the one it was without the live view.

@@ -33,6 +33,8 @@ use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
+use Intakt\Core\Review\Infrastructure\StreamAcceptance;
+use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
@@ -77,6 +79,8 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(StrictVerdictStreamListener::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[CoversClass(ReviewerRuns::class)]
+#[CoversClass(StreamAcceptance::class)]
+#[CoversClass(StreamingFallbacks::class)]
 #[CoversClass(MalformedToolCalls::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(UntrustedSource::class)]
@@ -115,7 +119,8 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private InMemoryLedger $ledger;
 
-    private bool $refusesStream = false;
+    // Streamed requests the provider accepts before it refuses the next ones; null for a provider that never refuses.
+    private ?int $streamsAccepted = null;
 
     private RecordedRoundUpdates $updates;
 
@@ -168,7 +173,7 @@ final class ReviewerVerdictTest extends WebTestCase
     public function testAProviderThatRefusesToStreamFallsBackToTheUnstreamedCallAndTheRoundRecordsIt(): void
     {
         $this->catalog = new FallbackModelCatalog();
-        $this->refusesStream = true;
+        $this->streamsAccepted = 0;
 
         $verdict = $this->review('Add a cart.', [], self::APPROVE);
 
@@ -177,6 +182,20 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame([], $this->updates->seen);
         self::assertEquals([LedgerEventKind::StreamingFellBack], $this->ledger->kinds());
         self::assertSame([['round' => $this->round->toRfc4122(), 'reviewer' => $this->conversation->toRfc4122()]], $this->ledger->payloads());
+    }
+
+    public function testARefusalAfterTheProviderAcceptedAStreamedRoundIsNeitherRecordedAsAFallbackNorRetried(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $this->streamsAccepted = 1;
+
+        try {
+            $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+            self::fail('A refused later round gave a verdict.');
+        } catch (BadRequestException) {
+            self::assertCount(1, $this->sent);
+            self::assertSame([], $this->ledger->kinds());
+        }
     }
 
     public function testAStreamCutOffMidAnswerIsNotRetriedUnstreamed(): void
@@ -766,7 +785,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates, $this->ledger, new NullLogger()));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates, new StreamingFallbacks($this->ledger, new NullLogger())));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 
@@ -782,9 +801,15 @@ final class ReviewerVerdictTest extends WebTestCase
      */
     private function refuseToStreamIfConfigured(array $options): void
     {
-        if ($this->refusesStream && true === ($options['stream'] ?? false)) {
-            throw new BadRequestException('This account cannot stream.');
+        if (null === $this->streamsAccepted || true !== ($options['stream'] ?? false)) {
+            return;
         }
+
+        if (0 === $this->streamsAccepted) {
+            throw new BadRequestException('This request is refused.');
+        }
+
+        --$this->streamsAccepted;
     }
 
     // Like a provider that answers in one piece unless the request asks for a stream.

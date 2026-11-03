@@ -102,16 +102,27 @@ final readonly class ReviewerAgent implements Reviewer
         return $platform->getModelCatalog()->getModel($model)->supports(Capability::OUTPUT_STREAMING);
     }
 
-    // Retried unstreamed only on a refused request, because a provider reports that before its first delta, so no text was published and no usage was spent; a stream cut off mid-answer is a different exception and is never retried.
+    // Retried unstreamed only when the request is refused before the provider accepted a stream, because a provider reports that before its first delta, so no text was published and no usage was spent; a later refusal or a stream cut off mid-answer is never retried.
     private function answeredStreaming(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
     {
+        $stream = new StreamAcceptance();
+
         try {
-            return $this->answerOf($this->runs->reporting($agent->call($conversation, self::STREAMED), $reviewer));
-        } catch (BadRequestException|InvalidRequestException) {
-            $this->runs->fellBackToUnstreamed($reviewer);
+            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer));
+        } catch (BadRequestException|InvalidRequestException $refused) {
+            $this->fellBackUnlessAccepted($stream, $refused, $reviewer);
         }
 
         return $this->answeredUnstreamed($agent, $conversation, $reviewer);
+    }
+
+    private function fellBackUnlessAccepted(StreamAcceptance $stream, BadRequestException|InvalidRequestException $refused, ReviewerConversation $reviewer): void
+    {
+        if ($stream->accepted()) {
+            throw $refused;
+        }
+
+        $this->runs->fellBackToUnstreamed($reviewer);
     }
 
     private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
