@@ -25,6 +25,7 @@ final readonly class StoredFindings
 {
     public function __construct(
         private EntityManagerInterface $entities,
+        #[Target('stored')]
         private SerializerInterface $serializer,
         #[Target('review_round')]
         private WorkflowInterface $machine,
@@ -36,7 +37,7 @@ final readonly class StoredFindings
     {
         $stored = $this->locked($project, $change);
 
-        return $stored->openRound(json_encode($this->ledgerOf($stored)->openForReviewers(), JSON_THROW_ON_ERROR));
+        return $stored->openRound($this->written($this->ledgerOf($stored)->openForReviewers()));
     }
 
     /**
@@ -99,17 +100,17 @@ final readonly class StoredFindings
             $ledger->recordVerdict($round->number(), $verdict);
         }
 
-        $round->keepReportedFindings(json_encode($ledger->openReportedIn($round->number()), JSON_THROW_ON_ERROR));
+        $round->keepReportedFindings($this->written($ledger->openReportedIn($round->number())));
 
         // The round still keeps what it reported, under its ledger's ids, so its judge sees its findings although its verdicts must not undo the newer round's; it keeps nothing as resolved, because a resolution its ledger accepted never reaches the stored one, where the newer round may hold the finding open.
         if ($stored->hasRecordedAfter($round->number())) {
-            $round->keepResolvedFindings(json_encode([], JSON_THROW_ON_ERROR));
+            $round->keepResolvedFindings($this->written([]));
 
             return;
         }
 
-        $round->keepResolvedFindings(json_encode($this->resolvedIn($round, $ledger), JSON_THROW_ON_ERROR));
-        $stored->recordFindings($round->number(), json_encode($ledger->all(), JSON_THROW_ON_ERROR));
+        $round->keepResolvedFindings($this->written($this->resolvedIn($round, $ledger)));
+        $stored->recordFindings($round->number(), $this->written($ledger->all()));
     }
 
     /**
@@ -150,6 +151,14 @@ final readonly class StoredFindings
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another round of the change created the row meanwhile, and the lock that follows waits for that round.
         }
+    }
+
+    /**
+     * @param list<Finding>|list<TrackedFinding> $findings
+     */
+    private function written(array $findings): string
+    {
+        return $this->serializer->serialize($findings, 'json');
     }
 
     /**

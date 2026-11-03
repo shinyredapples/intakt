@@ -111,7 +111,7 @@ final readonly class RoundFixture
         $entities = $container->get('doctrine.orm.entity_manager');
         assert($entities instanceof EntityManagerInterface);
         $this->entities = $entities;
-        $serializer = $container->get(SerializerInterface::class);
+        $serializer = $container->get('serializer.stored');
         assert($serializer instanceof SerializerInterface);
         $this->serializer = $serializer;
         $this->bus = new RecordingBus();
@@ -400,7 +400,7 @@ final readonly class RoundFixture
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes));
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes), $this->serializer);
 
         return new ReviewerLeases($entities, $moves, $this->clock);
     }

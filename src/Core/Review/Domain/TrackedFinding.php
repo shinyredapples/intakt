@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
+use Symfony\Component\Serializer\Attribute\Ignore;
 
 final readonly class TrackedFinding
 {
@@ -29,6 +30,8 @@ final readonly class TrackedFinding
         return array_last($this->rounds);
     }
 
+    // Ignored, because the serializer would store the answer as a field the reader does not know.
+    #[Ignore]
     public function isOpen(): bool
     {
         return FindingStatus::Open === $this->status;

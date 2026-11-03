@@ -203,7 +203,7 @@ final class ShadowRoundTest extends KernelTestCase
                 $this->fixture->judge($vendor)($judging);
             }
         };
-        $serializer = self::getContainer()->get(SerializerInterface::class);
+        $serializer = self::getContainer()->get('serializer.stored');
         assert($serializer instanceof SerializerInterface);
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
 

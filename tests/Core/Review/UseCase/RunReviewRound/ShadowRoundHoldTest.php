@@ -204,7 +204,7 @@ final class ShadowRoundHoldTest extends KernelTestCase
 
     private function reviewChange(RoundFixture $fixture, MessageBus $bus): ReviewChange
     {
-        $serializer = self::getContainer()->get(SerializerInterface::class);
+        $serializer = self::getContainer()->get('serializer.stored');
         assert($serializer instanceof SerializerInterface);
 
         return new ReviewChange(
