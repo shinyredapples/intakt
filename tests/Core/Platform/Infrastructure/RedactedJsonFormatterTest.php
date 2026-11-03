@@ -39,7 +39,7 @@ final class RedactedJsonFormatterTest extends TestCase
     {
         $line = $this->format('error', 'It failed.', ['exception' => new RuntimeException('outer', 0, new LogicException('inner'))]);
 
-        self::assertSame(LogicException::class, $this->loggedFailure($line)['previous']['class'] ?? null);
+        self::assertSame(LogicException::class, $this->loggedFailure($line)['previous']);
     }
 
     public function testEachRecordIsOneJsonLineHoldingItsContextItem(): void
@@ -70,7 +70,9 @@ final class RedactedJsonFormatterTest extends TestCase
 
     public function testAHeldCredentialWithCharactersJsonEscapesIsStillRedactedAfterEncoding(): void
     {
-        $line = $this->format('error', 'Key pa"ss/wo\\rd failed.', [], 'pa"ss/wo\\rd');
+        $_SERVER[self::CREDENTIAL] = 'pa"ss/wo\\rd';
+
+        $line = $this->format('error', 'Key pa"ss/wo\\rd failed.', []);
 
         self::assertStringNotContainsString('wo', $line);
         self::assertStringContainsString('[redacted]', $line);
@@ -78,7 +80,9 @@ final class RedactedJsonFormatterTest extends TestCase
 
     public function testAnUnsetCredentialRedactsNothing(): void
     {
-        $line = $this->format('error', 'Plain text.', [], null);
+        unset($_SERVER[self::CREDENTIAL]);
+
+        $line = $this->format('error', 'Plain text.', []);
 
         self::assertSame('Plain text.', $this->decoded($line)['message'] ?? null);
     }
@@ -119,16 +123,16 @@ final class RedactedJsonFormatterTest extends TestCase
     /**
      * @param array<string, mixed> $context
      */
-    private function format(string $level, string $message, array $context, ?string $credential = 'held-secret-1'): string
+    private function format(string $level, string $message, array $context): string
     {
-        $_SERVER[self::CREDENTIAL] = $credential;
+        $_SERVER[self::CREDENTIAL] ??= 'held-secret-1';
         $formatter = new RedactedJsonFormatter(new Redaction(), new MockClock('2026-11-03 10:00:00 UTC'), [self::CREDENTIAL, 'INTAKT_TEST_UNSET_CREDENTIAL']);
 
         return $formatter($level, $message, $context);
     }
 
     /**
-     * @return array{class: string, message: string, trace: string, previous?: array{class: string}}
+     * @return array{class: string, message: string, trace: string, previous: string|null}
      */
     private function loggedFailure(string $line): array
     {
@@ -136,16 +140,34 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertIsArray($context);
         $failure = $context['exception'] ?? null;
         self::assertIsArray($failure);
+        $previous = $failure['previous'] ?? null;
 
-        /* @var array{class: string, message: string, trace: string, previous?: array{class: string}} $failure */
-        return $failure;
+        return [
+            'class' => $this->textAt($failure, 'class'),
+            'message' => $this->textAt($failure, 'message'),
+            'trace' => $this->textAt($failure, 'trace'),
+            'previous' => is_array($previous) ? $this->textAt($previous, 'class') : null,
+        ];
     }
 
     /**
-     * @return array<string, mixed>
+     * @param array<array-key, mixed> $map
+     */
+    private function textAt(array $map, string $key): string
+    {
+        self::assertIsString($map[$key] ?? null);
+
+        return $map[$key];
+    }
+
+    /**
+     * @return array<array-key, mixed>
      */
     private function decoded(string $line): array
     {
-        return json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+        $decoded = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+
+        return $decoded;
     }
 }
