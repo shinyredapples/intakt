@@ -33,6 +33,6 @@ final readonly class FencedToolbox implements ToolboxInterface
         $result = $this->inner->execute($toolCall);
         $answer = new ToolResultConverter()->convert($result) ?? '';
 
-        return new ToolResult($toolCall, $this->fence->wrap(UntrustedSource::ToolResult, $answer), $result->getSources());
+        return new ToolResult($toolCall, new PromptCut($this->fence)->fenced(UntrustedSource::ToolResult, $answer), $result->getSources());
     }
 }
