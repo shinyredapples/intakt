@@ -29,6 +29,7 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpKernel\DependencyInjection\ServicesResetter;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -136,20 +137,53 @@ final class WorkerModeTest extends TestCase
         $first = new UuidV7();
         $second = new UuidV7();
 
+        $this->browserOn($kernel)->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
         $this->runReviewer($kernel, $first, 'Review the first change.');
         $reset = $this->nextRequestSees($kernel);
         $this->runReviewer($kernel, $second, 'Review the second change.');
 
+        self::assertNull($reset->user);
         self::assertSame(0, $reset->loadedEntities);
         self::assertSame(['Review the second change.', 'Answer to Review the second change.'], $this->storedTexts($kernel, $second));
         self::assertSame(['Review the first change.', 'Answer to Review the first change.'], $this->storedTexts($kernel, $first));
     }
 
-    // Booting after a terminate is what the next handle() does first, so this reads the state a new request starts with.
+    public function testWithoutTheTokenStorageResetAReviewerRunLeavesTheUserForTheNextRequest(): void
+    {
+        $kernel = $this->bootedKernel(new WorkerKernel('test', true, 'security.token_storage'));
+        $this->emptyDatabase($kernel);
+        $this->browserOn($kernel)->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
+
+        $this->runReviewer($kernel, new UuidV7(), 'Review this change.');
+
+        self::assertSame('mcp-owner', $this->nextRequestSees($kernel)->user);
+    }
+
+    public function testAFlashMessageIsShownOnlyOnceToTheBrowserThatCausedIt(): void
+    {
+        $kernel = $this->bootedKernel(new Kernel('test', true));
+        $container = $this->container($kernel);
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $container->set(Ledger::class, $ledger);
+        $container->set('command.bus', new StartedRoundBus());
+        $browser = $this->browserOn($kernel);
+
+        $this->startRoundAs($browser);
+        $shown = $browser->request('GET', '/reviews/round-1');
+        $again = $browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $shown->filter('.flash-success'));
+        self::assertCount(0, $again->filter('.flash-success'));
+    }
+
+    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, also after work that was not a request.
     #[NoDiscard]
     private function nextRequestSees(KernelInterface $kernel): WorkerState
     {
-        $kernel->boot();
+        $resetter = $kernel->getContainer()->get('services_resetter');
+        assert($resetter instanceof ServicesResetter);
+        $resetter->reset();
 
         return WorkerState::in($kernel);
     }
