@@ -103,7 +103,7 @@ final readonly class RateLimitReadings
         return $this->ahead(null === $reset ? null : $this->at($reset));
     }
 
-    // Seconds or an HTTP date, the two forms HTTP allows for Retry-After.
+    // Both forms, because HTTP allows Retry-After as seconds or as a date (RFC 9110, section 10.2.3).
     private function retryAfter(string $value): ?DateTimeImmutable
     {
         if (ctype_digit($value) && strlen($value) < 12) {

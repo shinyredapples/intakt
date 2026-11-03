@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use DateTimeImmutable;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
@@ -98,7 +97,7 @@ final class RateLimitReadingsTest extends TestCase
     {
         $limited = $this->limitOf($this->process(), 403, ['retry-after' => ['Wed, 25 Nov 2026 10:05:00 GMT']]);
 
-        self::assertEquals(new DateTimeImmutable('2026-11-25 10:05:00 UTC'), $limited->resetsAt);
+        self::assertSame($this->clock->now()->getTimestamp() + 300, $limited->resetsAt->getTimestamp());
     }
 
     public function testAnUnreadableRetryAfterPausesForOneMinute(): void
