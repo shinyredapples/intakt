@@ -1,0 +1,7 @@
+services:
+    # Records into the PHPUnit run's file instead of the fallback logger's stderr; outside a PHPUnit run the fallback logger stays, so an instance keeps its server log.
+    intakt.test.recording_logger:
+        class: Psr\Log\LoggerInterface
+        decorates: logger
+        factory: ['Intakt\Tests\Support\Log\RecordingLoggerFactory', 'create']
+        arguments: ['@.inner']

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Mcp\Contract;
 
 use Intakt\Kernel;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -13,6 +14,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversNothing]
 final class ToolSchemaContractTest extends KernelTestCase
 {
+    use AssertsLoggedErrors;
+
     public function testAToolWithoutParametersDeclaresThemAsAnEmptyPropertiesObject(): void
     {
         $client = $this->client();
@@ -47,6 +50,7 @@ final class ToolSchemaContractTest extends KernelTestCase
         self::assertIsInt(McpServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', json_encode($answer, JSON_THROW_ON_ERROR));
         self::assertArrayNotHasKey('trace', $answer);
+        self::assertLoggedError('error', 'Tool not found');
     }
 
     /**
