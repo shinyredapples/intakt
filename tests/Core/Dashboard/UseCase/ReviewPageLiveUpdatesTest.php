@@ -39,7 +39,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     #[Override]
     protected function setUp(): void
     {
-        $this->secretBefore = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
         // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
         parent::setUp();
@@ -92,7 +93,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         ];
 
         foreach ($streams as $stream) {
-            $target = (new Crawler($stream))->filter('turbo-stream')->attr('target');
+            $target = new Crawler($stream)->filter('turbo-stream')->attr('target');
+            self::assertNotNull($target);
             self::assertCount(1, $page->filter('#'.$target), $target);
         }
     }

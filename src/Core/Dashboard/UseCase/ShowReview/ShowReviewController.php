@@ -10,6 +10,9 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Session\Flash\FlashBag;
+use Symfony\Component\HttpFoundation\Session\Flash\FlashBagInterface;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Throwable;
@@ -38,17 +41,24 @@ final readonly class ShowReviewController
 
     private function rendered(Review $review, string $round, Request $request): string
     {
-        $flashes = $request->getSession()->getFlashBag()->peekAll();
+        $flashBag = $this->flashBagOf($request);
+        $flashes = $flashBag->peekAll();
 
         try {
             return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => true]);
         } catch (Throwable $failure) {
-            // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; the class only, because a message can echo a token.
-            // Put back, because the failed attempt already read the one-time messages.
-            $request->getSession()->getFlashBag()->setAll($flashes);
+            // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; flashes put back, because the failed attempt read them.
+            $flashBag->setAll($flashes);
             $this->logger->warning('The review page was rendered without live updates.', ['exception' => $failure::class]);
 
             return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => false]);
         }
+    }
+
+    private function flashBagOf(Request $request): FlashBagInterface
+    {
+        $session = $request->getSession();
+
+        return $session instanceof FlashBagAwareSessionInterface ? $session->getFlashBag() : new FlashBag();
     }
 }
