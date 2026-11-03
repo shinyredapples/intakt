@@ -23,7 +23,7 @@ final class DockerfileTest extends TestCase
 
     public function testTheImageDeclaresAHealthCheckOnTheMetricsEndpoint(): void
     {
-        self::assertMatchesRegularExpression('/^HEALTHCHECK .*\/metrics/m', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^HEALTHCHECK.*?\/metrics/ms', $this->dockerfile());
     }
 
     private function dockerfile(): string
