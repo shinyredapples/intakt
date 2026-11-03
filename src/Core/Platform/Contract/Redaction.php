@@ -88,7 +88,7 @@ final readonly class Redaction
     // Control characters, non-ASCII and the JSON_HEX_* characters are the ones json_encode may write as an escape.
     private function jsonMayEscape(string $char): bool
     {
-        return strlen($char) > 1 || ord($char) < 0x20 || str_contains('"\\/<>&\'', $char);
+        return strlen($char) > 1 || ord($char[0]) < 0x20 || str_contains('"\\/<>&\'', $char);
     }
 
     private function unicodeEscape(string $char): string
