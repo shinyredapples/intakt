@@ -48,7 +48,9 @@ docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data 
 - The database (SQLite) and the hub's history live in the volume `/app/var/data`. The container runs as the user with id 10001, so a bind-mounted folder must belong to that user. It applies the migrations on every start, then serves `/projects`.
 - Two worker pools serve requests: `app` for the dashboard, and `mcp` for `/mcp/*` with its own thread limits (`MCP_WORKERS`, `MCP_MAX_THREADS`), so a streamed MCP answer cannot take the dashboard's threads. `APP_WORKERS` sets the dashboard's pool, `MAX_WAIT_TIME` how long a request waits for a free thread.
 - FrankenPHP's admin API listens on `localhost:2019` inside the container and nothing publishes it; read it with `docker exec intakt php bin/console intakt:server:status`.
-- Not built yet: worker restarts after a number of requests, a memory ceiling, a restart policy, a health check, the queue consumers and the scheduler; the base image is named by tag, and #705 pins it by digest.
+- A worker is replaced after `FRANKENPHP_LOOP_MAX` requests (default 500) and when it holds more than `WORKER_MEMORY_CEILING_MB` megabytes (default 256) after a request; it finishes sending the answer first, so no request fails. A crash is restarted by FrankenPHP itself.
+- Start the container with `--restart unless-stopped`, so Docker starts it again after a crash or a reboot. The image has a health check that asks FrankenPHP's metrics endpoint every 30 seconds; read it with `docker inspect --format '{{.State.Health.Status}}' intakt` (`healthy` or `unhealthy`).
+- Not built yet: the queue consumers and the scheduler; the base image is named by tag, and #705 pins it by digest.
 
 ## Checking the server
 
