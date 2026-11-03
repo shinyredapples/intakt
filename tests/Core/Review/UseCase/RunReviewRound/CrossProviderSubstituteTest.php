@@ -53,6 +53,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
@@ -234,7 +235,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
             ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
         ]);
         $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new MockClock()));
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $this->limit);
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);

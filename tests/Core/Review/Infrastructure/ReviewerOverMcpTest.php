@@ -40,6 +40,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Http\Client\ClientInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -263,7 +264,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
             return 0 === $step++ ? new ToolCallResult([new ToolCall('1', $tool, $arguments)]) : self::APPROVE;
         };
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger())));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new RecordedRoundUpdates(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new MockClock()));
 
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
     }

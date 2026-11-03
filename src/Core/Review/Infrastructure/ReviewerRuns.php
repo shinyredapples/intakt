@@ -17,6 +17,7 @@ use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
 
 // Apart from ReviewerAgent, because how the agent runs (its stored conversation, its cap, its live progress) changes for other reasons than what a review asks and checks.
@@ -29,6 +30,7 @@ final readonly class ReviewerRuns
         private MessageStoreInterface $conversations,
         private RoundUpdates $updates,
         private StreamingFallbacks $fallbacks,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -66,7 +68,9 @@ final readonly class ReviewerRuns
             return $execution;
         }
 
-        return $execution->onProgress(function (Progress $progress) use ($round, $reviewer): void {
+        $text = new StreamedTextBatch($this->updates, $this->clock, $round, $reviewer->id->toRfc4122());
+
+        return $execution->onProgress(function (Progress $progress) use ($round, $reviewer, $text): void {
             $payload = $progress->getPayload();
 
             if ($payload instanceof ToolCall) {
@@ -74,8 +78,8 @@ final readonly class ReviewerRuns
             }
 
             if ($payload instanceof TextDelta) {
-                $this->updates->textStreamed($round, $reviewer->id->toRfc4122(), $payload->getText());
+                $text->add($payload->getText());
             }
-        });
+        })->onResult($text->flush(...));
     }
 }

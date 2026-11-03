@@ -45,6 +45,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
 use Symfony\AI\Agent\Exception\ConflictException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
@@ -785,7 +786,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates, new StreamingFallbacks($this->ledger, new NullLogger())));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, $this->updates, new StreamingFallbacks($this->ledger, new NullLogger()), new MockClock()));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 

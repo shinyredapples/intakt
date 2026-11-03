@@ -48,7 +48,7 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 | CI | GitHub hasn't finished the checks yet |
 | on hold | it needs something outside the task; it comes back by itself |
 
-**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. *(in progress: Intakt already sends a running review's tool calls, its progress and the judge's result live; the reviewers' text as they write it comes with #644, and the page that shows all this without a reload is planned)* Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
+**Open a card** to see its whole story: the plan, every build, the checks, each reviewer's verdict and findings, and the live log of the job running now, tool call by tool call. *(in progress: Intakt already sends a running review's tool calls, its progress and the judge's result live; each reviewer's text shows up as they write it, a few times a second, and the page that shows all this without a reload is planned)* Buttons let you **stop** the job, **continue** it, or **send it back with a note**. The buttons ask for your owner secret or passkey first, like every change on the dashboard ([steering budgets and pauses](#steering-budgets-and-pauses)).
 
 ## Waiting on you
 
