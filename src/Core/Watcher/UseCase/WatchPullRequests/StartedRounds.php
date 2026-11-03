@@ -40,7 +40,7 @@ final readonly class StartedRounds
             $queued = $this->startUnlessStarted($project, $change, $start);
             $this->ensureStillInTransaction($connection, $queued);
             $this->record($project, $change, $queued);
-            $this->pending->forget($project, $change);
+            $this->endTheWait($project, $change, $queued);
             $connection->commit();
         } catch (Throwable $failure) {
             $this->undo($connection);
@@ -152,19 +152,41 @@ final readonly class StartedRounds
         $this->entities->flush();
     }
 
+    // A returning head whose stale round still owes its queued line stays due, so a later tick starts its fresh round once that line is recorded.
+    private function endTheWait(string $project, OpenChange $change, ?QueuedRound $queued): void
+    {
+        if (!$queued instanceof QueuedRound && $this->awaitsReplacement($project, $change)) {
+            return;
+        }
+
+        $this->pending->forget($project, $change);
+    }
+
     // A stale round whose queued line is still owed keeps the head started, so the line is recorded before a returning head replaces the row.
     private function isStarted(string $project, OpenChange $change): bool
     {
-        $round = $this->entities->getRepository(StartedRound::class)->find(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+        $round = $this->storedRound($project, $change);
 
         return $round instanceof StartedRound && !$this->isReplaceable($round);
     }
 
+    private function awaitsReplacement(string $project, OpenChange $change): bool
+    {
+        $round = $this->storedRound($project, $change);
+
+        return true === $round?->isStale() && $round->owesQueuedLine();
+    }
+
+    private function storedRound(string $project, OpenChange $change): ?StartedRound
+    {
+        $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+
+        return $loaded instanceof StartedRound ? $this->readAgain($loaded) : null;
+    }
+
     private function isReplaceable(StartedRound $round): bool
     {
-        $stored = $this->readAgain($round);
-
-        return true === $stored?->isStale() && false === $stored->owesQueuedLine();
+        return $round->isStale() && !$round->owesQueuedLine();
     }
 
     // The key holds one row per head, and the verdicts of a stale round no longer count, so a head that returns gets a fresh round in the place of the old row; inside the start transaction a failed start restores it.
@@ -211,36 +233,39 @@ final readonly class StartedRounds
         return $this->entities->find(StartedRound::class, ['project' => $loaded->project(), 'change' => $loaded->change(), 'head' => $loaded->head()]);
     }
 
+    // The round's identity is part of the condition, because a returning head replaces the row under the same key and a delayed worker holding the old round must not claim the fresh one.
     private function claim(StartedRound $round): bool
     {
         $claimed = $this->entities->createQueryBuilder()
             ->update(StartedRound::class, 'r')
             ->set('r.queuedRecorded', ':recorded')
-            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.queuedRecorded = :owed')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.roundId = :round AND r.queuedRecorded = :owed')
             ->setParameter('recorded', true)
             ->setParameter('owed', false)
             ->setParameter('project', $round->project())
             ->setParameter('change', $round->change())
             ->setParameter('head', $round->head())
+            ->setParameter('round', $round->roundId())
             ->getQuery()
             ->execute();
 
         return 1 === $claimed;
     }
 
-    // One statement on the stored row, because the review's queries clear the entity manager and a loaded round would no longer be written; false when another worker marked it first.
+    // One statement on the stored row, because the review's queries clear the entity manager and a loaded round would no longer be written; false when another worker marked it first or a returning head replaced it.
     #[NoDiscard]
     private function markStale(StartedRound $round): bool
     {
         $marked = $this->entities->createQueryBuilder()
             ->update(StartedRound::class, 'r')
             ->set('r.stale', ':stale')
-            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.stale = :fresh')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.roundId = :round AND r.stale = :fresh')
             ->setParameter('stale', true)
             ->setParameter('fresh', false)
             ->setParameter('project', $round->project())
             ->setParameter('change', $round->change())
             ->setParameter('head', $round->head())
+            ->setParameter('round', $round->roundId())
             ->getQuery()
             ->execute();
 

@@ -217,6 +217,53 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame('round-1', $this->storedRoundId());
     }
 
+    public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStaysDueUntilTheLineIsRecorded(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $old = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->markStaleOnce($old, static function (): void {});
+        $this->pending->enqueue('alpha', [$this->green()]);
+
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+        $this->rounds->recordOnce($old, static function (): void {});
+
+        self::assertCount(1, $this->pending->dueFor('alpha'));
+    }
+
+    public function testADelayedRecorderOfAReplacedRoundDoesNotClaimTheFreshRoundsQueuedLine(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $delayed = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->recordOnce($delayed, static function (): void {});
+        $this->rounds->markStaleOnce($delayed, static function (): void {});
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+        $recorded = [];
+
+        $this->rounds->recordOnce($delayed, static function (StartedRound $round) use (&$recorded): void {
+            $recorded[] = $round->roundId();
+        });
+
+        self::assertSame([], $recorded);
+        self::assertSame(['round-2'], array_map(static fn (StartedRound $round): string => $round->roundId(), $this->rounds->notYetRecorded('alpha')));
+    }
+
+    public function testADelayedMarkerOfAReplacedRoundDoesNotMarkTheFreshRoundStale(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $delayed = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->recordOnce($delayed, static function (): void {});
+        $this->rounds->markStaleOnce($delayed, static function (): void {});
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+        $marked = [];
+
+        $this->rounds->markStaleOnce($delayed, static function (StartedRound $round) use (&$marked): void {
+            $marked[] = $round->roundId();
+        });
+
+        self::assertSame([], $marked);
+        self::assertSame(0, $this->entities->getRepository(StartedRound::class)->count(['stale' => true]));
+    }
+
     public function testAFailedStartOnAReturningHeadKeepsItsStaleRound(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
