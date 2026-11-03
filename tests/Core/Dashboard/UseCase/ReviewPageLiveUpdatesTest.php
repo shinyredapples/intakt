@@ -182,7 +182,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context);
     }
 
-    // Turbo appends the template's children to the target, which is what this does to a copy of the page.
+    // Done by hand on the parsed page, because no browser runs Turbo in the tests.
     private function appended(Crawler $target, string $template): Crawler
     {
         $node = $target->getNode(0);
