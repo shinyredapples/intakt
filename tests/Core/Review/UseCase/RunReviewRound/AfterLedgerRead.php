@@ -36,9 +36,9 @@ final readonly class AfterLedgerRead implements Ledger
         return $read;
     }
 
-    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    public function readOfKind(LedgerEventKind $kind, LedgerEventKind ...$more): RecordedEvents
     {
-        $read = $this->inner->readOfKind($kind);
+        $read = $this->inner->readOfKind($kind, ...$more);
         ($this->other)();
 
         return $read;

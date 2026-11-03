@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -28,35 +27,37 @@ final readonly class ReviewerStopping
     }
 
     // The request is read from the ledger, never from model output, so only a person's press on the dashboard can stop a reviewer; the cancel lands at the next progress update.
-    public function watching(ExecutionInterface $execution, ReviewerConversation $reviewer): ExecutionInterface
+    public function watching(ExecutionInterface $execution, ReviewerConversation $conversation): ExecutionInterface
     {
-        $round = $reviewer->round;
+        $round = $conversation->round;
+        $reviewer = $conversation->reviewer;
 
-        if (!$round instanceof Uuid) {
+        if (!$round instanceof Uuid || !$reviewer instanceof Uuid) {
             return $execution;
         }
 
-        $name = $reviewer->id->toRfc4122();
-        // A second back, because the ledger keeps whole seconds and a request pressed in the second this run began would otherwise look older; a request left from an earlier run is older than that.
-        $since = $this->clock->now()->modify('-1 second');
+        $name = $reviewer->toRfc4122();
         $pace = new StopPace($this->clock);
 
-        return $execution->onProgress(function () use ($execution, $round, $name, $since, $pace): void {
-            if ($pace->due() && $this->requested($round, $name, $since)) {
+        return $execution->onProgress(function () use ($execution, $round, $name, $pace): void {
+            if ($pace->due() && $this->pending($round, $name)) {
                 $this->stop($execution, $round, $name);
             }
         });
     }
 
-    private function requested(Uuid $round, string $reviewer, DateTimeImmutable $since): bool
+    // Pending until a later stop answers it, by place in the ledger rather than by time, so a press while the reviewer waits for a retry or before its call begins still stops the run, and an answered press never stops a later one.
+    private function pending(Uuid $round, string $reviewer): bool
     {
-        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested) as $recorded) {
-            if ($recorded->recordedAt >= $since && $this->names($recorded, $round, $reviewer)) {
-                return true;
+        $pending = false;
+
+        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested, LedgerEventKind::ReviewerStopped) as $recorded) {
+            if ($this->names($recorded, $round, $reviewer)) {
+                $pending = LedgerEventKind::ReviewerStopRequested === $recorded->event->kind;
             }
         }
 
-        return false;
+        return $pending;
     }
 
     private function names(RecordedEvent $recorded, Uuid $round, string $reviewer): bool

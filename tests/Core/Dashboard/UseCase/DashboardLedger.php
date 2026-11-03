@@ -30,9 +30,9 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents($this->recorded);
     }
 
-    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    public function readOfKind(LedgerEventKind $kind, LedgerEventKind ...$more): RecordedEvents
     {
-        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => in_array($recorded->event->kind, [$kind, ...$more], true))));
     }
 
     public function startRound(string $round, string $project): void

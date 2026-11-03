@@ -15,6 +15,8 @@ final readonly class ReviewerConversation
         public string $rolePrompt,
         public AbstractUid&TimeBasedUidInterface $id,
         public ?Uuid $round = null,
+        // The reviewer the ledger and the dashboard name, apart from the conversation, because a restarted reviewer begins a new conversation.
+        public ?Uuid $reviewer = null,
     ) {
     }
 }

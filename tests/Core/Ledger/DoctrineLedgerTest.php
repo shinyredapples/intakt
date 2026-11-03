@@ -77,6 +77,20 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame(['first', 'second'], $payloads);
     }
 
+    // The same second for every event, so only the place in the ledger can order them.
+    public function testAReadOfSeveralKindsReturnsTheirEventsInterleavedInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewerStopRequested, 'asked'], [LedgerEventKind::JudgeDone, 'other'], [LedgerEventKind::ReviewerStopped, 'stopped'], [LedgerEventKind::ReviewerStopRequested, 'asked again']] as [$kind, $payload]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readOfKind(LedgerEventKind::ReviewerStopRequested, LedgerEventKind::ReviewerStopped)));
+
+        self::assertSame(['asked', 'stopped', 'asked again'], $payloads);
+    }
+
     public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void
     {
         $clock = new MockClock('2026-10-27 12:00:00', 'UTC');

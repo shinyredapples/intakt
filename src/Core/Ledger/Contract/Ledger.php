@@ -13,5 +13,5 @@ interface Ledger
 
     public function readInOrder(): RecordedEvents;
 
-    public function readOfKind(LedgerEventKind $kind): RecordedEvents;
+    public function readOfKind(LedgerEventKind $kind, LedgerEventKind ...$more): RecordedEvents;
 }

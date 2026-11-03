@@ -123,6 +123,9 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private UuidV7 $round;
 
+    // Apart from the conversation, as in a real round, where the dashboard names the reviewer and a restart begins a new conversation.
+    private UuidV7 $reviewer;
+
     private ModelCatalogInterface $catalog;
 
     private InMemoryLedger $ledger;
@@ -155,6 +158,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->conversations = new InMemoryMessageStore();
         $this->conversation = new UuidV7();
         $this->round = new UuidV7();
+        $this->reviewer = new UuidV7();
         $this->updates = new RecordedRoundUpdates();
         $this->catalog = new UnstreamedModelCatalog();
         $this->clock = new MockClock('2026-11-03 12:00:00 UTC');
@@ -766,7 +770,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testAStopRequestedWhileTheReviewerWorksCancelsItAndItGivesNoApproval(): void
     {
-        $this->requestStopOf($this->conversation);
+        $this->requestStopOf($this->reviewer);
 
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
@@ -775,14 +779,14 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertTrue($verdict->isFailedReview());
         self::assertCount(1, $this->sent);
         self::assertSame([LedgerEventKind::ReviewerStopRequested, LedgerEventKind::ReviewerStopped], $this->ledger->kinds());
-        self::assertSame(['round' => $this->round->toRfc4122(), 'reviewer' => $this->conversation->toRfc4122()], $this->ledger->payloads()[1]);
-        self::assertSame(['stopped '.$this->conversation->toRfc4122()], $this->updates->seen);
+        self::assertSame(['round' => $this->round->toRfc4122(), 'reviewer' => $this->reviewer->toRfc4122()], $this->ledger->payloads()[1]);
+        self::assertContains('stopped '.$this->reviewer->toRfc4122(), $this->updates->seen);
     }
 
     public function testAStopRequestedWhileTheReviewerStreamsCancelsTheStreamedRunToo(): void
     {
         $this->catalog = new FallbackModelCatalog();
-        $this->requestStopOf($this->conversation);
+        $this->requestStopOf($this->reviewer);
 
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
@@ -801,10 +805,9 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame([LedgerEventKind::ReviewerStopRequested], $this->ledger->kinds());
     }
 
-    // A reviewer started again after a stopped worker must not be cancelled by the press that ended the earlier run.
-    public function testAStopRequestedBeforeThisRunBeganIsLeftAlone(): void
+    // The worker holds the conversation, but the dashboard can only name the reviewer, so a stop naming the conversation is no stop.
+    public function testAStopNamingTheConversationInsteadOfTheReviewerLeavesTheReviewerRunning(): void
     {
-        $this->ledger = new InMemoryLedger(recordedAt: $this->clock->now()->modify('-1 minute'));
         $this->requestStopOf($this->conversation);
 
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
@@ -850,7 +853,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, $this->clock), new ReviewerStopping($this->ledger, $this->updates, $this->clock, new NullLogger())));
 
-        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
+        $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round, $this->reviewer)), $platform, 'reviewer-model');
 
         $collector = new DataCollector($platform instanceof TraceablePlatform ? [$platform] : [], [$toolbox], [$toolbox], [], [], []);
         $collector->lateCollect();

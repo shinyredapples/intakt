@@ -55,13 +55,13 @@ final readonly class DoctrineLedger implements Ledger
         return $this->recordedEventsOf([]);
     }
 
-    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    public function readOfKind(LedgerEventKind $kind, LedgerEventKind ...$more): RecordedEvents
     {
-        return $this->recordedEventsOf(['kind' => $kind]);
+        return $this->recordedEventsOf(['kind' => [$kind, ...$more]]);
     }
 
     /**
-     * @param array<string, LedgerEventKind> $criteria
+     * @param array<string, list<LedgerEventKind>> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {
