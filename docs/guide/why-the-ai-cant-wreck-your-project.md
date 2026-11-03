@@ -75,10 +75,11 @@ Intakt asks you only when it cannot prove a rule change is harmless, and it alwa
 
 **What Intakt can prove on its own (mechanical checks, planned):**
 - **Only comments changed.** The file without its comments is the same as before. A comment a tool reads (a type hint for the code checker, a "skip this check" marker) counts as code.
-- **Judged by what the change itself does.** A change is compared with the project as it was when the change branched off, so a task that adds one library is asked about that library alone, not about libraries added to the project since (planned).
 - **A safe new library.** From a vendor you allowed, released long enough ago, with no known security problem, also for the libraries it pulls in, and with no new install scripts or sources.
 - **A check got no weaker.** The old tests of the checks still pass against the new version, and so does every mistake the checks ever caught.
 - **The start-up scripts.** Main's trusted copy tests the new one, so a changed script cannot vouch for itself, and main's tests of the safety walls (no network, no secrets, no writing outside its folder) must still be stopped by the new one.
+
+Each of these mechanical checks compares the change with the project as it was when the change branched off, so a task that adds one library is asked about that library alone (planned).
 
 On top, a separate **security reviewer**, which never sees what the builder wrote about its change, must agree, and an **attacker** tries to write an example that the old check stops and the new one lets through. If it finds one, you are asked.
 

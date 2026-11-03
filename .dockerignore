@@ -1,0 +1,16 @@
+.git
+.github
+.evidence
+.env.local
+.env.local.php
+.env.*.local
+intakt.env
+var
+vendor
+tests
+docs
+upstream
+mate
+Dockerfile
+.dockerignore
+PR.md
