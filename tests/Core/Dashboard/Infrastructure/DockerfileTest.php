@@ -31,6 +31,16 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^HEALTHCHECK.*?\/metrics/ms', $this->dockerfile());
     }
 
+    public function testTheImageSetsHowManyQueueConsumersRun(): void
+    {
+        self::assertMatchesRegularExpression('/^\s+MESSENGER_CONSUMERS=\d+/m', $this->dockerfile());
+    }
+
+    public function testTheImageInstallsPcntlSoAConsumerFinishesItsMessageOnStop(): void
+    {
+        self::assertMatchesRegularExpression('/^RUN install-php-extensions .*\bpcntl\b/m', $this->dockerfile());
+    }
+
     private function dockerfile(): string
     {
         $contents = file_get_contents(__DIR__.'/../../../../Dockerfile');
