@@ -12,8 +12,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
 {
     private const string SCRIPT = __DIR__.'/../../.github/ci/persistence-engines.sh';
 
-    // A fake docker, because the real engines need the runner's service containers: it notes when each engine started
-    // and ended so the test can prove they overlap, and exits with the code a fail.<network> file names.
+    // A fake docker, because the real engines need the runner's service containers; it records start and end times.
     private const string FAKE_DOCKER = <<<'BASH'
         #!/usr/bin/env bash
         while [ "$#" -gt 0 ]; do
