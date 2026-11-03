@@ -77,6 +77,18 @@ final class InstallationTokenMinterTest extends TestCase
         (void) $minter->mint('678');
     }
 
+    public function testATransportErrorIsLoggedWholeWithTheInstallation(): void
+    {
+        $failure = new TransportException('connection reset');
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with(self::anything(), ['installation' => '678', 'exception' => $failure]);
+        $minter = $this->minter(static fn (): ResponseInterface => throw $failure, logger: $logger);
+
+        $this->expectException(InstallationTokenNotMinted::class);
+
+        (void) $minter->mint('678');
+    }
+
     public function testAnAnswerWithoutATokenFailsTheCall(): void
     {
         $minter = $this->minter(static fn (): ResponseInterface => new MockResponse('{"expires_at":"2026-11-25T11:00:00Z"}', ['http_code' => 201]));

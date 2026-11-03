@@ -79,7 +79,8 @@ final readonly class RedactedJsonFormatter implements FormatterInterface
     {
         $redacted = [];
         foreach ($fields as $name => $value) {
-            $redacted[$name] = is_string($name) && $this->redaction->namesACredential($name) ? Redaction::REDACTED : $this->redactedValue($value);
+            // The name too, because a map can be keyed by a remote's URL or a credential.
+            $redacted[is_string($name) ? $this->redaction->of($name) : $name] = is_string($name) && $this->redaction->namesACredential($name) ? Redaction::REDACTED : $this->redactedValue($value);
         }
 
         return $redacted;

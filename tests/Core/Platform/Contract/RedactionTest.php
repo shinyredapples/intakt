@@ -24,6 +24,13 @@ final class RedactionTest extends TestCase
         self::assertSame('The token is [redacted].', new Redaction('123', 'abc-123-xyz')->of('The token is abc-123-xyz.'));
     }
 
+    public function testItRedactsACredentialItHoldsInsideAJsonText(): void
+    {
+        $text = json_encode(['password' => 'private"credential/value'], JSON_THROW_ON_ERROR);
+
+        self::assertSame('{"password":"[redacted]"}', new Redaction('private"credential/value')->of($text));
+    }
+
     /**
      * @return iterable<string, array{string, string}>
      */
@@ -42,7 +49,8 @@ final class RedactionTest extends TestCase
         yield 'an authorization header without a closing quote' => ['Authorization: "Bearer abc123', 'Authorization: "Bearer [redacted]"'];
         yield 'an authorization header in a JSON object' => ['{"Authorization":"Bearer abc123","Accept":"json"}', '{"Authorization":"Bearer [redacted]","Accept":"json"}'];
         yield 'a Digest authorization header' => ['Authorization: Digest username="alice", nonce="n0nce", response="r3sponse"', 'Authorization: Digest [redacted]'];
-        yield 'an API key header' => ['x-api-key: some-value', 'x-api-key: [redacted]'];
+        yield 'a Digest authorization header with spaces around its equals signs' => ['Authorization: Digest username = "alice", response = "r3sponse"', 'Authorization: Digest [redacted]'];
+        yield 'an API key header' =>['x-api-key: some-value', 'x-api-key: [redacted]'];
         yield 'a GitHub installation token' => ['token ghs_'.str_repeat('a1', 18).' expired', 'token [redacted] expired'];
         yield 'a fine-grained GitHub token' => ['github_pat_'.str_repeat('Ab1', 10), '[redacted]'];
         yield 'a provider API key' => ['key sk-ant-api03-'.str_repeat('x', 24), 'key [redacted]'];

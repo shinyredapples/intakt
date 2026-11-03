@@ -81,6 +81,30 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertSame(['Authorization' => '[redacted]', 'Accept' => ['json']], $line['context']['headers']);
     }
 
+    // Kept from the reviewers' probe, because only the values of a map were once redacted.
+    public function testASecretInAContextKeyIsWrittenRedacted(): void
+    {
+        $output = new RedactedJsonFormatter([self::CREDENTIAL], [])->format($this->record('Remotes failed.', ['remotes' => ['https://alice:KEYPASS@example.com/r.git' => 'failed', self::CREDENTIAL => 'x']]));
+
+        self::assertDoesNotMatchRegularExpression('~KEYPASS|'.self::CREDENTIAL.'~', $output);
+    }
+
+    public function testAContextKeyWithoutASecretIsWrittenAsItIs(): void
+    {
+        $line = $this->decoded(new RedactedJsonFormatter([self::CREDENTIAL], [])->format($this->record('Remotes failed.', ['remotes' => ['https://example.com/r.git' => 'failed']])));
+
+        self::assertSame(['https://example.com/r.git' => 'failed'], $line['context']['remotes']);
+    }
+
+    public function testACredentialEscapedInAnEmbeddedJsonMessageIsWrittenRedacted(): void
+    {
+        $credential = 'private"credential';
+
+        $line = $this->decoded(new RedactedJsonFormatter([$credential], [])->format($this->record(json_encode(['password' => $credential], JSON_THROW_ON_ERROR), [])));
+
+        self::assertSame('{"password":"[redacted]"}', $line['message']);
+    }
+
     public function testARecordWithoutContextKeepsAnEmptyObject(): void
     {
         $output = new RedactedJsonFormatter([], [])->format($this->record('Nothing happened.', []));
@@ -133,11 +157,11 @@ final class RedactedJsonFormatterTest extends TestCase
     }
 
     /**
-     * @return array{context: array<string, mixed>}
+     * @return array{message: string, context: array<string, mixed>}
      */
     private function decoded(string $output): array
     {
-        /** @var array{context: array<string, mixed>} $line */
+        /** @var array{message: string, context: array<string, mixed>} $line */
         $line = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
 
         return $line;
