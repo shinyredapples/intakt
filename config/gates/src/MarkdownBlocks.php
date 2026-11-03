@@ -12,7 +12,7 @@ final readonly class MarkdownBlocks
     // CommonMark: a closing fence carries no info string, so a fence line with trailing text stays inside the block.
     private const string CLOSING_FENCE = '/^ {0,3}(`{3,}|~{3,})\s*$/';
 
-    // CommonMark: an HTML block opens with <!-- after at most three spaces and owns every line up to the one holding -->.
+    // CommonMark: an HTML block opens with <!-- after at most three spaces, so a deeper indented opener is code and opens none.
     private const string COMMENT_OPENER = '/^ {0,3}<!--/';
 
     private const string COMMENT = '<!--';
@@ -22,7 +22,7 @@ final readonly class MarkdownBlocks
     /**
      * @param list<string> $lines
      *
-     * @return list<MarkdownBlock> the block each line is in, by line index
+     * @return list<MarkdownBlock>
      */
     public function of(array $lines): array
     {
@@ -57,7 +57,7 @@ final readonly class MarkdownBlocks
         };
     }
 
-    // The line that opens a fence never closes it, while a one-line comment closes on the line that opens it (CommonMark).
+    // Only a line after the opening fence can close it, because CommonMark reads the opener's trailing text as the info string, while a one-line comment closes on its own line.
     private function after(string $line, ?string $block): ?string
     {
         if (null === $block) {

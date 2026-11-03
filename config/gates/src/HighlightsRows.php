@@ -30,31 +30,31 @@ final readonly class HighlightsRows
 
         foreach ($lines as $index => $line) {
             $block = $blocks[$index];
-
-            // A block boundary ends the table around it, as a blank line does; a fenced table is an example and is skipped.
-            if ($block !== ($blocks[$index - 1] ?? MarkdownBlock::Text)) {
-                $columns = null;
-            }
-
-            if (MarkdownBlock::Fence === $block) {
-                continue;
-            }
-
             $headings = $this->headingsAfter($line, $block, $headings);
-            $cells = $this->cellsOf($line);
+            $cells = $this->cellsIn($block, $line);
 
-            if (null === $cells || null === $columns) {
+            // A block boundary ends the table around it, so a header on the last line of a block cannot pair with a separator after it.
+            if (null === $cells || null === $columns || $block !== ($blocks[$index - 1] ?? MarkdownBlock::Text)) {
                 $columns = $this->columnsOf($cells, $lines[$index + 1] ?? '');
 
                 continue;
             }
 
             if (!$this->isSeparator($cells)) {
-                $rows[] = new HighlightsRow($index + 1, array_values($headings), MarkdownBlock::Text === $block, ...$this->valuesOf($cells, $columns));
+                $rows[] = new HighlightsRow($index + 1, array_values($headings), $block, ...$this->valuesOf($cells, $columns));
             }
         }
 
         return $rows;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function cellsIn(MarkdownBlock $block, string $line): ?array
+    {
+        // A table in a fenced block is an example, so its lines hold no cells and end any table around the block.
+        return MarkdownBlock::Fence === $block ? null : $this->cellsOf($line);
     }
 
     /**

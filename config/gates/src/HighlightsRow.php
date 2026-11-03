@@ -20,10 +20,15 @@ final readonly class HighlightsRow
     public function __construct(
         public int $line,
         public array $headings,
-        public bool $rendered,
+        public MarkdownBlock $block,
         public ?string $status,
         public ?string $where,
     ) {
+    }
+
+    public function isRendered(): bool
+    {
+        return MarkdownBlock::Text === $this->block;
     }
 
     public function isUnder(string $heading): bool
