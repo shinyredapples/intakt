@@ -56,6 +56,10 @@ final class RedactionTest extends TestCase
         yield 'a header in print_r output' => ["[Authorization] => Bearer abc123\n[Accept] => json", "[Authorization] => Bearer [redacted]\n[Accept] => json"];
         yield 'a header value with a comma' => ['Authorization: Bearer abc,def', 'Authorization: Bearer [redacted]'];
         yield 'a header in JSON inside JSON' => ['{\"Authorization\":\"Bearer abc123\",\"Accept\":\"json\"}', '{\"Authorization\":\"Bearer [redacted]\",\"Accept\":\"json\"}'];
+        // Kept from a reviewer's probe, because the escaped quotes of a value inside a JSON text once ended the redaction early.
+        yield 'a Digest authorization header in a JSON text' => [json_encode(['Authorization' => 'Digest username="alice", response="r3sponse"'], JSON_THROW_ON_ERROR), '{"Authorization":"Digest [redacted]"}'];
+        yield 'a header value with an escaped quote in a JSON text' => [json_encode(['Authorization' => 'Bearer ab"c123'], JSON_THROW_ON_ERROR), '{"Authorization":"Bearer [redacted]"}'];
+        yield 'a header in JSON inside JSON inside JSON' => ['{\\\"Authorization\\\":\\\"Bearer abc123\\\",\\\"Accept\\\":\\\"json\\\"}', '{\\\"Authorization\\\":\\\"Bearer [redacted]\\\",\\\"Accept\\\":\\\"json\\\"}'];
         yield 'a URL with a slash in its password' => ['https://alice:pa/ss@example.com/r', 'https://[redacted]@example.com/r'];
         yield 'a URL with a # in its password' => ['https://alice:pa#ss@example.com/r', 'https://[redacted]@example.com/r'];
         yield 'a URL with escaped slashes in JSON' => ['{"url":"https:\/\/alice:hunter2@example.com\/repo"}', '{"url":"https:\/\/[redacted]@example.com\/repo"}'];

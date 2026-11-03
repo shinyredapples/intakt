@@ -63,6 +63,8 @@ final class RedactedJsonFormatterTest extends TestCase
         yield 'a quoted authorization header' => ['Authorization: "Bearer SECRETVALUE0123"'];
         yield 'an authorization header in embedded JSON' => ['{"Authorization":"Bearer SECRETVALUE0123"}'];
         yield 'a URL with a quote in its password' => ['https://alice:p"SECRETVALUE0123@example.com/repo'];
+        yield 'a Digest authorization header in embedded JSON' => [json_encode(['Authorization' => 'Digest username="alice", response="SECRETVALUE0123"'], JSON_THROW_ON_ERROR)];
+        yield 'a header value with an escaped quote in embedded JSON' => [json_encode(['Authorization' => 'Bearer ab"SECRETVALUE0123'], JSON_THROW_ON_ERROR)];
     }
 
     // Kept from the reviewers' probes, because a JSON escape in the written line once hid these from the patterns.

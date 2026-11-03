@@ -167,6 +167,23 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(['error', $message->reviewerId, $round->id()->toRfc4122(), $failure], [$level, $context['reviewer'], $context['round'], $context['exception']]);
     }
 
+    // Kept from a reviewer's probe, because the failure was once logged only after the ledger write that can refuse it.
+    public function testAFailedReviewerIsLoggedBeforeTheLedgerWriteThatCanRefuseItsEnd(): void
+    {
+        $this->fixture->start(1);
+        $failure = new RuntimeException('Reviewer mapping failed.');
+
+        try {
+            $this->fixture->worker($this->fixture->entities, new ScriptedVendor($failure), new InMemoryLedger(accepted: 1))($this->fixture->bus->messages[0]);
+            self::fail('The refused ledger event was swallowed.');
+        } catch (ReviewEventNotRecorded) {
+        }
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $this->fixture->log->cleanLogs();
+        self::assertContains($failure, array_map(static fn (array $log): mixed => $log[2]['exception'] ?? null, $logs));
+    }
+
     public function testTheStartOfARoundNamesItsChangeAndItsNumberInTheLedger(): void
     {
         $round = $this->fixture->start(2);

@@ -73,9 +73,9 @@ final readonly class ReviewWithReviewerHandler
 
             throw ReviewerMovesToAnotherAccount::now();
         } catch (Throwable $failure) {
-            // Every failure, because one left uncaught would leave the reviewer running until its hold ends; the ledger keeps the class only, because a provider's message can echo a key and only the log is redacted.
-            $this->leases->recordFailure($reviewer, $failure::class);
+            // Every failure, because one left uncaught would leave the reviewer running until its hold ends; logged before the ledger write, because a refused write would otherwise lose it; the ledger keeps the class only, because a provider's message can echo a key and only the log is redacted.
             $this->logger->error('A reviewer failed; it counts as finished without a verdict.', ['reviewer' => $reviewer->id()->toRfc4122(), 'round' => $round->id()->toRfc4122(), 'exception' => $failure]);
+            $this->leases->recordFailure($reviewer, $failure::class);
 
             return;
         }
