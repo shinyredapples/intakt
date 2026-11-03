@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Runs the persistence group on several database engines at once, each in its own CI image container on its service's
 # network, and reports every engine: its output in its own log group headed with its exit code. Fails when any engine
-# failed. Arguments: one "name|network|database URL" per engine. Needs CI_IMAGE and GITHUB_WORKSPACE.
+# failed or none was given. Arguments: one "name|network|database URL" per engine. Needs CI_IMAGE and GITHUB_WORKSPACE.
 set -uo pipefail
+
+if [ "$#" -eq 0 ]; then
+  echo "::error::no persistence engine given"
+  exit 2
+fi
 
 out=$(mktemp -d)
 

@@ -61,6 +61,19 @@ final class PersistenceEnginesTest extends SandboxTestCase
         self::assertFileExists($sandbox->root.'/marks/end.three');
     }
 
+    public function testACallWithoutEnginesFailsInsteadOfPassingSilently(): void
+    {
+        $sandbox = $this->sandboxWithFakeDocker();
+
+        $result = $sandbox->runScript(
+            'set -eo pipefail; PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT),
+            ['CI_IMAGE' => 'intakt-ci:test', 'GITHUB_WORKSPACE' => $sandbox->root, 'MARKS' => $sandbox->root.'/marks'],
+        );
+
+        self::assertSame(2, $result->exitCode, $result->output.$result->errors);
+        self::assertStringContainsString('::error::no persistence engine given', $result->output);
+    }
+
     private function sandboxWithFakeDocker(): Sandbox
     {
         $sandbox = $this->emptySandbox();
