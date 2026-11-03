@@ -107,21 +107,114 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     public function testThePageHoldsTheElementsTheStreamsReplaceAndAppendTo(): void
     {
         $this->givenARunningRound();
-        $twig = self::getContainer()->get(Environment::class);
-        self::assertInstanceOf(Environment::class, $twig);
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $streams = [
-            $twig->render('dashboard/stream/tool_called.stream.html.twig', ['reviewer' => 'round-1-correctness', 'tool' => 'read_file']),
-            $twig->render('dashboard/stream/text_streamed.stream.html.twig', ['reviewer' => 'round-1-correctness', 'text' => 'Looking']),
-            $twig->render('dashboard/stream/round_changed.stream.html.twig', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false)]),
+            $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']),
+            $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']),
+            $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false)]),
         ];
 
         foreach ($streams as $stream) {
-            $target = new Crawler($stream)->filter('turbo-stream')->attr('target');
+            $target = new Crawler($stream)->filter('turbo-stream[target]')->attr('target');
             self::assertNotNull($target);
             self::assertCount(1, $page->filter('#'.$target), $target);
         }
+    }
+
+    public function testOneListenerAuthorizesEveryUnfinishedRoundOfThePage(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $crawler->filter('turbo-mercure-stream-source'));
+        self::assertSame(['review/rounds/round-1', 'review/rounds/round-2'], $this->subscribedTopics());
+    }
+
+    public function testAReviewerThatStartsAfterThePageLoadedGetsItsPlaceFromItsFirstUpdate(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $placed = new Crawler($this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']))->filter('turbo-stream[targets]');
+
+        self::assertSame('#round-round-1-live:not(:has(#reviewer-round-1-correctness-text))', $placed->attr('targets'));
+        self::assertCount(0, $page->filter('#reviewer-round-1-correctness-text'));
+        $updated = $this->appended($page->filter('#round-round-1-live'), $placed->filter('template')->html());
+        self::assertCount(1, $updated->filter('#round-round-1-live #reviewer-round-1-correctness-text'));
+        self::assertCount(1, $updated->filter('#round-round-1-live #reviewer-round-1-correctness-activity'));
+    }
+
+    public function testAReviewerThePageAlreadyShowsKeepsItsPlaceSoItsTextStays(): void
+    {
+        $this->givenARunningRound();
+
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $page->filter('#round-round-1-live #reviewer-round-1-correctness-text'));
+    }
+
+    // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.
+    public function testThePageRendersFullyWhileTheHubIsStopped(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('0 of 2 reviewers finished.', $crawler->filter('#round-round-1-state')->text());
+        self::assertSame(['correctness'], $crawler->filter('table.reviewers tbody td:first-child')->each(static fn (Crawler $td): string => $td->text()));
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function stream(string $name, array $context): string
+    {
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context);
+    }
+
+    // Turbo appends the template's children to the target, which is what this does to a copy of the page.
+    private function appended(Crawler $target, string $template): Crawler
+    {
+        $node = $target->getNode(0);
+        self::assertNotNull($node);
+        $document = $node->ownerDocument;
+        self::assertNotNull($document);
+
+        foreach (new Crawler('<div>'.$template.'</div>')->filter('body > div > *') as $child) {
+            $node->appendChild($document->importNode($child, true));
+        }
+
+        return new Crawler($document);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function subscribedTopics(): array
+    {
+        foreach ($this->browser->getResponse()->headers->getCookies() as $cookie) {
+            if ('mercure_access_token' !== $cookie->getName()) {
+                continue;
+            }
+
+            $payload = explode('.', (string) $cookie->getValue())[1] ?? '';
+            $claims = (string) base64_decode(strtr($payload, '-_', '+/'), true);
+            preg_match_all('#review/rounds/[\w-]+#', stripslashes($claims), $topics);
+
+            return array_values(array_unique($topics[0]));
+        }
+
+        self::fail('The page set no subscriber cookie.');
     }
 
     private function givenARunningRound(): void

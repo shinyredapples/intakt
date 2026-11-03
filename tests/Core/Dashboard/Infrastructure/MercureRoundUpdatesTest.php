@@ -98,6 +98,13 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('Judged.', $this->published[0]->getData());
     }
 
+    public function testAReviewerUpdateBringsThePlaceOfAReviewerThePageDoesNotShowYet(): void
+    {
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+
+        self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $this->published[0]->getData());
+    }
+
     public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedWithoutItsMessage(): void
     {
         $updates = $this->updates(static fn (Update $update): string => throw new RuntimeException('token secret-value was refused'));
