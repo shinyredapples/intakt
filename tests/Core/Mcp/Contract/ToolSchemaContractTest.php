@@ -25,7 +25,7 @@ final class ToolSchemaContractTest extends KernelTestCase
 
     public function testListProjectsIsAnnotatedReadOnlyAndNotDestructive(): void
     {
-        $annotations = OwnerServerClient::at($this->listProjects($this->client()), 'annotations');
+        $annotations = McpServerClient::at($this->listProjects($this->client()), 'annotations');
 
         self::assertIsArray($annotations);
         self::assertTrue($annotations['readOnlyHint']);
@@ -36,15 +36,15 @@ final class ToolSchemaContractTest extends KernelTestCase
     {
         $answer = $this->client()->call('tools/call', ['name' => 'list_projects', 'arguments' => new stdClass()], 2);
 
-        self::assertFalse(OwnerServerClient::at($answer, 'result', 'isError'));
-        self::assertIsList(OwnerServerClient::at($answer, 'result', 'structuredContent', 'projects'));
+        self::assertFalse(McpServerClient::at($answer, 'result', 'isError'));
+        self::assertIsList(McpServerClient::at($answer, 'result', 'structuredContent', 'projects'));
     }
 
     public function testAnUnknownToolIsAnMcpErrorWithoutAStackTrace(): void
     {
         $answer = $this->client()->call('tools/call', ['name' => 'no_such_tool', 'arguments' => new stdClass()], 2);
 
-        self::assertIsInt(OwnerServerClient::at($answer, 'error', 'code'));
+        self::assertIsInt(McpServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', json_encode($answer, JSON_THROW_ON_ERROR));
         self::assertArrayNotHasKey('trace', $answer);
     }
@@ -52,9 +52,9 @@ final class ToolSchemaContractTest extends KernelTestCase
     /**
      * @return array<mixed>
      */
-    private function listProjects(OwnerServerClient $client): array
+    private function listProjects(McpServerClient $client): array
     {
-        $tools = OwnerServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
+        $tools = McpServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
         self::assertIsArray($tools);
 
         $found = array_first(array_filter($tools, static fn (mixed $tool): bool => is_array($tool) && 'list_projects' === ($tool['name'] ?? null)));
@@ -63,11 +63,11 @@ final class ToolSchemaContractTest extends KernelTestCase
         return $found;
     }
 
-    private function client(): OwnerServerClient
+    private function client(): McpServerClient
     {
         $kernel = self::bootKernel();
         self::assertInstanceOf(Kernel::class, $kernel);
-        $client = new OwnerServerClient($kernel);
+        $client = new McpServerClient($kernel);
         $client->initialize('2025-11-25');
 
         return $client;

@@ -26,7 +26,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 #[CoversNothing]
 final class RoundReadContractTest extends KernelTestCase
 {
-    private OwnerServerClient $client;
+    private McpServerClient $client;
 
     private string $roundId;
 
@@ -44,32 +44,32 @@ final class RoundReadContractTest extends KernelTestCase
         }
 
         $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))(new JudgeRound($this->roundId));
-        $this->client = new OwnerServerClient($kernel);
+        $this->client = new McpServerClient($kernel);
         $this->client->initialize('2025-11-25');
     }
 
     public function testEveryReadToolIsListedReadOnlyAndNotDestructive(): void
     {
-        $tools = OwnerServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
+        $tools = McpServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
         self::assertIsArray($tools);
 
         foreach (['review_status', 'review_verdicts', 'review_act_list'] as $name) {
             $tool = array_first(array_filter($tools, static fn (mixed $listed): bool => is_array($listed) && $name === ($listed['name'] ?? null)));
             self::assertIsArray($tool, $name.' is not listed.');
-            self::assertTrue(OwnerServerClient::at($tool, 'annotations', 'readOnlyHint'), $name);
-            self::assertFalse(OwnerServerClient::at($tool, 'annotations', 'destructiveHint'), $name);
+            self::assertTrue(McpServerClient::at($tool, 'annotations', 'readOnlyHint'), $name);
+            self::assertFalse(McpServerClient::at($tool, 'annotations', 'destructiveHint'), $name);
         }
     }
 
     public function testEveryReadToolDescribesItsRoundIdAsTheReviewRoundsUuid(): void
     {
-        $tools = OwnerServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
+        $tools = McpServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
         self::assertIsArray($tools);
 
         foreach (['review_status', 'review_verdicts', 'review_act_list'] as $name) {
             $tool = array_first(array_filter($tools, static fn (mixed $listed): bool => is_array($listed) && $name === ($listed['name'] ?? null)));
             self::assertIsArray($tool, $name.' is not listed.');
-            self::assertSame('UUID of the review round.', OwnerServerClient::at($tool, 'inputSchema', 'properties', 'roundId', 'description'), $name);
+            self::assertSame('UUID of the review round.', McpServerClient::at($tool, 'inputSchema', 'properties', 'roundId', 'description'), $name);
         }
     }
 
@@ -77,30 +77,30 @@ final class RoundReadContractTest extends KernelTestCase
     {
         $result = $this->callTool('review_status');
 
-        self::assertFalse(OwnerServerClient::at($result, 'isError'));
-        self::assertSame('judged', OwnerServerClient::at($result, 'structuredContent', 'state'));
-        $reviewers = OwnerServerClient::at($result, 'structuredContent', 'reviewers');
+        self::assertFalse(McpServerClient::at($result, 'isError'));
+        self::assertSame('judged', McpServerClient::at($result, 'structuredContent', 'state'));
+        $reviewers = McpServerClient::at($result, 'structuredContent', 'reviewers');
         self::assertIsArray($reviewers);
         self::assertCount(2, $reviewers);
-        self::assertSame(1, OwnerServerClient::at($result, 'structuredContent', 'round', 'number'));
-        self::assertSame('verdict', OwnerServerClient::at($result, 'structuredContent', 'reviewers', '0', 'state'));
+        self::assertSame(1, McpServerClient::at($result, 'structuredContent', 'round', 'number'));
+        self::assertSame('verdict', McpServerClient::at($result, 'structuredContent', 'reviewers', '0', 'state'));
     }
 
     public function testTheVerdictsToolAnswersWithTheReviewersVerdicts(): void
     {
         $result = $this->callTool('review_verdicts');
 
-        self::assertFalse(OwnerServerClient::at($result, 'isError'));
-        self::assertSame('changes', OwnerServerClient::at($result, 'structuredContent', 'verdicts', '0', 'verdict', 'verdict'));
+        self::assertFalse(McpServerClient::at($result, 'isError'));
+        self::assertSame('changes', McpServerClient::at($result, 'structuredContent', 'verdicts', '0', 'verdict', 'verdict'));
     }
 
     public function testTheActListToolAnswersWithTheFindingsTheJudgeMarkedAct(): void
     {
         $result = $this->callTool('review_act_list');
 
-        $act = OwnerServerClient::at($result, 'structuredContent', 'act');
-        self::assertFalse(OwnerServerClient::at($result, 'isError'));
-        self::assertTrue(OwnerServerClient::at($result, 'structuredContent', 'judged'));
+        $act = McpServerClient::at($result, 'structuredContent', 'act');
+        self::assertFalse(McpServerClient::at($result, 'isError'));
+        self::assertTrue(McpServerClient::at($result, 'structuredContent', 'judged'));
         self::assertIsArray($act);
         self::assertSame(['F1'], array_column($act, 'id'));
     }
@@ -109,14 +109,14 @@ final class RoundReadContractTest extends KernelTestCase
     {
         $answer = $this->client->call('tools/call', ['name' => 'review_status', 'arguments' => ['roundId' => 'not-a-round']], 3);
 
-        self::assertTrue(OwnerServerClient::at($answer, 'result', 'isError'));
+        self::assertTrue(McpServerClient::at($answer, 'result', 'isError'));
         self::assertStringContainsString('No review round is stored under the id not-a-round', $this->client->lastBody());
         self::assertStringNotContainsString('#0', $this->client->lastBody());
     }
 
     public function testTheFindingsResourceTemplateIsListed(): void
     {
-        $templates = OwnerServerClient::at($this->client->call('resources/templates/list', [], 3), 'result', 'resourceTemplates');
+        $templates = McpServerClient::at($this->client->call('resources/templates/list', [], 3), 'result', 'resourceTemplates');
 
         self::assertIsArray($templates);
         self::assertSame(['intakt://rounds/{roundId}/findings'], array_column($templates, 'uriTemplate'));
@@ -126,8 +126,8 @@ final class RoundReadContractTest extends KernelTestCase
     {
         $answer = $this->client->call('resources/read', ['uri' => 'intakt://rounds/'.$this->roundId.'/findings'], 3);
 
-        $text = OwnerServerClient::at($answer, 'result', 'contents', '0', 'text');
-        self::assertSame('application/json', OwnerServerClient::at($answer, 'result', 'contents', '0', 'mimeType'));
+        $text = McpServerClient::at($answer, 'result', 'contents', '0', 'text');
+        self::assertSame('application/json', McpServerClient::at($answer, 'result', 'contents', '0', 'mimeType'));
         self::assertIsString($text);
         $findings = json_decode($text, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($findings);
@@ -138,7 +138,7 @@ final class RoundReadContractTest extends KernelTestCase
     {
         $answer = $this->client->call('resources/read', ['uri' => 'intakt://rounds/not-a-round/findings'], 3);
 
-        self::assertIsInt(OwnerServerClient::at($answer, 'error', 'code'));
+        self::assertIsInt(McpServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', $this->client->lastBody());
     }
 
@@ -148,7 +148,7 @@ final class RoundReadContractTest extends KernelTestCase
     private function callTool(string $name): array
     {
         $answer = $this->client->call('tools/call', ['name' => $name, 'arguments' => ['roundId' => $this->roundId]], 3);
-        $result = OwnerServerClient::at($answer, 'result');
+        $result = McpServerClient::at($answer, 'result');
         self::assertIsArray($result);
 
         return $result;

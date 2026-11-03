@@ -15,12 +15,14 @@ use Intakt\Core\Review\Contract\DiscardQueuedRound;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\StartedRound;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundTransactionLost;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
+use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -28,9 +30,11 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
+use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(StartedRounds::class)]
+#[CoversClass(DiscardedRounds::class)]
 #[CoversClass(StartedRound::class)]
 #[CoversClass(QueuedRound::class)]
 #[CoversClass(DiscardQueuedRound::class)]
@@ -42,6 +46,7 @@ final class StartedRoundsTest extends KernelTestCase
     private EntityManagerInterface $entities;
     private RecordingCommandBus $commands;
     private PendingHeads $pending;
+    private RecordingLogger $logger;
     private StartedRounds $rounds;
 
     protected function setUp(): void
@@ -53,7 +58,8 @@ final class StartedRoundsTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->commands = new RecordingCommandBus();
         $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
-        $this->rounds = new StartedRounds($entities, $this->pending, $this->commands);
+        $this->logger = new RecordingLogger();
+        $this->rounds = new StartedRounds($entities, $this->pending, new DiscardedRounds($this->commands, $this->logger));
     }
 
     public function testARoundQueuedBeforeItsRecordRolledBackIsDiscardedAndLeavesNoRecord(): void
@@ -152,6 +158,29 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
     }
 
+    public function testADiscardThatFailsIsLoggedAndTheOriginalFailureIsRethrown(): void
+    {
+        $discardFailure = new RuntimeException('the discard failed');
+        $this->commands->discardFailure = $discardFailure;
+        $connection = $this->entities->getConnection();
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), function () use ($connection): QueuedRound {
+                $this->insertConflictingRound($connection);
+
+                return RecordingCommandBus::queued(1);
+            });
+            self::fail('The failed record of the round was swallowed.');
+        } catch (Throwable $thrown) {
+            self::assertInstanceOf(UniqueConstraintViolationException::class, $thrown);
+        }
+
+        self::assertCount(1, $this->logger->logged);
+        self::assertSame($discardFailure, $this->logger->logged[0][1]['exception']);
+        self::assertSame('round-1', $this->logger->logged[0][1]['round']);
+        self::assertSame(0, $this->storedRounds());
+    }
+
     public function testAStartThatFailsItselfLeavesTheDiscardToTheStart(): void
     {
         try {
@@ -201,6 +230,105 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(['round-1'], array_map(static fn (StartedRound $round): string => $round->roundId(), $open));
     }
 
+    public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStartsNoRound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $this->markStored(stale: true, recorded: false);
+        $started = 0;
+
+        $this->rounds->startOnce('alpha', $this->green(), static function () use (&$started): QueuedRound {
+            ++$started;
+
+            return RecordingCommandBus::queued(2);
+        });
+
+        self::assertSame(0, $started);
+        self::assertSame('round-1', $this->storedRoundId());
+    }
+
+    public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStaysDueUntilTheLineIsRecorded(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $old = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->markStaleOnce($old, static function (): void {});
+        $this->pending->enqueue('alpha', [$this->green()]);
+
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+        $this->rounds->recordOnce($old, static function (): void {});
+
+        self::assertCount(1, $this->pending->dueFor('alpha'));
+    }
+
+    // The listing lock is released before the heads are looked at, so a second tick records the owed line while the first is inside the start.
+    public function testALineRecordedBetweenTheStartedCheckAndTheEndOfTheWaitKeepsTheHeadDue(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $old = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->markStaleOnce($old, static function (): void {});
+        $this->pending->enqueue('alpha', [$this->green()]);
+        $this->entities->getEventManager()->addEventListener([Events::postLoad], new RecordedOnFirstLoad($this->rounds, $old));
+        $started = 0;
+
+        $this->rounds->startOnce('alpha', $this->green(), static function () use (&$started): QueuedRound {
+            ++$started;
+
+            return RecordingCommandBus::queued(2);
+        });
+
+        self::assertSame(0, $started);
+        self::assertCount(1, $this->pending->dueFor('alpha'));
+    }
+
+    public function testADelayedRecorderOfAReplacedRoundDoesNotClaimTheFreshRoundsQueuedLine(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $delayed = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->recordOnce($delayed, static function (): void {});
+        $this->rounds->markStaleOnce($delayed, static function (): void {});
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+        $recorded = [];
+
+        $this->rounds->recordOnce($delayed, static function (StartedRound $round) use (&$recorded): void {
+            $recorded[] = $round->roundId();
+        });
+
+        self::assertSame([], $recorded);
+        self::assertSame(['round-2'], array_map(static fn (StartedRound $round): string => $round->roundId(), $this->rounds->notYetRecorded('alpha')));
+    }
+
+    public function testADelayedMarkerOfAReplacedRoundDoesNotMarkTheFreshRoundStale(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $delayed = $this->rounds->notYetRecorded('alpha')[0];
+        $this->rounds->recordOnce($delayed, static function (): void {});
+        $this->rounds->markStaleOnce($delayed, static function (): void {});
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+        $marked = [];
+
+        $this->rounds->markStaleOnce($delayed, static function (StartedRound $round) use (&$marked): void {
+            $marked[] = $round->roundId();
+        });
+
+        self::assertSame([], $marked);
+        self::assertSame(0, $this->entities->getRepository(StartedRound::class)->count(['stale' => true]));
+    }
+
+    public function testAFailedStartOnAReturningHeadKeepsItsStaleRound(): void
+    {
+        $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
+        $this->markStored(stale: true, recorded: true);
+        $this->entities->getConnection()->executeStatement('DROP TABLE watcher_pending_head');
+
+        try {
+            $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(2));
+            self::fail('The failed end of the wait was swallowed.');
+        } catch (Exception) {
+        }
+
+        self::assertSame('round-1', $this->storedRoundId());
+        self::assertSame(1, $this->entities->getRepository(StartedRound::class)->count(['stale' => true]));
+    }
+
     private function green(): OpenChange
     {
         return RecordedForge::change('7', 'b', '2026-11-02T09:00:00Z');
@@ -223,6 +351,19 @@ final class StartedRoundsTest extends KernelTestCase
     {
         $this->entities->clear();
         $this->entities->getEventManager()->addEventListener([Events::postLoad], new DeletedOnFirstLoad($this->entities->getConnection(), 'watcher_started_round'));
+    }
+
+    private function markStored(bool $stale, bool $recorded): void
+    {
+        $this->entities->getConnection()->executeStatement('UPDATE watcher_started_round SET stale = ?, queued_recorded = ?', [$stale, $recorded], [Types::BOOLEAN, Types::BOOLEAN]);
+        $this->entities->clear();
+    }
+
+    private function storedRoundId(): string
+    {
+        $this->entities->clear();
+
+        return $this->entities->getRepository(StartedRound::class)->findOneBy([])?->roundId() ?? '';
     }
 
     private function storedRounds(): int

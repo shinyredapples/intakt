@@ -70,8 +70,8 @@ final readonly class ReviewWithReviewerHandler
             $this->leases->handBack($reviewer);
 
             throw ReviewerMovesToAnotherAccount::now();
+            // Boundary: records every failure because one left uncaught would leave the reviewer running until its hold ends, and keeps the class only because a provider's message can echo a key.
         } catch (Throwable $failure) {
-            // Every failure, because one left uncaught would leave the reviewer running until its hold ends; the class only, because a provider's message can echo a key.
             $this->leases->recordFailure($reviewer, $failure::class);
 
             return;

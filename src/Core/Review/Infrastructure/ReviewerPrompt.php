@@ -112,7 +112,7 @@ final readonly class ReviewerPrompt
     public function verdictIn(ExecutionInterface $execution): Verdict
     {
         return $this->parser->parseWith(static function () use ($execution): Verdict {
-            $answer = $execution->getContent();
+            $answer = $execution->getResult()->getContent();
 
             return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
         });

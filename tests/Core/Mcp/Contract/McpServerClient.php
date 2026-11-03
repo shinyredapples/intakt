@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use UnexpectedValueException;
 
-final class OwnerServerClient
+final class McpServerClient
 {
     private ?string $session = null;
 

@@ -1,0 +1,34 @@
+{
+    "interactions": [
+        {
+            "request": {
+                "method": "POST",
+                "url": "https://api.anthropic.com/v1/messages",
+                "signature": "002b09c82e546089723ff1cbbf839379",
+                "signature_v2": "1e501e213d256432b59f1b724508fd26",
+                "headers": {
+                    "x-api-key": [
+                        "[redacted]"
+                    ],
+                    "anthropic-version": [
+                        "2023-06-01"
+                    ],
+                    "content-type": [
+                        "application/json"
+                    ]
+                },
+                "body": "{\"stream\":true,\"max_tokens\":1000,\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]},\"steps\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]}},\"required\":[\"title\",\"priority\"],\"additionalProperties\":false}}},\"required\":[\"name\",\"priority\",\"steps\"],\"additionalProperties\":false}}},\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Plan the release.\",\"cache_control\":{\"type\":\"ephemeral\"}}]}],\"model\":\"claude-haiku-4-5\"}"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "content-type": [
+                        "text/event-stream"
+                    ]
+                },
+                "body_format": "sse",
+                "body": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_probe\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-haiku-4-5\",\"content\":[],\"usage\":{\"input_tokens\":12,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"{\\\"name\\\":\\\"ship\\\",\\\"priority\\\":\\\"high\\\",\\\"steps\\\":[{\\\"title\\\":\\\"build\\\",\\\"priority\\\":\\\"low\\\"},{\\\"title\\\":\\\"test\\\",\\\"priority\\\":\\\"high\\\"}]}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":40}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+            }
+        }
+    ]
+}
