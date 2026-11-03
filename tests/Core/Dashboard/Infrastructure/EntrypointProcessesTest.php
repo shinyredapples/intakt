@@ -28,7 +28,7 @@ final class EntrypointProcessesTest extends TestCase
     private const int CONTINUE = 18;
     private const int TERMINATE = 15;
 
-    // The entrypoint's grace period between SIGTERM and SIGKILL, in docker/entrypoint.sh.
+    // The same 8 seconds as the entrypoint's grace period between SIGTERM and SIGKILL, because a stop that takes longer is cut off by Docker's 10 second stop timeout.
     private const int GRACE_SECONDS = 8;
 
     private Process $entrypoint;
@@ -65,7 +65,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
         $this->entrypoint->stop(15);
-        // A child left behind by an entrypoint that ended without stopping it, the defect the forced-order test proves absent.
+        // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
         foreach ($this->childrenStartedBeforeTheStop() as $pid) {
             posix_kill($pid, self::KILL);
         }
@@ -248,7 +248,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         $noted = @file_get_contents($this->childrenStartedBeforeTheStopFile());
 
-        return is_string($noted) ? array_map(intval(...), array_filter(explode("\n", $noted))) : [];
+        return is_string($noted) ? array_values(array_map(intval(...), array_filter(explode("\n", $noted), static fn (string $line): bool => '' !== $line))) : [];
     }
 
     private function childrenStartedBeforeTheStopFile(): string
