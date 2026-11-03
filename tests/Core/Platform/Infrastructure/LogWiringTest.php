@@ -35,6 +35,21 @@ final class LogWiringTest extends KernelTestCase
         self::assertStringContainsString('Leaked [redacted].', $line);
     }
 
+    public function testTheLogLineIsRedactedWithTheLiveUpdateHubsSigningSecret(): void
+    {
+        $before = [$_SERVER['MERCURE_JWT_SECRET'] ?? null, $_ENV['MERCURE_JWT_SECRET'] ?? null];
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = 'hub-signing-secret-for-the-log-test';
+
+        try {
+            $line = $this->handler()->getFormatter()->format(new LogRecord(new DateTimeImmutable('2026-11-03T10:00:00+00:00'), 'app', Level::Error, 'Leaked hub-signing-secret-for-the-log-test.'));
+        } finally {
+            [$_SERVER['MERCURE_JWT_SECRET'], $_ENV['MERCURE_JWT_SECRET']] = $before;
+        }
+
+        self::assertIsString($line);
+        self::assertStringContainsString('Leaked [redacted].', $line);
+    }
+
     private function handler(): StreamHandler
     {
         $handler = self::getContainer()->get('monolog.handler.main');

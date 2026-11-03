@@ -15,6 +15,7 @@ parameters:
         - '%env(default::APP_SECRET)%'
         - '%env(default::GITHUB_APP_PRIVATE_KEY)%'
         - '%env(default::MCP_OWNER_TOKEN)%'
+        - '%env(default::MERCURE_JWT_SECRET)%'
 
 services:
     # default configuration for services in *this* file
