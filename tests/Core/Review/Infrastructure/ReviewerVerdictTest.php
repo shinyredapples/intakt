@@ -119,7 +119,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private InMemoryLedger $ledger;
 
-    // Streamed requests the provider accepts before it refuses the next ones; null for a provider that never refuses.
+    // A count, not a flag, because a provider may accept a streamed round and refuse a later one, which must not count as unable to stream; null never refuses.
     private ?int $streamsAccepted = null;
 
     private RecordedRoundUpdates $updates;
