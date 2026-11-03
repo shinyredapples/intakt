@@ -10,11 +10,10 @@ use Stringable;
 final class RecordingLogger extends AbstractLogger
 {
     /**
-     * @param string $level
      * @param array<mixed> $context
      */
-    public function log($level, string|Stringable $message, array $context = []): void
+    public function log(mixed $level, string|Stringable $message, array $context = []): void
     {
-        LogRecords::add((string) $level, (string) $message);
+        LogRecords::add(is_string($level) ? $level : get_debug_type($level), (string) $message);
     }
 }
