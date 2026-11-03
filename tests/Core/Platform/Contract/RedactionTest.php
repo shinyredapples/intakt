@@ -125,7 +125,7 @@ final class RedactionTest extends TestCase
         yield 'github token' => ['token ghp_'.str_repeat('a1', 18).' end'];
         yield 'anthropic style key' => ['key sk-'.str_repeat('ab', 15).' end'];
         yield 'aws key id' => ['id AKIA'.str_repeat('Q', 16).' end'];
-        yield 'private key block' => ["x ".str_repeat('-', 5).'BEGIN RSA PRIVATE KEY'.str_repeat('-', 5)."\n".str_repeat('QUJD', 8)."\n".str_repeat('-', 5).'END RSA PRIVATE KEY'.str_repeat('-', 5).' y'];
+        yield 'private key block' => ['x '.str_repeat('-', 5).'BEGIN RSA PRIVATE KEY'.str_repeat('-', 5)."\n".str_repeat('QUJD', 8)."\n".str_repeat('-', 5).'END RSA PRIVATE KEY'.str_repeat('-', 5).' y'];
     }
 
     #[DataProvider('secretShapes')]
