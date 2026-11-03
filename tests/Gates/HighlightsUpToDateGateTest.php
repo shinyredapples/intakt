@@ -9,12 +9,14 @@ use Intakt\Gates\HighlightsRow;
 use Intakt\Gates\HighlightsRows;
 use Intakt\Gates\HighlightStatus;
 use Intakt\Gates\HighlightsUpToDateGate;
+use Intakt\Gates\PathsOnBranch;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsUpToDateGate::class)]
 #[CoversClass(HighlightsRows::class)]
 #[CoversClass(HighlightsRow::class)]
+#[CoversClass(PathsOnBranch::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(HighlightStatus::class)]
 final class HighlightsUpToDateGateTest extends SandboxTestCase
@@ -94,7 +96,64 @@ final class HighlightsUpToDateGateTest extends SandboxTestCase
         $run = $this->checkCommitted($sandbox);
 
         self::assertTrue($run->failed(self::GATE), $run->output());
-        self::assertStringContainsString('docs/highlights.md:6: status "planned", but every path in Where exists (`src/Kernel.php`, `src`), update its status', $run->findingsOf(self::GATE));
+        self::assertStringContainsString('docs/highlights.md:6: status "planned", but every path in Where exists (`src/Kernel.php`, `src/`), update its status', $run->findingsOf(self::GATE));
+    }
+
+    public function testAReproductionRowInsideAnHtmlCommentDoesNotCount(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('upstream/some-bug/REPORT.md', "x\n");
+        $sandbox->write('docs/highlights.md', "## Found in the beta\n\n<!--\n| Probe | Status | Where |\n|---|---|---|\n| Bug | done | `upstream/some-bug/` |\n-->\n");
+
+        $run = $this->checkCommitted($sandbox);
+
+        self::assertTrue($run->failed(self::GATE), $run->output());
+        self::assertStringContainsString('`upstream/some-bug/` has no row', $run->findingsOf(self::GATE));
+    }
+
+    public function testAReproductionRowAfterAClosedHtmlCommentCounts(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('upstream/some-bug/REPORT.md', "x\n");
+        $sandbox->write('docs/highlights.md', "<!-- one line -->\n".self::BETA."| Bug | in progress | `upstream/some-bug/` | x |\n");
+
+        $run = $this->checkCommitted($sandbox);
+
+        self::assertTrue($run->passed(self::GATE), $run->output());
+    }
+
+    public function testAPlannedRowInsideAnHtmlCommentIsSkipped(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Kernel.php', "<?php\n");
+        $sandbox->write('docs/highlights.md', "<!--\n".self::FEATURES."| B | b | planned | `src/Kernel.php` |\n-->\n");
+
+        $run = $this->checkCommitted($sandbox);
+
+        self::assertTrue($run->passed(self::GATE), $run->output());
+    }
+
+    public function testAReproductionRowUnderASubheadingOfFoundInTheBetaCounts(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('upstream/some-bug/REPORT.md', "x\n");
+        $sandbox->write('docs/highlights.md', "# Highlights\n\n## Found in the beta\n\n### Platform\n\n| Probe | Status | Where |\n|---|---|---|\n| Bug | done | `upstream/some-bug/` |\n");
+
+        $run = $this->checkCommitted($sandbox);
+
+        self::assertTrue($run->passed(self::GATE), $run->output());
+    }
+
+    public function testAHeadingOfTheSameLevelEndsFoundInTheBeta(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('upstream/some-bug/REPORT.md', "x\n");
+        $sandbox->write('docs/highlights.md', "## Found in the beta\n\n### Platform\n\n## PHP 8.5 in use\n\n| Probe | Status | Where |\n|---|---|---|\n| Bug | done | `upstream/some-bug/` |\n");
+
+        $run = $this->checkCommitted($sandbox);
+
+        self::assertTrue($run->failed(self::GATE), $run->output());
+        self::assertStringContainsString('`upstream/some-bug/` has no row', $run->findingsOf(self::GATE));
     }
 
     public function testAPlannedRowWithAMissingPathPasses(): void

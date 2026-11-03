@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use Closure;
-
 final readonly class HighlightsUpToDateGate implements Gate
 {
     private const string FILE = 'docs/highlights.md';
@@ -40,9 +38,10 @@ final readonly class HighlightsUpToDateGate implements Gate
         }
 
         $rows = $this->rows->of($contents);
+        $branch = PathsOnBranch::of($workspace->root, $tracked);
         $findings = [
-            ...$this->reproductionsWithoutRow($this->reproductionsOn($workspace->root, $tracked), $rows),
-            ...$this->plannedRowsAlreadyBuilt($this->existenceOn($workspace->root, $tracked), $rows),
+            ...$this->reproductionsWithoutRow($this->reproductionsOn($workspace->root, $tracked), $rows, $branch),
+            ...$this->plannedRowsAlreadyBuilt($rows, $branch),
         ];
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
@@ -54,13 +53,20 @@ final readonly class HighlightsUpToDateGate implements Gate
      *
      * @return list<string>
      */
-    private function reproductionsWithoutRow(array $reproductions, array $rows): array
+    private function reproductionsWithoutRow(array $reproductions, array $rows, PathsOnBranch $branch): array
     {
-        $beta = array_filter($rows, static fn (HighlightsRow $row): bool => self::FOUND_IN_THE_BETA === $row->section);
+        $named = [];
+
+        foreach ($rows as $row) {
+            if ($row->isUnder(self::FOUND_IN_THE_BETA)) {
+                $named = [...$named, ...array_map($branch->normalized(...), $row->paths() ?? [])];
+            }
+        }
+
         $findings = [];
 
         foreach ($reproductions as $reproduction) {
-            if ([] === array_filter($beta, static fn (HighlightsRow $row): bool => $row->names($reproduction))) {
+            if ([] === array_filter($named, static fn (string $path): bool => $path === $reproduction || str_starts_with($path, $reproduction.'/'))) {
                 $findings[] = self::FILE.': `'.$reproduction.'/` has no row in "'.self::FOUND_IN_THE_BETA.'" whose Where names it, add one';
             }
         }
@@ -69,20 +75,20 @@ final readonly class HighlightsUpToDateGate implements Gate
     }
 
     /**
-     * @param Closure(string): bool $exists
-     * @param list<HighlightsRow>   $rows
+     * @param list<HighlightsRow> $rows
      *
      * @return list<string>
      */
-    private function plannedRowsAlreadyBuilt(Closure $exists, array $rows): array
+    private function plannedRowsAlreadyBuilt(array $rows, PathsOnBranch $branch): array
     {
         $findings = [];
 
         foreach ($rows as $row) {
-            $missing = array_filter($row->paths, static fn (string $path): bool => !$exists($path));
+            $paths = $row->paths() ?? [];
+            $missing = array_filter($paths, static fn (string $path): bool => !$branch->exists($path));
 
-            if (HighlightStatus::Planned->value === $row->status && [] !== $row->paths && [] === $missing) {
-                $named = implode(', ', array_map(static fn (string $path): string => '`'.$path.'`', $row->paths));
+            if (HighlightStatus::Planned->value === $row->status && [] !== $paths && [] === $missing) {
+                $named = implode(', ', array_map(static fn (string $path): string => '`'.$path.'`', $paths));
                 $findings[] = self::FILE.':'.$row->line.': status "planned", but every path in Where exists ('.$named.'), update its status to in progress or done';
             }
         }
@@ -114,25 +120,5 @@ final readonly class HighlightsUpToDateGate implements Gate
         }
 
         return array_keys($reproductions);
-    }
-
-    /**
-     * @return Closure(string): bool
-     */
-    private function existenceOn(string $root, ?ProcessResult $tracked): Closure
-    {
-        if (!$tracked instanceof ProcessResult) {
-            return static fn (string $path): bool => file_exists($root.'/'.$path);
-        }
-
-        $known = [];
-
-        foreach (explode("\0", $tracked->output) as $file) {
-            for ($path = $file; '' !== $path && '.' !== $path; $path = dirname($path)) {
-                $known[$path] = true;
-            }
-        }
-
-        return static fn (string $path): bool => isset($known[$path]);
     }
 }

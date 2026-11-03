@@ -6,12 +6,18 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\HighlightsGate;
+use Intakt\Gates\HighlightsRow;
+use Intakt\Gates\HighlightsRows;
 use Intakt\Gates\HighlightStatus;
+use Intakt\Gates\PathsOnBranch;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
 #[UsesClass(FencedCodeBlocks::class)]
+#[UsesClass(HighlightsRows::class)]
+#[UsesClass(HighlightsRow::class)]
+#[UsesClass(PathsOnBranch::class)]
 #[UsesClass(HighlightStatus::class)]
 final class HighlightsGateTest extends SandboxTestCase
 {

@@ -135,10 +135,10 @@ A boolean parameter that switches what a function does hides two behaviors behin
 
 The `highlights-up-to-date` gate checks that the page keeps up with the repository:
 
-- **`upstream/<slug>/` has no row in "Found in the beta" whose Where names it:** every folder directly under `upstream/` that git tracks a file in needs a row in the table under the "Found in the beta" heading whose Where cell names the folder, or a file inside it, in backticks (`upstream/<slug>/`); a mention in another column or another table does not count;
+- **`upstream/<slug>/` has no row in "Found in the beta" whose Where names it:** every folder directly under `upstream/` that git tracks a file in needs a row in a table under the "Found in the beta" heading, or under one of its subheadings, whose Where cell names the folder, or a file inside it, in backticks (`upstream/<slug>/`); a mention in another column or another table does not count, and the section ends at the next heading of the same or a higher level;
 - **status "planned", but every path in Where exists:** a row whose Where cell names at least one backticked path, all of them tracked by git, is built; change its status to `in progress` or `done`. A planned row that names no path, or a path not yet there, passes.
 
-Tables inside a fenced code block (three or more backticks or tildes, indented at most three spaces) are examples and are skipped. The block ends at a line holding only a fence of the same character, at least as long as the opening one; a fence line with text after it stays inside the block. A block that is never closed runs to the end of the file.
+Tables inside a fenced code block (three or more backticks or tildes, indented at most three spaces) are examples and are skipped. The block ends at a line holding only a fence of the same character, at least as long as the opening one; a fence line with text after it stays inside the block. A block that is never closed runs to the end of the file. Both gates also skip a table inside an HTML comment (from a line starting with `<!--` to the line holding `-->`), so commenting a row out does not count as having it.
 
 ## GitHub's test merge and the `commits` gate
 

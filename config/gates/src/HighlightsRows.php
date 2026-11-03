@@ -6,17 +6,10 @@ namespace Intakt\Gates;
 
 final readonly class HighlightsRows
 {
-    private const string HEADING = '/^#{1,6}\s+(.*?)\s*#*\s*$/';
+    private const string HEADING = '/^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/';
 
-    // Matches CommonMark, because ``a`b`` is one span and an escaped backtick opens none.
-    private const string BACKTICKED = '/\\\\.(*SKIP)(*FAIL)|(`+)(?!`)(?:(.+?)(?<!`)\1(?!`)|(*SKIP)(*FAIL))/';
-
-    // One space on each side is padding, so a span can start or end with a backtick (CommonMark).
-    private const string PADDED_SPAN = '/^ (.*[^ ].*) $/';
-
-    private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
-
-    private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
+    // CommonMark lets an HTML comment open a block indented up to three spaces; it runs to the line holding -->.
+    private const string COMMENT_OPENER = '/^ {0,3}<!--/';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
@@ -32,13 +25,15 @@ final readonly class HighlightsRows
      */
     public function of(string $contents): array
     {
-        $lines = $this->codeBlocks->blanked(explode("\n", $contents));
+        $lines = explode("\n", $contents)
+            |> $this->codeBlocks->blanked(...)
+            |> $this->uncommented(...);
         $rows = [];
-        $section = '';
+        $headings = [];
         $columns = null;
 
         foreach ($lines as $index => $line) {
-            $section = $this->headingOf($line) ?? $section;
+            $headings = $this->headingsAfter($line, $headings);
             $cells = $this->cellsOf($line);
 
             if (null === $cells || null === $columns) {
@@ -48,16 +43,51 @@ final readonly class HighlightsRows
             }
 
             if (!$this->isSeparator($cells)) {
-                $rows[] = new HighlightsRow($index + 1, $section, ...$this->valuesOf($cells, $columns));
+                $rows[] = new HighlightsRow($index + 1, array_values($headings), ...$this->valuesOf($cells, $columns));
             }
         }
 
         return $rows;
     }
 
-    private function headingOf(string $line): ?string
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function uncommented(array $lines): array
     {
-        return 1 === preg_match(self::HEADING, $line, $heading) ? $heading[1] : null;
+        $inComment = false;
+
+        foreach ($lines as $index => $line) {
+            $inComment = $inComment || 1 === preg_match(self::COMMENT_OPENER, $line);
+
+            if ($inComment) {
+                $lines[$index] = '';
+                $inComment = !str_contains($line, '-->');
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param array<int, string> $headings
+     *
+     * @return array<int, string>
+     */
+    private function headingsAfter(string $line, array $headings): array
+    {
+        if (1 !== preg_match(self::HEADING, $line, $heading)) {
+            return $headings;
+        }
+
+        // A heading ends every section of its level or deeper, so a subheading keeps the section that holds it.
+        $level = strlen($heading[1]);
+        $kept = array_filter($headings, static fn (int $outer): bool => $outer < $level, ARRAY_FILTER_USE_KEY);
+        $kept[$level] = $heading[2];
+
+        return $kept;
     }
 
     /**
@@ -81,33 +111,14 @@ final readonly class HighlightsRows
      * @param list<string>                               $cells
      * @param array{status: int|false, where: int|false} $columns
      *
-     * @return array{status: ?string, paths: list<string>}
+     * @return array{status: ?string, where: ?string}
      */
     private function valuesOf(array $cells, array $columns): array
     {
         return [
             'status' => false === $columns['status'] ? null : ($cells[$columns['status']] ?? ''),
-            'paths' => false === $columns['where'] ? [] : $this->pathsIn($cells[$columns['where']] ?? ''),
+            'where' => false === $columns['where'] ? null : ($cells[$columns['where']] ?? ''),
         ];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function pathsIn(string $where): array
-    {
-        preg_match_all(self::BACKTICKED, $where, $matches);
-        $paths = [];
-
-        foreach ($matches[2] ?? [] as $span) {
-            $path = preg_replace(self::PADDED_SPAN, '$1', $span) ?? $span;
-
-            if (1 === preg_match(self::PATH_LIKE, $path)) {
-                $paths[] = rtrim(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path, '/');
-            }
-        }
-
-        return $paths;
     }
 
     /**
