@@ -85,7 +85,7 @@ final readonly class Redaction
         return '(?:'.implode('|', $spellings).')';
     }
 
-    // Control characters, non-ASCII and the JSON_HEX_* characters are the ones json_encode may write as an escape.
+    // Only control characters, non-ASCII and the JSON_HEX_* characters get escape spellings, because json_encode escapes nothing else and each spelling grows the pattern.
     private function jsonMayEscape(string $char): bool
     {
         return strlen($char) > 1 || ord($char[0]) < 0x20 || str_contains('"\\/<>&\'', $char);
