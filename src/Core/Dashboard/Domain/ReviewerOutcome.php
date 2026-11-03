@@ -57,7 +57,7 @@ final readonly class ReviewerOutcome
     // What follows a stop (the blocked verdict the stopped reviewer returns) is the stop's own consequence, so the row keeps saying stopped.
     public function isStopped(): bool
     {
-        return ReviewerProgress::Stopped === $this->progress;
+        return $this->progress->isStopped();
     }
 
     public function substitutedBy(string $provider): self

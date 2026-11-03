@@ -11,4 +11,9 @@ enum ReviewerProgress: string
     case Failed = 'failed';
     case Blocked = 'blocked';
     case Stopped = 'stopped';
+
+    public function isStopped(): bool
+    {
+        return self::Stopped === $this;
+    }
 }
