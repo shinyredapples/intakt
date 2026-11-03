@@ -21,6 +21,7 @@ ENV APP_ENV=prod \
     APP_DEBUG=0 \
     SERVER_PORT=7781 \
     DASHBOARD_PORT=7781 \
+    MERCURE_JWT_ISSUER=http://localhost:7781 \
     FRANKENPHP_LOOP_MAX=500 \
     WORKER_MEMORY_CEILING_MB=256 \
     DATABASE_URL="sqlite:///%kernel.project_dir%/var/data/intakt.db" \

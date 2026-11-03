@@ -21,6 +21,11 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+WORKER_MEMORY_CEILING_MB=\d+/m', $this->dockerfile());
     }
 
+    public function testTheImageGivesTheMercureIssuerADefault(): void
+    {
+        self::assertMatchesRegularExpression('/^\s+MERCURE_JWT_ISSUER=http:\/\/localhost:7781/m', $this->dockerfile());
+    }
+
     public function testTheImageDeclaresAHealthCheckOnTheMetricsEndpoint(): void
     {
         self::assertMatchesRegularExpression('/^HEALTHCHECK.*?\/metrics/ms', $this->dockerfile());
