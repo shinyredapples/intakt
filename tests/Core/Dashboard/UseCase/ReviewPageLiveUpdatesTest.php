@@ -70,7 +70,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
                 continue;
             }
 
-            is_dir(dirname($path)) || mkdir(dirname($path), 0o777, true);
+            if (!is_dir(dirname($path))) {
+                mkdir(dirname($path), 0o777, true);
+            }
+
             file_put_contents($path, '');
             $this->placeholders[] = $path;
         }
