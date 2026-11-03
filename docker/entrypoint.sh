@@ -60,11 +60,10 @@ restart() {
     fi
 
     echo "intakt: $name ended with status $2, starting it again" >&2
-    sleep 1
     start "$name"
 }
 
-# A child that ends while another is handled is reaped by bash and unknown to the next wait -n ("no such job"), so it is found by pid and its status taken with a plain wait.
+# A child killed by a signal while a command runs is reaped by bash and unknown to wait -n ("no such job"), so every child is checked by pid and its status taken with a plain wait, which still has it.
 restart_ended() {
     local pid status
     for pid in "${!running[@]}"; do
@@ -83,12 +82,8 @@ for _ in $(seq "$MESSENGER_CONSUMERS"); do
 done
 start scheduler_watcher
 
+# A poll instead of wait -n, which blocks on the live children once it has forgotten a dead one; the second is also the pause before an ended consumer starts again, and the TERM trap runs after it, inside Docker's 10 s stop timeout.
 while :; do
-    ended=''
-    status=0
-    wait -n -p ended "${!running[@]}" 2>/dev/null || status=$?
-    if [[ -n $ended ]]; then
-        restart "$ended" "$status"
-    fi
+    sleep 1
     restart_ended
 done

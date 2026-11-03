@@ -113,6 +113,27 @@ final class EntrypointProcessesTest extends TestCase
         self::assertSame([], array_intersect($killed, array_keys($after)));
     }
 
+    public function testAConsumerKilledWhileOthersAreStartedAgainIsStartedAgainToo(): void
+    {
+        $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
+        $workers = $this->inEntrypointOrder(array_keys($before), (int) array_search('web', $before, true));
+        // The entrypoint checks its children in this order, so the first one is already found alive when the last two are started again.
+        $victim = array_first($workers);
+        $killedFirst = array_slice($workers, -2);
+        $this->entrypoint->signal(self::STOP);
+        foreach ($killedFirst as $pid) {
+            posix_kill($pid, self::KILL);
+        }
+        usleep(200_000);
+        $this->entrypoint->signal(self::CONTINUE);
+        $this->waitForErrorOutput('starting it again', 2);
+
+        posix_kill($victim, self::KILL);
+        $after = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], [$victim, ...$killedFirst]);
+
+        self::assertSame([], array_intersect([$victim, ...$killedFirst], array_keys($after)));
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
@@ -185,6 +206,33 @@ final class EntrypointProcessesTest extends TestCase
         self::fail('The entrypoint did not start every process: '.$this->entrypoint->getOutput().$this->entrypoint->getErrorOutput());
     }
 
+    private function waitForErrorOutput(string $line, int $times): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && substr_count($this->entrypoint->getErrorOutput(), $line) < $times) {
+            usleep(10_000);
+        }
+
+        self::assertGreaterThanOrEqual($times, substr_count($this->entrypoint->getErrorOutput(), $line), $this->entrypoint->getErrorOutput());
+    }
+
+    /**
+     * The same keys inserted in the same order give bash's associative array the order the entrypoint checks its children in.
+     *
+     * @param list<int> $pids
+     *
+     * @return list<int>
+     */
+    private function inEntrypointOrder(array $pids, int $web): array
+    {
+        sort($pids);
+        $order = new Process(['bash', '-c', 'declare -A running=(); for pid in "$@"; do running[$pid]=x; done; printf "%s\n" "${!running[@]}"', 'bash', ...array_map(strval(...), $pids)]);
+        $order->mustRun();
+
+        return array_values(array_diff(array_map(intval(...), explode("\n", trim($order->getOutput()))), [$web]));
+    }
+
     /**
      * @param list<string> $arguments
      */
@@ -211,8 +259,15 @@ final class EntrypointProcessesTest extends TestCase
         foreach (array_map(intval(...), array_filter(explode(' ', trim((string) $children)), static fn (string $part): bool => '' !== $part)) as $child) {
             $commandLine = @file_get_contents('/proc/'.$child.'/cmdline');
 
-            if (is_string($commandLine) && '' !== $commandLine) {
-                $arguments[$child] = explode("\0", rtrim($commandLine, "\0"));
+            if (!is_string($commandLine) || '' === $commandLine) {
+                continue;
+            }
+
+            $parts = explode("\0", rtrim($commandLine, "\0"));
+
+            // The entrypoint's poll sleeps in a child of its own, which is no process it supervises.
+            if ('sleep' !== basename($parts[0])) {
+                $arguments[$child] = $parts;
             }
         }
 
