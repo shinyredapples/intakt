@@ -43,7 +43,10 @@ final class CaddyfileWorkersTest extends TestCase
 
     private HttpClientInterface $client;
 
-    protected function setUp(): void
+    /**
+     * @param array<string, string> $extraEnvironment
+     */
+    private function start(array $extraEnvironment = []): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');
 
@@ -52,13 +55,6 @@ final class CaddyfileWorkersTest extends TestCase
         }
 
         $this->frankenphp = $frankenphp;
-    }
-
-    /**
-     * @param array<string, string> $extraEnvironment
-     */
-    private function start(array $extraEnvironment = []): void
-    {
         $port = $this->freePort();
         $this->origin = 'http://localhost:'.$port;
         $this->admin = 'localhost:'.$this->freePort();
@@ -176,19 +172,37 @@ final class CaddyfileWorkersTest extends TestCase
 
     private function largestServingAppWorkerMemory(): int
     {
-        $held = 0;
+        return self::largestMemoryOfServingAppWorkers($this->threads());
+    }
 
-        foreach ($this->threads() as $thread) {
+    /**
+     * @param list<array<mixed>> $threads
+     */
+    // No serving worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
+    public static function largestMemoryOfServingAppWorkers(array $threads): int
+    {
+        $held = null;
+
+        foreach ($threads as $thread) {
             $name = $thread['Name'] ?? null;
             $requests = $thread['RequestCount'] ?? null;
             $memory = $thread['MemoryUsage'] ?? null;
 
             if (is_string($name) && str_starts_with($name, 'Worker') && 'index.php' === basename($name) && is_int($requests) && $requests > 0 && is_int($memory)) {
-                $held = max($held, $memory);
+                $held = max($held ?? 0, $memory);
             }
         }
 
-        return $held;
+        return $held ?? PHP_INT_MAX;
+    }
+
+    public function testAMissingMemoryReadingIsNotTakenForAReplacedWorker(): void
+    {
+        $thread = ['Name' => 'Worker /app/public/index.php', 'RequestCount' => 10];
+
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([$thread]));
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([]));
+        self::assertSame(526_224, self::largestMemoryOfServingAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
     }
 
     /**
