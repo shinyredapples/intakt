@@ -24,7 +24,7 @@ final readonly class HighlightsUpToDateGate implements Gate
 
     private const string LEADING_DOT_SLASH = '#^(?:\./)+#';
 
-    private const string PATH_LIKE ='#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
+    private const string PATH_LIKE = '#^(?:[^*<>{}]+/[^*<>{}]*|[^*<>{}/]*\.\w+)$#';
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
