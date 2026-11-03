@@ -51,6 +51,13 @@ final class RedactionTest extends TestCase
         yield 'a Digest authorization header' => ['Authorization: Digest username="alice", nonce="n0nce", response="r3sponse"', 'Authorization: Digest [redacted]'];
         yield 'a Digest authorization header with spaces around its equals signs' => ['Authorization: Digest username = "alice", response = "r3sponse"', 'Authorization: Digest [redacted]'];
         yield 'an API key header' => ['x-api-key: some-value', 'x-api-key: [redacted]'];
+        yield 'a header in var_export output' => ["'Authorization' => 'Bearer abc123',", "'Authorization' => 'Bearer [redacted]',"];
+        yield 'a header in print_r output' => ["[Authorization] => Bearer abc123\n[Accept] => json", "[Authorization] => Bearer [redacted]\n[Accept] => json"];
+        yield 'a header value with a comma' => ['Authorization: Bearer abc,def', 'Authorization: Bearer [redacted]'];
+        yield 'a header in JSON inside JSON' => ['{\"Authorization\":\"Bearer abc123\",\"Accept\":\"json\"}', '{\"Authorization\":\"Bearer [redacted]\",\"Accept\":\"json\"}'];
+        yield 'a URL with a slash in its password' => ['https://alice:pa/ss@example.com/r', 'https://[redacted]@example.com/r'];
+        yield 'a URL with a # in its password' => ['https://alice:pa#ss@example.com/r', 'https://[redacted]@example.com/r'];
+        yield 'a URL with escaped slashes in JSON' => ['{"url":"https:\/\/alice:hunter2@example.com\/repo"}', '{"url":"https:\/\/[redacted]@example.com\/repo"}'];
         yield 'a GitHub installation token' => ['token ghs_'.str_repeat('a1', 18).' expired', 'token [redacted] expired'];
         yield 'a fine-grained GitHub token' => ['github_pat_'.str_repeat('Ab1', 10), '[redacted]'];
         yield 'a provider API key' => ['key sk-ant-api03-'.str_repeat('x', 24), 'key [redacted]'];
@@ -72,6 +79,7 @@ final class RedactionTest extends TestCase
     {
         yield 'plain text' => ['Two reviewers approve.'];
         yield 'a URL without userinfo' => ['See https://example.com/a@b and mail me@example.com.'];
+        yield 'a URL without userinfo with escaped slashes' => ['{"url":"https:\/\/example.com\/a@b"}'];
         yield 'the word authorization in a sentence' => ['The authorization step failed.'];
         yield 'a short sk- word' => ['Use the sk-learn package.'];
     }

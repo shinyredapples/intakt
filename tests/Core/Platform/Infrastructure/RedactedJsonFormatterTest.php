@@ -105,6 +105,14 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertSame('{"password":"[redacted]"}', $line['message']);
     }
 
+    // Kept from the reviewers' probe, because json_encode escapes the slashes of a URL in an embedded JSON message.
+    public function testAUrlWithUserinfoInAnEmbeddedJsonMessageIsWrittenRedacted(): void
+    {
+        $line = $this->decoded(new RedactedJsonFormatter([], [])->format($this->record(json_encode(['url' => 'https://alice:SENTINEL123@example.com/repo'], JSON_THROW_ON_ERROR), [])));
+
+        self::assertSame('{"url":"https:\/\/[redacted]@example.com\/repo"}', $line['message']);
+    }
+
     public function testARecordWithoutContextKeepsAnEmptyObject(): void
     {
         $output = new RedactedJsonFormatter([], [])->format($this->record('Nothing happened.', []));
