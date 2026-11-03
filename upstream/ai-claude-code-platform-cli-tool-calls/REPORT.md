@@ -4,16 +4,22 @@ Draft, not posted. Versions: `symfony/ai-claude-code-platform` v1.0.0-BETA1, `sy
 
 ## What happens
 
-The Claude Code CLI runs its built-in tools (`Read`, `Grep`, `Bash`, ...) itself and reports each use in its stream before its final result. `RawProcessResult::getData()` collects those `tool_use` blocks into `tool_calls`, and `ResultConverter` returns them as a `ToolCallResult` beside the final text. An `Agent` then treats them as calls to its own toolbox: it looks for a tool named `Read`, fails or runs a different tool of that name, and sends the model another round, although the CLI already finished. `reproduce.php` converts a run in which the CLI read one file and prints:
+The Claude Code CLI runs its built-in tools (`Read`, `Grep`, `Bash`, ...) itself and reports each use in its stream before its final result. `RawProcessResult::getData()` collects those `tool_use` blocks into `tool_calls`, and `ResultConverter` returns them as a `ToolCallResult` beside the final text. An `Agent` then treats them as calls to its own toolbox: it looks for a tool named `Read`, fails or runs a different tool of that name, and sends the model another round, although the CLI already finished.
+
+The streaming path has the same bug. With `stream: true`, `ResultConverter` yields `ToolCallComplete` for the `tool_use` block of the CLI's first message, and the Agent's `Runner::consumeStream()` then takes it as a tool call for its own toolbox and skips every later delta of the round, so the text of the final answer is dropped.
+
+`reproduce.php` converts a run in which the CLI read one file, once as a plain result and once as a stream, and prints:
 
 ```
-Symfony\AI\Platform\Result\MultiPartResult
+not streamed: Symfony\AI\Platform\Result\MultiPartResult
 The tool call the CLI already ran is handed to the caller to run again
+streamed: Symfony\AI\Platform\Result\Stream\Delta\ToolCallStart, Symfony\AI\Platform\Result\Stream\Delta\ToolInputDelta, Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete, TextDelta "The readme has a title."
+The stream completes a tool call the CLI already ran, so an agent drops the text after it
 ```
 
 ## Expected
 
-A `TextResult` with the CLI's final result, since no tool call is left for the caller to run.
+A `TextResult` with the CLI's final result, and a stream without `ToolCallComplete`, since no tool call is left for the caller to run.
 
 ## Effect in Intakt
 
@@ -30,3 +36,5 @@ Checked on 2026-11-02.
 - **Decision:** `ready to file`.
 - **Pull request search (D12, 2026-11-03, `main` 17d320e7beee):** open with the prefix `[Platform][ClaudeCode]`: #2713 (`[Platform][ClaudeCode][Codex] Parse the JSON Lines of the CLI output on any platform`); open touching `src/platform/src/Bridge/ClaudeCode/`: #2713 and #2719 (no prefix, HTTP options); merged since BETA1 on that path: none.
 - **Fix pull request:** `issue only`. Whether the caller should see the tool uses the CLI ran itself is not beyond doubt: #2015 added them on purpose as trace metadata, and the bridge's own tests pin the `MultiPartResult`. Open pull requests (checked 2026-11-03 against `main` 17d320e7beee): none fixes it; #2713 edits `RawProcessResult` only to split lines on any line ending, and #2719 edits `ModelClient`.
+- **Owner review (2026-11-03, `main` 17d320e7):** the streaming path has the same bug, so `reproduce.php` gained a `stream: true` case (fails at the pinned versions). This bug and `ai-codex-platform-cli-tool-calls` go upstream as one combined issue, which the owner session drafts; there is no issue text in this folder.
+- **Status:** `ready to file`, as one combined issue with `ai-codex-platform-cli-tool-calls` (owner drafts).

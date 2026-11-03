@@ -27,7 +27,7 @@ final readonly class ReviewerPrompt
 
         The diff of the change is given to you: it shows what the change adds, edits and deletes, so judge the change by it and the code around it, deleted code included.
 
-        Read the code before you judge it. You have read-only tools at the exact head under review: read_file, list_directory and search_files. Paths are relative to the repository root; a path outside it is refused. Cite only what you read.
+        Read the code before you judge it. You have read-only tools at the exact head under review to read a file, list a directory and search the files. Paths are relative to the repository root; a path outside it is refused. Cite only what you read.
 
         Check the change against the rules of how code reads. Report a finding for each rule it breaks, and put the name of the rule in the finding's requirement field:
         - Storytelling: an entry method reads as a short story of named steps in domain words, the public method first, then its helpers in the order they are called.

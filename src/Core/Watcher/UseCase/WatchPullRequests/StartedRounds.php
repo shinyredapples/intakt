@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use NoDiscard;
+use PDO;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Throwable;
 
@@ -37,6 +38,7 @@ final readonly class StartedRounds
 
         try {
             $queued = $this->startUnlessStarted($project, $change, $start);
+            $this->ensureStillInTransaction($connection, $queued);
             $this->record($project, $change, $queued);
             $this->pending->forget($project, $change);
             $connection->commit();
@@ -121,6 +123,22 @@ final readonly class StartedRounds
         }
 
         return $start();
+    }
+
+    // A lost connection ends the transaction and DBAL reconnects in autocommit, so the record and the end of the wait would be written for real and the discarded round's head would never be due again.
+    private function ensureStillInTransaction(Connection $connection, ?QueuedRound $queued): void
+    {
+        if ($queued instanceof QueuedRound && !$this->isInTransaction($connection)) {
+            throw RoundTransactionLost::for($queued->roundId);
+        }
+    }
+
+    // DBAL counts only the transactions it began and ended, so a commit past it (a native one, or MySQL's implicit commit on DDL) is seen only on the driver's own connection.
+    private function isInTransaction(Connection $connection): bool
+    {
+        $native = $connection->getNativeConnection();
+
+        return $connection->isTransactionActive() && (!$native instanceof PDO || $native->inTransaction());
     }
 
     private function record(string $project, OpenChange $change, ?QueuedRound $queued): void

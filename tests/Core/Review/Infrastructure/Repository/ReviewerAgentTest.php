@@ -244,7 +244,7 @@ final class ReviewerAgentTest extends WebTestCase
 
     public function testEveryRepositoryToolIsReadOnlyAndNamesItsPathArgumentAsTheListenerExpects(): void
     {
-        $tools = new ReviewerToolboxFactory()->create($this->fixture->checkout)->getTools();
+        $tools = new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout)->getTools();
 
         self::assertCount(3, $tools);
 
@@ -269,7 +269,7 @@ final class ReviewerAgentTest extends WebTestCase
      */
     private function runScript(ToolCall ...$calls): array
     {
-        $toolbox = new TraceableToolbox(new FaultTolerantToolbox(new ReviewerToolboxFactory()->create($this->fixture->checkout)));
+        $toolbox = new TraceableToolbox(new FaultTolerantToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout)));
         $step = 0;
         $platform = new TraceablePlatform(MockPlatformFactory::createPlatform(static function () use (&$step, $calls) {
             return $step < count($calls) ? new ToolCallResult([$calls[$step++]]) : new TextResult('done');

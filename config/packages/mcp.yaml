@@ -23,3 +23,14 @@ mcp:
                 lock: true
             registry:
                 tools: ['Intakt\Core\Review\UseCase\ServeReviewTools\']
+    # The reviewers' connection to the review server above, used by the mcp_server tool entry of the reviewer agent in ai.php.
+    clients:
+        reviewer:
+            client_info:
+                name: intakt-reviewer
+            servers:
+                review:
+                    transport: http
+                    url: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
+                    # Adds the bearer credential of the round under review to every request, because headers here are fixed.
+                    http_client: Intakt\Core\Review\Infrastructure\ReviewServerHttpClient

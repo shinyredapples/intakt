@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
-use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
@@ -23,11 +22,11 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireCallable;
 final readonly class ReviewerAgent implements Reviewer
 {
     /**
-     * @param Closure(Checkout): ToolboxInterface $toolboxes
+     * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
     public function __construct(
         private ReviewerPrompt $prompt,
-        #[AutowireCallable(service: ReviewerToolboxFactory::class, method: 'create')]
+        #[AutowireCallable(service: ReviewerMcpToolboxFactory::class, method: 'create')]
         private Closure $toolboxes,
         private ReviewerRuns $runs,
     ) {
@@ -36,8 +35,14 @@ final readonly class ReviewerAgent implements Reviewer
     #[Override]
     public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict
     {
+        $tools = new MalformedToolCalls(($this->toolboxes)($request));
+
+        // Before the model is asked, because a toolbox that cannot reach its server lists no tools and raises nothing, and a reviewer without them could approve code it never read.
+        if ([] === $tools->getTools()) {
+            return Verdict::noTools();
+        }
+
         $conversation = $this->runs->started($this->prompt->messagesFor($request->conversation, $request->brief));
-        $tools = new MalformedToolCalls(($this->toolboxes)($request->checkout));
         $agent = $this->runs->agent($this->prompt->fenced(new FaultTolerantToolbox($tools)), $platform, $model);
 
         $execution = $agent->call($conversation, [PlatformSubscriber::RESPONSE_FORMAT => Verdict::class]);
@@ -73,6 +78,8 @@ final readonly class ReviewerAgent implements Reviewer
             return $this->prompt->verdictIn($execution);
         } catch (MaxIterationsExceededException) {
             return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
+        } catch (ReviewServerLost) {
+            return Verdict::noTools();
         }
     }
 }
