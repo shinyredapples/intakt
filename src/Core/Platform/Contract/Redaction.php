@@ -69,6 +69,11 @@ final readonly class Redaction
     // Every spelling is allowed because JSON may write a character as itself, a short escape or a \u escape, with more backslashes per encoding.
     private function jsonSpellings(string $char): string
     {
+        // A plain ASCII character matches only as itself, so a long credential's pattern stays well under PCRE's compiled size.
+        if (!$this->jsonMayEscape($char)) {
+            return preg_quote($char, '~');
+        }
+
         $spellings = [in_array($char, ['"', '\\', '/'], true) ? '\\\\*'.preg_quote($char, '~') : preg_quote($char, '~')];
         if (isset(self::JSON_SHORT_ESCAPES[$char])) {
             $spellings[] = '\\\\+'.self::JSON_SHORT_ESCAPES[$char];
@@ -78,6 +83,12 @@ final readonly class Redaction
         }
 
         return '(?:'.implode('|', $spellings).')';
+    }
+
+    // Control characters, non-ASCII and the JSON_HEX_* characters are the ones json_encode may write as an escape.
+    private function jsonMayEscape(string $char): bool
+    {
+        return strlen($char) > 1 || ord($char) < 0x20 || str_contains('"\\/<>&\'', $char);
     }
 
     private function unicodeEscape(string $char): string
@@ -114,12 +125,11 @@ final readonly class Redaction
 
     private function endOfPrintRList(string $text, int $from, string $indent): int
     {
-        // print_r does not quote values, so only the indentation of the opening parenthesis tells its own closing one apart.
-        if (1 === preg_match('~\R'.preg_quote($indent, '~').'\)(?=\R|\z)~', $text, $close, PREG_OFFSET_CAPTURE, $from)) {
-            return $close[0][1] + strlen($close[0][0]);
-        }
+        // print_r does not quote values, so a value may hold a line that looks like the closing parenthesis; the last such line is at or after the real one.
+        preg_match_all('~\R'.preg_quote($indent, '~').'\)(?=\R|\z)~', $text, $closes, PREG_OFFSET_CAPTURE, $from);
+        $close = array_last($closes[0]);
 
-        return strlen($text);
+        return null === $close ? strlen($text) : $close[1] + strlen($close[0]);
     }
 
     private function endOfQuotedList(string $text, int $from, string $brackets): int

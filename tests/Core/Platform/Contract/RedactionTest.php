@@ -79,6 +79,15 @@ final class RedactionTest extends TestCase
         self::assertSame('[redacted]', trim(new Redaction()->redact($encoded, $credential), '"'));
     }
 
+    public function testItRedactsALongHeldCredentialAndKeepsTheRest(): void
+    {
+        $credential = substr(str_repeat('Ab3/+x9Q', 1000), 0, 3000);
+
+        $redacted = new Redaction()->redact('before '.$credential.' after', $credential);
+
+        self::assertSame('before [redacted] after', $redacted);
+    }
+
     public function testItKeepsTheHostOfAUrlWithUserinfo(): void
     {
         $redacted = new Redaction()->redact('clone https://deploy:hunter2@example.com/org/repo.git now');
@@ -162,7 +171,7 @@ final class RedactionTest extends TestCase
 
     public function testItRedactsAPrintRHeaderListPastAParenthesisLineInsideAValue(): void
     {
-        $dump = print_r(['Authorization' => ["first\n)\ncredential-tail"], 'Accept' => ['text/html']], true);
+        $dump = print_r(['Authorization' => ["first\n)\ncredential-tail"], 'Accept' => 'text/html'], true);
 
         $redacted = new Redaction()->redact($dump);
 
@@ -170,9 +179,41 @@ final class RedactionTest extends TestCase
         self::assertStringContainsString('text/html', $redacted);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function printRValuesMimickingTheClosingLine(): iterable
+    {
+        yield 'close line at the list indent' => ["first\n        )\ncredential-tail"];
+        yield 'close line at the list indent then a blank line' => ["first\n        )\n\ncredential-tail"];
+        yield 'close line at the list indent mimicking the next key' => ["first\n        )\n\n    [Accept] => credential-tail"];
+    }
+
+    #[DataProvider('printRValuesMimickingTheClosingLine')]
+    public function testItRedactsAPrintRHeaderListPastAValueThatMimicsItsClosingLine(string $value): void
+    {
+        $dump = print_r(['Authorization' => [$value], 'Accept' => 'text/html'], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringContainsString('[Accept] => text/html', $redacted);
+    }
+
+    public function testItRedactsAPrintRHeaderListTogetherWithAListThatFollowsIt(): void
+    {
+        $dump = print_r(['Authorization' => ["first\n        )\ncredential-tail"], 'Accept' => ['text/html']], true);
+
+        $redacted = new Redaction()->redact($dump);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringNotContainsString('text/html', $redacted);
+        self::assertStringEndsWith("[redacted]\n\n)\n", $redacted);
+    }
+
     public function testItRedactsAPrintRHeaderListPastANestedArray(): void
     {
-        $dump = print_r(['Authorization' => [['first'], 'credential-tail'], 'Accept' => ['text/html']], true);
+        $dump = print_r(['Authorization' => [['first'], 'credential-tail'], 'Accept' => 'text/html'], true);
 
         $redacted = new Redaction()->redact($dump);
 
@@ -188,7 +229,7 @@ final class RedactionTest extends TestCase
 
     public function testItRedactsAHeaderListPrintedWithPrintR(): void
     {
-        $dump = print_r(['Authorization' => ['Bearer abc123xyz'], 'Accept' => ['text/html']], true);
+        $dump = print_r(['Authorization' => ['Bearer abc123xyz'], 'Accept' => 'text/html'], true);
 
         $redacted = new Redaction()->redact($dump);
 
