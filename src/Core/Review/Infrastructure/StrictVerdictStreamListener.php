@@ -54,7 +54,7 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
             return;
         }
 
-        // Raised as a cut-off, because a stream the provider did not report as cut off can still end inside its document, and half a verdict is no verdict.
+        // Raised as a cut-off, because a stream the provider did not report as cut off can still end before or inside its document, and no or half a verdict is no verdict.
         if ($this->unfinished()) {
             throw new IncompleteStreamException('The reviewer stream ended before its answer was complete.');
         }
@@ -64,6 +64,36 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
 
     private function unfinished(): bool
     {
-        return !json_validate($this->answer) && null !== PartialJsonParser::parse($this->answer);
+        if ('' === trim($this->answer)) {
+            return true;
+        }
+
+        return $this->stillOpen() && null !== PartialJsonParser::parse($this->answer);
+    }
+
+    // Scanned here because a closed document with a syntax error is a refused verdict, not a cut-off, and Symfony AI's parser repairs both alike.
+    private function stillOpen(): bool
+    {
+        $depth = 0;
+        $inString = false;
+        $escaped = false;
+
+        foreach (str_split($this->answer) as $char) {
+            if ($inString) {
+                $inString = $escaped || '"' !== $char;
+                $escaped = !$escaped && '\\' === $char;
+
+                continue;
+            }
+
+            $inString = '"' === $char;
+            $depth += match ($char) {
+                '{', '[' => 1,
+                '}', ']' => -1,
+                default => 0,
+            };
+        }
+
+        return $inString || $depth > 0;
     }
 }

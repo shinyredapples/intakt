@@ -51,6 +51,7 @@ use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -195,6 +196,39 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->expectException(IncompleteStreamException::class);
 
         $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[]'));
+    }
+
+    public function testAStreamWithOnlyItsUsageFailsTheCallAsAnIncompleteAnswer(): void
+    {
+        $usageOnly = new StreamResult((static function (): Generator {
+            yield new TokenUsage(promptTokens: 100);
+        })());
+
+        $this->expectException(IncompleteStreamException::class);
+
+        $this->review('Add a cart.', [], $usageOnly);
+    }
+
+    public function testAStreamWithAnEmptyAnswerFailsTheCallAsAnIncompleteAnswer(): void
+    {
+        $this->expectException(IncompleteStreamException::class);
+
+        $this->review('Add a cart.', [], $this->streamed(' ', ''));
+    }
+
+    public function testAStreamedDocumentThatIsClosedButNotValidEndsAsChanges(): void
+    {
+        $verdict = $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve","findings":[],', '"resolved":[],"follow_ups":[],}'));
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAStreamThatEndsInsideAStringOfItsAnswerFailsTheCallAsAnIncompleteAnswer(): void
+    {
+        $this->expectException(IncompleteStreamException::class);
+
+        $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve","findings":[],"resolved":[],"follow_ups":["a \"}', ']'));
     }
 
     public function testAStreamedAnswerThatIsNotAVerdictEndsAsChanges(): void
