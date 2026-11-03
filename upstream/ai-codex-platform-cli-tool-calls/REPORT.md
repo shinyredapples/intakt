@@ -18,3 +18,13 @@ A `TextResult` with the final agent message, since no tool call is left for the 
 ## Effect in Intakt
 
 `src/Core/Ai/Infrastructure/CompletedCodexTurn.php` drops `tool_calls` from the raw result before the converter sees it.
+
+## Upstream status
+
+Checked on 2026-11-02.
+
+- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-codex-platform-cli-tool-calls`.
+- **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-codex-platform` 937734bb71b9, `symfony/ai-platform` 17c452fa350f): `still fails  ai-codex-platform-cli-tool-calls`.
+- **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #2015 (closed pull request, adds tool-call trace metadata from the same `item.started` and `item.completed` events), #1826 (closed pull request that added the bridge), #2712 and #2713 (open, JSON Lines split on `PHP_EOL` in `RawProcessResult`).
+- **Searches** (`symfony/ai` issues and pull requests, open and closed): `Codex tool_calls`, `Codex item.completed`, `label:Platform Codex`, `RawProcessResult`.
+- **Decision:** `ready to file`.

@@ -18,3 +18,13 @@ A turn that never completed passes for a complete answer
 ## Effect in Intakt
 
 `src/Core/Ai/Infrastructure/CompletedCodexTurn.php` wraps the bridge's raw result and raises `IncompleteStreamException` when an agent message comes without the usage of `turn.completed`.
+
+## Upstream status
+
+Checked on 2026-11-02.
+
+- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-codex-platform-cut-off-stream`.
+- **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-codex-platform` 937734bb71b9, `symfony/ai-platform` 17c452fa350f): `still fails  ai-codex-platform-cut-off-stream`.
+- **Existing issue or pull request:** none found. Candidates in `symfony/ai`, none the same bug: #2475 (closed pull request, adds the usage of `turn.completed` to streamed results only), #2579 (open question about a commentary channel), #1826 (closed pull request that added the bridge).
+- **Searches** (`symfony/ai` issues and pull requests, open and closed): `turn.completed`, `Codex agent_message`, `label:Platform Codex`, `IncompleteStreamException`.
+- **Decision:** `ready to file`.
