@@ -22,6 +22,11 @@ final class EntrypointProcessesTest extends TestCase
     // Longer than the workers test waits, because the consumers boot the kernel after the migration.
     private const int SECONDS_TO_WAIT = 90;
 
+    // POSIX numbers rather than SIGKILL, SIGSTOP and SIGTERM, because those constants exist only with pcntl and the CI image has none.
+    private const int KILL = 9;
+    private const int STOP = 19;
+    private const int TERMINATE = 15;
+
     private Process $entrypoint;
 
     private string $directory;
@@ -83,7 +88,7 @@ final class EntrypointProcessesTest extends TestCase
         $before = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         $killed = (int) array_search($transport, $before, true);
 
-        posix_kill($killed, SIGKILL);
+        posix_kill($killed, self::KILL);
         $after = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], $killed);
 
         self::assertArrayNotHasKey($killed, $after);
@@ -103,7 +108,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
-        $this->entrypoint->signal(SIGTERM);
+        $this->entrypoint->signal(self::TERMINATE);
         $this->entrypoint->wait();
 
         self::assertSame(0, $this->entrypoint->getExitCode());
@@ -114,11 +119,11 @@ final class EntrypointProcessesTest extends TestCase
     {
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
         // A stopped process cannot act on SIGTERM, like a consumer whose SIGTERM arrived before its worker existed (upstream/messenger-consume-ignores-early-sigterm).
-        posix_kill((int) array_search('async', $processes, true), SIGSTOP);
+        posix_kill((int) array_search('async', $processes, true), self::STOP);
         // A timeout, so an entrypoint without the grace period fails here instead of waiting for that consumer forever.
         $this->entrypoint->setTimeout(self::SECONDS_TO_WAIT * 2);
 
-        $this->entrypoint->signal(SIGTERM);
+        $this->entrypoint->signal(self::TERMINATE);
         $this->entrypoint->wait();
 
         self::assertSame(0, $this->entrypoint->getExitCode());
@@ -129,7 +134,7 @@ final class EntrypointProcessesTest extends TestCase
     {
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
-        posix_kill((int) array_search('web', $processes, true), SIGKILL);
+        posix_kill((int) array_search('web', $processes, true), self::KILL);
         $this->entrypoint->wait();
 
         self::assertSame(137, $this->entrypoint->getExitCode());
