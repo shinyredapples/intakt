@@ -171,11 +171,11 @@ final class EntrypointProcessesTest extends TestCase
     public function testStoppingTheEntrypointBetweenStartingAChildAndRecordingItStopsThatChildToo(): void
     {
         // Bash runs a pending trap between two commands, so a SIGTERM sent by this DEBUG trap lands after "$1" & and before running[$!]=$1 of the first child, whose pid the trap notes: the order in which a stop that only knew recorded children left it running.
-        $forcedOrder = <<<'BASH'
-            set -T
-            trap 'if [[ "$BASH_COMMAND" == "running[\$!]=\$1" ]]; then trap - DEBUG; echo "$!" >> "$CHILD_STARTED_BEFORE_THE_STOP"; kill -TERM "$$"; fi' DEBUG
-            source docker/entrypoint.sh
-            BASH;
+        $forcedOrder = <<<'BASH_WRAP'
+        set -T
+        trap 'if [[ "$BASH_COMMAND" == "running[\$!]=\$1" ]]; then trap - DEBUG; echo "$!" >> "$CHILD_STARTED_BEFORE_THE_STOP"; kill -TERM "$$"; fi' DEBUG
+        source docker/entrypoint.sh
+        BASH_WRAP;
         $this->startEntrypoint(['bash', '-c', $forcedOrder], [
             'PATH' => $this->stubProgramsThatSleep().':'.getenv('PATH'),
             'CHILD_STARTED_BEFORE_THE_STOP' => $this->childrenStartedBeforeTheStopFile(),
