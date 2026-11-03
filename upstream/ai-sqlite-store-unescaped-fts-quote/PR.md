@@ -30,7 +30,7 @@ Tests, in `StoreTest` and `VecStoreTest` (the latter skipped where the sqlite-ve
 - `testQueryTextIgnoresNulBytesInTerms`: a query for `fo\0x` finds the document `fox` finds, and raises nothing.
 - `testQueryTextKeepsQuotedOperatorsInsideThePhrase`: `alpha" OR "secret` does not match a document that contains only `secret`.
 
-All three fail without the change.
+The three `StoreTest` tests fail without the change. The `VecStoreTest` copies were not run without it, because the sqlite-vec extension was not available.
 
 Reproduction:
 
