@@ -28,9 +28,9 @@ final readonly class BlockReviewerOfFailedMessage
             return;
         }
 
-        // Every failure (a refused ledger event, a row that is gone, a database error) is logged instead of thrown, because the worker does not catch what a failure listener throws: it would stop before parking the message, and the message would come back again and again.
         try {
             $roundId = $this->leases->recordBlocked($message->reviewerId);
+            // Boundary: logs every failure instead of throwing because the worker does not catch what a failure listener throws, so it would stop before parking the message.
         } catch (Throwable $failure) {
             $this->logger->error('The reviewer of a failed message was not blocked; its message stays in the failure transport.', ['reviewer' => $message->reviewerId, 'exception' => $failure]);
 
