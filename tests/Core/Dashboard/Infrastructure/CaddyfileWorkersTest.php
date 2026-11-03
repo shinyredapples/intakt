@@ -24,6 +24,13 @@ final class CaddyfileWorkersTest extends TestCase
     // Longer than the hub test waits, because the workers boot the kernel and may warm its cache first.
     private const int SECONDS_TO_WAIT = 60;
 
+    // One megabyte, because a worker holding its booted kernel (about 5 MB) is past it and a new worker before its first request (about 0.5 MB) is not.
+    private const int CEILING_MEGABYTES = 1;
+
+    private const int CEILING_BYTES = self::CEILING_MEGABYTES * 1_048_576;
+
+    private const int SECONDS_TO_REPLACE = 10;
+
     private string $frankenphp;
 
     private Process $server;
@@ -36,7 +43,10 @@ final class CaddyfileWorkersTest extends TestCase
 
     private HttpClientInterface $client;
 
-    protected function setUp(): void
+    /**
+     * @param array<string, string> $extraEnvironment
+     */
+    private function start(array $extraEnvironment = []): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');
 
@@ -45,13 +55,6 @@ final class CaddyfileWorkersTest extends TestCase
         }
 
         $this->frankenphp = $frankenphp;
-    }
-
-    /**
-     * @param array<string, string> $extraEnvironment
-     */
-    private function start(array $extraEnvironment = []): void
-    {
         $port = $this->freePort();
         $this->origin = 'http://localhost:'.$port;
         $this->admin = 'localhost:'.$this->freePort();
@@ -95,7 +98,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     public function testAWorkerPastTheMemoryCeilingIsReplacedWithoutAFailedRequest(): void
     {
-        $this->start(['WORKER_MEMORY_CEILING_MB' => '1']);
+        $this->start(['WORKER_MEMORY_CEILING_MB' => (string) self::CEILING_MEGABYTES]);
 
         $statuses = [];
 
@@ -107,6 +110,8 @@ final class CaddyfileWorkersTest extends TestCase
 
         self::assertSame(array_fill(0, 10, 200), $statuses);
         self::assertTrue($this->server->isRunning());
+        self::assertSame(10, $this->requestsPerWorkerFile()['index.php']);
+        self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheServingAppWorkers());
     }
 
     public function testTheMcpRouteIsServedByTheMcpWorker(): void
@@ -133,11 +138,9 @@ final class CaddyfileWorkersTest extends TestCase
     // Counted by the file each thread runs, because the admin API names worker threads by file, not by worker name.
     private function requestsPerWorkerFile(): array
     {
-        $threads = $this->client->request('GET', 'http://'.$this->admin.'/frankenphp/threads')->toArray()['ThreadDebugStates'] ?? [];
-        self::assertIsArray($threads);
         $counts = ['index.php' => 0, 'mcp.php' => 0];
 
-        foreach (array_filter($threads, is_array(...)) as $thread) {
+        foreach ($this->threads() as $thread) {
             $name = $thread['Name'] ?? null;
             $requests = $thread['RequestCount'] ?? null;
 
@@ -147,6 +150,70 @@ final class CaddyfileWorkersTest extends TestCase
         }
 
         return $counts;
+    }
+
+    // The thread's RequestCount survives a replacement, so the sign is memory: a replaced worker has not booted the kernel yet. Polled, because the worker ends only after its answer is sent.
+    private function bytesHeldByTheServingAppWorkers(): int
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_REPLACE * 1_000_000_000;
+
+        do {
+            $held = $this->largestServingAppWorkerMemory();
+
+            if ($held < self::CEILING_BYTES) {
+                return $held;
+            }
+
+            usleep(100_000);
+        } while (hrtime(true) < $deadline);
+
+        return $held;
+    }
+
+    private function largestServingAppWorkerMemory(): int
+    {
+        return self::largestMemoryOfServingAppWorkers($this->threads());
+    }
+
+    /**
+     * @param list<array<mixed>> $threads
+     */
+    // No serving worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
+    public static function largestMemoryOfServingAppWorkers(array $threads): int
+    {
+        $held = null;
+
+        foreach ($threads as $thread) {
+            $name = $thread['Name'] ?? null;
+            $requests = $thread['RequestCount'] ?? null;
+            $memory = $thread['MemoryUsage'] ?? null;
+
+            if (is_string($name) && str_starts_with($name, 'Worker') && 'index.php' === basename($name) && is_int($requests) && $requests > 0 && is_int($memory)) {
+                $held = max($held ?? 0, $memory);
+            }
+        }
+
+        return $held ?? PHP_INT_MAX;
+    }
+
+    public function testAMissingMemoryReadingIsNotTakenForAReplacedWorker(): void
+    {
+        $thread = ['Name' => 'Worker /app/public/index.php', 'RequestCount' => 10];
+
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([$thread]));
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([]));
+        self::assertSame(526_224, self::largestMemoryOfServingAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function threads(): array
+    {
+        $threads = $this->client->request('GET', 'http://'.$this->admin.'/frankenphp/threads')->toArray()['ThreadDebugStates'] ?? [];
+        self::assertIsArray($threads);
+
+        return array_values(array_filter($threads, is_array(...)));
     }
 
     private function freePort(): int

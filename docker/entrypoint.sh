@@ -4,8 +4,13 @@ set -euo pipefail
 # Secrets arrive at run time (-e or --env-file), never in the image; fail here with a clear message instead of in the hub.
 : "${APP_SECRET:?set APP_SECRET}"
 : "${MERCURE_JWT_SECRET:?set MERCURE_JWT_SECRET}"
+# The Caddyfile reads MERCURE_JWT_ISSUER without a default, so a missing one is named here instead of ending the web process silently.
+: "${MERCURE_JWT_ISSUER:?set MERCURE_JWT_ISSUER}"
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+
+# Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.
+frankenphp validate --config Caddyfile --adapter caddyfile
 
 web() {
     exec frankenphp run --config Caddyfile --adapter caddyfile

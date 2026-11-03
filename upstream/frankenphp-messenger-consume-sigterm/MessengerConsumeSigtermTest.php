@@ -13,7 +13,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// The order is forced with marker files: the handler is in flight (started), then SIGTERM, then the handler is released. Plain php is the control.
+// The order is forced with marker files: in flight, the handler starts (started), then SIGTERM, then the handler is released (release); idle, the test waits for worker-started before it sends SIGTERM. Plain php is the control.
 #[CoversNothing]
 final class MessengerConsumeSigtermTest extends TestCase
 {

@@ -35,6 +35,7 @@ use Intakt\Tests\Core\Review\NeverStopped;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -70,6 +71,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Checkout::class)]
 final class ReviewerOverMcpTest extends KernelTestCase
 {
+    use AssertsLoggedErrors;
+
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
     private ReviewRound $round;
@@ -160,6 +163,8 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+        self::assertLoggedErrors(8, 'Transport error');
+        self::assertLoggedError('error', 'Failed to list the tools of MCP server "review", it contributes none for the next 60 seconds.');
     }
 
     public function testAReviewThatLosesItsServerAfterListingTheToolsIsBlockedInsteadOfApproved(): void
@@ -173,6 +178,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+        self::assertLoggedErrors(2, 'Transport error');
     }
 
     #[DataProvider('failedAnswers')]

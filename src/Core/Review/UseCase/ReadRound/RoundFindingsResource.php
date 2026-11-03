@@ -8,6 +8,8 @@ use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Mcp\Capability\Attribute\McpResourceTemplate;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
+use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\SerializerInterface;
 
 // The text of the findings comes from code under review, so a client treats it as data and never as instructions.
 #[McpResourceTemplate(
@@ -22,6 +24,8 @@ final readonly class RoundFindingsResource
     public function __construct(
         private ReadableRounds $rounds,
         private StoredFindings $findings,
+        #[Target('stored')]
+        private SerializerInterface $serializer,
     ) {
     }
 
@@ -29,6 +33,6 @@ final readonly class RoundFindingsResource
     {
         $round = $this->rounds->forResource($roundId, $uri);
 
-        return json_encode($this->findings->reportedIn($round), JSON_THROW_ON_ERROR);
+        return $this->serializer->serialize($this->findings->reportedIn($round), 'json');
     }
 }

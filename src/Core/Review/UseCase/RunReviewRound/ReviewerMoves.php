@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Workflow\WorkflowInterface;
 
 // Each move of a reviewer and the ledger event that reports it, together, so neither is ever stored without the other.
@@ -19,6 +20,8 @@ final readonly class ReviewerMoves
         #[Target('reviewer')]
         private WorkflowInterface $machine,
         private RoundLedger $ledger,
+        #[Target('stored')]
+        private SerializerInterface $serializer,
     ) {
     }
 
@@ -31,7 +34,7 @@ final readonly class ReviewerMoves
 
     public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): void
     {
-        $reviewer->recordVerdict($verdict, $substitute);
+        $reviewer->recordVerdict($this->serializer->serialize($verdict, 'json'), $substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
 

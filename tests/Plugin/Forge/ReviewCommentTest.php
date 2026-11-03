@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\Forge;
 
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReviewComment::class)]
 #[CoversClass(ReviewToken::class)]
 #[CoversClass(JobCredentials::class)]
+#[UsesClass(Redaction::class)]
 final class ReviewCommentTest extends TestCase
 {
     private const string TOKEN = 'round-7_token-0123456789';
