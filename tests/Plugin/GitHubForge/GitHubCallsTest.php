@@ -61,15 +61,16 @@ final class GitHubCallsTest extends TestCase
     {
         $sent = [];
         $calls = $this->callsAnswering(static function (string $method, string $url, array $options) use (&$sent): ResponseInterface {
-            /** @var array{normalized_headers: array{authorization: list<string>}} $options */
-            $sent[] = $options['normalized_headers']['authorization'][0];
+            $headers = $options['normalized_headers'];
+            self::assertIsArray($headers);
+            $sent[] = (array) ($headers['authorization'] ?? []);
 
             return new MockResponse('{}');
         });
 
         $calls->asInstallation('GET', 'https://api.github.com/installation/repositories', ['auth_bearer' => self::SECRET]);
 
-        self::assertSame(['Authorization: Bearer '.self::SECRET], $sent);
+        self::assertSame([['Authorization: Bearer '.self::SECRET]], $sent);
     }
 
     private function callsAnswering(callable $answer): GitHubCalls
