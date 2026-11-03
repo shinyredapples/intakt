@@ -96,7 +96,7 @@ final readonly class LogRecords
      */
     private function whileLocked(Closure $change): mixed
     {
-        // One lock from the read to the rewrite, or a record another process appends in between is lost.
+        // One lock from the read to the rewrite, because a record another process appends in between would otherwise be lost.
         $handle = fopen($this->file, 'c+');
         if (false === $handle || !flock($handle, LOCK_EX)) {
             throw new RuntimeException('The test log records file could not be locked.');

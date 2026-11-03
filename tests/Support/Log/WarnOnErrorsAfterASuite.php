@@ -14,7 +14,7 @@ final readonly class WarnOnErrorsAfterASuite implements FinishedSubscriber
     {
     }
 
-    // An error from tearDownAfterClass is named with its own class here, not blamed on the first test of the next one.
+    // Checked when a class finishes, so an error from tearDownAfterClass is named with its own class, not blamed on the next class's first test.
     public function notify(Finished $event): void
     {
         foreach ($this->records->takeErrors() as $record) {

@@ -13,15 +13,15 @@ use PHPUnit\Runner\Extension\ParameterCollection;
 use PHPUnit\TextUI\Configuration\Configuration;
 use Psr\Log\NullLogger;
 
-final class LogsAnErrorAfterTheLastSuiteExtension implements Extension
+final class LogsAnErrorAfterTheLastSuiteExtension implements Extension, ExecutionFinishedSubscriber
 {
     public function bootstrap(Configuration $configuration, Facade $facade, ParameterCollection $parameters): void
     {
-        $facade->registerSubscriber(new class implements ExecutionFinishedSubscriber {
-            public function notify(ExecutionFinished $event): void
-            {
-                RecordingLoggerFactory::create(new NullLogger())->error('Disk on fire after the last suite.');
-            }
-        });
+        $facade->registerSubscriber($this);
+    }
+
+    public function notify(ExecutionFinished $event): void
+    {
+        RecordingLoggerFactory::create(new NullLogger())->error('Disk on fire after the last suite.');
     }
 }

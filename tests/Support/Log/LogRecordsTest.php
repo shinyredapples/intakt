@@ -99,6 +99,7 @@ final class LogRecordsTest extends TestCase
         fclose($lock);
         pcntl_waitpid($removal, $status);
 
+        self::assertIsInt($status);
         self::assertSame(0, pcntl_wexitstatus($status));
         self::assertSame([['level' => LogLevel::ERROR, 'message' => 'Smoke in the hall.']], $this->records->takeErrors());
     }
@@ -137,7 +138,7 @@ final class LogRecordsTest extends TestCase
         exit(1);
     }
 
-    // The kernel names what a process sleeps on, which forces the order without guessing a delay: the removal has started and waits for the lock.
+    // Asks the kernel what the removal sleeps on, because that forces the order without guessing a delay.
     private function waitUntilItWaitsForTheLock(int $removal): void
     {
         for ($attempt = 0; $attempt < 500; ++$attempt) {
