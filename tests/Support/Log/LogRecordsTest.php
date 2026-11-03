@@ -17,46 +17,76 @@ final class LogRecordsTest extends TestCase
 {
     use AssertsLoggedErrors;
 
+    private LogRecords $records;
+
+    protected function setUp(): void
+    {
+        $this->records = new LogRecords((string) tempnam(sys_get_temp_dir(), 'intakt-log-records-test-'));
+    }
+
     protected function tearDown(): void
     {
-        LogRecords::takeErrors();
+        $this->records->discard();
     }
 
     public function testALoggedErrorTheTestAssertsIsRemovedFromTheRecord(): void
     {
-        new RecordingLogger()->error('Disk on fire.');
+        $this->runLogger()->error('Disk on fire.');
 
-        self::assertLoggedError(LogLevel::ERROR, 'Disk on fire.');
+        self::assertTrue($this->records->remove(LogLevel::ERROR, 'Disk on fire.'));
 
-        self::assertSame([], LogRecords::takeErrors());
+        self::assertSame([], $this->records->takeErrors());
     }
 
     public function testAnErrorThatWasNotLoggedFailsTheAssertion(): void
     {
         $this->expectException(AssertionFailedError::class);
 
-        self::assertLoggedError(LogLevel::ERROR, 'Disk on fire.');
+        self::assertLoggedError(LogLevel::ERROR, 'Disk on fire, never logged.');
     }
 
     public function testAnErrorWithAnotherMessageStaysInTheRecord(): void
     {
-        new RecordingLogger()->error('Disk on fire.');
+        $this->runLogger()->error('Disk on fire.');
 
-        self::assertFalse(LogRecords::remove(LogLevel::ERROR, 'Disk'));
-        self::assertSame([['level' => LogLevel::ERROR, 'message' => 'Disk on fire.']], LogRecords::takeErrors());
+        self::assertFalse($this->records->remove(LogLevel::ERROR, 'Disk'));
+        self::assertSame([['level' => LogLevel::ERROR, 'message' => 'Disk on fire.']], $this->records->takeErrors());
     }
 
     public function testTheSourceLineOfAnUncaughtExceptionIsNotPartOfTheMessage(): void
     {
-        new RecordingLogger()->error('Uncaught PHP Exception X: "boom" at Y.php line 12');
+        $this->runLogger()->error('Uncaught PHP Exception X: "boom" at Y.php line 12');
 
-        self::assertLoggedError(LogLevel::ERROR, 'Uncaught PHP Exception X: "boom"');
+        self::assertTrue($this->records->remove(LogLevel::ERROR, 'Uncaught PHP Exception X: "boom"'));
     }
 
     public function testAWarningIsNotReportedAsAnError(): void
     {
-        new RecordingLogger()->warning('Disk is warm.');
+        $this->runLogger()->warning('Disk is warm.');
 
-        self::assertSame([], LogRecords::takeErrors());
+        self::assertSame([], $this->records->takeErrors());
+    }
+
+    public function testAMessageOverSeveralLinesStaysOneRecord(): void
+    {
+        $this->runLogger()->error("Disk on fire.\nCall the owner.");
+
+        self::assertSame([['level' => LogLevel::ERROR, 'message' => "Disk on fire.\nCall the owner."]], $this->records->takeErrors());
+    }
+
+    public function testAnErrorTheTestAssertsThroughTheHelperIsRemovedFromTheRunsRecords(): void
+    {
+        $records = LogRecords::ofThisRun();
+        self::assertNotNull($records);
+        new RecordingLogger($records)->error('Disk on fire in this run.');
+
+        self::assertLoggedError(LogLevel::ERROR, 'Disk on fire in this run.');
+
+        self::assertSame([], $records->takeErrors());
+    }
+
+    private function runLogger(): RecordingLogger
+    {
+        return new RecordingLogger($this->records);
     }
 }

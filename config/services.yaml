@@ -103,7 +103,7 @@ services:
 
 when@test:
     imports:
-        # The logger records into memory, so a test run prints no log lines and an unasserted error fails its test.
+        # In a PHPUnit run the logger records into the run's file, so the run prints no log lines and an unasserted error fails its test.
         - { resource: '../tests/Support/services.yaml', ignore_errors: not_found }
         # Handlers that prove the bus separation live in tests/ (src/ has no handler yet); an installed instance ships without tests/.
         - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }

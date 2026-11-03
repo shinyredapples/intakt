@@ -9,11 +9,15 @@ use Stringable;
 
 final class RecordingLogger extends AbstractLogger
 {
+    public function __construct(private readonly LogRecords $records)
+    {
+    }
+
     /**
      * @param array<mixed> $context
      */
     public function log(mixed $level, string|Stringable $message, array $context = []): void
     {
-        LogRecords::add(is_string($level) ? $level : get_debug_type($level), (string) $message);
+        $this->records->add(is_string($level) ? $level : get_debug_type($level), (string) $message);
     }
 }

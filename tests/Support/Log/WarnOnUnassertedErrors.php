@@ -8,11 +8,15 @@ use PHPUnit\Event\Facade;
 use PHPUnit\Event\Test\Finished;
 use PHPUnit\Event\Test\FinishedSubscriber;
 
-final class WarnOnUnassertedErrors implements FinishedSubscriber
+final readonly class WarnOnUnassertedErrors implements FinishedSubscriber
 {
+    public function __construct(private LogRecords $records)
+    {
+    }
+
     public function notify(Finished $event): void
     {
-        foreach (LogRecords::takeErrors() as $record) {
+        foreach ($this->records->takeErrors() as $record) {
             // A subscriber cannot fail a test, so a PHPUnit warning names it and failOnWarning fails the run.
             Facade::emitter()->testTriggeredPhpunitWarning($event->test(), sprintf('Unasserted %s log record: "%s"', $record['level'], $record['message']));
         }

@@ -1,4 +1,7 @@
 services:
-    # Records into memory instead of the fallback logger's stderr, so a test run prints no log lines and the extension can fail on an unexpected error.
-    logger:
-        class: Intakt\Tests\Support\Log\RecordingLogger
+    # Records into the PHPUnit run's file instead of the fallback logger's stderr; outside a PHPUnit run the fallback logger stays, so an instance keeps its server log.
+    intakt.test.recording_logger:
+        class: Psr\Log\LoggerInterface
+        decorates: logger
+        factory: ['Intakt\Tests\Support\Log\RecordingLoggerFactory', 'create']
+        arguments: ['@.inner']
