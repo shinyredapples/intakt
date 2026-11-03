@@ -54,7 +54,7 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
             return;
         }
 
-        // A stream that ended without the provider noticing still leaves its document unfinished, and that is a cut-off answer, never a verdict.
+        // Raised as a cut-off, because a stream the provider did not report as cut off can still end inside its document, and half a verdict is no verdict.
         if ($this->unfinished()) {
             throw new IncompleteStreamException('The reviewer stream ended before its answer was complete.');
         }
