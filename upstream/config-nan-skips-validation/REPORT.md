@@ -4,17 +4,17 @@ Draft, not posted. Versions: `symfony/config` v8.1.5, PHP 8.5.12.
 
 ## What happens
 
-`BaseNode::normalize()` and `BaseNode::finalize()` detect a placeholder with `$value !== $placeholders = self::resolvePlaceholderValue($value)`. For `NAN`, `resolvePlaceholderValue()` returns the value unchanged, but `NAN !== NAN` is true, so the node takes the placeholder branch: it iterates over a float (a `foreach() argument must be of type array|object` warning) and returns the value without its type check, `min()`/`max()` or any `validate()` closure. YAML's `.NaN` reaches a `floatNode('ceiling')->min(1)->max(100)` this way:
+`BaseNode::normalize()` and `BaseNode::finalize()` detect a placeholder with `$value !== $placeholders = self::resolvePlaceholderValue($value)`. For `NAN`, `resolvePlaceholderValue()` returns the value unchanged, but `NAN !== NAN` is true, so the node takes the placeholder branch: it iterates over a float (a `foreach() argument must be of type array|object` warning) and returns the value without its type check or any `validate()` closure. YAML's `.NaN` reaches a `floatNode('ceiling')->min(1)->max(100)` this way:
 
 ```
 NaN passed min, max and the validation closure: NAN
 ```
 
-The same holds for every ancestor array node, since an array holding `NAN` is not identical to itself either. Only `beforeNormalization()` closures still run.
+`min()` and `max()` would not refuse it after a fix either, since `NAN < min` and `NAN > max` are both false; only a `validate()` closure catches it. The parent array nodes are not affected: `resolvePlaceholderValue()` returns the same array, which PHP treats as identical to itself even when it holds a NaN. Only `beforeNormalization()` closures still run.
 
 ## Expected
 
-The placeholder check compares in a way that holds for NaN (for example `is_float($value) && is_nan($value)` taken as no placeholder), so `min()`/`max()` and validation closures see the value and refuse it.
+The placeholder check runs only for strings (`resolvePlaceholderValue()` resolves nothing else), so the type check and the validation closures see a NaN like any other float.
 
 ## Effect in Intakt
 
@@ -29,3 +29,5 @@ Checked on 2026-11-02.
 - **Existing issue or pull request:** none found. Candidates in `symfony/symfony`, none the same bug: #23888 (closed pull request of 2017, validation of env vars in config, where `resolvePlaceholderValue()` comes from), #65906 (closed pull request, S/MIME cipher configuration). The `NaN config` hits are YAML and release pull requests.
 - **Searches** (`symfony/symfony` issues and pull requests, open and closed): `NaN config`, `resolvePlaceholderValue`, `label:Config NAN`, `BaseNode NAN`.
 - **Decision:** `ready to file`.
+- **Owner review (2026-11-03, symfony/symfony 6.4 to 8.2):** an issue. The fix looks small: guard the four `resolvePlaceholderValue()` comparisons in `BaseNode` with `\is_string($value)`. "min()/max() refuse it" is dropped (only a `validate()` closure catches a NaN after the fix). The owner session expected a misleading "A dynamic value is not compatible" error from the root when the NaN has non-NaN siblings; that does not reproduce on v8.1.5 or 8.2.x-dev (0d10198cc52a) with scalar, prototyped or nested array siblings, in one config or two (scratch scripts, 2026-11-03): the NaN passes silently in every case, so the issue says that. `reproduce.php` also fails with `symfony/config` v6.4.49 and v7.4.22.
+- **Status:** `ready to file`; the issue text is `ISSUE.md`.

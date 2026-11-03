@@ -12,6 +12,8 @@ TypeError instead of NotNormalizableValueException: Basket::__construct(): Argum
 
 A list of strings in the same position (`@param list<string>`) is refused with a `NotNormalizableValueException` as expected.
 
+The trigger is narrow: an object where the list is expected, which needs `JsonDecode::ASSOCIATIVE => false` or data built with objects in it (`['items' => new DateTimeImmutable()]` fails the same way). `#[MapRequestPayload]` and the default JSON decoding produce arrays and are not affected.
+
 ## Expected
 
 A `NotNormalizableValueException` saying the attribute expects an array.
@@ -29,3 +31,5 @@ Checked on 2026-11-02.
 - **Existing issue or pull request:** none found. Candidates in `symfony/symfony`, none the same bug: #64444 (closed issue, an `iterable` constructor argument not denormalized after 7.4.10), #42226 (closed issue, the `object` type), #60036 (closed issue, nested lists), #47220 (closed issue, empty list and empty object), #47012 (closed issue, default context).
 - **Searches** (`symfony/symfony` issues and pull requests, open and closed): `label:Serializer stdClass TypeError`, `validateAndDenormalize stdClass`, `ArrayDenormalizer stdClass`, `label:Serializer "JsonDecode::ASSOCIATIVE"`, `serializer list object TypeError NotNormalizableValueException`.
 - **Decision:** `ready to file`.
+- **Owner review (2026-11-03, symfony/symfony 6.4 to 8.2):** an issue, with the narrow trigger stated (`JsonDecode::ASSOCIATIVE => false` or pre-built objects; `MapRequestPayload` users are not affected). The fix looks small: the fallback `TypeIdentifier::OBJECT => \is_object($data)` check accepts any object for the class `Item[]`. `reproduce.php` also fails with `symfony/serializer` v6.4.49 and v7.4.22 (scratch projects, 2026-11-03).
+- **Status:** `ready to file`; the issue text is `ISSUE.md`.

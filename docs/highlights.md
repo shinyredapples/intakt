@@ -127,11 +127,24 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 ## Found in the beta
 
-Each entry is an isolated PHPUnit reproduction under `upstream/<slug>/` at pinned versions. The owner approves each report before it is filed.
+Each entry is an isolated reproduction under `upstream/<slug>/` at pinned versions (PHPUnit tests or a `reproduce.php` script). The owner approves each report before it is filed. **Upstream issue** gives the decision from the folder's `REPORT.md` and where its text is: `ISSUE.md` (a new issue), `COMMENT.md` (a comment on an existing one) or a fix pull request.
 
-| Probe | Status | Reproduction | Upstream issue |
+| Probe | Status | Where | Upstream issue |
 |---|---|---|---|
-| Failover with errors that surface only when the result is read (a 429 in a `DeferredResult`); two platforms of the same class sharing one rate-limit key | planned | T25 (#32) | |
+| Claude Code bridge: tools the CLI already ran come back as tool calls for the caller, also when streaming | in progress | T26 (#636, part #653), `upstream/ai-claude-code-platform-cli-tool-calls/` | ready to file: one issue together with the Codex tool calls, drafted by the owner |
+| Claude Code bridge: a cut-off run without streaming raises no `IncompleteStreamException` | in progress | T26 (#636, part #653), `upstream/ai-claude-code-platform-cut-off-stream/` | not filed: the exceptions are accurate, `IncompleteStreamException` is for streaming only |
+| Codex bridge: MCP tools the CLI already called come back as tool calls for the caller | in progress | T26 (#636, part #653), `upstream/ai-codex-platform-cli-tool-calls/` | ready to file: one issue together with the Claude Code tool calls, drafted by the owner |
+| Codex bridge: a turn without `turn.completed` is returned as a complete answer | in progress | T26 (#636, part #653), `upstream/ai-codex-platform-cut-off-stream/` | ready to file in symfony/ai: `ISSUE.md` |
+| Codex bridge: every user message but the last, and every text block but the first, is dropped | in progress | T26 (#636, part #653), `upstream/ai-codex-platform-last-user-message/` | already reported: symfony/ai#2544; comment in `COMMENT.md` |
+| Codex bridge: the usage of a turn without an agent message is lost | in progress | T26 (#636, part #653), `upstream/ai-codex-platform-usage-without-answer/` | not filed: unreachable through a `Platform`; one sentence of the Codex cut-off issue |
+| `FailoverPlatform` calls a failed platform again, and every platform shares one limiter | in progress | T26 (#636, part #653), `upstream/ai-failover-platform-retries-a-failed-platform/` | comment for symfony/ai#1953 (the planned `FailoverProvider`): `COMMENT.md` |
+| AI Mate: a symlinked `vendor` folder moves the project root | in progress | T26 (#636, part #653), `upstream/ai-mate-symlinked-vendor-root/` | not filed: a symlinked `vendor` is not supported by Composer's autoloaders either |
+| Platform: `#[Positive]` is described with a boolean `exclusiveMinimum` | in progress | T26 (#636, part #653), `upstream/ai-platform-positive-boolean-exclusive-minimum/` | fix pull request ready, prepared by the owner |
+| SQLite store: a double quote in the query text breaks the FTS5 query | done | T26 (#636, part #652), `upstream/ai-sqlite-store-unescaped-fts-quote/` | fix pull request ready: `fix.patch`, `PR.md` |
+| Config: a NaN value skips the type check and the validation closures | in progress | T26 (#636, part #653), `upstream/config-nan-skips-validation/` | ready to file in symfony/symfony, small fix: `ISSUE.md` |
+| DoctrineBundle: a PostgreSQL connection without `server_version` fails before it connects | in progress | T26 (#636, part #653), `upstream/doctrine-bundle-postgresql-empty-server-version/` | fix pull request ready against doctrine/DoctrineBundle, prepared by the owner; same bug as doctrine/dbal#6530 |
+| Serializer: a list of objects accepts any object and ends in a `TypeError` | in progress | T26 (#636, part #653), `upstream/serializer-object-collection-accepts-any-object/` | ready to file in symfony/symfony, small fix: `ISSUE.md` |
+| Failover with errors that surface only when the result is read (a 429 in a `DeferredResult`); the shared rate-limit key is covered by `upstream/ai-failover-platform-retries-a-failed-platform/` | planned | T25 (#32) | |
 | Streaming with a tool call and a stream cut mid-text: execution fails, usage counted once, the tool runs once | planned | T25 (#32) | |
 | Worker-mode state: two models and two MCP sessions in one kernel, flat memory over 1,000 calls | planned | T28 (#35), T29 (#29) | |
 | Structured output with enums and nested lists per provider, a stream truncated mid-array | planned | T28 (#35) | |
