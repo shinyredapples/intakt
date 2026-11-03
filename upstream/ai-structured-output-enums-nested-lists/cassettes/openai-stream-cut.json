@@ -1,0 +1,31 @@
+{
+    "interactions": [
+        {
+            "request": {
+                "method": "POST",
+                "url": "https://api.openai.com/v1/responses",
+                "signature": "ed293a92799f269971f882b245137ce3",
+                "signature_v2": "c9c60464d61f53b506de1cb5be6dab40",
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ],
+                    "authorization": [
+                        "[redacted]"
+                    ]
+                },
+                "body": "{\"stream\":true,\"text\":{\"format\":{\"name\":\"Plan\",\"schema\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]},\"steps\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"priority\":{\"type\":\"string\",\"enum\":[\"high\",\"low\"]}},\"required\":[\"title\",\"priority\"],\"additionalProperties\":false}}},\"required\":[\"name\",\"priority\",\"steps\"],\"additionalProperties\":false},\"strict\":true,\"type\":\"json_schema\"}},\"model\":\"gpt-4o\",\"input\":[{\"role\":\"user\",\"content\":\"Plan the release.\"}]}"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "content-type": [
+                        "text/event-stream"
+                    ]
+                },
+                "body_format": "sse",
+                "body": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_probe\",\"object\":\"response\",\"status\":\"in_progress\",\"model\":\"gpt-4o\",\"output\":[]}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_probe\",\"output_index\":0,\"content_index\":0,\"delta\":\"{\\\"name\\\":\\\"ship\\\",\\\"priority\\\":\\\"high\\\",\\\"steps\\\":[{\\\"title\\\":\\\"build\\\",\\\"priority\\\":\\\"low\\\"},{\\\"title\\\":\\\"te\"}\n\nevent: response.incomplete\ndata: {\"type\":\"response.incomplete\",\"response\":{\"id\":\"resp_probe\",\"object\":\"response\",\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"},\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"id\":\"msg_probe\",\"status\":\"incomplete\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"{\\\"name\\\":\\\"ship\\\",\\\"priority\\\":\\\"high\\\",\\\"steps\\\":[{\\\"title\\\":\\\"build\\\",\\\"priority\\\":\\\"low\\\"},{\\\"title\\\":\\\"te\",\"annotations\":[]}]}]}}\n\n"
+            }
+        }
+    ]
+}

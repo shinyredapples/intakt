@@ -33,6 +33,12 @@ enum Provider: string
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
     }
 
+    // Not the subscription CLIs, because their bridges answer in a final-result form and a streamed run ends differently: a killed process raises instead of giving an incomplete answer, and an answer after the CLI's own tools has no text.
+    public function streams(): bool
+    {
+        return !in_array($this, [self::ClaudeCode, self::Codex], true);
+    }
+
     /**
      * @param list<string> $missing
      */

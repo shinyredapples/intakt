@@ -28,6 +28,7 @@ final readonly class ReviewerRuns
     public function __construct(
         private MessageStoreInterface $conversations,
         private RoundUpdates $updates,
+        private StreamingFallbacks $fallbacks,
     ) {
     }
 
@@ -49,6 +50,11 @@ final readonly class ReviewerRuns
     public function agent(ToolboxInterface $toolbox, PlatformInterface $platform, string $model): Agent
     {
         return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
+    }
+
+    public function fellBackToUnstreamed(ReviewerConversation $reviewer): void
+    {
+        $this->fallbacks->record($reviewer);
     }
 
     // Reported as it happens and never read back, so the verdict path is the one it was without the live view.
