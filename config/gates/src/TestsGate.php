@@ -85,7 +85,8 @@ final class TestsGate implements Gate
      */
     private function resultOf(Workspace $workspace, string $scratch, array $passes): GateResult
     {
-        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes));
+        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes))
+            ->withSlowest($this->recordedDurations($workspace, $scratch, array_keys($passes)));
 
         return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
     }
@@ -104,7 +105,7 @@ final class TestsGate implements Gate
                 return [$pass.': cannot create the scratch directory of the pass in '.$scratch];
             }
 
-            $commands[$pass] = [$this->phpunit($workspace, $configuration), $this->isolated($scratch, $pass)];
+            $commands[$pass] = [$this->phpunit($workspace, $configuration, $this->junitReport($scratch, $pass)), $this->isolated($scratch, $pass)];
         }
 
         $findings = [];
@@ -114,6 +115,32 @@ final class TestsGate implements Gate
         }
 
         return $findings;
+    }
+
+    /**
+     * @param list<string> $passes
+     *
+     * @return array<string, float>
+     */
+    private function recordedDurations(Workspace $workspace, string $scratch, array $passes): array
+    {
+        $durations = new TestDurations($workspace->root);
+        $seconds = $durations->read(array_map(fn (string $pass): string => $this->junitReport($scratch, $pass), $passes));
+        $durations->write($seconds, $this->gatesCache());
+
+        return $durations->slowest($seconds);
+    }
+
+    private function junitReport(string $scratch, string $pass): string
+    {
+        return $scratch.'/'.$pass.'/junit.xml';
+    }
+
+    private function gatesCache(): string
+    {
+        $base = getenv(self::GATES_CACHE_VARIABLE);
+
+        return is_string($base) && '' !== $base ? $base : sys_get_temp_dir().'/intakt-gates';
     }
 
     /**
@@ -156,13 +183,13 @@ final class TestsGate implements Gate
     /**
      * @return list<string>
      */
-    private function phpunit(Workspace $workspace, string $configuration): array
+    private function phpunit(Workspace $workspace, string $configuration, string $junitReport): array
     {
         return [
             $workspace->tool('phpunit'),
             '--configuration='.$workspace->root.'/'.$configuration,
             ...self::FAIL_CLOSED,
-            '--display-phpunit-notices', '--display-phpunit-deprecations', '--do-not-record-test-run-history', '--colors=never', '--no-progress',
+            '--display-phpunit-notices', '--display-phpunit-deprecations', '--do-not-record-test-run-history', '--log-junit='.$junitReport, '--colors=never', '--no-progress',
         ];
     }
 }

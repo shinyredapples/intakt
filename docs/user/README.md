@@ -70,6 +70,16 @@ The exit code is 0 only when the status is `ready`. The server log goes to stand
 
 Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
 
+## Finding the slowest tests
+
+When the `tests` gate of `bin/check` runs, its line also lists the ten slowest test files under `slowest`, slowest first, each with its `file` and its `seconds` (the times of all its tests added up, over both test passes). For example:
+
+```
+{"gate":"tests","ok":true,"findings":[],"omitted":0,"slowest":[{"file":"tests/Application/InstanceTest.php","seconds":45.722},...]}
+```
+
+The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
+
 ## When `bin/check` reports a missing tool
 
 Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
