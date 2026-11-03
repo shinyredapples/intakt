@@ -176,7 +176,7 @@ final class RedactionTest extends TestCase
         $redacted = new Redaction()->redact($dump);
 
         self::assertStringNotContainsString('credential-tail', $redacted);
-        self::assertStringContainsString('text/html', $redacted);
+        self::assertStringEndsWith('[Authorization] => [redacted]', $redacted);
     }
 
     /**
@@ -197,7 +197,18 @@ final class RedactionTest extends TestCase
         $redacted = new Redaction()->redact($dump);
 
         self::assertStringNotContainsString('credential-tail', $redacted);
-        self::assertStringContainsString('[Accept] => text/html', $redacted);
+        self::assertStringEndsWith('[Authorization] => [redacted]', $redacted);
+    }
+
+    public function testItRedactsATruncatedPrintRHeaderListPastAForgedClosingLine(): void
+    {
+        $dump = print_r(['Authorization' => ["first\n        )\ncredential-tail"]], true);
+        $truncated = substr($dump, 0, strpos($dump, 'credential-tail') + strlen('credential-tail'));
+
+        $redacted = new Redaction()->redact($truncated);
+
+        self::assertStringNotContainsString('credential-tail', $redacted);
+        self::assertStringEndsWith('[Authorization] => [redacted]', $redacted);
     }
 
     public function testItRedactsAPrintRHeaderListTogetherWithAListThatFollowsIt(): void
@@ -207,8 +218,7 @@ final class RedactionTest extends TestCase
         $redacted = new Redaction()->redact($dump);
 
         self::assertStringNotContainsString('credential-tail', $redacted);
-        self::assertStringNotContainsString('text/html', $redacted);
-        self::assertStringEndsWith("[redacted]\n\n)\n", $redacted);
+        self::assertStringEndsWith('[Authorization] => [redacted]', $redacted);
     }
 
     public function testItRedactsAPrintRHeaderListPastANestedArray(): void
@@ -218,7 +228,7 @@ final class RedactionTest extends TestCase
         $redacted = new Redaction()->redact($dump);
 
         self::assertStringNotContainsString('credential-tail', $redacted);
-        self::assertStringContainsString('text/html', $redacted);
+        self::assertStringEndsWith('[Authorization] => [redacted]', $redacted);
     }
 
     #[DataProvider('headerForms')]
@@ -234,7 +244,7 @@ final class RedactionTest extends TestCase
         $redacted = new Redaction()->redact($dump);
 
         self::assertStringNotContainsString('abc123xyz', $redacted);
-        self::assertStringContainsString('text/html', $redacted);
+        self::assertStringEndsWith('[Authorization] => [redacted]', $redacted);
     }
 
     public function testItRedactsAHeaderListExportedWithVarExport(): void

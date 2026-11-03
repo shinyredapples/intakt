@@ -101,8 +101,8 @@ final readonly class Redaction
 
     private function redactHeaderLists(string $text): string
     {
-        // The indent is captured only for print_r, because it alone breaks the line between Array and its parenthesis.
-        $pattern = '~'.self::HEADER_HEAD.'(?<open>array\R(?<indent>[ \t]*)\(|array\s*\(|\[)~i';
+        // The print_r form is told apart because it alone breaks the line between Array and its parenthesis.
+        $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|\[)~i';
 
         $result = '';
         $offset = 0;
@@ -110,7 +110,8 @@ final readonly class Redaction
             $matchStart = $match[0][1];
             $afterOpen = $matchStart + strlen($match[0][0]);
             $end = match (true) {
-                -1 !== ($match['indent'][1] ?? -1) => $this->endOfPrintRList($text, $afterOpen, $match['indent'][0]),
+                // print_r does not quote values, so no line marks the end of its list for certain and the rest of the text goes.
+                -1 !== ($match['printR'][1] ?? -1) => strlen($text),
                 str_ends_with($match['open'][0], '(') => $this->endOfQuotedList($text, $afterOpen, '()'),
                 default => $this->endOfQuotedList($text, $afterOpen, '[]'),
             };
@@ -121,15 +122,6 @@ final readonly class Redaction
         }
 
         return $result.substr($text, $offset);
-    }
-
-    private function endOfPrintRList(string $text, int $from, string $indent): int
-    {
-        // print_r does not quote values, so a value may hold a line that looks like the closing parenthesis; the last such line is at or after the real one.
-        preg_match_all('~\R'.preg_quote($indent, '~').'\)(?=\R|\z)~', $text, $closes, PREG_OFFSET_CAPTURE, $from);
-        $close = array_last($closes[0]);
-
-        return null === $close ? strlen($text) : $close[1] + strlen($close[0]);
     }
 
     private function endOfQuotedList(string $text, int $from, string $brackets): int
