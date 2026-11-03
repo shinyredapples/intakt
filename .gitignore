@@ -41,3 +41,8 @@
 # tests/Application/AiProvidersTest.php writes a vault with its private key here, and a crashed run skips the teardown that removes it.
 /config/secrets/ai_providers_test/
 ###< intakt ###
+
+###> symfony/asset-mapper ###
+/public/assets/
+/assets/vendor/
+###< symfony/asset-mapper ###
