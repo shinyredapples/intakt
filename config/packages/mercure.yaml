@@ -1,0 +1,14 @@
+mercure:
+    hubs:
+        default:
+            url: '%env(MERCURE_URL)%'
+            public_url: '%env(MERCURE_PUBLIC_URL)%'
+            # The same secret signs the publisher token here and is the hub's key for both roles (see the Caddyfile), so the app and the hub never disagree.
+            jwt:
+                secret: '%env(MERCURE_JWT_SECRET)%'
+                publish: ['*']
+                claims:
+                    iss: '%env(MERCURE_JWT_ISSUER)%'
+                    # Required by the access-token profile the hub's modern mode checks.
+                    sub: app
+                    client_id: app

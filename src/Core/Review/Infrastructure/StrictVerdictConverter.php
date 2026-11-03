@@ -11,6 +11,7 @@ use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
@@ -47,6 +48,13 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         $text = $this->inner->convert($result, $options);
         // A tool call is a step towards the verdict, so the agent loop gets it as it is; the final answer is the one that must be a verdict.
         if ($text instanceof ToolCallResult) {
+            return $text;
+        }
+
+        // Passed on with a listener, because the agent reports each streamed delta as progress and the verdict exists only once the stream ends.
+        if ($text instanceof StreamResult) {
+            $text->addListener(new StrictVerdictStreamListener($this->verdictFrom(...)));
+
             return $text;
         }
 
