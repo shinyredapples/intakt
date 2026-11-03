@@ -33,9 +33,9 @@ One exception: a task whose pull request is already open (it needs a fix or an u
 
 - **Waiting on another task:** a task can say `Waits for #12`. It isn't picked until #12 is done, so nothing gets built on a missing foundation.
 - **Too big:** large tasks are split into parts that each work on their own, with their own tests.
-- **Two tasks touching the same files** are built one after the other, so they don't trip over each other; everything else can run in parallel.
+- **Two new tasks touching the same files** are usually built one after the other, so they don't trip over each other; everything else can run in parallel.
 - **A task with an open pull request never waits** because another task is changing the same files.
-- **A task waiting for files only lets a task of the same priority go ahead**, and if there is none, it is built anyway.
+- **A task held back for files only lets a task of the same priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway.
 - **Pace:** how many builders run at once depends on how much of the week's AI allowance is left (see [Spending wisely](how-intakt-works.md#spending-wisely)).
 
 ## 2. Building
