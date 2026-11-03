@@ -24,6 +24,8 @@ final class CaddyfileWorkersTest extends TestCase
     // Longer than the hub test waits, because the workers boot the kernel and may warm its cache first.
     private const int SECONDS_TO_WAIT = 60;
 
+    private string $frankenphp;
+
     private Process $server;
 
     private string $directory;
@@ -42,6 +44,14 @@ final class CaddyfileWorkersTest extends TestCase
             self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
         }
 
+        $this->frankenphp = $frankenphp;
+    }
+
+    /**
+     * @param array<string, string> $extraEnvironment
+     */
+    private function start(array $extraEnvironment = []): void
+    {
         $port = $this->freePort();
         $this->origin = 'http://localhost:'.$port;
         $this->admin = 'localhost:'.$this->freePort();
@@ -55,9 +65,9 @@ final class CaddyfileWorkersTest extends TestCase
             'MERCURE_JWT_SECRET' => self::SECRET,
             'MERCURE_JWT_ISSUER' => $this->origin,
             'MERCURE_BOLT_PATH' => $this->directory.'/hub.db',
-        ];
+        ] + $extraEnvironment;
         $this->migrate($environment);
-        $this->server = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), $environment);
+        $this->server = new Process([$this->frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), $environment);
         $this->server->start();
         $this->client = HttpClient::create();
         $this->waitForTheWorkers();
@@ -76,14 +86,32 @@ final class CaddyfileWorkersTest extends TestCase
 
     public function testTheDashboardIsServedByTheAppWorker(): void
     {
+        $this->start();
         $response = $this->client->request('GET', $this->origin.'/projects');
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame(['index.php' => 1, 'mcp.php' => 0], $this->requestsPerWorkerFile());
     }
 
+    public function testAWorkerPastTheMemoryCeilingIsReplacedWithoutAFailedRequest(): void
+    {
+        $this->start(['WORKER_MEMORY_CEILING_MB' => '1']);
+
+        $statuses = [];
+
+        for ($request = 0; $request < 10; ++$request) {
+            // Read so the server's debug log never fills its pipe and blocks the next answer.
+            $this->server->getIncrementalErrorOutput();
+            $statuses[] = $this->client->request('GET', $this->origin.'/projects')->getStatusCode();
+        }
+
+        self::assertSame(array_fill(0, 10, 200), $statuses);
+        self::assertTrue($this->server->isRunning());
+    }
+
     public function testTheMcpRouteIsServedByTheMcpWorker(): void
     {
+        $this->start();
         $this->client->request('POST', $this->origin.'/mcp/owner')->getStatusCode();
 
         self::assertSame(['index.php' => 0, 'mcp.php' => 1], $this->requestsPerWorkerFile());

@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Server\Infrastructure;
 
 use Intakt\Core\Server\Infrastructure\EndWorkerOnMemoryCeiling;
-use Intakt\Core\Server\Infrastructure\MemoryReading;
-use Intakt\Core\Server\Infrastructure\WorkerExit;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,44 +20,37 @@ final class EndWorkerOnMemoryCeilingTest extends TestCase
 
     public function testAWorkerWhoseMemoryPassesTheCeilingEndsItsLoop(): void
     {
-        $exit = $this->createMock(WorkerExit::class);
-        $exit->expects(self::once())->method('end');
-
-        $this->terminate(100 * self::MEGABYTE + 1, $exit, worker: true);
+        $this->terminate(100 * self::MEGABYTE + 1, worker: true, ended: true);
     }
 
     public function testAWorkerBelowTheCeilingKeepsServing(): void
     {
-        $exit = $this->createMock(WorkerExit::class);
-        $exit->expects(self::never())->method('end');
-
-        $this->terminate(50 * self::MEGABYTE, $exit, worker: true);
+        $this->terminate(50 * self::MEGABYTE, worker: true, ended: false);
     }
 
     public function testAWorkerExactlyAtTheCeilingKeepsServing(): void
     {
-        $exit = $this->createMock(WorkerExit::class);
-        $exit->expects(self::never())->method('end');
-
-        $this->terminate(100 * self::MEGABYTE, $exit, worker: true);
+        $this->terminate(100 * self::MEGABYTE, worker: true, ended: false);
     }
 
     public function testAProcessThatIsNoWorkerIsNeverEnded(): void
     {
-        $exit = $this->createMock(WorkerExit::class);
-        $exit->expects(self::never())->method('end');
-
-        $this->terminate(500 * self::MEGABYTE, $exit, worker: false);
+        $this->terminate(500 * self::MEGABYTE, worker: false, ended: false);
     }
 
-    private function terminate(int $bytes, WorkerExit $exit, bool $worker): void
+    private function terminate(int $bytes, bool $worker, bool $ended): void
     {
-        $memory = self::createStub(MemoryReading::class);
-        $memory->method('bytes')->willReturn($bytes);
+        $calls = 0;
         $request = new Request(server: $worker ? ['FRANKENPHP_WORKER' => '1'] : []);
 
-        (new EndWorkerOnMemoryCeiling($memory, $exit, self::CEILING_MEGABYTES))(
-            new TerminateEvent(self::createStub(HttpKernelInterface::class), $request, new Response()),
-        );
+        (new EndWorkerOnMemoryCeiling(
+            self::CEILING_MEGABYTES,
+            static fn (): int => $bytes,
+            static function () use (&$calls): void {
+                ++$calls;
+            },
+        ))(new TerminateEvent(self::createStub(HttpKernelInterface::class), $request, new Response()));
+
+        self::assertSame($ended ? 1 : 0, $calls);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Server\Infrastructure;
 
+use Closure;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
@@ -15,10 +16,11 @@ final readonly class EndWorkerOnMemoryCeiling
     private const int BYTES_PER_MEGABYTE = 1_048_576;
 
     public function __construct(
-        private MemoryReading $memory,
-        private WorkerExit $exit,
         #[Autowire('%env(int:WORKER_MEMORY_CEILING_MB)%')]
         private int $ceilingMegabytes,
+        // Both are set only by a test, to force a reading and to observe the end instead of leaving the test process.
+        private ?Closure $memoryBytes = null,
+        private ?Closure $end = null,
     ) {
     }
 
@@ -28,8 +30,20 @@ final readonly class EndWorkerOnMemoryCeiling
             return;
         }
 
-        if ($this->memory->bytes() > $this->ceilingMegabytes * self::BYTES_PER_MEGABYTE) {
-            $this->exit->end();
+        if ($this->usedBytes() > $this->ceilingMegabytes * self::BYTES_PER_MEGABYTE) {
+            $this->endWorker();
         }
+    }
+
+    // The true size is read because the container is charged for what the worker holds from the system, not for what PHP uses.
+    private function usedBytes(): int
+    {
+        return null === $this->memoryBytes ? memory_get_usage(true) : ($this->memoryBytes)();
+    }
+
+    // Status 0 is a normal end, so FrankenPHP starts a new worker and counts no failure toward max_consecutive_failures.
+    private function endWorker(): void
+    {
+        null === $this->end ? exit(0) : ($this->end)();
     }
 }
