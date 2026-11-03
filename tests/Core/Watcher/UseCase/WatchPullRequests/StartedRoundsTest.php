@@ -21,7 +21,6 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
-use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -110,22 +109,19 @@ final class StartedRoundsTest extends KernelTestCase
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
-    // Committed past DBAL, as MySQL commits implicitly before DDL: DBAL still counts the transaction, so the rollback is the step that fails.
+    // A commit past the native connection would make the record's flush open a savepoint outside a transaction, which PostgreSQL refuses before the rollback is reached, so the transaction ends through DBAL and the rollback fails for want of one.
     public function testARoundQueuedBeforeARollbackThatItselfFailsIsStillDiscardedAndTheOriginalFailureIsRethrown(): void
     {
         $connection = $this->entities->getConnection();
 
         try {
-            $this->rounds->startOnce('alpha', $this->green(), function () use ($connection): QueuedRound {
-                $this->insertConflictingRound($connection);
-                $native = $connection->getNativeConnection();
-                self::assertInstanceOf(PDO::class, $native);
-                $native->commit();
+            $this->rounds->startOnce('alpha', $this->green(), static function () use ($connection): QueuedRound {
+                $connection->commit();
 
                 return RecordingCommandBus::queued(1);
             });
-            self::fail('The failed record of the round was swallowed.');
-        } catch (UniqueConstraintViolationException) {
+            self::fail('The lost transaction was swallowed.');
+        } catch (RoundTransactionLost) {
         }
 
         self::assertEquals([RecordingCommandBus::queued(1)], $this->commands->discarded);
