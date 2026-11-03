@@ -7,7 +7,7 @@
 5. Default protected paths for projects without gates: strict (CI definitions, hook configuration, the check command, agent instructions, dependency manifests, Intakt's own project file).
 6. Bundled dependencies that are Intakt projects: tested against their main by default, switchable to their last release per dependency.
 7. Plan approval: adaptive (on after a rejected change, off after five clean merges), with size as the starting default.
-8. Overlap forecasts: measured (forecast against actual overlap is logged); serialization only at high forecast confidence.
+8. Overlap forecasts: measured (forecast against actual overlap is logged); serialization only at high forecast confidence, only among tasks of one priority not started yet, never for work on an open pull request (see Choosing work, step 6).
 9. Commit signing under the App: merges are created through the forge API, so they are verified as the App and the owner does not vouch for each merge; branch protection can require verified commits.
 10. Forges and trackers in v1: GitHub and Gitea; Jira is the first tracker plugin after v1.
 11. Spec and plan live in the repository (`docs/spec.md`, `docs/plan.md`), versioned and reviewed; the plan's tasks are created as issues.
