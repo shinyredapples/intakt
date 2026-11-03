@@ -108,9 +108,6 @@ final readonly class RedactedJsonFormatter
         return is_string($key) && $this->redaction->redact($sample) !== $sample;
     }
 
-    /**
-     * @param mixed $record
-     */
     private function encoded(mixed $record): string
     {
         $line = json_encode($record, JSON_PARTIAL_OUTPUT_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_SLASHES);
