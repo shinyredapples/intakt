@@ -45,6 +45,7 @@ final readonly class ReviewerPrompt
 
     public function __construct(
         private Fence $fence,
+        private PromptCut $cut,
         private VerdictParser $parser,
         // Optional because memory only helps a review: the container wires it in, and a prompt without it reviews from the task and diff alone.
         private ?ReviewerMemory $memory = null,
@@ -53,11 +54,10 @@ final readonly class ReviewerPrompt
 
     public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
     {
-        $cut = new PromptCut($this->fence);
         $messages = [
             Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
-            Message::ofUser("The task of the change:\n\n".$cut->fenced(UntrustedSource::Task, $brief->change->task)),
-            Message::ofUser("The diff of the change:\n\n".$cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
+            Message::ofUser("The task of the change:\n\n".$this->cut->fenced(UntrustedSource::Task, $brief->change->task)),
+            Message::ofUser("The diff of the change:\n\n".$this->cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
         ];
 
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
@@ -97,15 +97,13 @@ final readonly class ReviewerPrompt
 
     public function cutsInputOf(ReviewBrief $brief): bool
     {
-        $cut = new PromptCut($this->fence);
-
-        return $cut->cuts($brief->change->task) || $cut->cuts($brief->change->diff);
+        return $this->cut->cuts($brief->change->task) || $this->cut->cuts($brief->change->diff);
     }
 
     // The tool answers are prompt input too, so they reach the model through the same fence as the task.
     public function fenced(ToolboxInterface $toolbox): FencedToolbox
     {
-        return new FencedToolbox($toolbox, $this->fence);
+        return new FencedToolbox($toolbox, $this->cut);
     }
 
     // The instructions ask for a verdict, so an answer that is not one becomes the invalid-output verdict here.

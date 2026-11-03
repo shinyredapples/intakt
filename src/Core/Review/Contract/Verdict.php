@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\Valid;
 
 // Property names are the JSON field names because Symfony AI's structured output ignores serializer name mapping.
@@ -39,6 +40,7 @@ final readonly class Verdict
     }
 
     // By the finding ids the failure verdicts carry, because a reviewer that uses one of them itself gains nothing: its verdict then adds no finding and closes none.
+    #[Ignore]
     public function isFailedReview(): bool
     {
         return array_any($this->findings, static fn (Finding $finding): bool => in_array($finding->id, self::FAILED_REVIEWS, true));

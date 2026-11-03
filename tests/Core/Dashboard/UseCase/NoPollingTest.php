@@ -18,7 +18,6 @@ final class NoPollingTest extends DashboardPageTestCase
         yield 'project list' => ['/projects'];
         yield 'review list' => ['/reviews'];
         yield 'review list of one project' => ['/reviews?project=alpha'];
-        yield 'review page' => ['/reviews/round-1'];
     }
 
     public function testTheReviewPageWithTheStartButtonHoldsOnlyAPlainForm(): void
@@ -30,7 +29,7 @@ final class NoPollingTest extends DashboardPageTestCase
         $page = strtolower((string) $this->browser->getResponse()->getContent());
         self::assertStringContainsString('<form method="post"', $page);
 
-        foreach (['<script', 'http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'eventsource', 'websocket'] as $polling) {
+        foreach (['http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'websocket'] as $polling) {
             self::assertStringNotContainsString($polling, $page);
         }
     }

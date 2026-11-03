@@ -3,6 +3,8 @@ mercure:
         default:
             url: '%env(MERCURE_URL)%'
             public_url: '%env(MERCURE_PUBLIC_URL)%'
+            # The same name as the hub's cookie_name in the Caddyfile; the default would differ between dev and prod.
+            cookie_name: mercure_access_token
             # The same secret signs the publisher token here and is the hub's key for both roles (see the Caddyfile), so the app and the hub never disagree.
             jwt:
                 secret: '%env(MERCURE_JWT_SECRET)%'

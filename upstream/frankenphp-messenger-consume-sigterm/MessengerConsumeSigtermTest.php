@@ -61,6 +61,22 @@ final class MessengerConsumeSigtermTest extends TestCase
      * @param list<string> $runtime
      */
     #[DataProvider('runtimes')]
+    public function testTheIdleConsumerStopsWithExitCodeZeroOnSigterm(array $runtime): void
+    {
+        $consumer = $this->consume($runtime);
+        $this->waitFor('worker-started', $consumer);
+
+        $consumer->signal(SIGTERM);
+        $this->waitForExit($consumer);
+
+        self::assertSame(0, $consumer->getExitCode(), "output:\n".$consumer->getOutput().$consumer->getErrorOutput());
+        self::assertStringNotContainsString('Segmentation fault', $consumer->getErrorOutput());
+    }
+
+    /**
+     * @param list<string> $runtime
+     */
+    #[DataProvider('runtimes')]
     public function testTheMessageInFlightIsFinishedOrStillQueuedAfterTheConsumerStops(array $runtime): void
     {
         $this->runToEnd($runtime, ['probe:dispatch']);

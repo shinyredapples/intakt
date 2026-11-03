@@ -8,12 +8,15 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
 
 final readonly class StoredVerdicts
 {
-    public function __construct(private SerializerInterface $serializer)
-    {
+    public function __construct(
+        #[Target('stored')]
+        private SerializerInterface $serializer,
+    ) {
     }
 
     /**
