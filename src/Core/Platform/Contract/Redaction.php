@@ -14,8 +14,7 @@ final readonly class Redaction
 
     private const string HEADER_NAMES = 'proxy-authorization|authorization|set-cookie|cookie|x-api-key|x-auth-token';
 
-    // The closing quote or bracket and the separator vary because a header appears in log lines, JSON, shell flags and dumps.
-    // Possessive spaces, so that a value that fails to match cannot hand back a space to be redacted in its place.
+    // Quote, bracket and separator vary because headers appear in logs, JSON, shell and dumps; spaces are possessive so none is redacted for a value.
     private const string HEADER_HEAD = '(?<![\w-])(?:'.self::HEADER_NAMES.')[\\\\"\'\]]*\s*+(?:=>|:|=)\s*+';
 
     private const array JSON_SHORT_ESCAPES = ["\x08" => 'b', "\f" => 'f', "\n" => 'n', "\r" => 'r', "\t" => 't'];
@@ -67,7 +66,7 @@ final readonly class Redaction
         return '~'.implode('', array_map($this->jsonSpellings(...), $chars)).'~';
     }
 
-    // JSON writes a character as itself, a short escape or a \u escape, and every further encoding adds backslashes before it.
+    // Every spelling is allowed because JSON may write a character as itself, a short escape or a \u escape, with more backslashes per encoding.
     private function jsonSpellings(string $char): string
     {
         $spellings = [in_array($char, ['"', '\\', '/'], true) ? '\\\\*'.preg_quote($char, '~') : preg_quote($char, '~')];
@@ -83,7 +82,7 @@ final readonly class Redaction
 
     private function unicodeEscape(string $char): string
     {
-        // A character outside the basic plane is written as two \u escapes, one per UTF-16 unit.
+        // One escape per UTF-16 unit, because JSON writes a character outside the basic plane as a surrogate pair.
         $units = str_split(bin2hex(mb_convert_encoding($char, 'UTF-16BE', 'UTF-8')), 4);
 
         return implode('', array_map(static fn (string $unit): string => '\\\\+u(?i:'.$unit.')', $units));
@@ -91,7 +90,7 @@ final readonly class Redaction
 
     private function redactHeaderLists(string $text): string
     {
-        // print_r breaks the line between Array and its parenthesis; var_export writes "array (" on one line.
+        // The indent is captured only for print_r, because it alone breaks the line between Array and its parenthesis.
         $pattern = '~'.self::HEADER_HEAD.'(?<open>array\R(?<indent>[ \t]*)\(|array\s*\(|\[)~i';
 
         $result = '';
@@ -158,7 +157,7 @@ final readonly class Redaction
 
     private function redactUserinfo(string $text): string
     {
-        // JSON writes each slash of the separator as \/, once more per encoding.
+        // Backslashes are allowed before each slash because JSON writes the separator as :\/\/, once more per encoding.
         return preg_replace('~(?<scheme>\b[a-z][a-z0-9+.-]*:(?:\\\\*/){2})[^\s/?#"\'<>]+@~i', '$1'.self::MARKER.'@', $text) ?? self::MARKER;
     }
 
