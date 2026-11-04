@@ -325,7 +325,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame(['7', '8'], array_column($this->ledger->payloads(), 'change'));
-        self::assertStringStartsWith(UniqueConstraintViolationException::class.':', $this->ledger->payloads()[0]['cause']);
+        $cause = $this->ledger->payloads()[0]['cause'];
+        self::assertIsString($cause);
+        self::assertStringStartsWith(UniqueConstraintViolationException::class.':', $cause);
     }
 
     public function testAHeadWhoseFailureMessageIsNotUtf8IsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
