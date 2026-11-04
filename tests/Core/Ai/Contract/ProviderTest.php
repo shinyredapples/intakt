@@ -41,25 +41,25 @@ final class ProviderTest extends TestCase
 
     public function testTheDefaultAccountsPlatformIdCarriesNoAccountSuffix(): void
     {
-        self::assertSame('intakt.ai.platform.codex', Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT)));
+        self::assertSame(AiServices::PLATFORM_PREFIX.'codex', Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT)));
     }
 
     public function testANamedAccountsPlatformIdEndsWithTheAccountName(): void
     {
-        self::assertSame('intakt.ai.platform.codex.team', Provider::Codex->platformId(new Account(Provider::Codex, 'team')));
+        self::assertSame(AiServices::PLATFORM_PREFIX.'codex.team', Provider::Codex->platformId(new Account(Provider::Codex, 'team')));
     }
 
     public function testTheCliIdIsDerivedFromTheProviderAndTheAccount(): void
     {
         self::assertSame(
-            ['intakt.ai.claude_code.cli', 'intakt.ai.claude_code.cli.team'],
+            [AiServices::PREFIX.'claude_code.cli', AiServices::PREFIX.'claude_code.cli.team'],
             [Provider::ClaudeCode->cliId(new Account(Provider::ClaudeCode, Account::DEFAULT)), Provider::ClaudeCode->cliId(new Account(Provider::ClaudeCode, 'team'))],
         );
     }
 
     public function testTheAccountsIdIsDerivedFromTheProvider(): void
     {
-        self::assertSame('intakt.ai.accounts.openai', Provider::OpenAi->accountsId());
+        self::assertSame(AiServices::ACCOUNTS_PREFIX.'openai', Provider::OpenAi->accountsId());
     }
 
     public function testEachProvidersConfigKeyIsItsCaseValue(): void

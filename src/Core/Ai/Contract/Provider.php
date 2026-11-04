@@ -47,7 +47,6 @@ enum Provider: string
         return 'Provider "'.$this->value.'" is disabled: set '.implode(' and ', $missing).' to enable it.';
     }
 
-    // The default account keeps the bare id; a named account's id ends with its name.
     public function platformId(Account $account): string
     {
         return AiServices::PLATFORM_PREFIX.$this->value.$this->suffixOf($account);
