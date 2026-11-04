@@ -139,6 +139,10 @@ A boolean parameter that switches what a function does hides two behaviors behin
 
 Tables inside a fenced code block (three or more backticks or tildes, indented at most three spaces) are examples and are skipped. The block ends at a line holding only a fence of the same character, at least as long as the opening one; a fence line with text after it stays inside the block. A block that is never closed runs to the end of the file.
 
+## When `bin/check` reports a reproductions finding
+
+Every folder directly under `upstream/` is a reproduction of a likely library bug, and the `reproductions` gate of `bin/check` checks that each one is listed. A finding such as `upstream/messenger-lost-message/ has no row in "Found in the beta" of docs/highlights.md` names the folder. To resolve it, add a row to the "Found in the beta" table of `docs/highlights.md` that names the folder in its text, for example `` `upstream/messenger-lost-message/` `` in the Where column. Only a table row in that section counts: a mention in its prose, in another section or inside a fenced code block does not. A file directly under `upstream/` (such as its `README.md`) needs no row. The gate reads the folders git tracks or would add (ignored files do not count), and the working tree when there is no git repository.
+
 ## GitHub's test merge and the `commits` gate
 
 On a pull request, GitHub checks out a merge of the branch into the base branch, with a subject such as `Merge <sha> into <sha>`, which is not a Conventional Commit. CI names that merge and the pull request's head with `--test-merge=<merge>:<head>`, and the `commits` gate skips it when its second parent is the pull request's head and its first parent is on the base branch, also when the base branch moved after the pull request's last update. Every other commit, merges included, still needs a conforming subject.
