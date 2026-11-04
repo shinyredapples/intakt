@@ -11,7 +11,7 @@ final class JourneysGate implements Gate
     private const string JOURNEY_SECONDS = '240';
     // The journey's time plus bin/instance's boot and stop, because the whole process tree is killed after it.
     private const int CONTAINED_SECONDS = 300;
-    private const string FAILURE_LINE = '/journey ".+" failed at step ".+"/';
+    private const string FAILURE_LINE = '/journey ".+" failed at step ".+".*/';
 
     public function name(): string
     {

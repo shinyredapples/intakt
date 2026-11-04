@@ -33,7 +33,7 @@ final class JourneysGateTest extends SandboxTestCase
 
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('journeys'), $run->output());
-        self::assertStringContainsString('BrokenJourneyTest.php: journey "broken" failed at step "read the second page"', $run->findingsOf('journeys'));
+        self::assertStringContainsString('BrokenJourneyTest.php: journey "broken" failed at step "read the second page": Failed asserting that two strings are identical.', $run->findingsOf('journeys'));
         self::assertStringNotContainsString('CalmJourneyTest', $run->findingsOf('journeys'));
     }
 
