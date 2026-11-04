@@ -50,8 +50,6 @@ final class FailedHeadsTest extends KernelTestCase
     // Named in config/services.yaml among the held credentials, and its value has no shape the redaction knows.
     private const string HELD_NAME = 'OPENAI_COMPATIBLE_API_KEY';
     private const string HELD_VALUE = 'plainheldkeyvalue0123456789';
-
-    private EntityManagerInterface $entities;
     private MockClock $clock;
     private PendingHeads $pending;
 
@@ -59,7 +57,6 @@ final class FailedHeadsTest extends KernelTestCase
     {
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
