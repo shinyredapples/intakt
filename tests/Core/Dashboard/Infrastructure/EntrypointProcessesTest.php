@@ -22,7 +22,7 @@ final class EntrypointProcessesTest extends TestCase
     // Longer than the workers test waits, because the consumers boot the kernel after the migration.
     private const int SECONDS_TO_WAIT = 90;
 
-    // POSIX numbers rather than SIGKILL, SIGSTOP and SIGTERM, because those constants exist only with pcntl and the CI image has none.
+    // POSIX numbers rather than SIGKILL, SIGSTOP and SIGTERM, because those constants exist only with pcntl and the tests must run on a PHP without it.
     private const int KILL = 9;
     private const int STOP = 19;
     private const int CONTINUE = 18;

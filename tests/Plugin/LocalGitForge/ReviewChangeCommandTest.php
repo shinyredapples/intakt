@@ -232,7 +232,7 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertCount(1, $this->repository->worktrees());
     }
 
-    // One test for a PHP with and without signal support rather than a skipped one, because the tests gate fails on a skip and the CI image has no pcntl.
+    // One test for a PHP with and without signal support rather than a skipped one, because the tests gate fails on a skip and a PHP without pcntl must pass too.
     public function testItListensForTheStopSignalsOnlyWherePhpCanHandleThem(): void
     {
         $command = new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Approve)));
