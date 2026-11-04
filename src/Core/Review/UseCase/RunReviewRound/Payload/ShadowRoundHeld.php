@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound\Payload;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\StartDecision;
 
 final readonly class ShadowRoundHeld
 {
@@ -12,7 +13,7 @@ final readonly class ShadowRoundHeld
         public string $project,
         public string $change,
         public Provider $provider,
-        public string $reason,
+        public StartDecision $reason,
     ) {
     }
 }

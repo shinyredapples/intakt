@@ -61,7 +61,7 @@ final readonly class RoundLedger
     // No round exists yet, so the event names the change and the number asked for; the decision is the reason, in the words the guard uses.
     public function shadowRoundHeld(RunReviewRound $command, Provider $provider, StartDecision $decision): void
     {
-        $this->append(LedgerEventKind::ShadowRoundHeld, new ShadowRoundHeld($command->target->subject->project, $command->round->change, $provider, $decision->value));
+        $this->append(LedgerEventKind::ShadowRoundHeld, new ShadowRoundHeld($command->target->subject->project, $command->round->change, $provider, $decision));
     }
 
     public function reviewerStarted(RoundReviewer $reviewer): void

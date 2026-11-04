@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Stored;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountCooledDown;
+use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\UseCase\RunReviewRound\Payload\CatchUpOwed;
@@ -61,7 +62,7 @@ final class LedgerPayloadsTest extends KernelTestCase
         yield 'a started usage without a round' => [UsageStarted::class, '{"call":"c","phase":"started","project":"p","tier":"standard"}'];
         yield 'a review started with a source' => [ReviewStarted::class, '{"round":"r","project":"p","reviewers":2,"change":"c","number":1,"task":"t","repository":"o\\/r","base":"main"}'];
         yield 'a review started without a source' => [ReviewStarted::class, '{"round":"r","project":"p","reviewers":2,"change":"c","number":1,"task":"t"}'];
-        yield 'a held shadow round' => [ShadowRoundHeld::class, '{"project":"p","change":"c","provider":"anthropic","reason":"ceiling"}'];
+        yield 'a held shadow round' => [ShadowRoundHeld::class, '{"project":"p","change":"c","provider":"anthropic","reason":"at-ceiling"}'];
         yield 'a reviewer started' => [ReviewerStarted::class, "{{$identity}}"];
         yield 'a verdict received' => [VerdictReceived::class, "{{$identity},\"decision\":\"changes\",\"findings\":2,\"mode\":\"live\"}"];
         yield 'a catch-up owed' => [CatchUpOwed::class, "{{$identity},\"substitute\":\"openai\"}"];
@@ -109,12 +110,22 @@ final class LedgerPayloadsTest extends KernelTestCase
     public function testTheClosedSetsOfUsageShadowAndJudgeRowsReadIntoTheirEnums(): void
     {
         $started = $this->serializer()->deserialize('{"call":"c","phase":"started","project":"p","tier":"light"}', UsageStarted::class, 'json');
-        $held = $this->serializer()->deserialize('{"project":"p","change":"c","provider":"claude_code","reason":"ceiling"}', ShadowRoundHeld::class, 'json');
+        $held = $this->serializer()->deserialize('{"project":"p","change":"c","provider":"claude_code","reason":"no-trusted-reading"}', ShadowRoundHeld::class, 'json');
         $judged = $this->serializer()->deserialize('{"round":"r","act":[],"follow_ups":[],"findings":[{"id":"a","severity":"P1","text":"Broken."}]}', JudgeDone::class, 'json');
 
         self::assertSame(Tier::Light, $started->tier);
-        self::assertSame(Provider::ClaudeCode, $held->provider);
+        self::assertSame([Provider::ClaudeCode, StartDecision::NoTrustedReading], [$held->provider, $held->reason]);
         self::assertSame(Severity::P1, $judged->findings[0]->severity);
+    }
+
+    public function testAHeldShadowRoundWritesItsReasonAsTheStoredString(): void
+    {
+        $held = new ShadowRoundHeld('p', 'c', Provider::Anthropic, StartDecision::ReadingNotFreshEnough);
+
+        self::assertSame(
+            '{"project":"p","change":"c","provider":"anthropic","reason":"reading-not-fresh-enough"}',
+            $this->serializer()->serialize($held, 'json'),
+        );
     }
 
     public function testTheHandBuiltStoredSerializerWritesAPayloadAsTheContainersDoes(): void
