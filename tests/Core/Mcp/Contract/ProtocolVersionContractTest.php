@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Mcp\Contract;
 
 use Intakt\Kernel;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Covers nothing because the contract is the behavior of the MCP Bundle and SDK as Intakt configures them.
 #[CoversNothing]

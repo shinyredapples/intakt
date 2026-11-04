@@ -18,11 +18,11 @@ use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use Intakt\Plugin\GitHubForge\UseCase\CheckTrust\CheckTrustCommand;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 

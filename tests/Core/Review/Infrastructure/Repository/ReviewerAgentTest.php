@@ -12,6 +12,7 @@ use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\Agent;
@@ -26,7 +27,6 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TraceablePlatform;
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 #[CoversClass(ReviewerToolboxFactory::class)]
 #[CoversClass(DenyPathsOutsideCheckout::class)]

@@ -21,6 +21,7 @@ use Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\KernelTestCase;
 use Mcp\Client;
 use Mcp\Client\Builder;
 use Mcp\Client\Transport\HttpTransport;
@@ -33,7 +34,6 @@ use Mcp\Schema\Tool;
 use Mcp\Schema\ToolAnnotations;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Covers nothing because the contract is the owner's server as an MCP client meets it: the SDK's own client over HTTP into the kernel.
 #[Group('persistence')]

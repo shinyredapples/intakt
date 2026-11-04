@@ -36,7 +36,7 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
+use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -50,7 +50,6 @@ use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\Uid\UuidV7;
@@ -72,8 +71,6 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Checkout::class)]
 final class ReviewerOverMcpTest extends KernelTestCase
 {
-    use AssertsLoggedErrors;
-
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
     private ReviewRound $round;
