@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use DateTimeImmutable;
+use Doctrine\DBAL\Connection;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -26,6 +27,7 @@ final readonly class FailedHeads
         private WatcherLedger $ledger,
         private ClockInterface $clock,
         private Redactor $redactor,
+        private Connection $connection,
     ) {
     }
 
@@ -35,9 +37,13 @@ final readonly class FailedHeads
         $headFailure = new HeadFailure($project, $head, $this->causeOf($failure));
         $retryAt = $this->retryAt($failures);
 
-        // Recorded before the row is changed, because a failure the ledger could not take must leave the head due, so the tick fails and the next one tries again.
-        $this->record($headFailure, $failures, $retryAt);
-        $this->pending->backOff($headFailure, $failures, $retryAt);
+        // One transaction, because a failure the ledger could not take must leave the head due, so the tick fails and the next one tries again.
+        $this->connection->transactional(function () use ($headFailure, $failures, $retryAt): void {
+            // Row first, because its write lock holds off a listing that closes or re-queues the head, and a head no longer queued as it failed must get no line, or its card would promise a try that never comes.
+            if ($this->pending->backOff($headFailure, $failures, $retryAt)) {
+                $this->record($headFailure, $failures, $retryAt);
+            }
+        });
     }
 
     // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written; redacted as a log line is, because the cause is stored and shown on a card.

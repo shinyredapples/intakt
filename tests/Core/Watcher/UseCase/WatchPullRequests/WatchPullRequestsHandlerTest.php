@@ -791,7 +791,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor), $doctrine, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection()), $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);

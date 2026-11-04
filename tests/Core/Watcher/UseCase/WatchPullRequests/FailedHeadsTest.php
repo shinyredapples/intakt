@@ -51,6 +51,7 @@ final class FailedHeadsTest extends KernelTestCase
     private const string HELD_NAME = 'OPENAI_COMPATIBLE_API_KEY';
     private const string HELD_VALUE = 'plainheldkeyvalue0123456789';
     private MockClock $clock;
+    private EntityManagerInterface $entities;
     private PendingHeads $pending;
 
     protected function setUp(): void
@@ -60,6 +61,7 @@ final class FailedHeadsTest extends KernelTestCase
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
+        $this->entities = $entities;
         $this->pending = new PendingHeads($entities, $this->clock);
     }
 
@@ -106,12 +108,37 @@ final class FailedHeadsTest extends KernelTestCase
         }
     }
 
+    public function testAHeadClosedWhileItsStepWasInFlightGetsNoRetryCard(): void
+    {
+        $head = RecordedForge::change('7', 'a', '2026-11-04T09:00:00Z');
+        $this->pending->enqueue('alpha', [$head]);
+        $ledger = new DashboardLedger();
+        new WatcherLedger($ledger)->headForgotten('alpha', $this->pending->forgetClosed('alpha')[0]);
+
+        $this->failedHeads($ledger)->backOff('alpha', $head, new RuntimeException('CI read failed'));
+
+        self::assertSame([], $this->pending->dueFor('alpha'));
+        self::assertSame([], new LedgerFailingHeads($ledger)->now());
+    }
+
+    public function testAHeadStillQueuedWhenItsStepFailsGetsARetryCard(): void
+    {
+        $head = RecordedForge::change('7', 'a', '2026-11-04T09:00:00Z');
+        $this->pending->enqueue('alpha', [$head]);
+        $ledger = new DashboardLedger();
+
+        $this->failedHeads($ledger)->backOff('alpha', $head, new RuntimeException('CI read failed'));
+
+        self::assertCount(1, new LedgerFailingHeads($ledger)->now());
+        self::assertSame(1, $this->pending->failuresOf('alpha', $head));
+    }
+
     // The container's redactor, so the test proves the wiring: the names config/services.yaml holds, behind the Platform contract.
     private function failedHeads(Ledger $ledger): FailedHeads
     {
         $redactor = self::getContainer()->get(Redactor::class);
         self::assertInstanceOf(Redactor::class, $redactor);
 
-        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor);
+        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection());
     }
 }

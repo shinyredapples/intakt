@@ -92,10 +92,10 @@ final readonly class PendingHeads
         return $this->stored($project, $head)?->failuresOf($head) ?? 0;
     }
 
-    // Only while the row still holds this head from the same listing, because a head the listing queued meanwhile, even the same commit touched again, is counted anew and due now.
-    public function backOff(HeadFailure $failure, int $failures, DateTimeImmutable $until): void
+    // Only while the row still holds this head from the same listing, because a head the listing queued meanwhile, even the same commit touched again, is counted anew and due now; false when the row no longer holds it.
+    public function backOff(HeadFailure $failure, int $failures, DateTimeImmutable $until): bool
     {
-        $this->entities->createQueryBuilder()
+        $changed = $this->entities->createQueryBuilder()
             ->update(PendingHead::class, 'p')
             ->set('p.readAgainAt', ':readAgainAt')
             ->set('p.failures', ':failures')
@@ -109,6 +109,8 @@ final readonly class PendingHeads
             ->getQuery()
             ->execute();
         $this->dropLoaded($this->keyOf($failure->project, $failure->head));
+
+        return 1 === $changed;
     }
 
     // Reset only once a head was settled in full, because a step that fails after the read-again time was kept must still count toward the hand-over.
