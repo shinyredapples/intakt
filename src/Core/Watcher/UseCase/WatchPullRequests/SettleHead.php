@@ -12,24 +12,10 @@ final readonly class SettleHead
         private StaleVerdicts $stale,
         private HeadsWithoutRound $withoutRound,
         private RoundStarts $starts,
-        private HeadBackOff $backOff,
     ) {
     }
 
-    // Each head on its own, because one head that cannot be settled must not hold back the others or the ledger lines owed.
-    /**
-     * @param list<HeadDecision> $decisions
-     */
-    public function settleEach(WatchedProject $project, array $decisions): void
-    {
-        foreach ($decisions as $decision) {
-            $this->backOff->tryAlone($project->name, $decision->change, fn () => $this->settle($project, $decision));
-        }
-
-        $this->starts->recordQueued($project->name);
-    }
-
-    private function settle(WatchedProject $project, HeadDecision $decision): void
+    public function settle(WatchedProject $project, HeadDecision $decision): void
     {
         if ($decision->startsRound()) {
             $this->stale->noteMovedHead($project, $decision->change);

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -31,13 +32,16 @@ use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadBackOff;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadDecisions;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadLocks;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadsWithoutRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\LookAtHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundStarts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
@@ -68,9 +72,12 @@ use Symfony\Component\Lock\LockFactory;
 #[CoversClass(ChangedHeads::class)]
 #[CoversClass(LookAtHeads::class)]
 #[CoversClass(HeadLocks::class)]
+#[CoversClass(HeadDecisions::class)]
+#[CoversClass(SettleHeads::class)]
 #[CoversClass(SettleHead::class)]
 #[CoversClass(HeadsWithoutRound::class)]
 #[CoversClass(HeadBackOff::class)]
+#[CoversClass(FailedHeads::class)]
 #[CoversClass(HeadFailure::class)]
 #[CoversClass(PendingHeads::class)]
 #[CoversClass(PendingHead::class)]
@@ -293,6 +300,38 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['7', '8'], array_column($this->ledger->payloads(), 'change'));
     }
 
+    public function testAHeadWhoseFailedFlushClosesTheEntityManagerIsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::NEXT_GREEN, '2026-11-02T09:00:00Z'));
+        $connection = $this->entities->getConnection();
+        $this->commands->whileStarting = static function (StartReviewAtHead $command) use ($connection): void {
+            if ('7' === $command->start->round->change) {
+                // A row the start does not expect, so the flush of its own row breaks the key and closes the entity manager.
+                $connection->insert('watcher_started_round', ['project' => 'alpha', 'change_ref' => '7', 'head' => $command->head->hash, 'stale' => 0, 'queued_recorded' => 0, 'round_id' => 'other']);
+            }
+        };
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['7', '8'], array_column($this->ledger->payloads(), 'change'));
+    }
+
+    public function testAHeadWhoseFailureMessageIsNotUtf8IsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::NEXT_GREEN, '2026-11-02T09:00:00Z'));
+        $this->commands->whileStarting = static function (StartReviewAtHead $command): void {
+            if ('7' === $command->start->round->change) {
+                throw new RuntimeException("no such path: \xFF");
+            }
+        };
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame('RuntimeException: no such path: ?', $this->ledger->payloads()[0]['cause']);
+    }
+
     public function testAHeadWhoseCiCannotBeReadIsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
@@ -312,7 +351,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $errors = array_values(array_filter($this->logger->logged, static fn (array $line): bool => isset($line[1]['exception'])));
         self::assertCount(1, $errors);
-        self::assertSame(['A head failed; it backs off alone.', '6', 1], [$errors[0][0], $errors[0][1]['change'], $errors[0][1]['failures']]);
+        self::assertSame(['A head failed; it backs off alone.', '6'], [$errors[0][0], $errors[0][1]['change']]);
     }
 
     public function testAHeadThatFailsOnEveryTryWaitsTwiceAsLongAfterEachFailure(): void
@@ -686,12 +725,15 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $pending = new PendingHeads($this->entities, $this->clock);
         $rounds = new StartedRounds($this->entities, $pending, new DiscardedRounds($this->commands, $logger));
         $find = new FindChangedPullRequests($this->listing, new SeenListings($this->entities, $locks), $logger);
-        $admit = new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger);
-        $backOff = new HeadBackOff($pending, $ledger, $this->clock, $logger);
-        $settle = new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), new RoundStarts($this->commands, $rounds, $ledger), $backOff);
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock), $doctrine, $logger);
+        $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
+        $starts = new RoundStarts($this->commands, $rounds, $ledger);
+        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $admit, new AdmissionDecision(), $settle, $backOff));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $decisions, $settle));
     }
 
     private function panel(): Panel
