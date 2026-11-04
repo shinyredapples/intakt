@@ -20,11 +20,11 @@ use Intakt\Core\Budget\UseCase\ReplayDay\RolledBackReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 

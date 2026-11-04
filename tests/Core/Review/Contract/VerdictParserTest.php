@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\DataProviderExternal;
@@ -26,7 +27,6 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(VerdictParser::class)]
 #[CoversClass(Verdict::class)]

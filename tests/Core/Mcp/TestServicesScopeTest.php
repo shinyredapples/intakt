@@ -7,8 +7,8 @@ namespace Intakt\Tests\Core\Mcp;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Covers the test wiring itself: the doubles of the SDK client test must not leak into other kernel tests.
 #[CoversNothing]

@@ -19,10 +19,10 @@ use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\RefuseChangesToStoredEvents;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 

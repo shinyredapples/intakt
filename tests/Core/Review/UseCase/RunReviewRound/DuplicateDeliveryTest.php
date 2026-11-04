@@ -16,11 +16,11 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Two workers on two connections, the second one delivering the same message while the first is inside its vendor call, because that is the interleaving a duplicate delivery produces; the vendor double forces the order, so no timing is involved.
 #[Group('persistence')]

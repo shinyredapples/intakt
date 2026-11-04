@@ -20,7 +20,6 @@ use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\StartReview;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -47,8 +46,6 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(ShowReviewController::class)]
 final class StartReviewControllerTest extends DashboardPageTestCase
 {
-    use AssertsLoggedErrors;
-
     // The container keeps the ledger double and the bus mock across the page that hands out the token and the post that uses it.
     protected function setUp(): void
     {
