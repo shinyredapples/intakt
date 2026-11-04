@@ -4,7 +4,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 
 Only the install check and the provider configuration below exist so far. The other pages arrive with the review loop (see [the plan](../plan.md)):
 
-- Running the demo with `docker compose up` (planned). Its sample project already exists as files: see [the sample repository](#the-sample-repository)
+- Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict is planned
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), and `intakt:review` runs it (see [below](#reviewing-a-branch)).
 - Reviewing a branch of a local repository with `intakt:review` (see [below](#reviewing-a-branch)); reviewing a pull request is planned
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
@@ -418,4 +418,26 @@ The owner cuts each release: a signed tag on a green `main`, then a GitHub relea
 
 ## The sample repository
 
-`fixtures/sample-repository/` holds a small shop project to try a review on. `base/` is the base commit and `pull-request/` holds the files the pull request branch adds or changes. The branch carries three deliberate issues (a bug, a new function without a test, and a command built from input), listed in `issues.json` so a later check can tell whether a review found them. The folder's `README.md` has the git commands that turn it into a repository with a `main` branch and a `sample-change` branch. Starting it with `docker compose up` and seeding its panel is planned.
+`fixtures/sample-repository/` holds a small shop project to try a review on. `base/` is the base commit and `pull-request/` holds the files the pull request branch adds or changes. The branch carries three deliberate issues (a bug, a new function without a test, and a command built from input), listed in `issues.json` so a later check can tell whether a review found them. The folder's `README.md` has the git commands that turn it into a repository with a `main` branch and a `sample-change` branch. The demo builds that repository for you (see below).
+
+## The demo with docker compose
+
+```
+cp .env.dist .env.local   # fill in one or two provider keys and the two secrets
+docker compose up
+```
+
+`.env.local` needs `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or both, and `APP_SECRET` and `MERCURE_JWT_SECRET` (generate each with `openssl rand -hex 32`). The image is built from the `Dockerfile`, the dashboard answers on `http://localhost:7781` (on this computer only), and the data lives in the volume `intakt-data`.
+
+The first start seeds the demo, in the volume:
+
+- the sample repository at `/app/var/data/sample-repository`, with the branch `sample-change` to review against `main`;
+- the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI.
+
+The log then shows the command that reviews the sample change. Run it inside the container, for example:
+
+```
+docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
+```
+
+Later starts keep both as they are (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the first start stops with `Set ANTHROPIC_API_KEY or OPENAI_API_KEY to seed the sample project.`; without one of the secrets it stops naming the missing one.
