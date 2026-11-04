@@ -103,6 +103,69 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->failed('reproductions'), $run->output());
     }
 
+    public function testAHeadingWithAPipeRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n### Notes | `upstream/a-bug/`\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testAListItemWithAPipeRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n- pending | `upstream/a-bug/`\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testAnOrderedListItemWithAPipeRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n1) pending | `upstream/a-bug/`\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testABlockquoteWithAPipeRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n  > see | `upstream/a-bug/`\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testAnHtmlCommentWithAPipeRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n<!-- pending | `upstream/a-bug/` -->\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testACellPastTheHeaderDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| A | done | T1 (#5) | | `upstream/a-bug/` |\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testATableIndentedFourSpacesDoesNotCount(): void
+    {
+        $run = $this->checkWithSection(['upstream/a-bug/REPORT.md'], "## Found in the beta\n\n    | Probe | Where |\n    |---|---|\n    | A | `upstream/a-bug/` |\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testATableIndentedThreeSpacesCounts(): void
+    {
+        $run = $this->checkWithSection(['upstream/a-bug/REPORT.md'], "## Found in the beta\n\n   | Probe | Where |\n   |---|---|\n   | A | `upstream/a-bug/` |\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testARowWithFewerCellsThanTheHeaderStillCounts(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| A | `upstream/a-bug/` |\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
     public function testARowAfterARowWithAnEscapedPipeStillCounts(): void
     {
         $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | `a\\|b` | |\n| A | done | `upstream/a-bug/` | |\n");

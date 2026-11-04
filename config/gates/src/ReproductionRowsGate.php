@@ -21,6 +21,12 @@ final readonly class ReproductionRowsGate implements Gate
 
     private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
+    private const array OUTER_BORDERS = ['/^\s*\|/', '/(?<!\\\\)\|\s*$/'];
+
+    private const string BLOCK_START = '/^ {0,3}(?:[#><]|[-*+][ \t]|\d+[.)][ \t])/';
+
+    private const string INDENTED_CODE = '/^(?: {4}| {0,3}\t)/';
+
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
     ) {
@@ -119,15 +125,15 @@ final readonly class ReproductionRowsGate implements Gate
     private function tableBodyRows(array $lines): array
     {
         $rows = [];
-        $inTable = false;
+        $columns = 0;
         $previous = '';
 
         foreach ($lines as $line) {
-            // A line without a cell border ends the table, because in GFM a blank line or another block (a heading, a list, a quote) does.
-            if ($inTable && $this->isATableRow($line)) {
-                $rows[] = $line;
+            // A line without a cell border ends the table even where GFM keeps it as a row, because that can only fail closed.
+            if ($columns > 0 && $this->isATableRow($line)) {
+                $rows[] = implode('|', array_slice($this->cells($line), 0, $columns));
             } else {
-                $inTable = $this->startsATable($previous, $line);
+                $columns = $this->startsATable($previous, $line) ? count($this->cells($previous)) : 0;
             }
 
             $previous = $line;
@@ -138,11 +144,22 @@ final readonly class ReproductionRowsGate implements Gate
 
     private function startsATable(string $header, string $delimiter): bool
     {
-        return $this->isATableRow($header) && $this->isATableRow($delimiter) && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
+        return 0 === preg_match(self::INDENTED_CODE, $header)
+            && $this->isATableRow($header)
+            && 1 === preg_match(self::CELL_BORDER, $delimiter)
+            && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
     }
 
     private function isATableRow(string $line): bool
     {
-        return 1 === preg_match(self::CELL_BORDER, $line);
+        return 1 === preg_match(self::CELL_BORDER, $line) && 0 === preg_match(self::BLOCK_START, $line);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function cells(string $row): array
+    {
+        return preg_split(self::CELL_BORDER, preg_replace(self::OUTER_BORDERS, '', $row) ?? '') ?: [];
     }
 }
