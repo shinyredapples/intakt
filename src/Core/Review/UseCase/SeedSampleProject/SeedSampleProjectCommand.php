@@ -10,7 +10,6 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 
 #[AsCommand(name: 'intakt:sample:seed', description: 'Build the sample repository and write the sample project with its review panel, each only when it does not exist yet')]
@@ -20,7 +19,6 @@ final readonly class SeedSampleProjectCommand
         private SampleRepository $repository,
         private SampleProject $project,
         private LockFactory $locks,
-        private Filesystem $filesystem = new Filesystem(),
     ) {
     }
 
@@ -52,7 +50,7 @@ final readonly class SeedSampleProjectCommand
 
     private function seedProject(SymfonyStyle $io, string $configuration): bool
     {
-        if ($this->filesystem->exists($configuration)) {
+        if ($this->project->isWritten($configuration)) {
             $io->writeln(OutputFormatter::escape(sprintf('Kept the project configuration %s; remove it to seed the sample project again.', $configuration)));
 
             return true;
@@ -66,7 +64,7 @@ final readonly class SeedSampleProjectCommand
             return false;
         }
 
-        $this->filesystem->dumpFile($configuration, $this->project->configuration($providers));
+        $this->project->write($configuration, $providers);
         $io->writeln(OutputFormatter::escape(sprintf(
             'Wrote the sample project "%s" to %s, its panel on %s.',
             SampleProject::NAME,

@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use LogicException;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Yaml\Yaml;
 
 final readonly class SampleProject
@@ -29,8 +30,23 @@ final readonly class SampleProject
         'openai' => ['strong' => 'gpt-5', 'standard' => 'gpt-5-mini', 'light' => 'gpt-5-nano'],
     ];
 
-    public function __construct(private EnabledAccounts $accounts)
+    public function __construct(
+        private EnabledAccounts $accounts,
+        private Filesystem $filesystem = new Filesystem(),
+    ) {
+    }
+
+    public function isWritten(string $configuration): bool
     {
+        return $this->filesystem->exists($configuration);
+    }
+
+    /**
+     * @param non-empty-list<Provider> $providers
+     */
+    public function write(string $configuration, array $providers): void
+    {
+        $this->filesystem->dumpFile($configuration, $this->configuration($providers));
     }
 
     /**
@@ -52,7 +68,7 @@ final readonly class SampleProject
     /**
      * @param non-empty-list<Provider> $providers
      */
-    public function configuration(array $providers): string
+    private function configuration(array $providers): string
     {
         $tiers = $this->tierProviders($providers);
         $project = ['tiers' => $this->models($tiers), 'review' => $this->review($this->panel($tiers))];
