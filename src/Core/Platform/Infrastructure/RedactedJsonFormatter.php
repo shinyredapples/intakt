@@ -115,11 +115,25 @@ final readonly class RedactedJsonFormatter
 
         $redacted = [];
         foreach ($value as $key => $item) {
-            $name = is_string($key) ? $this->redaction->redact($key, ...$credentials) : $key;
+            $name = is_string($key) ? $this->freeName($this->redaction->redact($key, ...$credentials), $redacted) : $key;
             $redacted[$name] = $this->namesHeader($key) ? Redaction::MARKER : $this->redacted($item, $credentials);
         }
 
         return $redacted;
+    }
+
+    // Two keys can redact to one name (a held credential beside a key named like the marker), and the later must not overwrite the earlier's value.
+    /**
+     * @param array<array-key, mixed> $taken
+     */
+    private function freeName(string $name, array $taken): string
+    {
+        $free = $name;
+        for ($counter = 2; array_key_exists($free, $taken); ++$counter) {
+            $free = $name.' '.$counter;
+        }
+
+        return $free;
     }
 
     // A map holds a header's value apart from its name, so the redaction is asked whether it would redact a value written after this name.

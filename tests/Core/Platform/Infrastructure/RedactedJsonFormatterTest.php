@@ -202,6 +202,21 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertSame(['author' => 'octocat'], $this->decoded($line)['context'] ?? null);
     }
 
+    public function testTwoContextKeysThatRedactToOneNameBothKeepTheirValues(): void
+    {
+        $line = $this->format('error', 'Review failed.', ['held-secret-1' => 'first', '[redacted]' => 'second']);
+
+        self::assertStringNotContainsString('held-secret-1', $line);
+        self::assertSame(['[redacted]' => 'first', '[redacted] 2' => 'second'], $this->decoded($line)['context'] ?? null);
+    }
+
+    public function testAContextKeyThatRedactsToAFreeNameKeepsThatName(): void
+    {
+        $line = $this->format('error', 'Review failed.', ['held-secret-1' => 'first', 'author' => 'octocat']);
+
+        self::assertSame(['[redacted]' => 'first', 'author' => 'octocat'], $this->decoded($line)['context'] ?? null);
+    }
+
     public function testAnUnterminatedPrivateKeyInAFailureKeepsItsClassAndTrace(): void
     {
         $line = $this->format('error', 'It failed.', ['exception' => new RuntimeException("Bad key -----BEGIN RSA PRIVATE KEY-----\nMIIEabc")]);
