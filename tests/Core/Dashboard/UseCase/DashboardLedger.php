@@ -109,6 +109,34 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'model-a', 'prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]]]);
     }
 
+    public function failHead(string $project, string $change, string $head, int $failures): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, $head, $failures));
+    }
+
+    public function handOverHead(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::HeadHandedOver, $this->headFailure($project, $change, $head, 4));
+    }
+
+    public function keepHeadPending(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::HeadPending, ['project' => $project, 'change' => $change, 'head' => $head, 'read_again_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    public function failHeadWithoutCause(string $project, string $change): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function headFailure(string $project, string $change, string $head, int $failures): array
+    {
+        return ['project' => $project, 'change' => $change, 'head' => $head, 'cause' => 'RuntimeException: commit '.$head.' not fetched', 'failures' => $failures, 'retry_at' => '2026-10-28T12:08:00+00:00'];
+    }
+
     /**
      * @return array<string, string>
      */

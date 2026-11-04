@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -13,6 +16,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(ListReviewsController::class)]
 #[UsesClass(LedgerReviews::class)]
+#[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(FailingHead::class)]
+#[UsesClass(HeadFault::class)]
 #[UsesClass(ReviewSummary::class)]
 #[UsesClass(RoundStart::class)]
 final class ListReviewsControllerTest extends DashboardPageTestCase
@@ -67,5 +73,27 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         self::assertSelectorTextContains('main', 'No review has started yet.');
         self::assertSelectorNotExists('table');
+        self::assertSelectorNotExists('.failing-heads');
+    }
+
+    public function testAHandedOverHeadShowsItsCauseAndNextTryOnItsCard(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', '<b>');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('alpha, pull request 7', $crawler->filter('.failing-heads .card h3')->text());
+        self::assertSame('handed over to the maintainer agent, 4 failures in a row, next try 2026-10-28 12:08:00 UTC', $crawler->filter('.failing-heads .card .state')->text());
+        self::assertSame('RuntimeException: commit <b> not fetched', $crawler->filter('.failing-heads .card .cause')->text());
+    }
+
+    public function testTheProjectParameterKeepsOnlyThatProjectsFailedHeads(): void
+    {
+        $this->ledger->failHead('alpha', '7', 'a', 1);
+        $this->ledger->failHead('beta', '8', 'a', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews?project=beta');
+
+        self::assertSame(['beta, pull request 8'], $crawler->filter('.failing-heads .card h3')->each(static fn ($title): string => $title->text()));
     }
 }
