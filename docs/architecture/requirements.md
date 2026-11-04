@@ -42,6 +42,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from the Dockerfile's hash | yes |
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
+| `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
 
