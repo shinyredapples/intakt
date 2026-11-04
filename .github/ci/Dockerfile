@@ -11,9 +11,9 @@ ARG FRANKENPHP_SHA256=3bbd2f11929550e3b35ddb407c7981ef14bc5337e705c910068f85a6cc
 
 RUN set -eu; \
     apt-get update; \
-    apt-get install --yes --no-install-recommends git iproute2 jq libpq-dev python3 unzip; \
+    apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
-    docker-php-ext-install -j"$(nproc)" pdo_mysql pdo_pgsql; \
+    docker-php-ext-install -j"$(nproc)" intl pcntl pdo_mysql pdo_pgsql zip; \
     echo 'memory_limit=-1' > "$PHP_INI_DIR/conf.d/ci.ini"; \
     curl -fsSL -o /usr/local/bin/composer "https://getcomposer.org/download/$COMPOSER_VERSION/composer.phar"; \
     echo "$COMPOSER_SHA256  /usr/local/bin/composer" | sha256sum --check --strict; \
