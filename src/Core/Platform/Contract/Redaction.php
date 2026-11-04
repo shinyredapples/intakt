@@ -168,7 +168,7 @@ final readonly class Redaction
 
         $result = '';
         $offset = 0;
-        while (1 === ($found = preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset))) {
+        while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $valueStart = $match['head'][1] + strlen($match['head'][0]);
             $result .= substr($text, $offset, $valueStart - $offset);
             // Only a list's own marker is skipped, so the text after the list stays, while a value that merely holds a list opening is redacted whole.
@@ -185,7 +185,7 @@ final readonly class Redaction
         }
 
         // A failed match would leave the rest unredacted, so nothing of the text goes out.
-        return false === $found ? self::MARKER : $result.substr($text, $offset);
+        return PREG_NO_ERROR === preg_last_error() ? $result.substr($text, $offset) : self::MARKER;
     }
 
     private function redactUserinfo(string $text): string
