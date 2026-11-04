@@ -242,7 +242,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     public function testRequestsAreCountedOnceTheWorkerHasFinishedTheLastAnsweredOne(): void
     {
-        $reads = self::threadReads([self::appThreadWithRequests(9), self::appThreadWithRequests(10)]);
+        $reads = $this->threadReads([$this->appThreadWithRequests(9), $this->appThreadWithRequests(10)]);
 
         $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
 
@@ -251,7 +251,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     public function testRequestsAlreadyCountedAreReadOnce(): void
     {
-        $reads = self::threadReads([self::appThreadWithRequests(10)]);
+        $reads = $this->threadReads([$this->appThreadWithRequests(10)]);
 
         $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
 
@@ -263,7 +263,7 @@ final class CaddyfileWorkersTest extends TestCase
      *
      * @return Generator<int, list<array<mixed>>>
      */
-    private static function threadReads(array $reads): Generator
+    private function threadReads(array $reads): Generator
     {
         yield from $reads;
     }
@@ -285,7 +285,7 @@ final class CaddyfileWorkersTest extends TestCase
     /**
      * @return list<array<mixed>>
      */
-    private static function appThreadWithRequests(int $requests): array
+    private function appThreadWithRequests(int $requests): array
     {
         return [['Name' => 'Worker /app/public/index.php', 'RequestCount' => $requests]];
     }
