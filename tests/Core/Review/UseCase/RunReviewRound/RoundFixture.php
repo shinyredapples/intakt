@@ -42,6 +42,7 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
@@ -400,7 +401,7 @@ final readonly class RoundFixture
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes), $this->serializer);
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes), $this->serializer, new StopRequests($ledger ?? $this->ledger));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
     }

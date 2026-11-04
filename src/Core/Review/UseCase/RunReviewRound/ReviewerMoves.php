@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\StopRequests;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -22,6 +23,7 @@ final readonly class ReviewerMoves
         private RoundLedger $ledger,
         #[Target('stored')]
         private SerializerInterface $serializer,
+        private StopRequests $stops,
     ) {
     }
 
@@ -37,6 +39,7 @@ final readonly class ReviewerMoves
         $reviewer->recordVerdict($this->serializer->serialize($verdict, 'json'), $substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
+        $this->answerStopRequest($reviewer, $verdict);
 
         if ($substitute instanceof Provider) {
             $this->ledger->catchUpOwed($reviewer, $substitute);
@@ -69,5 +72,13 @@ final readonly class ReviewerMoves
     public function requeue(RoundReviewer $reviewer): void
     {
         $this->machine->apply($reviewer, ReviewerTransition::Requeue->value);
+    }
+
+    // Only for a pending request, because a model can name the stopped finding itself, and only the owner's request may make the ledger say a reviewer was stopped.
+    private function answerStopRequest(RoundReviewer $reviewer, Verdict $verdict): void
+    {
+        if ($verdict->isStopped() && $this->stops->pendingFor($reviewer->round()->id(), $reviewer->id())) {
+            $this->ledger->reviewerStopped($reviewer);
+        }
     }
 }

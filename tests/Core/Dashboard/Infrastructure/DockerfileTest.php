@@ -41,6 +41,17 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^RUN install-php-extensions .*\bpcntl\b/m', $this->dockerfile());
     }
 
+    public function testTheImageInstallsGitForTheForgeAndTheSampleRepository(): void
+    {
+        self::assertMatchesRegularExpression('/^\s+&& apt-get install -y --no-install-recommends git\b/m', $this->dockerfile());
+    }
+
+    public function testTheImagePointsReviewersAtTheMcpServerOnItsOwnPort(): void
+    {
+        self::assertMatchesRegularExpression('/^\s+SERVER_PORT=7781\b/m', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^\s+REVIEW_MCP_BASE_URL=http:\/\/localhost:7781\b/m', $this->dockerfile());
+    }
+
     private function dockerfile(): string
     {
         $contents = file_get_contents(__DIR__.'/../../../../Dockerfile');

@@ -1,6 +1,6 @@
 # A demo walkthrough
 
-A guided first run: start Intakt with a sample project, watch it review a change with deliberate mistakes, and see what each part of the screen means. Intakt is still being built: this walkthrough follows the demo the plan builds (milestone M5, tasks T23 and T24 in [the plan](../plan.md)), and its exact commands and timings are filled in when that demo works.
+A guided first run: start Intakt with a sample project, watch it review a change with deliberate mistakes, and see what each part of the screen means. Intakt is still being built: this walkthrough follows the demo the plan builds (milestone M5, tasks T23 and T24 in [the plan](../plan.md)), and the commands are below, and the timings are recorded in the [README](../../README.md#timed-run) once the owner has timed a run.
 
 ## What you need
 
@@ -21,10 +21,10 @@ flowchart LR
 ```
 
 1. **Clone** the repository.
-2. **Add your keys:** copy `.env.dist` to `.env` and fill in one or two provider keys.
-3. **Start it:** `docker compose up`. The first start sets up a **sample project**: a small codebase with a base version and a pull request that contains deliberate, findable problems.
-4. **Open the dashboard** in your browser.
-5. **Watch the review:** the sample pull request moves into **In review**. Open its card to see the reviewers working live: the files they read, the small tests they run.
+2. **Add your keys:** copy `.env.dist` to `.env.local` and fill in one or two provider keys, plus two secrets (any long random text; `openssl rand -hex 32` makes one).
+3. **Start it:** `docker compose up`. The first start sets up a **sample project**: a small codebase with a base version and a pull request that contains deliberate, findable problems, and a panel of two reviewers. With one key both reviewers come from that company; with two keys, from two companies. Later starts keep what the first one set up.
+4. **Open the dashboard** in your browser, at `http://localhost:7781`.
+5. **Watch the review:** for now you start it yourself, with the command the start printed at the end of its log (`docker compose exec intakt php bin/console intakt:review sample-change ...`); Intakt starting it on its own is still planned. The sample pull request moves into **In review**. Open its card to see the reviewers working live: the files they read, the small tests they run.
 6. **Read the verdicts:** each reviewer's verdict appears with its findings (P1, P2, P3), and the judge step's list of what to fix now. Compare the findings with the deliberate problems in the sample: the demo is designed so the reviewers find them.
 7. **Try it from your AI assistant:** connect your assistant to Intakt's MCP server and ask it to start a review of the sample branch, then read the verdicts and the list of things to fix ([how](using-intakt-from-your-assistant.md)).
 

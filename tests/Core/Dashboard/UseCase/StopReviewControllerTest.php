@@ -85,6 +85,26 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.flash-success', 'Asked the reviewer to stop.');
     }
 
+    public function testASecondPressForAStillRunningReviewerRecordsASecondRequestAndAnswersLikeTheFirst(): void
+    {
+        $this->runningReviewer();
+        $token = $this->token();
+
+        foreach ([1, 2] as $_) {
+            $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $token]);
+
+            self::assertResponseStatusCodeSame(303);
+            self::assertResponseRedirects('/reviews/round-1');
+            $this->browser->followRedirect();
+            self::assertSelectorTextContains('.flash-success', 'Asked the reviewer to stop.');
+        }
+
+        $recorded = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false);
+        self::assertCount(2, $recorded);
+        self::assertSame(['round' => 'round-1', 'reviewer' => 'round-1-security'], json_decode($recorded[0]->event->payload, true));
+        self::assertSame(['round' => 'round-1', 'reviewer' => 'round-1-security'], json_decode($recorded[1]->event->payload, true));
+    }
+
     public function testAMissingTokenRecordsNothing(): void
     {
         $this->runningReviewer();

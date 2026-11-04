@@ -20,10 +20,16 @@ RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
 
 FROM base
 
+# The base image has no git, which the local git forge reads a change with and the demo builds its sample repository with; Debian's is 2.45 or later (--no-lazy-fetch).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV APP_ENV=prod \
     APP_DEBUG=0 \
     SERVER_PORT=7781 \
     DASHBOARD_PORT=7781 \
+    REVIEW_MCP_BASE_URL=http://localhost:7781 \
     MERCURE_JWT_ISSUER=http://localhost:7781 \
     FRANKENPHP_LOOP_MAX=500 \
     WORKER_MEMORY_CEILING_MB=256 \
