@@ -25,12 +25,6 @@ final readonly class StopRequests
         return LedgerEventKind::ReviewerStopRequested === $this->lastRowFor($round, $reviewer);
     }
 
-    // The newest row is the answer, so a stop of an earlier run does not count for a later one that began after it.
-    public function answeredFor(Uuid $round, Uuid $reviewer): bool
-    {
-        return LedgerEventKind::ReviewerStopped === $this->lastRowFor($round, $reviewer);
-    }
-
     private function lastRowFor(Uuid $round, Uuid $reviewer): ?LedgerEventKind
     {
         $pair = [$round->toRfc4122(), $reviewer->toRfc4122()];
