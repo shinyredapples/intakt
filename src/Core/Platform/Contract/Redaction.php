@@ -101,8 +101,7 @@ final readonly class Redaction
     // Values are redacted only between the lists, because a value pass over a replaced list would take the marker and the rest of its line as a value.
     private function redactHeaders(string $text): string
     {
-        // The print_r form is told apart because it alone breaks the line between Array and its parenthesis.
-        // A held credential's marker is no list, so the value after it is still redacted.
+        // The print_r form is told apart because it alone breaks the line before its parenthesis; a held credential's marker opens no list, so the value after it is still redacted.
         $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|(?!'.preg_quote(self::MARKER, '~').')\[)~i';
 
         $result = '';
