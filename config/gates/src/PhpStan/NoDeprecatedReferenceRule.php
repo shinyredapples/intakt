@@ -63,7 +63,7 @@ final readonly class NoDeprecatedReferenceRule implements Rule
             array_filter($finder->findInstanceOf($nodes, GroupUse::class), static fn (GroupUse $group): bool => Use_::TYPE_NORMAL === $group->type),
         );
 
-        return array_merge([], ...$plain, ...$grouped);
+        return array_values(array_merge([], ...$plain, ...$grouped));
     }
 
     /**

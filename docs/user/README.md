@@ -128,6 +128,10 @@ Intakt keeps one process alive across many requests and messages, so a service t
 
 Doctrine entities, embeddables, mapped superclasses and column types, and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
 
+## When `bin/check` reports a deprecated reference
+
+Deprecated code is not used. The `phpstan` gate of `bin/check` already reports a call, a `new` or a signature type that uses a deprecated symbol, and reports a finding `intakt.deprecatedReference` for the places that check misses: a `use` import, an `instanceof`, a `catch` type, a `::class`, an attribute and a type in a docblock (`@var`, `@param`, `@return`, `@throws`), each naming a deprecated class, interface or trait. A class is deprecated when it carries a `@deprecated` tag, or when its file calls `trigger_deprecation()` outside any class or function, as some Symfony classes do to warn when they load. The finding names the class. To resolve it, switch to the replacement the class names (its `@deprecated` text or its deprecation message says which); do not silence the finding.
+
 ## When `bin/check` reports a flag parameter
 
 A boolean parameter that switches what a function does hides two behaviors behind one name, so the `phpstan` gate of `bin/check` reports a finding `intakt.flagParameter` for every parameter typed `bool`, `true` or `false` (also nullable or in a union) of a function, method, closure or constructor, except in `tests/`. The finding names the parameter. A `readonly` service is reported like any other. To resolve it, do one of:
