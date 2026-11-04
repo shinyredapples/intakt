@@ -15,10 +15,10 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 
 #[Group('persistence')]

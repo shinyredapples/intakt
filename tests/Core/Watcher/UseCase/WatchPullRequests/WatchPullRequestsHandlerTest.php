@@ -62,11 +62,11 @@ use Intakt\Tests\Core\Watcher\UseCase\AdmitHeads\RecordedChecks;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 

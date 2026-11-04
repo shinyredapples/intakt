@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Closure;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\StopReview\StopReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
@@ -18,10 +19,12 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
+use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\AgentVendor;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -31,7 +34,6 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use Symfony\Component\Clock\MockClock;
 
 // The stop is pressed on the real page while a scripted reviewer works, so the order is forced by the script and nothing is seeded by hand.
@@ -40,6 +42,8 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewerStopping::class)]
 #[UsesClass(StopRequests::class)]
+#[UsesClass(LedgerRounds::class)]
+#[UsesClass(LiveRoundProgress::class)]
 final class StopReviewerEndToEndTest extends WebTestCase
 {
     private KernelBrowser $browser;

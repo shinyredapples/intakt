@@ -62,6 +62,13 @@ final class PanelTest extends TestCase
         self::assertCount(2, $panel->reviewers);
     }
 
+    public function testAPanelOfFourReviewersIsBuiltBecauseTheSizeIsNotLimited(): void
+    {
+        $panel = new Panel(array_fill(0, 4, $this->reviewer(Tier::Strong)), QuorumPolicy::All);
+
+        self::assertCount(4, $panel->reviewers);
+    }
+
     private function reviewer(Tier $tier): PanelReviewer
     {
         return new PanelReviewer(new ReviewerRole('correctness', 'Check the logic.'), new ReviewerModel($tier, Provider::Anthropic), 3);

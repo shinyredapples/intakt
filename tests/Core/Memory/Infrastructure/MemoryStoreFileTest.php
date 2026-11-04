@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\AI\Store\ManagedStoreInterface;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversNothing]
 #[Group('persistence')]

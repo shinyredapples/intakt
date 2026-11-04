@@ -134,8 +134,15 @@ final readonly class HighlightsGate implements Gate
             $findings[] = 'status "'.$status.'" is not one of '.implode(', ', $known);
         }
 
-        if (false !== $columns['where']) {
-            $findings = [...$findings, ...$this->whereFindings($cells[$columns['where']] ?? '', $exists)];
+        if (false === $columns['where']) {
+            return $findings;
+        }
+
+        $where = $cells[$columns['where']] ?? '';
+        $findings = [...$findings, ...$this->whereFindings($where, $exists)];
+
+        if (HighlightStatus::Planned === HighlightStatus::tryFrom($status ?? '') && $this->namesOnlyExistingPaths($where, $exists)) {
+            $findings[] = 'row "'.$cells[0].'" is planned, but every path its Where names exists: update its status';
         }
 
         return $findings;
@@ -162,11 +169,8 @@ final readonly class HighlightsGate implements Gate
             $findings[] = 'Where cites a pull request ("'.$match[0].'"), cite the task and issue instead';
         }
 
-        foreach ($matches[2] as $span) {
-            // Falling back to the raw span keeps a failed match checked, since padding makes no tracked path.
-            $path = preg_replace(self::PADDED_SPAN, '$1', $span) ?? $span;
-
-            if (1 === preg_match(self::PATH_LIKE, $path) && !$exists(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path)) {
+        foreach ($this->pathsOf($matches[2]) as $path) {
+            if (!$exists($path)) {
                 $findings[] = 'Where names `'.$path.'`, which does not exist on the branch';
             }
         }
@@ -174,10 +178,56 @@ final readonly class HighlightsGate implements Gate
         return $findings;
     }
 
+    // A cell without a path proves nothing built, so it never reads as done.
+    /**
+     * @param Closure(string): bool $exists
+     */
+    private function namesOnlyExistingPaths(string $where, Closure $exists): bool
+    {
+        if (false === preg_match_all(self::BACKTICKED, $where, $matches)) {
+            return false;
+        }
+
+        $paths = $this->pathsOf($matches[2]);
+
+        return [] !== $paths && array_all($paths, $exists);
+    }
+
+    /**
+     * @param list<string> $spans
+     *
+     * @return list<string>
+     */
+    private function pathsOf(array $spans): array
+    {
+        $paths = [];
+
+        foreach ($spans as $span) {
+            // Falling back to the raw span keeps a failed match checked, since padding makes no tracked path.
+            $path = preg_replace(self::PADDED_SPAN, '$1', $span) ?? $span;
+
+            if (1 === preg_match(self::PATH_LIKE, $path)) {
+                $paths[] = $path;
+            }
+        }
+
+        return $paths;
+    }
+
     /**
      * @return Closure(string): bool
      */
     private function existenceOn(string $root, ?ProcessResult $tracked): Closure
+    {
+        $exists = $this->trackedOrPresent($root, $tracked);
+
+        return static fn (string $path): bool => $exists(preg_replace(self::LEADING_DOT_SLASH, '', $path) ?? $path);
+    }
+
+    /**
+     * @return Closure(string): bool
+     */
+    private function trackedOrPresent(string $root, ?ProcessResult $tracked): Closure
     {
         // Without git there is no branch, so the working tree stands in for it.
         if (!$tracked instanceof ProcessResult) {

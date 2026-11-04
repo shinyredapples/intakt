@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Intakt\Kernel;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\AI\AiBundle\AiBundle;
 use Symfony\AI\McpBundle\McpBundle;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(Kernel::class)]
 final class KernelTest extends KernelTestCase

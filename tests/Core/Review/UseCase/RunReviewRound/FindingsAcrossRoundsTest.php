@@ -33,13 +33,13 @@ use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
+use Intakt\Tests\Support\KernelTestCase;
 use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 
