@@ -81,6 +81,12 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerBlocked, $this->identify($reviewer) + ['reason' => $reason]);
     }
 
+    // Answers every stop request of this reviewer recorded before it, because the ledger orders them by place.
+    public function reviewerStopped(RoundReviewer $reviewer): void
+    {
+        $this->append(LedgerEventKind::ReviewerStopped, $this->identify($reviewer));
+    }
+
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
     public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
     {
