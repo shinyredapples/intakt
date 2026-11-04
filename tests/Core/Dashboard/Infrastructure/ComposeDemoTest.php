@@ -22,7 +22,7 @@ final class ComposeDemoTest extends TestCase
         $envFiles = array_column($this->service()['env_file'], 'path');
 
         self::assertSame(['.env.local'], $envFiles);
-        self::assertContains('.env.local', file(self::ROOT.'/.dockerignore', FILE_IGNORE_NEW_LINES));
+        self::assertContains('.env.local', explode(PHP_EOL, new Filesystem()->readFile(self::ROOT.'/.dockerignore')));
     }
 
     public function testTheSeededFilesLiveOnTheDataVolume(): void
@@ -78,6 +78,9 @@ final class ComposeDemoTest extends TestCase
      */
     private function envTemplate(): array
     {
-        return new Dotenv()->parse(new Filesystem()->readFile(self::ROOT.'/.env.dist'));
+        /** @var array<string, string> $variables */
+        $variables = new Dotenv()->parse(new Filesystem()->readFile(self::ROOT.'/.env.dist'));
+
+        return $variables;
     }
 }

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Application;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -112,7 +113,9 @@ final class SampleProjectSeedTest extends KernelTestCase
         $panels = $this->bootSeeded()->get(Panels::class);
         self::assertInstanceOf(Panels::class, $panels);
 
-        return array_map(static fn (PanelReviewer $reviewer): Provider => $reviewer->model->provider, $panels->panelFor('sample')->reviewers);
+        $panel = $panels->panelForChange('sample', new ChangeDescription(1, [], []));
+
+        return array_map(static fn (PanelReviewer $reviewer): Provider => $reviewer->model->provider, $panel->reviewers);
     }
 
     private function bootSeeded(): ContainerInterface

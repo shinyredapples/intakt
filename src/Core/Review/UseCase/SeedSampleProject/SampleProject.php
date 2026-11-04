@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use LogicException;
 use Symfony\Component\Yaml\Yaml;
 
 final readonly class SampleProject
@@ -84,7 +85,10 @@ final readonly class SampleProject
     {
         $models = [];
         foreach ($tiers as $tier => $provider) {
-            $models[$tier] = ['provider' => $provider->value, 'model' => self::MODELS[$provider->value][$tier]];
+            $models[$tier] = [
+                'provider' => $provider->value,
+                'model' => self::MODELS[$provider->value][$tier] ?? throw new LogicException(sprintf('The sample project has no %s model on %s.', $tier, $provider->value)),
+            ];
         }
 
         return $models;

@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Builds what fixtures/sample-repository/README.md describes: main holds base/, the branch adds pull-request/ on top.
+// Built at the first start, because the fixture is plain files rather than a git repository (fixtures/sample-repository/README.md).
 final readonly class SampleRepository
 {
     public const string BASE = 'main';
