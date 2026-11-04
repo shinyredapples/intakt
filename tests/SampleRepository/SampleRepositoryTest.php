@@ -44,6 +44,16 @@ final class SampleRepositoryTest extends TestCase
         self::assertStringContainsString('+++ b/src/discount.js', $diff);
     }
 
+    public function testTheMissingTestSampleChangesNoTestFile(): void
+    {
+        $output = $this->build()->log('--name-only', '--format=', 'main..sample-change');
+
+        $changed = array_filter(explode("\n", $output), static fn (string $name): bool => '' !== $name);
+
+        self::assertNotSame([], $changed);
+        self::assertSame([], array_values(array_filter($changed, static fn (string $name): bool => str_starts_with($name, 'test/'))));
+    }
+
     public function testTheIssuesCoverABugAMissingTestAndASecuritySmell(): void
     {
         $kinds = array_unique(array_column(self::listedIssues(), 'kind'));
