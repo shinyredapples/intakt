@@ -29,7 +29,7 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpKernel\DependencyInjection\ServicesResetter;
+use Symfony\Component\DependencyInjection\ServicesResetterInterface;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -182,7 +182,7 @@ final class WorkerModeTest extends TestCase
     private function nextRequestSees(KernelInterface $kernel): WorkerState
     {
         $resetter = $kernel->getContainer()->get('services_resetter');
-        assert($resetter instanceof ServicesResetter);
+        assert($resetter instanceof ServicesResetterInterface);
         $resetter->reset();
 
         return WorkerState::in($kernel);
