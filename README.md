@@ -17,15 +17,15 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 
 ## Five-minute start
 
-The demo (planned, see [Status](#status)):
+The demo (its timed run is planned, see [Status](#status)):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
-cp .env.dist .env.local   # add one or more provider API keys
+cp .env.dist .env.local   # add one or two provider API keys and the two secrets
 docker compose up         # Intakt, its database and a sample repository
 ```
 
-Then open the dashboard, pick the sample pull request and start a review. The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+Then start the review with the command the log prints at the end of the first start, and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
 
 What works now:
 

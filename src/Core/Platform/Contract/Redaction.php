@@ -33,8 +33,7 @@ final readonly class Redaction
     public function redact(string $text, #[SensitiveParameter] string ...$heldCredentials): string
     {
         $text = $this->redactHeldCredentials($text, array_values($heldCredentials));
-        $text = $this->redactHeaderLists($text);
-        $text = $this->redactHeaderValues($text);
+        $text = $this->redactHeaders($text);
         $text = $this->redactUserinfo($text);
 
         return $this->redactSecretShapes($text);
@@ -99,12 +98,23 @@ final readonly class Redaction
         return implode('', array_map(static fn (string $unit): string => '\\\\+u(?i:'.$unit.')', $units));
     }
 
-    private function redactHeaderLists(string $text): string
+    private function redactHeaders(string $text): string
     {
-        // The print_r form is told apart because it alone breaks the line between Array and its parenthesis.
-        $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|\[)~i';
+        [$text, $listMarkers] = $this->redactHeaderLists($text);
+
+        return $this->redactHeaderValues($text, $listMarkers);
+    }
+
+    /**
+     * @return array{string, list<int>}
+     */
+    private function redactHeaderLists(string $text): array
+    {
+        // The print_r form is told apart because it alone breaks the line before its parenthesis; a held credential's marker opens no list, so the value after it is still redacted.
+        $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|(?!'.preg_quote(self::MARKER, '~').')\[)~i';
 
         $result = '';
+        $listMarkers = [];
         $offset = 0;
         while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $matchStart = $match[0][1];
@@ -117,11 +127,30 @@ final readonly class Redaction
             };
 
             // A missing end takes the rest of the text because stopping early would leak.
-            $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0])).self::MARKER;
+            $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0]));
+            // An unrecorded marker is redacted by the value pass with the rest of its value, because a plain header value may start with a bracket (`[Bearer] token`) and its tail is secret too.
+            if ($this->isValueOfQuotedKey($text, $matchStart) && $this->isListShaped($text, $afterOpen, $end)) {
+                $listMarkers[] = strlen($result);
+            }
+            $result .= self::MARKER;
             $offset = $end;
         }
 
-        return $result.substr($text, $offset);
+        return [$result.substr($text, $offset), $listMarkers];
+    }
+
+    // Only structured data quotes its keys (JSON, var_export), so only there can a closing bracket be trusted to end the value.
+    private function isValueOfQuotedKey(string $text, int $nameStart): bool
+    {
+        return 1 === preg_match('~\G(?:'.self::HEADER_NAMES.')\\\\*["\']~i', $text, offset: $nameStart);
+    }
+
+    private function isListShaped(string $text, int $afterOpen, int $end): bool
+    {
+        $listStart = '~\G\s*+(?:["\'\[\])]|\d+\s*+=>|array\s*+\()~i';
+        $listEnd = '~\G[ \t]*+(?:[,\]})]|\R|\z)~';
+
+        return 1 === preg_match($listStart, $text, offset: $afterOpen) && 1 === preg_match($listEnd, $text, offset: $end);
     }
 
     private function endOfQuotedList(string $text, int $from, string $brackets): int
@@ -143,18 +172,37 @@ final readonly class Redaction
         return strlen($text);
     }
 
-    private function redactHeaderValues(string $text): string
+    /**
+     * @param list<int> $listMarkers
+     */
+    private function redactHeaderValues(string $text, array $listMarkers): string
     {
         // A quoted value takes a backslash run and a quote as part of itself, so an escaped quote does not end it, and the other quote character is plain text in it.
         $quoted = '(?<open>\\\\*["\'])(?:(?!\k<open>)(?:\\\\+["\']|[^\\\\]|\\\\))*+(?:\k<open>|\z)';
         // Quoted Digest parameters stay inside so that the value ends at the line or at the closing quote of a shell word.
         $unquoted = '(?:[^\r\n"\']|"[^"\r\n]*")+';
+        $pattern = '~(?<head>'.self::HEADER_HEAD.')(?:'.$quoted.'|'.$unquoted.')~i';
 
-        return preg_replace_callback(
-            '~(?<head>'.self::HEADER_HEAD.')(?:'.$quoted.'|'.$unquoted.')~i',
-            static fn (array $match): string => $match['head'].($match['open'] ?? '').self::MARKER.($match['open'] ?? ''),
-            $text,
-        ) ?? self::MARKER;
+        $result = '';
+        $offset = 0;
+        while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
+            $valueStart = $match['head'][1] + strlen($match['head'][0]);
+            $result .= substr($text, $offset, $valueStart - $offset);
+            // Only a list's own marker is skipped, so the text after the list stays, while a value that merely holds a list opening is redacted whole.
+            if (in_array($valueStart, $listMarkers, true)) {
+                $result .= self::MARKER;
+                $offset = $valueStart + strlen(self::MARKER);
+
+                continue;
+            }
+
+            $open = $match['open'][0] ?? '';
+            $result .= $open.self::MARKER.$open;
+            $offset = $match[0][1] + strlen($match[0][0]);
+        }
+
+        // A failed match would leave the rest unredacted, so nothing of the text goes out.
+        return PREG_NO_ERROR === preg_last_error() ? $result.substr($text, $offset) : self::MARKER;
     }
 
     private function redactUserinfo(string $text): string

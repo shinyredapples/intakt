@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\UseCase\ProbeCodexLogin;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
 use Intakt\Core\Ai\Infrastructure\CodexLoginUnusable;
 use Intakt\Core\Ai\Infrastructure\CodexSettings;
@@ -29,7 +30,7 @@ final readonly class ProbeCodexLoginCommand
      */
     public function __construct(
         private CodexLogins $logins,
-        #[Autowire('%intakt.ai.codex%')]
+        #[Autowire(param: AiServices::CODEX)]
         private ?array $codex,
     ) {
     }
