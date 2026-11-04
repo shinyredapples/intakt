@@ -47,6 +47,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, 'round_changed', ['round' => $round->toRfc4122(), 'progress' => $progress]);
     }
 
+    #[Override]
+    public function reviewerStopped(Uuid $round, string $reviewer): void
+    {
+        $this->publish($round, 'reviewer_stopped', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
+    }
+
     /**
      * @param array<string, mixed> $context
      */
