@@ -140,7 +140,7 @@ final class CaddyfileWorkersTest extends TestCase
      */
     private function requestsPerWorkerFile(int $served): array
     {
-        return self::requestsOnceServed($this->threads(...), $served);
+        return $this->requestsOnceServed($this->threads(...), $served);
     }
 
     /**
@@ -149,12 +149,12 @@ final class CaddyfileWorkersTest extends TestCase
      * @return array<string, int>
      */
     // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
-    private static function requestsOnceServed(Closure $threads, int $served): array
+    private function requestsOnceServed(Closure $threads, int $served): array
     {
         $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
 
         do {
-            $counts = self::requestsPerWorkerFileOf($threads());
+            $counts = $this->requestsPerWorkerFileOf($threads());
 
             if (array_sum($counts) >= $served) {
                 return $counts;
@@ -172,7 +172,7 @@ final class CaddyfileWorkersTest extends TestCase
      * @return array<string, int>
      */
     // Counted by the file each thread runs, because the admin API names worker threads by file, not by worker name.
-    private static function requestsPerWorkerFileOf(array $threads): array
+    private function requestsPerWorkerFileOf(array $threads): array
     {
         $counts = ['index.php' => 0, 'mcp.php' => 0];
 
@@ -208,14 +208,14 @@ final class CaddyfileWorkersTest extends TestCase
 
     private function largestServingAppWorkerMemory(): int
     {
-        return self::largestMemoryOfServingAppWorkers($this->threads());
+        return $this->largestMemoryOfServingAppWorkers($this->threads());
     }
 
     /**
      * @param list<array<mixed>> $threads
      */
     // No serving worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
-    private static function largestMemoryOfServingAppWorkers(array $threads): int
+    private function largestMemoryOfServingAppWorkers(array $threads): int
     {
         $held = null;
 
@@ -236,16 +236,16 @@ final class CaddyfileWorkersTest extends TestCase
     {
         $thread = ['Name' => 'Worker /app/public/index.php', 'RequestCount' => 10];
 
-        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([$thread]));
-        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([]));
-        self::assertSame(526_224, self::largestMemoryOfServingAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
+        self::assertSame(PHP_INT_MAX, $this->largestMemoryOfServingAppWorkers([$thread]));
+        self::assertSame(PHP_INT_MAX, $this->largestMemoryOfServingAppWorkers([]));
+        self::assertSame(526_224, $this->largestMemoryOfServingAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
     }
 
     public function testRequestsAreCountedOnceTheWorkerHasFinishedTheLastAnsweredOne(): void
     {
         $reads = $this->threadReads([$this->appThreadWithRequests(9), $this->appThreadWithRequests(10)]);
 
-        $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
+        $counts = $this->requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
 
         self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
     }
@@ -254,7 +254,7 @@ final class CaddyfileWorkersTest extends TestCase
     {
         $reads = $this->threadReads([$this->appThreadWithRequests(10)]);
 
-        $counts = self::requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
+        $counts = $this->requestsOnceServed(static fn (): array => self::nextRead($reads), 10);
 
         self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
     }
