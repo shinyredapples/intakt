@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Closure;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
@@ -37,6 +38,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
@@ -118,6 +121,26 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
+    public function testAStopAfterAMalformedToolCallStillEndsAsStoppedAndTheLedgerRecordsTheStop(): void
+    {
+        $message = $this->started();
+        $calls = 0;
+        $script = function () use ($message, &$calls): ToolCallResult {
+            if (0 === $calls++) {
+                return new ToolCallResult([new ToolCall('1', 'unknown_tool', [])]);
+            }
+            $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+
+            return new ToolCallResult([new ToolCall('2', 'read_file', ['path' => 'composer.json'])]);
+        };
+
+        $this->fixture->deliver($message, $this->agentScripted($script));
+
+        self::assertStringContainsString('"id":"reviewer-stopped"', (string) $this->fixture->reviewer($message->reviewerId)->verdictJson());
+        self::assertSame(['blocked'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
+        self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
+    }
+
     private function started(): ReviewWithReviewer
     {
         $this->fixture->start(1);
@@ -135,7 +158,12 @@ final class StopReviewerTest extends KernelTestCase
 
     private function agentAnswering(string $answer): AgentVendor
     {
-        $platform = MockPlatformFactory::createPlatform(static fn (): string => $answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        return $this->agentScripted(static fn (): string => $answer);
+    }
+
+    private function agentScripted(Closure $script): AgentVendor
+    {
+        $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests($this->fixture->ledger())));
 
         return new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);

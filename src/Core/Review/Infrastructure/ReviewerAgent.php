@@ -61,7 +61,8 @@ final readonly class ReviewerAgent implements Reviewer
 
         $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        if ($tools->seen()) {
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
+        if ($tools->seen() && !$verdict->isStopped()) {
             return Verdict::invalidOutput('the reviewer made a malformed tool call.');
         }
 
