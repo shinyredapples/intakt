@@ -89,8 +89,8 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
     public function testTheProjectParameterKeepsOnlyThatProjectsFailedHeads(): void
     {
-        $this->ledger->failHead('alpha', '7', 'a', 1);
-        $this->ledger->failHead('beta', '8', 'a', 1);
+        $this->ledger->failHead('alpha', '7', 1);
+        $this->ledger->failHead('beta', '8', 1);
 
         $crawler = $this->browser->request('GET', '/reviews?project=beta');
 

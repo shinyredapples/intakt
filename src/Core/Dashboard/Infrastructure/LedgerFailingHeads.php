@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
-use Exception;
+use DateTimeZone;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -28,7 +28,9 @@ final readonly class LedgerFailingHeads
      */
     public function now(): array
     {
+        /** @var array<string, array<string, FailingHead>> $failing */
         $failing = [];
+        /** @var array<string, array<string, ?string>> $handedOver */
         $handedOver = [];
 
         foreach ($this->ledger->readInOrder() as $recorded) {
@@ -87,15 +89,9 @@ final readonly class LedgerFailingHeads
 
     private function momentOf(mixed $moment): ?DateTimeImmutable
     {
-        if (!is_string($moment)) {
-            return null;
-        }
+        $parsed = is_string($moment) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC')) : false;
 
-        try {
-            return new DateTimeImmutable($moment);
-        } catch (Exception) {
-            return null;
-        }
+        return false === $parsed ? null : $parsed;
     }
 
     /**

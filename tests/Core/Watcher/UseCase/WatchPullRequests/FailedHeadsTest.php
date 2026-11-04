@@ -43,7 +43,7 @@ final class FailedHeadsTest extends KernelTestCase
         $listedAgain = RecordedForge::change('7', 'a', '2026-11-04T09:30:00Z');
         $pending->enqueue('alpha', [$old]);
         $pending->backOff(new HeadFailure('alpha', $old, 'RuntimeException: down'), 3, $clock->now());
-        $ledger = $this->createStub(Ledger::class);
+        $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback(static function () use ($pending, $listedAgain): AppendResult {
             $pending->enqueue('alpha', [$listedAgain]);
 

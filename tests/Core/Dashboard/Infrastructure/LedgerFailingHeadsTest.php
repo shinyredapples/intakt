@@ -28,7 +28,7 @@ final class LedgerFailingHeadsTest extends TestCase
 
     public function testAFailedHeadIsListedWithItsCauseFailuresAndNextTry(): void
     {
-        $this->ledger->failHead('alpha', '7', 'a', 2);
+        $this->ledger->failHead('alpha', '7',2);
 
         $heads = $this->failing();
 
@@ -38,16 +38,16 @@ final class LedgerFailingHeadsTest extends TestCase
 
     public function testOnlyTheLatestFailureOfAPullRequestIsListed(): void
     {
-        $this->ledger->failHead('alpha', '7', 'a', 1);
+        $this->ledger->failHead('alpha', '7',1);
 
-        $this->ledger->failHead('alpha', '7', 'a', 2);
+        $this->ledger->failHead('alpha', '7',2);
 
         self::assertSame([2], array_map(static fn (FailingHead $head): int => $head->fault->failures, $this->failing()));
     }
 
     public function testAHeadReadSinceItFailedIsNoLongerListed(): void
     {
-        $this->ledger->failHead('alpha', '7', 'a', 1);
+        $this->ledger->failHead('alpha', '7',1);
 
         $this->ledger->keepHeadPending('alpha', '7', 'a');
 
@@ -58,7 +58,7 @@ final class LedgerFailingHeadsTest extends TestCase
     {
         $this->ledger->handOverHead('alpha', '7', 'a');
 
-        $this->ledger->failHead('alpha', '7', 'a', 5);
+        $this->ledger->failHead('alpha', '7',5);
 
         self::assertTrue($this->failing()[0]->handedOver);
     }
@@ -67,15 +67,15 @@ final class LedgerFailingHeadsTest extends TestCase
     {
         $this->ledger->handOverHead('alpha', '7', 'a');
 
-        $this->ledger->failHead('alpha', '7', 'b', 1);
+        $this->ledger->failMovedHead('alpha', '7');
 
         self::assertFalse($this->failing()[0]->handedOver);
     }
 
     public function testTheSamePullRequestNumberInTwoProjectsIsListedForEach(): void
     {
-        $this->ledger->failHead('alpha', '7', 'a', 1);
-        $this->ledger->failHead('beta', '7', 'a', 1);
+        $this->ledger->failHead('alpha', '7',1);
+        $this->ledger->failHead('beta', '7',1);
 
         $this->ledger->keepHeadPending('beta', '7', 'a');
 
@@ -84,7 +84,7 @@ final class LedgerFailingHeadsTest extends TestCase
 
     public function testAnUnreadableFailureIsNotListedAndClearsTheEarlierOne(): void
     {
-        $this->ledger->failHead('alpha', '7', 'a', 1);
+        $this->ledger->failHead('alpha', '7',1);
 
         $this->ledger->failHeadWithoutCause('alpha', '7');
 
