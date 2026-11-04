@@ -136,9 +136,7 @@ final class ReviewerStoppingTest extends TestCase
             yield new Result(new TextResult('done'));
         }), $reviewer);
 
-        foreach ($execution as $update) {
-            self::assertNotNull($update);
-        }
+        self::assertNotSame([], iterator_to_array($execution, false));
 
         return $execution->getStatus();
     }

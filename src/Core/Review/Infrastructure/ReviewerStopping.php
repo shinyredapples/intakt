@@ -16,7 +16,7 @@ final readonly class ReviewerStopping
     ) {
     }
 
-    // Checked at every progress update, the only moment the agent hands control back: a request made before the call or during a retry wait lands at the first one, and a model silent for long stops only once it reports progress.
+    // Checked at every progress update, because only then does the agent hand control back: a request made before the call or during a retry wait lands at the first one, and a model silent for long stops only once it reports progress.
     public function watching(ExecutionInterface $execution, ReviewerConversation $reviewer): ExecutionInterface
     {
         $round = $reviewer->round;
