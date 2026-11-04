@@ -47,6 +47,34 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->failed('reproductions'), $run->output());
     }
 
+    public function testARowNamingAnotherPathEndingInTheFolderDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| A | done | `docs/upstream/a-bug/` | |\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testARowOfATableWithoutOuterPipesPasses(): void
+    {
+        $run = $this->checkWithSection(['upstream/a-bug/REPORT.md'], "## Found in the beta\n\nProbe | Where\n--- | ---\nA | `upstream/a-bug/`\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAPipePrefixedLineOutsideATableFails(): void
+    {
+        $run = $this->checkWithSection(['upstream/a-bug/REPORT.md'], "## Found in the beta\n\n| See `upstream/a-bug/` for an example.\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testALineAfterTheEndOfATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "\n| See `upstream/a-bug/` for an example.\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
     public function testANestedFolderOnlyNeedsTheRowOfItsReproduction(): void
     {
         $run = $this->checkWith(['upstream/a-bug/tests/ReproductionTest.php'], "| A | done | `upstream/a-bug/` | |\n");
@@ -127,13 +155,21 @@ final class ReproductionRowsGateTest extends SandboxTestCase
      */
     private function checkWith(array $files, string $rows): CheckRun
     {
+        return $this->checkWithSection($files, self::SECTION.$rows);
+    }
+
+    /**
+     * @param list<string> $files
+     */
+    private function checkWithSection(array $files, string $section): CheckRun
+    {
         $sandbox = $this->emptySandbox();
 
         foreach ($files as $file) {
             $sandbox->write($file, "# Reproduction\n");
         }
 
-        $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::SECTION.$rows);
+        $sandbox->write('docs/highlights.md', "# Highlights\n\n".$section);
 
         return $sandbox->check('--only=reproductions');
     }

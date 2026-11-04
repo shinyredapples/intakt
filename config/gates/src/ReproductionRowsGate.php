@@ -15,7 +15,10 @@ final readonly class ReproductionRowsGate implements Gate
     private const string REPRODUCTION_FILE = '#^upstream/([^/]+)/#';
 
     // A folder name ends at the first character a path or a code span cannot hold, so `upstream/a-bug-two/` names no `a-bug`.
-    private const string NAMED_FOLDER = '#\bupstream/([^/\s`|<>]+)#';
+    // The path must start at `upstream/`, so `docs/upstream/a-bug/` names no reproduction either.
+    private const string NAMED_FOLDER = '#(?<![\w/.-])upstream/([^/\s`|<>]+)#';
+
+    private const string DELIMITER_ROW = '/^[\s|:-]*-[\s|:-]*$/';
 
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
@@ -88,7 +91,7 @@ final readonly class ReproductionRowsGate implements Gate
      */
     private function sectionRows(string $contents): array
     {
-        $rows = [];
+        $section = [];
         $inSection = false;
 
         foreach ($this->codeBlocks->blanked(explode("\n", $contents)) as $line) {
@@ -98,12 +101,44 @@ final readonly class ReproductionRowsGate implements Gate
                 continue;
             }
 
-            // Only a table row counts, because the section's prose names `upstream/<slug>/` as a pattern.
-            if ($inSection && str_starts_with(ltrim($line), '|')) {
-                $rows[] = $line;
+            if ($inSection) {
+                $section[] = $line;
             }
         }
 
+        return $this->tableBodyRows($section);
+    }
+
+    /**
+     * Only a table body row counts, because the section's prose names `upstream/<slug>/` as a pattern.
+     *
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function tableBodyRows(array $lines): array
+    {
+        $rows = [];
+        $inTable = false;
+        $previous = '';
+
+        foreach ($lines as $line) {
+            if ('' === trim($line)) {
+                $inTable = false;
+            } elseif ($inTable) {
+                $rows[] = $line;
+            } elseif ($this->startsATable($previous, $line)) {
+                $inTable = true;
+            }
+
+            $previous = $line;
+        }
+
         return $rows;
+    }
+
+    private function startsATable(string $header, string $delimiter): bool
+    {
+        return str_contains($header, '|') && str_contains($delimiter, '|') && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
     }
 }
