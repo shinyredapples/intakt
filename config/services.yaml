@@ -119,5 +119,5 @@ when@test:
         - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
         # Recorded pull requests and CI runs, so a tick runs on an install in the test environment while no forge lists them (plan task T18).
         - { resource: '../tests/Core/Watcher/services.yaml', ignore_errors: not_found }
-        # The start guard under a public test name, so its test proves the alias and the ceilings this file wires.
+        # The start guard under a public test name, so its test proves the alias this file wires and the ceilings config/packages/ai.php binds.
         - { resource: '../tests/Core/Budget/services.yaml', ignore_errors: not_found }
