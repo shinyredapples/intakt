@@ -24,8 +24,21 @@ final class HeldCredentialsTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($_SERVER[self::NAME], $_SERVER[self::NAME.'_TEAM'], $_SERVER['OTHER_'.self::NAME], $_SERVER[self::NAME.'S']);
+        unset($_SERVER[self::NAME], $_SERVER[self::NAME.'_TEAM'], $_SERVER['OTHER_'.self::NAME], $_SERVER[self::NAME.'S'], $_ENV[self::NAME]);
+        putenv(self::NAME);
         new Filesystem()->remove($this->vaultDirectory);
+    }
+
+    public function testAVariableWithAnotherValueInEachSourceHoldsEveryValue(): void
+    {
+        putenv(self::NAME.'=process-credential-canary');
+        $_ENV[self::NAME] = 'env-credential-canary';
+        $_SERVER[self::NAME] = 'server-credential-canary';
+
+        self::assertSame(
+            ['process-credential-canary', 'env-credential-canary', 'server-credential-canary'],
+            new HeldCredentials([self::NAME])->values(),
+        );
     }
 
     public function testAVariableItNamesIsHeld(): void

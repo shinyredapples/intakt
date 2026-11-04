@@ -73,9 +73,31 @@ final readonly class RedactedJsonFormatter
             'class' => $failure::class,
             'message' => $failure->getMessage(),
             'at' => $failure->getFile().':'.$failure->getLine(),
-            'trace' => $failure->getTraceAsString(),
+            'trace' => $this->trace($failure),
             'previous' => $previous instanceof Throwable ? $this->failure($previous) : null,
         ];
+    }
+
+    // Never getTraceAsString(): it writes string arguments cut to zend.exception_string_param_max_len characters, and a credential's prefix does not match its whole value.
+    private function trace(Throwable $failure): string
+    {
+        $frames = [];
+        foreach ($failure->getTrace() as $index => $frame) {
+            $frames[] = $this->frame($index, $frame);
+        }
+        $frames[] = '#'.count($frames).' {main}';
+
+        return implode("\n", $frames);
+    }
+
+    /**
+     * @param array{file?: string, line?: int, class?: string, type?: string, function?: string} $frame
+     */
+    private function frame(int $index, array $frame): string
+    {
+        $place = isset($frame['file']) ? $frame['file'].'('.($frame['line'] ?? 0).')' : '[internal function]';
+
+        return sprintf('#%d %s: %s%s%s()', $index, $place, $frame['class'] ?? '', $frame['type'] ?? '', $frame['function'] ?? '');
     }
 
     /**

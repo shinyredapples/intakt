@@ -37,6 +37,42 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertStringContainsString(__FUNCTION__, $failure['trace']);
     }
 
+    // The image copies no php.ini, so production keeps the engine defaults: arguments in traces, strings cut to 15 characters when rendered.
+    public function testACredentialPassedAsATraceArgumentIsNotWrittenEvenCutShort(): void
+    {
+        $_SERVER[self::CREDENTIAL] = 'trace-canary-1234567890abcdef';
+        $ignoreArguments = ini_set('zend.exception_ignore_args', '0');
+        $cut = ini_set('zend.exception_string_param_max_len', '15');
+
+        try {
+            $line = $this->format('error', 'It failed.', ['exception' => $this->failedCallWith('trace-canary-1234567890abcdef')]);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignoreArguments);
+            ini_set('zend.exception_string_param_max_len', (string) $cut);
+        }
+
+        self::assertStringNotContainsString('trace-canary', $line);
+        self::assertStringContainsString('failedCallWith()', $this->loggedFailure($line)['trace']);
+    }
+
+    public function testAPreviousExceptionsTraceHoldsNoArgumentValueEither(): void
+    {
+        $_SERVER[self::CREDENTIAL] = 'trace-canary-1234567890abcdef';
+        $ignoreArguments = ini_set('zend.exception_ignore_args', '0');
+        $cut = ini_set('zend.exception_string_param_max_len', '15');
+
+        try {
+            $previous = $this->failedCallWith('trace-canary-1234567890abcdef');
+            $line = $this->format('error', 'It failed.', ['exception' => new RuntimeException('outer', 0, $previous)]);
+        } finally {
+            ini_set('zend.exception_ignore_args', (string) $ignoreArguments);
+            ini_set('zend.exception_string_param_max_len', (string) $cut);
+        }
+
+        self::assertStringNotContainsString('trace-canary', $line);
+        self::assertSame(RuntimeException::class, $this->loggedFailure($line)['previous']);
+    }
+
     public function testAPreviousExceptionIsWrittenWithItsOwnClass(): void
     {
         $line = $this->format('error', 'It failed.', ['exception' => new RuntimeException('outer', 0, new LogicException('inner'))]);
@@ -174,6 +210,11 @@ final class RedactedJsonFormatterTest extends TestCase
         self::assertSame('Bad key [redacted]', $failure['message']);
         self::assertSame(RuntimeException::class, $failure['class']);
         self::assertStringContainsString(__FUNCTION__, $failure['trace']);
+    }
+
+    private function failedCallWith(string $credential): RuntimeException
+    {
+        return new RuntimeException(sprintf('A call with a %d-character key failed.', strlen($credential)));
     }
 
     /**

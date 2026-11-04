@@ -33,11 +33,19 @@ final readonly class HeldCredentials
     /**
      * @return list<mixed>
      */
+    // Each source can hold its own value for a name (putenv() writes to neither array), so merging them by name would drop a value.
     private function environmentValues(): array
     {
-        $environment = [...getenv(), ...$_ENV, ...$_SERVER];
+        $values = [];
+        foreach ([getenv(), $_ENV, $_SERVER] as $source) {
+            foreach ($source as $name => $value) {
+                if ($this->isHeld((string) $name)) {
+                    $values[] = $value;
+                }
+            }
+        }
 
-        return array_values(array_filter($environment, fn (mixed $value, int|string $name): bool => $this->isHeld((string) $name), ARRAY_FILTER_USE_BOTH));
+        return $values;
     }
 
     /**
