@@ -8,6 +8,7 @@ use Intakt\Gates\PhpStan\DeprecatedClasses;
 use Intakt\Gates\PhpStan\FileScopeDeprecation;
 use Intakt\Gates\PhpStan\NoDeprecatedDocblockTypeRule;
 use Intakt\Gates\PhpStan\NoDeprecatedReferenceRule;
+use Intakt\Gates\PhpStan\OutermostTypeNodes;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(NoDeprecatedDocblockTypeRule::class)]
 #[CoversClass(DeprecatedClasses::class)]
 #[CoversClass(FileScopeDeprecation::class)]
+#[CoversClass(OutermostTypeNodes::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 {

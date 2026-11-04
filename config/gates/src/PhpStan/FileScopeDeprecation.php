@@ -39,7 +39,7 @@ final readonly class FileScopeDeprecation
     /**
      * @param array<Node> $statements
      *
-     * @return list<Node>
+     * @return array<Node>
      */
     private function bodies(array $statements): array
     {
@@ -50,7 +50,7 @@ final readonly class FileScopeDeprecation
     /**
      * @param array<Node> $nodes
      *
-     * @return list<int>
+     * @return array<int>
      */
     private function triggersIn(array $nodes): array
     {
