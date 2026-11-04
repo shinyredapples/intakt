@@ -14,8 +14,7 @@ final readonly class ReproductionRowsGate implements Gate
 
     private const string REPRODUCTION_FILE = '#^upstream/([^/]+)/#';
 
-    // A folder name ends at the first character a path or a code span cannot hold, so `upstream/a-bug-two/` names no `a-bug`.
-    // The path must start at `upstream/`, so `docs/upstream/a-bug/` names no reproduction either.
+    // A path starts at `upstream/` and ends where a code span ends, so `docs/upstream/a-bug/` and `upstream/a-bug-two/` name no `a-bug`.
     private const string NAMED_FOLDER = '#(?<![\w/.-])upstream/([^/\s`|<>]+)#';
 
     private const string DELIMITER_ROW = '/^[\s|:-]*-[\s|:-]*$/';
@@ -109,9 +108,8 @@ final readonly class ReproductionRowsGate implements Gate
         return $this->tableBodyRows($section);
     }
 
+    // Only a table body row counts, because the section's prose names `upstream/<slug>/` as a pattern.
     /**
-     * Only a table body row counts, because the section's prose names `upstream/<slug>/` as a pattern.
-     *
      * @param list<string> $lines
      *
      * @return list<string>
