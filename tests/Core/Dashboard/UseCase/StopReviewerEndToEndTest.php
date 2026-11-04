@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Closure;
+use Intakt\Core\Dashboard\UseCase\StopReview\StopReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -17,7 +18,6 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
-use Intakt\Core\Dashboard\UseCase\StopReview\StopReviewController;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\AgentVendor;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
