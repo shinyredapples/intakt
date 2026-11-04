@@ -160,6 +160,8 @@ final readonly class ReproductionRowsGate implements Gate
      */
     private function cells(string $row): array
     {
-        return preg_split(self::CELL_BORDER, preg_replace(self::OUTER_BORDERS, '', $row) ?? '') ?: [];
+        $cells = preg_split(self::CELL_BORDER, preg_replace(self::OUTER_BORDERS, '', $row) ?? '');
+
+        return false === $cells ? [] : $cells;
     }
 }
