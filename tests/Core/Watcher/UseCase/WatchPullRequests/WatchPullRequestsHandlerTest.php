@@ -392,10 +392,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
         $failing = true;
-        $this->commands->whileStarting = static function () use (&$failing): void {
-            if ($failing) {
-                throw new RuntimeException('commit not fetched yet');
-            }
+        $this->commands->whileStarting = static function (): void {
+            throw new RuntimeException('commit not fetched yet');
         };
         $this->tickEvery('+20 minutes', 4);
         $failing = false;
