@@ -9,6 +9,14 @@ set -euo pipefail
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
+# Set by compose.yaml for the demo. The image's container was built without the provider keys, which arrive only now, so it is built again before the seed reads them and again after it writes the project.
+if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
+    : "${INTAKT_CONFIG:?set INTAKT_CONFIG to the project file the sample project is written to}"
+    php bin/console cache:clear --no-interaction
+    php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
+    php bin/console cache:clear --no-interaction
+fi
+
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.
 frankenphp validate --config Caddyfile --adapter caddyfile
 
