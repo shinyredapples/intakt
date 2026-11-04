@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support\Log\Fixtures;
 
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
+use Intakt\Tests\Support\Log\RecordingLogger;
 use Intakt\Tests\Support\Log\RecordingLoggerFactory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -17,8 +18,9 @@ final class LogsAnErrorWithTheTraitFixture extends TestCase
 
     public function testItLogsAnErrorNobodyAssertsAndFailsItself(): void
     {
-        RecordingLoggerFactory::create(new NullLogger())->error('Disk on fire with the trait.');
+        $logger = RecordingLoggerFactory::create(new NullLogger());
+        $logger->error('Disk on fire with the trait.');
 
-        self::assertTrue(true);
+        self::assertInstanceOf(RecordingLogger::class, $logger);
     }
 }
