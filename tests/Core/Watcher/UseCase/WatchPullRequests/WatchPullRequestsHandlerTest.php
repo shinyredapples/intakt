@@ -23,6 +23,7 @@ use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Core\Watcher\UseCase\AdmitHeads\AdmitHeads;
@@ -31,7 +32,7 @@ use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadLocks;
-use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadsNotSettled;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadBackOff;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadsWithoutRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\LookAtHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
@@ -41,6 +42,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StartedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProjects;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
@@ -68,7 +70,8 @@ use Symfony\Component\Lock\LockFactory;
 #[CoversClass(HeadLocks::class)]
 #[CoversClass(SettleHead::class)]
 #[CoversClass(HeadsWithoutRound::class)]
-#[CoversClass(HeadsNotSettled::class)]
+#[CoversClass(HeadBackOff::class)]
+#[CoversClass(HeadFailure::class)]
 #[CoversClass(PendingHeads::class)]
 #[CoversClass(PendingHead::class)]
 #[CoversClass(StartedRounds::class)]
@@ -91,6 +94,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private const string RED = 'c';
     private const string NEXT_GREEN = 'e';
     private const string BASE = 'f';
+    // No recording, so reading its CI fails on every try.
+    private const string UNREADABLE = 'd';
 
     private EntityManagerInterface $entities;
     private RecordedForge $listing;
@@ -100,6 +105,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private MockClock $clock;
     private StandingQueryBus $queries;
     private BeforeChangeLockStore $locks;
+    private RecordingLogger $logger;
     private WatchPullRequestsHandler $handler;
 
     protected function setUp(): void
@@ -117,6 +123,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $this->queries = new StandingQueryBus($recorded, $entities);
         $this->locks = new BeforeChangeLockStore();
+        $this->logger = new RecordingLogger();
         $this->handler = $this->handler();
     }
 
@@ -232,31 +239,46 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertEquals(new CommitId(str_repeat(self::GREEN, 40)), $this->commands->started[0]->head);
     }
 
-    public function testAFailedStartIsTriedAgainOnTheNextTickEvenWhenTheListingIsUnchanged(): void
+    public function testAFailedStartIsTriedAgainOnceItsBackOffHasPassedEvenWhenTheListingIsUnchanged(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
-        $this->commands->whileStarting = $this->failOnce();
-        $this->tickExpectingFailure();
+        $this->commands->whileStarting = $this->failAlways();
+        $this->tick();
+        $this->commands->whileStarting = null;
 
+        $this->clock->modify('+61 seconds');
         $this->tick();
 
         self::assertSame(1, $this->listing->conditionalAnswers);
         self::assertCount(2, $this->commands->started);
-        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+    }
+
+    public function testAFailedStartIsNotTriedAgainBeforeItsBackOffHasPassed(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->commands->whileStarting = $this->failAlways();
+        $this->tick();
+        $this->commands->whileStarting = null;
+
+        $this->clock->modify('+59 seconds');
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
     }
 
     public function testAFailedStartLeavesNoRoundRecordedForItsHead(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
-        $this->commands->whileStarting = $this->failOnce();
+        $this->commands->whileStarting = $this->failAlways();
 
-        $this->tickExpectingFailure();
+        $this->tick();
 
         self::assertSame(0, $this->entities->getRepository(StartedRound::class)->count([]));
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
-    public function testAHeadThatCannotStartDoesNotHoldBackTheOtherHeadsOfTheTick(): void
+    public function testAHeadThatCannotStartIsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::NEXT_GREEN, '2026-11-02T09:00:00Z'));
         $this->commands->whileStarting = static function (StartReviewAtHead $command): void {
@@ -265,10 +287,83 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
             }
         };
 
-        $this->tickExpectingFailure();
+        $this->tick();
 
-        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
-        self::assertSame('8', $this->ledger->payloads()[0]['change']);
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['7', '8'], array_column($this->ledger->payloads(), 'change'));
+    }
+
+    public function testAHeadWhoseCiCannotBeReadIsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['change' => '6', 'cause' => 'LogicException: Not a recording: ', 'failures' => 1, 'retry_at' => '2026-11-02T10:01:00+00:00'], array_intersect_key($this->ledger->payloads()[0], array_flip(['change', 'cause', 'failures', 'retry_at'])));
+        self::assertSame('7', $this->ledger->payloads()[1]['change']);
+    }
+
+    public function testAHeadThatFailsIsLoggedAsAnErrorWithItsException(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        $errors = array_values(array_filter($this->logger->logged, static fn (array $line): bool => isset($line[1]['exception'])));
+        self::assertCount(1, $errors);
+        self::assertSame(['A head failed; it backs off alone.', '6', 1], [$errors[0][0], $errors[0][1]['change'], $errors[0][1]['failures']]);
+    }
+
+    public function testAHeadThatFailsOnEveryTryWaitsTwiceAsLongAfterEachFailure(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->clock->modify('+60 seconds');
+        $this->tick();
+
+        $this->clock->modify('+119 seconds');
+        $this->tick();
+
+        self::assertCount(2, $this->checks->asked);
+        self::assertSame(['2026-11-02T10:01:00+00:00', '2026-11-02T10:03:00+00:00'], array_column($this->ledger->payloads(), 'retry_at'));
+    }
+
+    public function testAHeadThatFailsFiveTimesInARowGoesToTheMaintainerAgentAndIsNoLongerTried(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->tickEvery('+20 minutes', 5);
+
+        $this->tickEvery('+1 hour', 1);
+
+        self::assertCount(5, $this->checks->asked);
+        self::assertSame([...array_fill(0, 4, LedgerEventKind::HeadFailed), LedgerEventKind::HeadHandedOver], $this->ledger->kinds());
+        self::assertSame(5, $this->ledger->payloads()[4]['failures']);
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAHeadHandedOverIsTriedAgainOnceItsPullRequestMoves(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->tickEvery('+20 minutes', 5);
+        $this->listing->opens('alpha', RecordedForge::change('6', self::GREEN, '2026-11-02T12:00:00Z'));
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+    }
+
+    public function testAFailureTheLedgerCannotRecordFailsTheTickAndLeavesTheHeadDue(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->useLedger(new InMemoryLedger(0));
+        $this->tickExpectingFailure();
+        $this->useLedger(new InMemoryLedger());
+
+        $this->tick();
+
+        self::assertCount(2, $this->checks->asked);
+        self::assertSame([LedgerEventKind::HeadFailed], $this->ledger->kinds());
     }
 
     public function testAHeadThatMovesDuringARoundMakesThatRoundsVerdictsStaleAndStoresIt(): void
@@ -343,24 +438,24 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->startRoundOnGreenHead();
         $this->queries->fetched = false;
         $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T10:05:00Z'));
-        $this->tickExpectingFailure();
+        $this->tick();
 
         $this->clock->modify('+59 seconds');
         $this->tick();
 
-        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadPending, LedgerEventKind::HeadFailed], $this->ledger->kinds());
         self::assertCount(2, $this->checks->asked);
     }
 
-    public function testAMovedHeadNotFetchedYetIsStillRecordedRedAndStaysDue(): void
+    public function testAMovedHeadNotFetchedYetIsStillRecordedRedAndStaysQueuedForItsNextTry(): void
     {
         $this->startRoundOnGreenHead();
         $this->queries->fetched = false;
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
 
-        $this->tickExpectingFailure();
+        $this->tick();
 
-        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::HeadFailed], $this->ledger->kinds());
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
@@ -370,9 +465,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->queries->fetched = false;
         $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
         $this->listing->opens('alpha', RecordedForge::change('7', self::RED, '2026-11-02T10:05:00Z'));
-        $this->tickExpectingFailure();
+        $this->tick();
         $this->queries->fetched = true;
 
+        $this->clock->modify('+61 seconds');
         $this->tick();
 
         self::assertTrue($this->storedStale(self::GREEN));
@@ -541,17 +637,25 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         ($this->handler)(new WatchPullRequests('alpha'));
     }
 
+    private function tickEvery(string $interval, int $ticks): void
+    {
+        foreach (range(1, $ticks) as $ignored) {
+            $this->tick();
+            $this->clock->modify($interval);
+        }
+    }
+
     private function tickExpectingFailure(): void
     {
         try {
             $this->tick();
-            self::fail('The failed start was swallowed.');
-        } catch (HeadsNotSettled) {
-            $this->commands->whileStarting = null;
+            self::fail('The line the ledger refused was swallowed.');
+        } catch (WatcherEventNotRecorded) {
+            // Expected: a line the ledger cannot take fails the tick, so the step is tried again.
         }
     }
 
-    private function failOnce(): Closure
+    private function failAlways(): Closure
     {
         return static fn () => throw new RuntimeException('the bus is down');
     }
@@ -568,15 +672,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
-        $logger = new RecordingLogger();
+        $logger = $this->logger;
         $pending = new PendingHeads($this->entities, $this->clock);
         $rounds = new StartedRounds($this->entities, $pending, new DiscardedRounds($this->commands, $logger));
         $find = new FindChangedPullRequests($this->listing, new SeenListings($this->entities, $locks), $logger);
         $admit = new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger);
-        $settle = new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), new RoundStarts($this->commands, $rounds, $ledger));
+        $backOff = new HeadBackOff($pending, $ledger, $this->clock, $logger);
+        $settle = new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), new RoundStarts($this->commands, $rounds, $ledger), $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $admit, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $admit, new AdmissionDecision(), $settle, $backOff));
     }
 
     private function panel(): Panel

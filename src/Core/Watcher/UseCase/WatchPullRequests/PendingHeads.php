@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -82,6 +84,44 @@ final readonly class PendingHeads
             ->getQuery()
             ->execute();
         $this->dropLoaded($this->keyOf($project, $decision->change));
+    }
+
+    public function failuresOf(string $project, OpenChange $head): int
+    {
+        return $this->stored($project, $head)?->failuresOf($head) ?? 0;
+    }
+
+    // Only while the row still holds this head, as in keep(), because a newer head the listing queued meanwhile has not failed.
+    public function backOff(HeadFailure $failure, int $failures, DateTimeImmutable $until): void
+    {
+        $this->entities->createQueryBuilder()
+            ->update(PendingHead::class, 'p')
+            ->set('p.readAgainAt', ':readAgainAt')
+            ->set('p.failures', ':failures')
+            ->where('p.project = :project AND p.change = :change AND p.head = :head')
+            ->setParameter('readAgainAt', PendingHead::momentOf($until))
+            ->setParameter('failures', $failures)
+            ->setParameter('project', $failure->project)
+            ->setParameter('change', $failure->head->id->value)
+            ->setParameter('head', $failure->head->head->hash)
+            ->getQuery()
+            ->execute();
+        $this->dropLoaded($this->keyOf($failure->project, $failure->head));
+    }
+
+    // Reset only once a head was settled in full, because a step that fails after the read-again time was kept must still count toward the hand-over.
+    public function clearFailures(string $project, OpenChange $settled): void
+    {
+        $this->entities->createQueryBuilder()
+            ->update(PendingHead::class, 'p')
+            ->set('p.failures', 0)
+            ->where('p.project = :project AND p.change = :change AND p.head = :head AND p.failures > 0')
+            ->setParameter('project', $project)
+            ->setParameter('change', $settled->id->value)
+            ->setParameter('head', $settled->head->hash)
+            ->getQuery()
+            ->execute();
+        $this->dropLoaded($this->keyOf($project, $settled));
     }
 
     // Removed with the listing's record, which forgets a closed pull request, because a closed one is never listed again and its CI, often cancelled, would be read every minute for good.

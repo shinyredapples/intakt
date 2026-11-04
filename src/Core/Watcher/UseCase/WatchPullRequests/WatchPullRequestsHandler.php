@@ -20,7 +20,7 @@ final readonly class WatchPullRequestsHandler
 
     /**
      * @throws ForgeReadFailed
-     * @throws HeadsNotSettled
+     * @throws WatcherEventNotRecorded
      */
     public function __invoke(WatchPullRequests $tick): void
     {

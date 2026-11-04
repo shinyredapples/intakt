@@ -33,6 +33,9 @@ final class PendingHead
     #[ORM\Column(name: 'read_again_at', length: 26)]
     private string $readAgainAt;
 
+    #[ORM\Column(options: ['default' => 0])]
+    private int $failures = 0;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]
@@ -49,6 +52,13 @@ final class PendingHead
         $this->head = $waiting->head->hash;
         $this->updatedAt = self::momentOf($waiting->updatedAt);
         $this->readAgainAt = self::momentOf($readAgainAt);
+        // Counted anew, because a head the listing names again has moved or been touched since it last failed.
+        $this->failures = 0;
+    }
+
+    public function failuresOf(OpenChange $head): int
+    {
+        return $head->head->hash === $this->head ? $this->failures : 0;
     }
 
     public function project(): string
