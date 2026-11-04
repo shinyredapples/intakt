@@ -265,53 +265,57 @@ final class RedactionTest extends TestCase
         self::assertSame("['Authorization' => [redacted], 'Accept' => ['text/html']]", $redacted);
     }
 
-    public function testItKeepsTheFieldsAfterARedactedHeaderListOnTheSameLine(): void
-    {
-        $redacted = new Redaction()->redact('{"authorization": ["Bearer abc123xyz"], "status": 200}');
-
-        self::assertSame('{"authorization": [redacted], "status": 200}', $redacted);
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
-    public static function valuesHoldingAHeaderListOpening(): iterable
-    {
-        yield 'unquoted value' => ['X-Api-Key: part1 cookie: [z] tailsecret'];
-        yield 'quoted json value' => ['{"cookie": "sess=abc; authorization=[1] tailsecret"}'];
-        yield 'shell quoted value' => ["curl -H 'Authorization: Basic x cookie=[y] tailsecret'"];
-        yield 'double quoted value' => ['Cookie: "prefix authorization: [abc] tailsecret"'];
-        yield 'unquoted value with a colon' => ['Cookie: prefix authorization: [abc] tailsecret'];
-    }
-
-    #[DataProvider('valuesHoldingAHeaderListOpening')]
-    public function testItRedactsTheRestOfAHeaderValueThatHoldsAHeaderListOpening(string $text): void
-    {
-        $redacted = new Redaction()->redact($text);
-
-        self::assertStringNotContainsString('tailsecret', $redacted);
-    }
-
-    /**
-     * @return iterable<string, array{string}>
-     */
-    public static function valuesStartingWithABracket(): iterable
+    public static function bracketedValuesOfPlainHeaders(): iterable
     {
         yield 'bracket then semicolon' => ['Cookie: [a]; sid=topsecretvalue'];
         yield 'bracketed scheme' => ['Authorization: [Bearer] topsecretvalue'];
         yield 'bracketed key' => ['X-Api-Key: [k] topsecretvalue'];
         yield 'shell quoted' => ["curl -H 'Cookie: [a] sid=topsecretvalue'"];
         yield 'empty brackets' => ['Cookie: [] topsecretvalue'];
+        yield 'single quoted scheme then semicolon' => ["Authorization: ['Bearer x'] ; topsecretvalue"];
+        yield 'single quoted key' => ["X-Api-Key: ['k'] topsecretvalue"];
+        yield 'single quoted element then a cookie' => ["Cookie: ['a'] sid=topsecretvalue"];
+        yield 'double quoted element then a comma' => ['Cookie: ["a"], sid=topsecretvalue'];
+        yield 'empty brackets then a bare comma' => ['X-Api-Key: [],topsecretvalue'];
+        yield 'empty brackets then a comma' => ['Cookie: [], sid=topsecretvalue'];
+        yield 'list opening later in an unquoted value' => ['X-Api-Key: part1 cookie: [z] topsecretvalue'];
+        yield 'list opening later in a json quoted value' => ['{"cookie": "sess=abc; authorization=[1] topsecretvalue"}'];
+        yield 'list opening later in a shell quoted value' => ["curl -H 'Authorization: Basic x cookie=[y] topsecretvalue'"];
+        yield 'list opening later in a double quoted value' => ['Cookie: "prefix authorization: [abc] topsecretvalue"'];
+        yield 'list opening later after a colon' => ['Cookie: prefix authorization: [abc] topsecretvalue'];
         yield 'quoted element without a separator after' => ['X-Api-Key: ["k"] topsecretvalue'];
         yield 'parenthesized' => ['Cookie: array (a) topsecretvalue'];
     }
 
-    #[DataProvider('valuesStartingWithABracket')]
-    public function testItRedactsAHeaderValueThatStartsWithABracketWhole(string $text): void
+    #[DataProvider('bracketedValuesOfPlainHeaders')]
+    public function testItRedactsABracketedHeaderValueWhole(string $text): void
     {
         $redacted = new Redaction()->redact($text);
 
         self::assertStringNotContainsString('topsecretvalue', $redacted);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function headerListsOfQuotedKeys(): iterable
+    {
+        yield 'json list' => ['{"authorization": ["Bearer abc123xyz"], "status": 200}', '"status": 200}'];
+        yield 'var_export short array' => ["['Authorization' => ['Bearer abc123xyz'], 'Accept' => 'text/html']", "'Accept' => 'text/html']"];
+        yield 'var_export array' => [var_export(['Authorization' => ['Bearer abc123xyz'], 'Accept' => 'text/html'], true), "'Accept' => 'text/html',"];
+    }
+
+    #[DataProvider('headerListsOfQuotedKeys')]
+    public function testItKeepsTheFieldAfterTheRedactedHeaderListOfAQuotedKey(string $text, string $field): void
+    {
+        $redacted = new Redaction()->redact($text);
+
+        self::assertStringNotContainsString('abc123xyz', $redacted);
+        self::assertStringContainsString('[redacted]', $redacted);
+        self::assertStringContainsString($field, $redacted);
     }
 
     public function testItKeepsTheFieldAfterARedactedHeaderListWithABlankBeforeTheComma(): void

@@ -116,33 +116,35 @@ final readonly class Redaction
         $result = '';
         $listMarkers = [];
         $offset = 0;
-        $from = 0;
-        while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $from)) {
+        while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $matchStart = $match[0][1];
             $afterOpen = $matchStart + strlen($match[0][0]);
-            $from = $afterOpen;
             $end = match (true) {
                 // print_r does not quote values, so no line marks the end of its list for certain and the rest of the text goes.
                 -1 !== ($match['printR'][1] ?? -1) => strlen($text),
                 str_ends_with($match['open'][0], '(') => $this->endOfQuotedList($text, $afterOpen, '()'),
                 default => $this->endOfQuotedList($text, $afterOpen, '[]'),
             };
-            // A bracket that opens no list is left to the value pass, because it redacts the value to the end of its line or quote, so nothing after the bracket leaks.
-            if ($end < strlen($text) && !$this->isListShaped($text, $afterOpen, $end)) {
-                continue;
-            }
 
             // A missing end takes the rest of the text because stopping early would leak.
             $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0]));
-            $listMarkers[] = strlen($result);
+            // An unrecorded marker is redacted by the value pass with the rest of its value, because a plain header value may start with a bracket (`[Bearer] token`) and its tail is secret too.
+            if ($this->isValueOfQuotedKey($text, $matchStart) && $this->isListShaped($text, $afterOpen, $end)) {
+                $listMarkers[] = strlen($result);
+            }
             $result .= self::MARKER;
-            $offset = $from = $end;
+            $offset = $end;
         }
 
         return [$result.substr($text, $offset), $listMarkers];
     }
 
-    // A plain value may start with a bracket too (`[Bearer] token`), so only a list whose first element is quoted, keyed, nested or missing, and that a separator or the line's end follows, keeps the text after it.
+    // Only structured data quotes its keys (JSON, var_export), so only there can a closing bracket be trusted to end the value.
+    private function isValueOfQuotedKey(string $text, int $nameStart): bool
+    {
+        return 1 === preg_match('~\G(?:'.self::HEADER_NAMES.')\\\\*["\']~i', $text, offset: $nameStart);
+    }
+
     private function isListShaped(string $text, int $afterOpen, int $end): bool
     {
         $listStart = '~\G\s*+(?:["\'\[\])]|\d+\s*+=>|array\s*+\()~i';
