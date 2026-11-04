@@ -22,10 +22,10 @@ use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageUnsettled;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Serializer\Normalizer\AbstractObjectNormalizer;
 use Symfony\Component\Serializer\SerializerInterface;
 
