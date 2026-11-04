@@ -7,7 +7,7 @@ namespace Intakt\Tests\Support;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase as SymfonyWebTestCase;
 
-// The extension can only warn about an unexpected error; this base fails the web test itself (#612, D3).
+// A base of its own, because the extension can only warn and #612 (D3) asks that the web test itself fails.
 abstract class WebTestCase extends SymfonyWebTestCase
 {
     use AssertsLoggedErrors;

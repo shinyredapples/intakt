@@ -12,6 +12,6 @@ final class KernelTestCaseWithoutTheTraitFixture extends KernelTestCase
 {
     public function testItBootsTheKernel(): void
     {
-        self::assertNotNull(self::bootKernel()->getContainer());
+        self::assertSame('test', self::bootKernel()->getEnvironment());
     }
 }
