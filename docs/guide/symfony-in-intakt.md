@@ -128,6 +128,8 @@ stateDiagram-v2
 
 Keeping the application loaded has one catch: anything a part remembers would leak into the next request. Symfony's **reset** mechanism clears that memory between requests, and Intakt has a check that refuses any part that remembers things without a way to be cleared. *(in progress)*
 
+As a second safety net, a worker (one loaded copy of Intakt) does not live forever: it is swapped for a fresh one after it has answered a set number of requests (500 by default), or as soon as it holds more memory than allowed (256 MB by default). The swap happens after the answer has gone out, so nobody sees an error, and a small leak that slips past the reset can never grow without end. *(built in the container image's configuration; the image is not published yet)*
+
 ## Keeping it honest
 
 - **Clock:** all time comes from one clock, so tests can freeze or fast-forward it; a check refuses code that reads the system time directly. *(in use)*
