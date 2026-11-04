@@ -121,10 +121,10 @@ final readonly class RoundFixture
         $this->events = new EventDispatcher();
         $this->updates = new RecordedRoundUpdates();
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
+        $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
 
         EmptyDatabase::in($container);
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());

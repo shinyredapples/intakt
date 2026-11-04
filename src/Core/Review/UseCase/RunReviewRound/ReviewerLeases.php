@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use NoDiscard;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
@@ -46,9 +47,11 @@ final readonly class ReviewerLeases
         });
     }
 
-    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): void
+    // Says whether the stored verdict answered a stop request, because the stop may be shown only once this transaction has committed.
+    #[NoDiscard]
+    public function recordVerdict(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): bool
     {
-        $this->record($reviewer, fn (RoundReviewer $stored) => $this->moves->receive($stored, $verdict, $substitute));
+        return true === $this->record($reviewer, fn (RoundReviewer $stored): bool => $this->moves->receive($stored, $verdict, $substitute));
     }
 
     public function recordFailure(RoundReviewer $reviewer, string $failure): void
@@ -112,22 +115,32 @@ final readonly class ReviewerLeases
     }
 
     /**
-     * @param Closure(RoundReviewer): void $move
+     * @template T
+     *
+     * @param Closure(RoundReviewer): T $move
+     *
+     * @return T|null
      */
-    private function record(RoundReviewer $reviewer, Closure $move): void
+    private function record(RoundReviewer $reviewer, Closure $move): mixed
     {
         $now = $this->clock->now();
 
         try {
-            $this->inOneTransaction(function () use ($reviewer, $move, $now): void {
+            return $this->inOneTransaction(function () use ($reviewer, $move, $now): mixed {
                 $stored = $this->lockedRow($reviewer->id());
 
                 // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
                 if (!$this->isStillHeldBy($reviewer, $stored)) {
-                    return;
+                    return null;
                 }
 
-                $this->withinTheHold($stored, $now) ? $move($stored) : $this->moves->fail($stored, self::CEILING_PASSED);
+                if (!$this->withinTheHold($stored, $now)) {
+                    $this->moves->fail($stored, self::CEILING_PASSED);
+
+                    return null;
+                }
+
+                return $move($stored);
             });
         } catch (ReviewEventNotRecorded $refused) {
             $this->handBack($reviewer);

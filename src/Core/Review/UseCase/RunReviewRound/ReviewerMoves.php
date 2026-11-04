@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Infrastructure\StopRequests;
+use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -34,16 +35,20 @@ final readonly class ReviewerMoves
         $this->ledger->reviewerStarted($reviewer);
     }
 
-    public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): void
+    // Says whether it answered a stop request, because only this decision may show the reviewer as stopped: the ledger read again later can hold a newer request or an older run's stop.
+    #[NoDiscard]
+    public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): bool
     {
         $reviewer->recordVerdict($this->serializer->serialize($verdict, 'json'), $substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
-        $this->answerStopRequest($reviewer, $verdict);
+        $stopped = $this->answerStopRequest($reviewer, $verdict);
 
         if ($substitute instanceof Provider) {
             $this->ledger->catchUpOwed($reviewer, $substitute);
         }
+
+        return $stopped;
     }
 
     public function fail(RoundReviewer $reviewer, string $failure): void
@@ -75,10 +80,14 @@ final readonly class ReviewerMoves
     }
 
     // Only for a pending request, because a model can name the stopped finding itself, and only the owner's request may make the ledger say a reviewer was stopped.
-    private function answerStopRequest(RoundReviewer $reviewer, Verdict $verdict): void
+    private function answerStopRequest(RoundReviewer $reviewer, Verdict $verdict): bool
     {
-        if ($verdict->isStopped() && $this->stops->pendingFor($reviewer->round()->id(), $reviewer->id())) {
-            $this->ledger->reviewerStopped($reviewer);
+        if (!$verdict->isStopped() || !$this->stops->pendingFor($reviewer->round()->id(), $reviewer->id())) {
+            return false;
         }
+
+        $this->ledger->reviewerStopped($reviewer);
+
+        return true;
     }
 }

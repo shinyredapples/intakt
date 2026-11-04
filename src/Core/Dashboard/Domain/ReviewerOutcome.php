@@ -49,6 +49,11 @@ final readonly class ReviewerOutcome
         return clone ($this, ['progress' => ReviewerProgress::Blocked, 'note' => $reason]);
     }
 
+    public function stopped(): self
+    {
+        return clone ($this, ['progress' => ReviewerProgress::Stopped]);
+    }
+
     public function substitutedBy(string $provider): self
     {
         return clone ($this, ['substitute' => $provider]);
