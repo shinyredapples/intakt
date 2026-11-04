@@ -59,8 +59,10 @@ final readonly class FileScopeDeprecation
 
     private function isTrigger(Node $node): bool
     {
+        // because PHP resolves a function name in any case, and a first-class callable (trigger_deprecation(...)) is a FuncCall that warns nobody
         return $node instanceof FuncCall
+            && !$node->isFirstClassCallable()
             && $node->name instanceof Name
-            && self::FUNCTION === $node->name->getLast();
+            && self::FUNCTION === strtolower($node->name->getLast());
     }
 }

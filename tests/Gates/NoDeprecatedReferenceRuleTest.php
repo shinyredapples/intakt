@@ -97,17 +97,32 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     public function testAFileScopeTriggerInsideAConditionStillMakesTheClassDeprecated(): void
     {
-        $sandbox = $this->sandboxWith('deprecated-file-scope');
-        $sandbox->write('src/Legacy.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nif ('disabled' !== getenv('LEGACY_DEPRECATION')) {\n    trigger_deprecation('acme/legacy', '1.0', 'Legacy is deprecated.');\n}\n\nclass Legacy\n{\n}\n");
-
-        $run = $sandbox->check('--only=phpstan');
-
-        self::assertStringContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+        $this->assertLegacyRefused("if ('disabled' !== getenv('LEGACY_DEPRECATION')) {\n    trigger_deprecation('acme/legacy', '1.0', 'Legacy is deprecated.');\n}\n\nclass Legacy\n{\n}\n");
     }
 
     public function testImportingADeprecatedClassInAGroupImportFailsStaticAnalysis(): void
     {
-        $this->assertConsumerRefused('deprecated-replacement', "use Intakt\\Sample\\{Legacy, Modern};\n\nfinal class Consumer\n{\n}\n");
+        $this->assertConsumerRefused('deprecated-replacement', "use Intakt\\Sample\\{Legacy};\n\nfinal class Consumer\n{\n}\n");
+    }
+
+    public function testADeprecatedClassInATraitLevelDocblockFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "/**\n * @property Legacy \$item\n */\ntrait Helper\n{\n}\n\nfinal class Consumer\n{\n    use Helper;\n}\n");
+    }
+
+    public function testTheReplacementInATraitLevelDocblockPassesStaticAnalysis(): void
+    {
+        $this->assertConsumerAccepted('deprecated-replacement', "/**\n * @property Modern \$item\n */\ntrait Helper\n{\n}\n\nfinal class Consumer\n{\n    use Helper;\n}\n");
+    }
+
+    public function testAFileScopeTriggerWrittenInUpperCaseStillMakesTheClassDeprecated(): void
+    {
+        $this->assertLegacyRefused("\\TRIGGER_DEPRECATION('acme/legacy', '1.0', 'Legacy is deprecated.');\n\nclass Legacy\n{\n}\n");
+    }
+
+    public function testAFirstClassCallableOfTriggerDeprecationDoesNotMakeTheClassDeprecated(): void
+    {
+        $this->assertLegacyAccepted("\$warn = \\trigger_deprecation(...);\n\nclass Legacy\n{\n}\n");
     }
 
     public function testAFunctionInAGroupImportIsNoClassReference(): void
@@ -154,12 +169,30 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     public function testATriggerDeprecationInsideAFileScopeClosureDoesNotMakeTheClassDeprecated(): void
     {
-        $sandbox = $this->sandboxWith('deprecated-file-scope');
-        $sandbox->write('src/Legacy.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nconst WARN = static function (): void {\n    trigger_deprecation('acme/legacy', '1.0', 'Legacy is deprecated.');\n};\n\nclass Legacy\n{\n}\n");
+        $this->assertLegacyAccepted("const WARN = static function (): void {\n    trigger_deprecation('acme/legacy', '1.0', 'Legacy is deprecated.');\n};\n\nclass Legacy\n{\n}\n");
+    }
 
-        $run = $sandbox->check('--only=phpstan');
+    private function assertLegacyRefused(string $body): void
+    {
+        $run = $this->checkLegacy($body);
+
+        self::assertStringContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+    }
+
+    private function assertLegacyAccepted(string $body): void
+    {
+        $run = $this->checkLegacy($body);
 
         self::assertTrue($run->passed('phpstan'), $run->output());
+    }
+
+    // because the file-scope fixture's consumer already names Legacy, so only Legacy's own file changes between these cases
+    private function checkLegacy(string $body): CheckRun
+    {
+        $sandbox = $this->sandboxWith('deprecated-file-scope');
+        $sandbox->write('src/Legacy.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\n".$body);
+
+        return $sandbox->check('--only=phpstan');
     }
 
     private function assertConsumerRefused(string $fixture, string $body): void
