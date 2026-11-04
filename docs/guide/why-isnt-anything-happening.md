@@ -46,6 +46,12 @@ flowchart TD
 
 If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
 
+## Reading Intakt's log
+
+Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened.
+
+Nothing secret is written. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../user/README.md#the-log) lists the fields and the credentials by name.
+
 ## Still stuck?
 
 Open the task's card: its timeline shows every step with its reason, and the live log shows what the current job is doing right now. If a card has been somewhere much longer than usual with no reason given, that is a bug in Intakt: the trends on the dashboard and the record behind every card make it easy to report.

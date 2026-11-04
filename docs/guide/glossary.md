@@ -35,6 +35,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Judge step** | a quick call that sorts findings into fix now, later, or not needed | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
+| **Log** | Intakt's own record of its warnings and errors, one line each, with every secret written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
 | **Maintainer agent** | the AI agent that settles stuck work, so it rarely reaches you | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |
