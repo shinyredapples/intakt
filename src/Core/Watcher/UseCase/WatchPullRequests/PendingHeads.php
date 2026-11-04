@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\Domain\SeenChange;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -84,16 +87,70 @@ final readonly class PendingHeads
         $this->dropLoaded($this->keyOf($project, $decision->change));
     }
 
-    // Removed with the listing's record, which forgets a closed pull request, because a closed one is never listed again and its CI, often cancelled, would be read every minute for good.
-    public function forgetClosed(string $project): void
+    public function failuresOf(string $project, OpenChange $head): int
     {
-        $this->entities->createQuery(sprintf(
-            'DELETE FROM %s p WHERE p.project = :project AND NOT EXISTS (SELECT s.change FROM %s s WHERE s.project = p.project AND s.change = p.change)',
+        return $this->stored($project, $head)?->failuresOf($head) ?? 0;
+    }
+
+    // Only while the row still holds this head from the same listing, because a head the listing queued meanwhile, even the same commit touched again, is counted anew and due now; false when the row no longer holds it.
+    public function backOff(HeadFailure $failure, int $failures, DateTimeImmutable $until): bool
+    {
+        $changed = $this->entities->createQueryBuilder()
+            ->update(PendingHead::class, 'p')
+            ->set('p.readAgainAt', ':readAgainAt')
+            ->set('p.failures', ':failures')
+            ->where('p.project = :project AND p.change = :change AND p.head = :head AND p.updatedAt = :updatedAt')
+            ->setParameter('readAgainAt', PendingHead::momentOf($until))
+            ->setParameter('failures', $failures)
+            ->setParameter('project', $failure->project)
+            ->setParameter('change', $failure->head->id->value)
+            ->setParameter('head', $failure->head->head->hash)
+            ->setParameter('updatedAt', PendingHead::momentOf($failure->head->updatedAt))
+            ->getQuery()
+            ->execute();
+        $this->dropLoaded($this->keyOf($failure->project, $failure->head));
+
+        return 1 === $changed;
+    }
+
+    // Reset only once a head was settled in full, because a step that fails after the read-again time was kept must still count toward the hand-over.
+    public function clearFailures(string $project, OpenChange $settled): void
+    {
+        $this->entities->createQueryBuilder()
+            ->update(PendingHead::class, 'p')
+            ->set('p.failures', 0)
+            ->where('p.project = :project AND p.change = :change AND p.head = :head AND p.failures > 0')
+            ->setParameter('project', $project)
+            ->setParameter('change', $settled->id->value)
+            ->setParameter('head', $settled->head->hash)
+            ->getQuery()
+            ->execute();
+        $this->dropLoaded($this->keyOf($project, $settled));
+    }
+
+    // Removed with the listing's record, which forgets a closed pull request, because a closed one is never listed again and its CI, often cancelled, would be read every minute for good; the forgotten heads are returned so the caller can record them.
+    /**
+     * @return list<OpenChange>
+     */
+    public function forgetClosed(string $project): array
+    {
+        /** @var list<PendingHead> $closed */
+        $closed = $this->entities->createQuery(sprintf(
+            'SELECT p FROM %s p WHERE p.project = :project AND NOT EXISTS (SELECT s.change FROM %s s WHERE s.project = p.project AND s.change = p.change)',
             PendingHead::class,
             SeenChange::class,
         ))
             ->setParameter('project', $project)
-            ->execute();
+            // Refreshed, because a worker keeps its entity manager and a row it loaded earlier may have moved to another head since.
+            ->setHint(Query::HINT_REFRESH, true)
+            ->getResult();
+
+        foreach ($closed as $pending) {
+            $this->entities->remove($pending);
+        }
+        $this->entities->flush();
+
+        return array_map(static fn (PendingHead $pending): OpenChange => $pending->openChange(), $closed);
     }
 
     // Removed only while the row still holds this head, in one statement, because the listing of another worker may have queued a newer head since this one was read.
