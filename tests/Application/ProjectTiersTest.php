@@ -41,8 +41,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
-use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Config\Exception\LoaderLoadException;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Contracts\Service\ServiceProviderInterface;
@@ -286,7 +286,8 @@ final class ProjectTiersTest extends KernelTestCase
     public function testTheCodexProbeOfTheContainerUsesTheOwnersCodexSection(): void
     {
         file_put_contents($this->file, "codex: { model: gpt-5.3-codex, effort: high }\n");
-        self::bootedContainer();
+        $this->bootedContainer();
+        self::assertNotNull(self::$kernel);
         $tester = new CommandTester(new Application(self::$kernel)->find('intakt:codex:probe'));
 
         $tester->execute(['account' => 'wiring']);
