@@ -4,7 +4,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 
 Only the install check and the provider configuration below exist so far. The other pages arrive with the review loop (see [the plan](../plan.md)):
 
-- Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict has its record in the [README](../README.md#timed-run), still to be filled in by the owner
+- Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict has its record in the [README](../../README.md#timed-run), still to be filled in by the owner
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), and `intakt:review` runs it (see [below](#reviewing-a-branch)).
 - Reviewing a branch of a local repository with `intakt:review` (see [below](#reviewing-a-branch)); reviewing a pull request is planned
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))

@@ -17,7 +17,7 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 
 ## Five-minute start
 
-The demo (its timed run is recorded [below](#timed-run)):
+The demo (its [timed run](#timed-run) is still waiting for the owner, so no timings are recorded yet):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
