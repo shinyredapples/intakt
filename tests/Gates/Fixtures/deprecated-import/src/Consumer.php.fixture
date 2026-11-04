@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Sample\Legacy;
+
+final class Consumer
+{
+    public function name(): string
+    {
+        return Legacy::class;
+    }
+}

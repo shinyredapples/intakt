@@ -43,3 +43,17 @@ services:
         class: Intakt\Gates\PhpStan\StatefulServiceResetRule
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\FileScopeDeprecation
+        arguments:
+            parser: @defaultAnalysisParser
+    -
+        class: Intakt\Gates\PhpStan\DeprecatedClasses
+    -
+        class: Intakt\Gates\PhpStan\NoDeprecatedReferenceRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoDeprecatedDocblockTypeRule
+        tags:
+            - phpstan.rules.rule
