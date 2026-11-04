@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeDescription;
@@ -22,7 +23,7 @@ final readonly class ConfiguredPanels implements Panels
      * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
      */
     public function __construct(
-        #[Autowire('%intakt.review.panels%')]
+        #[Autowire(param: ReviewServices::PANELS)]
         private array $panels,
     ) {
     }

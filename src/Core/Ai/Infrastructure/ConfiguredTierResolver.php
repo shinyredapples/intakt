@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -20,9 +21,9 @@ final readonly class ConfiguredTierResolver implements TierResolver
      * @param array<string, string>                                                                                                                                              $disabledProviders
      */
     public function __construct(
-        #[Autowire('%intakt.projects%')]
+        #[Autowire(param: AiServices::PROJECTS)]
         private array $projects,
-        #[Autowire('%intakt.ai.disabled_providers%')]
+        #[Autowire(param: AiServices::DISABLED_PROVIDERS)]
         private array $disabledProviders,
     ) {
     }

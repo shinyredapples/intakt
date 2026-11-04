@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -13,7 +14,7 @@ final readonly class WatchedProjects
      * @param array<string, array{repository: string, base: string, task: string}> $projects
      */
     public function __construct(
-        #[Autowire('%intakt.watcher.projects%')]
+        #[Autowire(param: WatcherServices::PROJECTS)]
         private array $projects,
     ) {
     }

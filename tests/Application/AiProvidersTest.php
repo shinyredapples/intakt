@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AiServices;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
@@ -66,15 +69,15 @@ final class AiProvidersTest extends KernelTestCase
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertTrue($container->has('ai.platform.openai'));
         self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
-        self::assertTrue($container->has('intakt.ai.platform.claude_code'));
-        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+        self::assertTrue($container->has(Provider::ClaudeCode->platformId(new Account(Provider::ClaudeCode, Account::DEFAULT))));
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
     }
 
     public function testTheSubscriptionPlatformIsBuiltWhenItsLoginTokenIsSet(): void
     {
         $container = $this->bootWith($this->allSet());
 
-        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.claude_code'));
+        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::ClaudeCode->platformId(new Account(Provider::ClaudeCode, Account::DEFAULT))));
     }
 
     public function testTheSubscriptionProviderIsDisabledUntilItsLoginTokenIsSet(): void
@@ -84,10 +87,10 @@ final class AiProvidersTest extends KernelTestCase
 
         $container = $this->bootWith($values);
 
-        self::assertFalse($container->has('intakt.ai.platform.claude_code'));
+        self::assertFalse($container->has(Provider::ClaudeCode->platformId(new Account(Provider::ClaudeCode, Account::DEFAULT))));
         self::assertSame(
             ['claude_code' => 'Provider "claude_code" is disabled: set CLAUDE_CODE_OAUTH_TOKEN to enable it.'],
-            $container->getParameter('intakt.ai.disabled_providers'),
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
         );
     }
 
@@ -102,7 +105,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertSame(
             ['openai' => 'Provider "openai" is disabled: set OPENAI_API_KEY to enable it.'],
-            $container->getParameter('intakt.ai.disabled_providers'),
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
         );
     }
 
@@ -111,7 +114,7 @@ final class AiProvidersTest extends KernelTestCase
         $container = $this->bootWith([...$this->allSet(), 'OPENAI_API_KEY' => '']);
 
         self::assertFalse($container->has('ai.platform.openai'));
-        $disabled = $container->getParameter('intakt.ai.disabled_providers');
+        $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
 
         self::assertIsArray($disabled);
         self::assertArrayHasKey('openai', $disabled);
@@ -127,7 +130,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertFalse($container->has('ai.platform.generic.openai_compatible'));
         self::assertSame(
             ['openai_compatible' => 'Provider "openai_compatible" is disabled: set OPENAI_COMPATIBLE_API_KEY to enable it.'],
-            $container->getParameter('intakt.ai.disabled_providers'),
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
         );
     }
 
@@ -135,7 +138,7 @@ final class AiProvidersTest extends KernelTestCase
     {
         $container = $this->bootWith([]);
 
-        $disabled = $container->getParameter('intakt.ai.disabled_providers');
+        $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
 
         self::assertIsArray($disabled);
         self::assertSame(['anthropic', 'openai', 'openai_compatible', 'claude_code'], array_keys($disabled));
@@ -161,7 +164,7 @@ final class AiProvidersTest extends KernelTestCase
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
         self::assertTrue($container->has('ai.platform.anthropic'));
-        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
         self::assertInstanceOf(PlatformInterface::class, $container->get('ai.platform.anthropic'));
     }
 
@@ -177,7 +180,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertFalse($container->has('ai.platform.anthropic'));
         self::assertSame(
             ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter('intakt.ai.disabled_providers'),
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
         );
     }
 
@@ -194,7 +197,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertTrue($container->has('ai.platform.anthropic'));
         self::assertTrue($container->has('ai.platform.openai'));
         self::assertTrue($container->has('ai.platform.generic.openai_compatible'));
-        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
     }
 
     public function testAKeyStoredOnlyInTheVaultBehindAMalformedDecryptionSecretCountsAsMissing(): void
@@ -210,7 +213,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertFalse($container->has('ai.platform.anthropic'));
         self::assertSame(
             ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter('intakt.ai.disabled_providers'),
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
         );
     }
 
@@ -228,7 +231,7 @@ final class AiProvidersTest extends KernelTestCase
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
         self::assertTrue($container->has('ai.platform.anthropic'));
-        self::assertSame([], $container->getParameter('intakt.ai.disabled_providers'));
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
     }
 
     public function testAKeyStoredOnlyInAVaultWithoutAnyUsableDecryptionKeyCountsAsMissing(): void
@@ -247,7 +250,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertFalse($container->has('ai.platform.anthropic'));
         self::assertSame(
             ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
-            $container->getParameter('intakt.ai.disabled_providers'),
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
         );
     }
 

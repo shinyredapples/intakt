@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Intakt\Core\Watcher\Contract\WatcherServices;
+use Intakt\Core\Review\Contract\ReviewServices;
+use Intakt\Core\Budget\Contract\BudgetServices;
+use Intakt\Core\Ai\Contract\AiServices;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -175,7 +179,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $container = $this->bootedContainer();
 
-        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter('intakt.watcher.projects'));
+        self::assertSame(['alpha-one' => ['repository' => 'repos/alpha', 'base' => 'main', 'task' => 'Review the pull request.']], $container->getParameter(WatcherServices::PROJECTS));
         self::assertInstanceOf(TierResolver::class, $container->get(TierResolver::class));
     }
 
@@ -213,7 +217,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
-        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter('intakt.budget.ceilings'));
+        self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter(BudgetServices::CEILINGS));
     }
 
     public function testTheStartGuardOfTheContainerRefusesAStartAtTheOwnersCeiling(): void
@@ -240,7 +244,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
 
-        self::assertEqualsCanonicalizing(['five-hour' => 70.0, 'weekly' => 50.0], $this->bootedContainer()->getParameter('intakt.budget.shadow_ceilings'));
+        self::assertEqualsCanonicalizing(['five-hour' => 70.0, 'weekly' => 50.0], $this->bootedContainer()->getParameter(BudgetServices::SHADOW_CEILINGS));
     }
 
     public function testTheShadowGuardOfTheContainerHoldsAProviderWhileTheOwnerPausedTheInstall(): void
@@ -275,7 +279,7 @@ final class ProjectTiersTest extends KernelTestCase
 
     public function testTheTierPlatformReachesTheProjectModelsThroughTheBundleModelCatalog(): void
     {
-        $platforms = $this->bootedContainer()->get(TierPlatform::PLATFORMS);
+        $platforms = $this->bootedContainer()->get(AiServices::PROVIDER_PLATFORMS);
         self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
         $anthropic = $platforms->get(Provider::Anthropic->value);
         self::assertInstanceOf(PlatformInterface::class, $anthropic);
@@ -291,7 +295,7 @@ final class ProjectTiersTest extends KernelTestCase
         $_SERVER['ANTHROPIC_API_KEY_TEAM'] = 'test-value';
 
         $container = $this->bootedContainer();
-        $platforms = $container->get(TierPlatform::PLATFORMS);
+        $platforms = $container->get(AiServices::PROVIDER_PLATFORMS);
         self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
         $anthropic = $platforms->get(Provider::Anthropic->value);
 
@@ -307,15 +311,15 @@ final class ProjectTiersTest extends KernelTestCase
         $container = $this->bootedContainer();
 
         self::assertSame(['default'], $this->accountsOf($container)[Provider::Anthropic->value]);
-        self::assertSame(['Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.'], $container->getParameter('intakt.ai.disabled_accounts'));
-        self::assertArrayNotHasKey(Provider::Anthropic->value, (array) $container->getParameter('intakt.ai.disabled_providers'));
+        self::assertSame(['Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.'], $container->getParameter(AiServices::DISABLED_ACCOUNTS));
+        self::assertArrayNotHasKey(Provider::Anthropic->value, (array) $container->getParameter(AiServices::DISABLED_PROVIDERS));
     }
 
     public function testAProviderWhoseEveryListedAccountLacksItsKeyIsDisabled(): void
     {
         $this->listAccounts('anthropic: [team]');
 
-        $disabled = (array) $this->bootedContainer()->getParameter('intakt.ai.disabled_providers');
+        $disabled = (array) $this->bootedContainer()->getParameter(AiServices::DISABLED_PROVIDERS);
 
         self::assertSame('Provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.', $disabled[Provider::Anthropic->value]);
     }
@@ -343,7 +347,7 @@ final class ProjectTiersTest extends KernelTestCase
             $_SERVER[$variable] = str_contains($variable, 'BASE_URL') ? 'http://localhost:8080' : 'sk-test-value';
         }
 
-        $platforms = $this->bootedContainer()->get(TierPlatform::PLATFORMS);
+        $platforms = $this->bootedContainer()->get(AiServices::PROVIDER_PLATFORMS);
         self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
         $platform = $platforms->get($provider->value);
 
@@ -396,7 +400,7 @@ final class ProjectTiersTest extends KernelTestCase
     private function accountsOf(ContainerInterface $container): array
     {
         /** @var array<string, list<string>> $accounts */
-        $accounts = $container->getParameter('intakt.ai.accounts');
+        $accounts = $container->getParameter(AiServices::ACCOUNTS);
 
         return $accounts;
     }
@@ -405,7 +409,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         // Nothing injects the loader yet, so the compiled container drops it; the parameter is what the config feeds it.
         /** @var array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}> $parameter */
-        $parameter = $this->bootedContainer()->getParameter('intakt.review.panels');
+        $parameter = $this->bootedContainer()->getParameter(ReviewServices::PANELS);
 
         return new ConfiguredPanels($parameter);
     }
@@ -424,19 +428,19 @@ final class ProjectTiersTest extends KernelTestCase
 
         $container = $this->bootedContainer();
 
-        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.codex'));
-        self::assertInstanceOf(PlatformInterface::class, $container->get('intakt.ai.platform.codex.team'));
-        self::assertSame(['default', 'team'], $this->parameterList($container, 'intakt.ai.accounts')['codex'] ?? null);
-        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.disabled_providers'));
+        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT))));
+        self::assertInstanceOf(PlatformInterface::class, $container->get(Provider::Codex->platformId(new Account(Provider::Codex, 'team'))));
+        self::assertSame(['default', 'team'], $this->parameterList($container, AiServices::ACCOUNTS)['codex'] ?? null);
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::DISABLED_PROVIDERS));
     }
 
     public function testWithoutItsSectionCodexIsLeftOutWithoutADisabledMessage(): void
     {
         $container = $this->bootedContainer();
 
-        self::assertFalse($container->has('intakt.ai.platform.codex'));
-        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.accounts'));
-        self::assertArrayNotHasKey('codex', $this->parameterList($container, 'intakt.ai.disabled_providers'));
+        self::assertFalse($container->has(Provider::Codex->platformId(new Account(Provider::Codex, Account::DEFAULT))));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::ACCOUNTS));
+        self::assertArrayNotHasKey('codex', $this->parameterList($container, AiServices::DISABLED_PROVIDERS));
     }
 
     /**

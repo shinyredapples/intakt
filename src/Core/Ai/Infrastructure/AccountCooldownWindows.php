@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AiServices;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
@@ -25,7 +26,6 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
 #[AsAlias(AccountCooldowns::class)]
 final readonly class AccountCooldownWindows implements AccountCooldowns
 {
-    public const string POOL = 'intakt.ai.account_cooldowns';
     private const string LIMITER = 'account-cooldown';
 
     // One minute because a provider that sends no reset still gets a pause, and it is the async transport's longest wait between two tries.
@@ -38,13 +38,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
      * @param array<string, list<string>> $accounts
      */
     public function __construct(
-        #[Autowire(service: self::POOL)]
+        #[Autowire(service: AiServices::ACCOUNT_COOLDOWNS)]
         private CacheItemPoolInterface $pool,
         private LockFactory $locks,
         private ClockInterface $clock,
         private Ledger $ledger,
         private LoggerInterface $logger,
-        #[Autowire('%intakt.ai.accounts%')]
+        #[Autowire(param: AiServices::ACCOUNTS)]
         private array $accounts,
     ) {
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\UseCase\ReplayDay;
 
+use Intakt\Core\Budget\Contract\BudgetServices;
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Budget\Domain\BudgetGuard;
@@ -28,7 +29,7 @@ final readonly class RolledBackReplay
     public function __construct(
         private EntityManagerInterface $entities,
         private LockFactory $locks,
-        #[Autowire('%intakt.budget.ceilings%')]
+        #[Autowire(param: BudgetServices::CEILINGS)]
         private array $ceilings,
     ) {
     }

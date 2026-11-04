@@ -40,7 +40,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
      */
     private function leavesThePinnedCodexModel(array $intakt): bool
     {
-        $pinned = $intakt['codex']['model'] ?? null;
+        $pinned = $intakt[Provider::Codex->configKey()]['model'] ?? null;
 
         return array_any(
             $this->mappingsOf($intakt['projects'] ?? []),
@@ -75,7 +75,7 @@ final class ProjectsConfiguration implements ConfigurationInterface
     // Optional, since only a Codex subscription account needs it; once present, both are required so neither falls back to the CLI's default.
     private function addCodex(TreeBuilder $tree): void
     {
-        $codex = $tree->getRootNode()->children()->arrayNode('codex')->children();
+        $codex = $tree->getRootNode()->children()->arrayNode(Provider::Codex->configKey())->children();
         $this->addModel($codex);
         $codex->enumNode('effort')->isRequired()->values(array_column(CodexEffort::cases(), 'value'));
     }

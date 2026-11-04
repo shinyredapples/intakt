@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
 use Intakt\Core\Ai\Contract\Provider;
@@ -16,7 +17,7 @@ final readonly class ConfiguredAccounts implements EnabledAccounts
      * @param array<string, list<string>> $accounts
      */
     public function __construct(
-        #[Autowire('%intakt.ai.accounts%')]
+        #[Autowire(param: AiServices::ACCOUNTS)]
         private array $accounts,
     ) {
     }

@@ -7,9 +7,9 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
-    intakt.vendor_account_parallel_calls: 3
+    !php/const Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices::ACCOUNT_PARALLEL_CALLS: 3
     # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
-    intakt.gitleaks: gitleaks
+    !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::GITLEAKS: gitleaks
 
 services:
     # default configuration for services in *this* file
@@ -39,14 +39,14 @@ services:
             $ceilings: '%intakt.budget.ceilings%'
 
     # The same guards with the lower ceilings for shadow work, so the weekly pace, the holds and the cooldowns apply; the scan builds the first ones for the start guard.
-    intakt.budget.shadow_ceilings:
-        class: Intakt\Core\Budget\Domain\CeilingStartGuard
-        arguments:
-            $ceilings: '%intakt.budget.shadow_ceilings%'
-    intakt.budget.shadow_ceiling_guard:
+    !php/const Intakt\Core\Budget\Contract\BudgetServices::SHADOW_CEILING_GUARD:
         class: Intakt\Core\Budget\Domain\BudgetGuard
         arguments:
-            $ceilings: '@intakt.budget.shadow_ceilings'
+            $ceilings: !service
+                class: Intakt\Core\Budget\Domain\CeilingStartGuard
+                autowire: true
+                arguments:
+                    $ceilings: '%intakt.budget.shadow_ceilings%'
 
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.
     Symfony\Component\Lock\Store\FlockStore:
