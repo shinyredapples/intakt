@@ -21,6 +21,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
+use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerLeases;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerMoves;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
@@ -50,11 +51,12 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(ReviewerMoves::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(Verdict::class)]
+#[CoversClass(ReviewWithReviewerHandler::class)]
+#[CoversClass(ReviewerLeases::class)]
+#[CoversClass(LiveRoundProgress::class)]
 #[UsesClass(ReviewerStopping::class)]
 #[UsesClass(StopRequests::class)]
 #[UsesClass(ReviewerRuns::class)]
-#[UsesClass(ReviewWithReviewerHandler::class)]
-#[UsesClass(ReviewerLeases::class)]
 final class StopReviewerTest extends KernelTestCase
 {
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
@@ -121,6 +123,49 @@ final class StopReviewerTest extends KernelTestCase
         self::assertSame([], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
+    public function testAStopTheVerdictAnswersIsPublishedLiveOnce(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+
+        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
+
+        self::assertSame(['stopped '.$message->reviewerId], $this->stopsPublished());
+    }
+
+    public function testAModelThatNamesTheStoppedFindingWithoutARequestPublishesNoStop(): void
+    {
+        $message = $this->started();
+
+        $this->fixture->deliver($message, $this->agentAnswering($this->forged()));
+
+        self::assertSame([], $this->stopsPublished());
+    }
+
+    public function testAModelThatNamesTheStoppedFindingInARunAfterAnAnsweredStopPublishesNoStop(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+        $this->record(LedgerEventKind::ReviewerStopped, $message);
+
+        $this->fixture->deliver($message, $this->agentAnswering($this->forged()));
+
+        self::assertCount(1, $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
+        self::assertSame([], $this->stopsPublished());
+    }
+
+    public function testARequestPressedAgainRightAfterTheStopWasRecordedStillPublishesTheStop(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+        $ledger = new AfterLedgerAppendOf($this->fixture->ledger(), LedgerEventKind::ReviewerStopped, fn () => $this->record(LedgerEventKind::ReviewerStopRequested, $message));
+
+        $this->fixture->worker($this->fixture->entities, $this->agentAnswering(self::APPROVE), $ledger)($message);
+
+        self::assertSame([LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped, LedgerEventKind::ReviewerStopRequested], $this->stopRows());
+        self::assertSame(['stopped '.$message->reviewerId], $this->stopsPublished());
+    }
+
     public function testAStopAfterAMalformedToolCallStillEndsAsStoppedAndTheLedgerRecordsTheStop(): void
     {
         $message = $this->started();
@@ -154,6 +199,19 @@ final class StopReviewerTest extends KernelTestCase
         $payload = json_encode(['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $message->reviewerId], JSON_THROW_ON_ERROR);
         $appended = $this->fixture->ledger()->append(new LedgerEvent($kind, $payload));
         self::assertTrue($appended->succeeded());
+    }
+
+    private function forged(): string
+    {
+        return VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::REVIEWER_STOPPED)->json();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stopsPublished(): array
+    {
+        return array_values(array_filter($this->fixture->updates->seen, static fn (string $update): bool => str_starts_with($update, 'stopped ')));
     }
 
     private function agentAnswering(string $answer): AgentVendor

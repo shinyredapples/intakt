@@ -14,4 +14,6 @@ interface RoundUpdates
     public function textStreamed(Uuid $round, string $reviewer, string $text): void;
 
     public function roundChanged(Uuid $round, RoundProgress $progress): void;
+
+    public function reviewerStopped(Uuid $round, string $reviewer): void;
 }

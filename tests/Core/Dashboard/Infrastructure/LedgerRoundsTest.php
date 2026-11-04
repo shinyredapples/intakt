@@ -85,6 +85,35 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
     }
 
+    public function testAReviewerWhoseLedgerShowsAStopIsStoppedWithItsBlockedVerdictKept(): void
+    {
+        $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.'}'),
+            $this->event(LedgerEventKind::VerdictReceived, '{'.$reviewer.',"decision":"blocked","findings":1}'),
+            $this->event(LedgerEventKind::ReviewerStopped, '{'.$reviewer.'}'),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame([ReviewerProgress::Stopped, 'blocked', 1], [$outcome?->progress, $outcome?->decision, $outcome?->findings]);
+    }
+
+    public function testAReviewerStartedAgainAfterAStopRunsAnew(): void
+    {
+        $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStopped, '{'.$reviewer.'}'),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.'}'),
+        );
+
+        self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
+    }
+
     #[DataProvider('modes')]
     public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
     {

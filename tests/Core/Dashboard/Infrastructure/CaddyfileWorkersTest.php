@@ -32,7 +32,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     private const int CEILING_BYTES = self::CEILING_MEGABYTES * 1_048_576;
 
-    // One value limits both polls, because the wait for the request count in requestsOnceServed and the wait for the memory reading in bytesHeldByTheServingAppWorkers end alike.
+    // One value limits both polls, so the request-count wait and the memory wait share a deadline.
     private const int SECONDS_TO_FINISH = 10;
 
     private string $frankenphp;
@@ -260,12 +260,12 @@ final class CaddyfileWorkersTest extends TestCase
         self::assertSame(['index.php' => 10, 'mcp.php' => 0], $counts);
     }
 
-    // The tests above are static, because Rector turns a private static helper with no static caller into an instance method.
     public function testTheHelpersThatReadNoServerStayPrivateStatic(): void
     {
         foreach (['requestsOnceServed', 'largestMemoryOfServingAppWorkers'] as $name) {
             $method = new ReflectionMethod(self::class, $name);
 
+            // Static callers keep them static, because Rector turns a private static helper with no static caller into an instance method.
             self::assertTrue($method->isPrivate() && $method->isStatic(), $name.' must be private static.');
         }
     }
