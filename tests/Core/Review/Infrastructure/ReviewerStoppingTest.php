@@ -97,6 +97,15 @@ final class ReviewerStoppingTest extends TestCase
         self::assertSame(ExecutionStatus::Completed, $this->statusAfterRunning($this->conversation(new UuidV7())));
     }
 
+    public function testRepeatedRequestsAnsweredByOneStopDoNotStopALaterRun(): void
+    {
+        $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
+        $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
+        $this->record(LedgerEventKind::ReviewerStopped, $this->reviewer);
+
+        self::assertSame(ExecutionStatus::Completed, $this->statusAfterRunning($this->conversation(new UuidV7())));
+    }
+
     public function testARequestRecordedAfterTheLastStopStopsTheRun(): void
     {
         $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
