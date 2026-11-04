@@ -9,12 +9,18 @@ set -euo pipefail
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
+# Warmed up in a new process, because cache:clear warms up in the process that loaded the old container and can keep the old projects and keys.
+rebuild_container() {
+    php bin/console cache:clear --no-warmup --no-interaction
+    php bin/console cache:warmup --no-interaction
+}
+
 # Set by compose.yaml for the demo. The image's container was built without the provider keys, which arrive only now, so it is built again before the seed reads them and again after it writes the project.
 if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     : "${INTAKT_CONFIG:?set INTAKT_CONFIG to the project file the sample project is written to}"
-    php bin/console cache:clear --no-interaction
+    rebuild_container
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
-    php bin/console cache:clear --no-interaction
+    rebuild_container
 fi
 
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.

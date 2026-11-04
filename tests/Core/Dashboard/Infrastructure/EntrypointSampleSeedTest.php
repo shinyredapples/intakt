@@ -41,10 +41,12 @@ final class EntrypointSampleSeedTest extends TestCase
 
         self::assertSame([
             'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
-            'bin/console cache:clear --no-interaction',
+            'bin/console cache:clear --no-warmup --no-interaction',
+            'bin/console cache:warmup --no-interaction',
             'bin/console intakt:sample:seed /data/sample /data/intakt.yaml',
-            'bin/console cache:clear --no-interaction',
-        ], $this->consoleCallsBeforeTheConsumers());
+            'bin/console cache:clear --no-warmup --no-interaction',
+            'bin/console cache:warmup --no-interaction',
+        ],$this->consoleCallsBeforeTheConsumers());
     }
 
     public function testWithoutASampleRepositoryNothingIsSeeded(): void
