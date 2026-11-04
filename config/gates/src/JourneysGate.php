@@ -66,7 +66,7 @@ final class JourneysGate implements Gate
             PHP_BINARY, $workspace->tool('phpunit'),
             '--no-configuration', '--bootstrap='.$workspace->autoload(), '--group=journeys', '--colors=never', '--no-progress',
             '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky', '--fail-on-warning',
-            '--fail-on-notice', '--fail-on-deprecation', '--do-not-cache-result',
+            '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation', '--fail-on-phpunit-deprecation', '--do-not-record-test-run-history',
             $file,
         ];
 

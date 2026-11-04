@@ -37,6 +37,14 @@ final class JourneysGateTest extends SandboxTestCase
         self::assertStringNotContainsString('CalmJourneyTest', $run->findingsOf('journeys'));
     }
 
+    public function testAPhpUnitNoticeInAJourneyFailsTheGate(): void
+    {
+        $run = $this->sandboxWith('journeys-phpunit-notice')->check('--journeys');
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertStringContainsString('NoticeJourneyTest.php', $run->findingsOf('journeys'));
+    }
+
     public function testAChildAJourneyLeavesBehindDoesNotOutliveTheGate(): void
     {
         if (ProcessRunner::PID_NAMESPACE !== new ProcessRunner()->containment()) {

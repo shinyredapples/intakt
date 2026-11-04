@@ -118,7 +118,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Quality gates | `bin/check` runs every gate locally and in CI | done | `bin/check`, `config/gates/` |
+| Quality gates | `bin/check` runs every gate locally and in CI; the user journeys run separately with `bin/check --journeys` | done | `bin/check`, `config/gates/` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
 | `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | in progress | T26 (#33), `src/Core/Upstream/` |
 | `intakt:change:summarize` | prints the change summary of a branch of a local repository | in progress | T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/` |
