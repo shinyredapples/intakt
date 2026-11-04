@@ -6,6 +6,7 @@ namespace Intakt\Core\Shadow\Infrastructure;
 
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Contract\ProjectModes;
+use Intakt\Core\Shadow\Contract\ShadowServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class ConfiguredProjectModes implements ProjectModes
@@ -14,7 +15,7 @@ final readonly class ConfiguredProjectModes implements ProjectModes
      * @param array<string, string> $modes
      */
     public function __construct(
-        #[Autowire('%intakt.shadow.modes%')]
+        #[Autowire(param: ShadowServices::MODES)]
         private array $modes,
     ) {
     }

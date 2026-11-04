@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\Provider as IntaktProvider;
 use Symfony\AI\Platform\Bridge\ClaudeCode\Contract\ClaudeCodeContract;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ModelCatalog;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ResultConverter;
@@ -17,8 +18,6 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 // The AI Bundle has no configuration for this bridge, so its platform is built here with the bundle's event dispatcher; the structured output subscribers hang on that.
 final readonly class ClaudeCodePlatformFactory
 {
-    private const string NAME = 'claude_code';
-
     public function __construct(
         private EventDispatcherInterface $events,
     ) {
@@ -30,7 +29,7 @@ final readonly class ClaudeCodePlatformFactory
     public function create(ModelClientInterface $cli, array $models): PlatformInterface
     {
         $provider = new Provider(
-            self::NAME,
+            IntaktProvider::ClaudeCode->value,
             [new ConfinedClaudeCodeClient($cli)],
             [new ResultConverter()],
             new ModelCatalog($models),

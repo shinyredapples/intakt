@@ -19,10 +19,10 @@ framework:
             #my.dedicated.cache: null
         pools:
             # On this host's filesystem, so every worker sees an account's cooldown; a cleared cache ends the cooldowns, and the next limit starts them again.
-            intakt.ai.account_cooldowns:
+            !php/const Intakt\Core\Ai\Contract\AiServices::ACCOUNT_COOLDOWNS:
                 adapter: cache.app
             # On this host's filesystem, so every worker and the scheduler read one installation's latest forge budget; a cleared cache only forgets a reading, and the next answer records it again.
-            intakt.github.rate_limits:
+            !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RATE_LIMITS:
                 adapter: cache.app
 
 when@test:
@@ -30,8 +30,8 @@ when@test:
         cache:
             pools:
                 # In memory, so no cooldown outlives the test that started it.
-                intakt.ai.account_cooldowns:
+                !php/const Intakt\Core\Ai\Contract\AiServices::ACCOUNT_COOLDOWNS:
                     adapter: cache.adapter.array
                 # In memory, so no reading outlives the test that recorded it.
-                intakt.github.rate_limits:
+                !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RATE_LIMITS:
                     adapter: cache.adapter.array

@@ -6,6 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Closure;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Semaphore\SemaphoreFactory;
@@ -18,7 +19,7 @@ final readonly class VendorAccountLimit
 
     public function __construct(
         private SemaphoreFactory $semaphores,
-        #[Autowire('%intakt.vendor_account_parallel_calls%')]
+        #[Autowire(param: SymfonyAiVendorServices::ACCOUNT_PARALLEL_CALLS)]
         private int $parallelCalls,
     ) {
     }
