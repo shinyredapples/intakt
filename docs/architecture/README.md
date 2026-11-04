@@ -404,11 +404,14 @@ flowchart TD
     act --> ledger[("Ledger")]
     open --> ledger
     verdicts --> ledger
-    ledger --> dash["Dashboard review page and live updates"]
+    ledger --> dash["Dashboard review page"]
+    open --> updates["RoundUpdates: Mercure publish"]
+    verdicts --> updates
+    updates --> live["Dashboard live updates"]
     act --> out["intakt:review prints the decision and the act list"]
 ```
 
-Every arrow into the ledger is an append of one event (`review_started`, `verdict_received`, `judge_done`, ...); the dashboard reads the ledger alone.
+Every arrow into the ledger is an append of one event (`review_started`, `verdict_received`, `judge_done`, ...); the dashboard pages are rendered from the ledger alone, while the live updates reach the page through the Review module's `RoundUpdates` contract, which the Dashboard publishes to Mercure.
 
 ## Review rounds
 

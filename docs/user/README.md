@@ -394,7 +394,7 @@ Exit codes: `0` approve, `10` changes, `11` blocked, `1` wrong input or configur
 
 ### Reading a verdict
 
-`intakt:review` ends with the outcome on the first line and an exit code a script can test. For example (the numbers vary):
+`intakt:review` ends with the outcome on the first line and an exit code a script can test. The shape is below (an illustration of the format `ReviewReport` prints, not a recorded run; ids, files and numbers differ in every review):
 
 ```
 changes (round 1)
