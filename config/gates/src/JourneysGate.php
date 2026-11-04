@@ -9,6 +9,8 @@ final class JourneysGate implements Gate
     private const string DIRECTORY = 'tests/Journeys';
     // Above bin/instance's default of a minute, because a journey walks several pages and commands.
     private const string JOURNEY_SECONDS = '240';
+    // The journey's time plus bin/instance's boot and stop, after which the whole process tree is killed.
+    private const int CONTAINED_SECONDS = 300;
     private const string FAILURE_LINE = '/journey ".+" failed at step ".+"/';
 
     public function name(): string
@@ -53,11 +55,12 @@ final class JourneysGate implements Gate
         return $findings;
     }
 
-    // One instance per journey, so a journey that breaks its database cannot make the next one fail.
+    // One contained instance per journey, so neither a broken database nor a child left running reaches the next journey.
     private function walk(Workspace $workspace, string $file): ProcessResult
     {
         // The status line goes to descriptor 3, which the shell points at the output so a failed boot is read too.
         $command = [
+            'env', 'INTAKT_INSTANCE_COMMAND_SECONDS='.self::JOURNEY_SECONDS,
             'sh', '-c', 'exec "$@" 3>&1', 'sh',
             PHP_BINARY, $workspace->instance(), '--',
             PHP_BINARY, $workspace->tool('phpunit'),
@@ -67,7 +70,7 @@ final class JourneysGate implements Gate
             $file,
         ];
 
-        return $workspace->command($command, ['INTAKT_INSTANCE_COMMAND_SECONDS' => self::JOURNEY_SECONDS]);
+        return $workspace->containedCommand($command, self::CONTAINED_SECONDS);
     }
 
     private function reason(ProcessResult $result): string

@@ -16,6 +16,8 @@ abstract class JourneyTestCase extends TestCase
 {
     private const string ADDRESS_VARIABLE = 'INTAKT_INSTANCE_URL';
     private const string ROOT = __DIR__.'/../../..';
+    // The instance runs in the test environment, so it reads the same file.
+    private const string TEST_SETTINGS = '.env.test';
     private const int CONSOLE_SECONDS = 60;
 
     private JourneySteps $steps;
@@ -68,15 +70,9 @@ abstract class JourneyTestCase extends TestCase
     // Because the dashboard refuses any other host name or port than its own, and the instance listens on a free port.
     private function dashboardPort(): string
     {
-        $port = getenv('DASHBOARD_PORT');
+        $port = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/'.self::TEST_SETTINGS))['DASHBOARD_PORT'] ?? null;
 
-        if (is_string($port) && '' !== $port) {
-            return $port;
-        }
-
-        $shipped = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env'))['DASHBOARD_PORT'] ?? null;
-
-        return is_string($shipped) ? $shipped : self::fail('DASHBOARD_PORT is not set in .env');
+        return is_string($port) && '' !== $port ? $port : self::fail('DASHBOARD_PORT is not set in '.self::TEST_SETTINGS);
     }
 
     private function address(): string

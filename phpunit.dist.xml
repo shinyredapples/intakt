@@ -19,16 +19,15 @@
         <server name="SHELL_VERBOSITY" value="-1" />
     </php>
 
-    <groups>
-        <exclude>
-            <group>journeys</group>
-        </exclude>
-    </groups>
-
     <testsuites>
         <testsuite name="application">
             <directory>tests</directory>
             <exclude>tests/Gates</exclude>
+            <!-- The journeys need a booted instance, so only the journeys gate runs them; their harness tests run here. -->
+            <exclude>tests/Journeys</exclude>
+        </testsuite>
+        <testsuite name="journey harness">
+            <directory>tests/Journeys/Support</directory>
         </testsuite>
     </testsuites>
 

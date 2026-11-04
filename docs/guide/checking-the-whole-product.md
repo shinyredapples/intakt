@@ -8,7 +8,7 @@ A journey is not part of the checks every change passes (`bin/check` and `bin/ch
 bin/check --journeys
 ```
 
-It starts a new copy for each journey, so one journey cannot upset the next. A passing run ends with `"result":"pass"`. A failing one names the journey and the step that broke, for example `journey "first install and setup" failed at step "open the reviews page"`, so you know where to look.
+It starts a new copy for each journey and stops everything that journey started when it ends, so one journey cannot upset the next. A passing run ends with `"result":"pass"`. A failing one names the journey and the step that broke, for example `journey "first install and setup" failed at step "open the reviews page"`, so you know where to look.
 
 Journeys never call an AI company or a forge and need no keys; they use the sample project only.
 

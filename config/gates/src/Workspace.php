@@ -147,6 +147,14 @@ final readonly class Workspace
     }
 
     /**
+     * @param list<string> $command
+     */
+    public function containedCommand(array $command, int $seconds): ProcessResult
+    {
+        return $this->runner->runWithin($command, $this->root, $seconds);
+    }
+
+    /**
      * @template Name of array-key
      *
      * @param array<Name, array{list<string>, array<string, string|false>}> $commands
