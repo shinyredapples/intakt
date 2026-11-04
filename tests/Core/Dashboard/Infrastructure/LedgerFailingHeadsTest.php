@@ -63,6 +63,56 @@ final class LedgerFailingHeadsTest extends TestCase
         self::assertTrue($this->failing()[0]->handedOver);
     }
 
+    public function testAHandedOverHeadReadAsPendingBeforeItsNextFailureStaysMarked(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', 'a');
+        $this->ledger->keepHeadPending('alpha', '7', 'a');
+
+        $this->ledger->failHead('alpha', '7', 5);
+
+        self::assertCount(1, $this->failing());
+        self::assertTrue($this->failing()[0]->handedOver);
+    }
+
+    public function testAHandedOverHeadReadAsRedBeforeItsNextFailureStaysMarked(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', 'a');
+        $this->ledger->recordRedHead('alpha', '7', 'a');
+
+        $this->ledger->failHead('alpha', '7', 5);
+
+        self::assertTrue($this->failing()[0]->handedOver);
+    }
+
+    public function testAHandedOverHeadThatFailsAgainAfterItsRoundStartedIsNotMarked(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', 'a');
+        $this->ledger->queueRoundOf('alpha', '7', 'a');
+
+        $this->ledger->failHead('alpha', '7', 1);
+
+        self::assertFalse($this->failing()[0]->handedOver);
+    }
+
+    public function testAHeadForgottenWithItsClosedPullRequestIsNoLongerListed(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $this->ledger->forgetHead('alpha', '7', 'a');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testAHandedOverHeadThatFailsAgainAfterItWasForgottenIsNotMarked(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', 'a');
+        $this->ledger->forgetHead('alpha', '7', 'a');
+
+        $this->ledger->failHead('alpha', '7', 1);
+
+        self::assertFalse($this->failing()[0]->handedOver);
+    }
+
     public function testAFailureOfAMovedHeadAfterAHandOverIsNotMarkedHandedOver(): void
     {
         $this->ledger->handOverHead('alpha', '7', 'a');

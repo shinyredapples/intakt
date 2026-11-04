@@ -12,6 +12,7 @@ use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\StartedRound;
+use Intakt\Plugin\Forge\Contract\OpenChange;
 
 final readonly class WatcherLedger
 {
@@ -41,6 +42,11 @@ final readonly class WatcherLedger
     public function verdictsStale(StartedRound $round): void
     {
         $this->append(LedgerEventKind::VerdictsStale, ['project' => $round->project(), 'change' => $round->change(), 'round' => $round->roundId(), 'head' => $round->head()]);
+    }
+
+    public function headForgotten(string $project, OpenChange $closed): void
+    {
+        $this->append(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $closed->id->value, 'head' => $closed->head->hash]);
     }
 
     public function headHandedOver(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void

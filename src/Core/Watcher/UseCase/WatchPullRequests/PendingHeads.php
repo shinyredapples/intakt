@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\PendingHead;
@@ -125,16 +126,29 @@ final readonly class PendingHeads
         $this->dropLoaded($this->keyOf($project, $settled));
     }
 
-    // Removed with the listing's record, which forgets a closed pull request, because a closed one is never listed again and its CI, often cancelled, would be read every minute for good.
-    public function forgetClosed(string $project): void
+    // Removed with the listing's record, which forgets a closed pull request, because a closed one is never listed again and its CI, often cancelled, would be read every minute for good; the forgotten heads are returned so the caller can record them.
+    /**
+     * @return list<OpenChange>
+     */
+    public function forgetClosed(string $project): array
     {
-        $this->entities->createQuery(sprintf(
-            'DELETE FROM %s p WHERE p.project = :project AND NOT EXISTS (SELECT s.change FROM %s s WHERE s.project = p.project AND s.change = p.change)',
+        /** @var list<PendingHead> $closed */
+        $closed = $this->entities->createQuery(sprintf(
+            'SELECT p FROM %s p WHERE p.project = :project AND NOT EXISTS (SELECT s.change FROM %s s WHERE s.project = p.project AND s.change = p.change)',
             PendingHead::class,
             SeenChange::class,
         ))
             ->setParameter('project', $project)
-            ->execute();
+            // Refreshed, because a worker keeps its entity manager and a row it loaded earlier may have moved to another head since.
+            ->setHint(Query::HINT_REFRESH, true)
+            ->getResult();
+
+        foreach ($closed as $pending) {
+            $this->entities->remove($pending);
+        }
+        $this->entities->flush();
+
+        return array_map(static fn (PendingHead $pending): OpenChange => $pending->openChange(), $closed);
     }
 
     // Removed only while the row still holds this head, in one statement, because the listing of another worker may have queued a newer head since this one was read.

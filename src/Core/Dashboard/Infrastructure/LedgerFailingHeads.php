@@ -16,8 +16,11 @@ final readonly class LedgerFailingHeads
 {
     private const array FAILED = [LedgerEventKind::HeadFailed, LedgerEventKind::HeadHandedOver];
 
-    // A later line of the watcher on the same pull request means its head was read or started since, so the failure no longer holds it.
-    private const array SETTLED = [LedgerEventKind::HeadPending, LedgerEventKind::HeadRed, LedgerEventKind::RoundQueued];
+    // A later line of the watcher on the same pull request means its head was read or started since, or its pull request closed, so the failure no longer holds it.
+    private const array SETTLED = [LedgerEventKind::HeadPending, LedgerEventKind::HeadRed, LedgerEventKind::RoundQueued, LedgerEventKind::HeadForgotten];
+
+    // A round or a closed pull request ends the item, while a pending or red read is recorded before the stale check, which may fail again and keeps the failure count.
+    private const array ENDED = [LedgerEventKind::RoundQueued, LedgerEventKind::HeadForgotten];
 
     public function __construct(private Ledger $ledger)
     {
@@ -57,13 +60,14 @@ final readonly class LedgerFailingHeads
         return $this->markHandedOver($failing, $handedOver);
     }
 
-    // Kept through later failures of the same commit only, because a moved head is a new item that has not been handed over.
+    // Kept through later lines of the same commit until the item ends, because a moved head is a new item that has not been handed over.
     private function handedOverHead(LedgerEventKind $kind, mixed $head, ?string $handedOver): ?string
     {
         return match (true) {
             !is_string($head) => null,
             LedgerEventKind::HeadHandedOver === $kind => $head,
-            LedgerEventKind::HeadFailed === $kind && $head === $handedOver => $head,
+            in_array($kind, self::ENDED, true) => null,
+            $head === $handedOver => $head,
             default => null,
         };
     }

@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -600,6 +601,34 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testAFailedHeadWhosePullRequestClosesIsForgottenInTheLedger(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->listing->opens('alpha', RecordedForge::change('2', self::GREEN, '2026-11-02T09:30:00Z'));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::HeadForgotten, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['project' => 'alpha', 'change' => '6', 'head' => str_repeat(self::UNREADABLE, 40)], $this->ledger->payloads()[1]);
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count(['change' => '6']));
+    }
+
+    public function testAForgottenHeadTheLedgerCannotRecordKeepsItsRowAndTheListingForTheNextTick(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->listing->opens('alpha');
+        $this->useLedger(new InMemoryLedger(0));
+        $this->tickExpectingFailure();
+        $this->useLedger(new InMemoryLedger());
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadForgotten], $this->ledger->kinds());
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
     public function testAPullRequestStillOpenKeepsItsWaitingHeadWhenAnotherPullRequestChanges(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
@@ -748,13 +777,15 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $find = new FindChangedPullRequests($this->listing, new SeenListings($this->entities, $locks), $logger);
         $doctrine = self::getContainer()->get('doctrine');
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock), $doctrine, $logger);
+        $redactor = self::createStub(Redactor::class);
+        $redactor->method('redact')->willReturnArgument(0);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor), $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $decisions, $settle));
     }
 
     private function panel(): Panel

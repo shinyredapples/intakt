@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use DateTimeImmutable;
-use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Symfony\Component\Clock\ClockInterface;
@@ -25,6 +25,7 @@ final readonly class FailedHeads
         private PendingHeads $pending,
         private WatcherLedger $ledger,
         private ClockInterface $clock,
+        private Redactor $redactor,
     ) {
     }
 
@@ -39,10 +40,10 @@ final readonly class FailedHeads
         $this->pending->backOff($headFailure, $failures, $retryAt);
     }
 
-    // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written.
+    // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written; redacted as a log line is, because the cause is stored and shown on a card.
     private function causeOf(Throwable $failure): string
     {
-        return $failure::class.': '.new Redaction()->redact(mb_scrub($failure->getMessage(), 'UTF-8'));
+        return $failure::class.': '.$this->redactor->redact(mb_scrub($failure->getMessage(), 'UTF-8'));
     }
 
     private function retryAt(int $failures): DateTimeImmutable
