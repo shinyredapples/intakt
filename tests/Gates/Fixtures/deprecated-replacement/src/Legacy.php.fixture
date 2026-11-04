@@ -9,4 +9,5 @@ namespace Intakt\Sample;
  */
 class Legacy
 {
+    public const string MODE = 'legacy';
 }

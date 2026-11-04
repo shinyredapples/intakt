@@ -4,33 +4,35 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
-use PhpParser\Comment\Doc;
 use PhpParser\Node;
+use PhpParser\Node\Expr\ArrowFunction;
+use PhpParser\Node\Expr\Closure;
+use PhpParser\Node\Param;
+use PhpParser\Node\PropertyHook;
 use PhpParser\Node\Stmt;
-use PHPStan\Analyser\NameScope;
+use PhpParser\Node\Stmt\ClassLike;
 use PHPStan\Analyser\Scope;
-use PHPStan\PhpDoc\TypeNodeResolver;
-use PHPStan\PhpDocParser\Ast\Type\TypeNode;
+use PHPStan\Node\VirtualNode;
 use PHPStan\Rules\IdentifierRuleError;
-use PHPStan\Rules\Rule;
-use PHPStan\Type\FileTypeMapper;
-use PHPStan\Type\Type;
+use PHPStan\Rules\MultipleNodeTypesRule;
 
 /**
- * @implements Rule<Stmt>
+ * @implements MultipleNodeTypesRule<Node>
  */
-final readonly class NoDeprecatedDocblockTypeRule implements Rule
+final readonly class NoDeprecatedDocblockTypeRule implements MultipleNodeTypesRule
 {
-    public function __construct(
-        private FileTypeMapper $typeMapper,
-        private TypeNodeResolver $typeResolver,
-        private DeprecatedClasses $deprecated,
-    ) {
+    public function __construct(private DeprecatedDocblockTypes $docblocks)
+    {
     }
 
     public function getNodeType(): string
     {
-        return Stmt::class;
+        return Node::class;
+    }
+
+    public function getNodeTypes(): array
+    {
+        return [Stmt::class, Closure::class, ArrowFunction::class, PropertyHook::class, Param::class];
     }
 
     /**
@@ -38,21 +40,11 @@ final readonly class NoDeprecatedDocblockTypeRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $comment = $node->getDocComment();
-        if (!$comment instanceof Doc) {
+        // because a virtual node repeats the docblock of the node it wraps, and a class docblock resolves only inside its class (NoDeprecatedClassDocblockTypeRule)
+        if ($node instanceof VirtualNode || $node instanceof ClassLike) {
             return [];
         }
 
-        $docblock = $this->typeMapper->getResolvedPhpDoc($scope->getFile(), $scope->getClassReflection()?->getName(), null, null, $comment->getText());
-        $nameScope = $docblock->getNullableNameScope();
-        if (!$nameScope instanceof NameScope) {
-            return [];
-        }
-
-        // because every tag keeps its types in other fields (@method parameters, @template bounds), only a walk finds them all
-        $types = array_map(fn (TypeNode $type): Type => $this->typeResolver->resolve($type, $nameScope), OutermostTypeNodes::in($docblock->getPhpDocNodes()));
-        $classes = array_unique(array_merge([], ...array_map(static fn (Type $type): array => $type->getReferencedClasses(), $types)));
-
-        return array_merge([], ...array_map(fn (string $class): array => $this->deprecated->reportUseOf($class, $comment->getStartLine()), $classes));
+        return $this->docblocks->reportIn($node->getDocComment(), $scope);
     }
 }

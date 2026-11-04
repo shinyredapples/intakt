@@ -5,19 +5,23 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\DeprecatedClasses;
+use Intakt\Gates\PhpStan\DeprecatedDocblockTypes;
+use Intakt\Gates\PhpStan\DocblockTypeNames;
 use Intakt\Gates\PhpStan\FileScopeDeprecation;
+use Intakt\Gates\PhpStan\NoDeprecatedClassDocblockTypeRule;
 use Intakt\Gates\PhpStan\NoDeprecatedDocblockTypeRule;
 use Intakt\Gates\PhpStan\NoDeprecatedReferenceRule;
-use Intakt\Gates\PhpStan\OutermostTypeNodes;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(NoDeprecatedReferenceRule::class)]
 #[CoversClass(NoDeprecatedDocblockTypeRule::class)]
+#[CoversClass(NoDeprecatedClassDocblockTypeRule::class)]
+#[CoversClass(DeprecatedDocblockTypes::class)]
 #[CoversClass(DeprecatedClasses::class)]
 #[CoversClass(FileScopeDeprecation::class)]
-#[CoversClass(OutermostTypeNodes::class)]
+#[CoversClass(DocblockTypeNames::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 {
@@ -99,6 +103,53 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
         $run = $sandbox->check('--only=phpstan');
 
         self::assertStringContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+    }
+
+    public function testImportingADeprecatedClassInAGroupImportFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "use Intakt\\Sample\\{Legacy, Modern};\n\nfinal class Consumer\n{\n}\n");
+    }
+
+    public function testAFunctionInAGroupImportIsNoClassReference(): void
+    {
+        $run = $this->checkConsumer('deprecated-replacement', "use Intakt\\Sample\\{function Legacy};\n\nfinal class Consumer\n{\n}\n");
+
+        self::assertStringNotContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+    }
+
+    public function testADeprecatedClassInAUnionTheAnalyserSimplifiesFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "final class Consumer\n{\n    /**\n     * @param object|Legacy \$item\n     */\n    public function take(object \$item): void\n    {\n    }\n}\n");
+    }
+
+    public function testADeprecatedClassInAClosureDocblockFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "final class Consumer\n{\n    public function make(): callable\n    {\n        return /** @return Legacy */ static function (): object {\n            throw new \\LogicException();\n        };\n    }\n}\n");
+    }
+
+    public function testADeprecatedClassInAnInlineVarTagInsideAMethodFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "final class Consumer\n{\n    public function take(object \$item): object\n    {\n        /** @var Legacy \$item */\n        return \$item;\n    }\n}\n");
+    }
+
+    public function testADeprecatedClassInAPromotedPropertyDocblockFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "final readonly class Consumer\n{\n    public function __construct(\n        /** @var Legacy */\n        private object \$item,\n    ) {\n    }\n}\n");
+    }
+
+    public function testADeprecatedClassInAConstantTypeFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "final class Consumer\n{\n    /**\n     * @param Legacy::* \$mode\n     */\n    public function take(string \$mode): void\n    {\n    }\n}\n");
+    }
+
+    public function testTheReplacementInAUnionAClosureDocblockAndAConstantTypePassesStaticAnalysis(): void
+    {
+        $this->assertConsumerAccepted('deprecated-replacement', "final class Consumer\n{\n    /**\n     * @param object|Modern \$item\n     * @param Modern::* \$mode\n     */\n    public function take(object \$item, string \$mode): callable\n    {\n        return /** @return Modern */ static fn (): object => new Modern();\n    }\n}\n");
+    }
+
+    public function testAnArrayShapeKeyNamedLikeADeprecatedClassIsNoReference(): void
+    {
+        $this->assertConsumerAccepted('deprecated-replacement', "final class Consumer\n{\n    /**\n     * @return array{Legacy: Modern}\n     */\n    public function shape(): array\n    {\n        return ['Legacy' => new Modern()];\n    }\n}\n");
     }
 
     public function testATriggerDeprecationInsideAFileScopeClosureDoesNotMakeTheClassDeprecated(): void

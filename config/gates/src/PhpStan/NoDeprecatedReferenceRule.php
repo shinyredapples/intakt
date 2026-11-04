@@ -55,16 +55,23 @@ final readonly class NoDeprecatedReferenceRule implements Rule
     private function imports(array $nodes): array
     {
         $finder = new NodeFinder();
-        $plain = array_map(
-            static fn (Use_ $use): array => array_map(static fn (UseItem $item): array => ['name' => $item->name->toString(), 'line' => $item->getStartLine()], $use->uses),
-            array_filter($finder->findInstanceOf($nodes, Use_::class), static fn (Use_ $use): bool => Use_::TYPE_NORMAL === $use->type),
-        );
-        $grouped = array_map(
-            static fn (GroupUse $group): array => array_map(static fn (UseItem $item): array => ['name' => $group->prefix->toString().'\\'.$item->name->toString(), 'line' => $item->getStartLine()], $group->uses),
-            array_filter($finder->findInstanceOf($nodes, GroupUse::class), static fn (GroupUse $group): bool => Use_::TYPE_NORMAL === $group->type),
-        );
+        $plain = array_map(static fn (Use_ $use): array => self::importedClasses($use->type, '', $use->uses), $finder->findInstanceOf($nodes, Use_::class));
+        $grouped = array_map(static fn (GroupUse $group): array => self::importedClasses($group->type, $group->prefix->toString().'\\', $group->uses), $finder->findInstanceOf($nodes, GroupUse::class));
 
-        return array_values(array_merge([], ...$plain, ...$grouped));
+        return array_merge([], ...$plain, ...$grouped);
+    }
+
+    // because a group import carries its kind on the group or on each item (use A\{function f} puts it on the item), as PHPStan's name resolver reads it
+    /**
+     * @param array<UseItem> $items
+     *
+     * @return list<Reference>
+     */
+    private static function importedClasses(int $kind, string $prefix, array $items): array
+    {
+        $classes = array_filter($items, static fn (UseItem $item): bool => Use_::TYPE_NORMAL === ($kind | $item->type));
+
+        return array_values(array_map(static fn (UseItem $item): array => ['name' => $prefix.$item->name->toString(), 'line' => $item->getStartLine()], $classes));
     }
 
     // because PHPStan has resolved every class name to its full form before rules run, so any other name is a class reference

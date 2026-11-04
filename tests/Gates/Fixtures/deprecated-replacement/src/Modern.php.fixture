@@ -6,4 +6,5 @@ namespace Intakt\Sample;
 
 final class Modern
 {
+    public const string MODE = 'modern';
 }

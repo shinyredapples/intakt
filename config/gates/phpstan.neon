@@ -54,6 +54,12 @@ services:
         tags:
             - phpstan.rules.rule
     -
+        class: Intakt\Gates\PhpStan\DeprecatedDocblockTypes
+    -
         class: Intakt\Gates\PhpStan\NoDeprecatedDocblockTypeRule
+        tags:
+            - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\NoDeprecatedClassDocblockTypeRule
         tags:
             - phpstan.rules.rule
