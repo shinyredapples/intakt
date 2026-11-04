@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\UseCase\ProbeCodexLogin;
 
-use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
 use Intakt\Core\Ai\Infrastructure\CodexLoginUnusable;
 use Intakt\Core\Ai\Infrastructure\CodexSettings;

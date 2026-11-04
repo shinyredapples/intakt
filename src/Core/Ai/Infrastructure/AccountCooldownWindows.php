@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Intakt\Core\Ai\Contract\AiServices;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;

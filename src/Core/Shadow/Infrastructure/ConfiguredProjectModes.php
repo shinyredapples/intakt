@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Shadow\Infrastructure;
 
-use Intakt\Core\Shadow\Contract\ShadowServices;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Contract\ProjectModes;
+use Intakt\Core\Shadow\Contract\ShadowServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class ConfiguredProjectModes implements ProjectModes

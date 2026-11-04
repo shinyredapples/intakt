@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
+use Intakt\Core\Ai\Contract\Provider;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;

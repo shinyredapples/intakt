@@ -72,4 +72,3 @@ final class ProviderTest extends TestCase
         self::assertSame(AiServices::CODEX, Provider::Codex->parameter());
     }
 }
-

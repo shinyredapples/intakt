@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;

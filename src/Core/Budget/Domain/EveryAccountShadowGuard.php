@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Domain;
 
-use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;

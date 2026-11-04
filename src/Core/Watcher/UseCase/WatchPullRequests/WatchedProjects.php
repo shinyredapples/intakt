@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
-use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Watcher\Contract\WatcherServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class WatchedProjects

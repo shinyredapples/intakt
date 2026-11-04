@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
-use Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices;
 use Closure;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Semaphore\SemaphoreFactory;

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
 use Intakt\Core\Ai\Contract\Provider;
 use Override;
