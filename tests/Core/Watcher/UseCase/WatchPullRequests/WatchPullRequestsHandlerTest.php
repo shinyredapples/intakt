@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
@@ -307,8 +309,15 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $connection = $this->entities->getConnection();
         $this->commands->whileStarting = static function (StartReviewAtHead $command) use ($connection): void {
             if ('7' === $command->start->round->change) {
-                // A row the start does not expect, so the flush of its own row breaks the key and closes the entity manager.
-                $connection->insert('watcher_started_round', ['project' => 'alpha', 'change_ref' => '7', 'head' => $command->head->hash, 'stale' => 0, 'queued_recorded' => 0, 'round_id' => 'other']);
+                // A row the start does not expect, so the flush of its own row breaks the key and closes the entity manager; typed booleans, because PostgreSQL refuses an integer in a boolean column.
+                $connection->insert('watcher_started_round', [
+                    'project' => 'alpha',
+                    'change_ref' => '7',
+                    'head' => $command->head->hash,
+                    'round_id' => 'other',
+                    'stale' => false,
+                    'queued_recorded' => false,
+                ], ['stale' => Types::BOOLEAN, 'queued_recorded' => Types::BOOLEAN]);
             }
         };
 
@@ -316,6 +325,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame(['7', '8'], array_column($this->ledger->payloads(), 'change'));
+        self::assertStringStartsWith(UniqueConstraintViolationException::class.':', $this->ledger->payloads()[0]['cause']);
     }
 
     public function testAHeadWhoseFailureMessageIsNotUtf8IsBackedOffAloneWhileTheNextHeadStartsItsRoundInTheSameTick(): void
