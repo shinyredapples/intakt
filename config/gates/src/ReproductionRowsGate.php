@@ -123,7 +123,7 @@ final readonly class ReproductionRowsGate implements Gate
         $previous = '';
 
         foreach ($lines as $line) {
-            // A table ends at the first line without a cell border (GFM: a blank line or another block), as in HighlightsGate.
+            // A line without a cell border ends the table, because in GFM a blank line or another block (a heading, a list, a quote) does.
             if ($inTable && $this->isATableRow($line)) {
                 $rows[] = $line;
             } else {
