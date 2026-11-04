@@ -154,6 +154,7 @@ Plan task T22, part 1. `Dockerfile` (multi-stage) builds on `dunglas/frankenphp:
 - **Restart tests:** `tests/Core/Server/Infrastructure/EndWorkerOnMemoryCeilingTest.php` forces the memory reading with a stub (below, at and above the ceiling, and outside a worker); `tests/Core/Dashboard/Infrastructure/DockerfileTest.php` checks the loop maximum, the ceiling and the health check.
 - **Processes (part 3):** `docker/entrypoint.sh` (bash, PID 1) starts `frankenphp run --config Caddyfile --adapter caddyfile`, `MESSENGER_CONSUMERS` (`Dockerfile`: 3) `messenger:consume async` and one `messenger:consume scheduler_watcher`, each consumer with `--memory-limit=${WORKER_MEMORY_CEILING_MB}M --time-limit=3600`. The consumers run with plain `php`, not `frankenphp php-cli`, until T28's SIGTERM probe (#35) passes on 1.13.4. A loop that sleeps one second and then checks every child with `kill -0` starts an ended consumer or scheduler again within a second, whatever its exit status, taking the status with `wait <pid>`; it does not block on `wait -n`, because bash reaps a child killed by a signal while a command runs and `wait -n` then no longer knows it ("no such job") and blocks on the live children, so a consumer ending while another is started again, or several ending together, are all started again (`EntrypointProcessesTest` forces both orders). It logs `intakt: <transport> ended with status <n>, starting it again` on stderr. When `frankenphp` ends, the script stops the others and exits with its status, so Docker's restart policy restarts the container. On SIGTERM or SIGINT it stops every child and exits 0. Stopping takes the children from bash's job table (`jobs -p`), not from the script's own list of recorded pids, because bash runs the trap between starting a child and recording its pid, and a child missed there would get no signal and hang the final `wait` past Docker's stop timeout. It sends SIGTERM, waits up to 8 seconds (inside Docker's 10 second stop timeout) and then sends SIGKILL to what still runs, because a consumer ignores a SIGTERM that arrives before its worker exists (`upstream/messenger-consume-ignores-early-sigterm`); the image installs `pcntl`, so a running worker finishes its current message first. Supervisor was not used: the image would need Python, and the loop is all that is needed.
 - **Process tests:** `tests/Core/Dashboard/Infrastructure/EntrypointProcessesTest.php` (group `hub`) runs the entrypoint with a scratch SQLite database and reads its children from `/proc`: the web server, two `async` consumers and the scheduler run, the consumers under `php`; a consumer or the scheduler killed with SIGKILL is replaced; SIGTERM ends every child and exits 0, also when a consumer cannot act on it (stopped with SIGSTOP), and also when it lands between starting the first child and recording its pid (forced with a bash `DEBUG` trap over the sourced entrypoint, with stand-ins for `php` and `frankenphp` in `PATH`); a killed `frankenphp` stops the others and the entrypoint exits 137. `DockerfileTest.php` checks `MESSENGER_CONSUMERS` and `pcntl`.
+- **Worker-mode state (plan task T29, part 1):** `tests/Application/WorkerModeTest.php` (group `persistence`) boots one kernel and never reboots it, sends requests through `KernelBrowser` with `disableReboot()` (it terminates the kernel after each request, as the worker loop does), and reads what the services hold with `WorkerState` after running the kernel's `services_resetter` itself, which is what the next `handle()` does after a terminate (so it also resets after a reviewer run, which is not a request). It shows that the user of a bearer-token request (`security.token_storage`), the entities in the entity manager's identity map (`doctrine`), another browser's flash messages (one session per browser) and the messages of an earlier reviewer conversation (`ReviewerRuns` over the `reviewer_conversation` store, a scripted platform) do not reach the next request. No application service needed a new `ResetInterface`: the `intakt.statefulService` rule keeps them stateless. Three tests run `tests/Application/WorkerKernel.php`, a kernel built like Intakt's with the `kernel.reset` tag removed from `doctrine` or `security.token_storage` (`KeepStateOf`), and show the leak appears without that reset: the entities, the user, and the user again after a reviewer run. Not covered here: `umask()`, locale, `$_ENV` and the runs with `FRANKENPHP_RESET_KERNEL=1` (part 2), and the Symfony AI services (part 3).
 - **git and the review server's address:** the final stage installs Debian's `git` (the base image has none; the local git forge and the sample seed need it) and sets `REVIEW_MCP_BASE_URL=http://localhost:7781`, the image's own `SERVER_PORT`, so a reviewer reaches the per-review MCP server in the container (the `.env` default names port 7780). `DockerfileTest` checks both.
 - **Not built yet:** `bin/instance` in worker mode inside the image (#703), the image build and smoke test in CI (#704), the base image digest pin (#705).
 
@@ -380,6 +381,40 @@ Plan task T40, part 3 (design: [Budget and model planner](../design/05-architect
 - Migration `Version20261102120000` creates the three tables.
 - `UseCase/ReplayDay/ReplayDayCommand` is `intakt:budget:replay <script>`: it reads the script (`Filesystem::readFile`), one step per line, `#` lines and blank lines skipped, each a UTC moment `YYYY-MM-DDTHH:MM` and one of `read <provider.name> <window> <percent> <reset>`, `limit <provider.name> <reset>`, `hold <shared hold> <until>`, `start <provider.name> <calls running>`, `merge`. All lines are parsed before the first step runs. `UseCase/ReplayDay/RolledBackReplay` then builds `DoctrineMeasuredUse`, `DoctrineHolds`, `OutageWatch` (with its own event dispatcher and a `DoctrineOutageNotices` listener) and `BudgetGuard` on a `MockClock` set to the first step's moment and the configured ceilings, and in one database transaction hands each step to `DayReplay`, moves the clock to each step's moment (never back), and prints the line and its outcome (`recorded`, a refusal, `held`, or the decision); outage notices go to a `ConsoleLogger` and print between the lines. The transaction is rolled back at the end, so the install keeps none of it. A missing file, an empty script or a line that breaks a rule (`UseCase/ReplayDay/ScriptLineNotUnderstood`, naming the line and the rule) fails the command.
 - Tests: `tests/Core/Budget/Domain/BudgetGuardTest.php` and `OutageWatchTest.php` (a `MockClock`, `tests/Core/Budget/HoldsInMemory.php` and a recording event listener), `tests/Core/Budget/Infrastructure/DoctrineHoldsTest.php` and `DoctrineOutageNoticesTest.php` (`persistence` group; the logger is the mock; a lock already held by another worker is forced; a failed warning is tried again), `tests/Core/Budget/Contract/UsageWindowTest.php`, `tests/Core/Budget/UseCase/ReplayDay/DayReplayTest.php` and `ReplayDayCommandTest.php` (`persistence` group: the whole of `tests/Core/Budget/UseCase/ReplayDay/scripted-day.txt` through the kernel's command, empty tables afterwards, the clock's advance and a step out of time order).
+
+## Review flow
+
+One review from a door to the act list. The sections [Review rounds](#review-rounds), [Judge](#judge) and [Quorum policies](#quorum-policies) hold the details; this page only shows how they connect.
+
+```mermaid
+flowchart TD
+    cli["intakt:review"] --> start
+    mcp["MCP start_review"] --> start
+    btn["Dashboard button"] --> start
+    start["RunReviewRound on command.bus"] --> open["Open the round: ReviewRound, one RoundReviewer per panel member, review_started in the ledger"]
+    open --> queue[("async queue: one ReviewWithReviewer per reviewer")]
+    queue --> w1["Worker: reviewer 1 reads the snapshot with the read-only tools"]
+    queue --> w2["Worker: reviewer 2"]
+    w1 --> verdicts["Verdicts: approve, changes or blocked, with findings"]
+    w2 --> verdicts
+    verdicts --> complete{"Every reviewer in?"}
+    complete -->|no| wait["The round stays collecting"]
+    complete -->|yes| quorum["Round complete: the quorum policy decides, findings join the change's finding list"]
+    quorum --> judge["JudgeRound: the judge marks each finding act, defer or reject"]
+    judge --> act["Act list and follow-ups in judge_done"]
+    act --> ledger[("Ledger")]
+    open --> ledger
+    verdicts --> ledger
+    ledger --> dash["Dashboard review page"]
+    w1 --> updates["RoundUpdates: Mercure publish"]
+    w2 --> updates
+    verdicts --> updates
+    judge --> updates
+    updates --> live["Dashboard live updates"]
+    act --> out["intakt:review prints the decision and the act list"]
+```
+
+Every arrow into the ledger is an append of one event (`review_started`, `verdict_received`, `judge_done`, ...); the dashboard pages are rendered from the ledger alone, while the live updates reach the page through the Review module's `RoundUpdates` contract, which the Dashboard publishes to Mercure: the workers stream each tool call and text piece as they go (`LiveProgress`), and the round's latest state is published after each verdict and after the judge (`LiveRoundProgress::publishLatest()`); opening the round publishes nothing.
 
 ## Review rounds
 
