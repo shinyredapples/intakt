@@ -382,6 +382,40 @@ Plan task T40, part 3 (design: [Budget and model planner](../design/05-architect
 - `UseCase/ReplayDay/ReplayDayCommand` is `intakt:budget:replay <script>`: it reads the script (`Filesystem::readFile`), one step per line, `#` lines and blank lines skipped, each a UTC moment `YYYY-MM-DDTHH:MM` and one of `read <provider.name> <window> <percent> <reset>`, `limit <provider.name> <reset>`, `hold <shared hold> <until>`, `start <provider.name> <calls running>`, `merge`. All lines are parsed before the first step runs. `UseCase/ReplayDay/RolledBackReplay` then builds `DoctrineMeasuredUse`, `DoctrineHolds`, `OutageWatch` (with its own event dispatcher and a `DoctrineOutageNotices` listener) and `BudgetGuard` on a `MockClock` set to the first step's moment and the configured ceilings, and in one database transaction hands each step to `DayReplay`, moves the clock to each step's moment (never back), and prints the line and its outcome (`recorded`, a refusal, `held`, or the decision); outage notices go to a `ConsoleLogger` and print between the lines. The transaction is rolled back at the end, so the install keeps none of it. A missing file, an empty script or a line that breaks a rule (`UseCase/ReplayDay/ScriptLineNotUnderstood`, naming the line and the rule) fails the command.
 - Tests: `tests/Core/Budget/Domain/BudgetGuardTest.php` and `OutageWatchTest.php` (a `MockClock`, `tests/Core/Budget/HoldsInMemory.php` and a recording event listener), `tests/Core/Budget/Infrastructure/DoctrineHoldsTest.php` and `DoctrineOutageNoticesTest.php` (`persistence` group; the logger is the mock; a lock already held by another worker is forced; a failed warning is tried again), `tests/Core/Budget/Contract/UsageWindowTest.php`, `tests/Core/Budget/UseCase/ReplayDay/DayReplayTest.php` and `ReplayDayCommandTest.php` (`persistence` group: the whole of `tests/Core/Budget/UseCase/ReplayDay/scripted-day.txt` through the kernel's command, empty tables afterwards, the clock's advance and a step out of time order).
 
+## Review flow
+
+One review from a door to the act list. The sections [Review rounds](#review-rounds), [Judge](#judge) and [Quorum policies](#quorum-policies) hold the details; this page only shows how they connect.
+
+```mermaid
+flowchart TD
+    cli["intakt:review"] --> start
+    mcp["MCP start_review"] --> start
+    btn["Dashboard button"] --> start
+    start["RunReviewRound on command.bus"] --> open["Open the round: ReviewRound, one RoundReviewer per panel member, review_started in the ledger"]
+    open --> queue[("async queue: one ReviewWithReviewer per reviewer")]
+    queue --> w1["Worker: reviewer 1 reads the snapshot with the read-only tools"]
+    queue --> w2["Worker: reviewer 2"]
+    w1 --> verdicts["Verdicts: approve, changes or blocked, with findings"]
+    w2 --> verdicts
+    verdicts --> complete{"Every reviewer in?"}
+    complete -->|no| wait["The round stays collecting"]
+    complete -->|yes| quorum["Round complete: the quorum policy decides, findings join the change's finding list"]
+    quorum --> judge["JudgeRound: the judge marks each finding act, defer or reject"]
+    judge --> act["Act list and follow-ups in judge_done"]
+    act --> ledger[("Ledger")]
+    open --> ledger
+    verdicts --> ledger
+    ledger --> dash["Dashboard review page"]
+    w1 --> updates["RoundUpdates: Mercure publish"]
+    w2 --> updates
+    verdicts --> updates
+    judge --> updates
+    updates --> live["Dashboard live updates"]
+    act --> out["intakt:review prints the decision and the act list"]
+```
+
+Every arrow into the ledger is an append of one event (`review_started`, `verdict_received`, `judge_done`, ...); the dashboard pages are rendered from the ledger alone, while the live updates reach the page through the Review module's `RoundUpdates` contract, which the Dashboard publishes to Mercure: the workers stream each tool call and text piece as they go (`LiveProgress`), and the round's latest state is published after each verdict and after the judge (`LiveRoundProgress::publishLatest()`); opening the round publishes nothing.
+
 ## Review rounds
 
 Plan task T9, part 2 (design: [Reviews](../design/05-architecture/07-reviews.md)). A round runs its reviewers in parallel and keeps its state in the database, so a restarted worker resumes. The two state machines are drawn in [review-round.dot](review-round.dot) (Graphviz source; no tool of Intakt renders it).
