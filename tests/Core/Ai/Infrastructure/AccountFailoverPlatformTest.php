@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
-use Intakt\Tests\Support\StoredSerializerFactory;
 use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
@@ -17,6 +16,7 @@ use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

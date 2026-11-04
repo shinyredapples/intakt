@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
-use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

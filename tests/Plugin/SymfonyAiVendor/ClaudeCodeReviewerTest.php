@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
-use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -55,6 +54,7 @@ use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;

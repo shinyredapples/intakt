@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
-// The payload of a UsageRecorded row written before a call; the round is left out of the JSON when the call belongs to none.
+// A null round is left out of the JSON because rows of a call outside any round never had the key.
 final readonly class UsageStarted
 {
     public function __construct(

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\RunReviewRound\Payload;
 
-// The payload of a ReviewStarted row; repository and base are left out of the JSON when the change has no source.
+// A null repository and base are left out of the JSON because rows of a change without a source never had the keys.
 final readonly class ReviewStarted
 {
     public function __construct(

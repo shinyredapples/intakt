@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
-// The payload of a UsageRecorded row for a call that failed; it keeps the usage of the rounds that answered before.
 final readonly class UsageUnsettled
 {
     /**
