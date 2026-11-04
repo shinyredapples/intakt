@@ -288,6 +288,9 @@ final class RedactionTest extends TestCase
         yield 'list opening later after a colon' => ['Cookie: prefix authorization: [abc] topsecretvalue'];
         yield 'quoted element without a separator after' => ['X-Api-Key: ["k"] topsecretvalue'];
         yield 'parenthesized' => ['Cookie: array (a) topsecretvalue'];
+        yield 'closing quote without an opening quote' => ['Authorization": ["a"], topsecretvalue'];
+        yield 'closing quote other than the opening quote' => ['\'Authorization": ["a"], topsecretvalue'];
+        yield 'quoted key inside the value of an unquoted header' => ['Cookie: x; \'authorization\': ["a"], sid=topsecretvalue'];
     }
 
     #[DataProvider('bracketedValuesOfPlainHeaders')]
@@ -306,6 +309,7 @@ final class RedactionTest extends TestCase
         yield 'json list' => ['{"authorization": ["Bearer abc123xyz"], "status": 200}', '"status": 200}'];
         yield 'var_export short array' => ["['Authorization' => ['Bearer abc123xyz'], 'Accept' => 'text/html']", "'Accept' => 'text/html']"];
         yield 'var_export array' => [var_export(['Authorization' => ['Bearer abc123xyz'], 'Accept' => 'text/html'], true), "'Accept' => 'text/html',"];
+        yield 'json list after a quoted header list on the same line' => ['{"cookie": ["a"], "authorization": ["Bearer abc123xyz"], "status": 200}', '"status": 200}'];
     }
 
     #[DataProvider('headerListsOfQuotedKeys')]
