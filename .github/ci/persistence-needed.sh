@@ -12,12 +12,12 @@ head=$2
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# Each git output is saved first and must succeed (set -e), so a failing git or an early-exiting grep can never read as "untouched".
+# Saved first under set -e, so a failing git can never read as "untouched".
 git diff --name-only "$base" "$head" > "$work/changed-paths"
 git diff "$base" "$head" -- src > "$work/src.diff"
 git diff "$base" "$head" -- tests > "$work/tests.diff"
 
-# A test file that carries the attribute on the head: grep exits 1 for no match, which is an answer; 2 and above is a failure.
+# Exit 1 means no match, an answer; above 1 is a failure.
 status=0
 git grep -l "Group('persistence')" "$head" -- tests > "$work/head-tests.raw" || status=$?
 if [ "$status" -gt 1 ]; then

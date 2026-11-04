@@ -96,7 +96,7 @@ jobs:
             echo "persistence engines needed: always on main"
             exit 0
           fi
-          # The script saves each diff first and must succeed (set -e), so a failing git or an early-exiting grep can never
+          # Each diff is saved first and must succeed (set -e), so a failing git or an early-exiting grep can never
           # read as "untouched"; it fails this job, and the run with it.
           base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
           touched=$(.github/ci/persistence-needed.sh "$base" "$HEAD_SHA")
