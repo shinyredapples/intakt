@@ -16,7 +16,10 @@ use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
+use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
 use Intakt\Core\Budget\Contract\BudgetServices;
+use Intakt\Core\Budget\Domain\BudgetGuard;
+use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\CeilingsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
@@ -41,6 +44,7 @@ use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigurator;
+use Symfony\Component\DependencyInjection\Parameter;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
@@ -273,6 +277,21 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(ShadowServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::SHADOW_CEILINGS, $ceilings['budget']['shadow_ceilings']);
+    // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around the first guard for the start guard.
+    $container->services()->set(CeilingStartGuard::class)
+        ->autowire()
+        ->autoconfigure()
+        ->arg('$ceilings', new Parameter(BudgetServices::CEILINGS));
+    // The same guards with the lower ceilings for shadow work, so the weekly pace, the holds and the cooldowns apply.
+    $container->services()->set(BudgetServices::SHADOW_CEILING_GUARD, BudgetGuard::class)
+        ->autowire()
+        ->autoconfigure()
+        ->arg('$ceilings', new Definition(CeilingStartGuard::class)->setAutowired(true)->setArgument('$ceilings', new Parameter(BudgetServices::SHADOW_CEILINGS)));
+    // Bound here because an attribute cannot call Provider::parameter(), which holds the parameter's name.
+    $container->services()->set(ProbeCodexLoginCommand::class)
+        ->autowire()
+        ->autoconfigure()
+        ->arg('$codex', new Parameter(Provider::Codex->parameter()));
     $container->services()->set(AiServices::PROVIDER_PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');

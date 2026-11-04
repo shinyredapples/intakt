@@ -40,6 +40,8 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Config\Exception\LoaderLoadException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
@@ -265,6 +267,31 @@ final class ProjectTiersTest extends KernelTestCase
         $this->emptyDatabase();
 
         self::assertSame(StartDecision::Start, $guard->decide(Provider::Anthropic));
+    }
+
+    public function testTheShadowGuardOfTheContainerHoldsAProviderAtTheShadowCeilingWhereTheStartGuardStarts(): void
+    {
+        $this->listAccounts('anthropic: [default]');
+        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
+        self::assertInstanceOf(ShadowStartGuard::class, $guard);
+        $this->emptyDatabase();
+        $start = self::getContainer()->get('test.intakt.start_guard');
+        self::assertInstanceOf(StartGuard::class, $start);
+
+        $this->measureBothWindowsAt(75.0);
+
+        self::assertSame([StartDecision::AtCeiling, StartDecision::Start], [$guard->decide(Provider::Anthropic), $start->decide(new Account(Provider::Anthropic, 'default'), 0)]);
+    }
+
+    public function testTheCodexProbeOfTheContainerUsesTheOwnersCodexSection(): void
+    {
+        file_put_contents($this->file, "codex: { model: gpt-5.3-codex, effort: high }\n");
+        self::bootedContainer();
+        $tester = new CommandTester(new Application(self::$kernel)->find('intakt:codex:probe'));
+
+        $tester->execute(['account' => 'wiring']);
+
+        self::assertStringContainsString('gpt-5.3-codex', $tester->getDisplay());
     }
 
     public function testACeilingAboveAHundredPercentStopsTheBoot(): void
