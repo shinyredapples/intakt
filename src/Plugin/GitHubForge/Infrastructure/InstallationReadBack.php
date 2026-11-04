@@ -44,7 +44,7 @@ final readonly class InstallationReadBack
         try {
             return $this->reader->read();
         } catch (InstallationNotReadBack $failure) {
-            $this->logger->warning('The GitHub App installation was not read back.', ['reason' => $failure->getMessage()]);
+            $this->logger->warning('The GitHub App installation was not read back.', ['exception' => $failure]);
 
             throw $failure;
         }

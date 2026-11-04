@@ -49,7 +49,7 @@ final readonly class ShowReviewController
         } catch (Throwable $failure) {
             // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; flashes put back, because the failed attempt read them.
             $flashBag->setAll($flashes);
-            $this->logger->warning('The review page was rendered without live updates.', ['exception' => $failure::class]);
+            $this->logger->warning('The review page was rendered without live updates.', ['round' => $round, 'exception' => $failure]);
 
             return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => false]);
         }
