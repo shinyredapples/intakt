@@ -5,12 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
-use PhpParser\Node\Expr\ArrowFunction;
-use PhpParser\Node\Expr\Closure;
-use PhpParser\Node\Param;
-use PhpParser\Node\PropertyHook;
-use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\ClassLike;
+use PhpParser\Node\Stmt\Trait_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\VirtualNode;
 use PHPStan\Rules\IdentifierRuleError;
@@ -32,7 +28,7 @@ final readonly class NoDeprecatedDocblockTypeRule implements MultipleNodeTypesRu
 
     public function getNodeTypes(): array
     {
-        return [Stmt::class, Closure::class, ArrowFunction::class, PropertyHook::class, Param::class];
+        return DeprecatedDocblockTypes::DOCUMENTED_NODES;
     }
 
     /**
@@ -40,11 +36,20 @@ final readonly class NoDeprecatedDocblockTypeRule implements MultipleNodeTypesRu
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // because a virtual node repeats the docblock of the node it wraps, and a class docblock resolves only inside its class (NoDeprecatedClassDocblockTypeRule)
-        if ($node instanceof VirtualNode || $node instanceof ClassLike) {
+        // because a virtual node repeats the docblock of the node it wraps, and a trait body visited through a using class is read once, from the trait's own declaration
+        if ($node instanceof VirtualNode || $scope->isInTrait()) {
             return [];
         }
 
-        return $this->docblocks->reportIn($node->getDocComment(), $scope);
+        if ($node instanceof Trait_) {
+            return $this->docblocks->reportInTrait($node, $scope->getFile());
+        }
+
+        // because a class docblock resolves only inside its class (NoDeprecatedClassDocblockTypeRule)
+        if ($node instanceof ClassLike) {
+            return [];
+        }
+
+        return $this->docblocks->reportIn($node->getDocComment(), DocblockLocation::of($node, $scope));
     }
 }

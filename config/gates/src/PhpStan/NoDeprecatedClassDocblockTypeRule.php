@@ -7,14 +7,13 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\Node\InClassNode;
-use PHPStan\Node\InTraitNode;
 use PHPStan\Rules\IdentifierRuleError;
-use PHPStan\Rules\MultipleNodeTypesRule;
+use PHPStan\Rules\Rule;
 
 /**
- * @implements MultipleNodeTypesRule<Node>
+ * @implements Rule<InClassNode>
  */
-final readonly class NoDeprecatedClassDocblockTypeRule implements MultipleNodeTypesRule
+final readonly class NoDeprecatedClassDocblockTypeRule implements Rule
 {
     public function __construct(private DeprecatedDocblockTypes $docblocks)
     {
@@ -22,12 +21,7 @@ final readonly class NoDeprecatedClassDocblockTypeRule implements MultipleNodeTy
 
     public function getNodeType(): string
     {
-        return Node::class;
-    }
-
-    public function getNodeTypes(): array
-    {
-        return [InClassNode::class, InTraitNode::class];
+        return InClassNode::class;
     }
 
     /**
@@ -35,7 +29,7 @@ final readonly class NoDeprecatedClassDocblockTypeRule implements MultipleNodeTy
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // because both virtual nodes carry the attributes of the declaration they wrap, the docblock included, and a trait docblock resolves only inside the class that uses it, where the analyser visits the trait
-        return $this->docblocks->reportIn($node->getDocComment(), $scope);
+        // because the virtual node carries the attributes of the class declaration it wraps, the docblock included, and a class docblock resolves only inside its class
+        return $this->docblocks->reportIn($node->getDocComment(), DocblockLocation::of($node, $scope));
     }
 }

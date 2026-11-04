@@ -172,6 +172,53 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
         $this->assertLegacyAccepted("const WARN = static function (): void {\n    trigger_deprecation('acme/legacy', '1.0', 'Legacy is deprecated.');\n};\n\nclass Legacy\n{\n}\n");
     }
 
+    public function testAFunctionDocblockNamingADeprecatedClassFailsStaticAnalysis(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "/**\n * @phpstan-assert Legacy \$value\n */\nfunction ensure(object \$value): void\n{\n    if (!\$value instanceof Modern) {\n        throw new \\LogicException();\n    }\n}\n\nfinal class Consumer\n{\n}\n");
+    }
+
+    public function testTheReplacementInAFunctionDocblockPassesStaticAnalysis(): void
+    {
+        $this->assertConsumerAccepted('deprecated-replacement', "/**\n * @phpstan-assert Modern \$value\n */\nfunction ensure(object \$value): void\n{\n    if (!\$value instanceof Modern) {\n        throw new \\LogicException();\n    }\n}\n\nfinal class Consumer\n{\n}\n");
+    }
+
+    public function testAnUnusedTraitCannotNameADeprecatedClassInItsDocblock(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "/**\n * @property Legacy \$item\n */\ntrait Consumer\n{\n}\n");
+    }
+
+    public function testAnUnusedTraitCannotNameADeprecatedClassInAMethodDocblock(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "trait Consumer\n{\n    /**\n     * @param Legacy \$item\n     */\n    public function take(object \$item): void\n    {\n    }\n}\n");
+    }
+
+    public function testAnUnusedTraitCannotNameADeprecatedClassInAStatementDocblockOfAMethod(): void
+    {
+        $this->assertConsumerRefused('deprecated-replacement', "trait Consumer\n{\n    public function take(object \$item): object\n    {\n        /** @var Legacy \$item */\n        return \$item;\n    }\n}\n");
+    }
+
+    public function testTheReplacementInAnUnusedTraitPassesStaticAnalysis(): void
+    {
+        $this->assertConsumerAccepted('deprecated-replacement', "/**\n * @property Modern \$item\n */\ntrait Consumer\n{\n    /**\n     * @param Modern \$item\n     */\n    public function take(object \$item): object\n    {\n        /** @var Modern \$item */\n        return \$item;\n    }\n}\n");
+    }
+
+    public function testAUsedTraitDocblockIsReportedOnce(): void
+    {
+        $run = $this->checkConsumer('deprecated-replacement', "/**\n * @property Legacy \$item\n */\ntrait Helper\n{\n    /**\n     * @param Legacy \$item\n     */\n    public function take(object \$item): void\n    {\n    }\n}\n\nfinal class Consumer\n{\n    use Helper;\n}\n\nfinal class OtherConsumer\n{\n    use Helper;\n}\n");
+
+        self::assertSame(2, substr_count($run->findingsOf('phpstan'), 'intakt.deprecatedReference'), $run->output());
+    }
+
+    public function testADifferentNamespacedFunctionDoesNotDeprecateAClass(): void
+    {
+        $this->assertLegacyAccepted("function trigger_deprecation(): void\n{\n}\n\ntrigger_deprecation();\n\nclass Legacy\n{\n}\n");
+    }
+
+    public function testAnAliasedDeprecationCallDeprecatesAClass(): void
+    {
+        $this->assertLegacyRefused("use function trigger_deprecation as warn;\n\nwarn('acme/legacy', '1.0', 'Legacy is deprecated.');\n\nclass Legacy\n{\n}\n");
+    }
+
     private function assertLegacyRefused(string $body): void
     {
         $run = $this->checkLegacy($body);

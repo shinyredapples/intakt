@@ -12,13 +12,16 @@ use PhpParser\Node\Stmt\ClassLike;
 use PhpParser\NodeFinder;
 use PHPStan\Parser\Parser;
 use PHPStan\Parser\ParserErrorsException;
+use PHPStan\Reflection\ReflectionProvider;
 
 final readonly class FileScopeDeprecation
 {
     private const string FUNCTION = 'trigger_deprecation';
 
-    public function __construct(private Parser $parser)
-    {
+    public function __construct(
+        private Parser $parser,
+        private ReflectionProvider $reflections,
+    ) {
     }
 
     public function triggeredBy(?string $file): bool
@@ -63,6 +66,22 @@ final readonly class FileScopeDeprecation
         return $node instanceof FuncCall
             && !$node->isFirstClassCallable()
             && $node->name instanceof Name
-            && self::FUNCTION === strtolower($node->name->getLast());
+            && self::FUNCTION === strtolower($this->calledFunction($node->name));
+    }
+
+    private function calledFunction(Name $name): string
+    {
+        // because the parser resolves a qualified or imported name, while an unqualified one falls back to the global function only when the namespace declares none of that name
+        $resolved = $name->getAttribute('resolvedName');
+        if ($resolved instanceof Name) {
+            return $resolved->toString();
+        }
+
+        $namespaced = $name->getAttribute('namespacedName');
+        if ($namespaced instanceof Name && $this->reflections->hasFunction($namespaced, null)) {
+            return $namespaced->toString();
+        }
+
+        return $name->toString();
     }
 }
