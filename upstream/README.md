@@ -1,6 +1,6 @@
 # Upstream reproductions
 
-One folder per likely bug in a library Intakt uses (Symfony AI, the PHP MCP SDK, Symfony components, Doctrine): a minimal reproduction (PHPUnit tests, or a script named `reproduce.php`) and `REPORT.md` with the exact versions, what happens and what was expected.
+One folder per likely bug in a library Intakt uses (Symfony AI, the PHP MCP SDK, Symfony components, Doctrine): a minimal reproduction (PHPUnit tests, or a script named `reproduce.php`) and `REPORT.md` with the exact versions, what happens and what was expected. Each folder has a row in the "Found in the beta" table of [`docs/highlights.md`](../docs/highlights.md) that names `upstream/<folder>/`; the `reproductions` gate of `bin/check` fails on a folder without one.
 
 Each `REPORT.md` ends with `## Upstream status`: the result at the pinned versions, the result on the upstream development branch (run in a scratch copy, never through Intakt's own `composer.json`), the upstream issues and pull requests found (or "none found", with the searches made), and the decision: `already reported`, `fixed upstream`, `ready to file`, `filed as pull request` (with the link) or `not a bug`. Once a later `intakt:upstream:run` finds the reproduction passing on a release, the report records that release. A later review by the owner adds an `Owner review` line with its corrections and a `Status` line with the next step; `not filed`, with the reason, marks a report that is not sent upstream although it was `ready to file`.
 

@@ -71,7 +71,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
-  # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), or added lines naming Doctrine anywhere in src/. Every push to
+  # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
   # main runs the engines regardless, so a change this filter misses is caught on main.
   changes:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
@@ -99,12 +99,7 @@ jobs:
           # Each diff is saved first and must succeed (set -e), so a failing git or an early-exiting grep can never
           # read as "untouched"; it fails this job, and the run with it.
           base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
-          git diff --name-only "$base" "$HEAD_SHA" > "$RUNNER_TEMP/changed-paths"
-          git diff "$base" "$HEAD_SHA" -- src > "$RUNNER_TEMP/src.diff"
-          touched=no
-          if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/(workflows|ci)/)' "$RUNNER_TEMP/changed-paths" > /dev/null; then touched=yes
-          elif grep -E '^\+.*(Doctrine|ORM\\)' "$RUNNER_TEMP/src.diff" > /dev/null; then touched=yes
-          fi
+          touched=$(.github/ci/persistence-needed.sh "$base" "$HEAD_SHA")
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
   # The persistence group on each supported engine; bin/check keeps running it on SQLite. One job runs all three engines
