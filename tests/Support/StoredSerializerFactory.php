@@ -15,7 +15,7 @@ use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
 use Symfony\Component\Serializer\SerializerInterface;
 
-// The `stored` serializer of config/packages/framework.yaml for tests that build a ledger writer without the container.
+// Built by hand because these tests make a ledger writer without the container; it mirrors the `stored` serializer of config/packages/framework.yaml.
 final class StoredSerializerFactory
 {
     public static function create(): SerializerInterface

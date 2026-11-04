@@ -46,7 +46,7 @@ final readonly class UsageLedger
     public function reserve(string $project, Tier $tier, ?Uuid $round = null): UsageReservation
     {
         $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        // A null round is left out of the JSON, as rows of a call outside any round have always been.
+        // Left out of the JSON when null because rows of a call outside any round never had the key.
         $this->record(new UsageStarted($reservation->call, 'started', $project, $tier->value, $round?->toString()), [AbstractObjectNormalizer::SKIP_NULL_VALUES => true]);
 
         return $reservation;
