@@ -10,7 +10,7 @@ The path from a clone to a first verdict, in order:
 4. **Review a branch:** `php bin/console intakt:review <branch> --project=<project> --task="..."` ([Reviewing a branch](#reviewing-a-branch)) and read the outcome ([Reading a verdict](#reading-a-verdict)).
 5. **Watch or script it:** the [dashboard](#the-dashboard) shows each round; an agent starts and reads reviews through [MCP](mcp.md).
 
-What exists, page by page:
+What the guide covers today, feature by feature; the parts marked planned arrive later:
 
 - Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict has its record in the [README](../../README.md#timed-run), still to be filled in by the owner
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), and `intakt:review` runs it (see [below](#reviewing-a-branch)).
