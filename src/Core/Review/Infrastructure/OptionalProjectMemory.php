@@ -26,8 +26,7 @@ final readonly class OptionalProjectMemory implements ProjectMemory
         try {
             return $this->memory->relevantTo($query);
         } catch (Throwable $failure) {
-            // The class only, because a provider's message can echo a key.
-            $this->logger->warning('Project memory could not be read; the review goes on without it.', ['failure' => $failure::class]);
+            $this->logger->warning('Project memory could not be read; the review goes on without it.', ['project' => $query->project, 'exception' => $failure]);
 
             return RelevantMemory::within([], $query->maxBytes);
         }
