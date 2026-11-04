@@ -6,7 +6,10 @@ namespace Intakt\Core\Dashboard\UseCase\ShowReview;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -45,14 +48,24 @@ final readonly class ShowReviewController
         $flashes = $flashBag->peekAll();
 
         try {
-            return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => true]);
+            return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => true, 'topics' => $this->unfinishedTopicsOf($review)]);
         } catch (Throwable $failure) {
             // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; flashes put back, because the failed attempt read them.
             $flashBag->setAll($flashes);
             $this->logger->warning('The review page was rendered without live updates.', ['round' => $round, 'exception' => $failure]);
 
-            return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => false]);
+            return $this->twig->render('dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'live' => false, 'topics' => []]);
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function unfinishedTopicsOf(Review $review): array
+    {
+        $unfinished = array_filter($review->rounds, static fn (ReviewedRound $reviewed): bool => ReviewState::Judged !== $reviewed->state);
+
+        return array_values(array_map(static fn (ReviewedRound $reviewed): string => MercureRoundUpdates::topicOf($reviewed->round), $unfinished));
     }
 
     private function flashBagOf(Request $request): FlashBagInterface
