@@ -16,6 +16,5 @@ final readonly class AiServices
     public const string DISABLED_PROVIDERS = 'intakt.ai.disabled_providers';
     public const string DISABLED_ACCOUNTS = 'intakt.ai.disabled_accounts';
     public const string ACCOUNTS = 'intakt.ai.accounts';
-    public const string CODEX = self::PREFIX.Provider::Codex->value;
     public const string PROJECTS = 'intakt.projects';
 }
