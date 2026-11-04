@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -25,14 +26,12 @@ use Symfony\Contracts\Service\ServiceProviderInterface;
 
 final readonly class TierPlatform implements TierInvoker
 {
-    public const string PLATFORMS = 'intakt.ai.provider_platforms';
-
     /**
      * @param ServiceProviderInterface<PlatformInterface> $platforms
      */
     public function __construct(
         private TierResolver $resolver,
-        #[Autowire(service: self::PLATFORMS)]
+        #[Autowire(service: AiServices::PROVIDER_PLATFORMS)]
         private ServiceProviderInterface $platforms,
         private AccountCooldowns $cooldowns,
         private LoggerInterface $logger,

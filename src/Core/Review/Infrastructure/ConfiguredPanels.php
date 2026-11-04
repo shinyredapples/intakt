@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\ReviewServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class ConfiguredPanels implements Panels
@@ -22,7 +23,7 @@ final readonly class ConfiguredPanels implements Panels
      * @param array<string, array{quorum: string, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>, rules?: list<array{min_lines?: positive-int, paths?: list<string>, reviewers: list<array{role: non-empty-string, tier: string, provider: string, prompt: non-empty-string, budget: positive-int}>}>}> $panels
      */
     public function __construct(
-        #[Autowire('%intakt.review.panels%')]
+        #[Autowire(param: ReviewServices::PANELS)]
         private array $panels,
     ) {
     }

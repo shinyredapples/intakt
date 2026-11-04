@@ -7,6 +7,7 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
+use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
@@ -17,7 +18,6 @@ use Symfony\Component\Lock\LockFactory;
 // In a cache every worker and the scheduler share, so all processes of one installation see its latest budget and its pause.
 final readonly class RateLimitReadings
 {
-    public const string POOL = 'intakt.github.rate_limits';
     private const array LIMITED_STATUSES = [403, 429];
 
     // Written out, because PHP 8.5 deprecates DATE_RFC7231; HTTP dates are always in GMT.
@@ -27,7 +27,7 @@ final readonly class RateLimitReadings
     private const int SECONDS_WITHOUT_RESET = 60;
 
     public function __construct(
-        #[Autowire(service: self::POOL)]
+        #[Autowire(service: GitHubForgeServices::RATE_LIMITS)]
         private CacheItemPoolInterface $pool,
         private ClockInterface $clock,
         private LockFactory $locks,
