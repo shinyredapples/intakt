@@ -19,6 +19,12 @@
         <server name="SHELL_VERBOSITY" value="-1" />
     </php>
 
+    <groups>
+        <exclude>
+            <group>journeys</group>
+        </exclude>
+    </groups>
+
     <testsuites>
         <testsuite name="application">
             <directory>tests</directory>

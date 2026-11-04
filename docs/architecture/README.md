@@ -101,7 +101,17 @@ The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$T
 
 The gates start `git` only through `Workspace::git()`, which runs the [hardened call](requirements.md#the-hardened-git-call) built by their own protected copy, `config/gates/src/HardenedGitCall.php`; the gitleaks gates start gitleaks with the hardened `git` environment. When the repository's `.git/info/attributes` exists, the call refuses it and `CheckCommand` reports every gate that reads git as failed with that reason.
 
-Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
+Options: `--fast` (changed PHP files only), `--journeys` (see [Journeys](#journeys)), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
+
+## Journeys
+
+A journey walks one path a user takes through a freshly booted install and asserts what the user sees, so a break that no single change's evidence shows is caught. They live in `tests/Journeys/`, in the PHPUnit group `journeys`, which `phpunit.dist.xml` excludes: neither the `tests` gate nor `bin/check --fast` runs them. Nothing here calls a model provider or a forge.
+
+- **Run:** `bin/check --journeys` runs the `journeys` gate alone (it refuses `--fast`, `--only` and `--skip`, and is not a gate that `--only` can name). For each `tests/Journeys/*JourneyTest.php` it starts `bin/instance` with PHPUnit as the command (`--no-configuration --group=journeys`, failing on skipped, risky, warning, notice and deprecation), so every journey gets its own instance and database, up to 240 seconds each (`INTAKT_INSTANCE_COMMAND_SECONDS`). A tree without a journey fails. A failing journey is one finding: its file and the line `journey "<name>" failed at step "<step>"`.
+- **Harness:** `tests/Journeys/Support/JourneyTestCase` reads the instance address from `INTAKT_INSTANCE_URL`, drives pages with BrowserKit's `HttpBrowser` (`visit()`, which sends the `Host` the dashboard accepts) and the console with `bin/console` through Symfony Process (`console()`). `step('<name>', <callable>)` runs a named step through `JourneySteps`, which turns any failure into `journey "<name>" failed at step "<step>": <reason>`. `JourneyStepsTest` and `tests/Gates/JourneysGateTest.php` (with a deliberately broken journey fixture) prove that a forced break names its journey and step.
+- **First install and setup** (`FirstInstallJourneyTest`): creates the database (`doctrine:migrations:migrate`), opens `/projects` and reads that no project has started a review, rebuilds the container with a placeholder provider key as the container entrypoint does and seeds the sample project (`intakt:sample:seed`), seeds again and reads that both parts are kept, then opens `/reviews`.
+
+The nightly and on-demand CI run, and the journeys of a built task, a live dashboard and an owner decision, are separate tasks (#859).
 
 ## CI
 

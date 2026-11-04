@@ -28,6 +28,16 @@ final readonly class Workspace
         return $this->home.'/vendor/bin/'.$name;
     }
 
+    public function instance(): string
+    {
+        return $this->home.'/bin/instance';
+    }
+
+    public function autoload(): string
+    {
+        return $this->home.'/vendor/autoload.php';
+    }
+
     public function console(): string
     {
         return $this->home.'/bin/console';

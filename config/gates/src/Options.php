@@ -41,19 +41,40 @@ final readonly class Options
      */
     public static function fromArguments(array $arguments): self
     {
-        $mode = Mode::Full;
+        $fast = false;
+        $journeys = false;
         $values = ['base' => null, 'only' => null, 'skip' => null, 'root' => null, 'test-merge' => null];
 
         foreach ($arguments as $argument) {
             if ('--fast' === $argument) {
-                $mode = Mode::ChangedFilesOnly;
+                $fast = true;
+                continue;
+            }
+
+            if ('--journeys' === $argument) {
+                $journeys = true;
                 continue;
             }
 
             $values = self::withValue($values, $argument);
         }
 
-        return new self($mode, $values);
+        $options = new self(self::modeOf($fast, $journeys), $values);
+
+        if (Mode::Journeys === $options->mode && ($fast || [] !== $options->only || [] !== $options->skip)) {
+            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only or --skip');
+        }
+
+        return $options;
+    }
+
+    private static function modeOf(bool $fast, bool $journeys): Mode
+    {
+        return match (true) {
+            $journeys => Mode::Journeys,
+            $fast => Mode::ChangedFilesOnly,
+            default => Mode::Full,
+        };
     }
 
     /**
@@ -71,7 +92,7 @@ final readonly class Options
             }
         }
 
-        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>]');
+        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>]');
     }
 
     /**
