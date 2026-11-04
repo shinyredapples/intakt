@@ -13,15 +13,23 @@ final class LogsAnErrorInAKernelTestFixture extends KernelTestCase
 {
     public function testItLogsAnErrorThroughTheContainerNobodyAsserts(): void
     {
-        self::getContainer()->get(LoggerInterface::class)->error('Disk on fire in the kernel.');
+        $this->logger()->error('Disk on fire in the kernel.');
 
         self::assertTrue(self::$booted);
     }
 
     public function testItLogsAnErrorThroughTheContainerAndAssertsIt(): void
     {
-        self::getContainer()->get(LoggerInterface::class)->error('Disk on fire in the kernel, asserted.');
+        $this->logger()->error('Disk on fire in the kernel, asserted.');
 
         self::assertLoggedError('error', 'Disk on fire in the kernel, asserted.');
+    }
+
+    private function logger(): LoggerInterface
+    {
+        $logger = self::getContainer()->get(LoggerInterface::class);
+        self::assertInstanceOf(LoggerInterface::class, $logger);
+
+        return $logger;
     }
 }
