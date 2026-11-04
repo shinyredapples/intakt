@@ -127,7 +127,7 @@ final readonly class Redaction
                 str_ends_with($match['open'][0], '(') => $this->endOfQuotedList($text, $afterOpen, '()'),
                 default => $this->endOfQuotedList($text, $afterOpen, '[]'),
             };
-            // A bracket that opens no list is left to the value pass, which redacts the value to the end of its line or quote.
+            // A bracket that opens no list is left to the value pass, because it redacts the value to the end of its line or quote, so nothing after the bracket leaks.
             if ($end < strlen($text) && !$this->isListShaped($text, $afterOpen, $end)) {
                 continue;
             }
