@@ -17,7 +17,7 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 
 ## Five-minute start
 
-The demo (its timed run is planned, see [Status](#status)):
+The demo (its timed run is recorded [below](#timed-run)):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
@@ -26,6 +26,20 @@ docker compose up         # Intakt, its database and a sample repository
 ```
 
 Then start the review with the command the log prints at the end of the first start, and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+
+### Timed run
+
+`(owner provides)`: the run needs Docker and a live provider key, which the build sandbox has neither of, so no timing or verdict is recorded yet. The owner times these steps on a clean clone (note `.env.local`, not `.env`: `compose.yaml` reads `.env.local`) and fills in the table:
+
+| Step | Command | Time |
+| --- | --- | --- |
+| 1. Clone | `git clone https://github.com/shinyredapples/intakt.git && cd intakt` | |
+| 2. Configure | `cp .env.dist .env.local`, then set one provider key and the two secrets | |
+| 3. Start | `docker compose up`, until the log prints the review command | |
+| 4. First verdict | the printed `docker compose exec intakt php bin/console intakt:review sample-change ...` | |
+| Total | | |
+
+Also record the date, the Intakt commit, the host (CPU, Docker version), the first verdict (decision, finding count with severities) and, with two keys set after `docker compose down -v`, that the seeded panel uses two providers.
 
 What works now:
 
