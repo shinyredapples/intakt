@@ -66,9 +66,8 @@ final readonly class NoDeprecatedReferenceRule implements Rule
         return array_values(array_merge([], ...$plain, ...$grouped));
     }
 
+    // because PHPStan has resolved every name to its full form before rules run
     /**
-     * The names are already resolved to their full form by the time rules run.
-     *
      * @param array<Node> $nodes
      *
      * @return list<Reference>

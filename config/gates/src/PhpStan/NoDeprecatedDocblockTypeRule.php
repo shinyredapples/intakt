@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Comment\Doc;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
 use PHPStan\Analyser\Scope;
@@ -35,7 +36,7 @@ final readonly class NoDeprecatedDocblockTypeRule implements Rule
     public function processNode(Node $node, Scope $scope): array
     {
         $comment = $node->getDocComment();
-        if (null === $comment) {
+        if (!$comment instanceof Doc) {
             return [];
         }
 

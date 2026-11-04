@@ -38,7 +38,7 @@ final readonly class DeprecatedClasses
 
         $class = $this->reflections->getClass($name);
 
-        // a vendor class that only warns when its file loads carries no tag for reflection to find
+        // because a vendor class that only warns when its file loads carries no tag for reflection to find
         return $class->isDeprecated() || $this->fileScope->triggeredBy($class->getFileName());
     }
 }
