@@ -24,9 +24,9 @@ final class JourneyStepsTest extends TestCase
         $steps = new JourneySteps('first install');
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('journey "first install" failed at step "open the dashboard": Failed asserting that false is true.');
+        $this->expectExceptionMessageMatches('/^journey "first install" failed at step "open the dashboard": the page is empty$/');
 
-        $steps->run('open the dashboard', static fn () => self::assertTrue(false));
+        $steps->run('open the dashboard', static fn () => self::fail('the page is empty'));
     }
 
     public function testAnErrorInAStepNamesTheStepToo(): void
@@ -34,7 +34,7 @@ final class JourneyStepsTest extends TestCase
         $steps = new JourneySteps('first install');
 
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('journey "first install" failed at step "seed": no disk');
+        $this->expectExceptionMessageMatches('/^journey "first install" failed at step "seed": no disk$/');
 
         $steps->run('seed', static fn () => throw new RuntimeException('no disk'));
     }

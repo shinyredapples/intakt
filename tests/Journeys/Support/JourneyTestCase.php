@@ -65,7 +65,7 @@ abstract class JourneyTestCase extends TestCase
         return $process->getOutput();
     }
 
-    // The dashboard refuses any other host name or port than its own, and the instance listens on a free port.
+    // Because the dashboard refuses any other host name or port than its own, and the instance listens on a free port.
     private function dashboardPort(): string
     {
         $port = getenv('DASHBOARD_PORT');
@@ -74,7 +74,9 @@ abstract class JourneyTestCase extends TestCase
             return $port;
         }
 
-        return new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env'))['DASHBOARD_PORT'] ?? self::fail('DASHBOARD_PORT is not set in .env');
+        $shipped = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env'))['DASHBOARD_PORT'] ?? null;
+
+        return is_string($shipped) ? $shipped : self::fail('DASHBOARD_PORT is not set in .env');
     }
 
     private function address(): string

@@ -41,40 +41,50 @@ final readonly class Options
      */
     public static function fromArguments(array $arguments): self
     {
-        $fast = false;
-        $journeys = false;
+        $modes = [];
         $values = ['base' => null, 'only' => null, 'skip' => null, 'root' => null, 'test-merge' => null];
 
         foreach ($arguments as $argument) {
-            if ('--fast' === $argument) {
-                $fast = true;
-                continue;
-            }
+            $mode = self::modeNamedBy($argument);
 
-            if ('--journeys' === $argument) {
-                $journeys = true;
+            if ($mode instanceof Mode) {
+                $modes[] = $mode;
                 continue;
             }
 
             $values = self::withValue($values, $argument);
         }
 
-        $options = new self(self::modeOf($fast, $journeys), $values);
+        return self::withMode($modes, $values);
+    }
 
-        if (Mode::Journeys === $options->mode && ($fast || [] !== $options->only || [] !== $options->skip)) {
+    private static function modeNamedBy(string $argument): ?Mode
+    {
+        return match ($argument) {
+            '--fast' => Mode::ChangedFilesOnly,
+            '--journeys' => Mode::Journeys,
+            default => null,
+        };
+    }
+
+    /**
+     * @param list<Mode>                                                                               $modes
+     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     */
+    private static function withMode(array $modes, array $values): self
+    {
+        if (!in_array(Mode::Journeys, $modes, true)) {
+            return new self(array_last($modes) ?? Mode::Full, $values);
+        }
+
+        $options = new self(Mode::Journeys, $values);
+        $others = array_filter($modes, static fn (Mode $mode): bool => Mode::Journeys !== $mode);
+
+        if ([] !== $others || [] !== $options->only || [] !== $options->skip) {
             throw new InvalidArgumentException('--journeys runs alone, without --fast, --only or --skip');
         }
 
         return $options;
-    }
-
-    private static function modeOf(bool $fast, bool $journeys): Mode
-    {
-        return match (true) {
-            $journeys => Mode::Journeys,
-            $fast => Mode::ChangedFilesOnly,
-            default => Mode::Full,
-        };
     }
 
     /**
