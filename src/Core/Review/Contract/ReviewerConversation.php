@@ -15,6 +15,8 @@ final readonly class ReviewerConversation
         public string $rolePrompt,
         public AbstractUid&TimeBasedUidInterface $id,
         public ?Uuid $round = null,
+        // The id the ledger records for the reviewer, apart from the conversation's, because a stop request names the reviewer and a retry starts a new conversation.
+        public ?Uuid $reviewerId = null,
     ) {
     }
 }
