@@ -12,10 +12,10 @@ use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use Intakt\Core\Review\Infrastructure\OptionalProjectMemory;
+use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(EmbeddingsNotConfigured::class)]
 #[UsesClass(StoreMemoryIndex::class)]

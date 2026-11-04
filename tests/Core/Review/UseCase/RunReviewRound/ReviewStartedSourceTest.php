@@ -9,9 +9,9 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[Group('persistence')]
 #[CoversClass(RoundLedger::class)]

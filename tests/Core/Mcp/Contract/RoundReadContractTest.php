@@ -17,18 +17,15 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Covers nothing because the contract is the read tools and the findings resource as an agent meets them through the running server.
 #[Group('persistence')]
 #[CoversNothing]
 final class RoundReadContractTest extends KernelTestCase
 {
-    use AssertsLoggedErrors;
-
     private McpServerClient $client;
 
     private string $roundId;

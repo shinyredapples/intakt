@@ -260,6 +260,10 @@ final class WorkerModeTest extends TestCase
         $console = new ApplicationTester($application);
         $console->run(['command' => 'doctrine:migrations:migrate', '--no-interaction' => true]);
         $console->assertCommandIsSuccessful($console->getDisplay());
-        self::assertInstanceOf(Connection::class, $this->container($kernel)->get('doctrine.dbal.default_connection'));
+
+        $connection = $this->container($kernel)->get('doctrine.dbal.default_connection');
+        assert($connection instanceof Connection);
+        // MySQL and MariaDB commit implicitly at every DDL statement, which leaves the migrations' transactions counted as open; the next flush would then ask for a savepoint that does not exist.
+        $connection->close();
     }
 }
