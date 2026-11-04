@@ -37,7 +37,6 @@ use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -72,8 +71,6 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Checkout::class)]
 final class ReviewerOverMcpTest extends KernelTestCase
 {
-    use AssertsLoggedErrors;
-
     private const string APPROVE = '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}';
 
     private ReviewRound $round;

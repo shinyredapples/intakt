@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Mcp\Contract;
 
 use Intakt\Kernel;
 use Intakt\Tests\Support\KernelTestCase;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use stdClass;
 
@@ -14,8 +13,6 @@ use stdClass;
 #[CoversNothing]
 final class ToolSchemaContractTest extends KernelTestCase
 {
-    use AssertsLoggedErrors;
-
     public function testAToolWithoutParametersDeclaresThemAsAnEmptyPropertiesObject(): void
     {
         $client = $this->client();

@@ -20,7 +20,6 @@ use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpFoundation\Request;
@@ -32,8 +31,6 @@ use Symfony\Component\Uid\Uuid;
 #[CoversNothing]
 final class ReviewServerContractTest extends KernelTestCase
 {
-    use AssertsLoggedErrors;
-
     private Kernel $app;
 
     private McpServerClient $client;
