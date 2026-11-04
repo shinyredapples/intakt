@@ -368,17 +368,41 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['2026-11-02T10:01:00+00:00', '2026-11-02T10:03:00+00:00'], array_column($this->ledger->payloads(), 'retry_at'));
     }
 
-    public function testAHeadThatFailsFourTimesInARowGoesToTheMaintainerAgentAndIsNoLongerTried(): void
+    public function testAHeadThatFailsFourTimesInARowGoesToTheMaintainerAgentOnce(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
-        $this->tickEvery('+20 minutes', 4);
 
-        $this->tickEvery('+1 hour', 1);
+        $this->tickEvery('+20 minutes', 5);
 
-        self::assertCount(4, $this->checks->asked);
-        self::assertSame([...array_fill(0, 3, LedgerEventKind::HeadFailed), LedgerEventKind::HeadHandedOver], $this->ledger->kinds());
+        self::assertSame([...array_fill(0, 3, LedgerEventKind::HeadFailed), LedgerEventKind::HeadHandedOver, LedgerEventKind::HeadFailed], $this->ledger->kinds());
         self::assertSame(4, $this->ledger->payloads()[3]['failures']);
-        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAHeadThatKeepsFailingWaitsAtMostHalfAnHourForItsNextTry(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+
+        $this->tickEvery('+1 hour', 6);
+
+        self::assertCount(6, $this->checks->asked);
+        self::assertSame('2026-11-02T15:30:00+00:00', $this->ledger->payloads()[5]['retry_at']);
+    }
+
+    public function testAHandedOverHeadWhoseFaultClearsStartsItsRoundWithoutItsPullRequestMoving(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $failing = true;
+        $this->commands->whileStarting = static function () use (&$failing): void {
+            if ($failing) {
+                throw new RuntimeException('commit not fetched yet');
+            }
+        };
+        $this->tickEvery('+20 minutes', 4);
+        $failing = false;
+
+        $this->tickEvery('+30 minutes', 1);
+
+        self::assertSame(LedgerEventKind::RoundQueued, array_last($this->ledger->kinds()));
     }
 
     public function testAHeadThatFailsThreeTimesInARowIsStillTried(): void

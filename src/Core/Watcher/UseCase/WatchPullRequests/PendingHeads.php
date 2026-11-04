@@ -91,19 +91,20 @@ final readonly class PendingHeads
         return $this->stored($project, $head)?->failuresOf($head) ?? 0;
     }
 
-    // Only while the row still holds this head, as in keep(), because a newer head the listing queued meanwhile has not failed.
+    // Only while the row still holds this head from the same listing, because a head the listing queued meanwhile, even the same commit touched again, is counted anew and due now.
     public function backOff(HeadFailure $failure, int $failures, DateTimeImmutable $until): void
     {
         $this->entities->createQueryBuilder()
             ->update(PendingHead::class, 'p')
             ->set('p.readAgainAt', ':readAgainAt')
             ->set('p.failures', ':failures')
-            ->where('p.project = :project AND p.change = :change AND p.head = :head')
+            ->where('p.project = :project AND p.change = :change AND p.head = :head AND p.updatedAt = :updatedAt')
             ->setParameter('readAgainAt', PendingHead::momentOf($until))
             ->setParameter('failures', $failures)
             ->setParameter('project', $failure->project)
             ->setParameter('change', $failure->head->id->value)
             ->setParameter('head', $failure->head->head->hash)
+            ->setParameter('updatedAt', PendingHead::momentOf($failure->head->updatedAt))
             ->getQuery()
             ->execute();
         $this->dropLoaded($this->keyOf($failure->project, $failure->head));

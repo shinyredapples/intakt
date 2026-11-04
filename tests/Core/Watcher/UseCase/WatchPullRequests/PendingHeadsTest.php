@@ -99,6 +99,18 @@ final class PendingHeadsTest extends KernelTestCase
         self::assertSame([str_repeat('b', 40)], $this->dueHeads());
     }
 
+    public function testTheSameHeadListedAgainBeforeItsOlderListingIsBackedOffStaysDueWithoutFailures(): void
+    {
+        $old = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');
+        $this->pending->enqueue('alpha', [$old]);
+        $this->pending->enqueue('alpha', [RecordedForge::change('7', 'a', '2026-11-02T09:30:00Z')]);
+
+        $this->pending->backOff(new HeadFailure('alpha', $old, 'RuntimeException: down'), 3, $this->clock->now()->modify('+4 minutes'));
+
+        self::assertSame(0, $this->pending->failuresOf('alpha', $old));
+        self::assertSame([str_repeat('a', 40)], $this->dueHeads());
+    }
+
     public function testAHeadSettledAfterFailingCountsItsFailuresAnew(): void
     {
         $head = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');

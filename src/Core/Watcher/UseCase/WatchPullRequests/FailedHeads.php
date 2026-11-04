@@ -15,6 +15,9 @@ final readonly class FailedHeads
 {
     private const int FIRST_WAIT_SECONDS = 60;
 
+    // Capped, because until the maintainer agent takes a handed-over head, a fault that clears (a commit not fetched yet, a CI endpoint down) must still let the head be reviewed within half an hour.
+    private const int LONGEST_WAIT_SECONDS = 1800;
+
     // Four in a row, as for a failing bench, because a passing fault clears within those doubling waits and one that does not needs someone to look.
     private const int HAND_OVER_AFTER = 4;
 
@@ -29,16 +32,10 @@ final readonly class FailedHeads
     {
         $failures = $this->pending->failuresOf($project, $head) + 1;
         $headFailure = new HeadFailure($project, $head, $this->causeOf($failure));
-
-        if ($failures >= self::HAND_OVER_AFTER) {
-            $this->handOver($headFailure, $failures);
-
-            return;
-        }
-
         $retryAt = $this->retryAt($failures);
+
         // Recorded before the row is changed, because a failure the ledger could not take must leave the head due, so the tick fails and the next one tries again.
-        $this->ledger->headFailed($headFailure, $failures, $retryAt);
+        $this->record($headFailure, $failures, $retryAt);
         $this->pending->backOff($headFailure, $failures, $retryAt);
     }
 
@@ -48,15 +45,22 @@ final readonly class FailedHeads
         return $failure::class.': '.new Redaction()->redact(mb_scrub($failure->getMessage(), 'UTF-8'));
     }
 
-    // Leaves the queue until its pull request changes, because the maintainer agent takes it from the ledger line and another try would fail the same way.
-    private function handOver(HeadFailure $failure, int $failures): void
-    {
-        $this->ledger->headHandedOver($failure, $failures);
-        $this->pending->forget($failure->project, $failure->head);
-    }
-
     private function retryAt(int $failures): DateTimeImmutable
     {
-        return $this->clock->now()->modify(sprintf('+%d seconds', self::FIRST_WAIT_SECONDS * 2 ** ($failures - 1)));
+        $wait = min(self::FIRST_WAIT_SECONDS * 2 ** ($failures - 1), self::LONGEST_WAIT_SECONDS);
+
+        return $this->clock->now()->modify(sprintf('+%d seconds', $wait));
+    }
+
+    // Handed over once, at the failure that reaches the limit, so the maintainer agent gets one line per head while later tries are recorded as failures.
+    private function record(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
+    {
+        if (self::HAND_OVER_AFTER === $failures) {
+            $this->ledger->headHandedOver($failure, $failures, $retryAt);
+
+            return;
+        }
+
+        $this->ledger->headFailed($failure, $failures, $retryAt);
     }
 }

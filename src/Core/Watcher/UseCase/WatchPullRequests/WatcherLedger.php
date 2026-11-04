@@ -43,22 +43,22 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::VerdictsStale, ['project' => $round->project(), 'change' => $round->change(), 'round' => $round->roundId(), 'head' => $round->head()]);
     }
 
-    public function headFailed(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
+    public function headHandedOver(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
     {
-        $this->append(LedgerEventKind::HeadFailed, $this->failureOf($failure, $failures) + ['retry_at' => $retryAt->format(DATE_ATOM)]);
+        $this->append(LedgerEventKind::HeadHandedOver, $this->failureOf($failure, $failures, $retryAt));
     }
 
-    public function headHandedOver(HeadFailure $failure, int $failures): void
+    public function headFailed(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
     {
-        $this->append(LedgerEventKind::HeadHandedOver, $this->failureOf($failure, $failures));
+        $this->append(LedgerEventKind::HeadFailed, $this->failureOf($failure, $failures, $retryAt));
     }
 
     /**
-     * @return array{project: string, change: string, head: string, cause: string, failures: int}
+     * @return array{project: string, change: string, head: string, cause: string, failures: int, retry_at: string}
      */
-    private function failureOf(HeadFailure $failure, int $failures): array
+    private function failureOf(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): array
     {
-        return ['project' => $failure->project, 'change' => $failure->head->id->value, 'head' => $failure->head->head->hash, 'cause' => $failure->cause, 'failures' => $failures];
+        return ['project' => $failure->project, 'change' => $failure->head->id->value, 'head' => $failure->head->head->hash, 'cause' => $failure->cause, 'failures' => $failures, 'retry_at' => $retryAt->format(DATE_ATOM)];
     }
 
     /**
