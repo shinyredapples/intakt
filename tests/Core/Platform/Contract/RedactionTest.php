@@ -292,6 +292,35 @@ final class RedactionTest extends TestCase
         self::assertStringNotContainsString('tailsecret', $redacted);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function valuesStartingWithABracket(): iterable
+    {
+        yield 'bracket then semicolon' => ['Cookie: [a]; sid=topsecretvalue'];
+        yield 'bracketed scheme' => ['Authorization: [Bearer] topsecretvalue'];
+        yield 'bracketed key' => ['X-Api-Key: [k] topsecretvalue'];
+        yield 'shell quoted' => ["curl -H 'Cookie: [a] sid=topsecretvalue'"];
+        yield 'empty brackets' => ['Cookie: [] topsecretvalue'];
+        yield 'quoted element without a separator after' => ['X-Api-Key: ["k"] topsecretvalue'];
+        yield 'parenthesized' => ['Cookie: array (a) topsecretvalue'];
+    }
+
+    #[DataProvider('valuesStartingWithABracket')]
+    public function testItRedactsAHeaderValueThatStartsWithABracketWhole(string $text): void
+    {
+        $redacted = new Redaction()->redact($text);
+
+        self::assertStringNotContainsString('topsecretvalue', $redacted);
+    }
+
+    public function testItKeepsTheFieldAfterARedactedHeaderListWithABlankBeforeTheComma(): void
+    {
+        $redacted = new Redaction()->redact('{"cookie": ["a"] , "x": "ok"}');
+
+        self::assertSame('{"cookie": [redacted] , "x": "ok"}', $redacted);
+    }
+
     public function testItKeepsTheFieldsAfterEachOfTwoRedactedHeaderListsOnTheSameLine(): void
     {
         $redacted = new Redaction()->redact('{"authorization": ["a1b2c3"], "cookie": ["d4e5f6"], "status": 200}');

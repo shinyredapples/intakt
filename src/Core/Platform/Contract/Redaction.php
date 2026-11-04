@@ -116,24 +116,39 @@ final readonly class Redaction
         $result = '';
         $listMarkers = [];
         $offset = 0;
-        while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
+        $from = 0;
+        while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $from)) {
             $matchStart = $match[0][1];
             $afterOpen = $matchStart + strlen($match[0][0]);
+            $from = $afterOpen;
             $end = match (true) {
                 // print_r does not quote values, so no line marks the end of its list for certain and the rest of the text goes.
                 -1 !== ($match['printR'][1] ?? -1) => strlen($text),
                 str_ends_with($match['open'][0], '(') => $this->endOfQuotedList($text, $afterOpen, '()'),
                 default => $this->endOfQuotedList($text, $afterOpen, '[]'),
             };
+            // A bracket that opens no list is left to the value pass, which redacts the value to the end of its line or quote.
+            if ($end < strlen($text) && !$this->isListShaped($text, $afterOpen, $end)) {
+                continue;
+            }
 
             // A missing end takes the rest of the text because stopping early would leak.
             $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0]));
             $listMarkers[] = strlen($result);
             $result .= self::MARKER;
-            $offset = $end;
+            $offset = $from = $end;
         }
 
         return [$result.substr($text, $offset), $listMarkers];
+    }
+
+    // A plain value may start with a bracket too (`[Bearer] token`), so only a list whose first element is quoted, keyed, nested or missing, and that a separator or the line's end follows, keeps the text after it.
+    private function isListShaped(string $text, int $afterOpen, int $end): bool
+    {
+        $listStart = '~\G\s*+(?:["\'\[\])]|\d+\s*+=>|array\s*+\()~i';
+        $listEnd = '~\G[ \t]*+(?:[,\]})]|\R|\z)~';
+
+        return 1 === preg_match($listStart, $text, offset: $afterOpen) && 1 === preg_match($listEnd, $text, offset: $end);
     }
 
     private function endOfQuotedList(string $text, int $from, string $brackets): int
