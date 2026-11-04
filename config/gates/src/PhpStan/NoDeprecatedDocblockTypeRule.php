@@ -7,8 +7,13 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Comment\Doc;
 use PhpParser\Node;
 use PhpParser\Node\Stmt;
+use PHPStan\Analyser\NameScope;
 use PHPStan\Analyser\Scope;
-use PHPStan\PhpDoc\ResolvedPhpDocBlock;
+use PHPStan\PhpDoc\TypeNodeResolver;
+use PHPStan\PhpDocParser\Ast\AbstractNodeVisitor;
+use PHPStan\PhpDocParser\Ast\Node as PhpDocNode;
+use PHPStan\PhpDocParser\Ast\NodeTraverser;
+use PHPStan\PhpDocParser\Ast\Type\TypeNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Type\FileTypeMapper;
@@ -21,6 +26,7 @@ final readonly class NoDeprecatedDocblockTypeRule implements Rule
 {
     public function __construct(
         private FileTypeMapper $typeMapper,
+        private TypeNodeResolver $typeResolver,
         private DeprecatedClasses $deprecated,
     ) {
     }
@@ -41,18 +47,42 @@ final readonly class NoDeprecatedDocblockTypeRule implements Rule
         }
 
         $docblock = $this->typeMapper->getResolvedPhpDoc($scope->getFile(), $scope->getClassReflection()?->getName(), null, null, $comment->getText());
-        $classes = array_unique(array_merge([], ...array_map(static fn (Type $type): array => $type->getReferencedClasses(), $this->types($docblock))));
+        $nameScope = $docblock->getNullableNameScope();
+        if (!$nameScope instanceof NameScope) {
+            return [];
+        }
+
+        $types = array_map(fn (TypeNode $type): Type => $this->typeResolver->resolve($type, $nameScope), $this->typeNodes($docblock->getPhpDocNodes()));
+        $classes = array_unique(array_merge([], ...array_map(static fn (Type $type): array => $type->getReferencedClasses(), $types)));
 
         return array_merge([], ...array_map(fn (string $class): array => $this->deprecated->reportUseOf($class, $comment->getStartLine()), $classes));
     }
 
+    // because every tag keeps its types in other fields (@method parameters, @template bounds), only a walk finds them all
     /**
-     * @return list<Type>
+     * @param array<PhpDocNode> $phpDocNodes
+     *
+     * @return list<TypeNode>
      */
-    private function types(ResolvedPhpDocBlock $docblock): array
+    private function typeNodes(array $phpDocNodes): array
     {
-        $tags = [...$docblock->getVarTags(), ...$docblock->getParamTags(), $docblock->getReturnTag(), $docblock->getThrowsTag()];
+        $collector = new class extends AbstractNodeVisitor {
+            /** @var list<TypeNode> */
+            public array $found = [];
 
-        return array_values(array_map(static fn (object $tag): Type => $tag->getType(), array_filter($tags, static fn (?object $tag): bool => null !== $tag)));
+            public function enterNode(PhpDocNode $node): ?int
+            {
+                if (!$node instanceof TypeNode) {
+                    return null;
+                }
+
+                $this->found[] = $node;
+
+                return NodeTraverser::DONT_TRAVERSE_CHILDREN;
+            }
+        };
+        new NodeTraverser([$collector])->traverse($phpDocNodes);
+
+        return $collector->found;
     }
 }

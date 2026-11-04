@@ -30,7 +30,7 @@ final readonly class DeprecatedClasses
         return [RuleErrorBuilder::message($message)->identifier('intakt.deprecatedReference')->line($line)->build()];
     }
 
-    private function isDeprecated(string $name): bool
+    public function isDeprecated(string $name): bool
     {
         if (!$this->reflections->hasClass($name)) {
             return false;

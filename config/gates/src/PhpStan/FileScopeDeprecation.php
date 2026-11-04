@@ -6,9 +6,10 @@ namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
 use PhpParser\Node\Expr\FuncCall;
+use PhpParser\Node\FunctionLike;
 use PhpParser\Node\Name;
-use PhpParser\Node\Stmt\Expression;
-use PhpParser\Node\Stmt\Namespace_;
+use PhpParser\Node\Stmt\ClassLike;
+use PhpParser\NodeFinder;
 use PHPStan\Parser\Parser;
 use PHPStan\Parser\ParserErrorsException;
 
@@ -32,7 +33,7 @@ final readonly class FileScopeDeprecation
             return false;
         }
 
-        return array_any($this->topLevel($statements), $this->isTrigger(...));
+        return [] !== array_diff($this->triggersIn($statements), $this->triggersIn($this->bodies($statements)));
     }
 
     /**
@@ -40,19 +41,26 @@ final readonly class FileScopeDeprecation
      *
      * @return list<Node>
      */
-    private function topLevel(array $statements): array
+    private function bodies(array $statements): array
     {
-        $inNamespaces = array_map(static fn (Node $node): array => $node instanceof Namespace_ ? $node->stmts : [], $statements);
-
-        return array_values([...$statements, ...array_merge([], ...$inNamespaces)]);
+        // a call inside a function, closure or class runs only when someone calls it, so it deprecates nothing at load time
+        return new NodeFinder()->find($statements, static fn (Node $node): bool => $node instanceof FunctionLike || $node instanceof ClassLike);
     }
 
-    private function isTrigger(Node $statement): bool
+    /**
+     * @param array<Node> $nodes
+     *
+     * @return list<int>
+     */
+    private function triggersIn(array $nodes): array
     {
-        // a call inside a method or a condition runs only when someone asks for it, so it deprecates nothing at load time
-        return $statement instanceof Expression
-            && $statement->expr instanceof FuncCall
-            && $statement->expr->name instanceof Name
-            && self::FUNCTION === $statement->expr->name->getLast();
+        return array_map(spl_object_id(...), new NodeFinder()->find($nodes, $this->isTrigger(...)));
+    }
+
+    private function isTrigger(Node $node): bool
+    {
+        return $node instanceof FuncCall
+            && $node->name instanceof Name
+            && self::FUNCTION === $node->name->getLast();
     }
 }
