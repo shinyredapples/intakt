@@ -122,7 +122,7 @@ final class MercureHubTest extends TestCase
 
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void
     {
-        $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(Uuid::fromString(self::ROUND))]]);
+        $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(self::ROUND)]]);
 
         self::assertSame(401, $response->getStatusCode());
     }
@@ -143,7 +143,7 @@ final class MercureHubTest extends TestCase
 
     private function subscribe(string $lastEventId): ResponseInterface
     {
-        $topic = MercureRoundUpdates::topicOf(Uuid::fromString(self::ROUND));
+        $topic = MercureRoundUpdates::topicOf(self::ROUND);
         $headers = ['Authorization' => 'Bearer '.$this->token(new Grant([Grant::ACTION_SUBSCRIBE], [$topic])), 'Last-Event-ID' => $lastEventId];
 
         $response = $this->client->request('GET', $this->url, ['query' => ['match' => $topic], 'headers' => $headers, 'timeout' => self::SECONDS_TO_WAIT]);

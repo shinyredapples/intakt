@@ -11,7 +11,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Labels** on each issue, from the design's [label families](design/05-architecture/04-labels.md): `intakt` on all; `class:` and `priority:` as listed; `plan:required` on L tasks; `model:strong` only where noted.
 - **PHP 8.5** lines name the 8.5 feature that fits a task (see `AGENTS.md`); use it where it makes the code clearer.
 - Contracts and config shapes are not designed ahead: each task adds the contract methods and config keys it uses, and nothing more ([Left to the builder](design/08-left-to-the-builder.md)). Every user-visible task updates `docs/user/` and `docs/architecture/`.
-- A task that starts or stops using a Symfony or Symfony AI feature updates its row in [highlights.md](highlights.md) (status, task and issue, path; never the pull request number); reviewers check it, and the `highlights` gate of `bin/check` checks the status, the backticked paths and that no pull request number appears; the `reproductions` gate checks that every folder under `upstream/` has a row in "Found in the beta".
+- A task that starts or stops using a Symfony or Symfony AI feature updates its row in [highlights.md](highlights.md) (status, task and issue, path; never the pull request number); reviewers check it, and the `highlights` gate of `bin/check` checks the status, the backticked paths, that no pull request number appears and that no row is still planned once every path it names exists; the `reproductions` gate checks that every folder under `upstream/` has a row in "Found in the beta".
 
 ## Milestones
 

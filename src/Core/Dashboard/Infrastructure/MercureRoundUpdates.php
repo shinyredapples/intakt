@@ -24,47 +24,47 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     ) {
     }
 
-    public static function topicOf(Uuid $round): string
+    public static function topicOf(string $round): string
     {
-        return 'review/rounds/'.$round->toRfc4122();
+        return 'review/rounds/'.$round;
     }
 
     #[Override]
     public function toolCalled(Uuid $round, string $reviewer, string $tool): void
     {
-        $this->publish($round, 'tool_called', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'tool' => $tool]);
+        $this->publish($round, RoundStream::ToolCalled, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'tool' => $tool]);
     }
 
     #[Override]
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
-        $this->publish($round, 'text_streamed', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'text' => $text]);
+        $this->publish($round, RoundStream::TextStreamed, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'text' => $text]);
     }
 
     #[Override]
     public function roundChanged(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, 'round_changed', ['round' => $round->toRfc4122(), 'progress' => $progress]);
+        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
     }
 
     #[Override]
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
-        $this->publish($round, 'reviewer_stopped', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
+        $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
     }
 
     /**
      * @param array<string, mixed> $context
      */
-    private function publish(Uuid $round, string $stream, array $context): void
+    private function publish(Uuid $round, RoundStream $stream, array $context): void
     {
         try {
-            $data = $this->twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $stream), $context);
+            $data = $this->twig->render($stream->template(), $context);
             // Private, because the text is model output about private code; only a subscriber the dashboard authorizes may read it.
-            $this->hub->publish(new Update(self::topicOf($round), $data, true));
+            $this->hub->publish(new Update(self::topicOf($round->toRfc4122()), $data, true));
         } catch (Throwable $failure) {
             // Swallowed after a log, because a live update is best effort and must never change a verdict or a round.
-            $this->logger->warning('A live round update was not published.', ['round' => $round->toRfc4122(), 'stream' => $stream, 'exception' => $failure]);
+            $this->logger->warning('A live round update was not published.', ['round' => $round->toRfc4122(), 'stream' => $stream->value, 'exception' => $failure]);
         }
     }
 }
