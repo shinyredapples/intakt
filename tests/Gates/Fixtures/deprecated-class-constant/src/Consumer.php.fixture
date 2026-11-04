@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Consumer
+{
+    public function name(): string
+    {
+        return Legacy::class;
+    }
+}
