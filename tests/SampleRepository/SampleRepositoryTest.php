@@ -49,7 +49,7 @@ final class SampleRepositoryTest extends TestCase
         $changed = $this->changedFileNames($this->build());
 
         self::assertNotSame([], $changed);
-        self::assertSame([], self::testFiles($changed));
+        self::assertSame([], $this->testFiles($changed));
     }
 
     public function testATestFileWithANonAsciiNameCountsAsAChangedTestFile(): void
@@ -59,7 +59,7 @@ final class SampleRepositoryTest extends TestCase
 
         $changed = $this->changedFileNames($repository);
 
-        self::assertSame(['test/régression.test.js'], self::testFiles($changed));
+        self::assertSame(['test/régression.test.js'], $this->testFiles($changed));
     }
 
     public function testTheIssuesCoverABugAMissingTestAndASecuritySmell(): void
@@ -139,7 +139,7 @@ final class SampleRepositoryTest extends TestCase
      *
      * @return list<string>
      */
-    private static function testFiles(array $names): array
+    private function testFiles(array $names): array
     {
         return array_values(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'test/')));
     }
