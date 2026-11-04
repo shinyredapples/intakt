@@ -329,23 +329,33 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(['2026-11-02T10:01:00+00:00', '2026-11-02T10:03:00+00:00'], array_column($this->ledger->payloads(), 'retry_at'));
     }
 
-    public function testAHeadThatFailsFiveTimesInARowGoesToTheMaintainerAgentAndIsNoLongerTried(): void
+    public function testAHeadThatFailsFourTimesInARowGoesToTheMaintainerAgentAndIsNoLongerTried(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
-        $this->tickEvery('+20 minutes', 5);
+        $this->tickEvery('+20 minutes', 4);
 
         $this->tickEvery('+1 hour', 1);
 
-        self::assertCount(5, $this->checks->asked);
-        self::assertSame([...array_fill(0, 4, LedgerEventKind::HeadFailed), LedgerEventKind::HeadHandedOver], $this->ledger->kinds());
-        self::assertSame(5, $this->ledger->payloads()[4]['failures']);
+        self::assertCount(4, $this->checks->asked);
+        self::assertSame([...array_fill(0, 3, LedgerEventKind::HeadFailed), LedgerEventKind::HeadHandedOver], $this->ledger->kinds());
+        self::assertSame(4, $this->ledger->payloads()[3]['failures']);
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAHeadThatFailsThreeTimesInARowIsStillTried(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+
+        $this->tickEvery('+20 minutes', 3);
+
+        self::assertNotContains(LedgerEventKind::HeadHandedOver, $this->ledger->kinds());
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
     public function testAHeadHandedOverIsTriedAgainOnceItsPullRequestMoves(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
-        $this->tickEvery('+20 minutes', 5);
+        $this->tickEvery('+20 minutes', 4);
         $this->listing->opens('alpha', RecordedForge::change('6', self::GREEN, '2026-11-02T12:00:00Z'));
 
         $this->tick();

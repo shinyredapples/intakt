@@ -18,8 +18,8 @@ final readonly class HeadBackOff
 {
     private const int FIRST_WAIT_SECONDS = 60;
 
-    // Five in a row, about a quarter of an hour of doubling waits, because a passing fault clears by then and one that does not needs someone to look.
-    private const int HAND_OVER_AFTER = 5;
+    // Four in a row, as for a failing bench, because a passing fault clears within those doubling waits and one that does not needs someone to look.
+    private const int HAND_OVER_AFTER = 4;
 
     public function __construct(
         private PendingHeads $pending,
