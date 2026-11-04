@@ -26,6 +26,6 @@ final class TestLoggerWiringTest extends KernelTestCase
         $run->run();
 
         self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
-        self::assertStringContainsString('[error] Disk on fire outside PHPUnit.', $run->getErrorOutput());
+        self::assertStringContainsString('"message":"Disk on fire outside PHPUnit."', $run->getErrorOutput());
     }
 }
