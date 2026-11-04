@@ -47,7 +47,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(HeadFault::class)]
 final class FailedHeadsTest extends KernelTestCase
 {
-    // Named in config/services.yaml among the held credentials, and its value has no shape the redaction knows.
+    // This name because config/services.yaml lists it among the held credentials, and this value because no secret shape matches it, so only the held-credential redaction can catch it.
     private const string HELD_NAME = 'OPENAI_COMPATIBLE_API_KEY';
     private const string HELD_VALUE = 'plainheldkeyvalue0123456789';
     private MockClock $clock;
