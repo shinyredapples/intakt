@@ -9,9 +9,6 @@ use PhpParser\Node\Stmt\Function_;
 use PhpParser\Node\Stmt\Trait_;
 use PHPStan\Analyser\Scope;
 
-/**
- * The file, class, trait and function the analyser files a docblock under.
- */
 final readonly class DocblockLocation
 {
     private function __construct(
@@ -33,6 +30,6 @@ final readonly class DocblockLocation
     public static function inTrait(string $file, Trait_ $trait, ?string $method): self
     {
         // because the analyser files a trait's own docblocks under the trait's name in the class slot, as it does for a class
-        return new self($file, $trait->namespacedName?->toString() ?? $trait->name->toString(), null, $method);
+        return new self($file, $trait->namespacedName?->toString() ?? (string) $trait->name, null, $method);
     }
 }
