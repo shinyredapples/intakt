@@ -27,20 +27,9 @@ final readonly class AdmitHeads
     }
 
     /**
-     * @param list<OpenChange> $changed
-     *
-     * @return list<HeadDecision>
-     *
      * @throws ForgeReadFailed
      */
-    public function __invoke(string $project, array $changed): array
-    {
-        $decisions = array_map(fn (OpenChange $change): HeadDecision => $this->decide($project, $change), $changed);
-
-        return $this->decision->order($decisions);
-    }
-
-    private function decide(string $project, OpenChange $change): HeadDecision
+    public function __invoke(string $project, OpenChange $change): HeadDecision
     {
         $ci = $this->forge->ciStateOf($project, $change->head);
 

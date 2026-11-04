@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\StartedRound;
+use Intakt\Plugin\Forge\Contract\OpenChange;
 
 final readonly class WatcherLedger
 {
@@ -39,6 +42,29 @@ final readonly class WatcherLedger
     public function verdictsStale(StartedRound $round): void
     {
         $this->append(LedgerEventKind::VerdictsStale, ['project' => $round->project(), 'change' => $round->change(), 'round' => $round->roundId(), 'head' => $round->head()]);
+    }
+
+    public function headForgotten(string $project, OpenChange $closed): void
+    {
+        $this->append(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $closed->id->value, 'head' => $closed->head->hash]);
+    }
+
+    public function headHandedOver(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
+    {
+        $this->append(LedgerEventKind::HeadHandedOver, $this->failureOf($failure, $failures, $retryAt));
+    }
+
+    public function headFailed(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
+    {
+        $this->append(LedgerEventKind::HeadFailed, $this->failureOf($failure, $failures, $retryAt));
+    }
+
+    /**
+     * @return array{project: string, change: string, head: string, cause: string, failures: int, retry_at: string}
+     */
+    private function failureOf(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): array
+    {
+        return ['project' => $failure->project, 'change' => $failure->head->id->value, 'head' => $failure->head->head->hash, 'cause' => $failure->cause, 'failures' => $failures, 'retry_at' => $retryAt->format(DATE_ATOM)];
     }
 
     /**
