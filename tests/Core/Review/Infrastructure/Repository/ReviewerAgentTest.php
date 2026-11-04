@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure\Repository;
 
-use Intakt\Tests\Support\WebTestCase;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\PathNotInCheckout;
 use Intakt\Core\Review\Contract\PathOutsideCheckout;
@@ -13,6 +12,7 @@ use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
+use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Agent\Agent;

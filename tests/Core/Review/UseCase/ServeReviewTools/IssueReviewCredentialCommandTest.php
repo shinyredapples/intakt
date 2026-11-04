@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Verdict;
@@ -14,6 +13,7 @@ use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;

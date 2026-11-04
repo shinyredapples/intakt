@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Kernel;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\AI\AiBundle\AiBundle;
 use Symfony\AI\McpBundle\McpBundle;

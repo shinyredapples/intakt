@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Contract;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Kernel;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use stdClass;

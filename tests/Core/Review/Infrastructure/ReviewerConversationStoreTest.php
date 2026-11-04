@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Doctrine\DBAL\Connection;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\AI\Agent\Exception\ConflictException;

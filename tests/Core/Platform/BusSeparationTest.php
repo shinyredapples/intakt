@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
 use Intakt\Core\Platform\Contract\Bus;
@@ -14,6 +13,7 @@ use Intakt\Tests\Core\Platform\Handler\Ping;
 use Intakt\Tests\Core\Platform\Handler\PingHandler;
 use Intakt\Tests\Core\Platform\Handler\RenameThing;
 use Intakt\Tests\Core\Platform\Handler\RenameThingHandler;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Exception\NoHandlerForMessageException;

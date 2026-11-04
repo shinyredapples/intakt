@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Memory\Infrastructure;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -13,6 +12,7 @@ use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use Intakt\Core\Review\Infrastructure\OptionalProjectMemory;
+use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;

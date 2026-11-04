@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 

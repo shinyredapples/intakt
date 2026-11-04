@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Intakt\Tests\Support\KernelTestCase;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
@@ -35,6 +34,7 @@ use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Tests\Core\Shadow\ReviewToPost;
 use Intakt\Tests\Core\Shadow\WriteRefusingForge;
+use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;

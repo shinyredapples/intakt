@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Closure;
 use GuzzleHttp\Psr7\Response;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
@@ -35,6 +34,7 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;

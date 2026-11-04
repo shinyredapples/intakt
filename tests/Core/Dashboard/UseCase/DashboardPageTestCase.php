@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use Intakt\Tests\Support\WebTestCase;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Tests\Support\WebTestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 abstract class DashboardPageTestCase extends WebTestCase

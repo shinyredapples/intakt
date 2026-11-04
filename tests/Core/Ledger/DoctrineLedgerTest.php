@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ledger;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Closure;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
@@ -20,6 +19,7 @@ use Intakt\Core\Ledger\Domain\EventRecord;
 use Intakt\Core\Ledger\Infrastructure\DoctrineLedger;
 use Intakt\Core\Ledger\Infrastructure\RefuseChangesToStoredEvents;
 use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;

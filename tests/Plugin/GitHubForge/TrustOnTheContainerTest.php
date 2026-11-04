@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
@@ -19,6 +18,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\SteeringIdentities;
 use Intakt\Plugin\GitHubForge\Infrastructure\SteeringTrustCheck;
 use Intakt\Plugin\GitHubForge\Infrastructure\TrustAnswers;
 use Intakt\Plugin\GitHubForge\UseCase\CheckTrust\CheckTrustCommand;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;

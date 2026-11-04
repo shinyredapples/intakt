@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Budget\Infrastructure;
 
-use Intakt\Tests\Support\KernelTestCase;
 use DateTimeImmutable;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
@@ -22,6 +21,7 @@ use Intakt\Core\Budget\Contract\WindowUse;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;

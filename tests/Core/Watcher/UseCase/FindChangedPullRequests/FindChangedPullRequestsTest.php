@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests;
 
-use Intakt\Tests\Support\KernelTestCase;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManager;
@@ -22,6 +21,7 @@ use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChangeListing;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;

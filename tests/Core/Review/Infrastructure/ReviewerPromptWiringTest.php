@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -18,6 +17,7 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\ReviewerMemory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Platform\Message\UserMessage;

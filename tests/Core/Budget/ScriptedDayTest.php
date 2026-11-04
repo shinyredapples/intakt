@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Budget;
 
-use Intakt\Tests\Support\KernelTestCase;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\ORM\EntityManagerInterface;
@@ -21,6 +20,7 @@ use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Domain\WindowReadingRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineMeasuredUse;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use Doctrine\DBAL\Tools\DsnParser;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Platform\Infrastructure\PostgreSqlServerVersion;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(PostgreSqlServerVersion::class)]

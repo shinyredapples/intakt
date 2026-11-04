@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Container\ContainerInterface;
 use stdClass;

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Domain;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\PanelReviewer;
@@ -23,6 +22,7 @@ use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\HoldRoundUntilEveryReviewerFinished;
 use Intakt\Core\Review\Infrastructure\StateMarkingStore;
 use Intakt\Tests\Core\Review\SampleIdentity;
+use Intakt\Tests\Support\KernelTestCase;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;

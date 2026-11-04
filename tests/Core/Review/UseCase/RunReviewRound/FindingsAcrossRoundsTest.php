@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
@@ -34,6 +33,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;
+use Intakt\Tests\Support\KernelTestCase;
 use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;

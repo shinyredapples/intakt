@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\IndexResolvedFindings;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\RelevantMemory;
@@ -28,6 +27,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RecordingBus;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;

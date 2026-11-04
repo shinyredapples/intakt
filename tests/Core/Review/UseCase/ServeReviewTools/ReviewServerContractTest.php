@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Verdict;
@@ -20,6 +19,7 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;

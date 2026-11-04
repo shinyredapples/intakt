@@ -23,17 +23,17 @@ final class KernelTestCasesFailOnUnassertedErrorsTest extends TestCase
     #[DataProvider('kernelTestCases')]
     public function testEveryKernelTestCaseFailsOnUnassertedErrorRecords(string $class): void
     {
-        self::assertTrue(self::failsOnUnassertedErrors($class), sprintf('%s does not extend Intakt\Tests\Support\KernelTestCase or WebTestCase.', $class));
+        self::assertTrue($this->failsOnUnassertedErrors($class), sprintf('%s does not extend Intakt\Tests\Support\KernelTestCase or WebTestCase.', $class));
     }
 
     public function testTheApplicationKernelTestFailsOnUnassertedErrorRecords(): void
     {
-        self::assertTrue(self::failsOnUnassertedErrors(KernelTest::class));
+        self::assertTrue($this->failsOnUnassertedErrors(KernelTest::class));
     }
 
     public function testAKernelTestCaseWithoutTheTraitIsFound(): void
     {
-        self::assertFalse(self::failsOnUnassertedErrors(KernelTestCaseWithoutTheTraitFixture::class));
+        self::assertFalse($this->failsOnUnassertedErrors(KernelTestCaseWithoutTheTraitFixture::class));
     }
 
     /**
@@ -53,7 +53,7 @@ final class KernelTestCasesFailOnUnassertedErrorsTest extends TestCase
     /**
      * @param class-string $class
      */
-    private static function failsOnUnassertedErrors(string $class): bool
+    private function failsOnUnassertedErrors(string $class): bool
     {
         $hook = new ReflectionMethod($class, 'assertPostConditions')->getDeclaringClass();
 

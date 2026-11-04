@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Contract;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -22,6 +21,7 @@ use Intakt\Tests\Core\Mcp\Contract\Tool\OnePanel;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\KernelTestCase;
 use Mcp\Client;
 use Mcp\Client\Builder;
 use Mcp\Client\Transport\HttpTransport;

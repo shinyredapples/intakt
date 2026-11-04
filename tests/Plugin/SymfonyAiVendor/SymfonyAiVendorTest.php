@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
-use Intakt\Tests\Support\KernelTestCase;
 use Closure;
 use Generator;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
@@ -76,6 +75,7 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Support\KernelTestCase;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
