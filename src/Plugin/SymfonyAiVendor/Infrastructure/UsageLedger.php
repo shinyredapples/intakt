@@ -19,6 +19,8 @@ use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageAggregation;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
@@ -31,6 +33,8 @@ final readonly class UsageLedger
         private Ledger $ledger,
         private ClockInterface $clock,
         private LoggerInterface $logger,
+        #[Target('stored')]
+        private SerializerInterface $serializer,
     ) {
     }
 
@@ -41,8 +45,7 @@ final readonly class UsageLedger
     public function reserve(string $project, Tier $tier, ?Uuid $round = null): UsageReservation
     {
         $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $started = ['call' => $reservation->call, 'phase' => 'started', 'project' => $project, 'tier' => $tier->value];
-        $this->record($round instanceof Uuid ? $started + ['round' => $round->toString()] : $started);
+        $this->record(new UsageStarted($reservation->call, 'started', $project, $tier, $round?->toString()));
 
         return $reservation;
     }
@@ -60,7 +63,7 @@ final readonly class UsageLedger
             return;
         }
 
-        $this->record(['call' => $reservation->call, 'phase' => 'settled', 'usages' => $usages]);
+        $this->record(new UsageSettled($reservation->call, 'settled', $usages));
     }
 
     /**
@@ -68,18 +71,14 @@ final readonly class UsageLedger
      */
     public function leaveUnsettled(UsageReservation $reservation, Throwable $failure, DeferredResult ...$rounds): void
     {
-        $this->record([
-            'call' => $reservation->call,
-            'phase' => 'unsettled',
-            'failure' => $failure::class,
-            'usages' => $this->usagesBeforeFailure($reservation, array_values($rounds)),
-        ], $failure);
+        $usages = $this->usagesBeforeFailure($reservation, array_values($rounds));
+        $this->record(new UsageUnsettled($reservation->call, 'unsettled', $failure::class, $usages), $failure);
     }
 
     /**
      * @param list<DeferredResult> $rounds
      *
-     * @return list<array<string, int|string|null>>
+     * @return list<TokenUsageRow>
      */
     // The rounds that answered spent their tokens, so the row keeps them; when they cannot be read, the failure is still what the row is for, so it is recorded without them.
     private function usagesBeforeFailure(UsageReservation $reservation, array $rounds): array
@@ -104,7 +103,7 @@ final readonly class UsageLedger
     }
 
     /**
-     * @return list<array<string, int|string|null>>
+     * @return list<TokenUsageRow>
      */
     private function usagesOfRounds(DeferredResult ...$rounds): array
     {
@@ -112,7 +111,7 @@ final readonly class UsageLedger
     }
 
     /**
-     * @return list<array<string, int|string|null>>
+     * @return list<TokenUsageRow>
      */
     private function usagesOf(DeferredResult $result): array
     {
@@ -124,7 +123,7 @@ final readonly class UsageLedger
         $usages = $usage instanceof TokenUsageAggregation ? $usage->getTokenUsages() : [$usage];
         $account = $this->accountOf($result);
 
-        return array_values(array_map(fn (TokenUsageInterface $part): array => ['account' => $account] + $this->asRow($part), $usages));
+        return array_values(array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, $account), $usages));
     }
 
     // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
@@ -166,35 +165,31 @@ final readonly class UsageLedger
         return $converted instanceof ResultInterface ? $converted->getMetadata()->get(self::TOKEN_USAGE) : null;
     }
 
-    /**
-     * @return array<string, int|string|null>
-     */
-    private function asRow(TokenUsageInterface $usage): array
+    private function asRow(TokenUsageInterface $usage, ?string $account): TokenUsageRow
     {
-        return [
-            'model' => $usage->getModel(),
-            'prompt' => $usage->getPromptTokens(),
-            'completion' => $usage->getCompletionTokens(),
-            'thinking' => $usage->getThinkingTokens(),
-            'tool' => $usage->getToolTokens(),
-            'cached' => $usage->getCachedTokens(),
-            'cache_creation' => $usage->getCacheCreationTokens(),
-            'cache_read' => $usage->getCacheReadTokens(),
-            'total' => $usage->getTotalTokens(),
-            'remaining' => $usage->getRemainingTokens(),
-            'remaining_minute' => $usage->getRemainingTokensMinute(),
-            'remaining_month' => $usage->getRemainingTokensMonth(),
-        ];
+        return new TokenUsageRow(
+            $account,
+            $usage->getModel(),
+            $usage->getPromptTokens(),
+            $usage->getCompletionTokens(),
+            $usage->getThinkingTokens(),
+            $usage->getToolTokens(),
+            $usage->getCachedTokens(),
+            $usage->getCacheCreationTokens(),
+            $usage->getCacheReadTokens(),
+            $usage->getTotalTokens(),
+            $usage->getRemainingTokens(),
+            $usage->getRemainingTokensMinute(),
+            $usage->getRemainingTokensMonth(),
+        );
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
      * @throws UsageNotRecorded
      */
-    private function record(array $payload, ?Throwable $failure = null): void
+    private function record(UsageStarted|UsageSettled|UsageUnsettled $payload, ?Throwable $failure = null): void
     {
-        $usage = json_encode($payload, JSON_THROW_ON_ERROR);
+        $usage = $this->serializer->serialize($payload, 'json');
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $usage));
         if ($appended->succeeded()) {
             return;

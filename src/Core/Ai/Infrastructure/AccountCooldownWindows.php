@@ -17,10 +17,12 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\RateLimiter\RateLimit;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
+use Symfony\Component\Serializer\SerializerInterface;
 
 // A RateLimiter window of one call per account, anchored at the vendor's reset, in a cache every worker shares, so all reviewers on an account wait together.
 #[AsAlias(AccountCooldowns::class)]
@@ -44,6 +46,8 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         private ClockInterface $clock,
         private Ledger $ledger,
         private LoggerInterface $logger,
+        #[Target('stored')]
+        private SerializerInterface $serializer,
         #[Autowire(param: AiServices::ACCOUNTS)]
         private array $accounts,
     ) {
@@ -132,7 +136,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     private function record(Account $account, DateTimeImmutable $until): void
     {
-        $payload = json_encode(['account' => $account->key(), 'until' => $until->format(DATE_ATOM)], JSON_THROW_ON_ERROR);
+        $payload = $this->serializer->serialize(new AccountCooledDown($account->key(), $until), 'json');
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, $payload));
 
         // Logged, not thrown, because the cooldown holds without its record and failing here would hide the provider's own error.
