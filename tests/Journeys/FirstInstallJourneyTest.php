@@ -13,7 +13,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[Group('journeys')]
 final class FirstInstallJourneyTest extends JourneyTestCase
 {
-    // Not a credential: the seed only checks that a key is present, and no step calls a provider.
+    // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
 
     private string $directory = '';
@@ -79,7 +79,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         $configuration = $this->directory.'/intakt.yaml';
         $environment = ['ANTHROPIC_API_KEY' => self::PLACEHOLDER_KEY, 'INTAKT_CONFIG' => $configuration];
 
-        // As the container entrypoint does: the provider keys count only in a container built after they are set.
+        // Because the provider keys count only in a container built after they are set, as the container entrypoint does.
         $this->console(['cache:clear', '--no-warmup'], $environment);
         $this->console(['cache:warmup'], $environment);
 
