@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Process\Exception\ExceptionInterface;
@@ -21,7 +22,7 @@ final readonly class SecretScan
     public function __construct(
         #[Autowire('%kernel.project_dir%')]
         private string $directory,
-        #[Autowire(env: 'default:intakt.gitleaks:INTAKT_GITLEAKS')]
+        #[Autowire(env: 'default:'.GitHubForgeServices::GITLEAKS.':INTAKT_GITLEAKS')]
         private string $scanner,
     ) {
     }

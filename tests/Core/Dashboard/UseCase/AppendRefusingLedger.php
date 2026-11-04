@@ -9,9 +9,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
-use PHPUnit\Framework\Attributes\CoversNothing;
 
-#[CoversNothing]
 final readonly class AppendRefusingLedger implements Ledger
 {
     public function __construct(private Ledger $reads)

@@ -46,4 +46,34 @@ enum Provider: string
     {
         return 'Provider "'.$this->value.'" is disabled: set '.implode(' and ', $missing).' to enable it.';
     }
+
+    public function platformId(Account $account): string
+    {
+        return AiServices::PLATFORM_PREFIX.$this->value.$this->suffixOf($account);
+    }
+
+    public function cliId(Account $account): string
+    {
+        return AiServices::PREFIX.$this->value.'.cli'.$this->suffixOf($account);
+    }
+
+    public function accountsId(): string
+    {
+        return AiServices::ACCOUNTS_PREFIX.$this->value;
+    }
+
+    public function configKey(): string
+    {
+        return $this->value;
+    }
+
+    public function parameter(): string
+    {
+        return AiServices::PREFIX.$this->value;
+    }
+
+    private function suffixOf(Account $account): string
+    {
+        return Account::DEFAULT === $account->name ? '' : '.'.$account->name;
+    }
 }

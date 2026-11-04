@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
@@ -15,13 +16,16 @@ use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
-use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Infrastructure\CeilingsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
+use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
+use Intakt\Core\Shadow\Contract\ShadowServices;
 use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
@@ -138,26 +142,24 @@ return static function (ContainerConfigurator $container): void {
     // The bundle has no configuration for this bridge, so each account gets its own CLI with its own configuration directory and token.
     $claudeCodePlatform = static function (Account $account, string $token) use ($container, $catalog): array {
         $default = Account::DEFAULT === $account->name;
-        $suffix = $default ? '' : '.'.$account->name;
-        $container->services()->set('intakt.ai.claude_code.cli'.$suffix, IsolatedClaudeCodeCli::class)
+        $container->services()->set(Provider::ClaudeCode->cliId($account), IsolatedClaudeCodeCli::class)
             ->args(['%kernel.project_dir%/var/claude-code'.($default ? '' : '-'.$account->name), $token]);
-        $container->services()->set('intakt.ai.platform.claude_code'.$suffix, PlatformInterface::class)
+        $container->services()->set(Provider::ClaudeCode->platformId($account), PlatformInterface::class)
             ->factory([new ReferenceConfigurator(ClaudeCodePlatformFactory::class), 'create'])
-            ->args([new ReferenceConfigurator('intakt.ai.claude_code.cli'.$suffix), $catalog->models(Provider::ClaudeCode)]);
+            ->args([new ReferenceConfigurator(Provider::ClaudeCode->cliId($account)), $catalog->models(Provider::ClaudeCode)]);
 
-        return [[], new Reference('intakt.ai.platform.claude_code'.$suffix)];
+        return [[], new Reference(Provider::ClaudeCode->platformId($account))];
     };
 
     // A CLI per account, because each account's call needs its own login and call home (CodexLogins); the pinned model and effort are shared.
     $codexPlatform = static function (Account $account) use ($container, $catalog): array {
-        $suffix = Account::DEFAULT === $account->name ? '' : '.'.$account->name;
-        $container->services()->set('intakt.ai.codex.cli'.$suffix, IsolatedCodexCli::class)
-            ->args([new ReferenceConfigurator(CodexLogins::class), new ReferenceConfigurator('intakt.ai.codex.settings'), $account->name]);
-        $container->services()->set('intakt.ai.platform.codex'.$suffix, PlatformInterface::class)
+        $container->services()->set(Provider::Codex->cliId($account), IsolatedCodexCli::class)
+            ->args([new ReferenceConfigurator(CodexLogins::class), new ReferenceConfigurator(AiServices::CODEX_SETTINGS), $account->name]);
+        $container->services()->set(Provider::Codex->platformId($account), PlatformInterface::class)
             ->factory([new ReferenceConfigurator(CodexPlatformFactory::class), 'create'])
-            ->args([new ReferenceConfigurator('intakt.ai.codex.cli'.$suffix), $catalog->models(Provider::Codex)]);
+            ->args([new ReferenceConfigurator(Provider::Codex->cliId($account)), $catalog->models(Provider::Codex)]);
 
-        return [[], new Reference('intakt.ai.platform.codex'.$suffix)];
+        return [[], new Reference(Provider::Codex->platformId($account))];
     };
 
     // Each account gets a platform of its own, with the credentials of its own variables; the default account keeps the bundle's own platform and ids.
@@ -183,10 +185,10 @@ return static function (ContainerConfigurator $container): void {
         };
     };
 
-    if (isset($configuration['codex'])) {
-        $container->services()->set('intakt.ai.codex.settings', CodexSettings::class)
+    if (isset($configuration[Provider::Codex->configKey()])) {
+        $container->services()->set(AiServices::CODEX_SETTINGS, CodexSettings::class)
             ->factory([CodexSettings::class, 'fromConfiguration'])
-            ->args([$configuration['codex']]);
+            ->args([$configuration[Provider::Codex->configKey()]]);
     }
 
     $platform = [];
@@ -197,7 +199,7 @@ return static function (ContainerConfigurator $container): void {
 
     foreach (Provider::cases() as $provider) {
         // Left out without a word, not disabled, because no tier can map Codex without its section (ProjectsConfiguration) and an install that does not use Codex should not be told so on every command.
-        if (Provider::Codex === $provider && !isset($configuration['codex'])) {
+        if (Provider::Codex === $provider && !isset($configuration[Provider::Codex->configKey()])) {
             continue;
         }
 
@@ -235,17 +237,17 @@ return static function (ContainerConfigurator $container): void {
             $platform = array_replace_recursive($platform, $bundleConfig);
         }
 
-        $container->services()->set('intakt.ai.accounts.'.$provider->value, AccountFailoverPlatform::class)
+        $container->services()->set($provider->accountsId(), AccountFailoverPlatform::class)
             ->args([$provider, $platforms, new ReferenceConfigurator(AccountCooldowns::class), new ReferenceConfigurator(ClockInterface::class), new ReferenceConfigurator('logger')]);
         $enabledAccounts[$provider->value] = array_keys($enabled);
-        $tierPlatforms[$provider->value] = new ReferenceConfigurator('intakt.ai.accounts.'.$provider->value);
+        $tierPlatforms[$provider->value] = new ReferenceConfigurator($provider->accountsId());
     }
 
     // The reviewer's rounds each keep a conversation, in the table the migration creates for the DBAL store.
     $conversations = ['doctrine' => ['dbal' => ['reviewer_conversation' => ['connection' => 'default']]]];
 
     // Project memory embeds with OpenAI because it is the only configured provider with an embedding model; without an enabled account the placeholder platform names the missing key when a worker indexes.
-    $embeddings = array_key_exists(Provider::OpenAi->value, $enabledAccounts) ? 'intakt.ai.accounts.'.Provider::OpenAi->value : EmbeddingsNotConfigured::class;
+    $embeddings = array_key_exists(Provider::OpenAi->value, $enabledAccounts) ? Provider::OpenAi->accountsId() : EmbeddingsNotConfigured::class;
     $memory = [
         'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:%kernel.project_dir%/var/memory_%kernel.environment%.db', 'table_name' => 'project_memory']]],
         'vectorizer' => ['memory' => ['platform' => $embeddings, 'model' => 'text-embedding-3-small']],
@@ -261,17 +263,17 @@ return static function (ContainerConfigurator $container): void {
     ]];
 
     $container->extension('ai', ['platform' => $platform, 'agent' => $agents, 'message_store' => $conversations, ...$memory]);
-    $container->parameters()->set('intakt.ai.disabled_providers', $disabled);
-    $container->parameters()->set('intakt.ai.disabled_accounts', $disabledAccounts);
-    $container->parameters()->set('intakt.ai.accounts', $enabledAccounts);
-    $container->parameters()->set('intakt.projects', $projects);
-    $container->parameters()->set('intakt.ai.codex', $configuration['codex'] ?? null);
-    $container->parameters()->set('intakt.review.panels', $panels);
-    $container->parameters()->set('intakt.watcher.projects', $projectWatches);
-    $container->parameters()->set('intakt.shadow.modes', array_map(static fn (array $project): string => $project['mode'], $projectModes));
-    $container->parameters()->set('intakt.budget.ceilings', $ceilings['budget']['ceilings']);
-    $container->parameters()->set('intakt.budget.shadow_ceilings', $ceilings['budget']['shadow_ceilings']);
-    $container->services()->set(TierPlatform::PLATFORMS, ServiceLocator::class)
+    $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
+    $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
+    $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
+    $container->parameters()->set(AiServices::PROJECTS, $projects);
+    $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
+    $container->parameters()->set(ReviewServices::PANELS, $panels);
+    $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
+    $container->parameters()->set(ShadowServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
+    $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
+    $container->parameters()->set(BudgetServices::SHADOW_CEILINGS, $ceilings['budget']['shadow_ceilings']);
+    $container->services()->set(AiServices::PROVIDER_PLATFORMS, ServiceLocator::class)
         ->args([$tierPlatforms])
         ->tag('container.service_locator');
 };

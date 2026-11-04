@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AiServices;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -17,9 +18,9 @@ final readonly class DisabledProvidersWarning
      * @param list<string>          $disabledAccounts
      */
     public function __construct(
-        #[Autowire('%intakt.ai.disabled_providers%')]
+        #[Autowire(param: AiServices::DISABLED_PROVIDERS)]
         private array $disabledProviders,
-        #[Autowire('%intakt.ai.disabled_accounts%')]
+        #[Autowire(param: AiServices::DISABLED_ACCOUNTS)]
         private array $disabledAccounts,
     ) {
     }

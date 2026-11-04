@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Closure;
 use Generator;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -745,7 +746,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
         ], []));
         $container->set(Ledger::class, new InMemoryLedger());
-        $container->set(TierPlatform::PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
+        $container->set(AiServices::PROVIDER_PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
         $vendor = $container->get(SymfonyAiVendor::class);
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
         $conversations = $container->get(MessageStoreInterface::class);
