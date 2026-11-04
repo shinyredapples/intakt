@@ -31,6 +31,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     private const int CEILING_BYTES = self::CEILING_MEGABYTES * 1_048_576;
 
+    // One value limits both polls, because the wait for the request count in requestsOnceServed and the wait for the memory reading in bytesHeldByTheServingAppWorkers end alike.
     private const int SECONDS_TO_FINISH = 10;
 
     private string $frankenphp;
@@ -148,7 +149,7 @@ final class CaddyfileWorkersTest extends TestCase
      * @return array<string, int>
      */
     // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
-    public static function requestsOnceServed(Closure $threads, int $served): array
+    private static function requestsOnceServed(Closure $threads, int $served): array
     {
         $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
 
@@ -214,7 +215,7 @@ final class CaddyfileWorkersTest extends TestCase
      * @param list<array<mixed>> $threads
      */
     // No serving worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
-    public static function largestMemoryOfServingAppWorkers(array $threads): int
+    private static function largestMemoryOfServingAppWorkers(array $threads): int
     {
         $held = null;
 
