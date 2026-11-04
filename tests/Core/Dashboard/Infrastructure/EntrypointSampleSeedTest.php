@@ -46,7 +46,7 @@ final class EntrypointSampleSeedTest extends TestCase
             'bin/console intakt:sample:seed /data/sample /data/intakt.yaml',
             'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
-        ],$this->consoleCallsBeforeTheConsumers());
+        ], $this->consoleCallsBeforeTheConsumers());
     }
 
     public function testWithoutASampleRepositoryNothingIsSeeded(): void
