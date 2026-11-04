@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Intakt\Tests\Support\StoredSerializerFactory;
 use Generator;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
@@ -59,7 +60,7 @@ final class UsageLedgerTest extends TestCase
 
     private function settle(InMemoryLedger $ledger, DeferredResult $round): void
     {
-        new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger())->settle(new UsageReservation('a call'), $round);
+        new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create())->settle(new UsageReservation('a call'), $round);
     }
 
     private function roundAnswering(ResultInterface $answer): DeferredResult

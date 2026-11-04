@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
@@ -214,7 +215,7 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testACooldownTheLedgerRefusesIsLoggedAndStillHolds(): void
     {
         $logger = new BufferingLogger();
-        $cooldowns = new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(accepted: 0), $logger, $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(accepted: 0), $logger, StoredSerializerFactory::create(), $this->accounts());
 
         $cooldowns->coolDown($this->default(), 300);
 
@@ -232,13 +233,13 @@ final class AccountCooldownWindowsTest extends TestCase
     // Alone on its provider, so the provider's wait is the account's own.
     private function secondsUntilFree(Account $account): int
     {
-        return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), [Provider::Anthropic->value => [$account->name]])
+        return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [$account->name]])
             ->secondsUntilAnAccountIsFree(Provider::Anthropic);
     }
 
     private function cooldowns(): AccountCooldownWindows
     {
-        return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), $this->accounts());
+        return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
     }
 
     /**
