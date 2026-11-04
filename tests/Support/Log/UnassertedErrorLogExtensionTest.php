@@ -26,6 +26,17 @@ final class UnassertedErrorLogExtensionTest extends TestCase
         self::assertStringContainsString('LogsAnErrorFixture::testItLogsAnErrorNobodyAsserts', $run->getOutput());
     }
 
+    public function testATestUsingTheTraitThatEndsWithAnUnassertedErrorRecordIsAFailedTestNamingTheRecord(): void
+    {
+        $run = $this->runFixture('LogsAnErrorWithTheTraitFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('There was 1 failure', $run->getOutput());
+        self::assertStringContainsString('Unasserted error log record: "Disk on fire with the trait."', $run->getOutput());
+        self::assertStringContainsString('LogsAnErrorWithTheTraitFixture::testItLogsAnErrorNobodyAssertsAndFailsItself', $run->getOutput());
+        self::assertStringNotContainsString('warning', strtolower($run->getOutput()));
+    }
+
     public function testATestInASeparateProcessThatEndsWithAnUnassertedErrorRecordFailsNamingTheRecord(): void
     {
         $run = $this->runFixture('LogsAnErrorInASeparateProcessFixture.php');
