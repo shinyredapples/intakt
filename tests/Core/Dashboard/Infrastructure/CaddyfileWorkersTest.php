@@ -31,7 +31,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     private const int CEILING_BYTES = self::CEILING_MEGABYTES * 1_048_576;
 
-    private const int SECONDS_TO_REPLACE = 10;
+    private const int SECONDS_TO_FINISH = 10;
 
     private string $frankenphp;
 
@@ -147,9 +147,22 @@ final class CaddyfileWorkersTest extends TestCase
      *
      * @return array<string, int>
      */
+    // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
     public static function requestsOnceServed(Closure $threads, int $served): array
     {
-        return self::requestsPerWorkerFileOf($threads());
+        $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
+
+        do {
+            $counts = self::requestsPerWorkerFileOf($threads());
+
+            if (array_sum($counts) >= $served) {
+                return $counts;
+            }
+
+            usleep(100_000);
+        } while (hrtime(true) < $deadline);
+
+        return $counts;
     }
 
     /**
@@ -177,7 +190,7 @@ final class CaddyfileWorkersTest extends TestCase
     // The thread's RequestCount survives a replacement, so the sign is memory: a replaced worker has not booted the kernel yet. Polled, because the worker ends only after its answer is sent.
     private function bytesHeldByTheServingAppWorkers(): int
     {
-        $deadline = hrtime(true) + self::SECONDS_TO_REPLACE * 1_000_000_000;
+        $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
 
         do {
             $held = $this->largestServingAppWorkerMemory();
