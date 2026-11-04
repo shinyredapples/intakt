@@ -46,12 +46,20 @@ final class SampleRepositoryTest extends TestCase
 
     public function testTheMissingTestSampleChangesNoTestFile(): void
     {
-        $output = $this->build()->log('--name-only', '--format=', 'main..sample-change');
-
-        $changed = array_filter(explode("\n", $output), static fn (string $name): bool => '' !== $name);
+        $changed = $this->changedFileNames($this->build());
 
         self::assertNotSame([], $changed);
-        self::assertSame([], array_values(array_filter($changed, static fn (string $name): bool => str_starts_with($name, 'test/'))));
+        self::assertSame([], self::testFiles($changed));
+    }
+
+    public function testATestFileWithANonAsciiNameCountsAsAChangedTestFile(): void
+    {
+        $repository = $this->build();
+        $repository->commitFile('test/régression.test.js', 'export const shippingTest = true;');
+
+        $changed = $this->changedFileNames($repository);
+
+        self::assertSame(['test/régression.test.js'], self::testFiles($changed));
     }
 
     public function testTheIssuesCoverABugAMissingTestAndASecuritySmell(): void
@@ -113,6 +121,27 @@ final class SampleRepositoryTest extends TestCase
         }
 
         self::fail('The evidence of '.$issue['file'].' is not in the file.');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function changedFileNames(TemporaryRepository $repository): array
+    {
+        // NUL-delimited, because git quotes a non-ASCII name otherwise and the quote hides its `test/` prefix.
+        $output = $repository->log('--name-only', '--format=', '-z', 'main..sample-change');
+
+        return array_values(array_filter(explode("\0", $output), static fn (string $name): bool => '' !== $name));
+    }
+
+    /**
+     * @param list<string> $names
+     *
+     * @return list<string>
+     */
+    private static function testFiles(array $names): array
+    {
+        return array_values(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'test/')));
     }
 
     private function build(): TemporaryRepository
