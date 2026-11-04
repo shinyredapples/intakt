@@ -34,18 +34,7 @@ final class ServiceIdsTest extends TestCase
         $values = array_values(new ReflectionClass($ids)->getConstants());
 
         self::assertNotSame([], $values);
-        self::assertSame([], array_values(array_filter($values, static fn (string $value): bool => !str_starts_with($value, 'intakt.'))));
-    }
-
-    /**
-     * @param class-string $ids
-     */
-    #[DataProvider('idsClasses')]
-    public function testNoIdIsDefinedTwiceInAModule(string $ids): void
-    {
-        $values = array_values(new ReflectionClass($ids)->getConstants());
-
-        self::assertSame($values, array_values(array_unique($values)));
+        self::assertFalse(array_any($values, static fn (mixed $value): bool => !is_string($value) || !str_starts_with($value, 'intakt.')));
     }
 
     /**

@@ -63,7 +63,6 @@ enum Provider: string
         return AiServices::ACCOUNTS_PREFIX.$this->value;
     }
 
-    // The key of this provider's own section in the owner's config file.
     public function configKey(): string
     {
         return $this->value;
