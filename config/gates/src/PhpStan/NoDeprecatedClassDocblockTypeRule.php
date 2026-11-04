@@ -35,11 +35,7 @@ final readonly class NoDeprecatedClassDocblockTypeRule implements MultipleNodeTy
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // because a trait docblock resolves only inside the class that uses it, which is where the analyser visits the trait
-        if (!$node instanceof InClassNode && !$node instanceof InTraitNode) {
-            return [];
-        }
-
-        return $this->docblocks->reportIn($node->getOriginalNode()->getDocComment(), $scope);
+        // because both virtual nodes carry the attributes of the declaration they wrap, the docblock included, and a trait docblock resolves only inside the class that uses it, where the analyser visits the trait
+        return $this->docblocks->reportIn($node->getDocComment(), $scope);
     }
 }
