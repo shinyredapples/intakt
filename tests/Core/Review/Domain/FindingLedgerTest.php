@@ -278,6 +278,8 @@ final class FindingLedgerTest extends TestCase
         yield 'incomplete stream' => [Verdict::incompleteStream('the stream ended.')];
         yield 'unread approval' => [Verdict::unreadApproval()];
         yield 'no tools' => [Verdict::noTools()];
+        yield 'cut approval' => [Verdict::cutApproval()];
+        yield 'reviewer stopped' => [Verdict::reviewerStopped()];
     }
 
     #[DataProvider('failedReviews')]

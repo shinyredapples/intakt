@@ -36,6 +36,12 @@ final class RecordedRoundUpdates implements RoundUpdates
     }
 
     #[Override]
+    public function reviewerStopped(Uuid $round, string $reviewer): void
+    {
+        $this->seen[] = sprintf('stopped %s', $reviewer);
+    }
+
+    #[Override]
     public function roundChanged(Uuid $round, RoundProgress $progress): void
     {
         $meanwhile = $this->whilePublishingNextRoundChange;

@@ -118,6 +118,29 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    public function testAStoppedReviewerReplacesItsStateAndEmptiesItsStopCell(): void
+    {
+        $this->updates()->reviewerStopped(Uuid::fromString(self::ROUND), self::REVIEWER);
+
+        $data = $this->published[0]->getData();
+        $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
+
+        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('target="%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
+    }
+
+    public function testAHubThatRefusesAStoppedReviewerIsLoggedAndDoesNotFailTheCaller(): void
+    {
+        $refusal = new RuntimeException('the hub refused the update');
+
+        $this->updates(static fn (Update $update): string => throw $refusal)->reviewerStopped(Uuid::fromString(self::ROUND), self::REVIEWER);
+
+        self::assertSame(
+            [['warning', 'A live round update was not published.', ['round' => self::ROUND, 'stream' => 'reviewer_stopped', 'exception' => $refusal]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
     /**
      * @param (callable(Update): string)|null $publisher
      */
