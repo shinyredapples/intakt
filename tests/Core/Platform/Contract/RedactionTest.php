@@ -272,6 +272,33 @@ final class RedactionTest extends TestCase
         self::assertSame('{"authorization": [redacted], "status": 200}', $redacted);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function valuesHoldingAHeaderListOpening(): iterable
+    {
+        yield 'unquoted value' => ['X-Api-Key: part1 cookie: [z] tailsecret'];
+        yield 'quoted json value' => ['{"cookie": "sess=abc; authorization=[1] tailsecret"}'];
+        yield 'shell quoted value' => ["curl -H 'Authorization: Basic x cookie=[y] tailsecret'"];
+        yield 'double quoted value' => ['Cookie: "prefix authorization: [abc] tailsecret"'];
+        yield 'unquoted value with a colon' => ['Cookie: prefix authorization: [abc] tailsecret'];
+    }
+
+    #[DataProvider('valuesHoldingAHeaderListOpening')]
+    public function testItRedactsTheRestOfAHeaderValueThatHoldsAHeaderListOpening(string $text): void
+    {
+        $redacted = new Redaction()->redact($text);
+
+        self::assertStringNotContainsString('tailsecret', $redacted);
+    }
+
+    public function testItKeepsTheFieldsAfterEachOfTwoRedactedHeaderListsOnTheSameLine(): void
+    {
+        $redacted = new Redaction()->redact('{"authorization": ["a1b2c3"], "cookie": ["d4e5f6"], "status": 200}');
+
+        self::assertSame('{"authorization": [redacted], "cookie": [redacted], "status": 200}', $redacted);
+    }
+
     public function testItRedactsAHeaderValueThatStartsWithAHeldCredential(): void
     {
         $redacted = new Redaction()->redact('Cookie: held-session-value; other=second-secret', 'held-session-value');
