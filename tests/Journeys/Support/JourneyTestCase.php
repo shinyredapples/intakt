@@ -6,8 +6,8 @@ namespace Intakt\Tests\Journeys\Support;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\BrowserKit\HttpBrowser;
-use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Process\Process;
 
