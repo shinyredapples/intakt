@@ -124,7 +124,7 @@ stateDiagram-v2
 ## The live dashboard
 
 - **FrankenPHP worker mode** keeps Intakt loaded in memory between requests, so pages answer fast. *(built in the container image's configuration; the image is not published yet)*
-- **Mercure**, built into FrankenPHP, pushes updates to your browser as they happen, and **Turbo** (part of Symfony UX) updates just the part of the page that changed: a review finishing shows up without a reload. *(in progress: the page of a review that is still running shows the updates without a reload; the stop button is planned)*
+- **Mercure**, built into FrankenPHP, pushes updates to your browser as they happen, and **Turbo** (part of Symfony UX) updates just the part of the page that changed: a review finishing shows up without a reload. *(in progress: the page of a review that is still running shows the updates without a reload; the stop button stops a working reviewer the next time it reports progress, and the page then shows it as stopped)*
 
 Keeping the application loaded has one catch: anything a part remembers would leak into the next request. Symfony's **reset** mechanism clears that memory between requests, and Intakt has a check that refuses any part that remembers things without a way to be cleared. *(in progress)*
 

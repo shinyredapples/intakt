@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Review\Domain\RoundReviewer;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Uid\Uuid;
 
@@ -36,6 +37,12 @@ final readonly class LiveRoundProgress
                 return;
             }
         }
+    }
+
+    // Only after the verdict that answered the stop is stored, never inside its transaction, because a refused ledger row would roll back a stop that was already shown.
+    public function publishStopOf(RoundReviewer $reviewer): void
+    {
+        $this->updates->reviewerStopped($reviewer->round()->id(), $reviewer->id()->toRfc4122());
     }
 
     private function publishedOnce(Uuid $roundId, ?RoundProgress $published): RoundProgress

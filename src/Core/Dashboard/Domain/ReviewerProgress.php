@@ -10,4 +10,5 @@ enum ReviewerProgress: string
     case Answered = 'verdict';
     case Failed = 'failed';
     case Blocked = 'blocked';
+    case Stopped = 'stopped';
 }

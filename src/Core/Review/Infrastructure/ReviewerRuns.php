@@ -24,6 +24,7 @@ final readonly class ReviewerRuns
         private MessageStoreInterface $conversations,
         private StreamingFallbacks $fallbacks,
         private LiveProgress $progress,
+        private ReviewerStopping $stopping,
     ) {
     }
 
@@ -54,6 +55,6 @@ final readonly class ReviewerRuns
 
     public function reporting(ExecutionInterface $execution, ReviewerConversation $reviewer): ExecutionInterface
     {
-        return $this->progress->reporting($execution, $reviewer);
+        return $this->stopping->watching($this->progress->reporting($execution, $reviewer), $reviewer);
     }
 }
