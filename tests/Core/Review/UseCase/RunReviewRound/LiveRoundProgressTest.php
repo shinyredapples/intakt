@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
@@ -13,7 +14,6 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[Group('persistence')]
 #[CoversClass(LiveRoundProgress::class)]

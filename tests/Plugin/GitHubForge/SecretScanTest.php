@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Kernel;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[CoversClass(SecretScan::class)]
 #[UsesClass(ForgeWriteFailed::class)]

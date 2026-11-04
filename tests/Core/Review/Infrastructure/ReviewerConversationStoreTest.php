@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Doctrine\DBAL\Connection;
 use Intakt\Tests\Application\EmptyDatabase;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -13,7 +14,6 @@ use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\Uid\UuidV7;
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Budget\Infrastructure;
 
+use Intakt\Tests\Support\KernelTestCase;
 use DateTimeImmutable;
 use Doctrine\Common\EventManager;
 use Doctrine\DBAL\DriverManager;
@@ -24,7 +25,6 @@ use Intakt\Tests\Application\EmptyDatabase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 
 #[Group('persistence')]

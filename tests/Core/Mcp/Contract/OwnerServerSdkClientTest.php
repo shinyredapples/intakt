@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Mcp\Contract;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -33,7 +34,6 @@ use Mcp\Schema\Tool;
 use Mcp\Schema\ToolAnnotations;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 // Covers nothing because the contract is the owner's server as an MCP client meets it: the SDK's own client over HTTP into the kernel.
 #[Group('persistence')]

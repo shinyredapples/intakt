@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Stored;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
@@ -13,7 +14,6 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingStatus;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Serializer\SerializerInterface;
 
 // Covers nothing because the subject is the application's configured serializer for stored JSON, not one class.

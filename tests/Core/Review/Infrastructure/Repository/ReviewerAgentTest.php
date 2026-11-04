@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure\Repository;
 
+use Intakt\Tests\Support\WebTestCase;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\PathNotInCheckout;
 use Intakt\Core\Review\Contract\PathOutsideCheckout;
@@ -26,7 +27,6 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TraceablePlatform;
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 #[CoversClass(ReviewerToolboxFactory::class)]
 #[CoversClass(DenyPathsOutsideCheckout::class)]

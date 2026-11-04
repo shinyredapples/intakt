@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Closure;
 use GuzzleHttp\Psr7\Response;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
@@ -48,7 +49,6 @@ use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\Uid\UuidV7;

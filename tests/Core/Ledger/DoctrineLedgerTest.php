@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ledger;
 
+use Intakt\Tests\Support\KernelTestCase;
 use Closure;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
@@ -22,7 +23,6 @@ use Intakt\Core\Ledger\Infrastructure\UtcDateTimeImmutableType;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
