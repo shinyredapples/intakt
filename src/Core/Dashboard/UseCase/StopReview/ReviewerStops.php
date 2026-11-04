@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use NoDiscard;
 
 final readonly class ReviewerStops
 {
@@ -27,6 +28,7 @@ final readonly class ReviewerStops
      * @return array{string, string}|null
      */
     // Null when the ledger shows no running reviewer with this id in an unjudged round, so the caller answers that nothing could be stopped.
+    #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOf(string $round, string $reviewer): ?array
     {
         if (!$this->isRunning($round, $reviewer)) {
