@@ -112,6 +112,10 @@ When the `tests` gate of `bin/check` runs, its line also lists the ten slowest t
 
 The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
 
+## When `bin/check` reports a different PHP
+
+The `environment` gate fails when the PHP running `bin/check` is older than `config.platform.php` in `composer.json`, lacks an extension listed as `ext-*` under `require` there, or has an ini setting that differs from `config/php/check.ini` (for example `zend.assertions=-1`). Each difference is named. Install the missing extension or a newer PHP, and load the check settings by putting `config/php` first in the scan path: `PHP_INI_SCAN_DIR=config/php:$(php -r 'echo PHP_CONFIG_FILE_SCAN_DIR;') bin/check`. The CI image does not install the profile yet.
+
 ## When `bin/check` reports a missing tool
 
 Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
