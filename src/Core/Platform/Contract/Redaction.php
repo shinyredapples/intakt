@@ -127,9 +127,13 @@ final readonly class Redaction
             };
 
             // A missing end takes the rest of the text because stopping early would leak.
-            $result .= substr($text, $offset, $matchStart - $offset).substr($match[0][0], 0, -strlen($match['open'][0]));
+            $result .= substr($text, $offset, $matchStart - $offset);
+            $keepsTail = $this->isValueOfQuotedKey($text, $matchStart)
+                && !$this->followsUnquotedHeaderOnItsLine($result)
+                && $this->isListShaped($text, $afterOpen, $end);
+            $result .= substr($match[0][0], 0, -strlen($match['open'][0]));
             // An unrecorded marker is redacted by the value pass with the rest of its value, because a plain header value may start with a bracket (`[Bearer] token`) and its tail is secret too.
-            if ($this->isValueOfQuotedKey($text, $matchStart) && $this->isListShaped($text, $afterOpen, $end)) {
+            if ($keepsTail) {
                 $listMarkers[] = strlen($result);
             }
             $result .= self::MARKER;
@@ -142,7 +146,21 @@ final readonly class Redaction
     // Only structured data quotes its keys (JSON, var_export), so only there can a closing bracket be trusted to end the value.
     private function isValueOfQuotedKey(string $text, int $nameStart): bool
     {
-        return 1 === preg_match('~\G(?:'.self::HEADER_NAMES.')\\\\*["\']~i', $text, offset: $nameStart);
+        $quote = 0 < $nameStart ? $text[$nameStart - 1] : '';
+        if ('"' !== $quote && "'" !== $quote) {
+            return false;
+        }
+
+        return 1 === preg_match('~\G(?:'.self::HEADER_NAMES.')\\\\*'.$quote.'~i', $text, offset: $nameStart);
+    }
+
+    // A quoted key after an unquoted header on the same line sits inside that header's value, so the value pass must redact it to the end of the line.
+    private function followsUnquotedHeaderOnItsLine(string $before): bool
+    {
+        $lineStart = (int) strrpos("\n".strtr($before, "\r", "\n"), "\n");
+        preg_match_all('~'.self::HEADER_HEAD.'~i', $before, $heads, PREG_OFFSET_CAPTURE, $lineStart);
+
+        return array_any($heads[0], fn (array $head): bool => !$this->isValueOfQuotedKey($before, $head[1]));
     }
 
     private function isListShaped(string $text, int $afterOpen, int $end): bool
