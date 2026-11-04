@@ -6,10 +6,10 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Generator;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageSettled;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TokenUsageRow;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
