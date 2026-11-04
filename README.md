@@ -7,17 +7,17 @@
   </picture>
 </p>
 
-The aim: give it a spec, and AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI. All of this is planned; [Status](#status) says what works today.
+The aim: give it a spec, and AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI. The review loop works today; the rest is planned, and [Status](#status) says which is which.
 
-- **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review.
-- **Why it will be different:** a panel of reviewers from different providers will return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
+- **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review (planned; the review step works today).
+- **Why it is different:** a panel of reviewers from different providers returns structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
 - **Why you will be able to trust it:** it will spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
 [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
 ## Five-minute start
 
-The demo (its [timed run](#timed-run) is still waiting for the owner, so no timings are recorded yet):
+The demo reviews a sample pull request with two reviewers (its [timed run](#timed-run) is still waiting for the owner, so no timings are recorded yet):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
@@ -25,7 +25,7 @@ cp .env.dist .env.local   # add one or two provider API keys and the two secrets
 docker compose up         # Intakt, its database and a sample repository
 ```
 
-Then start the review with the command the log prints at the end of the first start, and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+Then start the review with the command the log prints at the end of the first start, and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, see [Connecting an agent through MCP](docs/user/mcp.md); how a review runs inside is drawn in [the review flow](docs/architecture/README.md#review-flow). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
 
 ### Timed run
 
@@ -41,7 +41,7 @@ Then start the review with the command the log prints at the end of the first st
 
 Also record the date, the Intakt commit, the host (CPU, Docker version), the first verdict (decision, finding count with severities) and, with two keys set after `docker compose down -v`, that the seeded panel uses two providers.
 
-What works now:
+What works without Docker or a provider key:
 
 ```
 composer install
@@ -61,9 +61,9 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 ## Status
 
-**Works today:** the foundation. A Symfony 8.1 app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max, Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects, long dashes and the `docs/highlights.md` table lint.
+**Works today:** the review loop and its foundation. A reviewer panel of one to three reviewers (`config/intakt.yaml`) reviews a branch of a local repository (`intakt:review`, the dashboard button or the MCP tool `start_review`), a judge sorts the findings into the act list, and the dashboard shows each round live; the demo runs it on a sample repository with `docker compose up`. Under it, a Symfony 8.1 app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max, Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects, long dashes and the `docs/highlights.md` table lint.
 
-**Planned:** everything in the list above, in the order of [the plan](docs/plan.md).
+**Planned:** reviewing a pull request on GitHub and posting the result there, rounds started by the loop itself, the catch-up review after a substitute, and everything outside the review loop (tasks, building, merging), in the order of [the plan](docs/plan.md).
 
 ## How it is built
 

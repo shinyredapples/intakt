@@ -2,7 +2,15 @@
 
 For owners who run Intakt. Each feature gets a page here, written in the same change as the feature: what it does, how to set it up, and what to do when it goes wrong.
 
-Only the install check and the provider configuration below exist so far. The other pages arrive with the review loop (see [the plan](../plan.md)):
+The path from a clone to a first verdict, in order:
+
+1. **Set up:** `cp .env.dist .env.local`, set a provider key and the two secrets, and run `docker compose up` ([the demo](#the-demo-with-docker-compose)). Without Docker: `composer install`, `php bin/console doctrine:migrations:migrate`, and the keys as described in [Configuring providers and API keys](#configuring-providers-and-api-keys).
+2. **Choose the panel:** copy `config/intakt.example.yaml` to `config/intakt.yaml` and set the project's tiers and its `review:` section ([Capability tiers per project](#capability-tiers-per-project)); `php bin/console intakt:review:panel <project>` shows the panel a change would get without calling a model.
+3. **Start the workers:** `php bin/console messenger:consume async` ([Background work](#background-work)); the container already runs them.
+4. **Review a branch:** `php bin/console intakt:review <branch> --project=<project> --task="..."` ([Reviewing a branch](#reviewing-a-branch)) and read the outcome ([Reading a verdict](#reading-a-verdict)).
+5. **Watch or script it:** the [dashboard](#the-dashboard) shows each round; an agent starts and reads reviews through [MCP](mcp.md).
+
+What exists, page by page:
 
 - Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict has its record in the [README](../../README.md#timed-run), still to be filled in by the owner
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), and `intakt:review` runs it (see [below](#reviewing-a-branch)).
@@ -383,6 +391,26 @@ The outcome comes from plain code, never from what a reviewer wrote: `approve` w
 Exit codes: `0` approve, `10` changes, `11` blocked, `1` wrong input or configuration (a missing `--project` or `--task`, a `--round` below 1, a `--repository` that is not a directory, an empty branch or `--base`, an unknown project, a branch the repository does not have, a repository git cannot read, or a `--round` that is not the change's next round), with the reason printed. Any other error is a bug in Intakt: the command does not print it as a reason, so it reaches the console, which shows it as an error block naming the exception's file and line, adds the trace only with `-v`, and exits with the exception's code, or `1` when that code is 0 or negative; a code above 255 is capped at 255. An exit code of `1` alone therefore does not tell a wrong input from a bug; the printed message does. `--round` is optional: the next round of a change is numbered by Intakt (1, then 2, and so on), and `--round=N` makes the command refuse to start when the next round would not be N, so a script can tell that another round started meanwhile; the number is checked as the round is opened, so a round started by someone else a moment earlier is caught too.
 
 `--format=json` prints one JSON document instead of the text: `round_id`, `round`, `decision`, `exit_code`, `verdicts` (tier, decision and finding count per reviewer), `act_list`, `tokens` and `reasons`. [review-output.schema.json](review-output.schema.json) is its JSON Schema.
+
+### Reading a verdict
+
+`intakt:review` ends with the outcome on the first line and an exit code a script can test. For example (the numbers vary):
+
+```
+changes (round 1)
+strong reviewer: changes, 2 findings
+standard reviewer: approve, 0 findings
+act list: 2 findings
+F1 P1 src/Cart.php:42: the discount is applied twice
+F2 P2 src/Report.php:10: a new function has no test
+tokens: 5 calls, 18000 prompt, 1200 completion, 19200 total
+```
+
+- **The decision** is `approve` when the project's quorum policy is met, `changes` when a reviewer asked for changes, otherwise `blocked` (a reviewer that failed or was blocked gives no approval). Plain code decides it, never a reviewer's wording. The exit code is `0` for approve, `10` for changes, `11` for blocked and `1` for wrong input or configuration.
+- **One line per reviewer** names its tier, its decision and how many findings it reported. A `reason:` line follows when a reviewer was blocked, with why.
+- **The act list** holds the findings the judge marked to fix now. Each line has the finding's id (`F1`, ...; the same problem keeps its id in every later round), its severity (`P1` must be fixed, `P2` should be, `P3` is a small remark), the file and line, and the text. A finding the judge deferred becomes a follow-up and one it rejected is dropped; neither is on the list. `php bin/console intakt:review ... --format=json` prints the same as one JSON document ([schema](review-output.schema.json)).
+- **A failed review** shows as `changes` with a finding `invalid-output` (the model's answer was not a valid verdict), or `blocked` with a finding such as `reviewer-stopped` or `cut-approval`, or with a `reason:` line; fix the cause (a key, a tier, a change split in smaller parts) and start the next round. See [Asking a model for a verdict](#asking-a-model-for-a-verdict).
+- **The review page** (`/reviews/<round id>` in the [dashboard](#the-dashboard)) shows every reviewer's state and verdict, every finding with the judge's call (`act`, `follow-up` or `rejected or unmarked`) and the tokens used.
 
 ## Finding ids across review rounds
 
