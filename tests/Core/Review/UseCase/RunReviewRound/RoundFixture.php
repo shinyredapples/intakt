@@ -121,10 +121,10 @@ final readonly class RoundFixture
         $this->events = new EventDispatcher();
         $this->updates = new RecordedRoundUpdates();
         $this->locks = new LockFactory(new InMemoryStore());
-        $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
         $registry = $container->get('doctrine');
         assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
+        $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
 
         EmptyDatabase::in($container);
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
@@ -261,7 +261,7 @@ final readonly class RoundFixture
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
     public function liveProgress(EntityManagerInterface $entities): LiveRoundProgress
     {
-        return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks);
+        return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks, new StopRequests($this->ledger));
     }
 
     // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.

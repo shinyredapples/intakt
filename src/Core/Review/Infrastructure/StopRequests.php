@@ -22,15 +22,26 @@ final readonly class StopRequests
     // Pending until a later reviewer_stopped row of the same round and reviewer answers it, so an answered request never stops a later run.
     public function pendingFor(Uuid $round, Uuid $reviewer): bool
     {
+        return LedgerEventKind::ReviewerStopRequested === $this->lastRowFor($round, $reviewer);
+    }
+
+    // The newest row is the answer, so a stop of an earlier run does not count for a later one that began after it.
+    public function answeredFor(Uuid $round, Uuid $reviewer): bool
+    {
+        return LedgerEventKind::ReviewerStopped === $this->lastRowFor($round, $reviewer);
+    }
+
+    private function lastRowFor(Uuid $round, Uuid $reviewer): ?LedgerEventKind
+    {
         $pair = [$round->toRfc4122(), $reviewer->toRfc4122()];
 
         if (!$this->anyRequestFor($pair)) {
-            return false;
+            return null;
         }
 
         $rows = array_filter(iterator_to_array($this->ledger->readInOrder()), static fn (RecordedEvent $row): bool => in_array($row->event->kind, self::ROWS, true) && self::names($row, $pair));
 
-        return LedgerEventKind::ReviewerStopRequested === array_last($rows)?->event->kind;
+        return array_last($rows)?->event->kind;
     }
 
     // Requests are few and progress updates many, so the whole ledger is read only for a reviewer someone asked to stop.

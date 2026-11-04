@@ -28,6 +28,7 @@ final class LedgerRounds
         LedgerEventKind::ReviewerFailed,
         LedgerEventKind::ReviewerBlocked,
         LedgerEventKind::CatchUpOwed,
+        LedgerEventKind::ReviewerStopped,
     ];
 
     /** @var array<string, ReviewedRound> */
@@ -229,6 +230,7 @@ final class LedgerRounds
             LedgerEventKind::VerdictReceived === $kind && is_string($decision) && is_int($findings) => $outcome->answered($decision, $findings, $this->modeOf($payload)),
             LedgerEventKind::ReviewerFailed === $kind && is_string($failure) => $outcome->failed($failure),
             LedgerEventKind::ReviewerBlocked === $kind && is_string($reason) => $outcome->blocked($reason),
+            LedgerEventKind::ReviewerStopped === $kind => $outcome->stopped(),
             LedgerEventKind::CatchUpOwed === $kind && is_string($substitute) => $outcome->substitutedBy($substitute),
             default => null,
         };
