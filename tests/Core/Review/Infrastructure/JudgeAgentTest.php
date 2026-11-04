@@ -16,10 +16,10 @@ use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(JudgeAgent::class)]

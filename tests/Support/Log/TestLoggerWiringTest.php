@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support\Log;
 
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(RecordingLoggerFactory::class)]

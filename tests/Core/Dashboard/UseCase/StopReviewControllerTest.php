@@ -17,7 +17,6 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
 use Intakt\Core\Dashboard\UseCase\StopReview\StopReviewController;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
@@ -38,8 +37,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ShowReviewController::class)]
 final class StopReviewControllerTest extends DashboardPageTestCase
 {
-    use AssertsLoggedErrors;
-
     // The container keeps the ledger double across the page that hands out the token and the post that uses it.
     protected function setUp(): void
     {

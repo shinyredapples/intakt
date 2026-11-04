@@ -21,12 +21,12 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
-use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 #[Group('persistence')]
 #[CoversClass(RunReviewRoundHandler::class)]

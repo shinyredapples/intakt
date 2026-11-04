@@ -120,6 +120,7 @@ final readonly class CheckCommand
             new CommitSubjectsGate($testMerge),
             new LongDashesGate(),
             new HighlightsGate(new FencedCodeBlocks()),
+            new ReproductionRowsGate(new FencedCodeBlocks()),
         ];
     }
 
