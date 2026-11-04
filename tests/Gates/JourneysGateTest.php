@@ -95,6 +95,7 @@ final class JourneysGateTest extends SandboxTestCase
     private function isSleeping(string $seconds): bool
     {
         $commandLines = glob('/proc/[0-9]*/cmdline');
-        return array_any(false === $commandLines ? [] : $commandLines, fn($file) => ['sleep', $seconds] === explode("\0", rtrim((string) @file_get_contents($file), "\0")));
+
+        return array_any(false === $commandLines ? [] : $commandLines, fn ($file) => ['sleep', $seconds] === explode("\0", rtrim((string) @file_get_contents($file), "\0")));
     }
 }
