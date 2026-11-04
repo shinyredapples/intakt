@@ -34,7 +34,7 @@ final class PendingHead
     private string $readAgainAt;
 
     #[ORM\Column(options: ['default' => 0])]
-    private int $failures = 0;
+    private int $failures;
 
     public function __construct(
         #[ORM\Id]
