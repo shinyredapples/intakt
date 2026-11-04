@@ -18,7 +18,7 @@ final class RecordingLoggerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->records = LogRecords::startRun();
+        $this->records = new LogRecords((string) tempnam(sys_get_temp_dir(), 'intakt-recording-logger-test-'));
     }
 
     protected function tearDown(): void

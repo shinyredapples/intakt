@@ -46,6 +46,14 @@ final class UnassertedErrorLogExtensionTest extends TestCase
         self::assertStringContainsString('LogsAnErrorInASeparateProcessFixture::testItLogsAnErrorNobodyAssertsInItsOwnProcess', $run->getOutput());
     }
 
+    public function testAnUnassertedErrorRecordAfterTheRecordingLoggerTestsStillFailsTheRun(): void
+    {
+        $run = $this->runFixture('../RecordingLoggerTest.php', 'LogsAnErrorFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('Unasserted error log record: "Disk on fire."', $run->getOutput());
+    }
+
     public function testATestThatLogsOnlyAWarningPasses(): void
     {
         $run = $this->runFixture('LogsAWarningFixture.php');
