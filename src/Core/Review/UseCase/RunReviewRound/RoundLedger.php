@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -60,7 +61,7 @@ final readonly class RoundLedger
     // No round exists yet, so the event names the change and the number asked for; the decision is the reason, in the words the guard uses.
     public function shadowRoundHeld(RunReviewRound $command, Provider $provider, StartDecision $decision): void
     {
-        $this->append(LedgerEventKind::ShadowRoundHeld, new ShadowRoundHeld($command->target->subject->project, $command->round->change, $provider->value, $decision->value));
+        $this->append(LedgerEventKind::ShadowRoundHeld, new ShadowRoundHeld($command->target->subject->project, $command->round->change, $provider, $decision->value));
     }
 
     public function reviewerStarted(RoundReviewer $reviewer): void
@@ -73,16 +74,16 @@ final readonly class RoundLedger
     {
         $this->append(LedgerEventKind::VerdictReceived, new VerdictReceived(
             ...$this->identify($reviewer),
-            decision: $verdict->verdict->value,
+            decision: $verdict->verdict,
             findings: count($verdict->findings),
-            mode: $this->modes->of($reviewer->round()->project())->value,
+            mode: $this->modes->of($reviewer->round()->project()),
         ));
     }
 
     // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up.
     public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
     {
-        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(...$this->identify($reviewer), substitute: $substitute->value));
+        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(...$this->identify($reviewer), substitute: $substitute));
     }
 
     public function reviewerFailed(RoundReviewer $reviewer, string $failure): void
@@ -108,16 +109,16 @@ final readonly class RoundLedger
             $round->id()->toRfc4122(),
             array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
             array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
-            array_map(static fn (Finding $finding): JudgedFindingRow => new JudgedFindingRow($finding->id, $finding->severity->value, $finding->text), $judged->findings),
+            array_map(static fn (Finding $finding): JudgedFindingRow => new JudgedFindingRow($finding->id, $finding->severity, $finding->text), $judged->findings),
         ));
     }
 
     /**
-     * @return array{round: string, reviewer: string, role: string, tier: string}
+     * @return array{round: string, reviewer: string, role: string, tier: Tier}
      */
     private function identify(RoundReviewer $reviewer): array
     {
-        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()->value];
+        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
     // Null values are left out so a review without a source keeps no repository and base; no other payload holds a null.

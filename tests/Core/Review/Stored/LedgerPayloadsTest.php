@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Stored;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Infrastructure\AccountCooledDown;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\UseCase\RunReviewRound\Payload\CatchUpOwed;
 use Intakt\Core\Review\UseCase\RunReviewRound\Payload\JudgeDone;
 use Intakt\Core\Review\UseCase\RunReviewRound\Payload\ReviewerBlocked;
@@ -16,7 +20,9 @@ use Intakt\Core\Review\UseCase\RunReviewRound\Payload\ShadowRoundHeld;
 use Intakt\Core\Review\UseCase\RunReviewRound\Payload\VerdictReceived;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageStarted;
+use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageUnsettled;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -84,6 +90,41 @@ final class LedgerPayloadsTest extends KernelTestCase
 
         self::assertSame($row, $this->serializer()->serialize($payload, 'json'));
         self::assertSame('RuntimeException', $payload->failure);
+    }
+
+    public function testTheClosedSetsOfARoundRowReadIntoTheirEnumsAndWriteBackTheirStoredValues(): void
+    {
+        $verdict = '{'.self::IDENTITY.',"decision":"changes","findings":2,"mode":"shadow"}';
+        $catchUp = '{'.self::IDENTITY.',"substitute":"openai_compatible"}';
+
+        $received = $this->serializer()->deserialize($verdict, VerdictReceived::class, 'json');
+        $owed = $this->serializer()->deserialize($catchUp, CatchUpOwed::class, 'json');
+
+        self::assertSame([Tier::Standard, Decision::Changes, ProjectMode::Shadow], [$received->tier, $received->decision, $received->mode]);
+        self::assertSame(Provider::OpenAiCompatible, $owed->substitute);
+        self::assertSame($verdict, $this->serializer()->serialize($received, 'json'));
+        self::assertSame($catchUp, $this->serializer()->serialize($owed, 'json'));
+    }
+
+    public function testTheClosedSetsOfUsageShadowAndJudgeRowsReadIntoTheirEnums(): void
+    {
+        $started = $this->serializer()->deserialize('{"call":"c","phase":"started","project":"p","tier":"light"}', UsageStarted::class, 'json');
+        $held = $this->serializer()->deserialize('{"project":"p","change":"c","provider":"claude_code","reason":"ceiling"}', ShadowRoundHeld::class, 'json');
+        $judged = $this->serializer()->deserialize('{"round":"r","act":[],"follow_ups":[],"findings":[{"id":"a","severity":"P1","text":"Broken."}]}', JudgeDone::class, 'json');
+
+        self::assertSame(Tier::Light, $started->tier);
+        self::assertSame(Provider::ClaudeCode, $held->provider);
+        self::assertSame(Severity::P1, $judged->findings[0]->severity);
+    }
+
+    public function testTheHandBuiltStoredSerializerWritesAPayloadAsTheContainersDoes(): void
+    {
+        $payload = new VerdictReceived('r', 'v', 'correctness', Tier::Strong, Decision::Approve, 0, ProjectMode::Live);
+
+        self::assertSame(
+            $this->serializer()->serialize($payload, 'json'),
+            StoredSerializerFactory::create()->serialize($payload, 'json'),
+        );
     }
 
     private function serializer(): SerializerInterface
