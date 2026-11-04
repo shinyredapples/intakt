@@ -19,6 +19,8 @@ final readonly class ReproductionRowsGate implements Gate
 
     private const string DELIMITER_ROW = '/^[\s|:-]*-[\s|:-]*$/';
 
+    private const string CELL_BORDER = '/(?<!\\\\)\|/';
+
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
     ) {
@@ -121,12 +123,11 @@ final readonly class ReproductionRowsGate implements Gate
         $previous = '';
 
         foreach ($lines as $line) {
-            if ('' === trim($line)) {
-                $inTable = false;
-            } elseif ($inTable) {
+            // A table ends at the first line without a cell border (GFM: a blank line or another block), as in HighlightsGate.
+            if ($inTable && $this->isATableRow($line)) {
                 $rows[] = $line;
-            } elseif ($this->startsATable($previous, $line)) {
-                $inTable = true;
+            } else {
+                $inTable = $this->startsATable($previous, $line);
             }
 
             $previous = $line;
@@ -137,6 +138,11 @@ final readonly class ReproductionRowsGate implements Gate
 
     private function startsATable(string $header, string $delimiter): bool
     {
-        return str_contains($header, '|') && str_contains($delimiter, '|') && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
+        return $this->isATableRow($header) && $this->isATableRow($delimiter) && 1 === preg_match(self::DELIMITER_ROW, $delimiter);
+    }
+
+    private function isATableRow(string $line): bool
+    {
+        return 1 === preg_match(self::CELL_BORDER, $line);
     }
 }

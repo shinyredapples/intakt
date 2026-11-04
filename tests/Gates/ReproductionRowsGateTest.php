@@ -75,6 +75,41 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->failed('reproductions'), $run->output());
     }
 
+    public function testProseUnderAHeadingRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n### Notes\nSee `upstream/a-bug/` for details.\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testAListItemRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n- pending: `upstream/a-bug/`\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testABlockquoteRightAfterATableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n> see `upstream/a-bug/`\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testAPipeLineAfterALineThatEndedTheTableDoesNotCount(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | elsewhere | |\n### Notes\n| See `upstream/a-bug/` for details.\n");
+
+        self::assertTrue($run->failed('reproductions'), $run->output());
+    }
+
+    public function testARowAfterARowWithAnEscapedPipeStillCounts(): void
+    {
+        $run = $this->checkWith(['upstream/a-bug/REPORT.md'], "| Other | done | `a\\|b` | |\n| A | done | `upstream/a-bug/` | |\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
     public function testANestedFolderOnlyNeedsTheRowOfItsReproduction(): void
     {
         $run = $this->checkWith(['upstream/a-bug/tests/ReproductionTest.php'], "| A | done | `upstream/a-bug/` | |\n");
