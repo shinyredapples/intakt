@@ -78,7 +78,7 @@ final readonly class RedactedJsonFormatter
         ];
     }
 
-    // Never getTraceAsString(): it writes string arguments cut to zend.exception_string_param_max_len characters, and a credential's prefix does not match its whole value.
+    // getTraceAsString() is not used because it writes string arguments cut to zend.exception_string_param_max_len characters, so a credential would reach the log as a prefix the redaction cannot match.
     private function trace(Throwable $failure): string
     {
         $frames = [];
