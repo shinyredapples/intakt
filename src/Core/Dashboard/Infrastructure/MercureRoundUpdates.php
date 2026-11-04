@@ -47,6 +47,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, 'round_changed', ['round' => $round->toRfc4122(), 'progress' => $progress]);
     }
 
+    #[Override]
+    public function reviewerStopped(Uuid $round, string $reviewer): void
+    {
+        $this->publish($round, 'reviewer_stopped', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
+    }
+
     /**
      * @param array<string, mixed> $context
      */
@@ -57,8 +63,8 @@ final readonly class MercureRoundUpdates implements RoundUpdates
             // Private, because the text is model output about private code; only a subscriber the dashboard authorizes may read it.
             $this->hub->publish(new Update(self::topicOf($round), $data, true));
         } catch (Throwable $failure) {
-            // Swallowed after a log, because a live update is best effort and must never change a verdict or a round; the class only, because a transport message can echo a token.
-            $this->logger->warning('A live round update was not published.', ['stream' => $stream, 'exception' => $failure::class]);
+            // Swallowed after a log, because a live update is best effort and must never change a verdict or a round.
+            $this->logger->warning('A live round update was not published.', ['round' => $round->toRfc4122(), 'stream' => $stream, 'exception' => $failure]);
         }
     }
 }

@@ -15,7 +15,8 @@ final readonly class Verdict
     public const string UNREAD_APPROVAL = 'unread-approval';
     public const string NO_TOOLS = 'no-tools';
     public const string CUT_APPROVAL = 'cut-approval';
-    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL];
+    public const string REVIEWER_STOPPED = 'reviewer-stopped';
+    private const array FAILED_REVIEWS = [self::INVALID_OUTPUT, self::INCOMPLETE_STREAM, self::UNREAD_APPROVAL, self::NO_TOOLS, self::CUT_APPROVAL, self::REVIEWER_STOPPED];
 
     /**
      * @param list<Finding> $findings
@@ -44,6 +45,13 @@ final readonly class Verdict
     public function isFailedReview(): bool
     {
         return array_any($this->findings, static fn (Finding $finding): bool => in_array($finding->id, self::FAILED_REVIEWS, true));
+    }
+
+    // A model can name the id too, so a caller that answers a stop request also checks the ledger for one.
+    #[Ignore]
+    public function isStopped(): bool
+    {
+        return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
     }
 
     public static function invalidOutput(string $reason): self
@@ -130,6 +138,24 @@ final readonly class Verdict
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'A reviewer judges only a change it can read.',
+            evidence: null,
+        );
+
+        return new self(Decision::Blocked, [$finding], [], []);
+    }
+
+    public static function reviewerStopped(): self
+    {
+        $finding = new Finding(
+            id: self::REVIEWER_STOPPED,
+            severity: Severity::P1,
+            file: null,
+            line: null,
+            symbol: null,
+            text: 'The reviewer was stopped from the dashboard before it gave its verdict, so it did not finish its review and the review is blocked.',
+            fixable_by: FixableBy::Owner,
+            repeat: false,
+            requirement: 'A stopped reviewer gives no verdict; its review counts as blocked, never as approval or changes.',
             evidence: null,
         );
 

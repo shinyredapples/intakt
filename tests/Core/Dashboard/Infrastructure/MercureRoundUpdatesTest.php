@@ -105,15 +105,40 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $this->published[0]->getData());
     }
 
-    public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedWithoutItsMessage(): void
+    public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedWithItsRoundAndFailure(): void
     {
-        $updates = $this->updates(static fn (Update $update): string => throw new RuntimeException('token secret-value was refused'));
+        $refusal = new RuntimeException('the hub refused the update');
+        $updates = $this->updates(static fn (Update $update): string => throw $refusal);
 
         $updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
 
-        $logged = json_encode($this->log->cleanLogs(), JSON_THROW_ON_ERROR);
-        self::assertStringContainsString('RuntimeException', $logged);
-        self::assertStringNotContainsString('secret-value', $logged);
+        self::assertSame(
+            [['warning', 'A live round update was not published.', ['round' => self::ROUND, 'stream' => 'round_changed', 'exception' => $refusal]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAStoppedReviewerReplacesItsStateAndEmptiesItsStopCell(): void
+    {
+        $this->updates()->reviewerStopped(Uuid::fromString(self::ROUND), self::REVIEWER);
+
+        $data = $this->published[0]->getData();
+        $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
+
+        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('target="%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
+    }
+
+    public function testAHubThatRefusesAStoppedReviewerIsLoggedAndDoesNotFailTheCaller(): void
+    {
+        $refusal = new RuntimeException('the hub refused the update');
+
+        $this->updates(static fn (Update $update): string => throw $refusal)->reviewerStopped(Uuid::fromString(self::ROUND), self::REVIEWER);
+
+        self::assertSame(
+            [['warning', 'A live round update was not published.', ['round' => self::ROUND, 'stream' => 'reviewer_stopped', 'exception' => $refusal]]],
+            $this->log->cleanLogs(),
+        );
     }
 
     /**

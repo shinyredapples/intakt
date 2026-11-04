@@ -139,6 +139,30 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertSame(['F1', 'F2'], array_column($findings, 'id'));
     }
 
+    public function testTheFindingsResourceWritesEachFindingWithItsPropertyNamesAsJsonFields(): void
+    {
+        $round = $this->reviewedRound();
+        $id = $round->id()->toRfc4122();
+
+        $json = $this->findingsResource()($id, 'intakt://rounds/'.$id.'/findings');
+
+        $findings = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($findings);
+        self::assertSame([
+            'id' => 'F1',
+            'severity' => Severity::P1->value,
+            'file' => null,
+            'line' => null,
+            'symbol' => null,
+            'text' => 'Text of A.',
+            'fixable_by' => FixableBy::Builder->value,
+            'repeat' => false,
+            'requirement' => null,
+            'evidence' => null,
+            'regression' => false,
+        ], $findings[0]);
+    }
+
     public function testEachToolRefusesAnUnknownRoundAsAnMcpToolError(): void
     {
         foreach ([$this->statusTool(...), $this->actList(...)] as $tool) {
@@ -190,7 +214,10 @@ final class ReadRoundToolsTest extends KernelTestCase
 
     private function findingsResource(): RoundFindingsResource
     {
-        return new RoundFindingsResource($this->readable(), $this->fixture->findingStore());
+        $stored = self::getContainer()->get('serializer.stored');
+        assert($stored instanceof SerializerInterface);
+
+        return new RoundFindingsResource($this->readable(), $this->fixture->findingStore(), $stored);
     }
 
     private function readable(): ReadableRounds

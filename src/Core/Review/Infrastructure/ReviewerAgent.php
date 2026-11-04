@@ -15,7 +15,9 @@ use Intakt\Core\Review\Contract\Verdict;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
+use Symfony\AI\Agent\Exception\RuntimeException;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
+use Symfony\AI\Agent\Execution\ExecutionStatus;
 use Symfony\AI\Agent\Toolbox\FaultTolerantToolbox;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Capability;
@@ -59,7 +61,8 @@ final readonly class ReviewerAgent implements Reviewer
 
         $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        if ($tools->seen()) {
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
+        if ($tools->seen() && !$verdict->isStopped()) {
             return Verdict::invalidOutput('the reviewer made a malformed tool call.');
         }
 
@@ -138,6 +141,9 @@ final readonly class ReviewerAgent implements Reviewer
             return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
         } catch (ReviewServerLost) {
             return Verdict::noTools();
+        } catch (RuntimeException $failure) {
+            // Read from the execution, never from the message, so only a run ReviewerStopping cancelled ends as stopped and any other failure stays an error.
+            return ExecutionStatus::Cancelled === $execution->getStatus() ? Verdict::reviewerStopped() : throw $failure;
         }
     }
 }

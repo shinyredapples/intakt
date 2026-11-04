@@ -7,6 +7,7 @@ namespace Intakt\Core\Budget\Domain;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Contract\ShadowStartGuard;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
@@ -17,10 +18,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 #[AsAlias(ShadowStartGuard::class)]
 final readonly class EveryAccountShadowGuard implements ShadowStartGuard
 {
-    public const string CEILINGS = 'intakt.budget.shadow_ceiling_guard';
-
     public function __construct(
-        #[Autowire(service: self::CEILINGS)]
+        #[Autowire(service: BudgetServices::SHADOW_CEILING_GUARD)]
         private StartGuard $ceilings,
         private EnabledAccounts $accounts,
     ) {

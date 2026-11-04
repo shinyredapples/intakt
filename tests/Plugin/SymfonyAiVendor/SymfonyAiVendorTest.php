@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Closure;
 use Generator;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -46,8 +47,10 @@ use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
+use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
+use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
@@ -743,7 +746,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
         ], []));
         $container->set(Ledger::class, new InMemoryLedger());
-        $container->set(TierPlatform::PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
+        $container->set(AiServices::PROVIDER_PLATFORMS, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]));
         $vendor = $container->get(SymfonyAiVendor::class);
         self::assertInstanceOf(SymfonyAiVendor::class, $vendor);
         $conversations = $container->get(MessageStoreInterface::class);
@@ -797,7 +800,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function reviewer(): ReviewerAgent
     {
-        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock())));
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger()))));
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult

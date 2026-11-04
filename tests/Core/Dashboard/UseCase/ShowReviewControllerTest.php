@@ -66,11 +66,11 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'changes', '2', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.']],
+            [['correctness', 'standard', 'verdict', 'changes', '2', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'approve', '0', ''], ['security', 'standard', 'verdict', 'approve', '0', 'answered by the substitute openai, a catch-up review is owed']],
+            [['correctness', 'standard', 'verdict', 'approve', '0', '', ''], ['security', 'standard', 'verdict', 'approve', '0', 'answered by the substitute openai, a catch-up review is owed', '']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
     }
@@ -111,7 +111,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'standard', 'running', '', '', '']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
         self::assertSelectorTextContains('section.round', '1 of 2 reviewers started.');
     }
 
