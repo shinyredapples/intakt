@@ -16,14 +16,15 @@ final class ProbeTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
 
-    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test.
+    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test. It is kept only while its autoload file is the checkout's own (the same inode), because a folder left by a killed run with the same process id holds the vendor of an older checkout.
     private const string COPY = <<<'SH'
         set -e
         project=$1
         shift
         cd "$project"
         find . -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +
-        if [ ! -d vendor ]; then
+        if ! [ vendor/autoload.php -ef "$0"/vendor/autoload.php ]; then
+            rm -rf vendor vendor.partial
             cp -al "$0"/vendor vendor.partial 2>/dev/null || { rm -rf vendor.partial && cp -a "$0"/vendor vendor.partial; }
             mv vendor.partial vendor
         fi
@@ -197,6 +198,18 @@ final class ProbeTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->transcriptOf($run));
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->project.'/public'));
+    }
+
+    public function testAVendorLeftByAnEarlierRunOfTheSharedProjectIsReplacedByTheCheckouts(): void
+    {
+        $vendor = $this->project.'/vendor';
+        new Filesystem()->remove($vendor);
+        new Filesystem()->dumpFile($vendor.'/stale-marker', 'from an older checkout');
+
+        $project = $this->copyOfTheProject();
+
+        self::assertFileDoesNotExist($project.'/vendor/stale-marker');
+        self::assertFileExists($project.'/vendor/autoload.php');
     }
 
     public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
