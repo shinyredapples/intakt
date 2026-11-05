@@ -14,7 +14,7 @@ The pages only answer when you open them on the computer Intakt runs on (`localh
 
 ## The board (planned)
 
-Every task in flight is a card, and its column says where it is now. Cards move left to right:
+Every task in flight is a card, and its column says where it is now. **Waiting on you** is the first column on the left, because it is the only one that needs you to do something. Cards move through the other columns from left to right:
 
 ```mermaid
 flowchart LR
@@ -26,13 +26,13 @@ flowchart LR
 
 | Column | Meaning |
 |---|---|
+| **Waiting on you** | only a person can move it on (see below) |
 | **Backlog** | written, but not ready yet (unclear, waiting on another task) |
 | **Ready** | in the queue, waiting for a free builder |
 | **Planned** | the builder wrote a plan that waits for your approval (only when plan approval is on) |
 | **Building** | a builder is working on it |
 | **Checking** | the checks run on the finished work |
 | **In review** | the review panel is reading it |
-| **Waiting on you** | only a person can move it on (see below) |
 | **Merging** | approved, being merged |
 | **Done** | merged |
 

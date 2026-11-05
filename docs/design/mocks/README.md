@@ -15,7 +15,7 @@ Then open `http://localhost:8000/`. The board has example states: `index.html?de
 
 Every page uses `assets/intakt.css` and `assets/intakt.js`; `components.html` shows the component set.
 
-The mocks load their fonts from Google Fonts. They are design documents, not shipped code: the dashboard serves its fonts itself.
+The mocks load their fonts from Google Fonts, so opening them or running `tools/screenshots.js` needs the network; without it the browser falls back to other fonts and the screenshots differ from the approved set. The mocks are design documents, not shipped code: the dashboard serves its fonts itself.
 
 ## Screenshots
 
