@@ -21,7 +21,7 @@ final readonly class ReSpelledNameRule implements Rule
 {
     private const string SERVICE_ID_PREFIX = 'intakt.';
 
-    // tests pin a contract with the literal on purpose, and the intakt.* values under config/gates/ are PHPStan error identifiers
+    // not tests/, because tests pin a contract with the literal on purpose, and not config/gates/, because its intakt.* values are PHPStan error identifiers
     private const array CHECKED = ['/src/', '/config/'];
 
     private const string UNCHECKED = '/config/gates/';
