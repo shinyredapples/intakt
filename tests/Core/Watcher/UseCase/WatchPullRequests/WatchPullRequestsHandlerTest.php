@@ -12,6 +12,11 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\SharedHold;
+use Intakt\Core\Budget\Domain\ItemFailureRecord;
+use Intakt\Core\Budget\Domain\SharedHoldRecord;
+use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
+use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -92,6 +97,11 @@ use Symfony\Component\Lock\LockFactory;
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
 #[UsesClass(WatchPullRequests::class)]
+#[UsesClass(DoctrineInstallWideFailures::class)]
+#[UsesClass(ItemFailureRecord::class)]
+#[UsesClass(DoctrineHolds::class)]
+#[UsesClass(SharedHoldRecord::class)]
+#[UsesClass(SharedHold::class)]
 #[UsesClass(FindChangedPullRequests::class)]
 #[UsesClass(SeenListings::class)]
 #[UsesClass(AdmitHeads::class)]
@@ -791,7 +801,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection()), $doctrine, $logger);
+        $installWide = new DoctrineInstallWideFailures($this->entities, new DoctrineHolds($this->entities, $this->clock), $this->clock, $redactor, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide), $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);

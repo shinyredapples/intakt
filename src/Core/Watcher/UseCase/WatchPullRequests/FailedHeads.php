@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -28,6 +29,7 @@ final readonly class FailedHeads
         private ClockInterface $clock,
         private Redactor $redactor,
         private Connection $connection,
+        private InstallWideFailures $installWide,
     ) {
     }
 
@@ -37,13 +39,34 @@ final readonly class FailedHeads
         $headFailure = new HeadFailure($project, $head, $this->causeOf($failure));
         $retryAt = $this->retryAt($failures);
 
-        // One transaction, because a failure the ledger could not take must leave the head due, so the tick fails and the next one tries again.
-        $this->connection->transactional(function () use ($headFailure, $failures, $retryAt): void {
-            // Row first, because its write lock holds off a listing that closes or re-queues the head, and a head no longer queued as it failed must get no line, or its card would promise a try that never comes.
-            if ($this->pending->backOff($headFailure, $failures, $retryAt)) {
-                $this->record($headFailure, $failures, $retryAt);
+        $this->installWide->itemFailed($this->itemOf($project, $head), $failure);
+        $this->recordOnce($headFailure, $failures, $retryAt);
+    }
+
+    // Encoded as a list, because a project name may hold any character and a joined key could name two heads alike; the change alone, because a new commit of the same pull request is the same item.
+    private function itemOf(string $project, OpenChange $head): string
+    {
+        return json_encode(['watcher head', $project, $head->id->value], JSON_THROW_ON_ERROR);
+    }
+
+    private function recordOnce(HeadFailure $headFailure, int $failures, DateTimeImmutable $retryAt): void
+    {
+        try {
+            // One transaction, because a failure the ledger could not take must leave the head due, so the tick fails and the next one tries again.
+            $this->connection->transactional(function () use ($headFailure, $failures, $retryAt): void {
+                // Row first, because its write lock holds off a listing that closes or re-queues the head, and a head no longer queued as it failed must get no line, or its card would promise a try that never comes.
+                if ($this->pending->backOff($headFailure, $failures, $retryAt)) {
+                    $this->record($headFailure, $failures, $retryAt);
+                }
+            });
+        } catch (Throwable $notRecorded) {
+            // After the rollback, because the failure back-off must outlast it.
+            if (self::HAND_OVER_AFTER === $failures) {
+                $this->installWide->handOverFailed($notRecorded);
             }
-        });
+
+            throw $notRecorded;
+        }
     }
 
     // Scrubbed first, because a message may carry bytes of a path or a tool's output that are not UTF-8, and the ledger line must still be written; redacted as a log line is, because the cause is stored and shown on a card.
