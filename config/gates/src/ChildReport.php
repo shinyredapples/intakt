@@ -58,7 +58,7 @@ final readonly class ChildReport
     private static function failedChild(string $gate, ProcessResult $child): self
     {
         $output = preg_split('/\R/', trim($child->errors."\n".$child->output));
-        $lines = array_slice(array_values(array_filter(false === $output ? [] : $output,static fn (string $line): bool => '' !== trim($line))), -self::SHOWN_OUTPUT_LINES);
+        $lines = array_slice(array_values(array_filter(false === $output ? [] : $output, static fn (string $line): bool => '' !== trim($line))), -self::SHOWN_OUTPUT_LINES);
         $reason = 'the child process of the gate ended with exit code '.$child->exitCode.' and no valid result line';
 
         return new self(GateResult::withFindings($gate, [$reason, ...$lines])->toJson(), self::FAILED);
