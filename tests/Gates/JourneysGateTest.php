@@ -92,6 +92,22 @@ final class JourneysGateTest extends SandboxTestCase
         self::assertStringContainsString('--journeys runs alone', $run->output());
     }
 
+    public function testJourneysDoNotRunAgainstABase(): void
+    {
+        $run = $this->emptySandbox()->check('--journeys', '--base=HEAD');
+
+        self::assertSame(2, $run->exitCode());
+        self::assertStringContainsString('--journeys runs alone', $run->output());
+    }
+
+    public function testJourneysDoNotRunOnATestMerge(): void
+    {
+        $run = $this->emptySandbox()->check('--journeys', '--test-merge=HEAD:HEAD');
+
+        self::assertSame(2, $run->exitCode());
+        self::assertStringContainsString('--journeys runs alone', $run->output());
+    }
+
     public function testTheJourneysGateIsNotOneOfTheGatesAChangePasses(): void
     {
         $run = $this->emptySandbox()->check('--only=journeys');
@@ -104,6 +120,6 @@ final class JourneysGateTest extends SandboxTestCase
     {
         $commandLines = glob('/proc/[0-9]*/cmdline');
 
-        return array_any(false === $commandLines ? [] : $commandLines, fn ($file) => ['sleep', $seconds] === explode("\0", rtrim((string) @file_get_contents($file), "\0")));
+        return array_any(false === $commandLines ? [] : $commandLines, fn (string $file) => ['sleep', $seconds] === explode("\0", rtrim((string) @file_get_contents($file), "\0")));
     }
 }

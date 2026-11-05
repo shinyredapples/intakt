@@ -80,8 +80,8 @@ final readonly class Options
         $options = new self(Mode::Journeys, $values);
         $others = array_filter($modes, static fn (Mode $mode): bool => Mode::Journeys !== $mode);
 
-        if ([] !== $others || [] !== $options->only || [] !== $options->skip) {
-            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only or --skip');
+        if ([] !== $others || [] !== $options->only || [] !== $options->skip || null !== $values['base'] || null !== $values['test-merge']) {
+            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only, --skip, --base or --test-merge');
         }
 
         return $options;
