@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Team and accounts | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="team">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content roomy" id="main">
+<div class="page-head">
+  <div>
+    <h1>Team and accounts</h1>
+    <p class="lead">Who does what, and which account pays for it. You are the Product owner.</p>
+  </div>
+  <div class="actions"><a class="btn primary" id="add" href="add-account.html" data-icon="plus">Add an account</a></div>
+</div>
+
+
+
+<div class="split">
+<div>
+<section aria-labelledby="acc-h">
+  <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    <h2 id="acc-h">Accounts</h2>
+    <div class="legend" style="margin-left:auto"><span><i class="used"></i>Used</span><span><i class="reserved"></i>Reserved by running work</span><span><i class="forecast"></i>Forecast to reset</span></div>
+  </div>
+
+  <article class="acct">
+    <div>
+      <h3 class="acct-name">Work subscription <button type="button" class="linkbtn small" data-toast="Rename: type a new name">Rename</button></h3>
+      <p class="muted small" style="margin:4px 0 10px">Subscription, added 12 Oct</p>
+      <div class="chips page-chip"><span class="chip strong"><span class="dot ok"></span>Working</span></div>
+    </div>
+    <div>
+    <div class="window">
+      <div class="wl"><strong>Five-hour window</strong><span class="muted">46% used</span><span class="reset">Resets at 14:00</span></div>
+      <div class="bar" role="img" aria-label="Five-hour window: used 46 percent, reserved 12 percent, forecast 18 percent"><i class="used" style="width:46%"></i><i class="reserved" style="left:46%;width:12%"></i><i class="forecast" style="left:58%;width:18%"></i></div>
+    </div>
+    <div class="window">
+      <div class="wl"><strong>Weekly window</strong><span class="muted">61% used</span><span class="reset">Resets Monday 09:00</span></div>
+      <div class="bar" role="img" aria-label="Weekly window: used 61 percent, reserved 5 percent, forecast 22 percent"><i class="used" style="width:61%"></i><i class="reserved" style="left:61%;width:5%"></i><i class="forecast" style="left:66%;width:22%"></i></div>
+    </div>
+      <p class="small"><span class="muted">Control in effect:</span> Opus use capped at 70% of the weekly window, until Monday 09:00. <a href="history.html">Set by you</a></p>
+    </div>
+    <div><button class="btn secondary sm" type="button" data-icon="test" data-icon-cls="s" data-toast="Work subscription answered in 0.8 s">Test</button></div>
+  </article>
+
+  <article class="acct">
+    <div>
+      <h3 class="acct-name">Home subscription <button type="button" class="linkbtn small" data-toast="Rename: type a new name">Rename</button></h3>
+      <p class="muted small" style="margin:4px 0 10px">Subscription, added 28 Oct</p>
+      <div class="chips page-chip"><span class="chip strong"><span class="dot needs"></span>Login expired at 06:40</span></div>
+      <a class="btn needs sm" href="waiting.html" style="margin-top:12px">Log it back in</a>
+    </div>
+    <div>
+    <div class="window">
+      <div class="wl"><strong>Five-hour window</strong><span class="muted">Last seen 22% at 06:40</span><span class="reset">Unknown until logged in</span></div>
+      <div class="bar" role="img" aria-label="Five-hour window: 22 percent used when last seen"><i class="used" style="width:22%;opacity:.5"></i><i class="reserved" style="left:0%;width:0%"></i><i class="forecast" style="left:0%;width:0%"></i></div>
+    </div>
+    <div class="window">
+      <div class="wl"><strong>Weekly window</strong><span class="muted">38% used when last seen</span><span class="reset">Resets Thursday 18:00</span></div>
+      <div class="bar" role="img" aria-label="Weekly window: used 38 percent, reserved 0 percent, forecast 0 percent"><i class="used" style="width:38%;opacity:.5"></i><i class="reserved" style="left:38%;width:0%"></i><i class="forecast" style="left:38%;width:0%"></i></div>
+    </div>
+      <p class="small muted">No control in effect.</p>
+    </div>
+    <div><button class="btn secondary sm" type="button" data-icon="test" data-icon-cls="s" data-toast="Home subscription: login expired">Test</button></div>
+  </article>
+
+  <article class="acct">
+    <div>
+      <h3 class="acct-name">Overflow key <button type="button" class="linkbtn small" data-toast="Rename: type a new name">Rename</button></h3>
+      <p class="muted small" style="margin:4px 0 10px">API key, pay per use, ending <span class="mono">…7f2Q</span></p>
+      <div class="chips page-chip"><span class="chip strong"><span class="dot ok"></span>Working</span></div>
+    </div>
+    <div>
+    <div class="window">
+      <div class="wl"><strong>Five-hour window</strong><span class="muted">$4.10 of $15 limit</span><span class="reset">Rolling</span></div>
+      <div class="bar" role="img" aria-label="Five-hour window: used 27 percent, reserved 9 percent, forecast 20 percent"><i class="used" style="width:27%"></i><i class="reserved" style="left:27%;width:9%"></i><i class="forecast" style="left:36%;width:20%"></i></div>
+    </div>
+    <div class="window">
+      <div class="wl"><strong>Weekly window</strong><span class="muted">$86.20 of $150 limit</span><span class="reset">Resets Monday 00:00</span></div>
+      <div class="bar" role="img" aria-label="Weekly window: used 57 percent, reserved 3 percent, forecast 25 percent"><i class="used" style="width:57%"></i><i class="reserved" style="left:57%;width:3%"></i><i class="forecast" style="left:60%;width:25%"></i></div>
+    </div>
+      <p class="small"><span class="muted">Control in effect:</span> no more than $40 a day, until Friday 23:59. <a href="history.html">Set by you</a></p>
+    </div>
+    <div><button class="btn secondary sm" type="button" data-icon="test" data-icon-cls="s" data-toast="Overflow key answered in 0.6 s">Test</button></div>
+  </article>
+</section>
+
+<section class="section" aria-labelledby="spend-h">
+  <h2 id="spend-h" style="margin-bottom:16px">API spend</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="v">$11.84</div><div class="k">Today, of $40 daily cap</div></div>
+    <div class="kpi"><div class="v">$86.20</div><div class="k">This week, of $150</div></div>
+    <div class="kpi"><div class="v">$3.10</div><div class="k">Average per merged task</div></div>
+  </div>
+  <p class="muted small" style="margin-top:12px">Subscriptions have no per-use cost. Their cost per task is shown on each task as the API price it would have had.</p>
+</section>
+</div>
+<aside class="side" aria-labelledby="roles-h">
+  <h2 id="roles-h">Roles</h2>
+  <div class="roles">
+    <div class="role"><h3>Tech lead</h3><p>Plans each task and asks you when the issue leaves a real choice open.</p><p class="meta"><span>Opus</span><span>Work subscription</span></p></div>
+    <div class="role"><h3>Developer</h3><p>Builds the plan in a build slot and fixes review findings.</p><p class="meta"><span>Opus</span><span>Sonnet</span><span>Work subscription</span><span>Home subscription</span></p></div>
+    <div class="role"><h3>Code reviewers</h3><p>Two independent reviews of every version. Both must approve.</p><p class="meta"><span>Opus</span><span>Sonnet</span><span>Work subscription</span><span>Overflow key</span></p></div>
+    <div class="role"><h3>Designer</h3><p>Joins when a task changes what people see.</p><p class="meta"><span>Opus</span><span>Work subscription</span></p></div>
+    <div class="role"><h3>Security engineer</h3><p>Reviews anything touching secrets, logins or protected files.</p><p class="meta"><span>Opus</span><span>Overflow key</span></p></div>
+    <div class="role"><h3>Maintainer</h3><p>Merges approved work, retries broken infrastructure, keeps main green.</p><p class="meta"><span>Haiku</span><span>Overflow key</span></p></div>
+  </div>
+</aside>
+</div>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>
