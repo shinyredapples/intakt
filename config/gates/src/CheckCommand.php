@@ -8,8 +8,9 @@ use InvalidArgumentException;
 
 final readonly class CheckCommand
 {
+    // Because a test fakes the child that runs one gate; without it each child is bin/check itself.
     /**
-     * @param list<string>|null $gateCommand the command that runs one gate in a child process, `bin/check` itself unless a test fakes it
+     * @param list<string>|null $gateCommand
      */
     public function __construct(
         private string $home,
@@ -100,7 +101,7 @@ final readonly class CheckCommand
             $report = ChildReport::of($name, $children[$name]);
             fwrite(STDOUT, $report->line."\n");
 
-            if (!$report->passing) {
+            if (!$report->isPassing()) {
                 $failed[] = $name;
             }
         }

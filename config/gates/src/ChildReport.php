@@ -10,9 +10,11 @@ final readonly class ChildReport
 {
     private const int SHOWN_OUTPUT_LINES = 9;
 
+    private const int FAILED = 1;
+
     private function __construct(
         public string $line,
-        public bool $passing,
+        private int $exitCode,
     ) {
     }
 
@@ -22,11 +24,16 @@ final readonly class ChildReport
         $passing = self::verdictOf($gate, $line);
 
         // Because a child that reports one verdict and exits with the other is as untrustworthy as one that reports none.
-        if (null === $passing || ($passing ? 0 : 1) !== $child->exitCode) {
+        if (null === $passing || ($passing ? 0 : self::FAILED) !== $child->exitCode) {
             return self::failedChild($gate, $child);
         }
 
-        return new self($line, $passing);
+        return new self($line, $child->exitCode);
+    }
+
+    public function isPassing(): bool
+    {
+        return 0 === $this->exitCode;
     }
 
     private static function verdictOf(string $gate, string $line): ?bool
@@ -54,6 +61,6 @@ final readonly class ChildReport
         $lines = array_slice(array_values(array_filter(false === $output ? [] : $output,static fn (string $line): bool => '' !== trim($line))), -self::SHOWN_OUTPUT_LINES);
         $reason = 'the child process of the gate ended with exit code '.$child->exitCode.' and no valid result line';
 
-        return new self(GateResult::withFindings($gate, [$reason, ...$lines])->toJson(), false);
+        return new self(GateResult::withFindings($gate, [$reason, ...$lines])->toJson(), self::FAILED);
     }
 }
