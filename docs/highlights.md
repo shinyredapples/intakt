@@ -111,7 +111,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Mercure `bolt` transport | event history, so a reconnecting client catches up with `Last-Event-ID` | in progress | T21 (#27, part #583), `Caddyfile`, `tests/Core/Dashboard/Infrastructure/MercureHubTest.php` |
 | Prometheus metrics, `/frankenphp/threads`, `mercure_health` | the container health check and an infrastructure row on the dashboard; read today by `intakt:server:status` | in progress | T22 (#28), T34 (#63, part #618), `src/Core/Server/Infrastructure/AdminApiServerStatus.php` |
 | Admin API on localhost | never reachable from outside the container | planned | T22 (#28) |
-| `FRANKENPHP_RESET_KERNEL=1` | the leak test runs with and without it; the image ships without it | planned | T29 (#29) |
+| `FRANKENPHP_RESET_KERNEL=1` | the leak test runs with and without it; the image ships without it | in progress | T29 (#29, part #770), `tests/Application/WorkerBrowser.php`, `src/Kernel.php` |
 | `watch` and hot reload | a development compose override | planned | T35 (#64) |
 
 ## Tooling

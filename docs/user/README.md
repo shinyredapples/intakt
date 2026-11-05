@@ -43,7 +43,7 @@ While a review runs, Intakt sends each reviewer's tool calls, its text and each 
 
 ## Running the container image
 
-The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. Once #704 lands, the image is built and smoke-tested in CI. Between two requests the worker clears the signed-in user, the database entities it loaded and the other per-request state of Intakt's own services, so one browser never sees another's flash messages or data; a test in the repository (`tests/Application/WorkerModeTest.php`) checks it.
+The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with the live-update hub built in. Once #704 lands, the image is built and smoke-tested in CI. Between two requests the worker clears the signed-in user, the database entities it loaded and the other per-request state of Intakt's own services, so one browser never sees another's flash messages or data. Each request also starts with the file permission mask (`umask`), locale and environment variables the worker started with, whatever the request before changed. A test in the repository (`tests/Application/WorkerModeTest.php`) checks this, both as the image runs and with `FRANKENPHP_RESET_KERNEL=1` (a fresh copy of Intakt's kernel for each request). The image does not set it.
 
 ```
 docker build -t intakt .
