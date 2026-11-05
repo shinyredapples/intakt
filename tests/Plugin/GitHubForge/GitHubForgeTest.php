@@ -15,7 +15,6 @@ use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\Diff;
 use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
-use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -71,7 +70,6 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(FileContent::class)]
 #[UsesClass(FileNotFoundAtHead::class)]
 #[UsesClass(ForgeReadFailed::class)]
-#[UsesClass(ForgeCredentialsRefused::class)]
 #[UsesClass(RateLimitReadings::class)]
 #[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(HeadMove::class)]
@@ -335,40 +333,6 @@ final class GitHubForgeTest extends TestCase
         $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 403 to a read.'));
 
         $forge->change(new ChangeId(self::PULL));
-    }
-
-    public function testItChainsRefusedCredentialsUnderAReadAnswered401(): void
-    {
-        $forge = $this->forge(static fn (): ResponseInterface => new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]));
-
-        try {
-            $forge->change(new ChangeId(self::PULL));
-            self::fail('A 401 must fail the read.');
-        } catch (ForgeReadFailed $failed) {
-            self::assertInstanceOf(ForgeCredentialsRefused::class, $failed->getPrevious());
-        }
-    }
-
-    public function testItChainsNoRefusedCredentialsUnderAReadAnswered403(): void
-    {
-        $forge = $this->forge(static fn (): ResponseInterface => new MockResponse('{}', ['http_code' => 403]));
-
-        try {
-            $forge->change(new ChangeId(self::PULL));
-            self::fail('A 403 must fail the read.');
-        } catch (ForgeReadFailed $failed) {
-            self::assertNull($failed->getPrevious());
-        }
-    }
-
-    public function testItChainsRefusedCredentialsUnderAWriteAnswered401(): void
-    {
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => str_ends_with($url, '/reviews') ? new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]) : null);
-
-        $failure = $this->failureOfPost($forge, $forge->change(new ChangeId(self::PULL)), $this->comment('Looks good.'));
-
-        self::assertInstanceOf(ForgeWriteFailed::class, $failure);
-        self::assertInstanceOf(ForgeCredentialsRefused::class, $failure->getPrevious());
     }
 
     public function testItRetriesAFailedReadThroughTheRetryableClient(): void

@@ -288,7 +288,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
             $this->tick();
             self::fail('A lock store that fails must fail the tick.');
         } catch (LockReleasingException) {
-            // Expected: the tick fails, and the lock lapses with its time to live.
+            // Expected, because the tick must fail; the lock lapses with its time to live.
         }
 
         self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
