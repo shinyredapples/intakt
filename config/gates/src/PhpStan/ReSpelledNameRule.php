@@ -53,7 +53,7 @@ final readonly class ReSpelledNameRule implements Rule
             return [];
         }
 
-        $owners = $this->ownersOf($node->getNodes());
+        $owners = $this->declaringClassesOf($node->getNodes());
         $findings = [];
 
         foreach (new NodeFinder()->find($node->getNodes(), $this->isLiteral(...)) as $literal) {
@@ -81,9 +81,9 @@ final readonly class ReSpelledNameRule implements Rule
     /**
      * @param array<Node> $nodes
      *
-     * @return array<int, string> the name of the innermost class declaring each literal, by the literal's object id
+     * @return array<int, string>
      */
-    private function ownersOf(array $nodes): array
+    private function declaringClassesOf(array $nodes): array
     {
         $finder = new NodeFinder();
         $owners = [];
