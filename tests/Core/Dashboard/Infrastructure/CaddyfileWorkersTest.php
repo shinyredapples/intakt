@@ -116,7 +116,7 @@ final class CaddyfileWorkersTest extends TestCase
 
         self::assertSame(array_fill(0, 10, 200), $statuses);
         self::assertTrue($this->server->isRunning());
-        self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheServingAppWorkers());
+        self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheAppWorkers());
     }
 
     public function testTheMcpRouteIsServedByTheMcpWorker(): void
@@ -191,7 +191,7 @@ final class CaddyfileWorkersTest extends TestCase
     }
 
     // A worker that ends inside its last request is never counted, so the sign is memory: a replaced worker has not booted the kernel yet, and one that served past the ceiling still holds it. Polled, because the worker ends only after its answer is sent.
-    private function bytesHeldByTheServingAppWorkers(): int
+    private function bytesHeldByTheAppWorkers(): int
     {
         $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
 
@@ -210,14 +210,14 @@ final class CaddyfileWorkersTest extends TestCase
 
     private function largestServingAppWorkerMemory(): int
     {
-        return self::largestMemoryOfServingAppWorkers($this->threads());
+        return self::largestMemoryOfAppWorkers($this->threads());
     }
 
     /**
      * @param list<array<mixed>> $threads
      */
     // No app worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
-    private static function largestMemoryOfServingAppWorkers(array $threads): int
+    private static function largestMemoryOfAppWorkers(array $threads): int
     {
         $held = null;
 
@@ -237,9 +237,9 @@ final class CaddyfileWorkersTest extends TestCase
     {
         $thread = ['Name' => 'Worker /app/public/index.php', 'RequestCount' => 10];
 
-        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([$thread]));
-        self::assertSame(PHP_INT_MAX, self::largestMemoryOfServingAppWorkers([]));
-        self::assertSame(526_224, self::largestMemoryOfServingAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfAppWorkers([$thread]));
+        self::assertSame(PHP_INT_MAX, self::largestMemoryOfAppWorkers([]));
+        self::assertSame(526_224, self::largestMemoryOfAppWorkers([$thread + ['MemoryUsage' => 526_224]]));
     }
 
     public static function testRequestsAreCountedOnceTheWorkerHasFinishedTheLastAnsweredOne(): void
@@ -262,7 +262,7 @@ final class CaddyfileWorkersTest extends TestCase
 
     public function testTheHelpersThatReadNoServerStayPrivateStatic(): void
     {
-        foreach (['requestsOnceServed', 'largestMemoryOfServingAppWorkers'] as $name) {
+        foreach (['requestsOnceServed', 'largestMemoryOfAppWorkers'] as $name) {
             $method = new ReflectionMethod(self::class, $name);
 
             // Static callers keep them static, because Rector turns a private static helper with no static caller into an instance method.
