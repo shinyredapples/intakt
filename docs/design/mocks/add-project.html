@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add a project | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="projects">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content" id="main">
+<div class="flow">
+<p class="small" style="margin-bottom:12px"><a href="projects.html">Projects</a> <span class="muted">/</span> <span class="muted">Add a project</span></p>
+<ol class="steps" aria-label="Progress">
+  <li data-s="1"><button type="button">1 Repository</button></li>
+  <li data-s="2"><button type="button">2 Install the App</button></li>
+  <li data-s="3"><button type="button">3 Check</button></li>
+  <li data-s="4"><button type="button">4 Share and label</button></li>
+  <li data-s="5"><button type="button">5 Start</button></li>
+</ol>
+<p class="step-count" id="stepcount" aria-live="polite"></p>
+
+<section class="step" data-s="1" aria-labelledby="a1">
+  <h1 id="a1">Which repository?</h1>
+  <p class="lead">Intakt works from its issues and pull requests.</p>
+  <div class="field"><label for="repo">Repository address</label><input class="input" id="repo" type="url" value="https://github.com/acme/billing-api"><span class="hint">An https address or owner/name.</span></div>
+  <div class="detected"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><p><strong>GitHub</strong>, acme/billing-api, default branch main</p></div>
+  <div class="step-nav"><a class="btn quiet" href="projects.html">Cancel</a><span class="grow"></span><button class="btn primary" type="button" data-go="2">Continue</button></div>
+</section>
+
+<section class="step" data-s="2" aria-labelledby="a2">
+  <h1 id="a2">Install Intakt's GitHub App on it</h1>
+  <p class="lead">The App already exists from your first setup. Installing it on acme/billing-api lets Intakt read issues, push branches and open pull requests there, and nowhere else.</p>
+  <div class="detected"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><p><strong>Installed</strong> on acme/billing-api at 11:14</p></div>
+  <p class="muted small">Already installed on acme/acme-shop, acme/intakt and acme/field-notes.</p>
+  <div class="step-nav"><button class="btn quiet" type="button" data-go="1">Back</button><span class="grow"></span><button class="btn primary" type="button" data-go="3">Continue</button></div>
+</section>
+
+<section class="step" data-s="3" aria-labelledby="a3">
+  <h1 id="a3">Check the project</h1>
+  <p class="lead">Intakt reads the repository to learn how it is built and tested. It changes nothing.</p>
+  <ul class="checks">
+    <li><svg class="i ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><div><strong>Tests found</strong><p class="muted small"><span class="mono">go test ./...</span> runs 486 tests in 1 min 12 s, all pass.</p></div></li>
+    <li><svg class="i ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><div><strong>Builds in the sandbox</strong><p class="muted small">Peak memory 3.1 GB, under the 4 GB default.</p></div></li>
+    <li><svg class="i broken-i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg><div><strong class="red">Lint fails on main</strong><p class="muted small"><span class="mono">golangci-lint</span> reports 3 problems in <span class="mono">internal/invoice/round.go</span>. Intakt can still start; its first task will be to fix these, unless you fix them first.</p></div></li>
+    <li><svg class="i info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg><div><strong><span class="term" data-term="protected">Protected files</span> suggested</strong><p class="muted small"><span class="mono">.github/</span> and <span class="mono">internal/secrets/</span>. Change them later in the project's settings.</p></div></li>
+  </ul>
+  <div class="step-nav"><button class="btn quiet" type="button" data-go="2">Back</button><button class="btn secondary" type="button" data-toast="Check ran again: same result">Run again</button><span class="grow"></span><button class="btn primary" type="button" data-go="4">Continue</button></div>
+</section>
+
+<section class="step" data-s="4" aria-labelledby="a4">
+  <h1 id="a4">Share and label</h1>
+  <p class="lead">How much of the week this project gets, and which issues it picks up.</p>
+  <div class="field"><label for="share"><span class="term" data-term="share">Weekly share</span></label>
+    <div class="share-row"><input id="share" type="range" min="0" max="50" value="20"><output>20%</output></div>
+    <span class="hint">The other projects scale down to make room: intakt 50% to 40%, acme-shop 30% to 24%, field-notes 20% to 16%.</span></div>
+  <div class="field"><label for="lbl">Issue label</label><input class="input" id="lbl" type="text" value="intakt" style="max-width:240px"><span class="hint">Intakt picks up open issues with this label.</span></div>
+  <div class="step-nav"><button class="btn quiet" type="button" data-go="3">Back</button><span class="grow"></span><button class="btn primary" type="button" data-go="5">Continue</button></div>
+</section>
+
+<section class="step" data-s="5" aria-labelledby="a5">
+  <h1 id="a5">Ready to start billing-api</h1>
+  <ul class="defaults">
+    <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>It picks up issues labeled <strong>intakt</strong>, oldest first. 6 are labeled now.</span></li>
+    <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>First task: fix the 3 lint problems on main.</span></li>
+    <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>It builds <strong>2 tasks at a time</strong> and gets <strong>20%</strong> of the week.</span></li>
+  </ul>
+  <div class="step-nav"><button class="btn quiet" type="button" data-go="4">Back</button><span class="grow"></span><a class="btn primary" href="project.html" data-icon="play">Start</a></div>
+</section>
+</div>
+<script>
+(function () {
+  var names = ["Repository", "Install the App", "Check", "Share and label", "Start"];
+  function go(n) {
+    document.querySelectorAll(".step").forEach(function (s) { s.classList.toggle("current", s.dataset.s == n); });
+    document.querySelectorAll(".steps li").forEach(function (l) {
+      l.className = +l.dataset.s < n ? "done" : (+l.dataset.s === n ? "current" : "");
+      if (+l.dataset.s === n) l.setAttribute("aria-current", "step"); else l.removeAttribute("aria-current");
+    });
+    document.getElementById("stepcount").textContent = "Step " + n + " of 5: " + names[n - 1];
+    history.replaceState(null, "", "?step=" + n);
+  }
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest("[data-go]"); if (g) go(+g.dataset.go);
+    var s = e.target.closest(".steps li"); if (s) go(+s.dataset.s);
+  });
+  var r = document.getElementById("share"); r.addEventListener("input", function () { r.nextElementSibling.textContent = r.value + "%"; });
+  go(+(new URLSearchParams(location.search).get("step") || 1));
+})();
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

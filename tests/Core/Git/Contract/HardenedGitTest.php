@@ -94,7 +94,7 @@ final class HardenedGitTest extends TestCase
 
         self::assertSame(realpath($this->repository->path), $call->directory);
         self::assertSame($call->directory, $call->environment['GIT_WORK_TREE']);
-        self::assertSame(" M README.md\n", $this->runGit($call->command, $call->environment, $relative));
+        self::assertSame(" M README.md\n", $this->runGit($call->command, $call->environment, $call->directory));
     }
 
     public function testAPromisorRemoteOfTheRepositoryDoesNotFetchAMissingObjectThroughItsCommand(): void

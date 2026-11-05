@@ -7,12 +7,14 @@ namespace Intakt\Gates;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
+use JsonException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
 final readonly class TestDurations
 {
     private const int SLOWEST = 10;
+    private const string FILE = '/tests/durations.json';
 
     public function __construct(private string $root)
     {
@@ -41,6 +43,45 @@ final readonly class TestDurations
     }
 
     /**
+     * @return array<string, float>
+     */
+    public function recorded(string $cacheDirectory): array
+    {
+        $file = $cacheDirectory.self::FILE;
+
+        if (!is_file($file)) {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode(new Filesystem()->readFile($file), true, 2, JSON_THROW_ON_ERROR);
+        } catch (IOException|JsonException) {
+            // Because an unreadable record only costs the order of the queue, never the result of the run, and readFile() turns the PHP warning into this exception.
+            return [];
+        }
+
+        return is_array($decoded) ? $this->secondsIn($decoded) : [];
+    }
+
+    /**
+     * @param list<string>         $files
+     * @param array<string, float> $recorded
+     *
+     * @return list<string>
+     */
+    public function longestFirst(array $files, array $recorded): array
+    {
+        $unrecorded = array_values(array_filter($files, static fn (string $file): bool => !isset($recorded[$file])));
+        $timed = array_values(array_diff($files, $unrecorded));
+
+        // Because a file without a recorded duration may be the longest of all, it starts first, the largest of them first.
+        usort($unrecorded, fn (string $first, string $second): int => $this->size($second) <=> $this->size($first));
+        usort($timed, static fn (string $first, string $second): int => $recorded[$second] <=> $recorded[$first]);
+
+        return [...$unrecorded, ...$timed];
+    }
+
+    /**
      * @param array<string, float> $durations
      */
     public function write(array $durations, string $cacheDirectory): void
@@ -48,7 +89,7 @@ final readonly class TestDurations
         $json = json_encode($durations, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)."\n";
 
         try {
-            new Filesystem()->dumpFile($cacheDirectory.'/tests/durations.json', $json);
+            new Filesystem()->dumpFile($cacheDirectory.self::FILE, $json);
         } catch (IOException) {
             // Because the durations never affect the run, and dumpFile() turns every PHP warning into this exception, so none reaches the gate lines.
             return;
@@ -91,6 +132,31 @@ final readonly class TestDurations
         }
 
         return $cases;
+    }
+
+    /**
+     * @param array<mixed> $decoded
+     *
+     * @return array<string, float>
+     */
+    private function secondsIn(array $decoded): array
+    {
+        $seconds = [];
+
+        foreach ($decoded as $testFile => $duration) {
+            if (is_string($testFile) && (is_float($duration) || is_int($duration))) {
+                $seconds[$testFile] = (float) $duration;
+            }
+        }
+
+        return $seconds;
+    }
+
+    private function size(string $file): int
+    {
+        $path = $this->root.'/'.$file;
+
+        return is_file($path) ? (int) filesize($path) : 0;
     }
 
     private function relative(string $file): string
