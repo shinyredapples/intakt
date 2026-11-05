@@ -19,6 +19,10 @@ final class TestsGate implements Gate
         '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky',
         '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation', '--fail-on-phpunit-deprecation',
     ];
+    private const string PROCESS_STATUS = '/proc/self/status';
+    private const int PASS_TIMEOUT_SECONDS = 3600;
+    // Because the slowest test file takes under a minute, ten minutes on one file means it hangs.
+    private const int FILE_TIMEOUT_SECONDS = 600;
 
     public function name(): string
     {
@@ -39,10 +43,18 @@ final class TestsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $ports = TestPorts::forWorkers(count($passes), $this->variable(TestWorker::PORTS_VARIABLE));
+        $count = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), $this->processStatus());
+
+        if (null === $count) {
+            return GateResult::failedBecause($this->name(), TestWorkerCount::VARIABLE.' names no number of test workers from 1 to '.TestWorkerCount::most());
+        }
+
+        // Because a single worker keeps one process for each pass, and the passes still run side by side as before.
+        $slots = max($count, count($passes));
+        $ports = TestPorts::forWorkers($slots, $this->variable(TestWorker::PORTS_VARIABLE));
 
         if (!$ports instanceof TestPorts) {
-            return GateResult::failedBecause($this->name(), TestWorker::PORTS_VARIABLE.' names no range of ports that '.count($passes).' test workers can share');
+            return GateResult::failedBecause($this->name(), TestWorker::PORTS_VARIABLE.' names no range of ports that '.$slots.' test workers can share');
         }
 
         $scratch = $this->scratchDirectory();
@@ -52,10 +64,15 @@ final class TestsGate implements Gate
         }
 
         try {
-            return $this->resultOf($workspace, new TestWorkers($scratch, $ports), $passes);
+            return $this->resultOf($workspace, new TestWorkers($scratch, $ports, $count), $passes);
         } finally {
             $this->remove($scratch);
         }
+    }
+
+    private function processStatus(): string
+    {
+        return is_readable(self::PROCESS_STATUS) ? (string) file_get_contents(self::PROCESS_STATUS) : '';
     }
 
     private function whyNotReady(Workspace $workspace): ?string
@@ -106,30 +123,50 @@ final class TestsGate implements Gate
     {
         $numbered = [];
         $alone = [];
+        $prepared = [];
 
         foreach (array_keys($passes) as $index => $pass) {
             $numbered[] = $workers->numbered($pass, $passes[$pass], $index);
             $alone[] = $workers->serial($pass, $passes[$pass]);
+            $prepared = [...$prepared, ...$workers->allOf($pass, $passes[$pass])];
         }
 
-        foreach ([...$numbered, ...$alone] as $worker) {
+        foreach ([...$prepared, ...$alone] as $worker) {
             if (!$worker->prepared()) {
                 return [$worker->run.': cannot create the scratch directory of the run in '.$workers->scratch];
             }
         }
 
-        $listings = $this->concurrently($workspace, [...$numbered, ...$alone], static fn (): array => ['--list-tests', '--colors=never']);
-        $unlisted = $this->findingsOf($listings);
+        $listings = $this->concurrently($workspace, [...$numbered, ...$alone], static fn (TestWorker $worker): array => ['--list-test-files', '--colors=never', '--log-events-text='.$worker->listingEvents()]);
+        $unlisted = $this->unlisted([...$numbered, ...$alone], $listings);
 
         if ([] !== $unlisted) {
             return $unlisted;
         }
 
         [$concurrent, $serial] = $this->withTests($numbered, $alone, $listings);
-        $findings = $this->findingsOf($this->concurrently($workspace, $concurrent, $this->testRun(...)));
+        $findings = $this->findingsOf($this->queued($workspace, $workers, $this->testJobs($workspace, $workers)->queue($concurrent, $listings)));
 
         foreach ($serial as $worker) {
             $findings = [...$findings, ...$this->findingsOf($this->concurrently($workspace, [$worker], $this->testRun(...)))];
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param list<TestWorker>             $workers
+     * @param array<string, ProcessResult> $listings
+     *
+     * @return list<string>
+     */
+    private function unlisted(array $workers, array $listings): array
+    {
+        $findings = [];
+
+        foreach ($workers as $worker) {
+            $failed = PhpunitReport::findings($worker->run, $listings[$worker->run]);
+            $findings = [...$findings, ...([] === $failed ? PhpunitReport::listingDiagnostics($worker->run, $worker->listingEvents()) : $failed)];
         }
 
         return $findings;
@@ -158,6 +195,25 @@ final class TestsGate implements Gate
         return [$concurrent, $serial];
     }
 
+    private function testJobs(Workspace $workspace, TestWorkers $workers): TestJobs
+    {
+        $recorded = new TestDurations($workspace->root)->recorded($this->gatesCache());
+
+        return new TestJobs($workers, $workspace->root, fn (TestWorker $worker): array => $this->command($workspace, $worker, $this->testRun($worker)), $recorded);
+    }
+
+    /**
+     * @param array<string, Closure(int): array{list<string>, array<string, string>}> $jobs
+     *
+     * @return array<string, ProcessResult>
+     */
+    private function queued(Workspace $workspace, TestWorkers $workers, array $jobs): array
+    {
+        $seconds = 1 === $workers->count ? self::PASS_TIMEOUT_SECONDS : self::FILE_TIMEOUT_SECONDS;
+
+        return new ProcessQueue($seconds)->run($jobs, $workers->slots(), $workspace->root);
+    }
+
     /**
      * @param list<TestWorker>                  $workers
      * @param Closure(TestWorker): list<string> $flags
@@ -169,10 +225,20 @@ final class TestsGate implements Gate
         $commands = [];
 
         foreach ($workers as $worker) {
-            $commands[$worker->run] = [[$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$worker->configuration, ...$flags($worker), $worker->selection], $worker->environment()];
+            $commands[$worker->run] = [$this->command($workspace, $worker, $flags($worker)), $worker->environment()];
         }
 
         return $workspace->commandsConcurrently($commands);
+    }
+
+    /**
+     * @param list<string> $flags
+     *
+     * @return list<string>
+     */
+    private function command(Workspace $workspace, TestWorker $worker, array $flags): array
+    {
+        return [$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$worker->configuration, ...$flags, ...$worker->arguments()];
     }
 
     /**
