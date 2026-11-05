@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trends | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="history">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content roomy" id="main">
+<div class="page-head">
+  <div>
+    <h1>History</h1>
+    <p class="lead">How the work has been going. The project filter at the top applies.</p>
+  </div>
+</div>
+<nav class="subtabs" aria-label="History views"><a href="history.html">Ledger</a><a href="trends.html" aria-current="page">Trends</a></nav>
+
+<div class="filters" role="toolbar" aria-label="Time range">
+  <button class="fchip" type="button" aria-pressed="false">7 days</button>
+  <button class="fchip" type="button" aria-pressed="true">14 days</button>
+  <button class="fchip" type="button" aria-pressed="false">8 weeks</button>
+</div>
+
+<div class="charts">
+  <section class="chart" aria-labelledby="c1h">
+    <h2 id="c1h">Is the queue growing?</h2>
+    <p class="takeaway">Yes, slowly: 80 tasks created and 70 completed in 14 days. The open queue went from 31 to 41.</p>
+    <div class="pair">
+      <div><h3 class="label-sm">Created per day</h3><div id="c-created"></div></div>
+      <div><h3 class="label-sm">Completed per day</h3><div id="c-completed"></div></div>
+    </div>
+  </section>
+  <section class="chart" aria-labelledby="c2h">
+    <h2 id="c2h">Merges per day</h2>
+    <p class="takeaway">4.0 a day on average, 54 in total.</p>
+    <div id="c-merges"></div>
+  </section>
+  <section class="chart" aria-labelledby="c3h">
+    <h2 id="c3h">Review findings per merge</h2>
+    <p class="takeaway">Down from 2.1 to 1.1: fewer send-backs per change.</p>
+    <div id="c-findings"></div>
+  </section>
+  <section class="chart" aria-labelledby="c4h">
+    <h2 id="c4h">Agent share of merged changes</h2>
+    <p class="takeaway">94% of merged changes were built by Intakt's team; people made the rest.</p>
+    <div id="c-agent"></div>
+  </section>
+</div>
+
+<section class="section" aria-labelledby="cyh">
+  <h2 id="cyh">Cycle time per task, by stage</h2>
+  <p class="takeaway">Median hours per task in each stage, per week. Waiting on you fell from 6.5 to 2.7 hours.</p>
+  <div class="multiples four">
+    <div><h3 class="label-sm">Waiting to start</h3><div id="cy-wait"></div></div>
+    <div><h3 class="label-sm">Building</h3><div id="cy-build"></div></div>
+    <div><h3 class="label-sm">In review</h3><div id="cy-review"></div></div>
+    <div><h3 class="label-sm">Waiting on you</h3><div id="cy-you"></div></div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="rwh">
+  <h2 id="rwh">Rework per project</h2>
+  <p class="takeaway">acme-shop needs more fix rounds every week; intakt and field-notes are getting cheaper. field-notes has no data while paused.</p>
+  <h3 class="sub-h">Tokens per merged change, thousands</h3>
+  <div class="multiples three">
+    <div><h3 class="label-sm">intakt</h3><div id="rw-t-intakt"></div></div>
+    <div><h3 class="label-sm">acme-shop</h3><div id="rw-t-acme"></div></div>
+    <div><h3 class="label-sm">field-notes</h3><div id="rw-t-fn"></div></div>
+  </div>
+  <h3 class="sub-h">Rework share: tokens spent on fix rounds</h3>
+  <div class="multiples three">
+    <div><h3 class="label-sm">intakt</h3><div id="rw-s-intakt"></div></div>
+    <div><h3 class="label-sm">acme-shop</h3><div id="rw-s-acme"></div></div>
+    <div><h3 class="label-sm">field-notes</h3><div id="rw-s-fn"></div></div>
+  </div>
+</section>
+<script src="assets/charts.js"></script>
+<script>
+(function () {
+  var C = IntaktCharts.chart, $ = function (id) { return document.getElementById(id); };
+  var days = ["23 Oct","24 Oct","25 Oct","26 Oct","27 Oct","28 Oct","29 Oct","30 Oct","31 Oct","1 Nov","2 Nov","3 Nov","4 Nov","5 Nov"];
+  var weeks = ["15 Sep","22 Sep","29 Sep","6 Oct","13 Oct","20 Oct","27 Oct","3 Nov"];
+  C($("c-created"), { type: "bar", labels: days, values: [5,7,4,6,8,3,2,6,9,5,7,6,4,8], max: 10, height: 150, colName: "Created" });
+  C($("c-completed"), { type: "bar", labels: days, values: [4,6,5,5,6,4,3,5,6,6,5,5,4,6], max: 10, height: 150, colName: "Completed" });
+  C($("c-merges"), { type: "bar", labels: days, values: [3,5,4,4,5,2,1,4,5,5,4,4,3,5], colName: "Merges" });
+  C($("c-findings"), { type: "line", labels: days, values: [2.1,1.8,2.4,1.6,1.9,1.5,1.2,1.7,1.4,1.6,1.3,1.5,1.2,1.1], max: 3, colName: "Findings per merge", fmt: function (v) { return v.toFixed(1); } });
+  C($("c-agent"), { type: "line", labels: days, values: [82,85,80,88,86,90,92,87,89,91,90,93,92,94], max: 100, unit: "%", colName: "Agent share" });
+  var h = { type: "line", labels: weeks, max: 10, unit: " h", height: 140, rowName: "Week", colName: "Median hours", fmt: function (v) { return v.toFixed(1); } };
+  C($("cy-wait"), Object.assign({}, h, { values: [9,8,10,7,6,6,5,5] }));
+  C($("cy-build"), Object.assign({}, h, { values: [1.8,1.6,1.7,1.5,1.4,1.3,1.4,1.2] }));
+  C($("cy-review"), Object.assign({}, h, { values: [3.2,3.0,2.8,2.6,2.9,2.4,2.2,2.1] }));
+  C($("cy-you"), Object.assign({}, h, { values: [6.5,5.1,7.8,4.2,3.9,4.8,3.1,2.7] }));
+  var t = { type: "line", labels: weeks, max: 800, unit: "k", height: 140, rowName: "Week", colName: "Tokens per merged change" };
+  C($("rw-t-intakt"), Object.assign({}, t, { values: [410,390,402,370,355,340,332,318] }));
+  C($("rw-t-acme"), Object.assign({}, t, { values: [520,560,540,610,590,640,620,655] }));
+  C($("rw-t-fn"), Object.assign({}, t, { values: [300,290,310,280,270,265,null,null] }));
+  var s = { type: "line", labels: weeks, max: 40, unit: "%", height: 140, rowName: "Week", colName: "Rework share" };
+  C($("rw-s-intakt"), Object.assign({}, s, { values: [22,21,20,19,18,17,17,16] }));
+  C($("rw-s-acme"), Object.assign({}, s, { values: [25,27,26,30,29,31,30,33] }));
+  C($("rw-s-fn"), Object.assign({}, s, { values: [18,17,19,16,15,15,null,null] }));
+})();
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

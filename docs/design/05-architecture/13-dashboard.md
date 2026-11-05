@@ -20,6 +20,8 @@ The main view is a board, not a set of lists. Each task in flight is a card, and
 
 Updates are pushed to the page from the orchestrator's events; the page never polls. The same events feed the JSON API for the CLI and the notifier plugins (see Plugins).
 
+How the dashboard looks is in the [mocks](../mocks/README.md): a static HTML page for each screen, light and dark, desktop and phone, and [DESIGN.md](../mocks/DESIGN.md), the design system they share (tokens, type, components, breakpoints, phone patterns and the glossary of words the pages use). This page says what the dashboard shows; the mocks say how.
+
 ## Notices and "Waiting on you"
 
 One rule decides what reaches the owner: an item is a "Waiting on you" card if and only if only the owner can act on it, and every such card is notified. Plain-words version: [alerts and notifications](../../guide/a-tour-of-the-dashboard.md#alerts-and-notifications).
