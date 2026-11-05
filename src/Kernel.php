@@ -17,22 +17,23 @@ final class Kernel extends BaseKernel
 {
     use MicroKernelTrait;
 
-    private readonly ProcessSettings $processAtStart;
+    private ?ProcessSettings $processAtStart = null;
 
-    // Taken here, once per worker before its first request, because a kernel cloned per request (FRANKENPHP_RESET_KERNEL) carries it along, where a service would be rebuilt after the leak.
-    public function __construct(string $environment, bool $debug)
+    // Taken at the first boot, before the worker's first request, and kept by the kernel, because a kernel cloned per request (FRANKENPHP_RESET_KERNEL) carries it along, where a service would be rebuilt after the leak.
+    public function boot(): void
     {
-        parent::__construct($environment, $debug);
-        $this->processAtStart = ProcessSettings::now();
+        parent::boot();
+        $this->processAtStart ??= ProcessSettings::now();
     }
 
-    public function handle(Request $request, int $type = self::MAIN_REQUEST, bool $catch = true): Response
+    // After the terminate listeners, because they run in the request too; the runner terminates before it clones, so the next request starts clean in both modes.
+    public function terminate(Request $request, Response $response): void
     {
-        if (self::MAIN_REQUEST === $type) {
-            $this->processAtStart->restore();
+        try {
+            parent::terminate($request, $response);
+        } finally {
+            $this->processAtStart?->restore();
         }
-
-        return parent::handle($request, $type, $catch);
     }
 
     protected function build(ContainerBuilder $container): void

@@ -20,7 +20,9 @@ final readonly class ProcessSettings
     // Reading the locale with "0" cannot fail; "C" only satisfies the type, because an empty string would set the locale from the environment instead.
     public static function now(): self
     {
-        return new self(umask(), setlocale(LC_ALL, '0') ?: 'C', $_ENV);
+        $locale = setlocale(LC_ALL, '0');
+
+        return new self(umask(), false === $locale ? 'C' : $locale, $_ENV);
     }
 
     public function restore(): void

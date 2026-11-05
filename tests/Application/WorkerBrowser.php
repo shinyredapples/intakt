@@ -20,7 +20,7 @@ final class WorkerBrowser extends KernelBrowser
     {
         parent::__construct($kernel, $server);
         $this->disableReboot();
-        // Read once, as the runner reads it once before its loop.
+        // Read once, because the runner reads it once before its loop.
         $this->resetsKernel = filter_var($_SERVER['FRANKENPHP_RESET_KERNEL'] ?? false, FILTER_VALIDATE_BOOL);
     }
 

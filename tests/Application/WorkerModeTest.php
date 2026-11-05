@@ -131,12 +131,14 @@ final class WorkerModeTest extends TestCase
     {
         $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
         $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
+        // After the boot, because FrameworkBundle adds DOCTRINE_DEPRECATIONS while booting, and a worker starts from its booted kernel.
+        $booted = ProcessSettings::now();
 
         $this->requestThatRuns($browser, static function (): void {
             $_ENV[self::LEFTOVER] = 'set by the request before';
         });
 
-        self::assertSame($this->processBefore->env, $this->nextRequestSeesProcess($browser)->env);
+        self::assertSame($booted->env, $this->nextRequestSeesProcess($browser)->env);
     }
 
     // Also with a kernel cloned per request, because the clone shares the process: FRANKENPHP_RESET_KERNEL does not hide these leaks.
@@ -284,7 +286,7 @@ final class WorkerModeTest extends TestCase
         return WorkerState::in($kernel);
     }
 
-    // Read inside a real request, because the kernel restores the process settings in handle(), before the first listener.
+    // Read inside a real request, because that is what a request starts with after the kernel restored the process settings at the terminate of the one before.
     #[NoDiscard]
     private function nextRequestSeesProcess(KernelBrowser $browser): ProcessSettings
     {
