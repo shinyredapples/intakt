@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use RuntimeException;
+
+final class SampleFailure extends RuntimeException
+{
+}

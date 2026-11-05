@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Sample\Contract\SampleServices;
+
+final readonly class Locks
+{
+    public function name(string $account): string
+    {
+        return SampleServices::LOCK_PREFIX.$account;
+    }
+}
