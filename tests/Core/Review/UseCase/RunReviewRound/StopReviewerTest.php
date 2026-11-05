@@ -193,10 +193,12 @@ final class StopReviewerTest extends KernelTestCase
         return $this->fixture->bus->messages[0];
     }
 
+    // Each row in the format its writer records today: the dashboard writes the request, RoundLedger the stop with the reviewer's role and tier.
     private function record(LedgerEventKind $kind, ReviewWithReviewer $message): void
     {
         $reviewer = $this->fixture->reviewer($message->reviewerId);
-        $payload = json_encode(['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $message->reviewerId], JSON_THROW_ON_ERROR);
+        $pair = ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $message->reviewerId];
+        $payload = json_encode(LedgerEventKind::ReviewerStopped === $kind ? $pair + ['role' => $reviewer->roleName(), 'tier' => $reviewer->tier()] : $pair, JSON_THROW_ON_ERROR);
         $appended = $this->fixture->ledger()->append(new LedgerEvent($kind, $payload));
         self::assertTrue($appended->succeeded());
     }
@@ -222,7 +224,7 @@ final class StopReviewerTest extends KernelTestCase
     private function agentScripted(Closure $script): AgentVendor
     {
         $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests($this->fixture->ledger())));
+        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
 
         return new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);
     }

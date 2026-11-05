@@ -211,7 +211,7 @@ final class ShadowRoundTest extends KernelTestCase
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
             $this->fixture->transactions(),
             new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round')),
-            new RoundLedgerReading($this->fixture->ledger()),
+            new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads()),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),

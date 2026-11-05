@@ -7,13 +7,17 @@ namespace Intakt\Core\Review\UseCase\ReviewChange;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 
-// Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded.
+// Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded; usage rows stay arrays, because their payload classes belong to the vendor plugin.
 final readonly class RoundLedgerReading
 {
-    public function __construct(private Ledger $ledger)
-    {
+    public function __construct(
+        private Ledger $ledger,
+        private LedgerPayloads $payloads,
+    ) {
     }
 
     /**
@@ -21,9 +25,11 @@ final readonly class RoundLedgerReading
      */
     public function actIdsOf(string $roundId): array
     {
-        foreach ($this->payloadsOf(LedgerEventKind::JudgeDone) as $payload) {
-            if (($payload['round'] ?? null) === $roundId && is_array($payload['act'] ?? null)) {
-                return array_values(array_filter($payload['act'], is_string(...)));
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $judged = $this->payloads->of($recorded, JudgeDone::class);
+
+            if ($roundId === $judged?->round) {
+                return $judged->act;
             }
         }
 

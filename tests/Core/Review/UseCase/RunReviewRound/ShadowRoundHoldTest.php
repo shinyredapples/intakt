@@ -211,7 +211,7 @@ final class ShadowRoundHoldTest extends KernelTestCase
             $bus,
             $fixture->transactions(),
             new StoredFindings($fixture->entities, $serializer, $fixture->machine('state_machine.review_round')),
-            new RoundLedgerReading($fixture->ledger()),
+            new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads()),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($fixture->clock, static function (): void {

@@ -6,7 +6,9 @@ namespace Intakt\Core\Review\UseCase\ReadVerdicts;
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Contract\ProjectModes;
 
@@ -16,6 +18,7 @@ final readonly class ShadowRounds
     public function __construct(
         private ProjectModes $modes,
         private Ledger $ledger,
+        private LedgerPayloads $payloads,
     ) {
     }
 
@@ -27,9 +30,9 @@ final readonly class ShadowRounds
     private function hasShadowVerdict(string $roundId): bool
     {
         foreach ($this->ledger->readOfKind(LedgerEventKind::VerdictReceived) as $recorded) {
-            $payload = json_decode($recorded->event->payload, true);
+            $received = $this->payloads->of($recorded, VerdictReceived::class);
 
-            if (is_array($payload) && $roundId === ($payload['round'] ?? null) && ProjectMode::Shadow->value === ($payload['mode'] ?? null)) {
+            if ($roundId === $received?->round && ProjectMode::Shadow === $received->mode) {
                 return true;
             }
         }

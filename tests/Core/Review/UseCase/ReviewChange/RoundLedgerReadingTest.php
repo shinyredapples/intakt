@@ -7,17 +7,24 @@ namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[Group('persistence')]
 #[CoversClass(RoundLedgerReading::class)]
+#[CoversClass(LedgerPayloads::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(JudgeDone::class)]
+#[UsesClass(JudgeDoneFinding::class)]
 final class RoundLedgerReadingTest extends KernelTestCase
 {
     private const string ROUND = '0192a000-0000-7000-8000-000000000001';
@@ -65,6 +72,42 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([1, 500, 50, 550], $this->tokensOf(self::OTHER_ROUND));
     }
 
+    public function testTheActIdsOfAJudgeDoneRowInTodaysFormatAreRead(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['round' => self::OTHER_ROUND, 'act' => ['F9'], 'follow_ups' => [], 'findings' => []]);
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+
+        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+    }
+
+    public function testAJudgeDoneRowThatIsNotJsonIsSkipped(): void
+    {
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round": "'.self::ROUND.'", "act": ["F2"]'))->succeeded());
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+
+        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+    }
+
+    public function testAJudgeDoneRowWithAFindingOfAnUnknownSeverityIsSkipped(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2'], 'findings' => [['id' => 'F2', 'severity' => 'P9', 'text' => 'Odd.']]] + $this->judgeDone(self::ROUND));
+
+        self::assertSame([], $this->reading()->actIdsOf(self::ROUND));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function judgeDone(string $round): array
+    {
+        return ['round' => $round, 'act' => ['F1', 'F3'], 'follow_ups' => ['F2'], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Broken.'], ['id' => 'F2', 'severity' => 'P3', 'text' => 'Later.'], ['id' => 'F3', 'severity' => 'P2', 'text' => 'Untested.']]];
+    }
+
+    private function reading(): RoundLedgerReading
+    {
+        return new RoundLedgerReading($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
+    }
+
     private function recordCall(string $call, ?string $round, string $ending): void
     {
         $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
@@ -77,7 +120,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
      */
     private function tokensOf(string $round): array
     {
-        $tokens = new RoundLedgerReading($this->ledger)->tokensOf($round);
+        $tokens = $this->reading()->tokensOf($round);
 
         return [$tokens->calls, $tokens->prompt, $tokens->completion, $tokens->total];
     }

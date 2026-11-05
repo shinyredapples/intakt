@@ -13,9 +13,11 @@ use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\VerdictIdentity;
+use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
@@ -39,6 +41,8 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(VerdictsOfRoundHandler::class)]
 #[CoversClass(VerdictsOfRound::class)]
 #[CoversClass(ShadowRounds::class)]
+#[CoversClass(LedgerPayloads::class)]
+#[UsesClass(VerdictReceived::class)]
 #[UsesClass(ConfiguredProjectModes::class)]
 #[CoversClass(RoundVerdicts::class)]
 #[CoversClass(RoundNotFound::class)]
@@ -115,7 +119,7 @@ final class VerdictsOfRoundTest extends KernelTestCase
     public function testAShadowVerdictOfAnotherRoundLeavesTheVerdictsOfThisOneCounting(): void
     {
         $round = $this->reviewedRound();
-        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => Uuid::v7()->toRfc4122(), 'mode' => 'shadow'], JSON_THROW_ON_ERROR)))->succeeded());
+        $this->recordVerdictRow($this->shadowVerdictRow(Uuid::v7()->toRfc4122()));
 
         $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
 
@@ -125,11 +129,42 @@ final class VerdictsOfRoundTest extends KernelTestCase
     public function testAShadowVerdictOfThisRoundAmongOtherEventsStopsTheVerdictsCountingOnceTheProjectIsLive(): void
     {
         $round = $this->reviewedRound();
-        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, json_encode(['round' => $round, 'mode' => 'shadow'], JSON_THROW_ON_ERROR)))->succeeded());
+        $this->recordVerdictRow($this->shadowVerdictRow($round));
 
         $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
 
         self::assertSame([], $verdicts->counting);
+    }
+
+    public function testAVerdictRowThatIsNotJsonIsSkippedAndTheVerdictsStillCount(): void
+    {
+        $round = $this->reviewedRound();
+        $this->recordVerdictRow('{"round": "'.$round.'", "mode": "shadow"');
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
+
+        self::assertCount(2, $verdicts->counting);
+    }
+
+    public function testAVerdictRowWithAModeOutsideTheKnownOnesIsSkippedAndTheVerdictsStillCount(): void
+    {
+        $round = $this->reviewedRound();
+        $this->recordVerdictRow(str_replace('"shadow"', '"paused"', $this->shadowVerdictRow($round)));
+
+        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
+
+        self::assertCount(2, $verdicts->counting);
+    }
+
+    private function recordVerdictRow(string $payload): void
+    {
+        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, $payload))->succeeded());
+    }
+
+    // The format RoundLedger writes today, so the reader is shown the row it meets in production.
+    private function shadowVerdictRow(string $round): string
+    {
+        return json_encode(['round' => $round, 'reviewer' => Uuid::v7()->toRfc4122(), 'role' => 'security', 'tier' => 'strong', 'decision' => 'approve', 'findings' => 0, 'mode' => 'shadow'], JSON_THROW_ON_ERROR);
     }
 
     public function testAnotherProjectInShadowModeLeavesTheVerdictsOfThisOneCounting(): void

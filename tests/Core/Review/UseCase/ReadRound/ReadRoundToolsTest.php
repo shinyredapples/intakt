@@ -209,7 +209,7 @@ final class ReadRoundToolsTest extends KernelTestCase
 
     private function actList(): RoundActListTool
     {
-        return new RoundActListTool($this->readable(), $this->fixture->findingStore(), new RoundLedgerReading($this->fixture->ledger()));
+        return new RoundActListTool($this->readable(), $this->fixture->findingStore(), new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads()));
     }
 
     private function findingsResource(): RoundFindingsResource
