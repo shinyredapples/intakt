@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
+namespace Intakt\Tests\Plugin\SymfonyAiVendor\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TokenUsageRow;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageSettled;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageStarted;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageUnsettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\Serializer\SerializerInterface;

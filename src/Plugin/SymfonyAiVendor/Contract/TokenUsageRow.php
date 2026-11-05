@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
+namespace Intakt\Plugin\SymfonyAiVendor\Contract;
 
 // A value the vendor did not report stays null in the JSON, because usage rows have always kept the key.
 final readonly class TokenUsageRow

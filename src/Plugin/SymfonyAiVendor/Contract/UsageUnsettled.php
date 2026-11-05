@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
+namespace Intakt\Plugin\SymfonyAiVendor\Contract;
 
-final readonly class UsageSettled
+final readonly class UsageUnsettled
 {
     /**
      * @param list<TokenUsageRow> $usages
@@ -12,6 +12,7 @@ final readonly class UsageSettled
     public function __construct(
         public string $call,
         public string $phase,
+        public string $failure,
         public array $usages,
     ) {
     }

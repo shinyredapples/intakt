@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
+namespace Intakt\Plugin\SymfonyAiVendor\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Symfony\Component\Serializer\Attribute\Context;

@@ -7,7 +7,7 @@ namespace Intakt\Tests\Support;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
-use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageStarted;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Serializer\SerializerInterface;
