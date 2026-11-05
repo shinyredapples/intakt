@@ -113,7 +113,7 @@ The time of every test file, not only the ten slowest, is kept in `tests/duratio
 
 ## When `bin/check` reports a different PHP
 
-The `environment` gate fails when the PHP running `bin/check` is older than `config.platform.php` in `composer.json`, lacks an extension listed as `ext-*` under `require` there, or has an ini setting that differs from `config/php/check.ini` (for example `zend.assertions=-1`). Each difference is named. Install the missing extension or a newer PHP. `bin/check` loads the check settings itself: when `config/php` is not in `PHP_INI_SCAN_DIR`, it starts again with `config/php` added at the end, so those settings win over the system's ini files. A setting given with `php -d` still wins over them, and the gate names it. The CI image does not install the profile yet.
+The `environment` gate fails when the PHP running `bin/check` is older than `config.platform.php` in `composer.json`, lacks an extension listed as `ext-*` under `require` there, or has an ini setting that differs from `config/php/check.ini` (for example `zend.assertions=-1`). Each difference is named. Install the missing extension or a newer PHP. `bin/check` loads the check settings itself: when `config/php` is not in `PHP_INI_SCAN_DIR`, it starts again with `config/php` added at the end, so those settings win over the system's ini files. The new start keeps the options given to `php` (such as `-d` or `-n`), so a setting given with `php -d` still wins over them, and the gate names it. On a system without `/proc/self/cmdline` those options are dropped on the new start. The CI image does not install the profile yet.
 
 ## Running the tests in parallel
 

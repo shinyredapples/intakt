@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 use Intakt\Gates\CheckCommand;
+use Intakt\Gates\PhpStartupOptions;
 use Intakt\Gates\ProfileScanPath;
 
 $autoload = __DIR__.'/../vendor/autoload.php';
@@ -23,7 +24,7 @@ $scanPath = getenv('PHP_INI_SCAN_DIR');
 $scanPath = ProfileScanPath::missingFrom(dirname(__DIR__), false === $scanPath ? null : $scanPath);
 
 if (null !== $scanPath) {
-    $process = proc_open([PHP_BINARY, __FILE__, ...array_slice($arguments, 1)], [STDIN, STDOUT, STDERR], $pipes, null, ['PHP_INI_SCAN_DIR' => $scanPath] + getenv());
+    $process = proc_open([PHP_BINARY, ...PhpStartupOptions::current($arguments), __FILE__, ...array_slice($arguments, 1)], [STDIN, STDOUT, STDERR], $pipes, null, ['PHP_INI_SCAN_DIR' => $scanPath] + getenv());
 
     exit(false === $process ? 2 : proc_close($process));
 }
