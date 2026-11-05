@@ -1,0 +1,187 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Intakt\Gates\GateResult;
+use Intakt\Gates\PhpunitReport;
+use Intakt\Gates\ProcessQueue;
+use Intakt\Gates\TestDurations;
+use Intakt\Gates\TestPorts;
+use Intakt\Gates\TestsGate;
+use Intakt\Gates\TestWorker;
+use Intakt\Gates\TestWorkerCount;
+use Intakt\Gates\TestWorkers;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+
+#[CoversClass(TestsGate::class)]
+#[UsesClass(TestWorkerCount::class)]
+#[UsesClass(ProcessQueue::class)]
+#[UsesClass(TestWorker::class)]
+#[UsesClass(TestWorkers::class)]
+#[UsesClass(TestPorts::class)]
+#[UsesClass(PhpunitReport::class)]
+#[UsesClass(TestDurations::class)]
+#[UsesClass(GateResult::class)]
+final class TestsGateParallelTest extends SandboxTestCase
+{
+    private const array TWO_WORKERS = [TestWorkerCount::VARIABLE => '2'];
+
+    public function testAFailingTestInOneWorkerFailsTheGateAndIsNamedWithItsFile(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(3);
+        $sandbox->write('tests/FailingTest.php', $this->testFile('FailingTest', 'self::fail("the forced failure");'));
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('sqlite tests/FailingTest.php: FailingTest::testRuns', $run->findingsOf('tests'));
+        self::assertStringContainsString('the forced failure', $run->findingsOf('tests'));
+    }
+
+    public function testFindingsOfEveryWorkerAreListed(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(2);
+        $sandbox->write('tests/FirstFailingTest.php', $this->testFile('FirstFailingTest', 'self::fail("the first failure");'));
+        $sandbox->write('tests/SecondFailingTest.php', $this->testFile('SecondFailingTest', 'self::fail("the second failure");'));
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('the first failure', $run->findingsOf('tests'));
+        self::assertStringContainsString('the second failure', $run->findingsOf('tests'));
+    }
+
+    public function testASkippedTestInOneWorkerFailsTheGate(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(3);
+        $sandbox->write('tests/SkippedTest.php', $this->testFile('SkippedTest', 'self::markTestSkipped("the forced skip");'));
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('sqlite tests/SkippedTest.php: SkippedTest::testRuns: the forced skip', $run->findingsOf('tests'));
+    }
+
+    public function testADeprecationInOneWorkerFailsTheGate(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(3);
+        $sandbox->write('tests/DeprecatingTest.php', $this->testFile('DeprecatingTest', 'trigger_error("the forced deprecation", E_USER_DEPRECATED); self::assertTrue(true);'));
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('sqlite tests/DeprecatingTest.php', $run->findingsOf('tests'));
+    }
+
+    public function testAWorkerThatCrashesFailsTheGateWithItsOutput(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(3);
+        $sandbox->write('tests/CrashingTest.php', $this->testFile('CrashingTest', 'fwrite(STDERR, "the worker crashed\n"); exit(3);'));
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertMatchesRegularExpression('~sqlite tests/CrashingTest\.php: phpunit exited with code \d+: the worker crashed~', $run->findingsOf('tests'));
+    }
+
+    public function testTwoFilesRunAtTheSameTimeInWorkersOfTheirOwn(): void
+    {
+        $sandbox = $this->sandboxWith('tests-clean');
+        $sandbox->write('tests/FirstTest.php', $this->testFile('FirstTest', $this->meeting('first', 'second')));
+        $sandbox->write('tests/SecondTest.php', $this->testFile('SecondTest', $this->meeting('second', 'first')));
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->passed('tests'), $run->output());
+        self::assertNotSame(file_get_contents($sandbox->root.'/first'), file_get_contents($sandbox->root.'/second'));
+    }
+
+    public function testTheWorkersTakeTheLongestRecordedFileFirst(): void
+    {
+        $sandbox = $this->sandboxWith('tests-clean');
+        unlink($sandbox->root.'/tests/SampleTest.php');
+        $sandbox->write('tests/ATest.php', $this->testFile('ATest', $this->logging('A')));
+        $sandbox->write('tests/BTest.php', $this->testFile('BTest', $this->logging('B').$this->waitingFor('C')));
+        $sandbox->write('tests/CTest.php', $this->testFile('CTest', $this->logging('C').' usleep(500000);'));
+        $cache = $this->emptySandbox();
+        $cache->write('tests/durations.json', '{"tests/CTest.php": 50.0, "tests/BTest.php": 20.0, "tests/ATest.php": 1.0, "tests/Gates/GateTest.php": 0.1}');
+
+        $run = $sandbox->checkWith([...self::TWO_WORKERS, TestWorker::GATES_CACHE_VARIABLE => $cache->root], '--only=tests');
+
+        self::assertTrue($run->passed('tests'), $run->output());
+        self::assertSame('A', array_last(explode(' ', trim((string) file_get_contents($sandbox->root.'/order')))));
+    }
+
+    public function testASingleWorkerRunsEachPassInOneProcess(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(2);
+        $sandbox->write('tests/FailingTest.php', $this->testFile('FailingTest', 'self::fail("the forced failure");'));
+
+        $run = $sandbox->checkWith([TestWorkerCount::VARIABLE => '1'], '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('sqlite: FailingTest::testRuns', $run->findingsOf('tests'));
+    }
+
+    public function testAWorkerCountThatIsNoPositiveNumberFailsTheGate(): void
+    {
+        $run = $this->sandboxWith('tests-clean')->checkWith([TestWorkerCount::VARIABLE => 'all'], '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers', $run->findingsOf('tests'));
+    }
+
+    private function sandboxWithPassingFiles(int $count): Sandbox
+    {
+        $sandbox = $this->sandboxWith('tests-clean');
+
+        foreach (range(1, $count) as $number) {
+            $sandbox->write('tests/Passing'.$number.'Test.php', $this->testFile('Passing'.$number.'Test', 'self::assertSame(2, 1 + 1);'));
+        }
+
+        return $sandbox;
+    }
+
+    private function testFile(string $class, string $body): string
+    {
+        return <<<PHP
+            <?php
+
+            declare(strict_types=1);
+
+            use PHPUnit\\Framework\\Attributes\\CoversNothing;
+            use PHPUnit\\Framework\\TestCase;
+
+            #[CoversNothing]
+            final class {$class} extends TestCase
+            {
+                public function testRuns(): void
+                {
+                    {$body}
+                }
+            }
+
+            PHP;
+    }
+
+    // Because only two processes running at once both see each other's mark, each records its own database, then waits for the other.
+    private function meeting(string $own, string $other): string
+    {
+        return 'file_put_contents(dirname(__DIR__)."/'.$own.'", getenv("DATABASE_URL"));'.$this->waitingFor($other, '/'.$other).' self::assertTrue(true);';
+    }
+
+    private function logging(string $name): string
+    {
+        return 'file_put_contents(dirname(__DIR__)."/order", "'.$name.' ", FILE_APPEND); file_put_contents(dirname(__DIR__)."/started-'.$name.'", ""); self::assertTrue(true);';
+    }
+
+    private function waitingFor(string $name, ?string $mark = null): string
+    {
+        $mark ??= '/started-'.$name;
+
+        return ' $deadline = hrtime(true) + 30 * 1_000_000_000; while (!is_file(dirname(__DIR__)."'.$mark.'")) { if (hrtime(true) > $deadline) { self::fail("waited in vain for '.$name.'"); } usleep(20000); }';
+    }
+}

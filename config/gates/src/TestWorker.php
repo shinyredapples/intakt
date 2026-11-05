@@ -9,8 +9,13 @@ final readonly class TestWorker
     public const string PORTS_VARIABLE = 'INTAKT_TEST_PORTS';
     public const string GATES_CACHE_VARIABLE = 'INTAKT_GATES_CACHE';
 
-    public function __construct(public string $run, private string $directory, private string $ports, public string $configuration, public string $selection)
+    public function __construct(public string $run, private string $directory, private string $ports, public string $configuration, public string $selection, public ?string $file = null)
     {
+    }
+
+    public function taking(string $file): self
+    {
+        return clone($this, ['run' => $this->run.' '.$file, 'file' => $file]);
     }
 
     public function prepared(): bool
@@ -34,8 +39,17 @@ final readonly class TestWorker
         ];
     }
 
+    /**
+     * @return list<string>
+     */
+    public function arguments(): array
+    {
+        return null === $this->file ? [$this->selection] : [$this->selection, $this->file];
+    }
+
+    // Because a worker runs many files one after the other, each run keeps its own report.
     public function junitReport(): string
     {
-        return $this->directory.'/junit.xml';
+        return $this->directory.'/'.(null === $this->file ? 'junit.xml' : 'junit-'.hash('xxh128', $this->file).'.xml');
     }
 }

@@ -120,7 +120,7 @@ final class TestWorkerTest extends SandboxTestCase
         $ports = TestPorts::forWorkers(4, null);
         self::assertNotNull($ports);
 
-        return new TestWorkers($scratch, $ports);
+        return new TestWorkers($scratch, $ports, 4);
     }
 
     /**

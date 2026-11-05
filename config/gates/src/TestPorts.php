@@ -48,6 +48,11 @@ final readonly class TestPorts
         return $first.'-'.($first + $this->perWorker - 1);
     }
 
+    public function blocks(): int
+    {
+        return $this->workers;
+    }
+
     private function lastPort(): int
     {
         return $this->first + $this->workers * $this->perWorker - 1;
