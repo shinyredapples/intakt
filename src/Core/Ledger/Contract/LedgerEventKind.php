@@ -22,5 +22,8 @@ enum LedgerEventKind: string
     case RoundQueued = 'round_queued';
     case VerdictsStale = 'verdicts_stale';
     case ReviewerStopRequested = 'reviewer_stop_requested';
+    case HeadFailed = 'head_failed';
+    case HeadHandedOver = 'head_handed_over';
     case ReviewerStopped = 'reviewer_stopped';
+    case HeadForgotten = 'head_forgotten';
 }

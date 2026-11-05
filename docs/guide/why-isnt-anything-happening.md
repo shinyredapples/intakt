@@ -38,6 +38,7 @@ flowchart TD
 | A task never appears | no `intakt` label, or written by someone without write access | add the label yourself; for an issue by someone without write access the `intakt` label is not enough, a person with write access must set `take-over` (planned) |
 | A project gets nothing built or reviewed | its share is 0, which pauses it, open pull requests included | raise its share above 0 |
 | A project gets no new builds, but its reviews go on | another project has `urgent` work, which takes the next free build slot | nothing: it continues once the urgent task has its slot |
+| One pull request is skipped for a while | something went wrong with that one only, so Intakt tries it again after a short wait that grows each time; one broken item never stops the rest | nothing: the Reviews page shows a card with the reason; it is tried again at least every half hour, and after four failures in a row it goes to the maintainer agent (planned) |
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the maintainer agent tries to fix it first | nothing, unless it also turns up in Waiting on you |
 | A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the maintainer agent could not fix | follow the card: it names the step and the cause |
 

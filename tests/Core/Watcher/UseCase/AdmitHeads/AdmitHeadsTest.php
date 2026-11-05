@@ -46,7 +46,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testANewHeadWithPendingCiStartsNoRoundAndIsReadAgainAfterTheInterval(): void
     {
-        [$decision] = ($this->admit)('demo', [$this->change('1', 'a')]);
+        $decision = ($this->admit)('demo', $this->change('1', 'a'));
 
         self::assertSame(HeadAdmission::Pending, $decision->admission);
         self::assertFalse($decision->startsRound());
@@ -55,7 +55,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testAGreenHeadIsAdmittedWithoutAReadAgainMoment(): void
     {
-        [$decision] = ($this->admit)('demo', [$this->change('2', 'b')]);
+        $decision = ($this->admit)('demo', $this->change('2', 'b'));
 
         self::assertTrue($decision->startsRound());
         self::assertNull($decision->readAgainAt);
@@ -63,7 +63,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testRedCiIsRecordedInTheLogAndNotAdmitted(): void
     {
-        [$decision] = ($this->admit)('demo', [$this->change('3', 'c')]);
+        $decision = ($this->admit)('demo', $this->change('3', 'c'));
 
         self::assertSame(HeadAdmission::Red, $decision->admission);
         self::assertFalse($decision->startsRound());
@@ -73,7 +73,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testACancelledRunOnTheHeadIsWaitedOnNotRecordedAsRed(): void
     {
-        [$decision] = ($this->admit)('demo', [$this->change('4', 'd')]);
+        $decision = ($this->admit)('demo', $this->change('4', 'd'));
 
         self::assertSame(HeadAdmission::Pending, $decision->admission);
         self::assertEquals(new DateTimeImmutable('2026-11-02T10:01:00+00:00'), $decision->readAgainAt);
@@ -81,14 +81,14 @@ final class AdmitHeadsTest extends TestCase
 
     public function testACancelledRunReplacedByARerunOnTheSameHeadIsIgnored(): void
     {
-        [$decision] = ($this->admit)('demo', [$this->change('5', 'e')]);
+        $decision = ($this->admit)('demo', $this->change('5', 'e'));
 
         self::assertTrue($decision->startsRound());
     }
 
     public function testACancelledRunNewerThanTheSucceededOneOnTheHeadIsWaitedOn(): void
     {
-        [$decision] = ($this->admit)('demo', [$this->change('6', 'f')]);
+        $decision = ($this->admit)('demo', $this->change('6', 'f'));
 
         self::assertSame(HeadAdmission::Pending, $decision->admission);
         self::assertFalse($decision->startsRound());
@@ -97,10 +97,10 @@ final class AdmitHeadsTest extends TestCase
     public function testTheCiStateIsReadForTheExactHeadAndOlderRunsDoNotPaintItGreen(): void
     {
         // The green recording holds a failed run of an older head, because a rerun must not decide for the new one.
-        $decisions = ($this->admit)('demo', [$this->change('1', 'a'), $this->change('2', 'b')]);
+        $decisions = [($this->admit)('demo', $this->change('1', 'a')), ($this->admit)('demo', $this->change('2', 'b'))];
 
         self::assertSame([str_repeat('a', 40), str_repeat('b', 40)], $this->forge->asked);
-        self::assertSame([HeadAdmission::Green, HeadAdmission::Pending], array_map(static fn (HeadDecision $d): HeadAdmission => $d->admission, $decisions));
+        self::assertSame([HeadAdmission::Pending, HeadAdmission::Green], array_map(static fn (HeadDecision $d): HeadAdmission => $d->admission, $decisions));
     }
 
     public function testAnAnswerForAnotherHeadIsAFailedRead(): void
@@ -109,7 +109,7 @@ final class AdmitHeadsTest extends TestCase
 
         $this->expectException(ForgeReadFailed::class);
 
-        (new AdmitHeads($forge, new AdmissionDecision(), new MockClock(), $this->log))('demo', [$this->change('1', 'a')]);
+        (new AdmitHeads($forge, new AdmissionDecision(), new MockClock(), $this->log))('demo', $this->change('1', 'a'));
     }
 
     private function change(string $id, string $head): OpenChange
