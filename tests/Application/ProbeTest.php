@@ -323,17 +323,11 @@ final class ProbeTest extends TestCase
         new Filesystem()->mkdir($project.'/tests');
 
         // Hard links keep the vendor copy cheap; across file systems they fail partway, and cp -a would nest into the partial folder.
-        $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; }', self::ROOT, $project]);
+        // A symlink would be cheaper, but vendor then resolves the project directory to the real checkout, so the copy would not be what boots.
+        // One cp for the rest beats mirroring each folder from PHP.
+        $script = 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; } && cd "$0" && cp -a bin src config public composer.json .env .env.test "$1"/';
+        $copy = new Process(['sh', '-c', $script, self::ROOT, $project]);
         $copy->mustRun();
-
-        foreach (['bin', 'src', 'config', 'public'] as $directory) {
-            new Filesystem()->mirror(self::ROOT.'/'.$directory, $project.'/'.$directory);
-        }
-
-        foreach (['composer.json', '.env', '.env.test'] as $file) {
-            new Filesystem()->copy(self::ROOT.'/'.$file, $project.'/'.$file);
-        }
-
         new Filesystem()->copy(self::ROOT.'/tests/bootstrap.php', $project.'/tests/bootstrap.php');
         new Filesystem()->remove($project.'/config/reference.php');
 

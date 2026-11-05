@@ -484,6 +484,7 @@ final class ProjectTiersTest extends KernelTestCase
 
     private function bootedContainer(): ContainerInterface
     {
+        // Each test rewrites the config file the container is compiled from, so a container kept from an earlier test would answer for the old file, because of which every boot starts from a removed cache.
         new Filesystem()->remove(self::createKernel()->getCacheDir());
         self::ensureKernelShutdown();
         self::bootKernel();

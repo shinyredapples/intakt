@@ -8,6 +8,7 @@ use Intakt\Gates\WorkingTreeSecretsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
+// Each test plants a different file and scans a sandbox of its own, because a shared sandbox would let one planted secret fail the next test's clean scan.
 #[CoversClass(WorkingTreeSecretsGate::class)]
 final class WorkingTreeSecretsGateTest extends SandboxTestCase
 {
