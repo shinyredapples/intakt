@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\ClockOnlyRule;
+use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 #[CoversClass(ClockOnlyRule::class)]
-final class ClockOnlyRuleTest extends SandboxTestCase
+final class ClockOnlyRuleTest extends PhpStanRuleTestCase
 {
     private const int FIRST_CASE_LINE = 11;
+
+    protected function ruleFor(string $root): Rule
+    {
+        return new ClockOnlyRule();
+    }
 
     /**
      * @return iterable<string, array{list<string>}>
@@ -29,24 +35,23 @@ final class ClockOnlyRuleTest extends SandboxTestCase
     #[DataProvider('rejectedGroups')]
     public function testEachWayOfReadingTheSystemTimeIsRejected(array $expressions): void
     {
-        $run = $this->sandboxReturning($expressions)->check('--only=phpstan');
+        $findings = $this->ruleFindingsIn($this->sandboxReturning($expressions));
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
         foreach (array_keys($expressions) as $index) {
-            self::assertStringContainsString('src/Report.php:'.(self::FIRST_CASE_LINE + $index * 5).' intakt.clockOnly', $run->findingsOf('phpstan'), $expressions[$index]);
+            self::assertStringContainsString('src/Report.php:'.(self::FIRST_CASE_LINE + $index * 5).' intakt.clockOnly', $findings, $expressions[$index]);
         }
     }
 
     public function testAbsoluteMomentsAndExplicitTimeZonesPass(): void
     {
-        $run = $this->sandboxReturning([
+        $findings = $this->ruleFindingsIn($this->sandboxReturning([
             "new \\DateTimeImmutable('2026-10-27T10:00:00Z')",
             "new \\DateTimeImmutable('@1793000000')",
             "\\DateTimeImmutable::createFromFormat('Y-m-d', \$moment, new \\DateTimeZone('UTC'))",
             '$clock->now()',
-        ])->check('--only=phpstan');
+        ]));
 
-        self::assertTrue($run->passed('phpstan'), $run->output());
+        self::assertSame('', $findings);
     }
 
     public function testTheClockAdapterMayReadTheSystemTime(): void

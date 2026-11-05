@@ -6,28 +6,34 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StaticAnalysisGate::class)]
-final class StaticAnalysisGateTest extends SandboxTestCase
+final class StaticAnalysisGateTest extends TestCase
 {
+    // every case asks the gate's configuration about one file, so one run answers them all, each fixture in its own folder
+    private const array FIXTURES = ['loose-condition', 'deprecated-call', 'too-complex-method', 'class-too-complex'];
+
+    private static ?CheckRun $run = null;
+
     public function testANonBooleanConditionFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'loose-condition', 'if.condNotBoolean');
+        $this->assertRejectedInItsFolder('loose-condition', 'if.condNotBoolean');
     }
 
     public function testADeprecatedCallFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-call', 'function.deprecated');
+        $this->assertRejectedInItsFolder('deprecated-call', 'function.deprecated');
     }
 
     public function testAMethodAboveTheCognitiveComplexityLimitFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'too-complex-method', 'complexity.functionLike');
+        $this->assertRejectedInItsFolder('too-complex-method', 'complexity.functionLike');
     }
 
     public function testAClassAboveTheCognitiveComplexityLimitFailsStaticAnalysisEvenWhenEveryMethodIsSimple(): void
     {
-        $this->assertRejectedBy('phpstan', 'class-too-complex', 'complexity.classLike');
+        $this->assertRejectedInItsFolder('class-too-complex', 'complexity.classLike');
     }
 
     public function testStaticAnalysisRunsAtMaxLevelWithoutABaseline(): void
@@ -37,5 +43,26 @@ final class StaticAnalysisGateTest extends SandboxTestCase
         self::assertStringContainsString('level: max', $configuration);
         self::assertStringNotContainsStringIgnoringCase('baseline', $configuration);
         self::assertStringNotContainsString('ignoreErrors', $configuration);
+    }
+
+    private function assertRejectedInItsFolder(string $fixture, string $expectedFinding): void
+    {
+        $run = self::sharedRun();
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue($run->failed('phpstan'), $run->output());
+        self::assertMatchesRegularExpression('~^'.preg_quote($fixture.'/src/', '~').'\S+ '.preg_quote($expectedFinding, '~').' ~m', $run->findingsOf('phpstan'));
+    }
+
+    // the first case that asks pays for the run, so the test report shows its time
+    private static function sharedRun(): CheckRun
+    {
+        if (!self::$run instanceof CheckRun) {
+            $sandbox = Sandbox::withFixturesInFolders(...self::FIXTURES);
+            self::$run = $sandbox->check('--only=phpstan');
+            $sandbox->remove();
+        }
+
+        return self::$run;
     }
 }
