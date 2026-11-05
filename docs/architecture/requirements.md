@@ -26,7 +26,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `jq` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`, its fake `gh`), `docs/showcase/figures.sh` | computing the showcase figures from the API's JSON | for `bin/check` | 1.7 or later | development only |
 | `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner | reading pull requests and comments from the GitHub API; labeling a pull request | only for the showcase figures | any | no |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
-| `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe` | tests, static analysis, code style; the tests gate also asks PHPUnit for the test files of each pass (`--list-test-files`), runs them one file per process, and asks for a JUnit report of each run (`--log-junit`) to record per-file test durations | yes | as locked in `composer.lock` | development only |
+| `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe` | tests, static analysis, code style; the tests gate also asks PHPUnit for the test files of each pass (`--list-test-files`, with its events log, `--log-events-text`, to catch the warnings of the listing), runs them one file per process, and asks for a JUnit report of each run (`--log-junit`) to record per-file test durations | yes | as locked in `composer.lock` | development only |
 
 `unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
 

@@ -13,10 +13,16 @@ final class TestWorkerCount
     public static function chosen(?string $override, string $processStatus): ?int
     {
         if (null !== $override) {
-            return 1 === preg_match('/^[1-9]\d{0,2}$/', $override) ? (int) $override : null;
+            return 1 === preg_match('/^[1-9]\d{0,2}$/', $override) && (int) $override <= self::most() ? (int) $override : null;
         }
 
         return min(self::processorsIn($processStatus), self::MOST_BY_DEFAULT);
+    }
+
+    // Because each worker needs a block of the default ports, a count beyond them would fail on ports the user never set.
+    public static function most(): int
+    {
+        return TestPorts::mostWorkersByDefault();
     }
 
     // Because the processors the gate may run on (its affinity list) are what it sees, not every processor of the machine.

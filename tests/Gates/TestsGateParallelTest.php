@@ -89,6 +89,28 @@ final class TestsGateParallelTest extends SandboxTestCase
         self::assertMatchesRegularExpression('~sqlite tests/CrashingTest\.php: phpunit exited with code \d+: the worker crashed~', $run->findingsOf('tests'));
     }
 
+    public function testATestFileWithoutItsClassFailsTheGateWithSeveralWorkers(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(2);
+        $sandbox->write('tests/MissingTest.php', '<?php declare(strict_types=1);');
+
+        $run = $sandbox->checkWith(self::TWO_WORKERS, '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('sqlite: PHPUnit Warning (Class MissingTest cannot be found in', $run->findingsOf('tests'));
+    }
+
+    public function testATestFileWithoutItsClassFailsTheGateWithOneWorker(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(2);
+        $sandbox->write('tests/MissingTest.php', '<?php declare(strict_types=1);');
+
+        $run = $sandbox->checkWith([TestWorkerCount::VARIABLE => '1'], '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('Class MissingTest cannot be found in', $run->findingsOf('tests'));
+    }
+
     public function testTwoFilesRunAtTheSameTimeInWorkersOfTheirOwn(): void
     {
         $sandbox = $this->sandboxWith('tests-clean');
@@ -134,6 +156,14 @@ final class TestsGateParallelTest extends SandboxTestCase
 
         self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers', $run->findingsOf('tests'));
+    }
+
+    public function testAWorkerCountBeyondThePortsFailsTheGateNamingTheCount(): void
+    {
+        $run = $this->sandboxWith('tests-clean')->checkWith([TestWorkerCount::VARIABLE => '500'], '--only=tests');
+
+        self::assertTrue($run->failed('tests'), $run->output());
+        self::assertStringContainsString('INTAKT_TEST_WORKERS names no number of test workers from 1 to 127', $run->findingsOf('tests'));
     }
 
     private function sandboxWithPassingFiles(int $count): Sandbox

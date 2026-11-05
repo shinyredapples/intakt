@@ -37,6 +37,11 @@ final readonly class TestPorts
         return $first >= 1 && $last <= self::LAST_PORT && $perWorker >= 1 ? new self($first, $perWorker, $workers) : null;
     }
 
+    public static function mostWorkersByDefault(): int
+    {
+        return intdiv(self::FIRST_EPHEMERAL_PORT - self::FIRST_PORT, self::PORTS_PER_WORKER);
+    }
+
     public function block(int $index): string
     {
         if ($index < 0 || $index >= $this->workers) {

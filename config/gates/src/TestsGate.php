@@ -46,7 +46,7 @@ final class TestsGate implements Gate
         $count = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), $this->processStatus());
 
         if (null === $count) {
-            return GateResult::failedBecause($this->name(), TestWorkerCount::VARIABLE.' names no number of test workers from 1 to 999');
+            return GateResult::failedBecause($this->name(), TestWorkerCount::VARIABLE.' names no number of test workers from 1 to '.TestWorkerCount::most());
         }
 
         // Because a single worker keeps one process for each pass, and the passes still run side by side as before.
@@ -137,8 +137,8 @@ final class TestsGate implements Gate
             }
         }
 
-        $listings = $this->concurrently($workspace, [...$numbered, ...$alone], static fn (): array => ['--list-test-files', '--colors=never']);
-        $unlisted = $this->findingsOf($listings);
+        $listings = $this->concurrently($workspace, [...$numbered, ...$alone], static fn (TestWorker $worker): array => ['--list-test-files', '--colors=never', '--log-events-text='.$worker->listingEvents()]);
+        $unlisted = $this->unlisted([...$numbered, ...$alone], $listings);
 
         if ([] !== $unlisted) {
             return $unlisted;
@@ -149,6 +149,24 @@ final class TestsGate implements Gate
 
         foreach ($serial as $worker) {
             $findings = [...$findings, ...$this->findingsOf($this->concurrently($workspace, [$worker], $this->testRun(...)))];
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param list<TestWorker>             $workers
+     * @param array<string, ProcessResult> $listings
+     *
+     * @return list<string>
+     */
+    private function unlisted(array $workers, array $listings): array
+    {
+        $findings = [];
+
+        foreach ($workers as $worker) {
+            $failed = PhpunitReport::findings($worker->run, $listings[$worker->run]);
+            $findings = [...$findings, ...([] === $failed ? PhpunitReport::listingDiagnostics($worker->run, $worker->listingEvents()) : $failed)];
         }
 
         return $findings;

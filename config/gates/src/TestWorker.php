@@ -47,6 +47,11 @@ final readonly class TestWorker
         return null === $this->file ? [$this->selection] : [$this->selection, $this->file];
     }
 
+    public function listingEvents(): string
+    {
+        return $this->directory.'/listing-events.txt';
+    }
+
     // Because a worker runs many files one after the other, each run keeps its own report.
     public function junitReport(): string
     {
