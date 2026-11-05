@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use Doctrine\DBAL\Exception\ConnectionLost;
+use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -13,6 +14,8 @@ use Intakt\Core\Budget\Domain\SharedHoldRecord;
 use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Support\KernelTestCase;
@@ -23,7 +26,9 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
+use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Throwable;
 
@@ -33,6 +38,7 @@ use Throwable;
 #[UsesClass(DoctrineHolds::class)]
 #[UsesClass(SharedHoldRecord::class)]
 #[UsesClass(SharedHold::class)]
+#[UsesClass(ForgeCredentialsRefused::class)]
 final class DoctrineInstallWideFailuresTest extends KernelTestCase
 {
     private MockClock $clock;
@@ -143,6 +149,30 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         yield 'a lock store that fails' => [new LockStorageException('the lock store is down')];
         yield 'a lock store that fails while acquiring' => [new LockAcquiringException('Failed to acquire the "x" lock.')];
         yield 'a lock store failure wrapped by a forge' => [new RuntimeException('read failed', 0, new LockStorageException('the lock store is down'))];
+        yield 'a lock store that fails while releasing' => [new LockReleasingException('Failed to release the "x" lock.')];
+        yield 'the forge refusing Intakt\'s credentials' => [new ForgeReadFailed('GitHub answered 401 to a read.', 0, new ForgeCredentialsRefused(401))];
+        yield 'a full disk on a file write' => [new IOException('Failed to write file "x": No space left on device')];
+        yield 'a full disk under a wrapping failure' => [new RuntimeException('git fetch failed', 0, new RuntimeException('write error: No space left on device'))];
+        yield 'a disk quota reached' => [new IOException('Failed to write file "x": Disk quota exceeded')];
+        yield 'a full disk under the database' => [new DriverException(new DriverFailure('database or disk is full'), null)];
+    }
+
+    /**
+     * @return iterable<string, array{Throwable}>
+     */
+    public static function failuresOfOneItem(): iterable
+    {
+        yield 'a read the forge refused with 403' => [new ForgeReadFailed('GitHub answered 403 to a read.')];
+        yield 'a file the disk does not have' => [new IOException('Failed to read file "x": No such file or directory')];
+        yield 'a database constraint' => [new DriverException(new DriverFailure('UNIQUE constraint failed'), null)];
+    }
+
+    #[DataProvider('failuresOfOneItem')]
+    public function testAFailureOfOneItemStartsNoFailureBackOffOnItsFirstItem(Throwable $failure): void
+    {
+        $this->failures->itemFailed('head 7', $failure);
+
+        self::assertSame([], $this->holds->sharedInEffect());
     }
 
     #[DataProvider('failuresNoItemCanAvoid')]
@@ -152,6 +182,14 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
         self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
         self::assertSame('A failure no item can avoid starts the failure back-off.', $this->logger->logged[0][0]);
+    }
+
+    public function testALockStoreThatFailedStartsTheFailureBackOff(): void
+    {
+        $this->failures->lockStoreFailed(new LockAcquiringException('Failed to acquire the "x" lock.'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertSame('A lock store that failed starts the failure back-off.', $this->logger->logged[0][0]);
     }
 
     public function testAHandOverThatFailedStartsTheFailureBackOffForTenMinutes(): void

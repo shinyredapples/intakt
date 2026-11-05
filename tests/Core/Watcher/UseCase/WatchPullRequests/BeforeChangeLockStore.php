@@ -9,11 +9,13 @@ use Override;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Throwable;
 
 // Runs a step once just before a change lock is taken, because that is the window between reading the due heads and holding one, and only a forced order proves it closed.
 final class BeforeChangeLockStore implements PersistingStoreInterface
 {
     public ?Closure $beforeChangeLock = null;
+    public ?Throwable $deleteFailure = null;
     private readonly InMemoryStore $inner;
 
     public function __construct()
@@ -28,7 +30,7 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
 
         if ($step instanceof Closure && str_starts_with((string) $key, 'watcher-change-')) {
             $this->beforeChangeLock = null;
-            $step();
+            $step($key);
         }
 
         $this->inner->save($key);
@@ -37,6 +39,10 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     #[Override]
     public function delete(Key $key): void
     {
+        if ($this->deleteFailure instanceof Throwable && str_starts_with((string) $key, 'watcher-change-')) {
+            throw $this->deleteFailure;
+        }
+
         $this->inner->delete($key);
     }
 

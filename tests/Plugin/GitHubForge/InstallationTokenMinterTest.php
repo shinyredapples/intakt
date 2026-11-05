@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use DateTimeImmutable;
+use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
@@ -24,6 +25,7 @@ use Throwable;
 #[CoversClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenNotMinted::class)]
+#[UsesClass(ForgeCredentialsRefused::class)]
 #[UsesClass(AppJwt::class)]
 final class InstallationTokenMinterTest extends TestCase
 {
@@ -66,6 +68,30 @@ final class InstallationTokenMinterTest extends TestCase
     {
         yield 'bad credentials' => ['access_tokens_401.json', 401];
         yield 'installation not found' => ['access_tokens_404.json', 404];
+    }
+
+    public function testAnExchangeRefusedWith401ChainsTheRefusedCredentials(): void
+    {
+        $minter = $this->minter(static fn (): ResponseInterface => new MockResponse(self::recorded('access_tokens_401.json'), ['http_code' => 401]));
+
+        try {
+            (void) $minter->mint('678');
+            self::fail('A refused exchange must fail the call.');
+        } catch (InstallationTokenNotMinted $notMinted) {
+            self::assertInstanceOf(ForgeCredentialsRefused::class, $notMinted->getPrevious());
+        }
+    }
+
+    public function testAnExchangeRefusedWith404ChainsNoRefusedCredentials(): void
+    {
+        $minter = $this->minter(static fn (): ResponseInterface => new MockResponse(self::recorded('access_tokens_404.json'), ['http_code' => 404]));
+
+        try {
+            (void) $minter->mint('678');
+            self::fail('A refused exchange must fail the call.');
+        } catch (InstallationTokenNotMinted $notMinted) {
+            self::assertNull($notMinted->getPrevious());
+        }
     }
 
     public function testATransportErrorFailsTheCall(): void

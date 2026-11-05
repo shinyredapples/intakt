@@ -13,6 +13,7 @@ use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
@@ -30,7 +31,7 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
 
     private const int SAME_ERROR_WITHIN_SECONDS = 3600;
 
-    // The database's connection or its write access, and the shared lock store: every item needs them, so no item can avoid their failure.
+    // The database's connection or its write access, the shared lock store and the forge's acceptance of Intakt's credentials: every item needs them, so no item can avoid their failure.
     /** @var list<class-string<Throwable>> */
     private const array NO_ITEM_CAN_AVOID = [
         ConnectionException::class,
@@ -38,6 +39,15 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         LockAcquiringException::class,
         LockReleasingException::class,
         LockStorageException::class,
+        ForgeCredentialsRefused::class,
+    ];
+
+    // Matched in the message, because PHP, git and the database report a full disk only as the system's error text, never as a type of their own.
+    /** @var list<string> */
+    private const array FULL_DISK = [
+        'No space left on device',
+        'Disk quota exceeded',
+        'database or disk is full',
     ];
 
     public function __construct(
@@ -68,21 +78,37 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
     }
 
     #[Override]
+    public function lockStoreFailed(Throwable $failure): void
+    {
+        $this->backOff('A lock store that failed starts the failure back-off.', $failure);
+    }
+
+    #[Override]
     public function handOverFailed(Throwable $failure): void
     {
         $this->backOff('A hand-over that failed starts the failure back-off.', $failure);
     }
 
-    // Along the whole chain, because a forge or a use case may wrap the database's or the lock store's failure in its own.
+    // Along the whole chain, because a forge or a use case may wrap the database's, the lock store's, the forge's or the disk's failure in its own.
     private function noItemCanAvoid(Throwable $failure): bool
     {
         for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
-            if (array_any(self::NO_ITEM_CAN_AVOID, static fn (string $class): bool => $cause instanceof $class)) {
+            if ($this->isOfAClassNoItemCanAvoid($cause) || $this->isAFullDisk($cause)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function isOfAClassNoItemCanAvoid(Throwable $cause): bool
+    {
+        return array_any(self::NO_ITEM_CAN_AVOID, static fn (string $class): bool => $cause instanceof $class);
+    }
+
+    private function isAFullDisk(Throwable $cause): bool
+    {
+        return array_any(self::FULL_DISK, static fn (string $text): bool => str_contains($cause->getMessage(), $text));
     }
 
     // Redacted as a log line is before it is hashed, so two failures that differ only in a credential count as one error.

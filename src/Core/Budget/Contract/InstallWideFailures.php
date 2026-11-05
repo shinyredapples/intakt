@@ -12,5 +12,8 @@ interface InstallWideFailures
     // The item is the caller's key for what failed, the same on every failure of it, so its own repeated failures never count as two items.
     public function itemFailed(string $item, Throwable $failure): void;
 
+    // For a lock store that failed outside any item's step, such as while the locks of a tick's items are taken or given back.
+    public function lockStoreFailed(Throwable $failure): void;
+
     public function handOverFailed(Throwable $failure): void;
 }

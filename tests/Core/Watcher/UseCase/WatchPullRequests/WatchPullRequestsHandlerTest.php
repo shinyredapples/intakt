@@ -73,6 +73,10 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
+use Symfony\Component\Lock\Exception\LockReleasingException;
+use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 
 #[Group('persistence')]
@@ -257,6 +261,49 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertCount(1, $this->commands->started);
         self::assertEquals(new CommitId(str_repeat(self::GREEN, 40)), $this->commands->started[0]->head);
+    }
+
+    public function testALockStoreThatFailsWhileAHeadLockIsTakenStartsTheFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->locks->beforeChangeLock = static fn () => throw new LockStorageException('the lock store is down');
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockAcquiringException) {
+            // Expected: the tick fails, so the head stays due for the next one.
+        }
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([], $this->commands->started);
+    }
+
+    public function testALockStoreThatFailsWhileAHeadLockIsGivenBackStartsTheFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException) {
+            // Expected: the tick fails, and the lock lapses with its time to live.
+        }
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+    }
+
+    public function testAHeadLockHeldByAnotherTickStartsNoFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        // Not released on destruction, because the other tick still holds it when this tick tries.
+        $this->locks->beforeChangeLock = fn (Key $key): bool => new LockFactory($this->locks)->createLock((string) $key, autoRelease: false)->acquire();
+
+        $this->tick();
+
+        self::assertSame([], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([], $this->commands->started);
     }
 
     public function testAFailedStartIsTriedAgainOnceItsBackOffHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -808,7 +855,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide), $decisions, $settle));
     }
 
     private function panel(): Panel

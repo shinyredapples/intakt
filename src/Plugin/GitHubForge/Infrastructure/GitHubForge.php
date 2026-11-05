@@ -16,6 +16,7 @@ use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\Forge;
+use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
@@ -41,6 +42,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     private const string RAW = 'application/vnd.github.raw+json';
     private const int COMPARED_FILES_CAP = 300;
     private const int NOT_FOUND = 404;
+    private const int UNAUTHORIZED = 401;
 
     public function __construct(
         private GitHubCalls $calls,
@@ -284,7 +286,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             return null;
         }
 
-        return $status >= 200 && $status < 300 ? $body : throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status));
+        return $status >= 200 && $status < 300 ? $body : throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: $this->refusedCredentials($status));
     }
 
     /**
@@ -304,8 +306,14 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status));
+            throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: $this->refusedCredentials($status));
         }
+    }
+
+    // Only 401, because GitHub answers a rate limit or a missing permission with 403 and those are not the token being refused.
+    private function refusedCredentials(int $status): ?ForgeCredentialsRefused
+    {
+        return self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused($status) : null;
     }
 
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.
