@@ -127,13 +127,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([], $this->reading()->actIdsOf(self::ROUND));
     }
 
-    public function testTheActIdsOfAJudgeDoneRowWhoseActIsAJsonObjectComeBackAsAList(): void
-    {
-        $this->append(LedgerEventKind::JudgeDone, ['act' => ['a' => 'F1', 'b' => 'F3']] + $this->judgeDone(self::ROUND));
-
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
-    }
-
     /**
      * @return array<string, mixed>
      */

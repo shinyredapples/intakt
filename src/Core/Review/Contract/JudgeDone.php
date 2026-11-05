@@ -7,9 +7,9 @@ namespace Intakt\Core\Review\Contract;
 final readonly class JudgeDone
 {
     /**
-     * @param array<int|string, string> $act
-     * @param list<string>              $followUps
-     * @param list<JudgeDoneFinding>    $findings
+     * @param list<string>           $act
+     * @param list<string>           $followUps
+     * @param list<JudgeDoneFinding> $findings
      */
     public function __construct(
         public string $round,
