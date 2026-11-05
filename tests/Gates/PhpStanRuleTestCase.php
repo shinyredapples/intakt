@@ -17,7 +17,9 @@ use RecursiveIteratorIterator;
 use SplFileInfo;
 
 /**
- * @extends RuleTestCase<Rule<Node>>
+ * @template TRule of Rule<covariant Node>
+ *
+ * @extends RuleTestCase<TRule>
  */
 abstract class PhpStanRuleTestCase extends RuleTestCase
 {
@@ -48,7 +50,7 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
     }
 
     /**
-     * @return Rule<Node>
+     * @return TRule
      */
     abstract protected function ruleFor(string $root): Rule;
 
@@ -72,7 +74,6 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
         return $this->ruleFindingsIn($this->sandboxWith($fixture));
     }
 
-    // only the rule under test runs, and its findings read as the gate prints them
     final protected function ruleFindingsIn(Sandbox $sandbox): string
     {
         // because RuleTestCase keeps its analyser, and with it the first rule and container, for the whole test
@@ -108,7 +109,7 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
         return $files;
     }
 
-    // the test container finds a class only through an autoloader, while `phpstan analyse` also scans the analyzed files
+    // because the test container finds a class only through an autoloader, while `phpstan analyse` also scans the analyzed files
     /**
      * @param list<string> $files
      */
@@ -140,13 +141,15 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
         $classes = [];
 
         foreach ($tokens as $index => $token) {
-            $next = $tokens[$index + 1] ?? null;
+            $next = $tokens[$index + 1] ?? new PhpToken(T_WHITESPACE, '');
+            $previous = $tokens[$index - 1] ?? new PhpToken(T_WHITESPACE, '');
 
-            if ($token->is(T_NAMESPACE) && $next?->is([T_NAME_QUALIFIED, T_STRING])) {
+            if ($token->is(T_NAMESPACE) && $next->is([T_NAME_QUALIFIED, T_STRING])) {
                 $namespace = $next->text.'\\';
             }
 
-            if ($token->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM]) && $next?->is(T_STRING) && !($tokens[$index - 1] ?? null)?->is(T_DOUBLE_COLON)) {
+            // because `Name::class` is no declaration
+            if ($token->is([T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM]) && $next->is(T_STRING) && !$previous->is(T_DOUBLE_COLON)) {
                 $classes[] = $namespace.$next->text;
             }
         }

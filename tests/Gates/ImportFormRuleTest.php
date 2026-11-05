@@ -7,16 +7,18 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CodingStandardsGate;
 use Intakt\Gates\PhpStan\ImportFormRule;
 use Intakt\Gates\StaticAnalysisGate;
-use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<ImportFormRule>
+ */
 #[CoversClass(ImportFormRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 #[UsesClass(CodingStandardsGate::class)]
 final class ImportFormRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): Rule
+    protected function ruleFor(string $root): ImportFormRule
     {
         return new ImportFormRule();
     }

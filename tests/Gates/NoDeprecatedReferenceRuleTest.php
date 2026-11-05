@@ -13,12 +13,13 @@ use Intakt\Gates\PhpStan\NoDeprecatedDocblockTypeRule;
 use Intakt\Gates\PhpStan\NoDeprecatedReferenceRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPStan\PhpDoc\TypeNodeResolver;
-use PHPStan\Rules\Rule;
-use PHPStan\Testing\CompositeRule;
 use PHPStan\Type\FileTypeMapper;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<DeprecationRules>
+ */
 #[CoversClass(NoDeprecatedReferenceRule::class)]
 #[CoversClass(NoDeprecatedDocblockTypeRule::class)]
 #[CoversClass(NoDeprecatedClassDocblockTypeRule::class)]
@@ -27,19 +28,20 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(FileScopeDeprecation::class)]
 #[CoversClass(DocblockTypeNames::class)]
 #[UsesClass(StaticAnalysisGate::class)]
+#[UsesClass(DeprecationRules::class)]
 final class NoDeprecatedReferenceRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): Rule
+    protected function ruleFor(string $root): DeprecationRules
     {
         $reflections = self::createReflectionProvider();
         $deprecated = new DeprecatedClasses($reflections, new FileScopeDeprecation(self::getParser(), $reflections));
         $docblocks = new DeprecatedDocblockTypes(self::getContainer()->getByType(FileTypeMapper::class), self::getContainer()->getByType(TypeNodeResolver::class), $deprecated);
 
-        return new CompositeRule([
+        return new DeprecationRules(
             new NoDeprecatedReferenceRule($deprecated),
             new NoDeprecatedDocblockTypeRule($docblocks),
             new NoDeprecatedClassDocblockTypeRule($docblocks),
-        ]);
+        );
     }
 
     public function testImportingADeprecatedClassFailsStaticAnalysis(): void

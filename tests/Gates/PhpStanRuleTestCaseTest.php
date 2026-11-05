@@ -7,14 +7,16 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\DeprecatedClasses;
 use Intakt\Gates\PhpStan\FileScopeDeprecation;
 use Intakt\Gates\PhpStan\NoDeprecatedReferenceRule;
-use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Depends;
 
+/**
+ * @extends PhpStanRuleTestCase<NoDeprecatedReferenceRule>
+ */
 #[CoversNothing]
 final class PhpStanRuleTestCaseTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): Rule
+    protected function ruleFor(string $root): NoDeprecatedReferenceRule
     {
         $reflections = self::createReflectionProvider();
 

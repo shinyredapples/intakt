@@ -6,15 +6,17 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\NoNestedTryRule;
 use Intakt\Gates\StaticAnalysisGate;
-use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<NoNestedTryRule>
+ */
 #[CoversClass(NoNestedTryRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoNestedTryRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): Rule
+    protected function ruleFor(string $root): NoNestedTryRule
     {
         return new NoNestedTryRule();
     }

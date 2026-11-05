@@ -7,16 +7,18 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\ContainerRegistration;
 use Intakt\Gates\PhpStan\FlagParameterRule;
 use Intakt\Gates\StaticAnalysisGate;
-use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<FlagParameterRule>
+ */
 #[CoversClass(FlagParameterRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 #[UsesClass(ContainerRegistration::class)]
 final class FlagParameterRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): Rule
+    protected function ruleFor(string $root): FlagParameterRule
     {
         return new FlagParameterRule($root, new ContainerRegistration($root));
     }

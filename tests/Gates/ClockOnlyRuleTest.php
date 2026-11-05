@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\ClockOnlyRule;
-use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
+/**
+ * @extends PhpStanRuleTestCase<ClockOnlyRule>
+ */
 #[CoversClass(ClockOnlyRule::class)]
 final class ClockOnlyRuleTest extends PhpStanRuleTestCase
 {
     private const int FIRST_CASE_LINE = 11;
 
-    protected function ruleFor(string $root): Rule
+    protected function ruleFor(string $root): ClockOnlyRule
     {
         return new ClockOnlyRule();
     }

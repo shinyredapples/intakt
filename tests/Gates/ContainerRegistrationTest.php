@@ -6,16 +6,18 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\ContainerRegistration;
 use Intakt\Gates\PhpStan\StatefulServiceResetRule;
-use PHPStan\Rules\Rule;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<StatefulServiceResetRule>
+ */
 #[CoversClass(ContainerRegistration::class)]
 #[UsesClass(StatefulServiceResetRule::class)]
 final class ContainerRegistrationTest extends PhpStanRuleTestCase
 {
-    // the rule tests already run it through the gate, wired with the analyzed project's root
-    protected function ruleFor(string $root): Rule
+    // no case here runs bin/check, because the end-to-end cases of the rule tests already cover it wired with the analyzed project's root
+    protected function ruleFor(string $root): StatefulServiceResetRule
     {
         return new StatefulServiceResetRule(new ContainerRegistration($root));
     }
