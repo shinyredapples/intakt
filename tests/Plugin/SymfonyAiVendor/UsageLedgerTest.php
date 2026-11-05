@@ -6,8 +6,11 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Generator;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageSettled;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -26,6 +29,8 @@ use Symfony\Component\Clock\MockClock;
 #[CoversClass(UsageLedger::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[UsesClass(UsageReservation::class)]
+#[UsesClass(UsageSettled::class)]
+#[UsesClass(TokenUsageRow::class)]
 final class UsageLedgerTest extends TestCase
 {
     public function testACallWhoseAnswerIsAStreamSettlesWithOnlyItsFinalUsageOnce(): void
@@ -59,7 +64,7 @@ final class UsageLedgerTest extends TestCase
 
     private function settle(InMemoryLedger $ledger, DeferredResult $round): void
     {
-        new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger())->settle(new UsageReservation('a call'), $round);
+        new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create())->settle(new UsageReservation('a call'), $round);
     }
 
     private function roundAnswering(ResultInterface $answer): DeferredResult
