@@ -11,7 +11,7 @@ use SplFileInfo;
 
 final class TestsGate implements Gate
 {
-    private const string GATES_CACHE_VARIABLE = 'INTAKT_GATES_CACHE';
+    private const string SERIAL_GROUP = 'serial';
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
     private const string SKIPPED_GATES_PASS = 'gates pass skipped, the change leaves the gate code, the gate tests and their inputs unchanged';
@@ -86,7 +86,7 @@ final class TestsGate implements Gate
     private function resultOf(Workspace $workspace, string $scratch, array $passes): GateResult
     {
         $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes))
-            ->withSlowest($this->recordedDurations($workspace, $scratch, array_keys($passes)));
+            ->withSlowest($this->recordedDurations($workspace, $scratch));
 
         return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
     }
@@ -100,12 +100,14 @@ final class TestsGate implements Gate
     {
         $commands = [];
 
-        foreach ($passes as $pass => $configuration) {
-            if (!mkdir($scratch.'/'.$pass, 0o700)) {
+        foreach (array_keys($passes) as $index => $pass) {
+            $worker = TestWorker::numbered($scratch, $pass, $index);
+
+            if (!$worker->prepared()) {
                 return [$pass.': cannot create the scratch directory of the pass in '.$scratch];
             }
 
-            $commands[$pass] = [$this->phpunit($workspace, $configuration, $this->junitReport($scratch, $pass)), $this->isolated($scratch, $pass)];
+            $commands[$pass] = [[...$this->phpunit($workspace, $passes[$pass], $worker->junitReport()), '--exclude-group='.self::SERIAL_GROUP], $worker->environment()];
         }
 
         $findings = [];
@@ -114,48 +116,56 @@ final class TestsGate implements Gate
             $findings = [...$findings, ...PhpunitReport::findings($pass, $result)];
         }
 
+        foreach ($passes as $pass => $configuration) {
+            $findings = [...$findings, ...$this->serialFindings($workspace, TestWorker::serial($scratch, $pass), $configuration)];
+        }
+
         return $findings;
     }
 
     /**
-     * @param list<string> $passes
-     *
+     * @return list<string>
+     */
+    private function serialFindings(Workspace $workspace, TestWorker $worker, string $configuration): array
+    {
+        if (!$worker->prepared()) {
+            return [$worker->run.': cannot create the scratch directory of the serial pass'];
+        }
+
+        $groups = $workspace->command([$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$configuration, '--list-groups', '--colors=never'], $worker->environment());
+
+        if (!$groups->succeeded()) {
+            return PhpunitReport::findings($worker->run, $groups);
+        }
+
+        // Because a configuration without serial tests has nothing to run alone, and an empty run would fail on the empty test suite.
+        if (1 !== preg_match('/^ - '.self::SERIAL_GROUP.' \(/m', $groups->output)) {
+            return [];
+        }
+
+        $result = $workspace->command([...$this->phpunit($workspace, $configuration, $worker->junitReport()), '--group='.self::SERIAL_GROUP], $worker->environment());
+
+        return PhpunitReport::findings($worker->run, $result);
+    }
+
+    /**
      * @return array<string, float>
      */
-    private function recordedDurations(Workspace $workspace, string $scratch, array $passes): array
+    private function recordedDurations(Workspace $workspace, string $scratch): array
     {
         $durations = new TestDurations($workspace->root);
-        $seconds = $durations->read(array_map(fn (string $pass): string => $this->junitReport($scratch, $pass), $passes));
+        $reports = glob($scratch.'/*/*/junit.xml');
+        $seconds = $durations->read(false === $reports ? [] : $reports);
         $durations->write($seconds, $this->gatesCache());
 
         return $durations->slowest($seconds);
     }
 
-    private function junitReport(string $scratch, string $pass): string
-    {
-        return $scratch.'/'.$pass.'/junit.xml';
-    }
-
     private function gatesCache(): string
     {
-        $base = getenv(self::GATES_CACHE_VARIABLE);
+        $base = getenv(TestWorker::GATES_CACHE_VARIABLE);
 
         return is_string($base) && '' !== $base ? $base : sys_get_temp_dir().'/intakt-gates';
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function isolated(string $scratch, string $pass): array
-    {
-        $directory = $scratch.'/'.$pass;
-
-        return [
-            'DATABASE_URL' => 'sqlite:///'.$directory.'/database.sqlite',
-            'APP_CACHE_DIR' => $directory.'/cache',
-            'APP_LOG_DIR' => $directory.'/log',
-            self::GATES_CACHE_VARIABLE => $directory.'/tools',
-        ];
     }
 
     private function scratchDirectory(): ?string
