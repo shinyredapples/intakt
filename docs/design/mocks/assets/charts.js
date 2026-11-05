@@ -40,9 +40,9 @@
       el("line", { x1: P.l, x2: W - P.r, y1: yy, y2: yy, class: f === 0 ? "c-base" : "c-grid" }, svg);
       const t = el("text", { x: P.l - 6, y: yy + 4, class: "c-axis", "text-anchor": "end" }, svg); t.textContent = fmt(+v.toFixed(1));
     });
-    const step = iw / n;
+    const step = iw / Math.max(1, n); // no observations: no x labels, and no division by zero
     const cx = (i) => P.l + step * i + step / 2;
-    [0, Math.floor((n - 1) / 2), n - 1].forEach((i) => {
+    (n ? [...new Set([0, Math.floor((n - 1) / 2), n - 1])] : []).forEach((i) => {
       const t = el("text", { x: cx(i), y: H - 6, class: "c-axis", "text-anchor": "middle" }, svg); t.textContent = o.labels[i];
     });
     if (o.type === "bar") {
