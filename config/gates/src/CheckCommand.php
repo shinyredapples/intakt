@@ -91,17 +91,16 @@ final readonly class CheckCommand
             array_filter($gates, static fn (Gate $gate): bool => $gate instanceof SpreadsOverEveryProcessor),
         ));
 
-        return $this->runGates($names, $arguments, $slots, $spreading);
+        return $this->runGates($names, $arguments, new ProcessSlots($slots, $spreading));
     }
 
     /**
      * @param list<string> $names
      * @param list<string> $arguments
-     * @param list<string> $oneAtATime
      */
-    private function runGates(array $names, array $arguments, int $slots, array $oneAtATime): int
+    private function runGates(array $names, array $arguments, ProcessSlots $slots): int
     {
-        $children = new ProcessRunner()->runAtMost($slots, $this->childCommands($names, $arguments), $this->workingDirectory(), $oneAtATime);
+        $children = new ProcessRunner()->runAtMost($slots, $this->childCommands($names, $arguments), $this->workingDirectory());
         $failed = [];
 
         foreach ($names as $name) {

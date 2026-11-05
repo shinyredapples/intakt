@@ -6,10 +6,12 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\ProcessSlots;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(ProcessRunner::class)]
+#[CoversClass(ProcessSlots::class)]
 #[UsesClass(ProcessResult::class)]
 final class ProcessRunnerSlotsTest extends SandboxTestCase
 {
@@ -17,7 +19,7 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
     {
         $sandbox = $this->emptySandbox();
 
-        $results = new ProcessRunner()->runAtMost(1, [
+        $results = new ProcessRunner()->runAtMost(new ProcessSlots(1), [
             'first' => [['sh', '-c', 'sleep 0.2; touch first.done'], []],
             'second' => [['sh', '-c', 'test -e first.done'], []],
         ], $sandbox->root);
@@ -31,7 +33,7 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $waitsForTheOther = 'waited=0; while [ ! -e second.started ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done; test -e second.started';
 
-        $results = new ProcessRunner()->runAtMost(2, [
+        $results = new ProcessRunner()->runAtMost(new ProcessSlots(2), [
             'first' => [['sh', '-c', $waitsForTheOther], []],
             'second' => [['sh', '-c', 'touch second.started'], []],
         ], $sandbox->root);
@@ -44,10 +46,10 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
     {
         $sandbox = $this->emptySandbox();
 
-        $results = new ProcessRunner()->runAtMost(3, [
+        $results = new ProcessRunner()->runAtMost(new ProcessSlots(3, ['first', 'second']), [
             'first' => [['sh', '-c', 'touch first.running; sleep 0.3; rm first.running'], []],
             'second' => [['sh', '-c', 'test ! -e first.running'], []],
-        ], $sandbox->root, ['first', 'second']);
+        ], $sandbox->root);
 
         self::assertTrue($results['first']->succeeded());
         self::assertTrue($results['second']->succeeded());
@@ -58,10 +60,10 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $waitsForTheOther = 'waited=0; while [ ! -e other.started ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done; test -e other.started';
 
-        $results = new ProcessRunner()->runAtMost(2, [
+        $results = new ProcessRunner()->runAtMost(new ProcessSlots(2, ['marked']), [
             'marked' => [['sh', '-c', $waitsForTheOther], []],
             'other' => [['sh', '-c', 'touch other.started'], []],
-        ], $sandbox->root, ['marked']);
+        ], $sandbox->root);
 
         self::assertTrue($results['marked']->succeeded());
         self::assertTrue($results['other']->succeeded());
@@ -69,7 +71,7 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
 
     public function testACommandThatCannotStartIsReportedWhileTheOthersRun(): void
     {
-        $results = new ProcessRunner()->runAtMost(1, [
+        $results = new ProcessRunner()->runAtMost(new ProcessSlots(1), [
             'missing' => [['/nonexistent/program'], []],
             'present' => [['sh', '-c', 'echo here'], []],
         ], $this->emptySandbox()->root);

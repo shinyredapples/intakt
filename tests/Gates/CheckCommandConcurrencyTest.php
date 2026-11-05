@@ -8,6 +8,7 @@ use Intakt\Gates\CheckCommand;
 use Intakt\Gates\ChildReport;
 use Intakt\Gates\GateSlots;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\ProcessSlots;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -15,6 +16,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(ChildReport::class)]
 #[CoversClass(GateSlots::class)]
 #[UsesClass(ProcessRunner::class)]
+#[UsesClass(ProcessSlots::class)]
 final class CheckCommandConcurrencyTest extends SandboxTestCase
 {
     private const string FINDS_THE_GATE = 'for argument in "$@"; do case "$argument" in --gate=*) gate="${argument#--gate=}";; esac; done'."\n";
