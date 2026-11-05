@@ -132,7 +132,7 @@ final class ProcessRunner
      */
     public function runAtMost(ProcessSlots $slots, array $commands, string $directory): array
     {
-        $processes = $this->processes($commands, $directory, $this->slotSeconds);
+        $processes = $this->processes($this->leadingOwnGroups($commands), $directory, $this->slotSeconds);
         $failures = $this->runInSlots($slots, $processes);
         $results = $this->resultsOf($processes, $failures, $commands);
 
@@ -144,6 +144,19 @@ final class ProcessRunner
         }
 
         return $results;
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
+     *
+     * @return array<Name, array{list<string>, array<string, string|false>}>
+     */
+    private function leadingOwnGroups(array $commands): array
+    {
+        // Because stopping a timed-out child alone would leave the tool and the workers it started running in its slot: as the leader of its own process group, the child is killed together with them.
+        return array_map(static fn (array $command): array => [['setsid', ...$command[0]], $command[1]], $commands);
     }
 
     /**
@@ -192,22 +205,49 @@ final class ProcessRunner
     private function runInSlots(ProcessSlots $slots, array $waiting): array
     {
         $running = [];
+        $groups = [];
         $failures = [];
 
         while ([] !== $waiting || [] !== $running) {
             $starting = $slots->nextToStart($waiting, $running);
             $waiting = array_diff_key($waiting, $starting);
             $failures += $this->startAll($starting);
-            $running += array_diff_key($starting, $failures);
+            $started = array_diff_key($starting, $failures);
+            $running += $started;
+            $groups += $this->groupsOf($started);
 
             $finished = $this->pollAll($running);
             $running = array_diff_key($running, $finished);
-            $failures += array_filter($finished, static fn (?int $failure): bool => null !== $failure);
+            $stopped = array_filter($finished, static fn (?int $failure): bool => null !== $failure);
+            $failures += $stopped;
+            $this->killGroups(array_intersect_key($groups, $stopped));
 
             usleep(self::POLL_MICROSECONDS);
         }
 
         return $failures;
+    }
+
+    /**
+     * @param array<array-key, Process> $started
+     *
+     * @return array<array-key, int>
+     */
+    private function groupsOf(array $started): array
+    {
+        // Because Symfony Process forgets the pid once the child ended, the group is recorded right after the start.
+        return array_filter(array_map(static fn (Process $process): ?int => $process->getPid(), $started), is_int(...));
+    }
+
+    /**
+     * @param array<array-key, int> $groups
+     */
+    private function killGroups(array $groups): void
+    {
+        // Because the slot of a child the runner stopped is free only once the tool it started has ended with it.
+        foreach ($groups as $group) {
+            posix_kill(-$group, 9);
+        }
     }
 
     private function runCall(GitCall $call): ProcessResult

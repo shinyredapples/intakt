@@ -57,7 +57,7 @@ final class RequiredToolsTest extends TestCase
         $missing = $this->tools()->missingFor(['audit', 'tests', 'secrets', 'secrets-history']);
 
         self::assertSame(
-            array_map(RequiredTools::notFound(...), ['git', 'composer', 'sh', 'unshare', 'setsid', 'true', 'bash', 'jq', 'gitleaks', 'env']),
+            array_map(RequiredTools::notFound(...), ['git', 'setsid', 'composer', 'sh', 'unshare', 'true', 'bash', 'jq', 'gitleaks', 'env']),
             $missing,
         );
     }
@@ -76,7 +76,35 @@ final class RequiredToolsTest extends TestCase
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
 
-        self::assertSame([RequiredTools::notFound('git')], $this->tools()->missingFor(['cs']));
+        self::assertSame(array_map(RequiredTools::notFound(...), ['git', 'setsid']), $this->tools()->missingFor(['cs']));
+    }
+
+    public function testEveryGateRunNeedsSetsidForItsChildProcessGroup(): void
+    {
+        putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
+
+        self::assertContains(RequiredTools::notFound('setsid'), $this->tools()->missingFor(['commits']));
+    }
+
+    public function testWithoutThePosixFunctionsTheMissingExtensionIsListedAfterTheCommands(): void
+    {
+        $code = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).';'
+            .'echo json_encode((new '.RequiredTools::class.'('.var_export($this->root, true).'))->missingFor(["cs"]));';
+        $child = new Process([PHP_BINARY, '-d', 'disable_functions=posix_kill', '-r', $code]);
+
+        $child->run();
+
+        self::assertSame(json_encode([RequiredTools::posixMissing()]), $child->getOutput(), $child->getErrorOutput());
+    }
+
+    public function testWithThePosixFunctionsNothingIsListedForTheExtension(): void
+    {
+        self::assertSame([], $this->tools()->missingFor(['cs']));
+    }
+
+    public function testThePosixMessageNamesTheExtensionAndTheRequirementsPage(): void
+    {
+        self::assertSame('the PHP posix extension is missing, see docs/architecture/requirements.md', RequiredTools::posixMissing());
     }
 
     public function testNoCommandIsRequiredWhenNoGateIsSelected(): void
@@ -105,7 +133,7 @@ final class RequiredToolsTest extends TestCase
 
         $missing = $this->tools()->missingFor(['secrets', 'secrets-history']);
 
-        self::assertSame(array_map(RequiredTools::notFound(...), ['git', 'env']), $missing);
+        self::assertSame(array_map(RequiredTools::notFound(...), ['git', 'setsid', 'env']), $missing);
     }
 
     public function testARelativeScannerPathIsFoundInTheWorkspaceRoot(): void
@@ -169,7 +197,7 @@ final class RequiredToolsTest extends TestCase
     public function testWithoutAPathOnlyToolsAGateProcessCannotStartAreListed(): void
     {
         putenv('PATH');
-        $unstartable = array_values(array_filter(['git', 'composer'], fn (string $tool): bool => !$this->gateStarts($tool)));
+        $unstartable = array_values(array_filter(['git', 'setsid', 'composer'], fn (string $tool): bool => !$this->gateStarts($tool)));
 
         $missing = $this->tools()->missingFor(['audit']);
 
@@ -187,6 +215,7 @@ final class RequiredToolsTest extends TestCase
     public function testWithoutAPathOrAWayToStartAProcessOnlyTheWorkspaceRootIsSearched(): void
     {
         $this->install($this->root.'/git');
+        $this->install($this->root.'/setsid');
         $code = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; putenv("PATH");'
             .'echo json_encode((new '.RequiredTools::class.'('.var_export($this->root, true).'))->missingFor(["audit"]));';
         $child = new Process([PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $code]);

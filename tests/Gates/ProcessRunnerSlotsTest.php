@@ -90,4 +90,39 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
         self::assertSame("progress\n", $results['slow']->output);
         self::assertSame("diagnostic before timeout\nsh timed out after 1 seconds", $results['slow']->errors);
     }
+
+    public function testACommandThatTimesOutIsStoppedTogetherWithTheProcessesItStarted(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $tool = 'echo $$ > tool.pid; sleep 10; touch tool.survived';
+        $gateChild = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).';'
+            .'new Intakt\Gates\ProcessRunner()->run(["sh", "-c", '.var_export($tool, true).'], '.var_export($sandbox->root, true).');';
+
+        $results = new ProcessRunner(slotSeconds: 1)->runAtMost(new ProcessSlots(1), [
+            'gate' => [[PHP_BINARY, '-r', $gateChild], []],
+        ], $sandbox->root);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['gate']->exitCode);
+        $this->assertGoneSoon((int) trim((string) @file_get_contents($sandbox->root.'/tool.pid')));
+        self::assertFileDoesNotExist($sandbox->root.'/tool.survived');
+    }
+
+    private function assertGoneSoon(int $pid): void
+    {
+        self::assertGreaterThan(0, $pid, 'The tool of the gate child never started');
+
+        for ($attempt = 0; $attempt < 50 && $this->isRunning($pid); ++$attempt) {
+            usleep(100000);
+        }
+
+        self::assertFalse($this->isRunning($pid), 'The tool of the gate child survived the timeout');
+    }
+
+    private function isRunning(int $pid): bool
+    {
+        $status = (string) @file_get_contents('/proc/'.$pid.'/stat');
+        $end = strrpos($status, ')');
+
+        return false !== $end && 'Z' !== substr($status, $end + 2, 1);
+    }
 }

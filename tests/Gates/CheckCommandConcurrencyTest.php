@@ -85,6 +85,37 @@ final class CheckCommandConcurrencyTest extends SandboxTestCase
         self::assertStringContainsString('exit code 1', $run->findingsOf('cs'));
     }
 
+    public function testAPassingLineThatListsFindingsFailsTheGate(): void
+    {
+        $sandbox = $this->sandboxWithChild("echo '{\"gate\":\"cs\",\"ok\":true,\"findings\":[\"a rule failed\"],\"omitted\":0}'\n");
+
+        $run = $this->checkWithFakeChildren($sandbox, [], '--only=cs');
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue($run->failed('cs'), $run->output());
+        self::assertStringContainsString('no valid result line', $run->findingsOf('cs'));
+    }
+
+    public function testAPassingLineThatOmitsFindingsFailsTheGate(): void
+    {
+        $sandbox = $this->sandboxWithChild("echo '{\"gate\":\"cs\",\"ok\":true,\"findings\":[],\"omitted\":2}'\n");
+
+        $run = $this->checkWithFakeChildren($sandbox, [], '--only=cs');
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertStringContainsString('no valid result line', $run->findingsOf('cs'));
+    }
+
+    public function testAFailingLineWithoutFindingsFailsTheGateAsAnInvalidLine(): void
+    {
+        $sandbox = $this->sandboxWithChild("echo '{\"gate\":\"cs\",\"ok\":false,\"findings\":[],\"omitted\":0}'\nexit 1\n");
+
+        $run = $this->checkWithFakeChildren($sandbox, [], '--only=cs');
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertStringContainsString('no valid result line', $run->findingsOf('cs'));
+    }
+
     public function testAPassingLineFromAChildThatExitedCleanlyPassesTheGate(): void
     {
         $sandbox = $this->sandboxWithChild("echo '{\"gate\":\"cs\",\"ok\":true,\"findings\":[],\"omitted\":0,\"note\":\"kept\"}'\n");
@@ -171,6 +202,18 @@ final class CheckCommandConcurrencyTest extends SandboxTestCase
         self::assertSame(2, $this->checkWithFakeChildren($sandbox, ['INTAKT_GATES_AT_ONCE' => 'two'], '--only=cs')->exitCode());
     }
 
+    public function testWithoutThePosixFunctionsNoGateStartsAndTheMissingExtensionIsReported(): void
+    {
+        $sandbox = $this->sandboxWithChild("echo started >> log\n");
+
+        $run = $this->checkWithoutPosix($sandbox, '--only=cs');
+
+        self::assertSame(2, $run->exitCode(), $run->output());
+        self::assertStringContainsString('"error":"missing tools"', $run->output());
+        self::assertStringContainsString('the PHP posix extension is missing, see docs/architecture/requirements.md', $run->output());
+        self::assertFileDoesNotExist($sandbox->root.'/log');
+    }
+
     public function testAnUnknownGateForAChildIsAUsageError(): void
     {
         self::assertSame(2, $this->emptySandbox()->check('--gate=magic')->exitCode());
@@ -198,11 +241,23 @@ final class CheckCommandConcurrencyTest extends SandboxTestCase
      */
     private function checkWithFakeChildren(Sandbox $sandbox, array $environment, string ...$arguments): CheckRun
     {
+        return new CheckRun(new ProcessRunner()->run(['php', $this->checkScript($sandbox), '--root='.$sandbox->root, ...array_values($arguments)], $sandbox->root, $environment));
+    }
+
+    private function checkWithoutPosix(Sandbox $sandbox, string ...$arguments): CheckRun
+    {
+        $withoutPosix = ['php', '-d', 'disable_functions=posix_kill,posix_sysconf', $this->checkScript($sandbox), '--root='.$sandbox->root];
+
+        return new CheckRun(new ProcessRunner()->run([...$withoutPosix, ...array_values($arguments)], $sandbox->root));
+    }
+
+    private function checkScript(Sandbox $sandbox): string
+    {
         $home = dirname(__DIR__, 2);
         $sandbox->write('check.php', '<?php require '.var_export($home.'/vendor/autoload.php', true).';'
             .' exit(new Intakt\Gates\CheckCommand('.var_export($home, true).', ["sh", '.var_export($sandbox->root.'/child.sh', true).'])->run(array_slice($argv, 1)));');
 
-        return new CheckRun(new ProcessRunner()->run(['php', $sandbox->root.'/check.php', '--root='.$sandbox->root, ...array_values($arguments)], $sandbox->root, $environment));
+        return $sandbox->root.'/check.php';
     }
 
     /**

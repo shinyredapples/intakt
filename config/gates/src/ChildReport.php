@@ -38,6 +38,24 @@ final readonly class ChildReport
 
     private static function verdictOf(string $gate, string $line): ?bool
     {
+        $report = self::reportIn($line);
+
+        if (null === $report || $gate !== ($report['gate'] ?? null) || !self::isFindingsList($report['findings'] ?? null) || !self::isCount($report['omitted'] ?? null)) {
+            return null;
+        }
+
+        // Because a line that claims a pass while it lists or omits findings is as untrustworthy as none: the verdict counts only when it agrees with them.
+        $ok = $report['ok'] ?? null;
+        $clean = [] === $report['findings'] && 0 === $report['omitted'];
+
+        return is_bool($ok) && $ok === $clean ? $ok : null;
+    }
+
+    /**
+     * @return array<array-key, mixed>|null
+     */
+    private static function reportIn(string $line): ?array
+    {
         if (str_contains($line, "\n")) {
             return null;
         }
@@ -48,11 +66,17 @@ final readonly class ChildReport
             return null;
         }
 
-        if (!is_array($report) || $gate !== ($report['gate'] ?? null) || !is_array($report['findings'] ?? null) || !array_is_list($report['findings'])) {
-            return null;
-        }
+        return is_array($report) ? $report : null;
+    }
 
-        return is_bool($report['ok'] ?? null) ? $report['ok'] : null;
+    private static function isFindingsList(mixed $findings): bool
+    {
+        return is_array($findings) && array_is_list($findings) && array_all($findings, static fn (mixed $finding): bool => is_string($finding));
+    }
+
+    private static function isCount(mixed $omitted): bool
+    {
+        return is_int($omitted) && $omitted >= 0;
     }
 
     private static function failedChild(string $gate, ProcessResult $child): self

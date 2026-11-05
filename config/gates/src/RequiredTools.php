@@ -15,8 +15,8 @@ final readonly class RequiredTools
 
     private const string SCANNER = 'gitleaks';
 
-    // Every gate reads git, so git is not listed per gate, but a run that selects no gate reads nothing.
-    private const array COMMON = ['git'];
+    // Every gate reads git and runs as a child in its own process group (setsid), so neither is listed per gate, but a run that selects no gate starts nothing.
+    private const array COMMON = ['git', 'setsid'];
 
     private const array BY_GATE = [
         'audit' => ['composer'],
@@ -40,6 +40,11 @@ final readonly class RequiredTools
     public static function notFound(string $command): string
     {
         return $command.' not found, see '.self::REQUIREMENTS;
+    }
+
+    public static function posixMissing(): string
+    {
+        return 'the PHP posix extension is missing, see '.self::REQUIREMENTS;
     }
 
     /**
@@ -66,7 +71,15 @@ final readonly class RequiredTools
             |> array_unique(...)
             |> (fn (array $names): array => array_filter($names, fn (string $name): bool => !$this->isAvailable($name, $entries)));
 
-        return array_map(self::notFound(...), array_values($missing));
+        $messages = array_map(self::notFound(...), array_values($missing));
+
+        // Because the parent counts the processors and kills the process group of a stopped child through the posix functions.
+        return self::posixIsAvailable() ? $messages : [...$messages, self::posixMissing()];
+    }
+
+    private static function posixIsAvailable(): bool
+    {
+        return function_exists('posix_kill') && function_exists('posix_sysconf');
     }
 
     private function searchPath(): string
