@@ -41,19 +41,50 @@ final readonly class Options
      */
     public static function fromArguments(array $arguments): self
     {
-        $mode = Mode::Full;
+        $modes = [];
         $values = ['base' => null, 'only' => null, 'skip' => null, 'root' => null, 'test-merge' => null];
 
         foreach ($arguments as $argument) {
-            if ('--fast' === $argument) {
-                $mode = Mode::ChangedFilesOnly;
+            $mode = self::modeNamedBy($argument);
+
+            if ($mode instanceof Mode) {
+                $modes[] = $mode;
                 continue;
             }
 
             $values = self::withValue($values, $argument);
         }
 
-        return new self($mode, $values);
+        return self::withMode($modes, $values);
+    }
+
+    private static function modeNamedBy(string $argument): ?Mode
+    {
+        return match ($argument) {
+            '--fast' => Mode::ChangedFilesOnly,
+            '--journeys' => Mode::Journeys,
+            default => null,
+        };
+    }
+
+    /**
+     * @param list<Mode>                                                                               $modes
+     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     */
+    private static function withMode(array $modes, array $values): self
+    {
+        if (!in_array(Mode::Journeys, $modes, true)) {
+            return new self(array_last($modes) ?? Mode::Full, $values);
+        }
+
+        $options = new self(Mode::Journeys, $values);
+        $others = array_filter($modes, static fn (Mode $mode): bool => Mode::Journeys !== $mode);
+
+        if ([] !== $others || [] !== $options->only || [] !== $options->skip) {
+            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only or --skip');
+        }
+
+        return $options;
     }
 
     /**
@@ -71,7 +102,7 @@ final readonly class Options
             }
         }
 
-        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>]');
+        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>]');
     }
 
     /**
