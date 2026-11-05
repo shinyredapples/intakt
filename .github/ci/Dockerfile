@@ -7,7 +7,7 @@ ARG COMPOSER_SHA256=9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602
 ARG GITLEAKS_VERSION=8.30.1
 ARG GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 
-# The base image's XDG_*_HOME point Caddy at root's /config and /data; the jobs run as uid 1000.
+# Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
@@ -21,6 +21,7 @@ RUN set -eu; \
     echo "$GITLEAKS_SHA256  /tmp/gitleaks.tar.gz" | sha256sum --check --strict; \
     tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks; \
     rm /tmp/gitleaks.tar.gz; \
+    setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
     php -r 'foreach (["intl", "pcntl", "zip", "pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
