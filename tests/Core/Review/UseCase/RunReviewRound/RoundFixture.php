@@ -152,7 +152,7 @@ final readonly class RoundFixture
 
     public function startHandlerOn(MessageBusInterface $queue, StartGuard $guard = new ScriptedAccountGuard(), TierResolver $tiers = new ConfiguredTierResolver(self::TIERS, [])): RunReviewRoundHandler
     {
-        $ledger = new RoundLedger($this->ledger, $this->modes);
+        $ledger = new RoundLedger($this->ledger, $this->modes, $this->serializer);
 
         return new RunReviewRoundHandler($this->modes, $this->shadowHold($guard, $tiers, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue));
     }
@@ -272,7 +272,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger, $this->modes)), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger, $this->modes, $this->serializer)), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -326,7 +326,7 @@ final readonly class RoundFixture
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
-        $ledger = new RoundLedger(new InMemoryLedger(), $this->modes);
+        $ledger = new RoundLedger(new InMemoryLedger(), $this->modes, $this->serializer);
         $hold = $this->shadowHold(new ScriptedAccountGuard(), new ConfiguredTierResolver(self::TIERS, []), $ledger);
 
         return new RunReviewRoundHandler($this->modes, $hold, new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
@@ -401,7 +401,7 @@ final readonly class RoundFixture
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes), $this->serializer, new StopRequests($ledger ?? $this->ledger));
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes, $this->serializer), $this->serializer, new StopRequests($ledger ?? $this->ledger));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
     }

@@ -12,9 +12,14 @@ use Intakt\Gates\PhpStan\NoDeprecatedClassDocblockTypeRule;
 use Intakt\Gates\PhpStan\NoDeprecatedDocblockTypeRule;
 use Intakt\Gates\PhpStan\NoDeprecatedReferenceRule;
 use Intakt\Gates\StaticAnalysisGate;
+use PHPStan\PhpDoc\TypeNodeResolver;
+use PHPStan\Type\FileTypeMapper;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<DeprecationRules>
+ */
 #[CoversClass(NoDeprecatedReferenceRule::class)]
 #[CoversClass(NoDeprecatedDocblockTypeRule::class)]
 #[CoversClass(NoDeprecatedClassDocblockTypeRule::class)]
@@ -23,8 +28,22 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(FileScopeDeprecation::class)]
 #[CoversClass(DocblockTypeNames::class)]
 #[UsesClass(StaticAnalysisGate::class)]
-final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
+#[UsesClass(DeprecationRules::class)]
+final class NoDeprecatedReferenceRuleTest extends PhpStanRuleTestCase
 {
+    protected function ruleFor(string $root): DeprecationRules
+    {
+        $reflections = self::createReflectionProvider();
+        $deprecated = new DeprecatedClasses($reflections, new FileScopeDeprecation(self::getParser(), $reflections));
+        $docblocks = new DeprecatedDocblockTypes(self::getContainer()->getByType(FileTypeMapper::class), self::getContainer()->getByType(TypeNodeResolver::class), $deprecated);
+
+        return new DeprecationRules(
+            new NoDeprecatedReferenceRule($deprecated),
+            new NoDeprecatedDocblockTypeRule($docblocks),
+            new NoDeprecatedClassDocblockTypeRule($docblocks),
+        );
+    }
+
     public function testImportingADeprecatedClassFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'deprecated-import', 'intakt.deprecatedReference');
@@ -32,27 +51,27 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     public function testCheckingInstanceofAgainstADeprecatedClassFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-instanceof', 'intakt.deprecatedReference');
+        $this->assertRuleRejects('deprecated-instanceof', 'intakt.deprecatedReference');
     }
 
     public function testCatchingADeprecatedExceptionFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-catch', 'intakt.deprecatedReference');
+        $this->assertRuleRejects('deprecated-catch', 'intakt.deprecatedReference');
     }
 
     public function testADeprecatedClassInADocblockTypeFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-docblock', 'intakt.deprecatedReference');
+        $this->assertRuleRejects('deprecated-docblock', 'intakt.deprecatedReference');
     }
 
     public function testTheClassConstantOfADeprecatedClassFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-class-constant', 'intakt.deprecatedReference');
+        $this->assertRuleRejects('deprecated-class-constant', 'intakt.deprecatedReference');
     }
 
     public function testADeprecatedAttributeClassFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-attribute', 'intakt.deprecatedReference');
+        $this->assertRuleRejects('deprecated-attribute', 'intakt.deprecatedReference');
     }
 
     public function testTheNonDeprecatedReplacementPassesStaticAnalysis(): void
@@ -62,12 +81,12 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     public function testAClassWhoseFileTriggersADeprecationAtFileScopeFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'deprecated-file-scope', 'intakt.deprecatedReference');
+        $this->assertRuleRejects('deprecated-file-scope', 'intakt.deprecatedReference');
     }
 
     public function testATriggerDeprecationInsideAMethodDoesNotMakeTheClassDeprecated(): void
     {
-        $this->assertAcceptedBy('phpstan', 'deprecated-trigger-in-method');
+        $this->assertRuleAccepts('deprecated-trigger-in-method');
     }
 
     public function testADeprecatedClassInAClassLevelPropertyTagFailsStaticAnalysis(): void
@@ -127,9 +146,9 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     public function testAFunctionInAGroupImportIsNoClassReference(): void
     {
-        $run = $this->checkConsumer('deprecated-replacement', "use Intakt\\Sample\\{function Legacy};\n\nfinal class Consumer\n{\n}\n");
+        $findings = $this->checkConsumer('deprecated-replacement', "use Intakt\\Sample\\{function Legacy};\n\nfinal class Consumer\n{\n}\n");
 
-        self::assertStringNotContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+        self::assertStringNotContainsString('intakt.deprecatedReference', $findings);
     }
 
     public function testADeprecatedClassInAUnionTheAnalyserSimplifiesFailsStaticAnalysis(): void
@@ -204,9 +223,9 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     public function testAUsedTraitDocblockIsReportedOnce(): void
     {
-        $run = $this->checkConsumer('deprecated-replacement', "/**\n * @property Legacy \$item\n */\ntrait Helper\n{\n    /**\n     * @param Legacy \$item\n     */\n    public function take(object \$item): void\n    {\n    }\n}\n\nfinal class Consumer\n{\n    use Helper;\n}\n\nfinal class OtherConsumer\n{\n    use Helper;\n}\n");
+        $findings = $this->checkConsumer('deprecated-replacement', "/**\n * @property Legacy \$item\n */\ntrait Helper\n{\n    /**\n     * @param Legacy \$item\n     */\n    public function take(object \$item): void\n    {\n    }\n}\n\nfinal class Consumer\n{\n    use Helper;\n}\n\nfinal class OtherConsumer\n{\n    use Helper;\n}\n");
 
-        self::assertSame(2, substr_count($run->findingsOf('phpstan'), 'intakt.deprecatedReference'), $run->output());
+        self::assertSame(2, substr_count($findings, 'intakt.deprecatedReference'), $findings);
     }
 
     public function testADifferentNamespacedFunctionDoesNotDeprecateAClass(): void
@@ -221,47 +240,38 @@ final class NoDeprecatedReferenceRuleTest extends SandboxTestCase
 
     private function assertLegacyRefused(string $body): void
     {
-        $run = $this->checkLegacy($body);
-
-        self::assertStringContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+        self::assertStringContainsString('intakt.deprecatedReference', $this->checkLegacy($body));
     }
 
     private function assertLegacyAccepted(string $body): void
     {
-        $run = $this->checkLegacy($body);
-
-        self::assertTrue($run->passed('phpstan'), $run->output());
+        self::assertSame('', $this->checkLegacy($body));
     }
 
     // because the file-scope fixture's consumer already names Legacy, so only Legacy's own file changes between these cases
-    private function checkLegacy(string $body): CheckRun
+    private function checkLegacy(string $body): string
     {
         $sandbox = $this->sandboxWith('deprecated-file-scope');
         $sandbox->write('src/Legacy.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\n".$body);
 
-        return $sandbox->check('--only=phpstan');
+        return $this->ruleFindingsIn($sandbox);
     }
 
     private function assertConsumerRefused(string $fixture, string $body): void
     {
-        $run = $this->checkConsumer($fixture, $body);
-
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('intakt.deprecatedReference', $run->findingsOf('phpstan'), $run->output());
+        self::assertStringContainsString('intakt.deprecatedReference', $this->checkConsumer($fixture, $body));
     }
 
     private function assertConsumerAccepted(string $fixture, string $body): void
     {
-        $run = $this->checkConsumer($fixture, $body);
-
-        self::assertTrue($run->passed('phpstan'), $run->output());
+        self::assertSame('', $this->checkConsumer($fixture, $body));
     }
 
-    private function checkConsumer(string $fixture, string $body): CheckRun
+    private function checkConsumer(string $fixture, string $body): string
     {
         $sandbox = $this->sandboxWith($fixture);
         $sandbox->write('src/Consumer.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\n".$body);
 
-        return $sandbox->check('--only=phpstan');
+        return $this->ruleFindingsIn($sandbox);
     }
 }

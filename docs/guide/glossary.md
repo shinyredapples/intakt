@@ -23,6 +23,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Draining** | stopping new work so running jobs can finish before an update | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Fixture** | a small sample project a test of Intakt's own checks runs a rule on | [testing a new check](testing-a-new-check.md) |
 | **Follow-up** | a small task made from reviewers' nice-to-have notes | [journey](the-journey-of-a-task.md#7-afterwards) |
 | **Forge** | where your code lives: GitHub or Gitea | [connections](what-intakt-connects-to.md) |
 | **Generation** | a set of cycles with one kind of builder; the next one uses a stronger model | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
