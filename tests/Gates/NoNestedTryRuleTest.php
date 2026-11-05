@@ -9,10 +9,18 @@ use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<NoNestedTryRule>
+ */
 #[CoversClass(NoNestedTryRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
-final class NoNestedTryRuleTest extends SandboxTestCase
+final class NoNestedTryRuleTest extends PhpStanRuleTestCase
 {
+    protected function ruleFor(string $root): NoNestedTryRule
+    {
+        return new NoNestedTryRule();
+    }
+
     public function testATryInsideACatchFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'nested-try', 'intakt.nestedTry');
@@ -20,17 +28,17 @@ final class NoNestedTryRuleTest extends SandboxTestCase
 
     public function testATryInsideATryFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'try-in-try', 'intakt.nestedTry');
+        $this->assertRuleRejects('try-in-try', 'intakt.nestedTry');
     }
 
     public function testATryInsideAFinallyFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'try-in-finally', 'intakt.nestedTry');
+        $this->assertRuleRejects('try-in-finally', 'intakt.nestedTry');
     }
 
     public function testATryInAClosureInsideATryPassesStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'try-in-closure');
+        $this->assertRuleAccepts('try-in-closure');
     }
 
     public function testTriesInSeparateMethodsPassStaticAnalysis(): void

@@ -10,11 +10,19 @@ use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<ImportFormRule>
+ */
 #[CoversClass(ImportFormRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 #[UsesClass(CodingStandardsGate::class)]
-final class ImportFormRuleTest extends SandboxTestCase
+final class ImportFormRuleTest extends PhpStanRuleTestCase
 {
+    protected function ruleFor(string $root): ImportFormRule
+    {
+        return new ImportFormRule();
+    }
+
     public function testAPlainFunctionAndConstantPassTheCodingStandardsAndStaticAnalysis(): void
     {
         $this->assertAcceptedBy('cs', 'plain-function-and-constant');
@@ -23,11 +31,10 @@ final class ImportFormRuleTest extends SandboxTestCase
 
     public function testAFunctionOrConstantImportFailsStaticAnalysis(): void
     {
-        $run = $this->sandboxWith('imported-function-and-constant')->check('--only=phpstan');
+        $findings = $this->ruleFindingsOf('imported-function-and-constant');
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('src/Report.php:7 intakt.functionOrConstantImport', $run->findingsOf('phpstan'));
-        self::assertStringContainsString('src/Report.php:9 intakt.functionOrConstantImport', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Report.php:7 intakt.functionOrConstantImport', $findings);
+        self::assertStringContainsString('src/Report.php:9 intakt.functionOrConstantImport', $findings);
     }
 
     public function testAnImportAliasWithoutAShortNameClashFailsStaticAnalysis(): void
@@ -37,31 +44,31 @@ final class ImportFormRuleTest extends SandboxTestCase
 
     public function testAnImportAliasThatResolvesAShortNameClashPassesStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash');
+        $this->assertRuleAccepts('import-alias-for-short-name-clash');
     }
 
     public function testAnImportAliasThatResolvesAShortNameClashInAnotherLetterCasePassesStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'import-alias-for-short-name-clash-in-another-case');
+        $this->assertRuleAccepts('import-alias-for-short-name-clash-in-another-case');
     }
 
     public function testAnImportAliasWithoutAShortNameClashInItsOwnNamespaceFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'import-alias-in-another-namespace', 'src/Report.php:17 intakt.unneededImportAlias');
+        $this->assertRuleRejects('import-alias-in-another-namespace', 'src/Report.php:17 intakt.unneededImportAlias');
     }
 
     public function testAnImportAliasForAClassImportedTwiceFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'duplicate-import-alias', 'src/Report.php:8 intakt.unneededImportAlias');
+        $this->assertRuleRejects('duplicate-import-alias', 'src/Report.php:8 intakt.unneededImportAlias');
     }
 
     public function testAnImportAliasForTheShortNameOfTheDeclaredClassPassesStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'import-alias-for-declared-class');
+        $this->assertRuleAccepts('import-alias-for-declared-class');
     }
 
     public function testTheDoctrineOrmAliasPassesStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'doctrine-orm-alias');
+        $this->assertRuleAccepts('doctrine-orm-alias');
     }
 }

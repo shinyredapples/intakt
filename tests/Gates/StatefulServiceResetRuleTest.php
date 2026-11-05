@@ -10,23 +10,30 @@ use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
+/**
+ * @extends PhpStanRuleTestCase<StatefulServiceResetRule>
+ */
 #[CoversClass(StatefulServiceResetRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 #[UsesClass(ContainerRegistration::class)]
-final class StatefulServiceResetRuleTest extends SandboxTestCase
+final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
 {
+    protected function ruleFor(string $root): StatefulServiceResetRule
+    {
+        return new StatefulServiceResetRule(new ContainerRegistration($root));
+    }
+
     public function testAServiceWithAMutablePropertyFailsStaticAnalysis(): void
     {
-        $run = $this->sandboxWith('mutable-service')->check('--only=phpstan');
+        $findings = $this->ruleFindingsOf('mutable-service');
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('src/Mailer.php:9 intakt.statefulService Service property $sent', $run->findingsOf('phpstan'));
-        self::assertStringContainsString('src/Mailer.php:11 intakt.statefulService Service property $sender', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Mailer.php:9 intakt.statefulService Service property $sent', $findings);
+        self::assertStringContainsString('src/Mailer.php:11 intakt.statefulService Service property $sender', $findings);
     }
 
     public function testAServiceWithAMutablePropertyAndResetInterfacePassesStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'resettable-service');
+        $this->assertRuleAccepts('resettable-service');
     }
 
     public function testAReadonlyServicePassesStaticAnalysis(): void
@@ -36,36 +43,33 @@ final class StatefulServiceResetRuleTest extends SandboxTestCase
 
     public function testDoctrineColumnTypesWithMutablePropertiesPassStaticAnalysis(): void
     {
-        $this->assertAcceptedBy('phpstan', 'framework-built');
+        $this->assertRuleAccepts('framework-built');
     }
 
     public function testAnOptionPropertyAloneDoesNotExemptAServiceFromStaticAnalysis(): void
     {
-        $run = $this->sandboxWith('option-property-service')->check('--only=phpstan');
+        $findings = $this->ruleFindingsOf('option-property-service');
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('src/SendInput.php:11 intakt.statefulService Service property $uses', $run->findingsOf('phpstan'));
-        self::assertStringContainsString('src/SendInput.php:13 intakt.statefulService Service property $subject', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/SendInput.php:11 intakt.statefulService Service property $uses', $findings);
+        self::assertStringContainsString('src/SendInput.php:13 intakt.statefulService Service property $subject', $findings);
     }
 
     public function testOnlyPropertiesDeclaredUnderSrcAreReportedOnAServiceExtendingAFrameworkBaseClass(): void
     {
-        $run = $this->sandboxWith('framework-base')->check('--only=phpstan');
+        $findings = $this->ruleFindingsOf('framework-base');
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('src/Count.php:15 intakt.statefulService Service property $runs', $run->findingsOf('phpstan'));
-        self::assertStringNotContainsString('Command::$', $run->findingsOf('phpstan'));
-        self::assertStringNotContainsString('src/Greet.php', $run->findingsOf('phpstan'));
-        self::assertStringNotContainsString('src/Home.php', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Count.php:15 intakt.statefulService Service property $runs', $findings);
+        self::assertStringNotContainsString('Command::$', $findings);
+        self::assertStringNotContainsString('src/Greet.php', $findings);
+        self::assertStringNotContainsString('src/Home.php', $findings);
     }
 
     public function testOnlyABackedHookedPropertyOfAServiceFailsStaticAnalysis(): void
     {
-        $run = $this->sandboxWith('hooked-properties')->check('--only=phpstan');
+        $findings = $this->ruleFindingsOf('hooked-properties');
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('src/Mailer.php:13 intakt.statefulService Service property $subject', $run->findingsOf('phpstan'));
-        self::assertStringNotContainsString('$greeting', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Mailer.php:13 intakt.statefulService Service property $subject', $findings);
+        self::assertStringNotContainsString('$greeting', $findings);
     }
 
     public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void
@@ -75,15 +79,14 @@ final class StatefulServiceResetRuleTest extends SandboxTestCase
 
     public function testAStaticMutablePropertyOfAServiceFailsStaticAnalysis(): void
     {
-        $this->assertRejectedBy('phpstan', 'static-service', 'src/Mailer.php:9 intakt.statefulService Service property $sent');
+        $this->assertRuleRejects('static-service', 'src/Mailer.php:9 intakt.statefulService Service property $sent');
     }
 
     public function testMutablePropertiesFromATraitAndAParentFailStaticAnalysisOnTheService(): void
     {
-        $run = $this->sandboxWith('inherited-state')->check('--only=phpstan');
+        $findings = $this->ruleFindingsOf('inherited-state');
 
-        self::assertTrue($run->failed('phpstan'), $run->output());
-        self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Counting::$count', $run->findingsOf('phpstan'));
-        self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Sender::$last', $run->findingsOf('phpstan'));
+        self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Counting::$count', $findings);
+        self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Sender::$last', $findings);
     }
 }
