@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projects | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="projects">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content" id="main">
+<div class="page-head">
+  <div>
+    <h1>Projects</h1>
+    <p class="lead">Each project gets a share of the week's AI budget. Intakt paces work so spend tracks the share.</p>
+  </div>
+  <div class="actions"><a class="btn primary" href="add-project.html" data-icon="plus">Add a project</a></div>
+</div>
+<nav class="subtabs" aria-label="Project views"><a href="projects.html" aria-current="page">Projects</a><a href="health.html">Health <span class="count" style="margin-left:6px">1 broken</span></a></nav>
+
+<article class="pblock" id="intakt" data-project="intakt">
+  <div>
+    <h2><span class="dot ok"></span><a class="plink" href="project.html">intakt</a></h2>
+    <p class="muted small" style="margin:4px 0 14px">Running. Checks green on main.</p>
+    <p class="meta"><span>2 build slots</span><span>Label: intakt</span></p>
+  </div>
+  <div>
+    <p class="label-sm">This week</p>
+    <p><span class="stat">$412</span> <span class="muted">of $520 share</span></p>
+    <div class="bar" style="margin:10px 0 8px" role="img" aria-label="Spent 79 percent, forecast 96 percent of the weekly share"><i class="used" style="width:79%"></i><i class="forecast" style="left:79%;width:17%"></i></div>
+    <div class="legend"><span><i class="used"></i>Spent 79%</span><span><i class="forecast"></i>Forecast by Monday 96%</span></div>
+    <dl style="margin-top:16px"><dt><span class="term" data-term="share">Weekly share</span></dt><dd>50%</dd><dt>Merged this week</dt><dd>14</dd><dt>Sent back</dt><dd>3</dd></dl>
+  </div>
+  <div>
+    <p class="label-sm">Working on now</p>
+    <ul class="now">
+      <li><a href="task.html">#612 Command overlay for tasks and settings</a> <span class="muted small">building</span></li>
+      <li><a href="task.html">#598 Hold pushes while main is red</a> <span class="muted small">in review</span></li>
+      <li><a href="task.html">#603 Reviewer findings link to file and line</a> <span class="muted small">checking</span></li>
+    </ul>
+    <p style="margin-top:12px"><a class="waits" href="waiting.html"><span class="count needs">2</span><span>wait on you</span></a></p>
+  </div>
+</article>
+
+<article class="pblock" id="acme-shop" data-project="acme-shop">
+  <div>
+    <h2><span class="dot broken"></span><a class="plink" href="project.html">acme-shop</a></h2>
+    <p class="small" style="margin:4px 0 14px;color:var(--red)">CI image build failing since 09:12</p>
+    <p class="meta"><span>1 build slot</span><span>Label: ready-for-ai</span></p>
+    <a class="btn secondary sm" href="#" style="margin-top:14px" data-toast="Retrying the CI image build">Retry the CI build now</a>
+  </div>
+  <div>
+    <p class="label-sm">This week</p>
+    <p><span class="stat">$318</span> <span class="muted">of $312 share</span></p>
+    <div class="bar" style="margin:10px 0 8px" role="img" aria-label="Share used up"><i class="used" style="width:100%"></i></div>
+    <div class="legend"><span><i class="used"></i>Share used up. New builds wait until Monday 00:00</span></div>
+    <dl style="margin-top:16px"><dt><span class="term" data-term="share">Weekly share</span></dt><dd>30%</dd><dt>Merged this week</dt><dd>9</dd><dt>Sent back</dt><dd>1</dd></dl>
+  </div>
+  <div>
+    <p class="label-sm">Working on now</p>
+    <ul class="now">
+      <li><a href="task.html">#208 Round cart totals per line, not per order</a> <span class="muted small">building</span></li>
+      <li><a href="task.html">#205 Refund emails include the order number</a> <span class="muted small">checks blocked by CI</span></li>
+    </ul>
+    <p style="margin-top:12px"><a class="waits" href="waiting.html"><span class="count needs">1</span><span>waits on you</span></a></p>
+  </div>
+</article>
+
+<article class="pblock paused" id="field-notes" data-project="field-notes">
+  <div>
+    <h2><span class="dot idle"></span><a class="plink" href="project.html">field-notes</a> <span class="chip on-page strong" data-icon="pause" data-icon-cls="s">Paused</span></h2>
+    <p class="small" style="margin:4px 0 14px">Paused by you on Monday. Nothing new starts until you resume.</p>
+    <p class="meta"><span>1 build slot</span><span>Label: intakt</span></p>
+    <button class="btn primary" type="button" style="margin-top:14px" data-icon="play" data-toast="field-notes resumed" data-undo="field-notes paused again">Resume</button>
+  </div>
+  <div>
+    <p class="label-sm">This week</p>
+    <p><span class="stat">$41</span> <span class="muted">of $208 share</span></p>
+    <div class="bar" style="margin:10px 0 8px" role="img" aria-label="Spent 20 percent"><i class="used" style="width:20%"></i></div>
+    <div class="legend"><span><i class="used"></i>Spent 20%. Unused share goes to the other projects while paused</span></div>
+    <dl style="margin-top:16px"><dt><span class="term" data-term="share">Weekly share</span></dt><dd>20%</dd><dt>Merged this week</dt><dd>2</dd><dt>Sent back</dt><dd>0</dd></dl>
+  </div>
+  <div>
+    <p class="label-sm">Working on now</p>
+    <p class="muted">Nothing. #71 waits in review and #74 in Planned until you resume.</p>
+  </div>
+</article>
+
+<section class="section">
+  <a class="btn secondary" href="add-project.html" data-icon="plus">Add a project</a>
+  <p class="muted small" style="margin-top:8px">Connect a repository, check it, and pick a weekly share. Takes about two minutes.</p>
+</section>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

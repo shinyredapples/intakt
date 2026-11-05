@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>acme-shop | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="projects">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content roomy" id="main">
+<p class="small" style="margin-bottom:12px"><a href="projects.html">Projects</a> <span class="muted">/</span> <span class="muted">acme-shop</span></p>
+<div class="page-head" style="align-items:flex-start">
+  <div style="flex:1;min-width:260px">
+    <h1>acme-shop</h1>
+    <div class="head-meta">
+      <span class="chip on-page strong"><span class="dot idle"></span>Halted until Monday 00:00</span>
+      <p class="meta"><span>github.com/acme/acme-shop</span><span>Added 2 Sep</span><span>Label: ready-for-ai</span></p>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn secondary" href="#overrides">Change settings</a>
+    <button class="btn secondary" type="button" data-icon="pause" data-toast="acme-shop paused" data-undo="acme-shop running again">Pause</button>
+    <button class="btn primary" type="button" data-toast="Weekly share raised to 35%" data-undo="Weekly share back to 30%">Raise the weekly share</button>
+  </div>
+</div>
+
+<div class="banner broken" role="alert">
+  <button class="banner-toggle" type="button" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg><span>Checks can't run since 09:12</span><svg class="i s chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg>
+  <p><strong>Checks can't run since 09:12.</strong> The CI image build fails while installing packages. The Maintainer is on it and retries every 15 minutes.</p>
+  <a class="btn quiet sm" href="health.html">Open health</a>
+</div>
+
+<section class="psum" aria-label="Summary">
+  <div>
+    <h2 class="label-sm">This week</h2>
+    <p><span class="stat">$318</span> <span class="muted">of $312 <span class="term" data-term="share">weekly share</span></span></p>
+    <div class="bar" style="margin:10px 0 8px" role="img" aria-label="Share used up"><i class="used" style="width:100%"></i></div>
+    <p class="small">Why halted: the weekly share is used up. New builds start again Monday 00:00, or now if you raise the share.</p>
+  </div>
+  <div>
+    <h2 class="label-sm">Checks</h2>
+    <p class="status-row"><span class="dot broken"></span><span><strong class="red">CI image build failing</strong><br><span class="muted small">since 09:12, with the Maintainer</span></span></p>
+    <p class="status-row"><span class="dot ok"></span><span>Main branch green at <span class="mono">c41d0e2</span></span></p>
+  </div>
+  <div>
+    <h2 class="label-sm">Build limits</h2>
+    <dl class="kv">
+      <dt>Memory per build</dt><dd>6 GB <span class="muted small">set for this project; default 4 GB</span></dd>
+      <dt>Build slots</dt><dd>1 <span class="muted small">set for this project; default 2</span></dd>
+      <dt><span class="term" data-term="reserve">Reserve</span></dt><dd>10% <span class="muted small">of weekly capacity</span></dd>
+    </dl>
+  </div>
+</section>
+
+<div class="split proj-split">
+<div>
+<section class="section" aria-labelledby="pt-h">
+  <h2 id="pt-h">Tasks</h2>
+  <table class="ledger tasks">
+    <thead><tr><th>Task</th><th>State</th><th>In state for</th></tr></thead>
+    <tbody>
+      <tr><td><a href="task.html">#199 Gift cards: pick the stored currency</a></td><td><span class="dot needs"></span> Waiting on you</td><td>52 min</td></tr>
+      <tr><td><a href="task.html">#208 Round cart totals per line, not per order</a></td><td>Building</td><td>18 min</td></tr>
+      <tr><td><a href="task.html">#205 Refund emails include the order number</a></td><td><span class="red">Waiting for CI</span></td><td>1 h 50 min</td></tr>
+      <tr><td><a href="task.html">#214 Retry failed webhook deliveries with backoff</a></td><td>Ready, waits for budget</td><td>1 d</td></tr>
+      <tr><td><a href="task.html">#221 Gift card balance on the account page</a></td><td>Backlog</td><td>5 d</td></tr>
+      <tr><td><a href="task.html">#203 Search products by SKU</a></td><td class="muted">Merged today</td><td>2 h</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="section" id="overrides" aria-labelledby="po-h">
+  <h2 id="po-h">Settings for this project</h2>
+  <p class="takeaway">Only the first four differ from the defaults in <a href="settings.html">Settings</a>. Change a value here to override it for acme-shop only.</p>
+  <table class="ledger overrides">
+    <thead><tr><th>Setting</th><th>acme-shop</th><th>Default</th><th><span class="sr-only">Action</span></th></tr></thead>
+    <tbody>
+      <tr class="differs"><td>Build slots</td><td><strong>1</strong></td><td class="muted">2</td><td><button class="linkbtn" data-toast="Build slots back to the default">Use default</button></td></tr>
+      <tr class="differs"><td>Memory per build</td><td><strong>6 GB</strong></td><td class="muted">4 GB</td><td><button class="linkbtn" data-toast="Memory back to the default">Use default</button></td></tr>
+      <tr class="differs"><td>Issue label</td><td><strong>ready-for-ai</strong></td><td class="muted">intakt</td><td><button class="linkbtn" data-toast="Label back to the default">Use default</button></td></tr>
+      <tr class="differs"><td><span class="term" data-term="protected">Protected files</span></td><td><strong><span class="mono">.github/</span>, <span class="mono">src/payments/</span></strong></td><td class="muted"><span class="mono">.github/</span></td><td><button class="linkbtn" data-toast="Protected files back to the default">Use default</button></td></tr>
+      <tr><td>Merge without asking</td><td>On</td><td class="muted">Same</td><td></td></tr>
+      <tr><td>Waiting reviews limit</td><td>3</td><td class="muted">Same</td><td></td></tr>
+    </tbody>
+  </table>
+</section>
+</div>
+
+<aside class="side" aria-labelledby="ph-h">
+  <h2 id="ph-h">History</h2>
+  <ul>
+    <li><span>Maintainer held checks while the CI image fails</span><span class="when">09:40</span></li>
+    <li><span>Weekly share used up; halted until Monday</span><span class="when">00:00</span></li>
+    <li><span>You set memory per build: 4 GB → 6 GB</span><span class="when">Mon</span></li>
+    <li><span>You set the issue label: intakt → ready-for-ai</span><span class="when">2 Sep</span></li>
+  </ul>
+  <p class="small" style="margin-top:12px"><a href="history.html">All history for acme-shop</a></p>
+</aside>
+</div>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

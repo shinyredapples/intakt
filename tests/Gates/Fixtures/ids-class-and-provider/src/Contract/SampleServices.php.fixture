@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Contract;
+
+final readonly class SampleServices
+{
+    public const string PLATFORM_PREFIX = 'intakt.sample.platform.';
+    public const string LOCK_PREFIX = 'intakt.sample.lock.';
+
+    public static function platform(Provider $provider): string
+    {
+        return "intakt.sample.platform.{$provider->value}";
+    }
+
+    public static function lockNames(): object
+    {
+        return new class {
+            public string $prefix = 'intakt.sample.lock.';
+        };
+    }
+}
