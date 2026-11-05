@@ -145,7 +145,7 @@ final class TestsGate implements Gate
         }
 
         [$concurrent, $serial] = $this->withTests($numbered, $alone, $listings);
-        $findings = $this->findingsOf($this->queued($workspace, $workers, $this->jobs($workspace, $workers, $concurrent, $listings)));
+        $findings = $this->findingsOf($this->queued($workspace, $workers, $this->testJobs($workspace, $workers)->queue($concurrent, $listings)));
 
         foreach ($serial as $worker) {
             $findings = [...$findings, ...$this->findingsOf($this->concurrently($workspace, [$worker], $this->testRun(...)))];
@@ -177,46 +177,11 @@ final class TestsGate implements Gate
         return [$concurrent, $serial];
     }
 
-    /**
-     * @param list<TestWorker>             $concurrent
-     * @param array<string, ProcessResult> $listings
-     *
-     * @return array<string, Closure(int): array{list<string>, array<string, string>}>
-     */
-    private function jobs(Workspace $workspace, TestWorkers $workers, array $concurrent, array $listings): array
+    private function testJobs(Workspace $workspace, TestWorkers $workers): TestJobs
     {
-        $files = array_map(fn (TestWorker $worker): array => 1 === $workers->count ? [] : $this->listedFiles($workspace, $listings[$worker->run]), $concurrent);
-        $jobs = [];
+        $recorded = new TestDurations($workspace->root)->recorded($this->gatesCache());
 
-        // Because a pass that lists no file must still run whole, so it fails on the empty test suite.
-        foreach ($concurrent as $index => $worker) {
-            if ([] === $files[$index]) {
-                $jobs[$worker->run] = fn (int $slot): array => $this->testCommand($workspace, $workers->numbered($worker->run, $worker->configuration, $slot));
-            }
-        }
-
-        $durations = new TestDurations($workspace->root);
-
-        foreach ($durations->longestFirst(array_values(array_unique(array_merge(...$files))), $durations->recorded($this->gatesCache())) as $file) {
-            foreach ($concurrent as $index => $worker) {
-                if (in_array($file, $files[$index], true)) {
-                    $jobs[$worker->run.' '.$file] = fn (int $slot): array => $this->testCommand($workspace, $workers->numbered($worker->run, $worker->configuration, $slot)->taking($file));
-                }
-            }
-        }
-
-        return $jobs;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function listedFiles(Workspace $workspace, ProcessResult $listing): array
-    {
-        preg_match_all('/^ - (.+)$/m', $listing->output, $listed);
-        $prefix = rtrim($workspace->root, '/').'/';
-
-        return array_map(static fn (string $file): string => str_starts_with($file, $prefix) ? substr($file, strlen($prefix)) : $file, $listed[1]);
+        return new TestJobs($workers, $workspace->root, fn (TestWorker $worker): array => $this->command($workspace, $worker, $this->testRun($worker)), $recorded);
     }
 
     /**
@@ -229,14 +194,6 @@ final class TestsGate implements Gate
         $seconds = 1 === $workers->count ? self::PASS_TIMEOUT_SECONDS : self::FILE_TIMEOUT_SECONDS;
 
         return new ProcessQueue($seconds)->run($jobs, $workers->slots(), $workspace->root);
-    }
-
-    /**
-     * @return array{list<string>, array<string, string>}
-     */
-    private function testCommand(Workspace $workspace, TestWorker $worker): array
-    {
-        return [$this->command($workspace, $worker, $this->testRun($worker)), $worker->environment()];
     }
 
     /**

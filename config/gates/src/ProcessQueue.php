@@ -22,45 +22,25 @@ final readonly class ProcessQueue
     /**
      * @template Name of array-key
      *
-     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs in the order the workers take them, each built for the index of the worker that takes it
+     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs
      *
      * @return array<Name, ProcessResult>
      */
     public function run(array $jobs, int $workers, string $directory): array
     {
+        // Because the workers take the jobs in the order given, and each job is built for the index of the worker that takes it.
         $order = array_keys($jobs);
         $results = [];
         $running = [];
 
         while ([] !== $jobs || [] !== $running) {
-            foreach ($this->idleWorkers($running, $workers) as $worker) {
-                $name = array_key_first($jobs);
-
-                if (null === $name) {
-                    break;
-                }
-
-                [$command, $environment] = $jobs[$name]($worker);
-                unset($jobs[$name]);
-                $process = $this->started($command, $directory, $environment);
-
-                if ($process instanceof ProcessResult) {
-                    $results[$name] = $process;
-
-                    continue;
-                }
-
-                $running[$worker] = [$name, $process];
-            }
-
-            foreach ($running as $worker => [$name, $process]) {
-                $result = $this->finished($process);
-
-                if ($result instanceof ProcessResult) {
-                    $results[$name] = $result;
-                    unset($running[$worker]);
-                }
-            }
+            $idle = $this->idleWorkers($running, $workers);
+            $taken = array_slice($jobs, 0, count($idle), true);
+            $jobs = array_diff_key($jobs, $taken);
+            $running += $this->startedOn($idle, $taken, $directory);
+            $finished = $this->finishedOf($running);
+            $running = array_diff_key($running, $finished);
+            $results = array_replace($results, array_column($finished, 1, 0));
 
             usleep(self::POLL_MICROSECONDS);
         }
@@ -76,6 +56,48 @@ final readonly class ProcessQueue
     private function idleWorkers(array $running, int $workers): array
     {
         return array_values(array_diff(range(0, $workers - 1), array_keys($running)));
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param list<int>                                                             $idle
+     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $taken
+     *
+     * @return array<int, array{Name, Process|ProcessResult}>
+     */
+    private function startedOn(array $idle, array $taken, string $directory): array
+    {
+        $started = [];
+
+        foreach (array_keys($taken) as $index => $name) {
+            [$command, $environment] = $taken[$name]($idle[$index]);
+            $started[$idle[$index]] = [$name, $this->started($command, $directory, $environment)];
+        }
+
+        return $started;
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param array<int, array{Name, Process|ProcessResult}> $running
+     *
+     * @return array<int, array{Name, ProcessResult}>
+     */
+    private function finishedOf(array $running): array
+    {
+        $finished = [];
+
+        foreach ($running as $worker => [$name, $process]) {
+            $result = $process instanceof ProcessResult ? $process : $this->finished($process);
+
+            if ($result instanceof ProcessResult) {
+                $finished[$worker] = [$name, $result];
+            }
+        }
+
+        return $finished;
     }
 
     /**

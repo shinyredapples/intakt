@@ -60,19 +60,11 @@ final readonly class TestDurations
             return [];
         }
 
-        $seconds = [];
-
-        foreach (is_array($decoded) ? $decoded : [] as $testFile => $duration) {
-            if (is_string($testFile) && (is_float($duration) || is_int($duration))) {
-                $seconds[$testFile] = (float) $duration;
-            }
-        }
-
-        return $seconds;
+        return is_array($decoded) ? $this->secondsIn($decoded) : [];
     }
 
     /**
-     * @param list<string>         $files    relative to the root
+     * @param list<string>         $files
      * @param array<string, float> $recorded
      *
      * @return list<string>
@@ -140,6 +132,24 @@ final readonly class TestDurations
         }
 
         return $cases;
+    }
+
+    /**
+     * @param array<mixed> $decoded
+     *
+     * @return array<string, float>
+     */
+    private function secondsIn(array $decoded): array
+    {
+        $seconds = [];
+
+        foreach ($decoded as $testFile => $duration) {
+            if (is_string($testFile) && (is_float($duration) || is_int($duration))) {
+                $seconds[$testFile] = (float) $duration;
+            }
+        }
+
+        return $seconds;
     }
 
     private function size(string $file): int
