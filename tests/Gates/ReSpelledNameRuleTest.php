@@ -66,6 +66,11 @@ final class ReSpelledNameRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString("src/Factory.php:16 intakt.reSpelledName 'codex' re-spells a Provider case value", $findings);
     }
 
+    public function testAServiceIdInATraitNamedLikeAnIdsClassFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('a-service-id-in-a-services-trait', "src/Contract/OtherServices.php:11 intakt.reSpelledName 'intakt.duplicate' re-spells a container id or parameter name");
+    }
+
     public function testIdsClassesProviderAndNamesDerivedFromThemPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('ids-class-and-provider');
