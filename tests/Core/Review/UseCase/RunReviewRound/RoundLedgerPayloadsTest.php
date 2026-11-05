@@ -1,0 +1,122 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
+
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\UseCase\RunReviewRound\CatchUpOwed;
+use Intakt\Core\Review\UseCase\RunReviewRound\JudgeDone;
+use Intakt\Core\Review\UseCase\RunReviewRound\JudgedFinding;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerBlocked;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerFailed;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStarted;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStopped;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewStarted;
+use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHeld;
+use Intakt\Core\Review\UseCase\RunReviewRound\VerdictReceived;
+use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Tests\Support\KernelTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use Symfony\Component\Serializer\SerializerInterface;
+
+#[CoversClass(ReviewStarted::class)]
+#[CoversClass(ShadowRoundHeld::class)]
+#[CoversClass(ReviewerStarted::class)]
+#[CoversClass(VerdictReceived::class)]
+#[CoversClass(CatchUpOwed::class)]
+#[CoversClass(ReviewerFailed::class)]
+#[CoversClass(ReviewerBlocked::class)]
+#[CoversClass(ReviewerStopped::class)]
+#[CoversClass(JudgeDone::class)]
+#[CoversClass(JudgedFinding::class)]
+final class RoundLedgerPayloadsTest extends KernelTestCase
+{
+    private const string ROUND = '0195f0a2-7c1e-7000-8000-000000000001';
+
+    private const string REVIEWER = '0195f0a2-7c1e-7000-8000-000000000002';
+
+    private const string IDENTITY = '{"round":"'.self::ROUND.'","reviewer":"'.self::REVIEWER.'","role":"security","tier":"strong"';
+
+    public function testAStartWithASourceIsWrittenInTodaysFormat(): void
+    {
+        $started = new ReviewStarted(self::ROUND, 'alpha', 2, 'feat/x', 3, 'T7', '/repos/alpha', 'main');
+
+        self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":2,"change":"feat\/x","number":3,"task":"T7","repository":"\/repos\/alpha","base":"main"}', $this->written($started));
+    }
+
+    public function testAStartWithoutASourceHasNoRepositoryOrBaseKey(): void
+    {
+        $started = new ReviewStarted(self::ROUND, 'alpha', 1, 'feat/x', 1, 'T7');
+
+        self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":1,"change":"feat\/x","number":1,"task":"T7"}', $this->written($started));
+    }
+
+    public function testAHeldShadowRoundIsWrittenWithTodaysProviderValue(): void
+    {
+        $held = new ShadowRoundHeld('alpha', 'feat/x', Provider::Anthropic, 'at-ceiling');
+
+        self::assertSame('{"project":"alpha","change":"feat\/x","provider":"anthropic","reason":"at-ceiling"}', $this->written($held));
+    }
+
+    public function testAStartedReviewerIsWrittenWithItsIdentity(): void
+    {
+        self::assertSame(self::IDENTITY.'}', $this->written(new ReviewerStarted(self::ROUND, self::REVIEWER, 'security', Tier::Strong)));
+    }
+
+    public function testAReceivedVerdictIsWrittenWithTodaysDecisionAndModeValues(): void
+    {
+        $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::Shadow);
+
+        self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"shadow"}', $this->written($received));
+    }
+
+    public function testAnOwedCatchUpIsWrittenWithItsSubstitute(): void
+    {
+        $owed = new CatchUpOwed(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Provider::OpenAi);
+
+        self::assertSame(self::IDENTITY.',"substitute":"openai"}', $this->written($owed));
+    }
+
+    public function testAFailedReviewerIsWrittenWithItsFailure(): void
+    {
+        $failed = new ReviewerFailed(self::ROUND, self::REVIEWER, 'security', Tier::Strong, 'RuntimeException');
+
+        self::assertSame(self::IDENTITY.',"failure":"RuntimeException"}', $this->written($failed));
+    }
+
+    public function testABlockedReviewerIsWrittenWithItsReason(): void
+    {
+        $blocked = new ReviewerBlocked(self::ROUND, self::REVIEWER, 'security', Tier::Strong, 'no-tools');
+
+        self::assertSame(self::IDENTITY.',"reason":"no-tools"}', $this->written($blocked));
+    }
+
+    public function testAStoppedReviewerIsWrittenWithItsIdentity(): void
+    {
+        self::assertSame(self::IDENTITY.'}', $this->written(new ReviewerStopped(self::ROUND, self::REVIEWER, 'security', Tier::Strong)));
+    }
+
+    public function testADoneJudgeIsWrittenWithItsActListFollowUpsAndFindings(): void
+    {
+        $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgedFinding('f1', Severity::P1, 'A bug.'), new JudgedFinding('f2', Severity::P3, 'A nit.')]);
+
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug."},{"id":"f2","severity":"P3","text":"A nit."}]}', $this->written($done));
+    }
+
+    public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
+    {
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+    }
+
+    private function written(object $payload): string
+    {
+        $serializer = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $serializer);
+
+        return $serializer->serialize($payload, 'json');
+    }
+}
