@@ -15,7 +15,7 @@ final readonly class TestWorker
 
     public function taking(string $file): self
     {
-        return clone($this, ['run' => $this->run.' '.$file, 'file' => $file]);
+        return clone ($this, ['run' => $this->run.' '.$file, 'file' => $file]);
     }
 
     public function prepared(): bool
