@@ -48,9 +48,11 @@ If the dashboard is slow or does not answer, ask the web server how it is doing.
 
 ## Reading Intakt's log
 
+This is the service log, not the live job log on a task's card (described under "Still stuck?" below); they are two different things.
+
 Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened.
 
-Nothing secret is written. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../user/README.md#the-log) lists the fields and the credentials by name.
+Intakt hides the secrets it knows about. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../user/README.md#the-log) lists the fields and the credentials by name.
 
 ## Still stuck?
 
