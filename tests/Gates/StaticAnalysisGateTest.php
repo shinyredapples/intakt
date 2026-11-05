@@ -47,7 +47,7 @@ final class StaticAnalysisGateTest extends TestCase
 
     private function assertRejectedInItsFolder(string $fixture, string $expectedFinding): void
     {
-        $run = self::sharedRun();
+        $run = $this->sharedRun();
 
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('phpstan'), $run->output());
@@ -55,7 +55,7 @@ final class StaticAnalysisGateTest extends TestCase
     }
 
     // the first case that asks pays for the run, so the test report shows its time
-    private static function sharedRun(): CheckRun
+    private function sharedRun(): CheckRun
     {
         if (!self::$run instanceof CheckRun) {
             $sandbox = Sandbox::withFixturesInFolders(...self::FIXTURES);
