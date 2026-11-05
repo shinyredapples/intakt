@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AiServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
@@ -26,7 +27,7 @@ final readonly class CodexLogins
     public function handOver(string $account): string
     {
         $this->assertAccountName($account);
-        $lock = $this->locks->createLock('intakt.codex.login.'.$account);
+        $lock = $this->locks->createLock(AiServices::CODEX_LOGIN_LOCK_PREFIX.$account);
         $lock->acquire(true);
 
         try {

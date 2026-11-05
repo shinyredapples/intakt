@@ -17,4 +17,5 @@ final readonly class AiServices
     public const string DISABLED_ACCOUNTS = 'intakt.ai.disabled_accounts';
     public const string ACCOUNTS = 'intakt.ai.accounts';
     public const string PROJECTS = 'intakt.projects';
+    public const string CODEX_LOGIN_LOCK_PREFIX = 'intakt.codex.login.';
 }
