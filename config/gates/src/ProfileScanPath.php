@@ -8,13 +8,10 @@ final readonly class ProfileScanPath
 {
     private const string DIRECTORY = 'config/php';
 
-    /**
-     * The scan path that also loads the check ini, or null when it already does.
-     */
-    public static function missingFrom(string $root, string|false $scanPath): ?string
+    public static function missingFrom(string $root, ?string $scanPath): ?string
     {
         $profile = $root.'/'.self::DIRECTORY;
-        $directories = false === $scanPath ? [] : explode(PATH_SEPARATOR, $scanPath);
+        $directories = null === $scanPath ? [] : explode(PATH_SEPARATOR, $scanPath);
 
         foreach ($directories as $directory) {
             if (rtrim($directory, '/') === $profile) {
@@ -23,6 +20,6 @@ final readonly class ProfileScanPath
         }
 
         // Last, so the profile wins over every ini file the host scans before it.
-        return (false === $scanPath ? '' : $scanPath).PATH_SEPARATOR.$profile;
+        return ($scanPath ?? '').PATH_SEPARATOR.$profile;
     }
 }

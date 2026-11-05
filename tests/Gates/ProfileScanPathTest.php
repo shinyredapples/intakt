@@ -13,7 +13,7 @@ final class ProfileScanPathTest extends TestCase
 {
     public function testAnUnsetScanPathGetsTheDefaultDirectoriesAndThenTheProfile(): void
     {
-        self::assertSame(':/repo/config/php', ProfileScanPath::missingFrom('/repo', false));
+        self::assertSame(':/repo/config/php', ProfileScanPath::missingFrom('/repo', null));
     }
 
     public function testTheProfileComesAfterTheDirectoriesAlreadyScannedSoItsSettingsWin(): void

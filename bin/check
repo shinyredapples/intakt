@@ -19,7 +19,8 @@ $arguments = $_SERVER['argv'] ?? [];
 $arguments = is_array($arguments) ? array_values(array_filter($arguments, is_string(...))) : [];
 
 // Ini files load only at startup, so a PHP that did not scan the check ini runs this script again with it.
-$scanPath = ProfileScanPath::missingFrom(dirname(__DIR__), getenv('PHP_INI_SCAN_DIR'));
+$scanPath = getenv('PHP_INI_SCAN_DIR');
+$scanPath = ProfileScanPath::missingFrom(dirname(__DIR__), false === $scanPath ? null : $scanPath);
 
 if (null !== $scanPath) {
     $process = proc_open([PHP_BINARY, __FILE__, ...array_slice($arguments, 1)], [STDIN, STDOUT, STDERR], $pipes, null, ['PHP_INI_SCAN_DIR' => $scanPath] + getenv());
