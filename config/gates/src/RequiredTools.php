@@ -74,10 +74,10 @@ final readonly class RequiredTools
         $messages = array_map(self::notFound(...), array_values($missing));
 
         // Because the parent counts the processors and kills the process group of a stopped child through the posix functions.
-        return self::posixIsAvailable() ? $messages : [...$messages, self::posixMissing()];
+        return $this->posixIsAvailable() ? $messages : [...$messages, self::posixMissing()];
     }
 
-    private static function posixIsAvailable(): bool
+    private function posixIsAvailable(): bool
     {
         return function_exists('posix_kill') && function_exists('posix_sysconf');
     }
