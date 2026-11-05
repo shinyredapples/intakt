@@ -43,7 +43,7 @@ final class TestsGate implements Gate
 
         $ports = TestPorts::forWorkers(count($passes), $this->variable(TestWorker::PORTS_VARIABLE));
 
-        if (null === $ports) {
+        if (!$ports instanceof TestPorts) {
             return GateResult::failedBecause($this->name(), TestWorker::PORTS_VARIABLE.' names no range of ports that '.count($passes).' test workers can share');
         }
 
