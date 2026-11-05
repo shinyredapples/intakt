@@ -78,7 +78,7 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
     {
         $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]));
 
-        $failure = self::failureOf(static fn () => $forge->change(new ChangeId(self::PULL)));
+        $failure = $this->failureOf(static fn () => $forge->change(new ChangeId(self::PULL)));
 
         self::assertInstanceOf(ForgeReadFailed::class, $failure);
         self::assertInstanceOf(ForgeCredentialsRefused::class, $failure->getPrevious());
@@ -88,7 +88,7 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
     {
         $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse('{}', ['http_code' => 403]));
 
-        $failure = self::failureOf(static fn () => $forge->change(new ChangeId(self::PULL)));
+        $failure = $this->failureOf(static fn () => $forge->change(new ChangeId(self::PULL)));
 
         self::assertInstanceOf(ForgeReadFailed::class, $failure);
         self::assertNull($failure->getPrevious());
@@ -99,13 +99,13 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
         $forge = $this->forgeAnswering(static fn (string $url): ?MockResponse => str_ends_with($url, '/reviews') ? new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]) : null);
         $change = new Change(new ChangeId(self::PULL), new CommitRange(new CommitId(self::MERGE_BASE), new CommitId(self::HEAD)), new Diff('', new ChangedFiles()));
 
-        $failure = self::failureOf(static fn () => $forge->postReview('widgets', $change, new ReviewComment('Looks good.', new ReviewToken('round-7-token-0123456789'), new JobCredentials())));
+        $failure = $this->failureOf(static fn () => $forge->postReview('widgets', $change, new ReviewComment('Looks good.', new ReviewToken('round-7-token-0123456789'), new JobCredentials())));
 
         self::assertInstanceOf(ForgeWriteFailed::class, $failure);
         self::assertInstanceOf(ForgeCredentialsRefused::class, $failure->getPrevious());
     }
 
-    private static function failureOf(Closure $call): RuntimeException
+    private function failureOf(Closure $call): RuntimeException
     {
         try {
             $call();
