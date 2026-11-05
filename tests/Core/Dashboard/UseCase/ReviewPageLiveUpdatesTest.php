@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
@@ -32,6 +33,8 @@ use Twig\Environment;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
+// Because it creates and removes placeholder files in assets/vendor/ of the checkout, which every test worker shares.
+#[Group('serial')]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];

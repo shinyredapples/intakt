@@ -59,7 +59,6 @@ docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data 
 - A worker is replaced after `FRANKENPHP_LOOP_MAX` requests (default 500) and when it holds more than `WORKER_MEMORY_CEILING_MB` megabytes (default 256) after a request; it finishes sending the answer first, so no request fails. A crash is restarted by FrankenPHP itself.
 - The queue workers and the scheduler (see [Background work](#background-work)) run in the same container, beside the web server: `MESSENGER_CONSUMERS` workers (default 3, so the reviewers of a panel of three run at once) and one scheduler. When one of them stops, for any reason, it is started again a second later and the container logs `intakt: async ended with status 137, starting it again` (`scheduler_watcher` for the scheduler). A worker also ends on purpose after an hour or once it holds more than `WORKER_MEMORY_CEILING_MB` megabytes, between two messages, and is started again the same way. `docker stop` lets each worker finish the message it is on for up to 8 seconds, then stops what still runs; a message cut off is handed out again later.
 - Start the container with `--restart unless-stopped`, so Docker starts it again after a crash or a reboot. When the web server itself stops, the container stops the workers and the scheduler and exits, so this restart brings all of them back. The image has a health check that asks FrankenPHP's metrics endpoint every 30 seconds; read it with `docker inspect --format '{{.State.Health.Status}}' intakt` (`healthy` or `unhealthy`).
-- Not built yet: the base image is named by tag, and #705 pins it by digest.
 
 ## Checking the server
 
@@ -104,13 +103,17 @@ Intakt writes its warnings and errors to the service output (the journal, or `do
 
 ## Finding the slowest tests
 
-When the `tests` gate of `bin/check` runs, its line also lists the ten slowest test files under `slowest`, slowest first, each with its `file` and its `seconds` (the times of all its tests added up, over both test passes). For example:
+When the `tests` gate of `bin/check` runs, its line also lists the ten slowest test files under `slowest`, slowest first, each with its `file` and its `seconds` (the times of all its tests added up, over all test passes, including the run of the `serial` tests). For example:
 
 ```
 {"gate":"tests","ok":true,"findings":[],"omitted":0,"slowest":[{"file":"tests/Application/InstanceTest.php","seconds":45.722},...]}
 ```
 
 The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
+
+## Running the tests in parallel
+
+The `tests` gate runs the test files in several workers at once: one for each processor it may use, at most four. Each worker takes the next file from one shared list, which starts with the files that have no recorded time yet (new ones), then the files that took longest in the last run (from `tests/durations.json` above). Set `INTAKT_TEST_WORKERS` to choose the number of workers yourself (from 1 to 127; any other value fails the gate); `INTAKT_TEST_WORKERS=1` runs each test pass in a single process, as before. A finding names the pass and the file it came from, for example `sqlite tests/Core/ReportTest.php: ReportTest::testRuns: ...`. A failing, skipped, risky or incomplete test, or a warning, notice or deprecation, fails the gate in any worker, as does a warning PHPUnit gives while it lists the test files (for example a test file without its class), and so does a file whose run crashes (`phpunit exited with code ...`) or takes longer than 600 seconds (`timed out after 600 seconds, last output: ...`).
 
 ## When `bin/check` reports a missing tool
 

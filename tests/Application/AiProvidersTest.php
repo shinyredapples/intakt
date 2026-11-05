@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -16,6 +17,8 @@ use Symfony\Component\Filesystem\Filesystem;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
+// Because it writes and removes the vault in config/secrets/ai_providers_test/ of the checkout, which every test worker shares.
+#[Group('serial')]
 final class AiProvidersTest extends KernelTestCase
 {
     private const array VARIABLES = [

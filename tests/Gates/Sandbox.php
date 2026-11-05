@@ -35,6 +35,17 @@ final readonly class Sandbox
         return $sandbox;
     }
 
+    public static function withFixturesInFolders(string ...$names): self
+    {
+        $sandbox = self::empty();
+
+        foreach ($names as $name) {
+            $sandbox->copyFixture(self::FIXTURES.'/'.$name, $name.'/');
+        }
+
+        return $sandbox;
+    }
+
     public function write(string $path, string $contents): void
     {
         $target = $this->root.'/'.$path;
@@ -131,14 +142,14 @@ final readonly class Sandbox
         rmdir($this->root);
     }
 
-    private function copyFixture(string $source): void
+    private function copyFixture(string $source, string $folder = ''): void
     {
         $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS));
 
         foreach ($files as $file) {
             if ($file instanceof SplFileInfo) {
                 $relative = substr($file->getPathname(), strlen($source) + 1);
-                $this->write(preg_replace('/\.fixture$/', '', $relative) ?? $relative, (string) file_get_contents($file->getPathname()));
+                $this->write($folder.(preg_replace('/\.fixture$/', '', $relative) ?? $relative), (string) file_get_contents($file->getPathname()));
             }
         }
     }

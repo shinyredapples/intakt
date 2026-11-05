@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support\Log;
 
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
@@ -15,6 +16,8 @@ use Symfony\Component\Process\Process;
 #[CoversClass(WarnOnErrorsAfterTheRun::class)]
 #[UsesClass(LogRecords::class)]
 #[UsesClass(RecordingLogger::class)]
+// Because the PHPUnit runs it starts keep their result cache in var/cache/ of the checkout, which every test worker shares.
+#[Group('serial')]
 final class UnassertedErrorLogExtensionTest extends TestCase
 {
     public function testATestThatEndsWithAnUnassertedErrorRecordFailsNamingTheRecord(): void
