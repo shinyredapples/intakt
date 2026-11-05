@@ -20,7 +20,29 @@ final class InstanceTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
 
+    // Vendor is linked once per class and the rest copied anew per test, because no test writes to vendor and linking its many files cost more than half a second per test.
+    // Hard links, because a symlinked vendor resolves the project directory to the real checkout; linking fails partway across file systems, so a partial copy never counts as vendor.
+    private const string COPY = <<<'SH'
+        set -e
+        project=$1
+        shift
+        cd "$project"
+        find . -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +
+        if [ ! -d vendor ]; then
+            cp -al "$0"/vendor vendor.partial 2>/dev/null || { rm -rf vendor.partial && cp -a "$0"/vendor vendor.partial; }
+            mv vendor.partial vendor
+        fi
+        cd "$0"
+        cp -a "$@" "$project"/
+        SH;
+
+    // An instance per test, not per class, because each boot builds its container in a scratch folder it removes when it stops, which is what several tests prove, and most tests boot with another project, command or environment.
     private string $scratch;
+
+    public static function tearDownAfterClass(): void
+    {
+        new Filesystem()->remove(self::sharedProject());
+    }
 
     protected function setUp(): void
     {
@@ -407,16 +429,19 @@ final class InstanceTest extends TestCase
 
     private function copyOfTheProject(): string
     {
-        $project = $this->scratch.'/project';
+        $project = self::sharedProject();
         new Filesystem()->mkdir($project);
-
-        // Hard links keep the vendor copy cheap, and a symlink would not do because vendor then resolves the project directory to the real checkout.
-        $script = 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; } && cd "$0" && cp -a bin src config public composer.json .env "$1"/';
-        $copy = new Process(['sh', '-c', $script, self::ROOT, $project]);
+        $copy = new Process(['sh', '-c', self::COPY, self::ROOT, $project, 'bin', 'src', 'config', 'public', 'composer.json', '.env']);
         $copy->mustRun();
         new Filesystem()->remove($project.'/config/reference.php');
 
         return $project;
+    }
+
+    // Named by the process, because the copy outlives a test while two runs of this class side by side must not share it.
+    private static function sharedProject(): string
+    {
+        return sys_get_temp_dir().'/intakt-instance-test-project-'.getmypid();
     }
 
     // Regression guard: the caller holds descriptors 3 to 14 so a duplicate of descriptor 3 above 9 would show up, which a shell redirection cannot name.
