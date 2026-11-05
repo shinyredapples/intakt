@@ -8,8 +8,13 @@ use InvalidArgumentException;
 
 final readonly class CheckCommand
 {
-    public function __construct(private string $home)
-    {
+    /**
+     * @param list<string>|null $gateCommand the command that runs one gate in a child process, `bin/check` itself unless a test fakes it
+     */
+    public function __construct(
+        private string $home,
+        private ?array $gateCommand = null,
+    ) {
     }
 
     /**
@@ -33,13 +38,36 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGatesWhenToolsExist($options);
+        if (null !== $options->gate) {
+            return $this->runOneGateHere($options->gate, $options);
+        }
+
+        return $this->runGatesWhenToolsExist($options, $arguments);
     }
 
-    private function runGatesWhenToolsExist(Options $options): int
+    private function runOneGateHere(string $name, Options $options): int
     {
-        $gates = $this->selectedGates($options);
-        $names = array_map(static fn (Gate $gate): string => $gate->name(), $gates);
+        $gate = array_find($this->gates($options->testMerge), static fn (Gate $gate): bool => $gate->name() === $name);
+
+        if (!$gate instanceof Gate) {
+            $this->print(['error' => 'unknown gate '.$name]);
+
+            return 2;
+        }
+
+        $workspace = new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base);
+        $result = $this->resultOf($gate, $workspace);
+        fwrite(STDOUT, $result->toJson()."\n");
+
+        return $result->isPassing() ? 0 : 1;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function runGatesWhenToolsExist(Options $options, array $arguments): int
+    {
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
         $missing = new RequiredTools($options->root ?? $this->home)->missingFor($names);
 
         if ([] !== $missing) {
@@ -48,29 +76,64 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($gates, $options);
+        try {
+            $slots = GateSlots::fromEnvironment();
+        } catch (InvalidArgumentException $exception) {
+            $this->print(['error' => $exception->getMessage()]);
+
+            return 2;
+        }
+
+        return $this->runGates($names, $arguments, $slots);
     }
 
     /**
-     * @param list<Gate> $gates
+     * @param list<string> $names
+     * @param list<string> $arguments
      */
-    private function runGates(array $gates, Options $options): int
+    private function runGates(array $names, array $arguments, int $slots): int
     {
-        $workspace = new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base);
+        $children = new ProcessRunner()->runAtMost($slots, $this->childCommands($names, $arguments), $this->workingDirectory());
         $failed = [];
 
-        foreach ($gates as $gate) {
-            $result = $this->resultOf($gate, $workspace);
-            fwrite(STDOUT, $result->toJson()."\n");
+        foreach ($names as $name) {
+            $report = ChildReport::of($name, $children[$name]);
+            fwrite(STDOUT, $report->line."\n");
 
-            if (!$result->isPassing()) {
-                $failed[] = $gate->name();
+            if (!$report->passing) {
+                $failed[] = $name;
             }
         }
 
         $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
 
         return [] === $failed ? 0 : 1;
+    }
+
+    /**
+     * @param list<string> $names
+     * @param list<string> $arguments
+     *
+     * @return array<string, array{list<string>, array<string, string|false>}>
+     */
+    private function childCommands(array $names, array $arguments): array
+    {
+        $tests = new TestsGate()->name();
+        $commands = [];
+
+        // Because the tests gate takes longest by far, it starts first and never waits for a free slot.
+        foreach ([...array_intersect($names, [$tests]), ...array_diff($names, [$tests])] as $name) {
+            $commands[$name] = [[...$this->gateCommand ?? [PHP_BINARY, $this->home.'/bin/check'], ...$arguments, '--gate='.$name], []];
+        }
+
+        return $commands;
+    }
+
+    private function workingDirectory(): string
+    {
+        $directory = getcwd();
+
+        return false === $directory ? $this->home : $directory;
     }
 
     private function resultOf(Gate $gate, Workspace $workspace): GateResult

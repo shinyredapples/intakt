@@ -115,14 +115,57 @@ final class ProcessRunner
             return array_map(fn (array $command): ProcessResult => $this->timedOut($command[0][0], $seconds), $commands);
         }
 
+        $processes = $this->processes($commands, $directory, $seconds);
+        $failures = $this->startAll($processes);
+        $failures += $this->waitForAll(array_diff_key($processes, $failures));
+
+        return $this->resultsOf($processes, $failures, $commands);
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
+     *
+     * @return array<Name, ProcessResult>
+     */
+    public function runAtMost(int $slots, array $commands, string $directory): array
+    {
+        $processes = $this->processes($commands, $directory, self::OVERALL_TIMEOUT_SECONDS);
+        $failures = $this->runInSlots(max(1, $slots), $processes);
+
+        return $this->resultsOf($processes, $failures, $commands);
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
+     *
+     * @return array<Name, Process>
+     */
+    private function processes(array $commands, string $directory, int $seconds): array
+    {
         $processes = [];
 
         foreach ($commands as $name => [$command, $environment]) {
             $processes[$name] = new Process($command, $directory, [...getenv(), ...$environment], null, $seconds);
         }
 
-        $failures = $this->startAll($processes);
-        $failures += $this->waitForAll(array_diff_key($processes, $failures));
+        return $processes;
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param array<Name, Process>                                          $processes
+     * @param array<array-key, int>                                         $failures
+     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
+     *
+     * @return array<Name, ProcessResult>
+     */
+    private function resultsOf(array $processes, array $failures, array $commands): array
+    {
         $results = [];
 
         foreach ($processes as $name => $process) {
@@ -130,6 +173,32 @@ final class ProcessRunner
         }
 
         return $results;
+    }
+
+    /**
+     * @param array<array-key, Process> $waiting
+     *
+     * @return array<array-key, int>
+     */
+    private function runInSlots(int $slots, array $waiting): array
+    {
+        $running = [];
+        $failures = [];
+
+        while ([] !== $waiting || [] !== $running) {
+            $starting = array_slice($waiting, 0, $slots - count($running), true);
+            $waiting = array_diff_key($waiting, $starting);
+            $failures += $this->startAll($starting);
+            $running += array_diff_key($starting, $failures);
+
+            $finished = $this->pollAll($running);
+            $running = array_diff_key($running, $finished);
+            $failures += array_filter($finished, static fn (?int $failure): bool => null !== $failure);
+
+            usleep(self::POLL_MICROSECONDS);
+        }
+
+        return $failures;
     }
 
     private function runCall(GitCall $call): ProcessResult

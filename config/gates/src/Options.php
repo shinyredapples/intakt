@@ -24,8 +24,10 @@ final readonly class Options
 
     public ?string $testMerge;
 
+    public ?string $gate;
+
     /**
-     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string, gate: ?string} $values
      */
     private function __construct(public Mode $mode, array $values)
     {
@@ -34,6 +36,7 @@ final readonly class Options
         $this->skip = $this->names($values['skip']);
         $this->root = $values['root'];
         $this->testMerge = $values['test-merge'];
+        $this->gate = $values['gate'];
     }
 
     /**
@@ -42,7 +45,7 @@ final readonly class Options
     public static function fromArguments(array $arguments): self
     {
         $mode = Mode::Full;
-        $values = ['base' => null, 'only' => null, 'skip' => null, 'root' => null, 'test-merge' => null];
+        $values = ['base' => null, 'only' => null, 'skip' => null, 'root' => null, 'test-merge' => null, 'gate' => null];
 
         foreach ($arguments as $argument) {
             if ('--fast' === $argument) {
@@ -57,9 +60,9 @@ final readonly class Options
     }
 
     /**
-     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
+     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string, gate: ?string} $values
      *
-     * @return array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string}
+     * @return array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string, gate: ?string}
      */
     private static function withValue(array $values, string $argument): array
     {
