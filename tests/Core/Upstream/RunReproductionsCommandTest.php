@@ -24,7 +24,7 @@ final class RunReproductionsCommandTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';
 
-    // The passing reproduction next to the hanging one starts PHPUnit under the same limit, which takes over a second on a loaded machine.
+    // Longer than one second because the passing reproduction beside the hanging one starts PHPUnit under the same limit, and that start takes over a second on a loaded machine.
     private const float HANGING_TIMEOUT = 5.0;
 
     private string $folder = '';
