@@ -76,7 +76,7 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
     // Along the whole chain, because a forge or a use case may wrap the database's or the lock store's failure in its own.
     private function noItemCanAvoid(Throwable $failure): bool
     {
-        for ($cause = $failure; null !== $cause; $cause = $cause->getPrevious()) {
+        for ($cause = $failure; $cause instanceof Throwable; $cause = $cause->getPrevious()) {
             if (array_any(self::NO_ITEM_CAN_AVOID, static fn (string $class): bool => $cause instanceof $class)) {
                 return true;
             }
