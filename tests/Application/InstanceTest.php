@@ -20,8 +20,7 @@ final class InstanceTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
 
-    // Vendor is linked once per class and the rest copied anew per test, because no test writes to vendor and linking its many files cost more than half a second per test.
-    // Hard links, because a symlinked vendor resolves the project directory to the real checkout; linking fails partway across file systems, so a partial copy never counts as vendor.
+    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test.
     private const string COPY = <<<'SH'
         set -e
         project=$1
