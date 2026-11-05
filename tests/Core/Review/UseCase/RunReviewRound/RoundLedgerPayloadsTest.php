@@ -18,7 +18,10 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStopped;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewStarted;
 use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHeld;
 use Intakt\Core\Review\UseCase\RunReviewRound\VerdictReceived;
+use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\Serializer\SerializerInterface;
@@ -110,6 +113,20 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
         self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+    }
+
+    public function testTheLedgerSpreadsTheReviewerIdentityBeforeTheEventsOwnKeys(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $serializer = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $serializer);
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $serializer)->reviewerFailed($reviewer, 'RuntimeException');
+
+        $payload = $ledger->payloads()[0];
+        self::assertSame(['round', 'reviewer', 'role', 'tier', 'failure'], array_keys($payload));
+        self::assertSame([$reviewer->round()->id()->toRfc4122(), $reviewer->id()->toRfc4122()], [$payload['round'], $payload['reviewer']]);
     }
 
     private function written(object $payload): string
