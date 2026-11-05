@@ -1,5 +1,5 @@
-# The base image must be pinned by digest (tag@sha256:<digest>), which #705 does; 1.13.4 is the first release with every worker-mode state-leak fix.
-FROM dunglas/frankenphp:1.13.4-php8.5 AS base
+# Pinned by digest to FrankenPHP 1.13.4 on PHP 8.5.12, the digest pin #705 asks for; 1.13.4 is the first release with every worker-mode state-leak fix.
+FROM dunglas/frankenphp:1.13.4-php8.5.12-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e AS base
 
 # pcntl lets a consumer finish its message on SIGTERM instead of being cut off.
 RUN install-php-extensions intl pdo_sqlite opcache zip pcntl
