@@ -24,6 +24,23 @@ final class PhpunitReport
         return array_map(static fn (array $entry): string => self::finding($run, $entry[1], trim($entry[2])), $entries);
     }
 
+    /**
+     * @return list<string>
+     */
+    public static function listingDiagnostics(string $run, string $eventsLog): array
+    {
+        $events = is_readable($eventsLog) ? file_get_contents($eventsLog) : false;
+
+        if (false === $events) {
+            return [$run.': phpunit listed its test files without writing its events log'];
+        }
+
+        // Because PHPUnit leaves a test file it cannot load out of the list without a word, only its event log tells, and the workers would never run it.
+        preg_match_all('/^Test Runner Triggered (?!Garbage Collection)(.+)$/m', $events, $triggered);
+
+        return array_map(static fn (string $event): string => $run.': '.$event, $triggered[1]);
+    }
+
     private static function finding(string $run, string $test, string $message): string
     {
         return '' === $message ? $run.': '.$test : $run.': '.$test.': '.$message;
