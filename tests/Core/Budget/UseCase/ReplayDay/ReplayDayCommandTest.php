@@ -30,6 +30,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 
 // Through the kernel and the Doctrine stores, because the evidence of the guard is this command on a running install.
 #[Group('persistence')]
+// Because the outage notice takes its lock without waiting in var/locks/ of the checkout, so a lock another worker holds would skip the notice.
+#[Group('serial')]
 #[CoversClass(ReplayDayCommand::class)]
 #[CoversClass(RolledBackReplay::class)]
 #[UsesClass(OutageWatch::class)]

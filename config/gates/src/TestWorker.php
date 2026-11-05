@@ -45,6 +45,7 @@ final readonly class TestWorker
             'TMPDIR' => $this->directory.'/tmp',
             'APP_CACHE_DIR' => $this->directory.'/cache',
             'APP_LOG_DIR' => $this->directory.'/log',
+            'APP_SHARE_DIR' => $this->directory.'/share',
             self::GATES_CACHE_VARIABLE => $this->directory.'/tools',
             self::PORTS_VARIABLE => $firstPort.'-'.($firstPort + self::PORTS_PER_WORKER - 1),
         ];
