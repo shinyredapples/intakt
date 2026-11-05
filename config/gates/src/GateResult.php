@@ -98,9 +98,9 @@ final readonly class GateResult
 
         // The environment gate reports a missing mbstring through here, so the cut must work without it.
         if (!function_exists('mb_strimwidth')) {
-            $characters = preg_split('//u', $oneLine, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $characters = preg_split('//u', $oneLine, -1, PREG_SPLIT_NO_EMPTY);
 
-            return count($characters) <= self::MAXIMUM_FINDING_LENGTH ? $oneLine : implode('', array_slice($characters, 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
+            return false === $characters || count($characters) <= self::MAXIMUM_FINDING_LENGTH ? $oneLine : implode('', array_slice($characters, 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
         }
 
         return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...');

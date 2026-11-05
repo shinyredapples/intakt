@@ -15,7 +15,7 @@ final readonly class PhpStartupOptions
      */
     public static function current(array $arguments): array
     {
-        // PHP exposes its own options (-d, -n, -c) nowhere else; without /proc they are dropped on the restart.
+        // Read from /proc because PHP exposes its own options (-d, -n, -c) nowhere else.
         $commandLine = is_readable(self::COMMAND_LINE) ? file_get_contents(self::COMMAND_LINE) : false;
 
         return false === $commandLine ? [] : self::between(explode("\0", rtrim($commandLine, "\0")), $arguments);
