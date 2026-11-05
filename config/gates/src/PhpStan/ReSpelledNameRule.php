@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\InterpolatedStringPart;
 use PhpParser\Node\Scalar\InterpolatedString;
 use PhpParser\Node\Scalar\String_;
@@ -89,6 +90,11 @@ final readonly class ReSpelledNameRule implements Rule
         $owners = [];
 
         foreach ($finder->findInstanceOf($nodes, ClassLike::class) as $class) {
+            // an anonymous class has no namespacedName at all (the name resolver sets it only for a named class), so its literals keep the class around it as their owner
+            if (!$class->name instanceof Identifier) {
+                continue;
+            }
+
             foreach ($finder->find([$class], $this->isLiteral(...)) as $literal) {
                 $owners[spl_object_id($literal)] = $class->namespacedName?->toString() ?? '';
             }

@@ -13,4 +13,11 @@ final readonly class SampleServices
     {
         return "intakt.sample.platform.{$provider->value}";
     }
+
+    public static function lockNames(): object
+    {
+        return new class {
+            public string $prefix = 'intakt.sample.lock.';
+        };
+    }
 }
