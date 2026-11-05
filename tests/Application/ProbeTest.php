@@ -322,9 +322,7 @@ final class ProbeTest extends TestCase
         $project = $this->scratch.'/project';
         new Filesystem()->mkdir($project.'/tests');
 
-        // Hard links keep the vendor copy cheap; across file systems they fail partway, and cp -a would nest into the partial folder.
-        // A symlink would be cheaper, but vendor then resolves the project directory to the real checkout, so the copy would not be what boots.
-        // One cp for the rest beats mirroring each folder from PHP.
+        // Hard links keep the vendor copy cheap, and a symlink would not do because vendor then resolves the project directory to the real checkout.
         $script = 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; } && cd "$0" && cp -a bin src config public composer.json .env .env.test "$1"/';
         $copy = new Process(['sh', '-c', $script, self::ROOT, $project]);
         $copy->mustRun();
