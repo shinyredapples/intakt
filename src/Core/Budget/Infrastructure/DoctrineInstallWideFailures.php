@@ -25,7 +25,7 @@ use Throwable;
 #[AsAlias(InstallWideFailures::class)]
 final readonly class DoctrineInstallWideFailures implements InstallWideFailures
 {
-    // Long enough for a database or a lock store to come back after a restart, short enough that a cause already gone holds the install only briefly.
+    // Ten minutes, because a restarted database or lock store is back by then, and a cause already gone should hold the install only briefly.
     private const int BACK_OFF_SECONDS = 600;
 
     private const int SAME_ERROR_WITHIN_SECONDS = 3600;

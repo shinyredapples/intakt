@@ -131,7 +131,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
         $this->failures->itemFailed('head 8', new RuntimeException('other'));
 
-        self::assertSame(1, (int) $this->entities->getConnection()->fetchOne('SELECT COUNT(*) FROM budget_item_failure'));
+        self::assertCount(1, $this->entities->getConnection()->fetchFirstColumn('SELECT position FROM budget_item_failure'));
     }
 
     /**
