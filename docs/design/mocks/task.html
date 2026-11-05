@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>#598 Hold pushes while main is red | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="task">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content roomy" id="main">
+<p class="small" style="margin-bottom:12px"><a href="index.html">Board</a> <span class="muted">/</span> <span class="muted">In review</span></p>
+<div class="page-head" style="align-items:flex-start">
+  <div style="flex:1;min-width:280px">
+    <h1>#598 Hold pushes while main is red</h1>
+    <div class="head-meta">
+      <span class="chip on-page strong"><span class="dot ok"></span>In review, round 2</span>
+      <p class="meta"><span>intakt</span><span>Size M</span><span data-icon="clock" data-icon-cls="s">Started 2 h 31 min ago</span><span data-icon="coin" data-icon-cls="s">$5.62 so far</span><a href="#" data-icon="pr" data-icon-cls="s">Pull request 611</a></p>
+    </div>
+  </div>
+  <div class="actions task-actions">
+    <button class="btn secondary" type="button" data-icon="stop" data-toast="#598 stopped. Work so far is kept on its branch" data-undo="#598 continues">Stop</button>
+    <button class="btn secondary" type="button" data-icon="play" disabled style="opacity:.55;cursor:not-allowed" title="Already running">Continue</button>
+    <button class="btn primary" type="button" id="sendback-btn" aria-expanded="false" aria-controls="sendback" data-icon="send">Send back with a note</button>
+  </div>
+</div>
+<form class="sendback" id="sendback" onsubmit="event.preventDefault();this.classList.remove('open');Intakt.toast('Sent back to the Developer with your note',()=>Intakt.toast('Send-back withdrawn'))">
+  <label for="note" class="l" style="font:600 15px/1.3 var(--f-head)">What should change?</label>
+  <textarea class="input" id="note" rows="3">Keep the old release order for pushes that were held before this change.</textarea>
+  <div style="display:flex;gap:8px"><button class="btn primary sm" type="submit">Send back</button><button class="btn quiet sm" type="button" onclick="document.getElementById('sendback').classList.remove('open')">Cancel</button></div>
+</form>
+
+<section class="state-block" aria-labelledby="st-h">
+  <div class="sb-head"><span class="dot ok"></span><h2 id="st-h">Now: <span class="term" data-term="round">round</span> 2 in review</h2><p class="meta"><span>since 11:02</span><span><span class="term" data-term="version">version</span> <span class="mono">9b3e5aa</span></span></p></div>
+  <div class="sb-grid">
+    <div>
+      <h3 class="label-sm">Reviewers</h3>
+      <ul class="sb-list">
+        <li><span class="dot ok"></span><span><strong>Code reviewer A</strong>, Opus. Checked R1-1 to R1-3: all fixed. Running the forge tests.</span><span class="r">11 min</span></li>
+        <li><span class="dot ok"></span><span><strong>Code reviewer B</strong>, Sonnet. Reading the whole diff again.</span><span class="r">9 min</span></li>
+        <li><svg class="i s ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span><strong>Security engineer</strong>. Round 1 approval still holds: no <span class="term" data-term="protected">protected file</span> changed.</span></li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="label-sm">Open finding</h3>
+      <a class="sb-finding" href="#f-R2-1"><span class="sev">P3</span><span><span class="mono">R2-1</span> The 30 second cache window is written inline. Name it next to the other forge timings.<span class="loc">src/Forge/PushGate.php:92</span></span></a>
+    </div>
+    <div>
+      <h3 class="label-sm">Merge still needs</h3>
+      <ul class="needs-list">
+        <li class="met"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Checks green on <span class="mono">9b3e5aa</span></li>
+        <li><span class="todo"></span>Approval from Code reviewer A</li>
+        <li><span class="todo"></span>Approval from Code reviewer B</li>
+        <li><span class="todo"></span>R2-1 fixed or accepted</li>
+      </ul>
+    </div>
+  </div>
+</section>
+<div class="ttabs" role="tablist" aria-label="Task views"><div class="seg">
+  <button type="button" role="tab" aria-selected="true" data-pane="timeline">Timeline</button>
+  <button type="button" role="tab" aria-selected="false" data-pane="log">Live log</button>
+</div></div>
+<div class="task-grid" id="tgrid" data-pane="timeline" style="margin-top:32px">
+  <section class="tl-pane" aria-labelledby="tl-h">
+    <h2 id="tl-h" style="margin-bottom:20px">Timeline</h2>
+    <ol class="timeline">
+      <li><span class="node done"></span>
+        <details class="ev"><summary class="ev-head"><h3>Accepted and planned</h3><span class="muted small">Product owner, Tech lead</span><time>08:58 to 09:02</time></summary>
+          <p class="ev-body">The Product owner accepted the issue as ready: it has an outcome and acceptance criteria. The Tech lead's plan: before each push to a pull request, read the latest status of main. If main is red, put the push on hold and release pushes on hold oldest first once main is green. Touches the push gate, its tests and the user guide. No interface change, so no Designer.</p>
+        </details>
+      </li>
+      <li id="ev-round1"><span class="node done"></span>
+        <details class="ev"><summary class="ev-head"><h3>Round 1: changes requested</h3><span class="muted small">3 findings, 1 P1</span><time>09:10 to 10:05</time></summary>
+          <div class="ev-step"><h4>Build 1</h4><p class="meta"><span>Developer, Opus, slot 1</span><span class="mono">4e1b7d0</span><span>6 files</span><span>+214 −37</span><span>$2.10</span></p></div>
+          <div class="ev-step"><h4>Checks passed</h4><p class="meta"><span>Lint, static analysis and 412 tests</span><span>09:52</span></p></div>
+          <div class="ev-step"><h4>Review</h4><p class="ev-body">Code reviewer A and B asked for changes. The Security engineer approved.</p></div>
+          <div class="findings">
+            <div class="finding" id="f-R1-1"><span class="fid">R1-1</span><span class="sev p1">P1</span><p>The gate reads main's status once at startup, so main turning red later is never seen.</p><span class="loc">src/Forge/PushGate.php:88</span></div>
+            <div class="finding" id="f-R1-2"><span class="fid">R1-2</span><span class="sev">P2</span><p>Pushes on hold are released in no fixed order. Release the oldest first.</p><span class="loc">src/Forge/PushGate.php:131</span></div>
+            <div class="finding" id="f-R1-3"><span class="fid">R1-3</span><span class="sev">P3</span><p>The guide says "blocked" where the dashboard says "held".</p><span class="loc">docs/guide/holds.md:12</span></div>
+          </div>
+        </details>
+      </li>
+      <li id="ev-round2"><span class="node live"></span>
+        <div class="ev-head"><h3>Round 2: in review</h3><span class="muted small">Fixes R1-1, R1-2, R1-3</span><time>since 10:20</time></div>
+        <div class="ev-step"><h4>Build 2</h4><p class="meta"><span>Developer, Opus, slot 1</span><span class="mono">9b3e5aa</span><span>3 files</span><span>+58 −19</span><span>$1.44</span></p></div>
+        <div class="ev-step"><h4>Checks passed</h4><p class="meta"><span>Lint, static analysis and 417 tests</span><span>10:55</span></p></div>
+        <div class="ev-step"><h4>Review in progress</h4><p class="ev-body">Both Code reviewers are working. One finding so far.</p></div>
+        <div class="findings">
+          <div class="finding" id="f-R2-1"><span class="fid">R2-1</span><span class="sev">P3</span><p>The 30 second cache window is written inline. Name it next to the other forge timings.</p><span class="loc">src/Forge/PushGate.php:92</span></div>
+        </div>
+      </li>
+      <li><span class="node"></span>
+        <div class="ev-head"><h3 class="muted">Merge</h3><span class="muted small">Maintainer</span></div>
+        <p class="ev-body muted">Merges once both reviewers approve and checks are green on the same version.</p>
+      </li>
+    </ol>
+  </section>
+
+  <aside class="log log-pane" aria-labelledby="log-h">
+    <header><span class="dot ok"></span><h2 id="log-h">Code reviewer A, live</h2><p class="meta" style="margin-left:auto"><span>Opus</span><span>11 min</span></p></header>
+    <div class="log-main"><ol aria-live="off">
+      <li><time>11:02:04</time><span><span class="tool">Read</span> pull request 611, round 1 findings</span></li>
+      <li><time>11:02:09</time><span><span class="tool">Read</span> src/Forge/PushGate.php</span></li>
+      <li><time>11:02:31</time><span><span class="tool">Grep</span> "mainStatus(" in src/</span></li>
+      <li class="out"><time></time><span>src/Forge/PushGate.php:86, 104
+src/Forge/MainWatcher.php:41</span></li>
+      <li><time>11:03:12</time><span><span class="tool">Read</span> src/Forge/MainWatcher.php</span></li>
+      <li><time>11:04:40</time><span><span class="tool">Note</span> R1-1 fixed: status read per push, cached 30 s</span></li>
+      <li><time>11:05:02</time><span><span class="tool">Read</span> tests/Forge/PushGateTest.php</span></li>
+      <li><time>11:06:18</time><span><span class="tool">Run</span> vendor/bin/phpunit --filter PushGateTest</span></li>
+      <li class="out"><time></time><span>OK (14 tests, 41 assertions)</span></li>
+      <li><time>11:07:55</time><span><span class="tool">Note</span> R1-2 fixed: queue ordered by held_at</span></li>
+      <li><time>11:08:20</time><span><span class="tool">Read</span> docs/guide/holds.md</span></li>
+      <li><time>11:09:03</time><span><span class="tool">Note</span> R1-3 fixed</span></li>
+      <li><time>11:10:47</time><span><span class="tool">Run</span> vendor/bin/phpunit tests/Forge</span></li>
+      <li class="out cursor"><time></time><span>...........................</span></li>
+    </ol></div>
+    <section class="log-summary" aria-label="Session summary">
+      <div class="ls-grid">
+        <div>
+          <h3 class="label-sm">Tool calls</h3>
+          <dl class="ls-dl"><dt>Read</dt><dd>5</dd><dt>Grep</dt><dd>1</dd><dt>Run</dt><dd>2</dd><dt>Note</dt><dd>3</dd><dt>Total</dt><dd>11</dd></dl>
+        </div>
+        <div>
+          <h3 class="label-sm">Cost</h3>
+          <dl class="ls-dl"><dt>This round</dt><dd>$0.61</dd><dt>Task so far</dt><dd>$5.62</dd></dl>
+        </div>
+      </div>
+      <div>
+        <h3 class="label-sm">Tests</h3>
+        <ul class="ls-list">
+          <li><span class="dot ok"></span><span class="mono">--filter PushGateTest</span><span class="r">14 passed</span></li>
+          <li><span class="dot idle"></span><span class="mono">tests/Forge</span><span class="r">running</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="label-sm">Files read</h3>
+        <ul class="ls-list">
+          <li><span class="mono">src/Forge/PushGate.php</span></li>
+          <li><span class="mono">src/Forge/MainWatcher.php</span></li>
+          <li><span class="mono">tests/Forge/PushGateTest.php</span></li>
+          <li><span class="mono">docs/guide/holds.md</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="label-sm">Findings this round</h3>
+        <ul class="ls-list">
+          <li><a href="#f-R2-1" class="mono">R2-1</a><span class="sev">P3</span><span>Open: name the cache window</span></li>
+          <li><a href="#f-R1-1" class="mono">R1-1</a><span class="sev">P1</span><span class="muted">Checked, fixed</span></li>
+          <li><a href="#f-R1-2" class="mono">R1-2</a><span class="sev">P2</span><span class="muted">Checked, fixed</span></li>
+          <li><a href="#f-R1-3" class="mono">R1-3</a><span class="sev">P3</span><span class="muted">Checked, fixed</span></li>
+        </ul>
+      </div>
+    </section>
+  </aside>
+</div>
+<script>
+document.querySelectorAll(".ttabs [data-pane]").forEach(function (b) {
+  b.addEventListener("click", function () {
+    document.getElementById("tgrid").dataset.pane = b.dataset.pane;
+    document.querySelectorAll(".ttabs [data-pane]").forEach(function (x) { x.setAttribute("aria-selected", x === b); });
+  });
+});
+document.getElementById("sendback-btn").addEventListener("click", function () {
+  var f = document.getElementById("sendback"), open = f.classList.toggle("open");
+  this.setAttribute("aria-expanded", open); if (open) document.getElementById("note").focus();
+});
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="settings">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content" id="main">
+<div class="settings-layout">
+<nav class="snav" aria-label="Setting groups">
+  <a href="#general" aria-current="true">General</a>
+  <a href="#defaults">Project defaults</a>
+  <a href="#notifications">Notifications</a>
+  <a href="#danger">Danger zone</a>
+</nav>
+<div class="settings">
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="lead">Most changes save as you make them; the port waits for Apply. Each project can override the defaults on its own page.</p>
+  </div>
+</div>
+
+<section class="sgroup" id="general" aria-labelledby="g1">
+  <h2 id="g1">General</h2>
+  <p>How you reach the dashboard.</p>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-port">Dashboard port</label><p class="d">The dashboard listens on this port.</p><p class="d port-preview" id="port-preview" aria-live="polite">Now at <span class="mono">intakt.local:8470</span>. After Apply this page reconnects to the new address.</p></div>
+    <div class="ctl"><span class="port-will" id="port-will">Will move to <span class="mono">intakt.local:8471</span></span><span class="sstate"></span><input class="input" id="s-port" type="number" value="8471" min="1024" max="65535"><button class="btn primary" type="button" id="port-apply">Apply</button></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-phone">Phone access</label><p class="d">Lets phones on your home network open the dashboard and answer what waits on you.</p></div>
+    <div class="ctl"><span class="sstate saved"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Saved</span><span class="switch"><input id="s-phone" type="checkbox" role="switch" checked data-setting><span></span></span></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-tz">Time zone</label><p class="d">Used for reset times, history and the daily summary.</p></div>
+    <div class="ctl"><span class="sstate"></span><select class="select" id="s-tz" data-setting><option>Europe/Berlin</option><option>Europe/London</option><option>America/New_York</option><option>UTC</option></select></div>
+  </div>
+</section>
+
+<section class="sgroup" id="defaults" aria-labelledby="g2">
+  <h2 id="g2">Project defaults</h2>
+  <p>Used by every project unless it sets its own.</p>
+  <div class="srow">
+    <div class="txt"><span class="l" id="l-slots">Build slots</span><p class="d">How many tasks a project may build at the same time.</p><p class="d">Each running build uses one account. With 2 working accounts, a third slot waits until one is free.</p></div>
+    <div class="ctl"><span class="sstate"></span><div class="stepper" role="group" aria-labelledby="l-slots"><button type="button" aria-label="Fewer" data-step="-1">−</button><output data-setting-out>2</output><button type="button" aria-label="More" data-step="1">+</button></div></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><span class="l" id="l-wait">Waiting reviews limit</span><p class="d">When this many finished builds wait for review, Intakt reviews before it builds more.</p></div>
+    <div class="ctl"><span class="sstate"></span><div class="stepper" role="group" aria-labelledby="l-wait"><button type="button" aria-label="Fewer" data-step="-1">−</button><output data-setting-out>3</output><button type="button" aria-label="More" data-step="1">+</button></div></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-label">Issue label</label><p class="d">Intakt only picks up issues that carry this label.</p></div>
+    <div class="ctl"><span class="sstate"></span><input class="input" id="s-label" type="text" value="intakt" style="width:160px" data-setting></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-merge">Merge without asking</label><p class="d">Merge approved work on its own. Changes to <span class="term" data-term="protected">protected files</span> always wait for you.</p></div>
+    <div class="ctl"><span class="sstate"></span><span class="switch"><input id="s-merge" type="checkbox" role="switch" checked data-setting><span></span></span></div>
+  </div>
+</section>
+
+<section class="sgroup" id="notifications" aria-labelledby="g3">
+  <h2 id="g3">Notifications</h2>
+  <p class="rule-note"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg>Intakt only notifies you about things that wait on you. Everything else stays on the dashboard. This is not a setting.</p>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-push">Phone push</label><p class="d">To Pixel 9, added 12 Oct. <button type="button" class="linkbtn" data-toast="Test notification sent to Pixel 9">Send a test</button></p></div>
+    <div class="ctl"><span class="sstate"></span><span class="switch"><input id="s-push" type="checkbox" role="switch" checked data-setting><span></span></span></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-mail">Email</label><p class="d">Same items as push, one email each.</p></div>
+    <div class="ctl"><span class="sstate"></span><input class="input" id="s-mail-addr" type="email" value="owner@example.com" style="width:220px" aria-label="Email address"><span class="switch"><input id="s-mail" type="checkbox" role="switch" data-setting><span></span></span></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-hook">Webhook</label><p class="d">Intakt sends a JSON message to this address, for chat tools or your own scripts.</p></div>
+    <div class="ctl"><span class="sstate"></span><input class="input" id="s-hook" type="url" placeholder="https://" style="width:260px" data-setting></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-quiet">Quiet hours</label><p class="d">Notifications wait until morning. Work carries on, and the dashboard still shows everything.</p></div>
+    <div class="ctl"><span class="sstate failed">Not saved, still 22:00 to 07:00. <button type="button" class="linkbtn" data-retry>Retry</button></span><select class="select" id="s-quiet" data-setting><option>Off</option><option>22:00 to 07:00</option><option selected>23:00 to 08:00</option></select></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-daily">Daily summary</label><p class="d">One message a day: what merged, what was sent back, what it cost. Sent by email.</p></div>
+    <div class="ctl"><span class="sstate"></span><span class="switch"><input id="s-daily" type="checkbox" role="switch" data-setting><span></span></span></div>
+  </div>
+</section>
+
+<section class="sgroup danger" id="danger" aria-labelledby="g4">
+  <h2 id="g4">Danger zone</h2>
+  <p>These stop work. Both can be undone.</p>
+  <div class="srow">
+    <div class="txt"><span class="l">Pause everything</span><p class="d">Running builds finish their current step, then every project stops until you resume.</p></div>
+    <div class="ctl"><button class="btn danger" type="button" data-icon="pause" data-confirm="Click again to pause" data-toast="All projects paused" data-undo="Projects resumed">Pause everything</button></div>
+  </div>
+  <div class="srow">
+    <div class="txt"><label class="l" for="s-remove">Remove a project</label><p class="d">Intakt stops working on it and forgets its settings. Your repository and its issues stay as they are.</p></div>
+    <div class="ctl"><select class="select" id="s-remove" style="min-width:160px"><option>field-notes</option><option>acme-shop</option><option>intakt</option></select><button class="btn danger" type="button" data-confirm="Click again to remove" data-toast="Project removed" data-undo="Project restored">Remove</button></div>
+  </div>
+</section>
+<p class="muted small">For people building Intakt: <a href="components.html">component reference</a>.</p>
+</div>
+</div>
+<script>
+(function () {
+  var CHECK = '<svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  function state(row, st) {
+    var el = row.querySelector(".sstate"); if (!el) return;
+    el.className = "sstate " + st;
+    el.innerHTML = st === "saving" ? "Saving…" : st === "saved" ? CHECK + "Saved" : "Not saved, still " + (row.dataset.active || "the old value") + '. <button type="button" class="linkbtn" data-retry>Retry</button>';
+  }
+  function save(el, undo) {
+    var row = el.closest(".srow"); state(row, "saving");
+    setTimeout(function () { state(row, "saved"); window.Intakt && Intakt.toast("Saved", undo); }, 700);
+  }
+  document.addEventListener("click", function (e) {
+    var r = e.target.closest("[data-retry]"); if (r) save(r);
+  });
+  document.querySelectorAll("[data-setting]").forEach(function (el) {
+    var prev = el.type === "checkbox" ? el.checked : el.value;
+    el.addEventListener("change", function () {
+      var before = prev; prev = el.type === "checkbox" ? el.checked : el.value;
+      save(el, function () { if (el.type === "checkbox") el.checked = before; else el.value = before; prev = before; state(el.closest(".srow"), "saved"); Intakt.toast("Change undone"); });
+    });
+  });
+  var port = document.getElementById("s-port"), apply = document.getElementById("port-apply"), will = document.getElementById("port-will"), pv = document.getElementById("port-preview"), cur = "8470";
+  function portUI() {
+    var ok = +port.value >= 1024 && +port.value <= 65535, changed = port.value !== cur;
+    apply.disabled = !(ok && changed); apply.className = "btn " + (ok && changed ? "primary" : "secondary");
+    will.innerHTML = !changed ? "" : ok ? 'Will move to <span class="mono">intakt.local:' + port.value + '</span>' : "Use 1024 to 65535";
+    pv.innerHTML = 'Now at <span class="mono">intakt.local:' + cur + '</span>.' + (changed && ok ? " After Apply this page reconnects to the new address." : "");
+  }
+  port.addEventListener("input", portUI);
+  apply.addEventListener("click", function () {
+    var row = port.closest(".srow"); state(row, "saving"); apply.disabled = true;
+    setTimeout(function () { cur = port.value; state(row, "saved"); portUI(); Intakt.toast("Reconnecting to intakt.local:" + cur); }, 900);
+  });
+  document.querySelectorAll(".stepper").forEach(function (s) {
+    var out = s.querySelector("output");
+    s.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-step]"); if (!b) return;
+      var before = +out.value, v = Math.max(1, Math.min(8, before + +b.dataset.step));
+      if (v === before) return; out.value = v;
+      save(s, function () { out.value = before; Intakt.toast("Change undone"); });
+    });
+  });
+  var links = document.querySelectorAll(".snav a");
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) links.forEach(function (a) { a.setAttribute("aria-current", a.hash === "#" + e.target.id); }); });
+  }, { rootMargin: "-20% 0px -70% 0px" });
+  document.querySelectorAll(".sgroup").forEach(function (g) { io.observe(g); });
+
+})();
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>
