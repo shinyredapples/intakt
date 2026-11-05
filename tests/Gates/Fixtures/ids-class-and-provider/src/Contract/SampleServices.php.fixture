@@ -8,4 +8,9 @@ final readonly class SampleServices
 {
     public const string PLATFORM_PREFIX = 'intakt.sample.platform.';
     public const string LOCK_PREFIX = 'intakt.sample.lock.';
+
+    public static function platform(Provider $provider): string
+    {
+        return "intakt.sample.platform.{$provider->value}";
+    }
 }

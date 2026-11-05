@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
+use PhpParser\Node\InterpolatedStringPart;
+use PhpParser\Node\Scalar\InterpolatedString;
 use PhpParser\Node\Scalar\String_;
+use PhpParser\Node\Stmt\ClassLike;
+use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
+use PHPStan\Node\FileNode;
 use PHPStan\Reflection\EnumCaseReflection;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\IdentifierRuleError;
@@ -15,7 +20,7 @@ use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Type\Constant\ConstantStringType;
 
 /**
- * @implements Rule<String_>
+ * @implements Rule<FileNode>
  */
 final readonly class ReSpelledNameRule implements Rule
 {
@@ -33,9 +38,10 @@ final readonly class ReSpelledNameRule implements Rule
     ) {
     }
 
+    // the whole file rather than each literal, because PHPStan never analyses the body of a trait that no class uses
     public function getNodeType(): string
     {
-        return String_::class;
+        return FileNode::class;
     }
 
     /**
@@ -47,17 +53,18 @@ final readonly class ReSpelledNameRule implements Rule
             return [];
         }
 
-        $message = match (true) {
-            $this->isServiceId($node->value) && !$this->isInIdsClass($scope) => "'%s' re-spells a container id or parameter name: use the constant of the module's ids class (a *Services class in its Contract/).",
-            $this->isProviderValue($node->value) && !$this->isInProvider($scope) => "'%s' re-spells a Provider case value: derive the name from the case.",
-            default => null,
-        };
+        $owners = $this->ownersOf($node->getNodes());
+        $findings = [];
 
-        if (null === $message) {
-            return [];
+        foreach (new NodeFinder()->find($node->getNodes(), $this->isLiteral(...)) as $literal) {
+            $message = $this->messageFor($literal, $owners[spl_object_id($literal)] ?? '');
+
+            if (null !== $message) {
+                $findings[] = RuleErrorBuilder::message($message)->line($literal->getStartLine())->identifier('intakt.reSpelledName')->build();
+            }
         }
 
-        return [RuleErrorBuilder::message(sprintf($message, $node->value))->identifier('intakt.reSpelledName')->build()];
+        return $findings;
     }
 
     private function isChecked(string $file): bool
@@ -66,26 +73,65 @@ final readonly class ReSpelledNameRule implements Rule
             && !str_starts_with($file, $this->root.self::UNCHECKED);
     }
 
+    private function isLiteral(Node $node): bool
+    {
+        return $node instanceof String_ || $node instanceof InterpolatedString;
+    }
+
+    /**
+     * @param array<Node> $nodes
+     *
+     * @return array<int, string> the name of the innermost class declaring each literal, by the literal's object id
+     */
+    private function ownersOf(array $nodes): array
+    {
+        $finder = new NodeFinder();
+        $owners = [];
+
+        foreach ($finder->findInstanceOf($nodes, ClassLike::class) as $class) {
+            foreach ($finder->find([$class], $this->isLiteral(...)) as $literal) {
+                $owners[spl_object_id($literal)] = $class->namespacedName?->toString() ?? '';
+            }
+        }
+
+        return $owners;
+    }
+
+    private function messageFor(Node $literal, string $owner): ?string
+    {
+        $value = $this->leadingTextOf($literal);
+
+        return match (true) {
+            $this->isServiceId($value) && !$this->isIdsClass($owner) => sprintf("'%s' re-spells a container id or parameter name: use the constant of the module's ids class (a *Services class in its Contract/).", $value),
+            $literal instanceof String_ && $this->isProviderValue($value) && $owner !== $this->provider => sprintf("'%s' re-spells a Provider case value: derive the name from the case.", $value),
+            default => null,
+        };
+    }
+
+    private function leadingTextOf(Node $literal): string
+    {
+        if ($literal instanceof String_) {
+            return $literal->value;
+        }
+
+        $first = $literal instanceof InterpolatedString ? $literal->parts[0] ?? null : null;
+
+        return $first instanceof InterpolatedStringPart ? $first->value : '';
+    }
+
     private function isServiceId(string $value): bool
     {
         return str_starts_with($value, self::SERVICE_ID_PREFIX);
     }
 
-    private function isInIdsClass(Scope $scope): bool
+    private function isIdsClass(string $class): bool
     {
-        $class = $scope->getClassReflection()?->getName() ?? '';
-
         return str_contains($class, '\\Contract\\') && str_ends_with($class, 'Services');
     }
 
     private function isProviderValue(string $value): bool
     {
         return in_array($value, $this->providerValues(), true);
-    }
-
-    private function isInProvider(Scope $scope): bool
-    {
-        return $scope->getClassReflection()?->getName() === $this->provider;
     }
 
     /**

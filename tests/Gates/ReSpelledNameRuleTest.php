@@ -44,6 +44,19 @@ final class ReSpelledNameRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('re-spelled-provider-value-in-config', "config/packages/ai.php:5 intakt.reSpelledName 'codex' re-spells a Provider case value");
     }
 
+    public function testAnInterpolatedServiceIdFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('interpolated-service-id', "src/PlatformLookup.php:11 intakt.reSpelledName 'intakt.ai.platform.' re-spells a container id or parameter name");
+    }
+
+    public function testRespelledNamesInAnUnusedTraitFailStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsOf('re-spelled-names-in-an-unused-trait');
+
+        self::assertStringContainsString("src/Names.php:11 intakt.reSpelledName 'codex' re-spells a Provider case value", $findings);
+        self::assertStringContainsString("src/Names.php:16 intakt.reSpelledName 'intakt.ai.platform.codex' re-spells a container id or parameter name", $findings);
+    }
+
     public function testIdsClassesProviderAndNamesDerivedFromThemPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('ids-class-and-provider');

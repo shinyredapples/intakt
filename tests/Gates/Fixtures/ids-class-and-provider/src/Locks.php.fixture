@@ -18,6 +18,6 @@ final readonly class Locks
 
     public function model(Provider $provider): string
     {
-        return self::MODELS[$provider->value] ?? throw new SampleFailure('Provider "codex" has no model.');
+        return self::MODELS[$provider->value] ?? throw new SampleFailure("Provider {$provider->value} has no intakt.sample model.");
     }
 }
