@@ -12,6 +12,8 @@ use SplFileInfo;
 final class TestsGate implements Gate
 {
     private const string SERIAL_GROUP = 'serial';
+    private const string WORKERS = '--exclude-group=';
+    private const string ALONE = '--group=';
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
     private const string SKIPPED_GATES_PASS = 'gates pass skipped, the change leaves the gate code, the gate tests and their inputs unchanged';
@@ -39,6 +41,12 @@ final class TestsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
+        $ports = TestPorts::forWorkers(count($passes), $this->variable(TestWorker::PORTS_VARIABLE));
+
+        if (null === $ports) {
+            return GateResult::failedBecause($this->name(), TestWorker::PORTS_VARIABLE.' names no range of ports that '.count($passes).' test workers can share');
+        }
+
         $scratch = $this->scratchDirectory();
 
         if (null === $scratch) {
@@ -46,7 +54,7 @@ final class TestsGate implements Gate
         }
 
         try {
-            return $this->resultOf($workspace, $scratch, $passes);
+            return $this->resultOf($workspace, $scratch, $passes, $ports);
         } finally {
             $this->remove($scratch);
         }
@@ -83,9 +91,9 @@ final class TestsGate implements Gate
     /**
      * @param array<string, string> $passes
      */
-    private function resultOf(Workspace $workspace, string $scratch, array $passes): GateResult
+    private function resultOf(Workspace $workspace, string $scratch, array $passes, TestPorts $ports): GateResult
     {
-        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes))
+        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes, $ports))
             ->withSlowest($this->recordedDurations($workspace, $scratch));
 
         return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
@@ -96,56 +104,60 @@ final class TestsGate implements Gate
      *
      * @return list<string>
      */
-    private function findings(Workspace $workspace, string $scratch, array $passes): array
+    private function findings(Workspace $workspace, string $scratch, array $passes, TestPorts $ports): array
     {
         $commands = [];
+        $alone = [];
+        $findings = [];
 
         foreach (array_keys($passes) as $index => $pass) {
-            $worker = TestWorker::numbered($scratch, $pass, $index);
+            $workers = [self::WORKERS => TestWorker::numbered($scratch, $pass, $index, $ports), self::ALONE => TestWorker::serial($scratch, $pass, $ports)];
 
-            if (!$worker->prepared()) {
+            if (!$workers[self::WORKERS]->prepared() || !$workers[self::ALONE]->prepared()) {
                 return [$pass.': cannot create the scratch directory of the pass in '.$scratch];
             }
 
-            $commands[$pass] = [[...$this->phpunit($workspace, $passes[$pass], $worker->junitReport()), '--exclude-group='.self::SERIAL_GROUP], $worker->environment()];
-        }
+            $listed = [];
 
-        $findings = [];
+            foreach ($workers as $part => $worker) {
+                $listing = $workspace->command([$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$passes[$pass], '--list-tests', '--colors=never', $part.self::SERIAL_GROUP], $worker->environment());
+
+                if (!$listing->succeeded()) {
+                    $findings = [...$findings, ...PhpunitReport::findings($worker->run, $listing)];
+
+                    continue 2;
+                }
+
+                $listed[$part] = 1 === preg_match('/^ - /m', $listing->output);
+            }
+
+            // Because a configuration whose tests are all serial leaves the workers nothing, while one without any test must still fail on the empty test suite.
+            if ($listed[self::WORKERS] || !$listed[self::ALONE]) {
+                $commands[$pass] = [[...$this->phpunit($workspace, $passes[$pass], $workers[self::WORKERS]->junitReport()), self::WORKERS.self::SERIAL_GROUP], $workers[self::WORKERS]->environment()];
+            }
+
+            if ($listed[self::ALONE]) {
+                $alone[$pass] = $workers[self::ALONE];
+            }
+        }
 
         foreach ($workspace->commandsConcurrently($commands) as $pass => $result) {
             $findings = [...$findings, ...PhpunitReport::findings($pass, $result)];
         }
 
-        foreach ($passes as $pass => $configuration) {
-            $findings = [...$findings, ...$this->serialFindings($workspace, TestWorker::serial($scratch, $pass), $configuration)];
+        foreach ($alone as $pass => $worker) {
+            $result = $workspace->command([...$this->phpunit($workspace, $passes[$pass], $worker->junitReport()), self::ALONE.self::SERIAL_GROUP], $worker->environment());
+            $findings = [...$findings, ...PhpunitReport::findings($worker->run, $result)];
         }
 
         return $findings;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function serialFindings(Workspace $workspace, TestWorker $worker, string $configuration): array
+    private function variable(string $name): ?string
     {
-        if (!$worker->prepared()) {
-            return [$worker->run.': cannot create the scratch directory of the serial pass'];
-        }
+        $value = getenv($name);
 
-        $groups = $workspace->command([$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$configuration, '--list-groups', '--colors=never'], $worker->environment());
-
-        if (!$groups->succeeded()) {
-            return PhpunitReport::findings($worker->run, $groups);
-        }
-
-        // Because a configuration without serial tests has nothing to run alone, and an empty run would fail on the empty test suite.
-        if (1 !== preg_match('/^ - '.self::SERIAL_GROUP.' \(/m', $groups->output)) {
-            return [];
-        }
-
-        $result = $workspace->command([...$this->phpunit($workspace, $configuration, $worker->junitReport()), '--group='.self::SERIAL_GROUP], $worker->environment());
-
-        return PhpunitReport::findings($worker->run, $result);
+        return is_string($value) && '' !== $value ? $value : null;
     }
 
     /**
@@ -163,9 +175,7 @@ final class TestsGate implements Gate
 
     private function gatesCache(): string
     {
-        $base = getenv(TestWorker::GATES_CACHE_VARIABLE);
-
-        return is_string($base) && '' !== $base ? $base : sys_get_temp_dir().'/intakt-gates';
+        return $this->variable(TestWorker::GATES_CACHE_VARIABLE) ?? sys_get_temp_dir().'/intakt-gates';
     }
 
     private function scratchDirectory(): ?string

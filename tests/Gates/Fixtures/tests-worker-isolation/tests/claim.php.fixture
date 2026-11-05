@@ -25,10 +25,10 @@ function holdTheNamesOfThisWorkerTogetherWith(string $worker, string $other): vo
     }
 
     touch($rendezvous.'/'.$worker);
-    $deadline = microtime(true) + 60;
+    $deadline = hrtime(true) + 60 * 1_000_000_000;
 
     while (!is_file($rendezvous.'/'.$other)) {
-        if (microtime(true) > $deadline) {
+        if (hrtime(true) > $deadline) {
             throw new RuntimeException($worker.' waited in vain for '.$other);
         }
 

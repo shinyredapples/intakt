@@ -9,23 +9,19 @@ final readonly class TestWorker
     public const string PORTS_VARIABLE = 'INTAKT_TEST_PORTS';
     public const string GATES_CACHE_VARIABLE = 'INTAKT_GATES_CACHE';
 
-    // Because Linux hands out port zero from 32768 up, so a port the system picks for a server never lands in a worker's block.
-    private const int FIRST_PORT = 20000;
-    private const int PORTS_PER_WORKER = 100;
-
-    private function __construct(public string $run, private string $directory, private int $index)
+    private function __construct(public string $run, private string $directory, private string $ports)
     {
     }
 
-    public static function numbered(string $scratch, string $pass, int $index): self
+    public static function numbered(string $scratch, string $pass, int $index, TestPorts $ports): self
     {
-        return new self($pass, $scratch.'/'.$pass.'/worker-'.$index, $index);
+        return new self($pass, $scratch.'/'.$pass.'/worker-'.$index, $ports->block($index));
     }
 
     // Because the serial pass starts only after every worker has stopped, the ports of the first worker are free again.
-    public static function serial(string $scratch, string $pass): self
+    public static function serial(string $scratch, string $pass, TestPorts $ports): self
     {
-        return new self($pass.' serial', $scratch.'/'.$pass.'/serial', 0);
+        return new self($pass.' serial', $scratch.'/'.$pass.'/serial', $ports->block(0));
     }
 
     public function prepared(): bool
@@ -38,8 +34,6 @@ final readonly class TestWorker
      */
     public function environment(): array
     {
-        $firstPort = self::FIRST_PORT + $this->index * self::PORTS_PER_WORKER;
-
         return [
             'DATABASE_URL' => 'sqlite:///'.$this->directory.'/database.sqlite',
             'TMPDIR' => $this->directory.'/tmp',
@@ -47,7 +41,7 @@ final readonly class TestWorker
             'APP_LOG_DIR' => $this->directory.'/log',
             'APP_SHARE_DIR' => $this->directory.'/share',
             self::GATES_CACHE_VARIABLE => $this->directory.'/tools',
-            self::PORTS_VARIABLE => $firstPort.'-'.($firstPort + self::PORTS_PER_WORKER - 1),
+            self::PORTS_VARIABLE => $this->ports,
         ];
     }
 
