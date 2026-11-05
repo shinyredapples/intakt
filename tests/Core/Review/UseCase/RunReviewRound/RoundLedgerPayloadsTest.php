@@ -10,7 +10,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\UseCase\RunReviewRound\CatchUpOwed;
 use Intakt\Core\Review\UseCase\RunReviewRound\JudgeDone;
-use Intakt\Core\Review\UseCase\RunReviewRound\JudgedFinding;
+use Intakt\Core\Review\UseCase\RunReviewRound\JudgeDoneFinding;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerBlocked;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerFailed;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStarted;
@@ -32,7 +32,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewerBlocked::class)]
 #[CoversClass(ReviewerStopped::class)]
 #[CoversClass(JudgeDone::class)]
-#[CoversClass(JudgedFinding::class)]
+#[CoversClass(JudgeDoneFinding::class)]
 final class RoundLedgerPayloadsTest extends KernelTestCase
 {
     private const string ROUND = '0195f0a2-7c1e-7000-8000-000000000001';
@@ -102,7 +102,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeIsWrittenWithItsActListFollowUpsAndFindings(): void
     {
-        $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgedFinding('f1', Severity::P1, 'A bug.'), new JudgedFinding('f2', Severity::P3, 'A nit.')]);
+        $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
         self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug."},{"id":"f2","severity":"P3","text":"A nit."}]}', $this->written($done));
     }

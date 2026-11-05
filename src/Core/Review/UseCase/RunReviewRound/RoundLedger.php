@@ -98,7 +98,7 @@ final readonly class RoundLedger
             $round->id()->toRfc4122(),
             array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
             array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
-            array_map(static fn (Finding $finding): JudgedFinding => new JudgedFinding($finding->id, $finding->severity, $finding->text), $judged->findings),
+            array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text), $judged->findings),
         ));
     }
 

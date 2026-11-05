@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Review\Contract\Severity;
 
-final readonly class JudgedFinding
+final readonly class JudgeDoneFinding
 {
     public function __construct(
         public string $id,
