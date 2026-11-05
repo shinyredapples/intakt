@@ -116,7 +116,6 @@ final class CaddyfileWorkersTest extends TestCase
 
         self::assertSame(array_fill(0, 10, 200), $statuses);
         self::assertTrue($this->server->isRunning());
-        self::assertSame(10, $this->requestsPerWorkerFile(10)['index.php']);
         self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheServingAppWorkers());
     }
 
@@ -191,7 +190,7 @@ final class CaddyfileWorkersTest extends TestCase
         return $counts;
     }
 
-    // The thread's RequestCount survives a replacement, so the sign is memory: a replaced worker has not booted the kernel yet. Polled, because the worker ends only after its answer is sent.
+    // A worker that ends inside its last request is never counted, so the sign is memory: a replaced worker has not booted the kernel yet, and one that served past the ceiling still holds it. Polled, because the worker ends only after its answer is sent.
     private function bytesHeldByTheServingAppWorkers(): int
     {
         $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
@@ -217,17 +216,16 @@ final class CaddyfileWorkersTest extends TestCase
     /**
      * @param list<array<mixed>> $threads
      */
-    // No serving worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
+    // No app worker with a memory reading counts as past the ceiling, so a missing observation can never pass as a replacement.
     private static function largestMemoryOfServingAppWorkers(array $threads): int
     {
         $held = null;
 
         foreach ($threads as $thread) {
             $name = $thread['Name'] ?? null;
-            $requests = $thread['RequestCount'] ?? null;
             $memory = $thread['MemoryUsage'] ?? null;
 
-            if (is_string($name) && str_starts_with($name, 'Worker') && 'index.php' === basename($name) && is_int($requests) && $requests > 0 && is_int($memory)) {
+            if (is_string($name) && str_starts_with($name, 'Worker') && 'index.php' === basename($name) && is_int($memory)) {
                 $held = max($held ?? 0, $memory);
             }
         }
