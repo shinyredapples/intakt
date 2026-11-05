@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -17,6 +18,8 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Shadow\Contract\ProjectModes;
+use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\SerializerInterface;
 
 // Called inside the caller's transaction, so a refused event rolls the move it reports back with it.
 final readonly class RoundLedger
@@ -24,104 +27,92 @@ final readonly class RoundLedger
     public function __construct(
         private Ledger $ledger,
         private ProjectModes $modes,
+        #[Target('stored')]
+        private SerializerInterface $serializer,
     ) {
     }
 
     // The repository, base and task go with the start, because the dashboard starts the change's next round from the ledger alone and ledger rows are never back-filled.
     public function reviewStarted(ReviewRound $round, ?ChangeSource $source): void
     {
-        $this->append(LedgerEventKind::ReviewStarted, [
-            'round' => $round->id()->toRfc4122(),
-            'project' => $round->project(),
-            'reviewers' => count($round->reviewers()),
-            'change' => $round->change(),
-            'number' => $round->number(),
-        ] + $this->sourceOf($round, $source));
+        $this->append(LedgerEventKind::ReviewStarted, new ReviewStarted(
+            $round->id()->toRfc4122(),
+            $round->project(),
+            count($round->reviewers()),
+            $round->change(),
+            $round->number(),
+            $round->task(),
+            $source?->repository,
+            $source?->base,
+        ));
     }
 
     // No round exists yet, so the event names the change and the number asked for; the decision is the reason, in the words the guard uses.
     public function shadowRoundHeld(RunReviewRound $command, Provider $provider, StartDecision $decision): void
     {
-        $this->append(LedgerEventKind::ShadowRoundHeld, [
-            'project' => $command->target->subject->project,
-            'change' => $command->round->change,
-            'provider' => $provider->value,
-            'reason' => $decision->value,
-        ]);
+        $this->append(LedgerEventKind::ShadowRoundHeld, new ShadowRoundHeld($command->target->subject->project, $command->round->change, $provider, $decision->value));
     }
 
     public function reviewerStarted(RoundReviewer $reviewer): void
     {
-        $this->append(LedgerEventKind::ReviewerStarted, $this->identify($reviewer));
+        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer)));
     }
 
     // The mode goes with each verdict, because a verdict recorded as shadow must never count for a merge, even after the project is switched to live.
     public function verdictReceived(RoundReviewer $reviewer, Verdict $verdict): void
     {
-        $this->append(LedgerEventKind::VerdictReceived, $this->identify($reviewer) + [
-            'decision' => $verdict->verdict->value,
-            'findings' => count($verdict->findings),
-            'mode' => $this->modes->of($reviewer->round()->project())->value,
-        ]);
+        $this->append(LedgerEventKind::VerdictReceived, new VerdictReceived(
+            ...$this->identify($reviewer),
+            decision: $verdict->verdict,
+            findings: count($verdict->findings),
+            mode: $this->modes->of($reviewer->round()->project()),
+        ));
     }
 
     // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up.
     public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
     {
-        $this->append(LedgerEventKind::CatchUpOwed, $this->identify($reviewer) + ['substitute' => $substitute->value]);
+        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(...$this->identify($reviewer), substitute: $substitute));
     }
 
     public function reviewerFailed(RoundReviewer $reviewer, string $failure): void
     {
-        $this->append(LedgerEventKind::ReviewerFailed, $this->identify($reviewer) + ['failure' => $failure]);
+        $this->append(LedgerEventKind::ReviewerFailed, new ReviewerFailed(...$this->identify($reviewer), failure: $failure));
     }
 
     public function reviewerBlocked(RoundReviewer $reviewer, string $reason): void
     {
-        $this->append(LedgerEventKind::ReviewerBlocked, $this->identify($reviewer) + ['reason' => $reason]);
+        $this->append(LedgerEventKind::ReviewerBlocked, new ReviewerBlocked(...$this->identify($reviewer), reason: $reason));
     }
 
     // Answers every stop request of this reviewer recorded before it, because the ledger orders them by place.
     public function reviewerStopped(RoundReviewer $reviewer): void
     {
-        $this->append(LedgerEventKind::ReviewerStopped, $this->identify($reviewer));
+        $this->append(LedgerEventKind::ReviewerStopped, new ReviewerStopped(...$this->identify($reviewer)));
     }
 
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
     public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
     {
-        $this->append(LedgerEventKind::JudgeDone, [
-            'round' => $round->id()->toRfc4122(),
-            'act' => array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
-            'follow_ups' => array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
-            'findings' => array_map(static fn (Finding $finding): array => ['id' => $finding->id, 'severity' => $finding->severity->value, 'text' => $finding->text], $judged->findings),
-        ]);
+        $this->append(LedgerEventKind::JudgeDone, new JudgeDone(
+            $round->id()->toRfc4122(),
+            array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
+            array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
+            array_map(static fn (Finding $finding): JudgedFinding => new JudgedFinding($finding->id, $finding->severity, $finding->text), $judged->findings),
+        ));
     }
 
     /**
-     * @return array<string, string>
-     */
-    private function sourceOf(ReviewRound $round, ?ChangeSource $source): array
-    {
-        $task = ['task' => $round->task()];
-
-        return $source instanceof ChangeSource ? $task + ['repository' => $source->repository, 'base' => $source->base] : $task;
-    }
-
-    /**
-     * @return array<string, string>
+     * @return array{round: string, reviewer: string, role: string, tier: Tier}
      */
     private function identify(RoundReviewer $reviewer): array
     {
-        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()->value];
+        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    /**
-     * @param array<string, int|string|list<string>|list<array<string, string>>> $payload
-     */
-    private function append(LedgerEventKind $kind, array $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ShadowRoundHeld|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, 'json')));
 
         if (!$result->succeeded()) {
             throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);
