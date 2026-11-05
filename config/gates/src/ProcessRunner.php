@@ -129,12 +129,18 @@ final class ProcessRunner
      *
      * @return array<Name, ProcessResult>
      */
-    public function runAtMost(ProcessSlots $slots, array $commands, string $directory): array
+    public function runAtMost(ProcessSlots $slots, array $commands, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): array
     {
-        $processes = $this->processes($commands, $directory, self::OVERALL_TIMEOUT_SECONDS);
+        $processes = $this->processes($commands, $directory, $seconds);
         $failures = $this->runInSlots($slots, $processes);
+        $results = $this->resultsOf($processes, $failures, $commands);
 
-        return $this->resultsOf($processes, $failures, $commands);
+        // Because a gate that timed out is reported with what its child printed, which tells where it got stuck.
+        foreach (array_keys($failures, self::TIMED_OUT, true) as $name) {
+            $results[$name] = new ProcessResult(self::TIMED_OUT, $processes[$name]->getOutput(), $processes[$name]->getErrorOutput().$results[$name]->errors);
+        }
+
+        return $results;
     }
 
     /**

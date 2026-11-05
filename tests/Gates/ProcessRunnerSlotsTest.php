@@ -79,4 +79,15 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
         self::assertFalse($results['missing']->succeeded());
         self::assertSame("here\n", $results['present']->output);
     }
+
+    public function testACommandThatTimesOutKeepsTheOutputItPrintedBefore(): void
+    {
+        $results = new ProcessRunner()->runAtMost(new ProcessSlots(1), [
+            'slow' => [['sh', '-c', 'echo progress; echo diagnostic before timeout >&2; sleep 5'], []],
+        ], $this->emptySandbox()->root, 1);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['slow']->exitCode);
+        self::assertSame("progress\n", $results['slow']->output);
+        self::assertSame("diagnostic before timeout\nsh timed out after 1 seconds", $results['slow']->errors);
+    }
 }
