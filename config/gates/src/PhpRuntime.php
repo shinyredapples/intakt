@@ -24,8 +24,20 @@ final readonly class PhpRuntime
         return new self(
             PHP_VERSION,
             array_map(strtolower(...), get_loaded_extensions()),
-            static fn (string $name): ?string => false === ini_get($name) ? null : ini_get($name),
+            self::iniSetting(...),
         );
+    }
+
+    private static function iniSetting(string $name): ?string
+    {
+        // Without an ini file that sets it, ini_get() returns '' while PHP applies E_ALL.
+        if ('error_reporting' === $name) {
+            return (string) error_reporting();
+        }
+
+        $value = ini_get($name);
+
+        return false === $value ? null : $value;
     }
 
     public function hasExtension(string $name): bool
