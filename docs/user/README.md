@@ -111,6 +111,10 @@ When the `tests` gate of `bin/check` runs, its line also lists the ten slowest t
 
 The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
 
+## Running the tests in parallel
+
+The `tests` gate runs the test files in several workers at once: one for each processor it may use, at most four. Each worker takes the next file from one shared list, which starts with the files that have no recorded time yet (new ones), then the files that took longest in the last run (from `tests/durations.json` above). Set `INTAKT_TEST_WORKERS` to choose the number of workers yourself (from 1 to 999; any other value fails the gate); `INTAKT_TEST_WORKERS=1` runs each test pass in a single process, as before. A finding names the pass and the file it came from, for example `sqlite tests/Core/ReportTest.php: ReportTest::testRuns: ...`. A failing, skipped, risky or incomplete test, or a warning, notice or deprecation, fails the gate in any worker, and so does a file whose run crashes (`phpunit exited with code ...`) or takes longer than 600 seconds (`timed out after 600 seconds, last output: ...`).
+
 ## When `bin/check` reports a missing tool
 
 Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. Install the program (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
