@@ -87,7 +87,7 @@ final readonly class RoundLedgerReading
         return null !== $ended && in_array($ended->call, $calls, true) ? $ended->usages : [];
     }
 
-    // The phase names the payload class, and it is only known once the row is read.
+    // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.
     private function endingOf(RecordedEvent $row): UsageSettled|UsageUnsettled|null
     {
         $settled = $this->payloads->of($row, UsageSettled::class);
