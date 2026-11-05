@@ -195,13 +195,28 @@
     m.classList.toggle("open");
     document.querySelector(".menu-btn")?.setAttribute("aria-expanded", m.classList.contains("open"));
   }
+  /* The project filter and a column's page limit are separate: the filter marks what does not match (data-filtered),
+     the page limit then hides the matching cards past the first `pageLimit`, so filtering never undoes "Show more". */
   function applyProjectFilter() {
     const p = localStorage.getItem("intakt-project") || "all";
-    document.querySelectorAll("[data-project]").forEach((el) => { el.hidden = p !== "all" && el.dataset.project !== p && el.dataset.project !== "all"; });
-    document.querySelectorAll(".col").forEach((c) => {
-      const n = [...c.querySelectorAll(".card")].filter((x) => !x.hidden).length;
-      const cnt = c.querySelector(".col-head .count"); if (cnt) cnt.textContent = n;
+    document.querySelectorAll("[data-project]").forEach((el) => {
+      const out = p !== "all" && el.dataset.project !== p && el.dataset.project !== "all";
+      el.toggleAttribute("data-filtered", out);
+      el.hidden = out;
     });
+    document.querySelectorAll(".col").forEach((c) => {
+      const n = [...c.querySelectorAll(".card")].filter((x) => !x.hasAttribute("data-filtered")).length;
+      const cnt = c.querySelector(".col-head .count"); if (cnt) cnt.textContent = n;
+      paginate(c);
+    });
+  }
+  function paginate(c) {
+    if (!c.dataset.pageLimit) return;
+    const limit = +c.dataset.pageLimit, open = c.dataset.expanded === "1";
+    const cards = [...c.querySelectorAll(".card")].filter((x) => !x.hasAttribute("data-filtered"));
+    cards.forEach((x, i) => (x.hidden = !open && i >= limit));
+    const btn = c.querySelector(".more-btn");
+    if (btn) { btn.style.display = open || cards.length <= limit ? "none" : ""; btn.textContent = `Show ${cards.length - limit} more`; }
   }
   const isMac = () => /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -473,12 +488,11 @@
     if (DEMO === "stress") {
       lead.textContent = "Six projects, 43 tasks ready. Long titles wrap to three lines; long project names truncate.";
       document.querySelectorAll(".col").forEach((c) => {
-        const cards = [...c.querySelectorAll(".card")];
-        if (cards.length > 12) {
-          cards.slice(12).forEach((x) => (x.hidden = true));
-          c.querySelector(".col-cards").insertAdjacentHTML("beforeend", `<button type="button" class="btn secondary sm more-btn">Show ${cards.length - 12} more</button>`);
-          c.querySelector(".more-btn").onclick = (e) => { cards.forEach((x) => (x.hidden = false)); e.target.remove(); };
-        }
+        if (c.querySelectorAll(".card").length <= 12) return;
+        c.dataset.pageLimit = "12";
+        c.querySelector(".col-cards").insertAdjacentHTML("beforeend", `<button type="button" class="btn secondary sm more-btn"></button>`);
+        c.querySelector(".more-btn").onclick = () => { c.dataset.expanded = "1"; paginate(c); };
+        paginate(c);
       });
     }
     if (DEMO === "reconnecting") {
@@ -499,7 +513,7 @@
         <ol><li>In <span class="mono">acme/field-notes</span>, add the label <strong>intakt</strong> to an issue that says what you want.</li>
         <li>Intakt picks it up within a minute. It shows up in Ready, then Planned.</li>
         <li>If the issue leaves a real choice open, the Tech lead asks you here and on your phone.</li></ol>
-        <p class="muted small">14 open issues in field-notes, none labeled yet. <a href="https://github.com/acme/field-notes/issues">Open the issues</a></p></div></section>`);
+        <p class="muted small">14 open issues in field-notes, none labeled yet. <a href="#">Open the issues</a></p></div></section>`);
     }
     if (DEMO === "loading") {
       document.querySelectorAll(".banner").forEach((b) => b.remove());

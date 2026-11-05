@@ -1,8 +1,8 @@
 # Dashboard
 
-The main view is a board, not a set of lists. Each task in flight is a card, and its column is where it is now:
+The main view is a board, not a set of lists. Each task in flight is a card, and its column is where it is now. Waiting on you comes first, because it is the only column that asks something of the reader; the rest follow the order a task moves through:
 
-| Backlog | Ready | Planned | Building | Checking | In review | Waiting on you | Merging | Done |
+| Waiting on you | Backlog | Ready | Planned | Building | Checking | In review | Merging | Done |
 |---|---|---|---|---|---|---|---|---|
 
 - **Cards** show the task, its size, the slot and model working on it, time in the column, tokens and cost so far, the review round, and a badge for why it waits (budget, overlap, dependency, CI). Parked and blocked tasks sit in their column with the reason on the card.

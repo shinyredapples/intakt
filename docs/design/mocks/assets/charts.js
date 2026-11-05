@@ -30,7 +30,7 @@
   function chart(host, o) {
     const W = Math.max(240, Math.round(host.clientWidth || 560)), H = o.height || 180, P = { l: 36, r: o.type === "line" ? 64 : 8, t: 12, b: 26 };
     const vals = o.values.filter((v) => v != null);
-    const max = o.max || niceMax(Math.max(...vals));
+    const max = o.max || niceMax(vals.length ? Math.max(0, ...vals) : 0) || 1; // all zero or no data: a scale of 1, never 0 or -Infinity
     const fmt = o.fmt || ((v) => String(v));
     const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: "chart-svg", role: "img", "aria-label": o.aria || "" });
     const iw = W - P.l - P.r, ih = H - P.t - P.b, n = o.values.length;
@@ -70,10 +70,12 @@
         hit.addEventListener("pointerenter", on); hit.addEventListener("focus", on);
         hit.addEventListener("pointerleave", off); hit.addEventListener("blur", off);
       });
-      let li = o.values.length - 1; while (li > 0 && o.values[li] == null) li--;
-      el("circle", { cx: cx(li), cy: y(o.values[li]), r: 4, class: "c-end" }, svg);
-      const t = el("text", { x: cx(li) + 8, y: y(o.values[li]) + 4, class: "c-label" }, svg);
-      t.textContent = (o.endLabel ? o.endLabel + " " : "") + fmt(o.values[li]) + (o.unit || "");
+      let li = o.values.length - 1; while (li >= 0 && o.values[li] == null) li--;
+      if (li >= 0) { // no endpoint when the series has no observation
+        el("circle", { cx: cx(li), cy: y(o.values[li]), r: 4, class: "c-end" }, svg);
+        const t = el("text", { x: cx(li) + 8, y: y(o.values[li]) + 4, class: "c-label" }, svg);
+        t.textContent = (o.endLabel ? o.endLabel + " " : "") + fmt(o.values[li]) + (o.unit || "");
+      }
     }
     host.appendChild(svg);
     if (o.table !== false) {
