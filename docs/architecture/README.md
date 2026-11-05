@@ -84,6 +84,8 @@ The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$T
 
 `bin/check` runs every gate and prints one JSON line per gate, then a result line. CI runs the same command.
 
+The selected gates run at the same time: `CheckCommand` starts each one in its own child process (`PHP_BINARY bin/check <the same arguments> --gate=<gate>`, which runs that one gate and prints only its line) through `ProcessRunner::runAtMost()`, at most N children at once. N is the CPU count (`posix_sysconf(POSIX_SC_NPROCESSORS_ONLN)`), or `INTAKT_GATES_AT_ONCE` when it is set (`GateSlots`; a value that is not a whole number of at least 1 is a usage error, exit code 2, before any gate starts); N = 1 runs the gates one after another. The `tests` gate starts first, so it never waits for a free slot. Once every child has ended, the lines are printed in the fixed gate order of the table below, then the result line, so the report and the exit code do not depend on which gate finished first. `ChildReport` fails closed: a child whose output is not exactly one JSON line for its own gate with a boolean `ok` and a list of `findings`, or whose exit code does not match that line (0 for a pass, 1 for a failure), fails that gate with its exit code and the last lines of its output. That covers a crash and a child stopped after the runner's overall timeout of 3600 seconds. The missing-tools check still runs in the parent before any child starts.
+
 | Gate | What it checks |
 |---|---|
 | `cs` | PHP-CS-Fixer, PER-CS and Symfony rules, strict types, imported class names, and global functions and constants written plain: a leading backslash (`\count()`, `\PHP_EOL`, and in a first-class callable `\strlen(...)` through Intakt's own fixer `Intakt/plain_first_class_callable`) is removed, and so is a `use function` or `use const` of a global name |
@@ -102,7 +104,7 @@ The tests (`tests/Plugin/LocalGitForge/`) build a temporary repository under `$T
 
 The gates start `git` only through `Workspace::git()`, which runs the [hardened call](requirements.md#the-hardened-git-call) built by their own protected copy, `config/gates/src/HardenedGitCall.php`; the gitleaks gates start gitleaks with the hardened `git` environment. When the repository's `.git/info/attributes` exists, the call refuses it and `CheckCommand` reports every gate that reads git as failed with that reason.
 
-Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
+Options: `--fast` (changed PHP files only), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`). `--gate=<gate>` is what the parent passes to a child: it runs that gate alone in the same process, without the missing-tools check, and prints only its line (exit code 0 or 1; 2 for an unknown gate).
 
 ## CI
 
