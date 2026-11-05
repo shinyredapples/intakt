@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Closure;
 use Doctrine\DBAL\Connection;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -11,10 +12,12 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
+use Intakt\Core\Server\Infrastructure\ProcessSettings;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use NoDiscard;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
@@ -30,6 +33,8 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\ServicesResetterInterface;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -43,33 +48,122 @@ final class WorkerModeTest extends TestCase
 
     private const string HOST = 'localhost:7780';
 
+    private const string LEFTOVER = 'WORKER_MODE_LEFTOVER';
+
     private ?KernelInterface $kernel = null;
+
+    private ProcessSettings $processBefore;
 
     protected function setUp(): void
     {
         // Both arrays, because the env var processor reads $_ENV first and the dotenv file filled it with an empty token.
         $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
+        $this->processBefore = ProcessSettings::now();
     }
 
     protected function tearDown(): void
     {
+        $this->processBefore->restore();
         $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = '';
+        unset($_SERVER['FRANKENPHP_RESET_KERNEL']);
         $this->kernel?->shutdown();
     }
 
-    public function testARequestWithoutATokenDoesNotSeeTheOwnerOfTheRequestBefore(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function runnerModes(): iterable
     {
+        yield 'one kept kernel' => ['0'];
+        yield 'a kernel cloned per request' => ['1'];
+    }
+
+    #[DataProvider('runnerModes')]
+    public function testARequestWithoutATokenDoesNotSeeTheOwnerOfTheRequestBefore(string $resetKernel): void
+    {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
         $kernel = $this->bootedKernel(new Kernel('test', true));
         $browser = $this->browserOn($kernel);
 
         $browser->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
 
         self::assertSame('mcp-owner', WorkerState::in($kernel)->user);
-        self::assertNull($this->nextRequestSees($kernel)->user);
+        self::assertNull($this->nextRequestSees($browser->getKernel())->user);
     }
 
-    public function testAReviewCredentialDoesNotCarryItsRoundToTheNextRequest(): void
+    public function testWithTheKernelResetTheNextRequestRunsOnAContainerOfItsOwn(): void
     {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = '1';
+        $kernel = $this->bootedKernel(new Kernel('test', true));
+        $browser = $this->browserOn($kernel);
+
+        $browser->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
+        $next = $browser->getKernel();
+        $next->boot();
+
+        self::assertNotSame($kernel->getContainer(), $next->getContainer());
+    }
+
+    #[DataProvider('runnerModes')]
+    public function testARequestDoesNotSeeTheUmaskTheRequestBeforeSet(string $resetKernel): void
+    {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
+        $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
+
+        $this->requestThatRuns($browser, static fn (): int => umask(0o077));
+
+        self::assertSame($this->processBefore->umask, $this->nextRequestSeesProcess($browser)->umask);
+    }
+
+    #[DataProvider('runnerModes')]
+    public function testARequestDoesNotSeeTheLocaleTheRequestBeforeSet(string $resetKernel): void
+    {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
+        $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
+
+        $this->requestThatRuns($browser, $this->otherLocale(...));
+
+        self::assertSame($this->processBefore->locale, $this->nextRequestSeesProcess($browser)->locale);
+    }
+
+    #[DataProvider('runnerModes')]
+    public function testARequestDoesNotSeeTheEnvironmentVariableTheRequestBeforeSet(string $resetKernel): void
+    {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
+        $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
+        // After the boot, because FrameworkBundle adds DOCTRINE_DEPRECATIONS while booting, and a worker starts from its booted kernel.
+        $booted = ProcessSettings::now();
+
+        $this->requestThatRuns($browser, static function (): void {
+            $_ENV[self::LEFTOVER] = 'set by the request before';
+        });
+
+        self::assertSame($booted->env, $this->nextRequestSeesProcess($browser)->env);
+    }
+
+    // Also with a kernel cloned per request, because the clone shares the process: FRANKENPHP_RESET_KERNEL does not hide these leaks.
+    #[DataProvider('runnerModes')]
+    public function testWithoutTheRestoreTheNextRequestSeesTheProcessSettingsOfTheOneBefore(string $resetKernel): void
+    {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
+        $browser = $this->browserOn($this->bootedKernel(new UnrestoredKernel('test', true)));
+
+        $this->requestThatRuns($browser, function (): void {
+            umask(0o077);
+            $this->otherLocale();
+            $_ENV[self::LEFTOVER] = 'set by the request before';
+        });
+        $seen = $this->nextRequestSeesProcess($browser);
+
+        self::assertSame(0o077, $seen->umask);
+        self::assertNotSame($this->processBefore->locale, $seen->locale);
+        self::assertSame('set by the request before', $seen->env[self::LEFTOVER] ?? null);
+    }
+
+    #[DataProvider('runnerModes')]
+    public function testAReviewCredentialDoesNotCarryItsRoundToTheNextRequest(string $resetKernel): void
+    {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
         $kernel = $this->bootedKernel(new Kernel('test', true));
         $browser = $this->browserOn($kernel);
         $round = Uuid::v7()->toRfc4122();
@@ -79,7 +173,7 @@ final class WorkerModeTest extends TestCase
         $browser->request('POST', '/mcp/review', server: ['HTTP_AUTHORIZATION' => 'Bearer '.$credential->issueFor($round), 'HTTP_HOST' => 'localhost']);
 
         self::assertSame($round, WorkerState::in($kernel)->user);
-        self::assertNull($this->nextRequestSees($kernel)->user);
+        self::assertNull($this->nextRequestSees($browser->getKernel())->user);
     }
 
     public function testAFlashMessageOfOneBrowserIsNotShownToAnotherBrowser(): void
@@ -101,15 +195,18 @@ final class WorkerModeTest extends TestCase
         self::assertSame('Started round round-2.', trim($ownPage->filter('.flash-success')->text()));
     }
 
-    public function testAnEntityLoadedByOneRequestIsNotInTheIdentityMapOfTheNext(): void
+    #[DataProvider('runnerModes')]
+    public function testAnEntityLoadedByOneRequestIsNotInTheIdentityMapOfTheNext(string $resetKernel): void
     {
+        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
         $kernel = $this->bootedKernel(new Kernel('test', true));
         $this->emptyDatabase($kernel);
         $this->recordAnEvent($kernel);
-        $this->browserOn($kernel)->request('GET', '/reviews');
+        $browser = $this->browserOn($kernel);
+        $browser->request('GET', '/reviews');
 
         self::assertGreaterThan(0, WorkerState::in($kernel)->loadedEntities);
-        self::assertSame(0, $this->nextRequestSees($kernel)->loadedEntities);
+        self::assertSame(0, $this->nextRequestSees($browser->getKernel())->loadedEntities);
     }
 
     public function testWithoutTheDoctrineResetTheNextRequestSeesTheEntitiesOfTheOneBefore(): void
@@ -177,15 +274,48 @@ final class WorkerModeTest extends TestCase
         self::assertCount(0, $again->filter('.flash-success'));
     }
 
-    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request.
+    // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request. A kernel cloned per request boots afresh first.
     #[NoDiscard]
     private function nextRequestSees(KernelInterface $kernel): WorkerState
     {
+        $kernel->boot();
         $resetter = $kernel->getContainer()->get('services_resetter');
         assert($resetter instanceof ServicesResetterInterface);
         $resetter->reset();
 
         return WorkerState::in($kernel);
+    }
+
+    // Read inside a real request, because that is what a request starts with after the kernel restored the process settings at the terminate of the one before.
+    #[NoDiscard]
+    private function nextRequestSeesProcess(KernelBrowser $browser): ProcessSettings
+    {
+        $seen = null;
+        $this->requestThatRuns($browser, static function () use (&$seen): void {
+            $seen = ProcessSettings::now();
+        });
+        assert($seen instanceof ProcessSettings);
+
+        return $seen;
+    }
+
+    // Removed again after the request, because a kept kernel would run it in every later request too.
+    private function requestThatRuns(KernelBrowser $browser, Closure $step): void
+    {
+        $kernel = $browser->getKernel();
+        $kernel->boot();
+        $dispatcher = $this->container($kernel)->get('event_dispatcher');
+        assert($dispatcher instanceof EventDispatcherInterface);
+        $dispatcher->addListener(KernelEvents::REQUEST, $step, 4096);
+
+        $browser->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
+        $dispatcher->removeListener(KernelEvents::REQUEST, $step);
+    }
+
+    private function otherLocale(): void
+    {
+        $other = 'C' === $this->processBefore->locale ? 'C.UTF-8' : 'C';
+        self::assertSame($other, setlocale(LC_ALL, $other));
     }
 
     private function bootedKernel(KernelInterface $kernel): KernelInterface
@@ -196,13 +326,9 @@ final class WorkerModeTest extends TestCase
         return $kernel;
     }
 
-    // BrowserKit terminates the kernel after each request, and no reboot keeps the one kernel, as the worker does; each browser has its own cookies and so its own session.
     private function browserOn(KernelInterface $kernel): KernelBrowser
     {
-        $browser = new KernelBrowser($kernel, ['HTTP_HOST' => self::HOST]);
-        $browser->disableReboot();
-
-        return $browser;
+        return new WorkerBrowser($kernel, ['HTTP_HOST' => self::HOST]);
     }
 
     private function startRoundAs(KernelBrowser $browser): void

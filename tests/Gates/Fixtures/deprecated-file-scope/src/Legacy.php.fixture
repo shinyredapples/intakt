@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trigger_deprecation("acme/legacy", "1.0", "Legacy is deprecated.");
+
+class Legacy
+{
+}

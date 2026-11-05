@@ -23,6 +23,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Draining** | stopping new work so running jobs can finish before an update | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Fixture** | a small sample project a test of Intakt's own checks runs a rule on | [testing a new check](testing-a-new-check.md) |
 | **Follow-up** | a small task made from reviewers' nice-to-have notes | [journey](the-journey-of-a-task.md#7-afterwards) |
 | **Forge** | where your code lives: GitHub or Gitea | [connections](what-intakt-connects-to.md) |
 | **Generation** | a set of cycles with one kind of builder; the next one uses a stronger model | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
@@ -35,6 +36,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Judge step** | a quick call that sorts findings into fix now, later, or not needed | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
+| **Log** | Intakt's own record of its warnings and errors, one line each, with the secrets Intakt knows about written as `[redacted]` | [why isn't anything happening](why-isnt-anything-happening.md#reading-intakts-log) |
 | **Main** | the official version of your project | |
 | **Maintainer agent** | the AI agent that settles stuck work, so it rarely reaches you | [how it works](how-intakt-works.md#what-needs-you-and-what-doesnt) |
 | **MCP** | a standard way for AI assistants to use tools | [assistant](using-intakt-from-your-assistant.md) |

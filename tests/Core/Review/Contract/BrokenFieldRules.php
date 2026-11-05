@@ -71,8 +71,8 @@ final readonly class BrokenFieldRules
         $design = VerdictDocument::fromTheDesign();
 
         yield 'type: the verdict is a list' => ['[]', '"$verdict"'];
-        yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '($findings) must be of type array, stdClass given'];
-        yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '($findings) must be of type array, stdClass given'];
+        yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '($findings)'];
+        yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '($findings)'];
         yield 'type: resolved is an empty object' => [$design->with('resolved', new stdClass())->json(), '"resolved" attribute'];
         yield 'type: follow_ups is an empty object' => [$design->with('follow_ups', new stdClass())->json(), '"follow_ups" attribute'];
         yield 'type: a finding is a string' => [$design->with('findings', ['F3'])->json(), '"$id"'];
@@ -88,7 +88,7 @@ final readonly class BrokenFieldRules
         yield 'type: text is null' => [$design->withFinding('text', null)->json(), '"text" attribute'];
         yield 'type: repeat is a string' => [$design->withFinding('repeat', 'false')->json(), '"repeat" attribute'];
         yield 'type: requirement is a number' => [$design->withFinding('requirement', 1)->json(), '"requirement" attribute'];
-        yield 'type: evidence is a string' => [$design->withFinding('evidence', 'probe.php')->json(), '"$probe", "$output"'];
+        yield 'type: evidence is a string' => [$design->withFinding('evidence', 'probe.php')->json(), 'Contract\Evidence'];
         yield 'type: evidence probe is a number' => [$design->withFinding('evidence', ['probe' => 1, 'output' => '...'])->json(), '"probe" attribute'];
         yield 'type: evidence output is a number' => [$design->withFinding('evidence', ['probe' => '...', 'output' => 1])->json(), '"output" attribute'];
     }

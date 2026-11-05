@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="../../../../vendor/phpunit/phpunit/phpunit.xsd"
+         failOnWarning="true"
+         bootstrap="../../../bootstrap.php"
+         cacheDirectory="../../../../var/cache/unasserted-error-log-kernel-fixture"
+>
+    <extensions>
+        <bootstrap class="Intakt\Tests\Support\Log\UnassertedErrorLogExtension"/>
+    </extensions>
+</phpunit>

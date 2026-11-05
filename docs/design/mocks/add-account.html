@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add an account | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="team">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content" id="main">
+<div class="flow">
+<p class="small" style="margin-bottom:12px"><a href="team.html">Team</a> <span class="muted">/</span> <span class="muted">Add an account</span></p>
+<h1>Add an account</h1>
+<p class="lead muted" style="margin:6px 0 28px">An account pays for the team's work. Intakt reads its usage windows from the vendor and paces work inside them.</p>
+
+<div class="field"><label for="aname">Name</label><input class="input" id="aname" type="text" value="Spare key" style="max-width:360px"><span class="hint">Your name for it, shown everywhere instead of the kind.</span></div>
+
+<div class="field"><span class="l" style="font:600 15px/1.3 var(--f-head)">How it signs in</span>
+  <div class="seg" role="tablist" aria-label="Sign-in kind" style="margin:0">
+    <button type="button" role="tab" aria-selected="false" data-tab="token">Subscription token</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="device">Device login</button>
+    <button type="button" role="tab" aria-selected="true" data-tab="api">API key</button>
+  </div>
+</div>
+<div data-panel="token" hidden>
+  <div class="field"><span class="hint">Run this where you are logged in to the subscription, then paste what it prints.</span><div class="copy"><code>claude setup-token</code><button class="btn sm" type="button" data-copy="claude setup-token" data-icon="copy" data-icon-cls="s">Copy</button></div></div>
+  <div class="field"><label for="tok">Token</label><input class="input mono" id="tok" type="password" placeholder="Paste the token"></div>
+</div>
+<div data-panel="device" hidden>
+  <div class="field"><span class="hint">Open the login page on any device and enter this code. This page updates when you confirm.</span>
+    <div class="device-code"><span class="mono">WXQP-7KDL</span><a class="btn secondary sm" href="#">Open the login page</a></div>
+    <span class="hint">Waiting for you to confirm. The code expires in 9 minutes.</span></div>
+</div>
+<div data-panel="api">
+  <div class="field"><label for="key">API key</label><input class="input mono" id="key" type="password" value="placeholder text for the mock"><span class="hint">Stored encrypted on this machine. Never shown again in full.</span></div>
+</div>
+
+<fieldset class="field roles-pick"><legend>Roles it may serve</legend>
+  <label><input type="checkbox"> Tech lead</label>
+  <label><input type="checkbox" checked> Developer</label>
+  <label><input type="checkbox" checked> Code reviewers</label>
+  <label><input type="checkbox"> Designer</label>
+  <label><input type="checkbox" checked> Security engineer</label>
+  <label><input type="checkbox" checked> Maintainer</label>
+  <span class="hint">Intakt uses it for these roles when the Work subscription is busy or near its limits.</span>
+</fieldset>
+
+<h2 class="sub-h" style="margin-top:8px">Spending</h2>
+<div class="srow"><div class="txt"><label class="l" for="ov">Allow overage</label><p class="d">Keep working past the plan's included usage, billed per use.</p></div><div class="ctl"><span class="switch"><input id="ov" type="checkbox" role="switch"><span></span></span></div></div>
+<div class="srow"><div class="txt"><label class="l" for="pool">Credit pool</label><p class="d">Prepaid credit this key draws from. Intakt stops using the key when it runs out.</p></div><div class="ctl"><select class="select" id="pool"><option>Prepaid credit, $50</option><option>Shared team pool</option><option>No pool, billed monthly</option></select></div></div>
+<div class="srow"><div class="txt"><label class="l" for="cap">Daily cap</label><p class="d">Most this account may spend in a day.</p></div><div class="ctl"><input class="input" id="cap" type="number" value="20" style="width:100px"><span class="muted">dollars</span></div></div>
+
+<div class="test-row">
+  <button class="btn secondary" type="button" id="test-btn" data-icon="test" data-icon-cls="s">Test</button>
+  <div class="test-result ok" id="test-result" role="status">
+    <p><strong><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Connected in 0.7 s.</strong> Models available: Opus, Sonnet, Haiku.</p>
+    <dl class="kv">
+      <dt>Five-hour window</dt><dd>0% used, read from the vendor</dd>
+      <dt>Weekly window</dt><dd>0% used, resets Monday 00:00</dd>
+      <dt>Credit pool</dt><dd>$50.00 of $50.00 left</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="step-nav"><a class="btn quiet" href="team.html">Cancel</a><span class="grow"></span><a class="btn primary" href="team.html" data-icon="plus">Add Spare key</a></div>
+</div>
+<script>
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("[data-tab]");
+  if (t) {
+    document.querySelectorAll("[data-tab]").forEach(function (x) { x.setAttribute("aria-selected", x === t); });
+    document.querySelectorAll("[data-panel]").forEach(function (p) { p.hidden = p.dataset.panel !== t.dataset.tab; });
+  }
+  if (e.target.closest("#test-btn")) {
+    var r = document.getElementById("test-result"); r.className = "test-result"; r.innerHTML = "<p>Testing…</p>";
+    setTimeout(function () { location.reload(); }, 800);
+  }
+});
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

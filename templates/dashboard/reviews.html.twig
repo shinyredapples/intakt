@@ -4,6 +4,18 @@
 
 {% block body %}
 <h1>Reviews{% if project is not null %} of {{ project }}{% endif %}</h1>
+{% if failing is not empty %}
+<section class="failing-heads">
+<h2>Heads that failed</h2>
+{% for head in failing %}
+    <article class="card">
+        <h3>{{ head.project }}, pull request {{ head.change }}</h3>
+        <p class="state">{{ head.handedOver ? 'handed over to the maintainer agent' : 'backing off' }}, {{ head.fault.failures }} failures in a row, next try {{ head.fault.retryAt|date('Y-m-d H:i:s', 'UTC') }} UTC</p>
+        <p class="cause">{{ head.fault.cause }}</p>
+    </article>
+{% endfor %}
+</section>
+{% endif %}
 {% if reviews is empty %}
 <p>No review has started{% if project is not null %} for this project{% endif %} yet.</p>
 {% else %}

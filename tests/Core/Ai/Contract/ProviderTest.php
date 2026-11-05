@@ -67,8 +67,8 @@ final class ProviderTest extends TestCase
         self::assertSame(array_column(Provider::cases(), 'value'), array_map(static fn (Provider $provider): string => $provider->configKey(), Provider::cases()));
     }
 
-    public function testTheCodexParameterIsTheOneTheIdsClassNames(): void
+    public function testTheCodexParameterIsTheModulePrefixWithTheProvider(): void
     {
-        self::assertSame(AiServices::CODEX, Provider::Codex->parameter());
+        self::assertSame('intakt.ai.codex', Provider::Codex->parameter());
     }
 }

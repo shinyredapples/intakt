@@ -24,6 +24,9 @@ final class RunReproductionsCommandTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';
 
+    // Longer than one second because the passing reproduction beside the hanging one starts PHPUnit under the same limit, and that start takes over a second on a loaded machine.
+    private const float HANGING_TIMEOUT = 5.0;
+
     private string $folder = '';
 
     protected function setUp(): void
@@ -86,7 +89,7 @@ final class RunReproductionsCommandTest extends TestCase
         $this->givenReproduction('a-hanging-bug', 'sleep(30);');
         $this->givenReproduction('b-fixed-bug', '$this->assertTrue(true);');
 
-        $tester = $this->whenTheCommandRuns(timeout: 1.0);
+        $tester = $this->whenTheCommandRuns(timeout: self::HANGING_TIMEOUT);
 
         $display = $tester->getDisplay();
         self::assertMatchesRegularExpression('/^still fails\s+a-hanging-bug$/m', $display);
@@ -208,7 +211,7 @@ final class RunReproductionsCommandTest extends TestCase
         $this->givenScript('a-hanging-script', 'sleep(30);');
         $this->givenScript('b-fixed-script', "echo 'REPRODUCTION PASSES';");
 
-        $display = $this->whenTheCommandRuns(timeout: 1.0)->getDisplay();
+        $display = $this->whenTheCommandRuns(timeout: self::HANGING_TIMEOUT)->getDisplay();
 
         self::assertMatchesRegularExpression('/^still fails\s+a-hanging-script$/m', $display);
         self::assertMatchesRegularExpression('/^passes\s+b-fixed-script$/m', $display);

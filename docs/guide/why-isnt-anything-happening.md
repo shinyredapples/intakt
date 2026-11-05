@@ -38,12 +38,21 @@ flowchart TD
 | A task never appears | no `intakt` label, or written by someone without write access | add the label yourself; for an issue by someone without write access the `intakt` label is not enough, a person with write access must set `take-over` (planned) |
 | A project gets nothing built or reviewed | its share is 0, which pauses it, open pull requests included | raise its share above 0 |
 | A project gets no new builds, but its reviews go on | another project has `urgent` work, which takes the next free build slot | nothing: it continues once the urgent task has its slot |
+| One pull request is skipped for a while | something went wrong with that one only, so Intakt tries it again after a short wait that grows each time; one broken item never stops the rest | nothing: the Reviews page shows a card with the reason; it is tried again at least every half hour, and after four failures in a row it goes to the maintainer agent (planned) |
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the maintainer agent tries to fix it first | nothing, unless it also turns up in Waiting on you |
 | A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the maintainer agent could not fix | follow the card: it names the step and the cause |
 
 ## Is the server itself busy?
 
 If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
+
+## Reading Intakt's log
+
+This is the service log, not the live job log on a task's card (described under "Still stuck?" below); they are two different things.
+
+Intakt writes its warnings and errors to the service output: the journal when it runs as a service, or `docker logs` when it runs in a container. Each line is one record in JSON. It holds the time, the level (such as warning or error), the message, and the item it belongs to, such as the reviewer, the round or the account. For a failure it also holds the kind of error and the place in the code where it happened.
+
+Intakt hides the secrets it knows about. The credentials Intakt holds, the user and password in a web address, the values of authorization and cookie headers, and anything shaped like a secret all appear as `[redacted]`. The [technical description of the log](../user/README.md#the-log) lists the fields and the credentials by name.
 
 ## Still stuck?
 

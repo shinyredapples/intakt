@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Health | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="projects">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content" id="main">
+<div class="page-head">
+  <div>
+    <h1>Projects</h1>
+    <p class="lead">What Intakt itself needs to run work: the sandbox, package installs, the boot gate and access to your forge.</p>
+  </div>
+</div>
+<nav class="subtabs" aria-label="Project views"><a href="projects.html">Projects</a><a href="health.html" aria-current="page">Health <span class="count" style="margin-left:6px">1 broken</span></a></nav>
+
+<p class="health-sum"><span class="dot broken"></span> 1 broken, with the Maintainer. 1 waits on you. 2 working.</p>
+
+<div class="list health">
+  <article class="hrow broken">
+    <span class="dot broken" aria-hidden="true"></span>
+    <div class="body">
+      <h2>Package installs <span class="red">broken for acme-shop</span></h2>
+      <dl class="kv">
+        <dt>Step</dt><dd>Building the CI image: <span class="mono">npm ci</span></dd>
+        <dt>Cause</dt><dd>The package registry answers 503 for <span class="mono">@acme/ui@4.2.0</span>. Other packages install.</dd>
+        <dt>Since</dt><dd>09:12, 6 failed attempts</dd>
+        <dt>Who has it</dt><dd>The Maintainer. It retries every 15 minutes; next at 11:30. If the registry is still down at 13:00, it will pin <span class="mono">@acme/ui@4.1.3</span> and ask you first.</dd>
+      </dl>
+    </div>
+    <div class="side-actions"><button class="btn secondary sm" type="button" data-toast="Retrying the CI image build">Retry now</button><a class="btn quiet sm" href="project.html">acme-shop</a></div>
+  </article>
+  <article class="hrow">
+    <span class="dot needs" aria-hidden="true"></span>
+    <div class="body">
+      <h2>Account login: Home subscription <span class="muted">waits on you</span></h2>
+      <dl class="kv">
+        <dt>Step</dt><dd>Signing in to the vendor</dd>
+        <dt>Cause</dt><dd>The login expired.</dd>
+        <dt>Since</dt><dd>06:40</dd>
+        <dt>Who has it</dt><dd>You. Builds continue on the Work subscription, one slot short.</dd>
+      </dl>
+    </div>
+    <div class="side-actions"><a class="btn needs sm" href="waiting.html#w-login">Log it back in</a></div>
+  </article>
+  <article class="hrow">
+    <span class="dot ok" aria-hidden="true"></span>
+    <div class="body"><h2>Sandbox</h2><p class="muted">Working. 3 of 4 build containers in use; 11.2 of 24 GB memory.</p></div>
+  </article>
+  <article class="hrow">
+    <span class="dot ok" aria-hidden="true"></span>
+    <div class="body"><h2>Boot gate</h2><p class="muted">Working. Last start 2 Nov 08:01 passed all 7 start-up checks.</p></div>
+  </article>
+  <article class="hrow">
+    <span class="dot ok" aria-hidden="true"></span>
+    <div class="body"><h2>Forge token</h2><p class="muted">Working. The GitHub App token renews on its own; last renewed 10:58.</p></div>
+  </article>
+</div>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

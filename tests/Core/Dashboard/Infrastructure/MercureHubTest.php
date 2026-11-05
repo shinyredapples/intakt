@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -62,8 +63,9 @@ final class MercureHubTest extends TestCase
             self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
         }
 
-        $port = $this->freePort();
-        $this->admin = 'localhost:'.$this->freePort();
+        $ports = WorkerPorts::ofThisWorker();
+        $port = $ports->next();
+        $this->admin = 'localhost:'.$ports->next();
         $this->storage = sys_get_temp_dir().'/intakt-hub-'.bin2hex(random_bytes(6));
         mkdir($this->storage);
         $this->issuer = 'http://localhost:'.$port;
@@ -122,7 +124,7 @@ final class MercureHubTest extends TestCase
 
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void
     {
-        $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(Uuid::fromString(self::ROUND))]]);
+        $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(self::ROUND)]]);
 
         self::assertSame(401, $response->getStatusCode());
     }
@@ -143,7 +145,7 @@ final class MercureHubTest extends TestCase
 
     private function subscribe(string $lastEventId): ResponseInterface
     {
-        $topic = MercureRoundUpdates::topicOf(Uuid::fromString(self::ROUND));
+        $topic = MercureRoundUpdates::topicOf(self::ROUND);
         $headers = ['Authorization' => 'Bearer '.$this->token(new Grant([Grant::ACTION_SUBSCRIBE], [$topic])), 'Last-Event-ID' => $lastEventId];
 
         $response = $this->client->request('GET', $this->url, ['query' => ['match' => $topic], 'headers' => $headers, 'timeout' => self::SECONDS_TO_WAIT]);
@@ -225,16 +227,6 @@ final class MercureHubTest extends TestCase
     private function token(Grant $grant): string
     {
         return new LcobucciFactory(self::SECRET)->create([$grant], ['iss' => $this->issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => $this->url]);
-    }
-
-    private function freePort(): int
-    {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
-        self::assertNotFalse($socket);
-        $port = (int) parse_url('tcp://'.stream_socket_get_name($socket, false), PHP_URL_PORT);
-        fclose($socket);
-
-        return $port;
     }
 
     private function waitForTheHub(int $port): void

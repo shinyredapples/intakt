@@ -109,6 +109,54 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'model-a', 'prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]]]);
     }
 
+    public function failHead(string $project, string $change, int $failures): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, 'a') + ['failures' => $failures]);
+    }
+
+    public function failMovedHead(string $project, string $change): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, 'b') + ['failures' => 1]);
+    }
+
+    public function handOverHead(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::HeadHandedOver, $this->headFailure($project, $change, $head) + ['failures' => 4]);
+    }
+
+    public function keepHeadPending(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::HeadPending, ['project' => $project, 'change' => $change, 'head' => $head, 'read_again_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    public function recordRedHead(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::HeadRed, ['project' => $project, 'change' => $change, 'head' => $head, 'read_again_at' => null]);
+    }
+
+    public function queueRoundOf(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::RoundQueued, ['project' => $project, 'change' => $change, 'head' => $head, 'round' => Uuid::v7()->toRfc4122()]);
+    }
+
+    public function forgetHead(string $project, string $change, string $head): void
+    {
+        $this->add(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $change, 'head' => $head]);
+    }
+
+    public function failHeadWithoutCause(string $project, string $change): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function headFailure(string $project, string $change, string $head): array
+    {
+        return ['project' => $project, 'change' => $change, 'head' => $head, 'cause' => 'RuntimeException: commit '.$head.' not fetched', 'retry_at' => '2026-10-28T12:08:00+00:00'];
+    }
+
     /**
      * @return array<string, string>
      */

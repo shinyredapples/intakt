@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="setup">
+<main class="setup">
+  <div class="brand" style="display:flex;align-items:center">
+    <img class="logo-light" src="assets/intakt-lockup.svg" alt="Intakt">
+    <img class="logo-dark" src="assets/intakt-lockup-dark.svg" alt="Intakt">
+    <button class="icon-btn" type="button" id="theme" aria-label="Switch light or dark theme" style="margin-left:auto">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5"/></svg>
+    </button>
+  </div>
+
+  <ol class="steps" aria-label="Setup progress">
+    <li data-s="1"><button type="button">1 Repository</button></li>
+    <li data-s="2"><button type="button">2 GitHub App</button></li>
+    <li data-s="3"><button type="button">3 AI account</button></li>
+    <li data-s="4"><button type="button">4 Check</button></li>
+    <li data-s="5"><button type="button">5 Done</button></li>
+  </ol>
+  <p class="step-count" id="stepcount" aria-live="polite"></p>
+
+  <section class="step" data-s="1" aria-labelledby="s1h">
+    <h1 id="s1h">Connect your repository</h1>
+    <p class="lead">Intakt works from your repository's issues and pull requests. Paste its address.</p>
+    <div class="field">
+      <label for="repo">Repository address</label>
+      <input class="input" id="repo" type="url" value="https://github.com/acme/field-notes" autocomplete="off">
+      <span class="hint">An https address or the owner/name form both work.</span>
+    </div>
+    <div class="detected">
+      <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+      <p><strong>GitHub</strong>, repository acme/field-notes, default branch main</p>
+    </div>
+    <div class="step-nav"><span class="grow"></span><button class="btn primary" type="button" data-go="2">Continue</button></div>
+  </section>
+
+  <section class="step" data-s="2" aria-labelledby="s2h">
+    <h1 id="s2h">Create Intakt's GitHub App</h1>
+    <p class="lead">The app lets Intakt read issues, push branches and open pull requests in acme/field-notes, and nothing else. GitHub asks you to confirm, then sends you back here.</p>
+    <button class="btn primary" type="button" onclick="this.outerHTML='<div class=&quot;detected&quot;><svg class=&quot;i&quot; viewBox=&quot;0 0 24 24&quot;><path d=&quot;m5 12.5 4.5 4.5L19 7.5&quot;/></svg><p><strong>App created</strong> and installed on acme/field-notes</p></div>'">Create the app on GitHub</button>
+    <p class="muted small" style="margin-top:12px">Permissions it asks for: issues, pull requests and contents on this repository only.</p>
+    <div class="step-nav"><button class="btn quiet" type="button" data-go="1">Back</button><span class="grow"></span><button class="btn primary" type="button" data-go="3">Continue</button></div>
+  </section>
+
+  <section class="step" data-s="3" aria-labelledby="s3h">
+    <h1 id="s3h">Add an AI account</h1>
+    <p class="lead">Intakt's team needs one account to work with. You can add more later on the Team page.</p>
+    <div class="seg" role="tablist" aria-label="Account type">
+      <button type="button" role="tab" aria-selected="true" data-tab="sub">Subscription</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="api">API key</button>
+    </div>
+    <div data-panel="sub">
+      <div class="field">
+        <span class="l" style="font:600 15px/1.3 var(--f-head)">1. Create a token</span>
+        <span class="hint">Run this on any computer where you are logged in to your subscription.</span>
+        <div class="copy"><code>claude setup-token</code><button class="btn sm" type="button" data-copy="claude setup-token"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copy</button></div>
+      </div>
+      <div class="field">
+        <label for="tok">2. Paste the token it prints</label>
+        <input class="input mono" id="tok" type="password" placeholder="Paste the token" autocomplete="off">
+        <span class="hint">Stored encrypted on this machine. It stays valid for a year.</span>
+      </div>
+    </div>
+    <div data-panel="api" hidden>
+      <div class="field">
+        <label for="key">API key</label>
+        <input class="input mono" id="key" type="password" placeholder="Paste the key" autocomplete="off">
+        <span class="hint">Pay per use. You can set a daily cap on the Team page.</span>
+      </div>
+    </div>
+    <div class="step-nav"><button class="btn quiet" type="button" data-go="2">Back</button><span class="grow"></span><button class="btn primary" type="button" data-go="4">Test and continue</button></div>
+  </section>
+
+  <section class="step" data-s="4" aria-labelledby="s4h">
+    <h1 id="s4h">Check the project</h1>
+    <p class="lead">Intakt reads the repository to learn how it is built and tested. It changes nothing.</p>
+    <ul class="checks">
+      <li><svg class="i ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><div><strong>Tests found</strong><p class="muted small"><span class="mono">npm test</span> runs 212 tests in 41 seconds, all pass.</p></div></li>
+      <li><svg class="i ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><div><strong>Lint and type checks found</strong><p class="muted small"><span class="mono">npm run lint</span> and <span class="mono">npm run typecheck</span>, both clean.</p></div></li>
+      <li><svg class="i ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><div><strong>CI found</strong><p class="muted small">One workflow runs on pull requests. Intakt waits for it before merging.</p></div></li>
+      <li><svg class="i info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg><div><strong>Protected files suggested</strong><p class="muted small">Changes to <span class="mono">.github/</span> and <span class="mono">src/auth/</span> will wait for your approval. Change this later in the project's settings.</p></div></li>
+      <li><svg class="i info" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg><div><strong>14 open issues, none labeled yet</strong><p class="muted small">Add the label intakt to the issues you want built.</p></div></li>
+    </ul>
+    <div class="step-nav"><button class="btn quiet" type="button" data-go="3">Back</button><button class="btn secondary" type="button" onclick="Intakt.toast('Check ran again: same result')">Run again</button><span class="grow"></span><button class="btn primary" type="button" data-go="5">Continue</button></div>
+  </section>
+
+  <section class="step" data-s="5" aria-labelledby="s5h">
+    <h1 id="s5h">Ready to start</h1>
+    <p class="lead">Intakt starts with these defaults. Each one can be changed later in Settings.</p>
+    <ul class="defaults">
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>It picks up issues labeled <strong>intakt</strong>, oldest first.</span></li>
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>It builds <strong>one task at a time</strong>.</span></li>
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>Two code reviewers must approve before anything merges.</span></li>
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>Changes to protected files and any question wait for you.</span></li>
+      <li><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>This project gets <strong>all of this week's share</strong> until you add another.</span></li>
+    </ul>
+    <div class="step-nav"><button class="btn quiet" type="button" data-go="4">Back</button><span class="grow"></span><a class="btn primary" href="index.html" data-icon="play">Start</a></div>
+  </section>
+</main>
+<script src="assets/intakt.js"></script>
+<script>
+(function () {
+  function go(n) {
+    document.querySelectorAll(".step").forEach(function (s) { s.classList.toggle("current", s.dataset.s == n); });
+    document.querySelectorAll(".steps li").forEach(function (l) {
+      l.className = +l.dataset.s < n ? "done" : (+l.dataset.s === n ? "current" : "");
+      if (+l.dataset.s === n) l.setAttribute("aria-current", "step"); else l.removeAttribute("aria-current");
+    });
+    var names = ["Repository", "GitHub App", "AI account", "Check", "Done"];
+    document.getElementById("stepcount").textContent = "Step " + n + " of 5: " + names[n - 1];
+    history.replaceState(null, "", "?step=" + n);
+    var h = document.querySelector(".step.current h1"); if (h && go.started) { h.tabIndex = -1; h.focus(); }
+    go.started = true;
+  }
+  document.addEventListener("click", function (e) {
+    var g = e.target.closest("[data-go]"); if (g) go(+g.dataset.go);
+    var s = e.target.closest(".steps li"); if (s) go(+s.dataset.s);
+    var t = e.target.closest("[data-tab]");
+    if (t) {
+      document.querySelectorAll("[data-tab]").forEach(function (x) { x.setAttribute("aria-selected", x === t); });
+      document.querySelectorAll("[data-panel]").forEach(function (p) { p.hidden = p.dataset.panel !== t.dataset.tab; });
+    }
+  });
+  document.getElementById("theme").addEventListener("click", function () {
+    var d = document.documentElement, t = d.dataset.theme === "dark" ? "light" : "dark";
+    d.dataset.theme = t; localStorage.setItem("intakt-theme", t);
+  });
+  go(+(new URLSearchParams(location.search).get("step") || 1));
+})();
+</script>
+</body>
+</html>

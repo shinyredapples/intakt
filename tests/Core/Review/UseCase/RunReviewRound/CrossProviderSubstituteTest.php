@@ -54,6 +54,7 @@ use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -115,7 +116,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
     {
         $this->fixture = new RoundFixture(self::getContainer());
         $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
+        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
     }
 
     public function testARoundWithOneProvidersKeyRevokedIsReviewedByTheSubstituteAndOwesACatchUp(): void
@@ -240,7 +241,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         ]);
         $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger()))));
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger()), $this->limit);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $this->limit);
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
     }
