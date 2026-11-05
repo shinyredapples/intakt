@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -48,11 +49,12 @@ final class EntrypointProcessesTest extends TestCase
 
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->directory);
-        $port = (string) $this->freePort();
+        $ports = WorkerPorts::ofThisWorker();
+        $port = (string) $ports->next();
         $this->environment = [
             'SERVER_PORT' => $port,
             'DASHBOARD_PORT' => $port,
-            'CADDY_ADMIN' => 'localhost:'.$this->freePort(),
+            'CADDY_ADMIN' => 'localhost:'.$ports->next(),
             'DATABASE_URL' => 'sqlite:///'.$this->directory.'/intakt.db',
             'MESSENGER_TRANSPORT_DSN' => 'doctrine://default',
             'MESSENGER_CONSUMERS' => '2',
@@ -384,15 +386,5 @@ final class EntrypointProcessesTest extends TestCase
         }
 
         return $arguments;
-    }
-
-    private function freePort(): int
-    {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
-        self::assertNotFalse($socket);
-        $port = (int) parse_url('tcp://'.stream_socket_get_name($socket, false), PHP_URL_PORT);
-        fclose($socket);
-
-        return $port;
     }
 }

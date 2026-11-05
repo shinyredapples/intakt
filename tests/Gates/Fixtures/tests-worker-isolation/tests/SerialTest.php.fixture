@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\TestCase;
+
+#[CoversNothing]
+#[Group('serial')]
+final class SerialTest extends TestCase
+{
+    public function testRunsAfterBothWorkersFinishedInItsOwnDirectory(): void
+    {
+        $rendezvous = dirname(__DIR__).'/rendezvous';
+        $database = substr((string) getenv('DATABASE_URL'), strlen('sqlite:///'));
+
+        self::assertFileExists($rendezvous.'/done-sqlite');
+        self::assertFileExists($rendezvous.'/done-gates');
+        self::assertSame('serial', basename(dirname($database)));
+        self::assertFileDoesNotExist($rendezvous.'/serial');
+
+        file_put_contents($rendezvous.'/serial', 'ran');
+    }
+}

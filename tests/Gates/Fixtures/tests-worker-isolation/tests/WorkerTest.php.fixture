@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\TestCase;
+
+#[CoversNothing]
+final class WorkerTest extends TestCase
+{
+    public function testHoldsItsNamesWhileTheGatesWorkerHoldsTheSameNames(): void
+    {
+        holdTheNamesOfThisWorkerTogetherWith('sqlite', 'gates');
+
+        self::assertFileExists(dirname(__DIR__).'/rendezvous/gates');
+    }
+}
