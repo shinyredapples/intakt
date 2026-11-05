@@ -6,10 +6,12 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\TestPorts;
 use Intakt\Gates\TestWorker;
+use Intakt\Gates\TestWorkers;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(TestWorker::class)]
+#[CoversClass(TestWorkers::class)]
 #[UsesClass(TestPorts::class)]
 final class TestWorkerTest extends SandboxTestCase
 {
@@ -17,24 +19,24 @@ final class TestWorkerTest extends SandboxTestCase
 
     public function testTwoWorkersShareNoPath(): void
     {
-        $first = TestWorker::numbered('/scratch', 'sqlite', 0, $this->ports())->environment();
-        $second = TestWorker::numbered('/scratch', 'gates', 1, $this->ports())->environment();
+        $first = $this->workers('/scratch')->numbered('sqlite', 'phpunit.dist.xml', 0)->environment();
+        $second = $this->workers('/scratch')->numbered('gates', 'phpunit.gates.xml', 1)->environment();
 
         self::assertSame([], array_intersect(array_values($first), array_values($second)));
     }
 
     public function testTheSerialWorkerSharesNoPathWithTheWorkerOfItsPass(): void
     {
-        $worker = TestWorker::numbered('/scratch', 'sqlite', 0, $this->ports())->environment();
-        $serial = TestWorker::serial('/scratch', 'sqlite', $this->ports())->environment();
+        $worker = $this->workers('/scratch')->numbered('sqlite', 'phpunit.dist.xml', 0)->environment();
+        $serial = $this->workers('/scratch')->serial('sqlite', 'phpunit.dist.xml')->environment();
 
         self::assertSame([], array_intersect(array_diff_key($worker, ['INTAKT_TEST_PORTS' => true]), $serial));
     }
 
     public function testTwoWorkersGetPortRangesThatDoNotOverlap(): void
     {
-        [$firstFrom, $firstTo] = $this->portsOf(TestWorker::numbered('/scratch', 'sqlite', 0, $this->ports()));
-        [$secondFrom, $secondTo] = $this->portsOf(TestWorker::numbered('/scratch', 'gates', 1, $this->ports()));
+        [$firstFrom, $firstTo] = $this->portsOf($this->workers('/scratch')->numbered('sqlite', 'phpunit.dist.xml', 0));
+        [$secondFrom, $secondTo] = $this->portsOf($this->workers('/scratch')->numbered('gates', 'phpunit.gates.xml', 1));
 
         self::assertLessThan($secondFrom, $firstTo);
         self::assertLessThanOrEqual($firstTo, $firstFrom);
@@ -43,27 +45,36 @@ final class TestWorkerTest extends SandboxTestCase
 
     public function testTheSerialWorkerRunsAloneSoItTakesThePortsOfTheFirstWorker(): void
     {
-        self::assertSame($this->portsOf(TestWorker::numbered('/scratch', 'sqlite', 0, $this->ports())), $this->portsOf(TestWorker::serial('/scratch', 'sqlite', $this->ports())));
+        $workers = $this->workers('/scratch');
+
+        self::assertSame($this->portsOf($workers->numbered('sqlite', 'phpunit.dist.xml', 0)), $this->portsOf($workers->serial('sqlite', 'phpunit.dist.xml')));
     }
 
     public function testThePortsOfTheFourthWorkerStayBelowThePortsTheSystemPicksForPortZero(): void
     {
-        [, $last] = $this->portsOf(TestWorker::numbered('/scratch', 'sqlite', 3, $this->ports()));
+        [, $last] = $this->portsOf($this->workers('/scratch')->numbered('sqlite', 'phpunit.dist.xml', 3));
 
         self::assertLessThan(self::FIRST_EPHEMERAL_PORT, $last);
     }
 
     public function testThePortRangeOfAWorkerHoldsOneHundredPorts(): void
     {
-        [$from, $to] = $this->portsOf(TestWorker::numbered('/scratch', 'sqlite', 2, $this->ports()));
+        [$from, $to] = $this->portsOf($this->workers('/scratch')->numbered('sqlite', 'phpunit.dist.xml', 2));
 
         self::assertSame(100, $to - $from + 1);
     }
 
+    public function testTheWorkersLeaveOutTheSerialGroupAndTheSerialWorkerRunsOnlyIt(): void
+    {
+        $workers = $this->workers('/scratch');
+
+        self::assertSame('--exclude-group=serial', $workers->numbered('sqlite', 'phpunit.dist.xml', 0)->selection);
+        self::assertSame('--group=serial', $workers->serial('sqlite', 'phpunit.dist.xml')->selection);
+    }
+
     public function testAPreparedWorkerHasItsTemporaryDirectory(): void
     {
-        $scratch = $this->emptySandbox()->root;
-        $worker = TestWorker::numbered($scratch, 'sqlite', 0, $this->ports());
+        $worker = $this->workers($this->emptySandbox()->root)->numbered('sqlite', 'phpunit.dist.xml', 0);
 
         self::assertTrue($worker->prepared());
         self::assertDirectoryExists($worker->environment()['TMPDIR']);
@@ -74,27 +85,42 @@ final class TestWorkerTest extends SandboxTestCase
         $scratch = $this->emptySandbox()->root;
         file_put_contents($scratch.'/sqlite', 'a file where the pass directory belongs');
 
-        self::assertFalse(@TestWorker::numbered($scratch, 'sqlite', 0, $this->ports())->prepared());
+        self::assertFalse(@$this->workers($scratch)->numbered('sqlite', 'phpunit.dist.xml', 0)->prepared());
     }
 
     public function testTheJunitReportOfAWorkerLiesInItsOwnDirectory(): void
     {
-        self::assertSame('/scratch/sqlite/worker-0/junit.xml', TestWorker::numbered('/scratch', 'sqlite', 0, $this->ports())->junitReport());
-        self::assertSame('/scratch/sqlite/serial/junit.xml', TestWorker::serial('/scratch', 'sqlite', $this->ports())->junitReport());
+        $workers = $this->workers('/scratch');
+
+        self::assertSame('/scratch/sqlite/worker-0/junit.xml', $workers->numbered('sqlite', 'phpunit.dist.xml', 0)->junitReport());
+        self::assertSame('/scratch/sqlite/serial/junit.xml', $workers->serial('sqlite', 'phpunit.dist.xml')->junitReport());
+    }
+
+    public function testTheJunitReportsOfAllWorkersAreFound(): void
+    {
+        $workers = $this->workers($this->emptySandbox()->root);
+        $reports = [$workers->numbered('sqlite', 'phpunit.dist.xml', 0)->junitReport(), $workers->serial('sqlite', 'phpunit.dist.xml')->junitReport()];
+        $workers->numbered('sqlite', 'phpunit.dist.xml', 0)->prepared();
+        $workers->serial('sqlite', 'phpunit.dist.xml')->prepared();
+        array_map(touch(...), $reports);
+
+        self::assertEqualsCanonicalizing($reports, $workers->junitReports());
     }
 
     public function testFindingsOfTheSerialWorkerNameItsPass(): void
     {
-        self::assertSame('sqlite', TestWorker::numbered('/scratch', 'sqlite', 0, $this->ports())->run);
-        self::assertSame('sqlite serial', TestWorker::serial('/scratch', 'sqlite', $this->ports())->run);
+        $workers = $this->workers('/scratch');
+
+        self::assertSame('sqlite', $workers->numbered('sqlite', 'phpunit.dist.xml', 0)->run);
+        self::assertSame('sqlite serial', $workers->serial('sqlite', 'phpunit.dist.xml')->run);
     }
 
-    private function ports(): TestPorts
+    private function workers(string $scratch): TestWorkers
     {
         $ports = TestPorts::forWorkers(4, null);
         self::assertNotNull($ports);
 
-        return $ports;
+        return new TestWorkers($scratch, $ports);
     }
 
     /**

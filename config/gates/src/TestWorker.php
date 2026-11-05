@@ -9,19 +9,8 @@ final readonly class TestWorker
     public const string PORTS_VARIABLE = 'INTAKT_TEST_PORTS';
     public const string GATES_CACHE_VARIABLE = 'INTAKT_GATES_CACHE';
 
-    private function __construct(public string $run, private string $directory, private string $ports)
+    public function __construct(public string $run, private string $directory, private string $ports, public string $configuration, public string $selection)
     {
-    }
-
-    public static function numbered(string $scratch, string $pass, int $index, TestPorts $ports): self
-    {
-        return new self($pass, $scratch.'/'.$pass.'/worker-'.$index, $ports->block($index));
-    }
-
-    // Because the serial pass starts only after every worker has stopped, the ports of the first worker are free again.
-    public static function serial(string $scratch, string $pass, TestPorts $ports): self
-    {
-        return new self($pass.' serial', $scratch.'/'.$pass.'/serial', $ports->block(0));
     }
 
     public function prepared(): bool

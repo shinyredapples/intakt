@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Closure;
 use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -11,9 +12,6 @@ use SplFileInfo;
 
 final class TestsGate implements Gate
 {
-    private const string SERIAL_GROUP = 'serial';
-    private const string WORKERS = '--exclude-group=';
-    private const string ALONE = '--group=';
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
     private const string SKIPPED_GATES_PASS = 'gates pass skipped, the change leaves the gate code, the gate tests and their inputs unchanged';
@@ -54,7 +52,7 @@ final class TestsGate implements Gate
         }
 
         try {
-            return $this->resultOf($workspace, $scratch, $passes, $ports);
+            return $this->resultOf($workspace, new TestWorkers($scratch, $ports), $passes);
         } finally {
             $this->remove($scratch);
         }
@@ -91,10 +89,10 @@ final class TestsGate implements Gate
     /**
      * @param array<string, string> $passes
      */
-    private function resultOf(Workspace $workspace, string $scratch, array $passes, TestPorts $ports): GateResult
+    private function resultOf(Workspace $workspace, TestWorkers $workers, array $passes): GateResult
     {
-        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $scratch, $passes, $ports))
-            ->withSlowest($this->recordedDurations($workspace, $scratch));
+        $result = GateResult::withFindings($this->name(), $this->findings($workspace, $workers, $passes))
+            ->withSlowest($this->recordedDurations($workspace, $workers));
 
         return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
     }
@@ -104,50 +102,90 @@ final class TestsGate implements Gate
      *
      * @return list<string>
      */
-    private function findings(Workspace $workspace, string $scratch, array $passes, TestPorts $ports): array
+    private function findings(Workspace $workspace, TestWorkers $workers, array $passes): array
     {
-        $commands = [];
+        $numbered = [];
         $alone = [];
-        $findings = [];
 
         foreach (array_keys($passes) as $index => $pass) {
-            $workers = [self::WORKERS => TestWorker::numbered($scratch, $pass, $index, $ports), self::ALONE => TestWorker::serial($scratch, $pass, $ports)];
+            $numbered[] = $workers->numbered($pass, $passes[$pass], $index);
+            $alone[] = $workers->serial($pass, $passes[$pass]);
+        }
 
-            if (!$workers[self::WORKERS]->prepared() || !$workers[self::ALONE]->prepared()) {
-                return [$pass.': cannot create the scratch directory of the pass in '.$scratch];
+        foreach ([...$numbered, ...$alone] as $worker) {
+            if (!$worker->prepared()) {
+                return [$worker->run.': cannot create the scratch directory of the run in '.$workers->scratch];
             }
+        }
 
-            $listed = [];
+        $listings = $this->concurrently($workspace, [...$numbered, ...$alone], static fn (): array => ['--list-tests', '--colors=never']);
+        $unlisted = $this->findingsOf($listings);
 
-            foreach ($workers as $part => $worker) {
-                $listing = $workspace->command([$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$passes[$pass], '--list-tests', '--colors=never', $part.self::SERIAL_GROUP], $worker->environment());
+        if ([] !== $unlisted) {
+            return $unlisted;
+        }
 
-                if (!$listing->succeeded()) {
-                    $findings = [...$findings, ...PhpunitReport::findings($worker->run, $listing)];
+        [$concurrent, $serial] = $this->withTests($numbered, $alone, $listings);
+        $findings = $this->findingsOf($this->concurrently($workspace, $concurrent, $this->testRun(...)));
 
-                    continue 2;
-                }
+        foreach ($serial as $worker) {
+            $findings = [...$findings, ...$this->findingsOf($this->concurrently($workspace, [$worker], $this->testRun(...)))];
+        }
 
-                $listed[$part] = 1 === preg_match('/^ - /m', $listing->output);
-            }
+        return $findings;
+    }
 
+    /**
+     * @param list<TestWorker>             $numbered
+     * @param list<TestWorker>             $alone
+     * @param array<string, ProcessResult> $listings
+     *
+     * @return array{list<TestWorker>, list<TestWorker>}
+     */
+    private function withTests(array $numbered, array $alone, array $listings): array
+    {
+        $listsATest = static fn (TestWorker $worker): bool => 1 === preg_match('/^ - /m', $listings[$worker->run]->output);
+        $concurrent = [];
+        $serial = array_values(array_filter($alone, $listsATest));
+
+        foreach ($numbered as $index => $worker) {
             // Because a configuration whose tests are all serial leaves the workers nothing, while one without any test must still fail on the empty test suite.
-            if ($listed[self::WORKERS] || !$listed[self::ALONE]) {
-                $commands[$pass] = [[...$this->phpunit($workspace, $passes[$pass], $workers[self::WORKERS]->junitReport()), self::WORKERS.self::SERIAL_GROUP], $workers[self::WORKERS]->environment()];
-            }
-
-            if ($listed[self::ALONE]) {
-                $alone[$pass] = $workers[self::ALONE];
+            if ($listsATest($worker) || !$listsATest($alone[$index])) {
+                $concurrent[] = $worker;
             }
         }
 
-        foreach ($workspace->commandsConcurrently($commands) as $pass => $result) {
-            $findings = [...$findings, ...PhpunitReport::findings($pass, $result)];
+        return [$concurrent, $serial];
+    }
+
+    /**
+     * @param list<TestWorker>                  $workers
+     * @param Closure(TestWorker): list<string> $flags
+     *
+     * @return array<string, ProcessResult>
+     */
+    private function concurrently(Workspace $workspace, array $workers, Closure $flags): array
+    {
+        $commands = [];
+
+        foreach ($workers as $worker) {
+            $commands[$worker->run] = [[$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$worker->configuration, ...$flags($worker), $worker->selection], $worker->environment()];
         }
 
-        foreach ($alone as $pass => $worker) {
-            $result = $workspace->command([...$this->phpunit($workspace, $passes[$pass], $worker->junitReport()), self::ALONE.self::SERIAL_GROUP], $worker->environment());
-            $findings = [...$findings, ...PhpunitReport::findings($worker->run, $result)];
+        return $workspace->commandsConcurrently($commands);
+    }
+
+    /**
+     * @param array<string, ProcessResult> $results
+     *
+     * @return list<string>
+     */
+    private function findingsOf(array $results): array
+    {
+        $findings = [];
+
+        foreach ($results as $run => $result) {
+            $findings = [...$findings, ...PhpunitReport::findings($run, $result)];
         }
 
         return $findings;
@@ -163,11 +201,10 @@ final class TestsGate implements Gate
     /**
      * @return array<string, float>
      */
-    private function recordedDurations(Workspace $workspace, string $scratch): array
+    private function recordedDurations(Workspace $workspace, TestWorkers $workers): array
     {
         $durations = new TestDurations($workspace->root);
-        $reports = glob($scratch.'/*/*/junit.xml');
-        $seconds = $durations->read(false === $reports ? [] : $reports);
+        $seconds = $durations->read($workers->junitReports());
         $durations->write($seconds, $this->gatesCache());
 
         return $durations->slowest($seconds);
@@ -203,13 +240,11 @@ final class TestsGate implements Gate
     /**
      * @return list<string>
      */
-    private function phpunit(Workspace $workspace, string $configuration, string $junitReport): array
+    private function testRun(TestWorker $worker): array
     {
         return [
-            $workspace->tool('phpunit'),
-            '--configuration='.$workspace->root.'/'.$configuration,
             ...self::FAIL_CLOSED,
-            '--display-phpunit-notices', '--display-phpunit-deprecations', '--do-not-record-test-run-history', '--log-junit='.$junitReport, '--colors=never', '--no-progress',
+            '--display-phpunit-notices', '--display-phpunit-deprecations', '--do-not-record-test-run-history', '--log-junit='.$worker->junitReport(), '--colors=never', '--no-progress',
         ];
     }
 }

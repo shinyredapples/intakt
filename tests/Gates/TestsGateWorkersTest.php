@@ -10,6 +10,7 @@ use Intakt\Gates\TestDurations;
 use Intakt\Gates\TestPorts;
 use Intakt\Gates\TestsGate;
 use Intakt\Gates\TestWorker;
+use Intakt\Gates\TestWorkers;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(TestsGate::class)]
 #[UsesClass(TestWorker::class)]
 #[UsesClass(TestPorts::class)]
+#[UsesClass(TestWorkers::class)]
 #[UsesClass(PhpunitReport::class)]
 #[UsesClass(TestDurations::class)]
 #[UsesClass(GateResult::class)]
