@@ -33,7 +33,7 @@ final readonly class RoundLedgerReading
             $judged = $this->payloads->of($recorded, JudgeDone::class);
 
             if ($roundId === $judged?->round) {
-                return array_values($judged->act);
+                return $judged->act;
             }
         }
 
