@@ -63,3 +63,10 @@ services:
         class: Intakt\Gates\PhpStan\NoDeprecatedClassDocblockTypeRule
         tags:
             - phpstan.rules.rule
+    -
+        class: Intakt\Gates\PhpStan\ReSpelledNameRule
+        arguments:
+            root: %currentWorkingDirectory%
+            provider: Intakt\Core\Ai\Contract\Provider
+        tags:
+            - phpstan.rules.rule

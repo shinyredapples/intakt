@@ -26,8 +26,8 @@ final readonly class SampleProject
     private const array PROVIDERS = [Provider::Anthropic, Provider::OpenAi];
 
     private const array MODELS = [
-        'anthropic' => ['strong' => 'claude-opus-5-5', 'standard' => 'claude-sonnet-5-5', 'light' => 'claude-haiku-5-5'],
-        'openai' => ['strong' => 'gpt-5', 'standard' => 'gpt-5-mini', 'light' => 'gpt-5-nano'],
+        Provider::Anthropic->value => ['strong' => 'claude-opus-5-5', 'standard' => 'claude-sonnet-5-5', 'light' => 'claude-haiku-5-5'],
+        Provider::OpenAi->value => ['strong' => 'gpt-5', 'standard' => 'gpt-5-mini', 'light' => 'gpt-5-nano'],
     ];
 
     public function __construct(

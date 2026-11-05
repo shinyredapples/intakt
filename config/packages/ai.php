@@ -136,7 +136,9 @@ return static function (ContainerConfigurator $container): void {
 
     // The bundle configures one anthropic and one openai platform, so another account of theirs is built with the bridge factory and the arguments the bundle passes.
     $bridgePlatform = static function (Provider $provider, array $arguments) use ($catalog): Definition {
-        [$factory, $name] = Provider::Anthropic === $provider ? [AnthropicFactory::class, 'anthropic'] : [OpenAiFactory::class, 'openai'];
+        $factory = Provider::Anthropic === $provider ? AnthropicFactory::class : OpenAiFactory::class;
+        // The bundle names these two platforms by the provider's value, so its name is derived from the case.
+        $name = $provider->value;
         $models = new Definition(CompositeModelCatalog::class, [[new Definition(InMemoryModelCatalog::class, [$catalog->models($provider)]), new Reference('ai.platform.model_catalog.'.$name)]]);
         $http = new Reference('http_client', ContainerInterface::NULL_ON_INVALID_REFERENCE);
 
@@ -170,15 +172,15 @@ return static function (ContainerConfigurator $container): void {
     $accountPlatform = static function (Account $account) use ($env, $modelCatalog, $bridgePlatform, $claudeCodePlatform, $codexPlatform): array {
         $variables = array_map($env, $account->variables());
         $default = Account::DEFAULT === $account->name;
-        $generic = 'openai_compatible'.($default ? '' : '_'.$account->name);
+        $generic = Provider::OpenAiCompatible->value.($default ? '' : '_'.$account->name);
         $events = new Reference('event_dispatcher');
 
         return match ($account->provider) {
             Provider::Anthropic => $default
-                ? [['anthropic' => ['api_key' => $variables[0], 'cache_retention' => 'short', 'model_catalog' => $modelCatalog(Provider::Anthropic)]], new Reference('ai.platform.anthropic')]
+                ? [[Provider::Anthropic->value => ['api_key' => $variables[0], 'cache_retention' => 'short', 'model_catalog' => $modelCatalog(Provider::Anthropic)]], new Reference('ai.platform.anthropic')]
                 : [[], $bridgePlatform(Provider::Anthropic, [$variables[0], $events, 'short'])],
             Provider::OpenAi => $default
-                ? [['openai' => ['api_key' => $variables[0], 'model_catalog' => $modelCatalog(Provider::OpenAi)]], new Reference('ai.platform.openai')]
+                ? [[Provider::OpenAi->value => ['api_key' => $variables[0], 'model_catalog' => $modelCatalog(Provider::OpenAi)]], new Reference('ai.platform.openai')]
                 : [[], $bridgePlatform(Provider::OpenAi, [$variables[0], null, $events])],
             Provider::OpenAiCompatible => [
                 ['generic' => [$generic => ['base_url' => $variables[0], 'api_key' => $variables[1], 'model_catalog' => $modelCatalog(Provider::OpenAiCompatible)]]],
