@@ -7,7 +7,7 @@ ARG COMPOSER_SHA256=9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602
 ARG GITLEAKS_VERSION=8.30.1
 ARG GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
 
-# The base image keeps Caddy's state in /config/caddy and /data/caddy (XDG_*_HOME), root's; the jobs run as uid 1000.
+# The base image's XDG_*_HOME point Caddy at root's /config and /data; the jobs run as uid 1000.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
