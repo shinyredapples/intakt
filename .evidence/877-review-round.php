@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -20,7 +19,6 @@ use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Dotenv\Dotenv;
 
-// Usage: php .evidence/877-review-round.php <fresh SQLite file>
 require __DIR__.'/../vendor/autoload.php';
 
 $database = $argv[1] ?? throw new InvalidArgumentException('Name a fresh SQLite file.');
@@ -48,7 +46,6 @@ $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mar
 $fixture->startFor('feat/next', $fixture->bus, 1);
 
 foreach ($fixture->ledger()->readInOrder() as $recorded) {
-    assert($recorded instanceof RecordedEvent);
     echo $recorded->event->kind->value, ' ', $recorded->event->payload, "\n";
 }
 
