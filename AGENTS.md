@@ -28,6 +28,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Classes are imported, never fully qualified; global functions and constants are written plain (`count()`, `PHP_EOL`), with neither a backslash nor a `use function`/`use const` (enforced). A class alias only where two classes share a short name, plus Doctrine's `ORM`.
 - Names: commands imperative, events past tense, queries nouns or questions; exceptions named after the broken rule.
 - A closed set of values is a backed enum; a single named value stays a constant.
+- A name built from an enum value is derived from the case, never re-spelled; container service ids and parameter names live in the module's ids class (`<Module>Services` in its `Contract/`). The `phpstan` gate enforces this only for `Provider` values and `intakt.` ids.
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
 - Time only through Symfony's `ClockInterface`, `DateTimeImmutable` in UTC; system-time functions and non-literal moments are refused (enforced). `hrtime()` for elapsed time.
 - Worker mode: services keep no per-request state; what must reset implements `ResetInterface`.

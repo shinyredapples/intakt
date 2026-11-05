@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Sample\Contract\Provider;
+use Intakt\Sample\Contract\SampleServices;
+
+final readonly class Locks
+{
+    private const array MODELS = [Provider::Codex->value => 'gpt-5'];
+
+    public function name(Provider $provider): string
+    {
+        return SampleServices::LOCK_PREFIX.$provider->platformId();
+    }
+
+    public function model(Provider $provider): string
+    {
+        return self::MODELS[$provider->value] ?? throw new SampleFailure("Provider {$provider->value} has no intakt.sample model.");
+    }
+}
