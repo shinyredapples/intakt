@@ -114,7 +114,7 @@ The time of every test file, not only the ten slowest, is kept in `tests/duratio
 
 ## How many gates `bin/check` runs at once
 
-`bin/check` runs the selected gates at the same time, as many at once as the machine has CPUs, and starts the `tests` gate first. It still prints the gate lines in the same fixed order, then the result line, and exits with the same code as when the gates ran one after another. To change how many run at once, set `INTAKT_GATES_AT_ONCE` to a whole number of at least 1; `INTAKT_GATES_AT_ONCE=1` runs them one after another. Any other value stops `bin/check` with exit code 2 before a gate runs. A gate whose run crashes, or ends without a valid result line, fails with what it printed.
+`bin/check` runs the selected gates at the same time, as many at once as the machine has CPUs, and starts the `tests` gate first. `phpstan` and `rector` each already use every CPU, so they take turns while the other gates run alongside them. It still prints the gate lines in the same fixed order, then the result line, and exits with the same code as when the gates ran one after another. To change how many run at once, set `INTAKT_GATES_AT_ONCE` to a whole number of at least 1; `INTAKT_GATES_AT_ONCE=1` runs them one after another. Any other value stops `bin/check` with exit code 2 before a gate runs. A gate whose run crashes, or ends without a valid result line, fails with what it printed.
 
 ## When `bin/check` reports a missing tool
 
