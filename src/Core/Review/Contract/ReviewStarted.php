@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\UseCase\RunReviewRound;
+namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\Serializer\Attribute\Context;
 use Symfony\Component\Serializer\Normalizer\AbstractObjectNormalizer;

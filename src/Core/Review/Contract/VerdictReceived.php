@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\UseCase\RunReviewRound;
+namespace Intakt\Core\Review\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 
 final readonly class VerdictReceived
