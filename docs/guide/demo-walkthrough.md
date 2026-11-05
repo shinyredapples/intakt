@@ -1,6 +1,6 @@
 # A demo walkthrough
 
-A guided first run: start Intakt with a sample project, watch it review a change with deliberate mistakes, and see what each part of the screen means. Intakt is still being built: this walkthrough follows the demo the plan builds (milestone M5, tasks T23 and T24 in [the plan](../plan.md)), and the commands are below, and the timings are recorded in the [README](../../README.md#timed-run) once the owner has timed a run.
+A guided first run: start Intakt with a sample project, watch it review a change with deliberate mistakes, and see what each part of the screen means. Intakt is still being built: this walkthrough follows the demo the plan builds (milestone M5, tasks T23 and T24 in [the plan](../plan.md)). The commands are below; the timings are recorded in the [README](../../README.md#timed-run) once the owner has timed a run.
 
 ## What you need
 
