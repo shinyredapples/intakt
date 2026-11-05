@@ -54,9 +54,9 @@ final readonly class TestDurations
         }
 
         try {
-            $decoded = json_decode((string) file_get_contents($file), true, 2, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            // Because an unreadable record only costs the order of the queue, never the result of the run.
+            $decoded = json_decode(new Filesystem()->readFile($file), true, 2, JSON_THROW_ON_ERROR);
+        } catch (IOException|JsonException) {
+            // Because an unreadable record only costs the order of the queue, never the result of the run, and readFile() turns the PHP warning into this exception.
             return [];
         }
 
