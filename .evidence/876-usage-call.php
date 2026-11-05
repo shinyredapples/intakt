@@ -23,7 +23,12 @@ $usageLedger = $container->get(UsageLedger::class);
 assert($usageLedger instanceof UsageLedger);
 
 $answer = new TextResult('a stubbed answer');
-$answer->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 1200, completionTokens: 80, cacheCreationTokens: 300, totalTokens: 1580));
+$answer->getMetadata()->add('token_usage', new TokenUsage(
+    promptTokens: 1200,
+    completionTokens: 80,
+    cacheCreationTokens: 300,
+    totalTokens: 1580,
+));
 
 $reservation = $usageLedger->reserve('alpha', Tier::Strong);
 $usageLedger->settle($reservation, MockPlatformFactory::createPlatform(['stub' => $answer])->invoke('stub', 'hello'));
