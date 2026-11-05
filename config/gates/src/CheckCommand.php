@@ -68,7 +68,8 @@ final readonly class CheckCommand
      */
     private function runGatesWhenToolsExist(Options $options, array $arguments): int
     {
-        $names = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
+        $gates = $this->selectedGates($options);
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $gates);
         $missing = new RequiredTools($options->root ?? $this->home)->missingFor($names);
 
         if ([] !== $missing) {
@@ -85,16 +86,22 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($names, $arguments, $slots);
+        $spreading = array_values(array_map(
+            static fn (Gate $gate): string => $gate->name(),
+            array_filter($gates, static fn (Gate $gate): bool => $gate instanceof SpreadsOverEveryProcessor),
+        ));
+
+        return $this->runGates($names, $arguments, $slots, $spreading);
     }
 
     /**
      * @param list<string> $names
      * @param list<string> $arguments
+     * @param list<string> $oneAtATime
      */
-    private function runGates(array $names, array $arguments, int $slots): int
+    private function runGates(array $names, array $arguments, int $slots, array $oneAtATime): int
     {
-        $children = new ProcessRunner()->runAtMost($slots, $this->childCommands($names, $arguments), $this->workingDirectory());
+        $children = new ProcessRunner()->runAtMost($slots, $this->childCommands($names, $arguments), $this->workingDirectory(), $oneAtATime);
         $failed = [];
 
         foreach ($names as $name) {

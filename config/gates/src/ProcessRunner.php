@@ -127,12 +127,14 @@ final class ProcessRunner
      *
      * @param array<Name, array{list<string>, array<string, string|false>}> $commands
      *
+     * @param list<Name>                                                    $oneAtATime
+     *
      * @return array<Name, ProcessResult>
      */
-    public function runAtMost(int $slots, array $commands, string $directory): array
+    public function runAtMost(int $slots, array $commands, string $directory, array $oneAtATime = []): array
     {
         $processes = $this->processes($commands, $directory, self::OVERALL_TIMEOUT_SECONDS);
-        $failures = $this->runInSlots(max(1, $slots), $processes);
+        $failures = $this->runInSlots(max(1, $slots), $processes, $oneAtATime);
 
         return $this->resultsOf($processes, $failures, $commands);
     }
@@ -177,16 +179,17 @@ final class ProcessRunner
 
     /**
      * @param array<array-key, Process> $waiting
+     * @param list<array-key>           $oneAtATime
      *
      * @return array<array-key, int>
      */
-    private function runInSlots(int $slots, array $waiting): array
+    private function runInSlots(int $slots, array $waiting, array $oneAtATime): array
     {
         $running = [];
         $failures = [];
 
         while ([] !== $waiting || [] !== $running) {
-            $starting = array_slice($waiting, 0, $slots - count($running), true);
+            $starting = $this->nextToStart($waiting, $slots - count($running), $running, $oneAtATime);
             $waiting = array_diff_key($waiting, $starting);
             $failures += $this->startAll($starting);
             $running += array_diff_key($starting, $failures);
@@ -199,6 +202,37 @@ final class ProcessRunner
         }
 
         return $failures;
+    }
+
+    /**
+     * @param array<array-key, Process> $waiting
+     * @param array<array-key, Process> $running
+     * @param list<array-key>           $oneAtATime
+     *
+     * @return array<array-key, Process>
+     */
+    private function nextToStart(array $waiting, int $free, array $running, array $oneAtATime): array
+    {
+        $starting = [];
+        $takenTurn = array_any(array_keys($running), static fn (int|string $name): bool => in_array($name, $oneAtATime, true));
+
+        foreach ($waiting as $name => $process) {
+            if (count($starting) >= $free) {
+                break;
+            }
+
+            if (in_array($name, $oneAtATime, true)) {
+                if ($takenTurn) {
+                    continue;
+                }
+
+                $takenTurn = true;
+            }
+
+            $starting[$name] = $process;
+        }
+
+        return $starting;
     }
 
     private function runCall(GitCall $call): ProcessResult

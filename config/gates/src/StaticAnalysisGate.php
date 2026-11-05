@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-final readonly class StaticAnalysisGate extends PhpFilesToolGate
+final readonly class StaticAnalysisGate extends PhpFilesToolGate implements SpreadsOverEveryProcessor
 {
     public function name(): string
     {

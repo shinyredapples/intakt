@@ -108,6 +108,37 @@ final class CheckCommandConcurrencyTest extends SandboxTestCase
         self::assertSame(['cs', 'phpstan', 'tests'], $this->reportedGates($run));
     }
 
+    public function testGatesThatSpreadOverEveryProcessorRunOneAfterTheOther(): void
+    {
+        $sandbox = $this->sandboxWithChild(<<<'SH'
+            echo "start $gate" >> log
+            sleep 0.3
+            echo "end $gate" >> log
+            echo "{\"gate\":\"$gate\",\"ok\":true,\"findings\":[],\"omitted\":0}"
+            SH);
+
+        $run = $this->checkWithFakeChildren($sandbox, ['INTAKT_GATES_AT_ONCE' => '4'], '--only=phpstan,rector');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+        self::assertSame(['start phpstan', 'end phpstan', 'start rector', 'end rector'], $this->logOf($sandbox));
+    }
+
+    public function testAnotherGateRunsAlongsideAGateThatSpreadsOverEveryProcessor(): void
+    {
+        $sandbox = $this->sandboxWithChild(<<<'SH'
+            if [ "$gate" = phpstan ]; then other=cs; else other=phpstan; fi
+            touch "$gate.started"
+            waited=0
+            while [ ! -e "$other.started" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+            test -e "$other.started" || exit 1
+            echo "{\"gate\":\"$gate\",\"ok\":true,\"findings\":[],\"omitted\":0}"
+            SH);
+
+        $run = $this->checkWithFakeChildren($sandbox, ['INTAKT_GATES_AT_ONCE' => '2'], '--only=phpstan,cs');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+    }
+
     public function testAChildGetsTheOptionsOfTheRunAndItsGate(): void
     {
         $sandbox = $this->sandboxWithChild(<<<'SH'

@@ -40,6 +40,33 @@ final class ProcessRunnerSlotsTest extends SandboxTestCase
         self::assertTrue($results['second']->succeeded());
     }
 
+    public function testCommandsMarkedOneAtATimeNeverOverlapEvenWithFreeSlots(): void
+    {
+        $sandbox = $this->emptySandbox();
+
+        $results = new ProcessRunner()->runAtMost(3, [
+            'first' => [['sh', '-c', 'touch first.running; sleep 0.3; rm first.running'], []],
+            'second' => [['sh', '-c', 'test ! -e first.running'], []],
+        ], $sandbox->root, ['first', 'second']);
+
+        self::assertTrue($results['first']->succeeded());
+        self::assertTrue($results['second']->succeeded());
+    }
+
+    public function testACommandNotMarkedOneAtATimeRunsAlongsideAMarkedOne(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $waitsForTheOther = 'waited=0; while [ ! -e other.started ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done; test -e other.started';
+
+        $results = new ProcessRunner()->runAtMost(2, [
+            'marked' => [['sh', '-c', $waitsForTheOther], []],
+            'other' => [['sh', '-c', 'touch other.started'], []],
+        ], $sandbox->root, ['marked']);
+
+        self::assertTrue($results['marked']->succeeded());
+        self::assertTrue($results['other']->succeeded());
+    }
+
     public function testACommandThatCannotStartIsReportedWhileTheOthersRun(): void
     {
         $results = new ProcessRunner()->runAtMost(1, [

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-final readonly class RectorGate extends PhpFilesToolGate
+final readonly class RectorGate extends PhpFilesToolGate implements SpreadsOverEveryProcessor
 {
     public function name(): string
     {
