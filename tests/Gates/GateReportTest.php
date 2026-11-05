@@ -24,7 +24,7 @@ final class GateReportTest extends TestCase
     {
         $report = GateReport::fromChild('cs', new ProcessResult(0, self::PASSING."\n", 'noise'));
 
-        self::assertTrue($report->passing);
+        self::assertTrue($report->isPassing());
         self::assertSame(self::PASSING, $report->line);
     }
 
@@ -32,7 +32,7 @@ final class GateReportTest extends TestCase
     {
         $report = GateReport::fromChild('cs', new ProcessResult(1, self::FAILING."\n", ''));
 
-        self::assertFalse($report->passing);
+        self::assertFalse($report->isPassing());
         self::assertSame(self::FAILING, $report->line);
     }
 
@@ -40,7 +40,7 @@ final class GateReportTest extends TestCase
     {
         $report = GateReport::fromChild('cs', new ProcessResult(0, '', ''));
 
-        self::assertFalse($report->passing);
+        self::assertFalse($report->isPassing());
         self::assertStringContainsString('"gate":"cs","ok":false', $report->line);
     }
 
@@ -48,7 +48,7 @@ final class GateReportTest extends TestCase
     {
         $report = GateReport::fromChild('cs', new ProcessResult(124, '', 'php timed out after 3600 seconds'));
 
-        self::assertFalse($report->passing);
+        self::assertFalse($report->isPassing());
         self::assertStringContainsString('php timed out after 3600 seconds', $report->line);
     }
 
@@ -56,38 +56,38 @@ final class GateReportTest extends TestCase
     {
         $report = GateReport::fromChild('phpstan', new ProcessResult(0, self::PASSING, ''));
 
-        self::assertFalse($report->passing);
+        self::assertFalse($report->isPassing());
         self::assertStringContainsString('"gate":"phpstan","ok":false', $report->line);
     }
 
     public function testAPassingLineWithAFailingExitCodeFailsTheGate(): void
     {
-        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(255, self::PASSING, ''))->passing);
+        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(255, self::PASSING, ''))->isPassing());
     }
 
     public function testALineThatPassesDespiteFindingsFailsTheGate(): void
     {
         $line = '{"gate":"cs","ok":true,"findings":["a.php:1 bad"],"omitted":0}';
 
-        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, $line, ''))->passing);
+        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, $line, ''))->isPassing());
     }
 
     public function testALineThatPassesDespiteOmittedFindingsFailsTheGate(): void
     {
         $line = '{"gate":"cs","ok":true,"findings":[],"omitted":3}';
 
-        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, $line, ''))->passing);
+        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, $line, ''))->isPassing());
     }
 
     public function testALineWithAnUnknownFieldFailsTheGate(): void
     {
         $line = '{"gate":"cs","ok":true,"findings":[],"omitted":0,"skip":true}';
 
-        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, $line, ''))->passing);
+        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, $line, ''))->isPassing());
     }
 
     public function testTwoResultLinesFailTheGate(): void
     {
-        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, self::PASSING."\n".self::PASSING, ''))->passing);
+        self::assertFalse(GateReport::fromChild('cs', new ProcessResult(0, self::PASSING."\n".self::PASSING, ''))->isPassing());
     }
 }

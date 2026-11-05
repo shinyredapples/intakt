@@ -10,7 +10,6 @@ final readonly class GateReport
 
     private function __construct(
         public string $gate,
-        public bool $passing,
         public string $line,
     ) {
     }
@@ -22,12 +21,17 @@ final readonly class GateReport
         $passing = self::verdictOf($gate, $line);
 
         if (null !== $passing && $child->exitCode === ($passing ? 0 : 1)) {
-            return new self($gate, $passing, $line);
+            return new self($gate, $line);
         }
 
         $reason = 'gate process ended with exit code '.$child->exitCode.' and no valid result line: '.trim($child->errors."\n".$child->output);
 
-        return new self($gate, false, GateResult::failedBecause($gate, $reason)->toJson());
+        return new self($gate, GateResult::failedBecause($gate, $reason)->toJson());
+    }
+
+    public function isPassing(): bool
+    {
+        return true === self::verdictOf($this->gate, $this->line);
     }
 
     private static function verdictOf(string $gate, string $line): ?bool

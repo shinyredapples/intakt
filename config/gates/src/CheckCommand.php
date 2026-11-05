@@ -91,7 +91,7 @@ final readonly class CheckCommand
         foreach (new GateChildren($this->home)->reportsOf($names, $arguments) as $report) {
             fwrite(STDOUT, $report->line."\n");
 
-            if (!$report->passing) {
+            if (!$report->isPassing()) {
                 $failed[] = $report->gate;
             }
         }
