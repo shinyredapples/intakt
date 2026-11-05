@@ -74,6 +74,7 @@ Before it runs any gate, `bin/check` looks up the commands of the selected gates
 |---|---|
 | every gate | `git` |
 | `audit` | `composer` |
+| `journeys` | `sh`, `env`, `setsid` |
 | `tests` | `sh`, `unshare`, `setsid`, `true`, `bash`, `jq` |
 | `secrets`, `secrets-history` | `gitleaks`, `env` |
 
