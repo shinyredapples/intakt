@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StaticAnalysisGate::class)]
@@ -14,26 +15,40 @@ final class StaticAnalysisGateTest extends TestCase
     // every case asks the gate's configuration about one file, so one run answers them all, each fixture in its own folder
     private const array FIXTURES = ['loose-condition', 'deprecated-call', 'too-complex-method', 'class-too-complex'];
 
-    private static ?CheckRun $run = null;
-
-    public function testANonBooleanConditionFailsStaticAnalysis(): void
+    public function testStaticAnalysisOfEveryFixtureFailsInOneRun(): CheckRun
     {
-        $this->assertRejectedInItsFolder('loose-condition', 'if.condNotBoolean');
+        $sandbox = Sandbox::withFixturesInFolders(...self::FIXTURES);
+        $run = $sandbox->check('--only=phpstan');
+        $sandbox->remove();
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue($run->failed('phpstan'), $run->output());
+
+        return $run;
     }
 
-    public function testADeprecatedCallFailsStaticAnalysis(): void
+    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
+    public function testANonBooleanConditionFailsStaticAnalysis(CheckRun $run): void
     {
-        $this->assertRejectedInItsFolder('deprecated-call', 'function.deprecated');
+        $this->assertRejectedInItsFolder($run, 'loose-condition', 'if.condNotBoolean');
     }
 
-    public function testAMethodAboveTheCognitiveComplexityLimitFailsStaticAnalysis(): void
+    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
+    public function testADeprecatedCallFailsStaticAnalysis(CheckRun $run): void
     {
-        $this->assertRejectedInItsFolder('too-complex-method', 'complexity.functionLike');
+        $this->assertRejectedInItsFolder($run, 'deprecated-call', 'function.deprecated');
     }
 
-    public function testAClassAboveTheCognitiveComplexityLimitFailsStaticAnalysisEvenWhenEveryMethodIsSimple(): void
+    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
+    public function testAMethodAboveTheCognitiveComplexityLimitFailsStaticAnalysis(CheckRun $run): void
     {
-        $this->assertRejectedInItsFolder('class-too-complex', 'complexity.classLike');
+        $this->assertRejectedInItsFolder($run, 'too-complex-method', 'complexity.functionLike');
+    }
+
+    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
+    public function testAClassAboveTheCognitiveComplexityLimitFailsStaticAnalysisEvenWhenEveryMethodIsSimple(CheckRun $run): void
+    {
+        $this->assertRejectedInItsFolder($run, 'class-too-complex', 'complexity.classLike');
     }
 
     public function testStaticAnalysisRunsAtMaxLevelWithoutABaseline(): void
@@ -45,24 +60,8 @@ final class StaticAnalysisGateTest extends TestCase
         self::assertStringNotContainsString('ignoreErrors', $configuration);
     }
 
-    private function assertRejectedInItsFolder(string $fixture, string $expectedFinding): void
+    private function assertRejectedInItsFolder(CheckRun $run, string $fixture, string $expectedFinding): void
     {
-        $run = $this->sharedRun();
-
-        self::assertSame(1, $run->exitCode(), $run->output());
-        self::assertTrue($run->failed('phpstan'), $run->output());
         self::assertMatchesRegularExpression('~^'.preg_quote($fixture.'/src/', '~').'\S+ '.preg_quote($expectedFinding, '~').' ~m', $run->findingsOf('phpstan'));
-    }
-
-    // the first case that asks pays for the run, so the test report shows its time
-    private function sharedRun(): CheckRun
-    {
-        if (!self::$run instanceof CheckRun) {
-            $sandbox = Sandbox::withFixturesInFolders(...self::FIXTURES);
-            self::$run = $sandbox->check('--only=phpstan');
-            $sandbox->remove();
-        }
-
-        return self::$run;
     }
 }
