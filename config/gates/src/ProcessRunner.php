@@ -126,7 +126,6 @@ final class ProcessRunner
      * @template Name of array-key
      *
      * @param array<Name, array{list<string>, array<string, string|false>}> $commands
-     *
      * @param list<Name>                                                    $oneAtATime
      *
      * @return array<Name, ProcessResult>
