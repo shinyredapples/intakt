@@ -193,7 +193,7 @@ final class StopReviewerTest extends KernelTestCase
         return $this->fixture->bus->messages[0];
     }
 
-    // Each row in the format its writer records today: the dashboard writes the request, RoundLedger the stop with the reviewer's role and tier.
+    // A stop row carries role and tier, because RoundLedger writes it so and a row without them no longer reads back.
     private function record(LedgerEventKind $kind, ReviewWithReviewer $message): void
     {
         $reviewer = $this->fixture->reviewer($message->reviewerId);

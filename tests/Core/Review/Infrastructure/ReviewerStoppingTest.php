@@ -155,7 +155,7 @@ final class ReviewerStoppingTest extends TestCase
         self::assertTrue($appended->succeeded());
     }
 
-    // Each row in the format its writer records today: the dashboard writes the request, RoundLedger the stop.
+    // A stop row carries role and tier, because RoundLedger writes it so and a row without them no longer reads back.
     private function payloadOf(LedgerEventKind $kind, Uuid $reviewer): string
     {
         $pair = ['round' => $this->round->toRfc4122(), 'reviewer' => $reviewer->toRfc4122()];
