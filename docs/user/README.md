@@ -103,7 +103,7 @@ Intakt writes its warnings and errors to the service output (the journal, or `do
 
 ## Finding the slowest tests
 
-When the `tests` gate of `bin/check` runs, its line also lists the ten slowest test files under `slowest`, slowest first, each with its `file` and its `seconds` (the times of all its tests added up, over both test passes). For example:
+When the `tests` gate of `bin/check` runs, its line also lists the ten slowest test files under `slowest`, slowest first, each with its `file` and its `seconds` (the times of all its tests added up, over all test passes, including the run of the `serial` tests). For example:
 
 ```
 {"gate":"tests","ok":true,"findings":[],"omitted":0,"slowest":[{"file":"tests/Application/InstanceTest.php","seconds":45.722},...]}

@@ -1,0 +1,39 @@
+<?php
+
+declare(strict_types=1);
+
+// Because a collision shows only while both workers hold the same names at once: each claims them, then waits for the other before letting go.
+function holdTheNamesOfThisWorkerTogetherWith(string $worker, string $other): void
+{
+    $rendezvous = dirname(__DIR__).'/rendezvous';
+    @mkdir($rendezvous);
+    $database = substr((string) getenv('DATABASE_URL'), strlen('sqlite:///'));
+    $port = (int) explode('-', (string) getenv('INTAKT_TEST_PORTS'))[0];
+
+    $held = [
+        'the database file' => @fopen($database, 'x'),
+        'the temporary directory' => @fopen(sys_get_temp_dir().'/claimed', 'x'),
+        'the cache directory' => @mkdir((string) getenv('APP_CACHE_DIR'), 0o700, true),
+        'the gates cache' => @mkdir((string) getenv('INTAKT_GATES_CACHE'), 0o700, true),
+        'the first port' => @stream_socket_server('tcp://127.0.0.1:'.$port),
+    ];
+
+    foreach ($held as $name => $claim) {
+        if (false === $claim) {
+            throw new RuntimeException($worker.' could not claim '.$name.', another worker holds it');
+        }
+    }
+
+    touch($rendezvous.'/'.$worker);
+    $deadline = hrtime(true) + 60 * 1_000_000_000;
+
+    while (!is_file($rendezvous.'/'.$other)) {
+        if (hrtime(true) > $deadline) {
+            throw new RuntimeException($worker.' waited in vain for '.$other);
+        }
+
+        usleep(20_000);
+    }
+
+    touch($rendezvous.'/done-'.$worker);
+}

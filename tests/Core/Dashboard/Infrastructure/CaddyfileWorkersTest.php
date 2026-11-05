@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Closure;
 use Generator;
+use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -59,9 +60,10 @@ final class CaddyfileWorkersTest extends TestCase
         }
 
         $this->frankenphp = $frankenphp;
-        $port = $this->freePort();
+        $ports = WorkerPorts::ofThisWorker();
+        $port = $ports->next();
         $this->origin = 'http://localhost:'.$port;
-        $this->admin = 'localhost:'.$this->freePort();
+        $this->admin = 'localhost:'.$ports->next();
         $this->directory = sys_get_temp_dir().'/intakt-workers-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->directory);
         $environment = [
@@ -311,16 +313,6 @@ final class CaddyfileWorkersTest extends TestCase
         self::assertIsArray($threads);
 
         return array_values(array_filter($threads, is_array(...)));
-    }
-
-    private function freePort(): int
-    {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
-        self::assertNotFalse($socket);
-        $port = (int) parse_url('tcp://'.stream_socket_get_name($socket, false), PHP_URL_PORT);
-        fclose($socket);
-
-        return $port;
     }
 
     private function waitForTheWorkers(): void
