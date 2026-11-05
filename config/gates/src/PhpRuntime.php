@@ -30,7 +30,7 @@ final readonly class PhpRuntime
 
     private static function iniSetting(string $name): ?string
     {
-        // Without an ini file that sets it, ini_get() returns '' while PHP applies E_ALL.
+        // Read the applied level because ini_get() returns '' when no ini file sets it, as in the CI image.
         if ('error_reporting' === $name) {
             return (string) error_reporting();
         }
