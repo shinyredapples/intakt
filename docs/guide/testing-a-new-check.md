@@ -6,7 +6,7 @@ Intakt's own checks (`bin/check`) include rules of its own for the static analys
 
 A rule is tested with small sample projects, called **fixtures**: a few files that break the rule, or that look close to breaking it but are fine. Each test copies one fixture into a scratch folder and asks what the rule says about it.
 
-- **The full run.** Starting the whole check on a fixture takes a few seconds, because the analysis starts from scratch each time. So each rule has exactly two such tests: one fixture the check must reject and one it must accept. They prove that the rule is really switched on in the check, with its real settings.
+- **The full run.** Starting the whole check on a fixture takes a few seconds, because the analysis starts from scratch each time. So each rule has two such tests: one fixture the check must reject and one it must accept (a rule that only rejects has just the first). They prove that the rule is really switched on in the check, with its real settings.
 - **The quick run.** All the other cases ask the rule alone, inside the test itself, without starting the check. That takes a fraction of a second, so a rule can have many cases (every trick someone might try) without making the tests slow.
 
 ```mermaid
