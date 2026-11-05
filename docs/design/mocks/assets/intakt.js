@@ -206,7 +206,12 @@
     });
     document.querySelectorAll(".col").forEach((c) => {
       const n = [...c.querySelectorAll(".card")].filter((x) => !x.hasAttribute("data-filtered")).length;
-      const cnt = c.querySelector(".col-head .count"); if (cnt) cnt.textContent = n;
+      // every place that shows this column's total follows the filter: the heading, the folded column and the phone switcher
+      const name = c.getAttribute("aria-label"), key = (c.id || "").replace(/^col-/, "");
+      const counts = [c.querySelector(".col-head .count"), c.querySelector(".col-fold .count"),
+        key ? document.querySelector(`#colswitch [data-col="${key}"] .count`) : null];
+      counts.forEach((cnt) => { if (!cnt) return; cnt.textContent = n; if (c.classList.contains("col-needs")) cnt.classList.toggle("needs", n > 0); });
+      const fold = c.querySelector(".col-fold"); if (fold && name) fold.setAttribute("aria-label", `Show ${name}, ${n} tasks`);
       paginate(c);
     });
   }
