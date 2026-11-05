@@ -19,25 +19,25 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(GateResult::class)]
 final class TestsGateWorkersTest extends SandboxTestCase
 {
-    private const string FAILING_SERIAL_TEST = <<<'PHP'
-        <?php
-
-        declare(strict_types=1);
-
-        use PHPUnit\Framework\Attributes\CoversNothing;
-        use PHPUnit\Framework\Attributes\Group;
-        use PHPUnit\Framework\TestCase;
-
-        #[CoversNothing]
-        #[Group('serial')]
-        final class SerialTest extends TestCase
+    private const string FAILING_SERIAL_TEST = <<<'PHP_WRAP'
+    <?php
+    
+    declare(strict_types=1);
+    
+    use PHPUnit\Framework\Attributes\CoversNothing;
+    use PHPUnit\Framework\Attributes\Group;
+    use PHPUnit\Framework\TestCase;
+    
+    #[CoversNothing]
+    #[Group('serial')]
+    final class SerialTest extends TestCase
+    {
+        public function testFailsAlone(): void
         {
-            public function testFailsAlone(): void
-            {
-                self::fail('the serial test failed');
-            }
+            self::fail('the serial test failed');
         }
-        PHP;
+    }
+    PHP_WRAP;
 
     public function testTwoWorkersHoldingTheSameNamesAtTheSameMomentDoNotCollide(): void
     {
