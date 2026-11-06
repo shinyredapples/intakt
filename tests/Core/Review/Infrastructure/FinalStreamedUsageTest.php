@@ -19,7 +19,11 @@ final class FinalStreamedUsageTest extends TestCase
 {
     public function testAStreamWithSeveralUsageEventsCarriesOnlyItsLastOne(): void
     {
-        $final = new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120);
+        $final = new TokenUsage(
+            promptTokens: 100,
+            completionTokens: 20,
+            totalTokens: 120,
+        );
         $stream = $this->streamOf(new TokenUsage(promptTokens: 100), new TextDelta('{}'), $final);
 
         iterator_to_array($stream->getContent());

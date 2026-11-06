@@ -280,7 +280,12 @@ final class ReviewServerContractTest extends KernelTestCase
 
         $body = json_encode(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'initialize', 'params' => ['protocolVersion' => '2025-11-25', 'capabilities' => [], 'clientInfo' => ['name' => 'claude-code', 'version' => '1.0.0']]], JSON_THROW_ON_ERROR);
 
-        return $this->app->handle(Request::create('http://localhost/mcp/review', 'POST', server: $server, content: $body))->getStatusCode();
+        return $this->app->handle(Request::create(
+            'http://localhost/mcp/review',
+            'POST',
+            server: $server,
+            content: $body,
+        ))->getStatusCode();
     }
 
     /**
