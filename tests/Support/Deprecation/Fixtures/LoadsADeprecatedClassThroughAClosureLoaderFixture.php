@@ -26,18 +26,23 @@ final class LoadsADeprecatedClassThroughAClosureLoaderFixture extends TestCase
         file_put_contents($loaderFile, '<?php return static function (string $class): void { if ('.var_export($name, true).' === $class) { require '.var_export($file, true).'; } };');
 
         try {
-            $loader = require $loaderFile;
-            self::assertInstanceOf(Closure::class, $loader);
-            spl_autoload_register($loader, true, true);
-
-            try {
-                self::assertTrue(interface_exists($name));
-            } finally {
-                spl_autoload_unregister($loader);
-            }
+            $this->loadThrough($loaderFile, $name);
         } finally {
             unlink($loaderFile);
             rmdir($directory);
+        }
+    }
+
+    private function loadThrough(string $loaderFile, string $name): void
+    {
+        $loader = require $loaderFile;
+        self::assertInstanceOf(Closure::class, $loader);
+        spl_autoload_register($loader, true, true);
+
+        try {
+            self::assertTrue(interface_exists($name));
+        } finally {
+            spl_autoload_unregister($loader);
         }
     }
 }

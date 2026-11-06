@@ -58,8 +58,8 @@ final class LoadTimeDeprecationResolver implements Resolver
             $autoloader instanceof Closure => new ReflectionFunction($autoloader),
             is_array($autoloader) => new ReflectionMethod($autoloader[0], $autoloader[1]),
             is_object($autoloader) => new ReflectionMethod($autoloader, '__invoke'),
-            str_contains($autoloader, '::') => ReflectionMethod::createFromMethodName($autoloader),
-            default => new ReflectionFunction($autoloader),
+            is_string($autoloader) && str_contains($autoloader, '::') => ReflectionMethod::createFromMethodName($autoloader),
+            is_string($autoloader) => new ReflectionFunction($autoloader),
         };
 
         return $reflection instanceof ReflectionMethod
