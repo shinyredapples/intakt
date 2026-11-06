@@ -271,7 +271,7 @@ final class InstanceTest extends TestCase
         mkdir($caller.'/tools', recursive: true);
         symlink($frankenphp, $caller.'/tools/frankenphp');
 
-        $run = $this->runInstance(self::ROOT, environment: ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()], directory: $caller);
+        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()]);
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame(0, $run['exit']);
@@ -411,11 +411,31 @@ final class InstanceTest extends TestCase
      *
      * @return array{status: string, exit: int, output: string, errors: string}
      */
-    private function runInstance(string $project, array $command = [], array $environment = [], ?string $directory = null): array
+    private function runInstance(string $project, array $command = [], array $environment = []): array
     {
         $statusFile = $this->scratch.'/status';
         $arguments = [] === $command ? [] : ['--', ...$command];
         $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($statusFile);
+        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
+        $process->run();
+
+        return [
+            'status' => trim((string) file_get_contents($statusFile)),
+            'exit' => (int) $process->getExitCode(),
+            'output' => $process->getOutput(),
+            'errors' => $process->getErrorOutput(),
+        ];
+    }
+
+    /**
+     * @param array<string, string|false> $environment
+     *
+     * @return array{status: string, exit: int, output: string, errors: string}
+     */
+    private function runInstanceFrom(string $directory, array $environment): array
+    {
+        $statusFile = $this->scratch.'/status';
+        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
         $process = Process::fromShellCommandline($shell, $directory, [...$this->environment(), ...$environment]);
         $process->run();
 
