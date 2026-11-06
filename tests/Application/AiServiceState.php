@@ -72,7 +72,7 @@ final class AiServiceState
             }
         }
 
-        return self::sorted($changed);
+        return $this->sorted($changed);
     }
 
     // Every property a request could write: not static, not readonly, on an object that has no reset() for the kernel to call.
@@ -82,7 +82,7 @@ final class AiServiceState
     #[NoDiscard]
     public function mutableWithoutReset(): array
     {
-        return self::sorted(array_keys($this->mutable));
+        return $this->sorted(array_keys($this->mutable));
     }
 
     /**
@@ -185,7 +185,7 @@ final class AiServiceState
      *
      * @return list<string>
      */
-    private static function sorted(array $names): array
+    private function sorted(array $names): array
     {
         $names = array_values(array_unique($names));
         sort($names);
