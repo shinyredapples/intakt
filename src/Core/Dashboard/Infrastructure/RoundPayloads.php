@@ -29,7 +29,7 @@ final readonly class RoundPayloads
 {
     private const array UNNAMED_START = ['change' => '', 'task' => ''];
 
-    // The number only lets a start written before rounds were numbered deserialize; startOf() gives such a round none.
+    // Read only after the numbered read failed, because the number lets a start written before rounds were numbered deserialize and startOf() then gives it none.
     private const array UNNUMBERED_START = [...self::UNNAMED_START, 'number' => 0];
 
     private const array UNMARKED_VERDICT = ['mode' => ProjectMode::Live];
@@ -52,7 +52,7 @@ final readonly class RoundPayloads
         return $unnumbered instanceof ReviewStarted ? $this->reviewedRound($unnumbered, null, $recorded) : null;
     }
 
-    // Any readable judge row; one written before the finding text was recorded reads with no findings.
+    // Reads a row without findings with none, because rounds judged before the finding text was recorded still count as judged.
     public function judgeOf(RecordedEvent $recorded): ?JudgeDone
     {
         return $this->payloads->of($recorded, JudgeDone::class, self::UNRECORDED_FINDINGS);
