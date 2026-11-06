@@ -29,16 +29,8 @@ final class KernelTest extends KernelTestCase
     public function testTheApplicationPassesAuthorizeToolCallsBeforeOptimization(): void
     {
         $container = new ContainerBuilder();
-        $earlier = new class implements CompilerPassInterface {
-            public function process(ContainerBuilder $container): void
-            {
-            }
-        };
-        $later = new class implements CompilerPassInterface {
-            public function process(ContainerBuilder $container): void
-            {
-            }
-        };
+        $earlier = self::createStub(CompilerPassInterface::class);
+        $later = self::createStub(CompilerPassInterface::class);
         $container->addCompilerPass($earlier, PassConfig::TYPE_BEFORE_OPTIMIZATION, -9);
         $container->addCompilerPass($later, PassConfig::TYPE_BEFORE_OPTIMIZATION, -11);
 
