@@ -10,6 +10,7 @@ use DOMXPath;
 use JsonException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
 
 final readonly class TestDurations
 {
@@ -167,8 +168,13 @@ final readonly class TestDurations
 
     private function relative(string $file): ?string
     {
-        $prefix = rtrim($this->root, '/').'/';
+        // Because a report path may climb out of the root with dot segments, containment is checked on the canonical form.
+        if (!Path::isAbsolute($file) || !Path::isBasePath($this->root, $file)) {
+            return null;
+        }
 
-        return str_starts_with($file, $prefix) ? substr($file, strlen($prefix)) : null;
+        $relative = Path::makeRelative($file, $this->root);
+
+        return '' === $relative ? null : $relative;
     }
 }

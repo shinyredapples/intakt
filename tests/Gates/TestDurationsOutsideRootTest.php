@@ -51,6 +51,24 @@ final class TestDurationsOutsideRootTest extends TestCase
         self::assertSame(['tests/InsideTest.php'], array_keys($durations));
     }
 
+    public function testAPathThatClimbsOutOfTheRootWithDotSegmentsIsLeftOutOfTheRecordedDurationsAndTheSlowestLine(): void
+    {
+        $durations = new TestDurations('/work');
+
+        $seconds = $durations->read([$this->reportNaming('/work/../elsewhere/tests/OutsideTest.php')]);
+        $durations->write($seconds, $this->directory);
+
+        self::assertSame(['tests/InsideTest.php' => 0.5], json_decode((string) file_get_contents($this->directory.'/tests/durations.json'), true));
+        self::assertSame(['tests/InsideTest.php'], array_keys($durations->slowest($seconds)));
+    }
+
+    public function testAPathWithDotSegmentsThatStaysInsideTheRootKeepsItsNormalizedRelativePath(): void
+    {
+        $durations = new TestDurations('/work')->read([$this->reportNaming('/work/tests/./Gates/../Gates/GateTest.php')]);
+
+        self::assertSame(['tests/Gates/GateTest.php', 'tests/InsideTest.php'], array_keys($durations));
+    }
+
     public function testATestFileInsideTheRootKeepsItsPathRelativeToTheRoot(): void
     {
         $durations = new TestDurations('/work/')->read([$this->reportNaming('/work/tests/Gates/GateTest.php')]);
