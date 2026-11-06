@@ -171,9 +171,7 @@ final class ShadowRoundTest extends KernelTestCase
 
     private function modes(): ProjectModes
     {
-        $modes = self::getContainer()->get(ProjectModes::class);
-
-        return $modes;
+        return self::getContainer()->get(ProjectModes::class);
     }
 
     // Posts the decision the way a round will once it posts its outcome, so the only write a round leads to goes through the container's forge writes.
@@ -232,8 +230,6 @@ final class ShadowRoundTest extends KernelTestCase
 
     private function forge(): WriteRefusingForge
     {
-        $forge = self::getContainer()->get(WriteRefusingForge::class);
-
-        return $forge;
+        return self::getContainer()->get(WriteRefusingForge::class);
     }
 }

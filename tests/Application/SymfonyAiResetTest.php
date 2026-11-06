@@ -333,9 +333,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private function runsOf(KernelInterface $kernel): ReviewerRuns
     {
-        $runs = $this->container($kernel)->get(ReviewerRuns::class);
-
-        return $runs;
+        return $this->container($kernel)->get(ReviewerRuns::class);
     }
 
     private function reviewRound(KernelInterface $kernel, ReviewRound $round, string $model): void
@@ -414,9 +412,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private function toolboxesOf(KernelInterface $kernel): ReviewerMcpToolboxFactory
     {
-        $factory = $this->container($kernel)->get(ReviewerMcpToolboxFactory::class);
-
-        return $factory;
+        return $this->container($kernel)->get(ReviewerMcpToolboxFactory::class);
     }
 
     // A kernel of its own, because the web server runs in a process of its own.

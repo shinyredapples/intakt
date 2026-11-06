@@ -226,9 +226,7 @@ final class ReadRoundToolsTest extends KernelTestCase
 
     private function serializer(): SerializerInterface
     {
-        $serializer = self::getContainer()->get(SerializerInterface::class);
-
-        return $serializer;
+        return self::getContainer()->get(SerializerInterface::class);
     }
 
     private function finding(string $id, Severity $severity): Finding

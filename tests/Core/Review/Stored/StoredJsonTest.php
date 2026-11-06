@@ -99,8 +99,6 @@ final class StoredJsonTest extends KernelTestCase
 
     private function serializer(): SerializerInterface
     {
-        $serializer = self::getContainer()->get('serializer.stored');
-
-        return $serializer;
+        return self::getContainer()->get('serializer.stored');
     }
 }
