@@ -56,9 +56,10 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
             return;
         }
 
-        $this->record($item, $this->errorKey($failure));
+        $errorKey = $this->errorKey($failure);
+        $this->record($item, $errorKey);
 
-        if ($this->anotherItemFailedTheSame($item, $this->errorKey($failure))) {
+        if ($this->anotherItemFailedTheSame($item, $errorKey)) {
             $this->backOff('two items failed with the same error within an hour', $failure);
         }
     }

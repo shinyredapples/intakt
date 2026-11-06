@@ -142,6 +142,17 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         self::assertSame([], $this->holds->sharedInEffect());
     }
 
+    public function testAnItemFailureRecordedAfterTheEntityManagerClosedStillCountsTowardsTheFailureBackOff(): void
+    {
+        $this->failures->itemFailed('round-1', new RuntimeException('record not found'));
+        $this->entities->close();
+
+        $this->failures->itemFailed('round-2', new RuntimeException('record not found'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertLoggedError('error', 'The install-wide failure back-off started because two items failed with the same error within an hour.');
+    }
+
     public function testTheSameErrorOnTwoDifferentItemsWithinAnHourStartsTheFailureBackOff(): void
     {
         $this->failures->itemFailed('round-1', new RuntimeException('record not found'));
