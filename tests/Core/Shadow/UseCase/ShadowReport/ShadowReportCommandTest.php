@@ -23,14 +23,19 @@ use Intakt\Core\Shadow\Domain\ReviewComparison;
 use Intakt\Core\Shadow\Infrastructure\RecordedHead;
 use Intakt\Core\Shadow\UseCase\ShadowReport\ReportFormat;
 use Intakt\Core\Shadow\UseCase\ShadowReport\ShadowReportCommand;
+use Intakt\Tests\Support\ConsoleDisplay;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(ShadowReportCommand::class)]
+#[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(ReportFormat::class)]
 #[UsesClass(RecordedHead::class)]
 #[UsesClass(LoopReviewReader::class)]
@@ -128,7 +133,39 @@ final class ShadowReportCommandTest extends TestCase
         }
 
         self::assertSame(Command::INVALID, $status);
-        self::assertStringContainsString('broken.json', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows($folder.'/broken.json'));
+    }
+
+    public function testAnUnreadableHeadIsNamedInFullThoughTheErrorWrapsInsideTheFileName(): void
+    {
+        $columns = getenv('COLUMNS');
+        putenv('COLUMNS=80');
+
+        try {
+            $folder = $this->folderWhoseErrorWrapsInsideTheFileName();
+            $tester = $this->reportOnABrokenHeadIn($folder);
+        } finally {
+            putenv(false === $columns ? 'COLUMNS' : 'COLUMNS='.$columns);
+        }
+
+        self::assertStringNotContainsString('broken.json', $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows($folder.'/broken.json'));
+    }
+
+    private function reportOnABrokenHeadIn(string $folder): CommandTester
+    {
+        mkdir($folder);
+        file_put_contents($folder.'/broken.json', '{"identity": 1}');
+        $tester = $this->tester();
+
+        try {
+            $tester->execute(['folder' => $folder]);
+        } finally {
+            unlink($folder.'/broken.json');
+            rmdir($folder);
+        }
+
+        return $tester;
     }
 
     public function testAFolderWithPatternCharactersInItsNameStillFindsItsHeads(): void
@@ -215,6 +252,22 @@ final class ShadowReportCommandTest extends TestCase
         $status = $tester->execute(['folder' => self::RECORDED.'/missing']);
 
         self::assertSame(Command::INVALID, $status);
+    }
+
+    // Because where the break falls depends on the length of the temp folder's path, the depth is chosen by wrapping the command's error at the same width.
+    private function folderWhoseErrorWrapsInsideTheFileName(): string
+    {
+        $parent = sys_get_temp_dir().'/shadow-report-'.bin2hex(random_bytes(4)).'-';
+        for ($depth = 0; $depth < SymfonyStyle::MAX_LINE_LENGTH; ++$depth) {
+            $folder = $parent.str_repeat('d', $depth);
+            $output = new BufferedOutput();
+            new SymfonyStyle(new ArrayInput([]), $output)->error(sprintf('Cannot read a recorded head from %s.', $folder.'/broken.json'));
+            if (!str_contains($output->fetch(), 'broken.json')) {
+                return $folder;
+            }
+        }
+
+        self::fail('No folder depth wraps the error inside the file name.');
     }
 
     private function tester(): CommandTester
