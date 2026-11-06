@@ -32,7 +32,7 @@ The checks of the analysis itself (how strict it is, which extra rule sets it us
 
 This part is planned (plan task T83); the [design](../design/04-constraints.md#ratchet-lists-for-a-new-rule-decided-2026-11-06) has the details.
 
-A new rule often finds places in the existing code that break it. When fixing them all takes more than one build, the rule does not wait for the cleanup: it is switched on at once, and today's violations go into a **ratchet list**, one file per rule, kept in the repository. A ratchet only turns one way, and so does the list: it can only get shorter.
+A new rule often finds places in the existing code that break it. When fixing them all takes more than one build, the rule does not wait for the cleanup: it is switched on at once, and today's violations go into a **ratchet list**, one file per rule, kept in the repository. The list is added once, in the same change that switches the rule on, and never later. A ratchet only turns one way, and so does the list: it can only get shorter.
 
 - The check fails on any violation that is not on the list, so new code cannot add one.
 - A change may delete entries or lower an entry's count. Adding an entry, raising a count or widening what an entry matches fails the check. A change that only shortens the list does not need the owner.
