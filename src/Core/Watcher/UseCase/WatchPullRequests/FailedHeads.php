@@ -10,6 +10,7 @@ use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Plugin\Forge\Contract\OpenChange;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Throwable;
 
@@ -30,6 +31,7 @@ final readonly class FailedHeads
         private Redactor $redactor,
         private Connection $connection,
         private InstallWideFailures $installWide,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -39,8 +41,18 @@ final readonly class FailedHeads
         $headFailure = new HeadFailure($project, $head, $this->causeOf($failure));
         $retryAt = $this->retryAt($failures);
 
-        $this->installWide->itemFailed($this->itemOf($project, $head), $failure);
+        $this->reportToTheInstall($this->itemOf($project, $head), $failure);
         $this->recordOnce($headFailure, $failures, $retryAt);
+    }
+
+    // Contained, because the head's own back-off and the next heads must not depend on Budget's write, which fails too when the head's failed flush closed the entity manager.
+    private function reportToTheInstall(string $item, Throwable $failure): void
+    {
+        try {
+            $this->installWide->itemFailed($item, $failure);
+        } catch (Throwable $notRecorded) {
+            $this->logger->error('The install-wide failure record failed; the head still backs off alone.', ['exception' => $notRecorded]);
+        }
     }
 
     // Encoded as a list, because a project name may hold any character and a joined key could name two heads alike; the change alone, because a new commit of the same pull request is the same item.

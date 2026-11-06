@@ -12,6 +12,7 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Domain\ItemFailureRecord;
 use Intakt\Core\Budget\Domain\SharedHoldRecord;
@@ -411,6 +412,22 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame(['change' => '6', 'cause' => 'LogicException: Not a recording: ', 'failures' => 1, 'retry_at' => '2026-11-02T10:01:00+00:00'], array_intersect_key($this->ledger->payloads()[0], array_flip(['change', 'cause', 'failures', 'retry_at'])));
         self::assertSame('7', $this->ledger->payloads()[1]['change']);
+    }
+
+    public function testAHeadWhoseInstallWideRecordFailsStillBacksOffAloneAndTheNextHeadStartsItsRound(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('itemFailed')->willThrowException(new RuntimeException('budget_item_failure is locked'));
+        $this->handler = $this->handler($installWide);
+
+        $this->tick();
+
+        self::assertSame(1, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z')));
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame('7', $this->ledger->payloads()[1]['change']);
+        $notRecorded = array_values(array_filter($this->logger->logged, static fn (array $line): bool => 'The install-wide failure record failed; the head still backs off alone.' === $line[0]));
+        self::assertSame('budget_item_failure is locked', array_first($notRecorded)[1]['exception']->getMessage());
     }
 
     public function testAHeadThatFailsIsLoggedAsAnErrorWithItsException(): void
@@ -836,7 +853,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         return (bool) $this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round WHERE head = ?', [str_repeat($head, 40)]);
     }
 
-    private function handler(): WatchPullRequestsHandler
+    private function handler(?InstallWideFailures $installWide = null): WatchPullRequestsHandler
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
@@ -848,8 +865,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
-        $installWide = new DoctrineInstallWideFailures($this->entities, new DoctrineHolds($this->entities, $this->clock), $this->clock, $redactor, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide), $doctrine, $logger);
+        $installWide ??= new DoctrineInstallWideFailures($this->entities, new DoctrineHolds($this->entities, $this->clock), $this->clock, $redactor, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger), $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);

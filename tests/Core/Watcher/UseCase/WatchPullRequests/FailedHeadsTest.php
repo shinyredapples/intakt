@@ -255,6 +255,6 @@ final class FailedHeadsTest extends KernelTestCase
         self::assertInstanceOf(Redactor::class, $redactor);
         $installWide = new DoctrineInstallWideFailures($this->entities, $this->holds, $this->clock, $redactor, new NullLogger());
 
-        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection(), $installWide);
+        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection(), $installWide, new NullLogger());
     }
 }
