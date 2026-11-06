@@ -144,13 +144,26 @@ final class ProcessRunner
         $process = new Process($command, $directory, getenv(), null, $seconds);
         $failure = $this->failuresOf([$process])[0] ?? null;
 
-        if (self::TIMED_OUT !== $failure) {
-            return $this->resultOf($process, $failure, $command[0]);
+        if (self::TIMED_OUT === $failure) {
+            $timedOut = $this->timedOut($command[0], $seconds);
+
+            return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
         }
 
-        $timedOut = $this->timedOut($command[0], $seconds);
+        if (null !== $failure && $process->isStarted() && $process->hasBeenSignaled()) {
+            return $this->signaled($process, $command[0]);
+        }
 
-        return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
+        return $this->resultOf($process, $failure, $command[0]);
+    }
+
+    // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.
+    private function signaled(Process $process, string $program): ProcessResult
+    {
+        $signal = $process->getTermSignal();
+        $ended = $program.' was killed by signal '.$signal;
+
+        return new ProcessResult($process->getExitCode() ?? 128 + $signal, $process->getOutput(), trim($process->getErrorOutput()."\n".$ended));
     }
 
     private function runCall(GitCall $call): ProcessResult
