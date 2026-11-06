@@ -21,15 +21,9 @@ final readonly class PhpStanIncludes
      */
     public function ratchetListsIn(string $configuration): ?array
     {
-        $lines = $this->includeLines($configuration);
-
-        if (null === $lines) {
-            return null;
-        }
-
         $paths = [];
 
-        foreach ($lines as $line) {
+        foreach ($this->includeLines($configuration) as $line) {
             $path = 1 === preg_match(self::INCLUDE_LINE, $line, $match) ? $this->repositoryPath($match['path']) : null;
 
             if (null === $path) {
@@ -43,30 +37,32 @@ final readonly class PhpStanIncludes
     }
 
     /**
-     * @return list<string>|null
+     * @return list<string>
      */
-    private function includeLines(string $configuration): ?array
+    private function includeLines(string $configuration): array
     {
         $lines = [];
         $inIncludes = false;
 
         foreach ($this->meaningfulLines($configuration) as $line) {
-            if (ltrim($line) === $line) {
-                $inIncludes = 1 === preg_match(self::INCLUDES_KEY, $line);
+            $topLevel = ltrim($line) === $line;
 
-                if ($inIncludes && 'includes:' !== rtrim($line)) {
-                    return null;
-                }
-
-                continue;
+            if ($topLevel) {
+                $inIncludes = 'includes:' === rtrim($line);
             }
 
-            if ($inIncludes) {
+            if ($this->belongsToIncludes($line, $topLevel, $inIncludes)) {
                 $lines[] = $line;
             }
         }
 
         return $lines;
+    }
+
+    // Because an includes key with anything after its colon is a form the gate cannot read, it is kept as an include line, which matches no "- path".
+    private function belongsToIncludes(string $line, bool $topLevel, bool $inIncludes): bool
+    {
+        return $topLevel ? !$inIncludes && 1 === preg_match(self::INCLUDES_KEY, $line) : $inIncludes;
     }
 
     /**
