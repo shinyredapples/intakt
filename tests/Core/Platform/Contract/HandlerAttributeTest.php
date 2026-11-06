@@ -17,7 +17,11 @@ final class HandlerAttributeTest extends TestCase
 {
     public function testTheCommandAttributeTargetsTheCommandBusAndPassesItsArgumentsThrough(): void
     {
-        $attribute = new AsCommandHandler(handles: 'Message', method: 'run', priority: 5);
+        $attribute = new AsCommandHandler(
+            handles: 'Message',
+            method: 'run',
+            priority: 5,
+        );
 
         self::assertSame(Bus::Command->value, $attribute->bus);
         self::assertSame('Message', $attribute->handles);
@@ -27,7 +31,11 @@ final class HandlerAttributeTest extends TestCase
 
     public function testTheQueryAttributeTargetsTheQueryBusAndPassesItsArgumentsThrough(): void
     {
-        $attribute = new AsQueryHandler(handles: 'Message', method: 'run', priority: 5);
+        $attribute = new AsQueryHandler(
+            handles: 'Message',
+            method: 'run',
+            priority: 5,
+        );
 
         self::assertSame(Bus::Query->value, $attribute->bus);
         self::assertSame('Message', $attribute->handles);

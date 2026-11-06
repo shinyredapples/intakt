@@ -120,7 +120,10 @@ final class TierPlatformTest extends TestCase
     {
         $logger = new BufferingLogger();
 
-        $answering = $this->tierPlatform(logger: $logger, disabled: ['anthropic' => 'Provider is disabled: no enabled accounts.'])->answering('gamma', Tier::Strong);
+        $answering = $this->tierPlatform(
+            logger: $logger,
+            disabled: ['anthropic' => 'Provider is disabled: no enabled accounts.'],
+        )->answering('gamma', Tier::Strong);
 
         self::assertEquals(new ResolvedModel(Provider::OpenAi, 'sub-openai'), $answering);
         self::assertSame([['info', 'Provider {own} is out, so the review goes to the substitute {substitute}.', ['own' => 'anthropic', 'substitute' => 'openai']]], $logger->cleanLogs());

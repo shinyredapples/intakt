@@ -37,7 +37,12 @@ final readonly class KernelHttpClient implements ClientInterface
 
         $server['CONTENT_TYPE'] = $request->getHeaderLine('Content-Type');
 
-        return Request::create((string) $request->getUri(), $request->getMethod(), server: $server, content: (string) $request->getBody());
+        return Request::create(
+            (string) $request->getUri(),
+            $request->getMethod(),
+            server: $server,
+            content: (string) $request->getBody(),
+        );
     }
 
     private function bodyOf(HttpResponse $response): string

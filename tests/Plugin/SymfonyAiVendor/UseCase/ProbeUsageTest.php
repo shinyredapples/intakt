@@ -16,7 +16,14 @@ final class ProbeUsageTest extends TestCase
 {
     public function testTheUsageIsNormalizedToTheFiguresInTheOrderTheLinePrintsThem(): void
     {
-        $usage = ProbeUsage::of(new TokenUsage(promptTokens: 12, completionTokens: 3, cachedTokens: 4, remainingTokens: 900, totalTokens: 15, model: 'big'));
+        $usage = ProbeUsage::of(new TokenUsage(
+            promptTokens: 12,
+            completionTokens: 3,
+            cachedTokens: 4,
+            remainingTokens: 900,
+            totalTokens: 15,
+            model: 'big',
+        ));
 
         $figures = new Serializer([new ObjectNormalizer()])->normalize($usage);
 
