@@ -37,7 +37,7 @@ final class AiServiceState
     }
 
     /**
-     * @return list<string> "Class::$property" of each property whose value differs from this snapshot
+     * @return list<string>
      */
     #[NoDiscard]
     public function changedSince(self $before): array

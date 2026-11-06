@@ -10,7 +10,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 final class ProviderAnswers
 {
     /**
-     * @var list<array<string, mixed>>
+     * @var list<array<mixed>>
      */
     public array $requests = [];
 
@@ -20,7 +20,7 @@ final class ProviderAnswers
     public function __invoke(string $method, string $url, array $options): MockResponse
     {
         $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
-        assert(is_array($request));
+        assert(is_array($request) && is_string($request['model'] ?? null));
         $this->requests[] = $request;
         $answer = ['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'Answer of '.$request['model']], 'finish_reason' => 'stop']]];
 

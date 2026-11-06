@@ -24,6 +24,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
+use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\Toolbox;
@@ -44,7 +45,7 @@ final class SymfonyAiResetTest extends TestCase
 {
     private const array FRESH_ROUND = ['server/discover', 'tools/list'];
 
-    // What a request leaves in the Symfony AI and MCP SDK objects after the kernel's reset, each judged here; a new entry fails the test until it is.
+    // Listed one by one, because state a request leaves after the kernel's reset is a leak until someone judges it harmless or reproduces it upstream.
     private const array LEFT_BEHIND = [
         // Harmless: the client counts on across connections, and a JSON-RPC id only has to be unique, so a number is all a later request sees.
         'Mcp\\Client\\State\\ClientState::$requestIdCounter',
@@ -67,9 +68,9 @@ final class SymfonyAiResetTest extends TestCase
         $kernel = $this->bootedKernel(new AiPlatformKernel('test', true));
         $this->emptyDatabase($kernel);
 
-        $this->review($kernel, $this->toolNamed('first_tool'), 'model-a?temperature=0.2', 'Review the first change.');
+        $this->review($kernel, $this->reviewer($kernel, $this->toolNamed('first_tool'), 'model-a?temperature=0.2'), 'Review the first change.');
         $this->nextRequest($kernel);
-        $this->review($kernel, $this->toolNamed('second_tool'), 'model-b', 'Review the second change.');
+        $this->review($kernel, $this->reviewer($kernel, $this->toolNamed('second_tool'), 'model-b'), 'Review the second change.');
         [$first, $second] = $this->providerRequests($kernel);
 
         self::assertSame(['model' => 'model-a', 'temperature' => 0.2, 'tools' => ['first_tool'], 'messages' => ['Review the first change.']], $this->seenBy($first));
@@ -135,24 +136,36 @@ final class SymfonyAiResetTest extends TestCase
         self::assertSame(self::LEFT_BEHIND, AiServiceState::of($kernel)->changedSince($before));
     }
 
-    private function review(KernelInterface $kernel, ToolboxInterface $tools, string $model, string $task): void
+    private function review(KernelInterface $kernel, Agent $reviewer, string $task): void
+    {
+        $conversation = $this->runsOf($kernel)->started(MessageBag::forId(new UuidV7(), Message::ofUser($task)));
+        $reviewer->call($conversation)->asText();
+    }
+
+    private function reviewer(KernelInterface $kernel, ToolboxInterface $tools, string $model): Agent
+    {
+        $platform = $this->container($kernel)->get(AiPlatformKernel::PLATFORM);
+        assert($platform instanceof PlatformInterface && '' !== $model);
+
+        return $this->runsOf($kernel)->agent($tools, $platform, $model);
+    }
+
+    private function runsOf(KernelInterface $kernel): ReviewerRuns
     {
         $runs = $this->container($kernel)->get(ReviewerRuns::class);
-        $platform = $this->container($kernel)->get(AiPlatformKernel::PLATFORM);
-        assert($runs instanceof ReviewerRuns && $platform instanceof PlatformInterface && '' !== $model);
+        assert($runs instanceof ReviewerRuns);
 
-        $conversation = $runs->started(MessageBag::forId(new UuidV7(), Message::ofUser($task)));
-        $runs->agent($tools, $platform, $model)->call($conversation)->asText();
+        return $runs;
     }
 
     private function reviewRound(KernelInterface $kernel, ReviewRound $round, string $model): void
     {
         $tools = $this->toolboxesOf($kernel)->create($this->requestFor($round));
-        $this->review($kernel, $tools, $model, 'Review round '.$round->id()->toRfc4122().'.');
+        $this->review($kernel, $this->reviewer($kernel, $tools, $model), 'Review round '.$round->id()->toRfc4122().'.');
     }
 
     /**
-     * @return list<string> the JSON-RPC methods the round sent to the review server while it listed its tools
+     * @return list<string>
      */
     #[NoDiscard]
     private function callsOfRound(KernelInterface $kernel, ReviewRound $round, RecordingHttpClient $server): array
@@ -185,7 +198,7 @@ final class SymfonyAiResetTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $request
+     * @param array<mixed> $request
      *
      * @return array{model: mixed, temperature: mixed, tools: list<mixed>, messages: list<mixed>}
      */
@@ -197,13 +210,13 @@ final class SymfonyAiResetTest extends TestCase
         return [
             'model' => $request['model'] ?? null,
             'temperature' => $request['temperature'] ?? null,
-            'tools' => array_values(array_column(array_column($tools, 'function'), 'name')),
-            'messages' => array_values(array_column(array_filter($messages, static fn (array $message): bool => 'user' === $message['role']), 'content')),
+            'tools' => array_column(array_column($tools, 'function'), 'name'),
+            'messages' => array_column(array_filter($messages, static fn (mixed $message): bool => is_array($message) && 'user' === ($message['role'] ?? null)), 'content'),
         ];
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array<mixed>>
      */
     private function providerRequests(KernelInterface $kernel): array
     {
@@ -226,7 +239,7 @@ final class SymfonyAiResetTest extends TestCase
         return $factory;
     }
 
-    // A kernel of its own, as the web server is a process of its own.
+    // A kernel of its own, because the web server runs in a process of its own.
     private function reviewServerFor(KernelInterface $kernel): RecordingHttpClient
     {
         $recording = new RecordingHttpClient(new KernelHttpClient($this->bootedKernel(new Kernel('test', false))));
@@ -235,7 +248,7 @@ final class SymfonyAiResetTest extends TestCase
         return $recording;
     }
 
-    // Set before the reviewer's MCP connection is built, which then sends through it.
+    // Set before the reviewer's MCP connection is built, because the connection keeps the client it was built with.
     private function serveReviewToolsFor(KernelInterface $kernel, ClientInterface $http): void
     {
         $credential = $this->container($kernel)->get(ReviewCredential::class);
