@@ -9,8 +9,6 @@ use RuntimeException;
 // A cause chained as previous, never thrown alone, so callers keep catching ForgeReadFailed and ForgeWriteFailed; the fixed message holds no token or key.
 final class ForgeCredentialsRefused extends RuntimeException
 {
-    public const int STATUS = 401;
-
     public function __construct()
     {
         parent::__construct('The forge refused the credentials it was given.');
