@@ -143,22 +143,29 @@ final class ShadowReportCommandTest extends TestCase
 
         try {
             $folder = $this->folderWhoseErrorWrapsInsideTheFileName();
-            mkdir($folder);
-            file_put_contents($folder.'/broken.json', '{"identity": 1}');
-            $tester = $this->tester();
-
-            try {
-                $tester->execute(['folder' => $folder]);
-            } finally {
-                unlink($folder.'/broken.json');
-                rmdir($folder);
-            }
+            $tester = $this->reportOnABrokenHeadIn($folder);
         } finally {
             putenv(false === $columns ? 'COLUMNS' : 'COLUMNS='.$columns);
         }
 
         self::assertStringNotContainsString('broken.json', $tester->getDisplay());
         self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($folder.'/broken.json'), $tester->getDisplay());
+    }
+
+    private function reportOnABrokenHeadIn(string $folder): CommandTester
+    {
+        mkdir($folder);
+        file_put_contents($folder.'/broken.json', '{"identity": 1}');
+        $tester = $this->tester();
+
+        try {
+            $tester->execute(['folder' => $folder]);
+        } finally {
+            unlink($folder.'/broken.json');
+            rmdir($folder);
+        }
+
+        return $tester;
     }
 
     public function testAFolderWithPatternCharactersInItsNameStillFindsItsHeads(): void
