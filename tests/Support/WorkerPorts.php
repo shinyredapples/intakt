@@ -20,7 +20,7 @@ final class WorkerPorts
             return;
         }
 
-        if (1 !== preg_match('/^(\d{1,5})-(\d{1,5})$/', $range, $bounds) || (int) $bounds[1] > (int) $bounds[2]) {
+        if (1 !== preg_match('/^(\d{1,5})-(\d{1,5})$/', $range, $bounds) || 0 === (int) $bounds[1] || (int) $bounds[1] > (int) $bounds[2]) {
             throw new LogicException(sprintf('%s must name a range of ports such as 20000-20099, not "%s".', TestWorker::PORTS_VARIABLE, $range));
         }
 
