@@ -38,13 +38,7 @@ final class ConsoleDisplay extends Constraint
 
         $display = mb_str_split((string) preg_replace('/[ \t]*\R[ \t]*/u', self::BREAK, $other));
 
-        foreach (array_keys($display) as $start) {
-            if ($this->isShownAt($display, $start)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(array_keys($display), fn ($start) => $this->isShownAt($display, $start));
     }
 
     /** @param list<string> $display */
@@ -55,7 +49,7 @@ final class ConsoleDisplay extends Constraint
                 ++$position;
             }
 
-            if (!self::isShownAs($character, $display[$position] ?? null)) {
+            if (!$this->isShownAs($character, $display[$position] ?? null)) {
                 return false;
             }
 
@@ -65,7 +59,7 @@ final class ConsoleDisplay extends Constraint
         return true;
     }
 
-    private static function isShownAs(string $character, ?string $shown): bool
+    private function isShownAs(string $character, ?string $shown): bool
     {
         return $shown === $character || (' ' === $character && self::BREAK === $shown);
     }
