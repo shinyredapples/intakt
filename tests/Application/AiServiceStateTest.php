@@ -99,6 +99,14 @@ final class AiServiceStateTest extends TestCase
         self::assertContains(MockModelCatalog::class.'::$models', $after->changedSince($before));
     }
 
+    public function testAPropertyOnlyTheReplacedObjectAtAnExistingPathDeclaredIsReported(): void
+    {
+        $before = AiServiceState::ofServices(['ai.catalog' => new MockModelCatalog(['model-of-the-first-run' => ['class' => Model::class, 'capabilities' => []]])]);
+        $after = AiServiceState::ofServices(['ai.catalog' => new InMemoryModelCatalog()]);
+
+        self::assertContains(MockModelCatalog::class.'::$models', $after->changedSince($before));
+    }
+
     public function testANewObjectAsEmptyAsTheOneItReplacedLeavesNothingBehind(): void
     {
         $before = AiServiceState::ofServices(['ai.toolbox' => $this->toolboxOf(new MemoryToolFactory())]);
