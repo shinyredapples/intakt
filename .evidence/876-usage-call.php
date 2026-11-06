@@ -8,7 +8,6 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Dotenv\Dotenv;
 
 require __DIR__.'/../vendor/autoload.php';
@@ -18,9 +17,7 @@ new Dotenv()->bootEnv(__DIR__.'/../.env');
 $kernel = new Kernel('test', true);
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
-assert($container instanceof ContainerInterface);
 $usageLedger = $container->get(UsageLedger::class);
-assert($usageLedger instanceof UsageLedger);
 
 $answer = new TextResult('a stubbed answer');
 $answer->getMetadata()->add('token_usage', new TokenUsage(
