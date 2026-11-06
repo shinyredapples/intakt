@@ -16,24 +16,19 @@ final class TestWorkerCountTest extends TestCase
 {
     private const string TWO_PROCESSORS = "Name:\tphp\nCpus_allowed:\t3\nCpus_allowed_list:\t0-1\nMems_allowed_list:\t0\n";
 
-    public function testTheGateRunsTwoWorkersForEachProcessorItSees(): void
+    public function testTheGateRunsOneWorkerForEachProcessorItSees(): void
     {
-        self::assertSame(4, TestWorkerCount::chosen(null, self::TWO_PROCESSORS));
+        self::assertSame(2, TestWorkerCount::chosen(null, self::TWO_PROCESSORS));
     }
 
     public function testProcessorsListedApartAddUp(): void
     {
-        self::assertSame(6, TestWorkerCount::chosen(null, "Cpus_allowed_list:\t0,2,5\n"));
+        self::assertSame(3, TestWorkerCount::chosen(null, "Cpus_allowed_list:\t0,2,5\n"));
     }
 
-    public function testFourProcessorsGetEightWorkers(): void
+    public function testWithoutAnOverrideTheGateRunsAtMostFourWorkers(): void
     {
-        self::assertSame(8, TestWorkerCount::chosen(null, "Cpus_allowed_list:\t0-3\n"));
-    }
-
-    public function testWithoutAnOverrideTheGateRunsAtMostEightWorkers(): void
-    {
-        self::assertSame(8, TestWorkerCount::chosen(null, "Cpus_allowed_list:\t0-11\n"));
+        self::assertSame(4, TestWorkerCount::chosen(null, "Cpus_allowed_list:\t0-11\n"));
     }
 
     public function testAGateThatCannotTellItsProcessorsRunsOneWorker(): void
