@@ -12,7 +12,10 @@ return RectorConfig::configure()
     ->withCache($cacheDirectory)
     ->withImportNames(removeUnusedImports: true)
     ->withPhpSets(php85: true)
-    ->withPreparedSets(deadCode: true, codeQuality: true)
+    ->withPreparedSets(
+        deadCode: true,
+        codeQuality: true,
+    )
     ->withRules([StringClassNameToClassConstantRector::class])
     ->withSkip([
         getcwd().'/upstream',

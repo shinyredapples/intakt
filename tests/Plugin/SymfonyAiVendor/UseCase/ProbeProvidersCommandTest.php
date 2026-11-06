@@ -39,7 +39,14 @@ final class ProbeProvidersCommandTest extends TestCase
         $calls = new ArrayObject();
         $tester = $this->execute($this->resolver(), $this->invoker($calls, static function (): TextResult {
             $result = new TextResult('ok');
-            $result->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 12, completionTokens: 3, cachedTokens: 4, remainingTokens: 900, totalTokens: 15, model: 'big'));
+            $result->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 12,
+                completionTokens: 3,
+                cachedTokens: 4,
+                remainingTokens: 900,
+                totalTokens: 15,
+                model: 'big',
+            ));
 
             return $result;
         }));

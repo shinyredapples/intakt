@@ -20,22 +20,38 @@ final class EndWorkerOnMemoryCeilingTest extends TestCase
 
     public function testAWorkerWhoseMemoryPassesTheCeilingEndsItsLoop(): void
     {
-        $this->terminate(100 * self::MEGABYTE + 1, worker: true, ended: true);
+        $this->terminate(
+            100 * self::MEGABYTE + 1,
+            worker: true,
+            ended: true,
+        );
     }
 
     public function testAWorkerBelowTheCeilingKeepsServing(): void
     {
-        $this->terminate(50 * self::MEGABYTE, worker: true, ended: false);
+        $this->terminate(
+            50 * self::MEGABYTE,
+            worker: true,
+            ended: false,
+        );
     }
 
     public function testAWorkerExactlyAtTheCeilingKeepsServing(): void
     {
-        $this->terminate(100 * self::MEGABYTE, worker: true, ended: false);
+        $this->terminate(
+            100 * self::MEGABYTE,
+            worker: true,
+            ended: false,
+        );
     }
 
     public function testAProcessThatIsNoWorkerIsNeverEnded(): void
     {
-        $this->terminate(500 * self::MEGABYTE, worker: false, ended: false);
+        $this->terminate(
+            500 * self::MEGABYTE,
+            worker: false,
+            ended: false,
+        );
     }
 
     private function terminate(int $bytes, bool $worker, bool $ended): void

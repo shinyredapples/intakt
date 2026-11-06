@@ -269,7 +269,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
         $cutOff = static fn (): StreamResult => new StreamResult((static function (): Generator {
-            yield new TokenUsage(promptTokens: 100, model: 'big');
+            yield new TokenUsage(
+                promptTokens: 100,
+                model: 'big',
+            );
             yield new TextDelta('{"verdict":"approve",');
 
             throw new IncompleteStreamException('The stream ended before its last event.');
@@ -311,7 +314,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $step = 0;
         $rounds = static function () use (&$step): ToolCallResult {
             if (0 === $step++) {
-                return self::carrying(new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]), new TokenUsage(promptTokens: 100, model: 'big'));
+                return self::carrying(new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]), new TokenUsage(
+                    promptTokens: 100,
+                    model: 'big',
+                ));
             }
 
             throw new ServerException(503);
@@ -614,7 +620,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testAProviderAnswerThatFailsToMapSettlesWithTheTokensItsExtractorReads(): void
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
-        $extractor->method('extract')->willReturn(new TokenUsage(promptTokens: 9, model: 'big'));
+        $extractor->method('extract')->willReturn(new TokenUsage(
+            promptTokens: 9,
+            model: 'big',
+        ));
         $converter = self::createStub(ResultConverterInterface::class);
         $converter->method('convert')->willThrowException(new RuntimeException('not a verdict'));
         $converter->method('getTokenUsageExtractor')->willReturn($extractor);
@@ -659,7 +668,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testAnAggregatedUsageSettlesAsOneEntryPerPart(): void
     {
         $ledger = new InMemoryLedger();
-        $aggregation = new TokenUsageAggregation([new TokenUsage(promptTokens: 7, model: 'big'), new TokenUsage(promptTokens: 3, cachedTokens: 2, model: 'small')]);
+        $aggregation = new TokenUsageAggregation([new TokenUsage(
+            promptTokens: 7,
+            model: 'big',
+        ), new TokenUsage(
+            promptTokens: 3,
+            cachedTokens: 2,
+            model: 'small',
+        )]);
         $answer = static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json(), $aggregation);
 
         $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
@@ -805,7 +821,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
         return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
     }
 
-    private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big')): TextResult
+    private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(
+        promptTokens: 100,
+        completionTokens: 20,
+        cachedTokens: 60,
+        remainingTokens: 5000,
+        totalTokens: 120,
+        model: 'big',
+    )): TextResult
     {
         return self::carrying(new TextResult($json), $usage);
     }
@@ -814,11 +837,21 @@ final class SymfonyAiVendorTest extends KernelTestCase
     private static function streamed(string $json): StreamResult
     {
         return new StreamResult((static function () use ($json): Generator {
-            yield new TokenUsage(promptTokens: 100, model: 'big');
+            yield new TokenUsage(
+                promptTokens: 100,
+                model: 'big',
+            );
             foreach (str_split($json, 40) as $part) {
                 yield new TextDelta($part);
             }
-            yield new TokenUsage(promptTokens: 100, completionTokens: 20, cachedTokens: 60, remainingTokens: 5000, totalTokens: 120, model: 'big');
+            yield new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                cachedTokens: 60,
+                remainingTokens: 5000,
+                totalTokens: 120,
+                model: 'big',
+            );
         })());
     }
 
