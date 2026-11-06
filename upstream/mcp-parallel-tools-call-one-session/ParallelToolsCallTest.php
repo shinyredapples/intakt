@@ -109,7 +109,7 @@ final class ParallelToolsCallTest extends TestCase
 
         self::assertSame(200, $answer['status']);
         self::assertStringContainsString('done 104', $answer['body']);
-        self::assertSame(['104 [] {}'], file($this->dir.'/arguments', FILE_IGNORE_NEW_LINES), 'the tool must get no arguments, and its request must encode them as {}, not [] or missing');
+        self::assertSame(['104 [] {}'], file($this->dir.'/arguments', FILE_IGNORE_NEW_LINES), 'the tool must get an empty array, and its request must encode it as {}');
     }
 
     /**
