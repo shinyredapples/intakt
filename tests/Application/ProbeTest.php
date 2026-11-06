@@ -16,14 +16,14 @@ final class ProbeTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
 
-    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test. It is kept only while its autoload file is the checkout's own (the same inode), because a folder left by a killed run with the same process id holds the vendor of an older checkout.
+    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test. It is kept only while its installed packages are the checkout's (the same installed.json content), because a folder left by a killed run with the same process id may hold the vendor of an older checkout, and the autoload file keeps its inode across an in-place dependency update, so a copy that could not be linked is reused too.
     private const string COPY = <<<'SH'
         set -e
         project=$1
         shift
         cd "$project"
         find . -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +
-        if ! [ vendor/autoload.php -ef "$0"/vendor/autoload.php ]; then
+        if ! cmp -s vendor/composer/installed.json "$0"/vendor/composer/installed.json 2>/dev/null; then
             rm -rf vendor vendor.partial
             cp -al "$0"/vendor vendor.partial 2>/dev/null || { rm -rf vendor.partial && cp -a "$0"/vendor vendor.partial; }
             mv vendor.partial vendor
@@ -210,6 +210,33 @@ final class ProbeTest extends TestCase
 
         self::assertFileDoesNotExist($project.'/vendor/stale-marker');
         self::assertFileExists($project.'/vendor/autoload.php');
+    }
+
+    public function testAVendorWithOtherPackagesThanTheCheckoutsIsReplacedEvenWhenItsAutoloadFileIsTheCheckouts(): void
+    {
+        $vendor = $this->project.'/vendor';
+        new Filesystem()->remove($vendor.'/composer/installed.json');
+        new Filesystem()->dumpFile($vendor.'/composer/installed.json', '[]');
+        new Filesystem()->dumpFile($vendor.'/stale-marker', 'from an older checkout');
+
+        $project = $this->copyOfTheProject();
+
+        self::assertFileDoesNotExist($project.'/vendor/stale-marker');
+        self::assertFileEquals(self::ROOT.'/vendor/composer/installed.json', $project.'/vendor/composer/installed.json');
+    }
+
+    public function testAVendorCopiedWithoutLinksIsReusedWhenItsPackagesAreTheCheckouts(): void
+    {
+        $autoload = $this->project.'/vendor/autoload.php';
+        new Filesystem()->remove($autoload);
+        new Filesystem()->copy(self::ROOT.'/vendor/autoload.php', $autoload);
+        clearstatcache();
+        $copied = fileinode($autoload);
+
+        $project = $this->copyOfTheProject();
+
+        clearstatcache();
+        self::assertSame($copied, fileinode($project.'/vendor/autoload.php'));
     }
 
     public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
