@@ -64,7 +64,7 @@ final readonly class ContainerUnknownHasIdRule implements Rule
 
     private function isContainer(Type $receiver): bool
     {
-        // a locator answers for the local keys it was given, not for container ids
+        // because a locator answers for the local keys it was given, not for container ids
         if (new ObjectType(ServiceProviderInterface::class)->isSuperTypeOf($receiver)->yes()) {
             return false;
         }
