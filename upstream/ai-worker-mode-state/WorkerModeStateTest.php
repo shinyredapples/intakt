@@ -58,7 +58,8 @@ final class ProviderAnswers
      */
     public function __invoke(string $method, string $url, array $options): MockResponse
     {
-        $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);        $text = isset($request['response_format']) ? '{"label":"ok"}' : 'answer of '.$request['model'];
+        $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
+        $text = isset($request['response_format']) ? '{"label":"ok"}' : 'answer of '.$request['model'];
         $answer = ['choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => $text], 'finish_reason' => 'stop']]];
 
         return new MockResponse(json_encode($answer, JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);

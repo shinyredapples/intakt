@@ -293,6 +293,149 @@ final class InstanceTest extends TestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
+    public function testWithoutFrankenphpACommandGetsNoAdminUrl(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo var_export(getenv("INTAKT_INSTANCE_ADMIN_URL"), true), "\n";']);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertSame("false\n", $run['output']);
+    }
+
+    public function testWithFrankenphpOnThePathTheBootReportsReadyInWorkerMode(): void
+    {
+        $run = $this->runInstance(self::ROOT, environment: $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    public function testInWorkerModeTheAppWorkerServedTheReadinessRequest(): void
+    {
+        // FrankenPHP counts a request once the worker has finished it, after the answer is sent, so the command polls.
+        $threads = 'for ($i = 0; $i < 100; ++$i) { '
+            .'$states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? []; '
+            .'foreach ($states as $state) { if (str_starts_with($state["Name"], "Worker ") && $state["RequestCount"] > 0) { echo $state["Name"], " served ", $state["RequestCount"], "\n"; exit(0); } } '
+            .'usleep(100_000); } exit(3);';
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $threads], $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertMatchesRegularExpression('#^Worker PHP Thread - '.preg_quote((string) realpath(self::ROOT), '#').'/public/index\.php served [1-9]\d*$#m', $run['output']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    public function testInWorkerModeTheHttpListenerIsBoundToLoopbackOnly(): void
+    {
+        // A Caddy site address only matches the Host header, so the kernel's socket table tells where the listener really is.
+        $listeners = '$port = (int) parse_url((string) getenv("INTAKT_INSTANCE_URL"), PHP_URL_PORT); $addresses = []; '
+            .'foreach (["/proc/net/tcp", "/proc/net/tcp6"] as $table) { foreach (file($table) ?: [] as $line) { $columns = preg_split("/\s+/", trim($line)); '
+            .'if ("0A" !== ($columns[3] ?? "")) { continue; } [$address, $hexPort] = explode(":", $columns[1]); if (hexdec($hexPort) === $port) { $addresses[] = $address; } } } '
+            .'echo implode("\n", array_unique($addresses)), "\n";';
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $listeners], $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("0100007F\n", $run['output']);
+    }
+
+    public function testInWorkerModeABrokenKernelConfigReportsFailedWithTheErrorAndExitsNonZero(): void
+    {
+        $project = $this->copyOfTheProject();
+        file_put_contents($project.'/config/packages/broken.yaml', "framework:\n    no_such_option: true\n");
+
+        $run = $this->runInstance($project, environment: $this->environmentWithFrankenphp());
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertStringContainsString('"mode":"worker"', $run['status']);
+        self::assertStringContainsString('no_such_option', $status['reason']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testAFrankenphpFoundThroughARelativePathEntryBootsInWorkerModeFromAnotherDirectory(): void
+    {
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
+        self::assertNotNull($frankenphp, 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+        $caller = $this->scratch.'/caller';
+        mkdir($caller.'/tools', recursive: true);
+        symlink($frankenphp, $caller.'/tools/frankenphp');
+
+        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    public function testAFrankenphpInTheCallersDirectoryIsFoundThroughAnEmptyPathEntry(): void
+    {
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
+        self::assertNotNull($frankenphp, 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+        $caller = $this->scratch.'/caller';
+        mkdir($caller);
+        symlink($frankenphp, $caller.'/frankenphp');
+
+        $run = $this->runInstanceFrom($caller, ['PATH' => ':'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    public function testNothingIsLeftBehindAfterAWorkerModeBoot(): void
+    {
+        $this->runInstance(self::ROOT, environment: $this->environmentWithFrankenphp());
+
+        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
+    }
+
+    public function testAFrankenphpThatFailsToStartReportsFailedWithItsReasonAndLeavesNothing(): void
+    {
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', "#!/bin/sh\necho 'Error: loading initial config: listen tcp 127.0.0.1:1: bind: address already in use' >&2\nexit 1\n");
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        $status = json_decode($run['status'], true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($status);
+        self::assertSame(['status', 'mode', 'reason'], array_keys($status));
+        self::assertSame(['failed', 'worker'], [$status['status'], $status['mode']]);
+        self::assertSame('the server exited: Error: loading initial config: listen tcp 127.0.0.1:1: bind: address already in use', $status['reason']);
+        self::assertSame(1, $run['exit']);
+        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
+    }
+
+    public function testAnAnswerOnTheChosenPortBeforeFrankenphpServesDoesNotMakeTheInstanceReady(): void
+    {
+        // The stub answers one request on the port like an unrelated listener would, then fails to bind as the real FrankenPHP does behind it.
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', '#!'.PHP_BINARY."\n".<<<'PHP'
+            <?php
+            preg_match('~http://127\.0\.0\.1:(\d+)~', (string) file_get_contents($argv[array_search('--config', $argv, true) + 1]), $match);
+            $listener = stream_socket_server('tcp://127.0.0.1:'.$match[1]);
+            $connection = stream_socket_accept($listener, 3);
+            if (false !== $connection) {
+                fread($connection, 8192);
+                fwrite($connection, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                fclose($connection);
+            }
+            fwrite(STDERR, 'Error: loading initial config: listen tcp 127.0.0.1:'.$match[1].": bind: address already in use\n");
+            exit(1);
+            PHP);
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo "command ran\n";'], ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertMatchesRegularExpression('/^the server exited: Error: loading initial config: listen tcp 127\.0\.0\.1:\d+: bind: address already in use$/', $status['reason']);
+        self::assertStringNotContainsString('command ran', $run['output']);
+        self::assertSame(1, $run['exit']);
+    }
+
     public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
     {
         $notAFolder = $this->scratch.'/file';
@@ -417,13 +560,33 @@ final class InstanceTest extends TestCase
     }
 
     /**
+     * @param array<string, string|false> $environment
+     *
+     * @return array{status: string, exit: int, output: string, errors: string}
+     */
+    private function runInstanceFrom(string $directory, array $environment): array
+    {
+        $statusFile = $this->scratch.'/status';
+        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
+        $process = Process::fromShellCommandline($shell, $directory, [...$this->environment(), ...$environment]);
+        $process->run();
+
+        return [
+            'status' => trim((string) file_get_contents($statusFile)),
+            'exit' => (int) $process->getExitCode(),
+            'output' => $process->getOutput(),
+            'errors' => $process->getErrorOutput(),
+        ];
+    }
+
+    /**
      * @param list<string> $phpOptions
      */
     private function runInstanceWithoutDescriptorThree(array $phpOptions): Process
     {
         // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
         $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
-        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp']);
+        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp', 'PATH' => $this->pathWithoutFrankenphp()]);
         $process->run();
 
         return $process;
@@ -463,7 +626,37 @@ final class InstanceTest extends TestCase
      */
     private function environment(): array
     {
-        return ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test'];
+        // Without frankenphp on the PATH, so these runs cover the built-in server wherever they run.
+        return ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', 'PATH' => $this->pathWithoutFrankenphp()];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function environmentWithFrankenphp(): array
+    {
+        $path = (string) getenv('PATH');
+        self::assertNotNull(new ExecutableFinder()->find('frankenphp'), 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+
+        return ['PATH' => $path];
+    }
+
+    private function pathWithoutFrankenphp(): string
+    {
+        $directories = array_filter(explode(':', (string) getenv('PATH')), static fn (string $directory): bool => !is_file($directory.'/frankenphp'));
+
+        return implode(':', $directories);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function processesNaming(string $path): array
+    {
+        return array_values(array_filter(
+            $this->matching('/proc/[0-9]*'),
+            static fn (string $directory): bool => str_contains((string) @file_get_contents($directory.'/cmdline'), $path),
+        ));
     }
 
     private function copyOfTheProject(): string
