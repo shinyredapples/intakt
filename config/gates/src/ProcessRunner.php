@@ -25,6 +25,8 @@ final class ProcessRunner
 
     private const int POLL_MICROSECONDS = 10000;
 
+    private const int STOP_GRACE_SECONDS = 2;
+
     private const array NAMESPACE_OPTIONS = ['--user', '--map-root-user', '--pid', '--fork', '--kill-child', '--mount-proc'];
 
     private const int PROBE_TIMEOUT_SECONDS = 10;
@@ -91,6 +93,9 @@ final class ProcessRunner
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
+        $forwarding = StopSignalForwarding::through(static function () use ($group): void {
+            posix_kill(-$group, 9);
+        });
         $failure = $this->waitForAll([$process])[0] ?? null;
 
         if (null === $failure && $this->groupOutlives($group, $deadline)) {
@@ -98,6 +103,7 @@ final class ProcessRunner
         }
 
         posix_kill(-$group, 9);
+        $forwarding->end();
 
         return $this->resultOf($process, $failure, $command[0]);
     }
@@ -144,15 +150,22 @@ final class ProcessRunner
         }
 
         $release = new InputStream();
-        $process = new Process($this->held($command), $directory, getenv(), $release, $seconds);
+        $process = new Process($this->held($command), $directory, getenv(), $release, null);
+        $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
         if (null === $group) {
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
-        $forwarding = StopSignalForwarding::toGroup($group);
-        $failure = $this->waitForAll([$process])[0] ?? null;
+        $forwarding = StopSignalForwarding::through(fn () => $this->stopGroup($group));
+        $failure = $this->waitUntil($process, $deadline);
+
+        if (self::TIMED_OUT === $failure) {
+            $this->stopGroup($group);
+            $this->waitForAll([$process]);
+        }
+
         posix_kill(-$group, 9);
         $forwarding->end();
 
@@ -167,6 +180,32 @@ final class ProcessRunner
         }
 
         return $this->resultOf($process, $failure, $command[0]);
+    }
+
+    // Because Symfony's own timeout sends TERM and KILL at once, before the child can stop the contained run it started in a session of its own.
+    private function waitUntil(Process $process, float $deadline): ?int
+    {
+        while (true) {
+            $failure = $this->poll($process);
+
+            if (self::STILL_RUNNING !== $failure) {
+                return $failure;
+            }
+
+            if ((hrtime(true) / 1_000_000_000) >= $deadline) {
+                return self::TIMED_OUT;
+            }
+
+            usleep(self::POLL_MICROSECONDS);
+        }
+    }
+
+    // Because only the gate child can reach the session of its contained run, it is asked to stop first and killed when it does not.
+    private function stopGroup(int $group): void
+    {
+        posix_kill(-$group, 15);
+        $this->groupOutlives($group, (hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS);
+        posix_kill(-$group, 9);
     }
 
     // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.

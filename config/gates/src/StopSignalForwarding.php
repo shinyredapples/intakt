@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use Closure;
+
 // Because a child in a session of its own no longer gets the Ctrl-C or kill meant for bin/check.
 final readonly class StopSignalForwarding
 {
@@ -18,7 +20,10 @@ final readonly class StopSignalForwarding
     }
 
     // Because the parent sleeps between polls of its child, a signal must run its handler at once, not at the next tick.
-    public static function toGroup(int $group): self
+    /**
+     * @param Closure(): void $stop
+     */
+    public static function through(Closure $stop): self
     {
         if (!function_exists('pcntl_signal')) {
             return new self([]);
@@ -29,8 +34,8 @@ final readonly class StopSignalForwarding
 
         foreach (self::STOPPING_SIGNALS as $signal) {
             $handlers[$signal] = pcntl_signal_get_handler($signal);
-            pcntl_signal($signal, static function (int $signal) use ($group): void {
-                posix_kill(-$group, 9);
+            pcntl_signal($signal, static function (int $signal) use ($stop): void {
+                $stop();
                 pcntl_signal($signal, SIG_DFL);
                 posix_kill(posix_getpid(), $signal);
             });

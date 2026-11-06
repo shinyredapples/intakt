@@ -53,7 +53,42 @@ final class GateChildTreeTest extends TestCase
     public function testAGateChildAndItsProgramsStopWhenBinCheckIsInterrupted(): void
     {
         $ready = $this->marker.'-ready';
-        $gate = $this->gateLeavingADescendant('touch('.var_export($ready, true).'); sleep(10);');
+
+        $status = $this->interruptBinCheckRunning($this->gateLeavingADescendant('touch('.var_export($ready, true).'); sleep(10);'), $ready);
+
+        self::assertTrue($status['signaled']);
+        self::assertSame(2, $status['termsig']);
+        self::assertFileDoesNotExist($this->marker);
+    }
+
+    public function testAContainedRunOfATimedOutGateChildIsStoppedWithIt(): void
+    {
+        $child = new ProcessRunner()->runToItsEnd($this->gateRunningWithin($this->descendant()), sys_get_temp_dir(), 1);
+        usleep(2_500_000);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $child->exitCode);
+        self::assertStringContainsString('started', $child->output);
+        self::assertFileDoesNotExist($this->marker);
+    }
+
+    public function testAContainedRunOfAGateChildStopsWhenBinCheckIsInterrupted(): void
+    {
+        $ready = $this->marker.'-ready';
+
+        $status = $this->interruptBinCheckRunning($this->gateRunningWithin($this->descendant('touch('.var_export($ready, true).');')), $ready);
+
+        self::assertTrue($status['signaled']);
+        self::assertSame(2, $status['termsig']);
+        self::assertFileDoesNotExist($this->marker);
+    }
+
+    /**
+     * @param list<string> $gate
+     *
+     * @return array{running: bool, signaled: bool, termsig: int}
+     */
+    private function interruptBinCheckRunning(array $gate, string $ready): array
+    {
         $check = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; new '.ProcessRunner::class.'()->runToItsEnd('.var_export($gate, true).', sys_get_temp_dir(), 30);';
         $parent = proc_open([PHP_BINARY, '-r', $check], [], $pipes);
         self::assertIsResource($parent);
@@ -73,9 +108,7 @@ final class GateChildTreeTest extends TestCase
 
         usleep(2_000_000);
 
-        self::assertTrue($status['signaled']);
-        self::assertSame(2, $status['termsig']);
-        self::assertFileDoesNotExist($this->marker);
+        return $status;
     }
 
     /**
@@ -83,9 +116,23 @@ final class GateChildTreeTest extends TestCase
      */
     private function gateLeavingADescendant(string $then): array
     {
-        $descendant = 'usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
-        $gate = 'proc_open('.var_export([PHP_BINARY, '-r', $descendant], true).', [], $pipes); echo "started"; fflush(STDOUT); '.$then;
+        $gate = 'proc_open('.var_export([PHP_BINARY, '-r', $this->descendant()], true).', [], $pipes); echo "started"; fflush(STDOUT); '.$then;
 
         return [PHP_BINARY, '-r', $gate];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function gateRunningWithin(string $program): array
+    {
+        $gate = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; echo "started"; fflush(STDOUT); new '.ProcessRunner::class.'()->runWithin('.var_export([PHP_BINARY, '-r', $program], true).', sys_get_temp_dir(), 30);';
+
+        return [PHP_BINARY, '-r', $gate];
+    }
+
+    private function descendant(string $first = ''): string
+    {
+        return $first.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
     }
 }
