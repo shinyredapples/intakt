@@ -118,7 +118,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
 
-        while (hrtime(true) < $deadline && !(str_contains($this->calls(), 'frankenphp run') && str_contains($this->calls(), 'messenger:consume scheduler_watcher'))) {
+        while (hrtime(true) < $deadline && (!str_contains($this->calls(), 'frankenphp run') || !str_contains($this->calls(), 'messenger:consume scheduler_watcher'))) {
             usleep(50_000);
         }
 
