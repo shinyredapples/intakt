@@ -206,7 +206,8 @@
     });
     document.querySelectorAll(".col").forEach((c) => {
       const n = [...c.querySelectorAll(".card")].filter((x) => !x.hasAttribute("data-filtered")).length;
-      // every place that shows this column's total follows the filter: the heading, the folded column and the phone switcher
+      // the heading, the folded column button and its label, and the phone switcher must all change together: a reader who
+      // meets the column through any one of them (or a screen reader) would otherwise see a total the filter no longer shows
       const name = c.getAttribute("aria-label"), key = (c.id || "").replace(/^col-/, "");
       const counts = [c.querySelector(".col-head .count"), c.querySelector(".col-fold .count"),
         key ? document.querySelector(`#colswitch [data-col="${key}"] .count`) : null];

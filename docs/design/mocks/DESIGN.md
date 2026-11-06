@@ -46,7 +46,7 @@ Spacing steps 4, 8, 12, 16, 24, 32, 48. Radius by hierarchy: chips 6, buttons an
 
 ## Components
 
-- **Card**: flat `--tint`, no border, no shadow, radius 12, padding 12/14. Title 15/600 Outfit, meta row of chips beneath. Needs-you card uses `--amber-tint` with a 4 px amber dot before the number. Hover darkens nothing; focus shows the ring.
+- **Card**: flat `--tint`, no border, no shadow, radius 12, padding 12/14. Title 15/600 Outfit, meta row of chips beneath. Needs-you card uses `--amber-tint` with a 4 px amber dot before the number. Hover fills it with `--tint-2`; focus shows the ring.
 - **Chip**: 13 px, radius 6, `--raised` fill on cards, `--tint` fill on the page. Only for state and reason badges (Budget, Needs #612, CI broken, Project paused, a task's state).
 - **Card emphasis**: a blocker or next step ("Waiting for CI: image build failing", "Needs #612 merged first", the needs-you ask) is a 13 px weight-500 ink line with an icon right under the title (red only when something is broken). The meta line follows with time, slot and round first; size and cost come last.
 - **Account names**: accounts carry owner-chosen names ("Work subscription", "Overflow key") with a Rename link; the kind (subscription or API key) is secondary text.
