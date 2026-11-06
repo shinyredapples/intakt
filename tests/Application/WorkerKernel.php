@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Intakt\Core\Mcp\Infrastructure\AuthorizeToolCallsPass;
+use Intakt\Kernel as IntaktKernel;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -27,7 +27,7 @@ final class WorkerKernel extends Kernel
 
     protected function build(ContainerBuilder $container): void
     {
-        $container->addCompilerPass(new AuthorizeToolCallsPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
+        IntaktKernel::addApplicationPasses($container);
         // Priority 0, because the framework's pass that collects the kernel.reset tags runs at -32 and must find the tag already gone.
         $container->addCompilerPass(new KeepStateOf($this->unresetService), PassConfig::TYPE_BEFORE_OPTIMIZATION, 0);
     }
