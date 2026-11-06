@@ -11,6 +11,9 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\Toolbox\ChainToolbox;
 use Symfony\AI\Agent\Toolbox\Toolbox;
 use Symfony\AI\Agent\Toolbox\ToolFactory\MemoryToolFactory;
+use Symfony\AI\Platform\Model;
+use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
+use Symfony\AI\Platform\Test\MockModelCatalog;
 
 // Covers nothing because the subject, AiServiceState, is a helper of the Symfony AI reset probe, not application code.
 #[CoversNothing]
@@ -85,6 +88,15 @@ final class AiServiceStateTest extends TestCase
         $after = AiServiceState::ofServices(['ai.toolbox' => $toolbox]);
 
         self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
+    }
+
+    // Both catalogs record properties under the same path, so the walk compares property lists there, not only paths; the parent's private properties are invisible to the walk, so no library pair keeps a property and adds one.
+    public function testAPropertyOnlyTheNewObjectAtAnExistingPathDeclaresIsReported(): void
+    {
+        $before = AiServiceState::ofServices(['ai.catalog' => new InMemoryModelCatalog()]);
+        $after = AiServiceState::ofServices(['ai.catalog' => new MockModelCatalog(['model-of-the-first-run' => ['class' => Model::class, 'capabilities' => []]])]);
+
+        self::assertContains(MockModelCatalog::class.'::$models', $after->changedSince($before));
     }
 
     public function testANewObjectAsEmptyAsTheOneItReplacedLeavesNothingBehind(): void
