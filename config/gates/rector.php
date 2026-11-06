@@ -2,14 +2,12 @@
 
 declare(strict_types=1);
 
+use Intakt\Gates\GatesCache;
 use Rector\Config\RectorConfig;
 use Rector\Php55\Rector\String_\StringClassNameToClassConstantRector;
 
-$cacheBase = getenv('INTAKT_GATES_CACHE');
-$cacheDirectory = (is_string($cacheBase) && '' !== $cacheBase ? $cacheBase : sys_get_temp_dir().'/intakt-gates').'/rector';
-
 return RectorConfig::configure()
-    ->withCache($cacheDirectory)
+    ->withCache(GatesCache::directory().'/rector')
     ->withImportNames(removeUnusedImports: true)
     ->withPhpSets(php85: true)
     ->withPreparedSets(

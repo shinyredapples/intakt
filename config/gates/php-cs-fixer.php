@@ -2,16 +2,14 @@
 
 declare(strict_types=1);
 
+use Intakt\Gates\GatesCache;
 use Intakt\Gates\PhpCsFixer\MultilineNamedArgumentsFixer;
 use Intakt\Gates\PhpCsFixer\PlainFirstClassCallableFixer;
 use PhpCsFixer\Config;
 
-$cacheBase = getenv('INTAKT_GATES_CACHE');
-$cacheDirectory = (is_string($cacheBase) && '' !== $cacheBase ? $cacheBase : sys_get_temp_dir().'/intakt-gates').'/php-cs-fixer';
-
 return new Config()
     ->setRiskyAllowed(true)
-    ->setCacheFile($cacheDirectory.'.cache')
+    ->setCacheFile(GatesCache::directory().'/php-cs-fixer.cache')
     ->registerCustomFixers([new PlainFirstClassCallableFixer(), new MultilineNamedArgumentsFixer()])
     ->setRules([
         'Intakt/plain_first_class_callable' => true,
