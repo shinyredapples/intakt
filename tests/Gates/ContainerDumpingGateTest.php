@@ -32,4 +32,16 @@ final class ContainerDumpingGateTest extends SandboxTestCase
     {
         $this->assertAcceptedBy('phpstan', 'service-id-checked-with-has');
     }
+
+    public function testTheContainerIsDumpedAgainWhenItsDumpIsGoneFromAFreshCache(): void
+    {
+        $sandbox = $this->sandboxWith('misspelled-service-id');
+        $cache = ['APP_CACHE_DIR' => $sandbox->root.'/var/cache'];
+        $sandbox->checkWith($cache, '--only=phpstan');
+        unlink($sandbox->root.'/var/cache/test/Intakt_KernelTestDebugContainer.xml');
+
+        $run = $sandbox->checkWith($cache, '--only=phpstan');
+
+        self::assertStringContainsString('symfonyContainer.serviceNotFound Service "kernal" is not registered in the container.', $run->findingsOf('phpstan'));
+    }
 }
