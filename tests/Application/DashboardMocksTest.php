@@ -140,7 +140,7 @@ final class DashboardMocksTest extends TestCase
 
     private function statusOf(string $url): string
     {
-        // The client reports a refused connection as an exception, where file_get_contents() raises a warning that fails the run.
+        // Not file_get_contents(), because its warning on a refused connection fails the run while the server starts.
         try {
             return 'HTTP '.HttpClient::create()->request('GET', $url, ['timeout' => 2])->getStatusCode();
         } catch (TransportExceptionInterface) {
