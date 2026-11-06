@@ -6,7 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\UseCase\ProbeProviders;
 
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
-// The figures of one probe line, in the order it prints them; null for a figure the provider did not report.
+// Properties are declared in the order the probe line prints them, because the normalizer keeps that order.
 final readonly class ProbeUsage
 {
     public function __construct(
