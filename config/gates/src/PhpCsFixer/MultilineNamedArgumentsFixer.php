@@ -146,11 +146,13 @@ final readonly class MultilineNamedArgumentsFixer implements FixerInterface
         }
     }
 
-    // A comment between the boundary and the argument keeps its place when a line break already follows it.
+    // A comment between the boundary and the argument keeps its place when a line break already follows it; a line break inside a block comment does not count.
     private function hasLineBreakBetween(Tokens $tokens, int $fromIndex, int $toIndex): bool
     {
         for ($index = $fromIndex + 1; $index < $toIndex; ++$index) {
-            if (str_contains($tokens[$index]->getContent(), "\n")) {
+            $content = $tokens[$index]->getContent();
+
+            if ($tokens[$index]->isWhitespace() ? str_contains($content, "\n") : str_ends_with($content, "\n")) {
                 return true;
             }
         }

@@ -104,6 +104,26 @@ final class MultilineNamedArgumentsFixerTest extends SandboxTestCase
             PHP, $this->fixed($code));
     }
 
+    public function testAClosingParenthesisAfterAMultilineBlockCommentMovesToItsOwnLine(): void
+    {
+        $code = "<?php\n\$report = render(strict: true, limit: 3, /* because explanation\nends here */);\n";
+
+        self::assertSame("<?php\n\$report = render(\n    strict: true,\n    limit: 3, /* because explanation\nends here */\n);\n", $this->fixed($code));
+    }
+
+    public function testAOneLineCallThatAlreadyEndsInATrailingCommaGetsNoSecondComma(): void
+    {
+        self::assertSame("<?php\n\$report = render(\n    strict: true,\n    limit: 3,\n);\n", $this->fixed("<?php\n\$report = render(strict: true, limit: 3,);\n"));
+    }
+
+    public function testANestedCallWithTwoNamedArgumentsIsSplitAsWellAsItsOuterCall(): void
+    {
+        self::assertSame(
+            "<?php\n\$report = render(\n    strict: format(\n    width: 80,\n    height: 3,\n),\n    limit: 3,\n);\n",
+            $this->fixed("<?php\n\$report = render(strict: format(width: 80, height: 3), limit: 3);\n"),
+        );
+    }
+
     #[DataProvider('kindsOfCall')]
     public function testEveryKindOfCallWithTwoNamedArgumentsIsSplit(string $call): void
     {
