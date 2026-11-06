@@ -44,12 +44,20 @@ final class ConsoleDisplay extends Constraint
     /** @param list<string> $display */
     private function isShownAt(array $display, int $position): bool
     {
-        foreach ($this->characters as $index => $character) {
-            if (0 < $index && ' ' !== $character && self::BREAK === ($display[$position] ?? null)) {
-                ++$position;
-            }
+        $count = count($this->characters);
 
-            if (!$this->isShownAs($character, $display[$position] ?? null)) {
+        for ($index = 0; $index < $count; ++$index) {
+            $character = $this->characters[$index];
+            $shown = $display[$position] ?? null;
+
+            // A break drops every space of the run it lands in, so it stands for the whole run.
+            if (' ' === $character && self::BREAK === $shown) {
+                while (' ' === ($this->characters[$index + 1] ?? null)) {
+                    ++$index;
+                }
+            } elseif (0 < $index && self::BREAK === $shown && ($display[$position + 1] ?? null) === $character) {
+                ++$position;
+            } elseif ($shown !== $character) {
                 return false;
             }
 
@@ -57,10 +65,5 @@ final class ConsoleDisplay extends Constraint
         }
 
         return true;
-    }
-
-    private function isShownAs(string $character, ?string $shown): bool
-    {
-        return $shown === $character || (' ' === $character && self::BREAK === $shown);
     }
 }

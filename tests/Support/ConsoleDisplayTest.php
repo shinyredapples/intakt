@@ -33,6 +33,21 @@ final class ConsoleDisplayTest extends TestCase
         self::assertThat($display, ConsoleDisplay::shows($path.'.'));
     }
 
+    public function testAPathWithTwoSpacesThatAnErrorBlockWrapsAtIsFoundWhole(): void
+    {
+        $path = '/'.str_repeat('two  spaces/', 6).'broken.json';
+
+        $display = $this->error('Cannot read a recorded head from '.$path.'.');
+
+        self::assertMatchesRegularExpression('/two[ ]*\R[ ]*spaces/', $display);
+        self::assertThat($display, ConsoleDisplay::shows($path.'.'));
+    }
+
+    public function testTwoSpacesInTheTextAreNotFoundWhereOneLineHasOne(): void
+    {
+        self::assertThat('/two spaces/broken.json', self::logicalNot(ConsoleDisplay::shows('/two  spaces/broken.json')));
+    }
+
     public function testAPathAsLongAsLinuxAllowsIsFoundWhole(): void
     {
         $path = '/'.str_repeat('deep/', 817).'broke.json';
