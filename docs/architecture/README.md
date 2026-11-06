@@ -17,7 +17,7 @@ config/modules.php      the module list; a test keeps it equal to the directorie
 fixtures/sample-repository/   plain files for the demo, see below
 ```
 
-The Notifier, WorkSource and Gate contracts are empty for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)). The Forge contract has the methods for reading a change and, apart from them, the one write so far; see below.
+The Notifier, WorkSource and Gate contracts are empty for now. The first implementation of each kind adds the methods it needs (see [Left to the builder](../design/08-left-to-the-builder.md)). No work intake is built yet (plan task T47). When it is, the state of every waited-for issue must come from the tick's one listing of the forge, or from the stored state of an item that listing shows unchanged, never from one read per reference; only a complete, successful listing may mark a waited-for issue closed; and a worker that will not take work this tick makes no forge call for intake ([Choosing work](../design/05-architecture/03-choosing-work.md)). The Forge contract has the methods for reading a change and, apart from them, the one write so far; see below.
 
 ## Sample repository
 
