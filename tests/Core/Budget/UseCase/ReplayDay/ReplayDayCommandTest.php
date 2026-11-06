@@ -126,7 +126,7 @@ final class ReplayDayCommandTest extends KernelTestCase
         $this->command->execute(['script' => __DIR__.'/no-such-day.txt']);
 
         self::assertSame(Command::FAILURE, $this->command->getStatusCode());
-        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped(__DIR__.'/no-such-day.txt'), $this->command->getDisplay());
+        self::assertThat($this->command->getDisplay(), ConsoleDisplay::shows(__DIR__.'/no-such-day.txt'));
     }
 
     public function testALineNotUnderstoodStopsTheReplayWithItsRule(): void

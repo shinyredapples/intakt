@@ -133,7 +133,7 @@ final class ShadowReportCommandTest extends TestCase
         }
 
         self::assertSame(Command::INVALID, $status);
-        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($folder.'/broken.json'), $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows($folder.'/broken.json'));
     }
 
     public function testAnUnreadableHeadIsNamedInFullThoughTheErrorWrapsInsideTheFileName(): void
@@ -149,7 +149,7 @@ final class ShadowReportCommandTest extends TestCase
         }
 
         self::assertStringNotContainsString('broken.json', $tester->getDisplay());
-        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($folder.'/broken.json'), $tester->getDisplay());
+        self::assertThat($tester->getDisplay(), ConsoleDisplay::shows($folder.'/broken.json'));
     }
 
     private function reportOnABrokenHeadIn(string $folder): CommandTester

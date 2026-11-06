@@ -20,7 +20,7 @@ final class ConsoleDisplayTest extends TestCase
         $display = $this->error('Cannot read '.$path.'.');
 
         self::assertStringNotContainsString($path, $display);
-        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($path.'.'), $display);
+        self::assertThat($display, ConsoleDisplay::shows($path.'.'));
     }
 
     public function testAPathWithSpacesThatAnErrorBlockWrapsIsFoundWhole(): void
@@ -30,23 +30,43 @@ final class ConsoleDisplayTest extends TestCase
         $display = $this->error('Cannot read '.$path.'.');
 
         self::assertStringNotContainsString($path, $display);
-        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($path.'.'), $display);
+        self::assertThat($display, ConsoleDisplay::shows($path.'.'));
+    }
+
+    public function testAPathAsLongAsLinuxAllowsIsFoundWhole(): void
+    {
+        $path = '/'.str_repeat('deep/', 817).'broke.json';
+
+        $display = $this->error('Cannot read '.$path.'.');
+
+        self::assertSame(4096, strlen($path));
+        self::assertThat($display, ConsoleDisplay::shows($path.'.'));
     }
 
     public function testASpaceInTheTextIsNotFoundWhereTheDisplayHasNone(): void
     {
-        self::assertDoesNotMatchRegularExpression(ConsoleDisplay::wrapped('/a b/broken.json'), '/ab/broken.json');
+        self::assertThat('/ab/broken.json', self::logicalNot(ConsoleDisplay::shows('/a b/broken.json')));
     }
 
     public function testCharactersTheDisplaySeparatesOnOneLineAreNotFound(): void
     {
-        self::assertDoesNotMatchRegularExpression(ConsoleDisplay::wrapped('/ab/broken.json'), '/a b/broken.json');
+        self::assertThat('/a b/broken.json', self::logicalNot(ConsoleDisplay::shows('/ab/broken.json')));
+    }
+
+    public function testATextThatOnlyStartsInTheDisplayIsNotFound(): void
+    {
+        self::assertThat("read /ab/\n broken", self::logicalNot(ConsoleDisplay::shows('/ab/broken.json')));
     }
 
     public function testPatternCharactersInTheTextAreMatchedLiterally(): void
     {
-        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped('/shadow[1]*?.json'), 'read /shadow[1]*?.json');
-        self::assertDoesNotMatchRegularExpression(ConsoleDisplay::wrapped('/shadow[1]*?.json'), 'read /shadow1.json');
+        self::assertThat('read /shadow[1]*?.json', ConsoleDisplay::shows('/shadow[1]*?.json'));
+        self::assertThat('read /shadow1.json', self::logicalNot(ConsoleDisplay::shows('/shadow[1]*?.json')));
+    }
+
+    public function testAFailureNamesTheTextLookedFor(): void
+    {
+        self::assertSame('shows \'/x/broken.json\', wrapped or not', ConsoleDisplay::shows('/x/broken.json')->toString());
     }
 
     private function error(string $message): string
