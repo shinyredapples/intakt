@@ -8,7 +8,9 @@ final class TestWorkerCount
 {
     public const string VARIABLE = 'INTAKT_TEST_WORKERS';
 
-    private const int MOST_BY_DEFAULT = 4;
+    // Because the test files wait on the processes they start (instance boots, servers, gitleaks) for much of their time, so one worker per processor leaves it idle.
+    private const int WORKERS_PER_PROCESSOR = 2;
+    private const int MOST_BY_DEFAULT = 8;
 
     public static function chosen(?string $override, string $processStatus): ?int
     {
@@ -16,7 +18,9 @@ final class TestWorkerCount
             return 1 === preg_match('/^[1-9]\d{0,2}$/', $override) && (int) $override <= self::most() ? (int) $override : null;
         }
 
-        return min(self::processorsIn($processStatus), self::MOST_BY_DEFAULT);
+        $processors = self::processorsIn($processStatus);
+
+        return null === $processors ? 1 : min(self::WORKERS_PER_PROCESSOR * $processors, self::MOST_BY_DEFAULT);
     }
 
     // Because each worker needs a block of the default ports, a count beyond them would fail on ports the user never set.
@@ -26,10 +30,10 @@ final class TestWorkerCount
     }
 
     // Because the processors the gate may run on (its affinity list) are what it sees, not every processor of the machine.
-    private static function processorsIn(string $processStatus): int
+    private static function processorsIn(string $processStatus): ?int
     {
         if (1 !== preg_match('/^Cpus_allowed_list:\s*([\d,-]+)\s*$/m', $processStatus, $list)) {
-            return 1;
+            return null;
         }
 
         $processors = 0;
