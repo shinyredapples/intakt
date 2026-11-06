@@ -10,7 +10,7 @@ final readonly class PhpStanIncludes
 
     private const string INCLUDE_LINE = '/^\s+-\s+(?<path>[\w.\/-]+)\s*$/';
 
-    private const string INCLUDES_KEY = '/^[\'"]?includes[\'"]?\s*:/';
+    private const string UNREADABLE_INCLUDES_KEY = '/^(?!includes:\h*\r?$)[\'"]?includes[\'"]?\h*:/m';
 
     // Because the gate configuration and the installed packages are no lists: only what the analysis includes from the rest of the repository is.
     private const array NOT_LISTS = ['config/gates/', 'vendor/'];
@@ -21,6 +21,10 @@ final readonly class PhpStanIncludes
      */
     public function ratchetListsIn(string $configuration): ?array
     {
+        if (1 === preg_match(self::UNREADABLE_INCLUDES_KEY, $configuration)) {
+            return null;
+        }
+
         $paths = [];
 
         foreach ($this->includeLines($configuration) as $line) {
@@ -45,24 +49,17 @@ final readonly class PhpStanIncludes
         $inIncludes = false;
 
         foreach ($this->meaningfulLines($configuration) as $line) {
-            $topLevel = ltrim($line) === $line;
-
-            if ($topLevel) {
+            if (ltrim($line) === $line) {
                 $inIncludes = 'includes:' === rtrim($line);
+                continue;
             }
 
-            if ($this->belongsToIncludes($line, $topLevel, $inIncludes)) {
+            if ($inIncludes) {
                 $lines[] = $line;
             }
         }
 
         return $lines;
-    }
-
-    // Because an includes key with anything after its colon is a form the gate cannot read, it is kept as an include line, which matches no "- path".
-    private function belongsToIncludes(string $line, bool $topLevel, bool $inIncludes): bool
-    {
-        return $topLevel ? !$inIncludes && 1 === preg_match(self::INCLUDES_KEY, $line) : $inIncludes;
     }
 
     /**
