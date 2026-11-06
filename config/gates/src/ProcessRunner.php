@@ -137,23 +137,37 @@ final class ProcessRunner
     /**
      * @param list<string> $command
      */
-    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS, ?string $toolsFrom = null): ProcessResult
+    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
     {
-        $refusal = $this->refusal($command[0], $seconds);
+        return $this->toItsEnd(new Process($this->held($command), $directory, getenv(), null, null), $command[0], $seconds);
+    }
+
+    // Because a relative PATH entry resolves in the directory a program starts in, `setsid` and `sh` start where the tools are searched, then the command moves to its own directory.
+    /**
+     * @param list<string> $command
+     */
+    public function runToItsEndWithToolsFrom(string $toolsFrom, array $command, string $directory): ProcessResult
+    {
+        $held = ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $directory, ...$command];
+
+        return $this->toItsEnd(new Process($held, $toolsFrom, getenv(), null, null), $command[0], self::OVERALL_TIMEOUT_SECONDS);
+    }
+
+    private function toItsEnd(Process $process, string $program, int $seconds): ProcessResult
+    {
+        $refusal = $this->refusal($program, $seconds);
 
         if ($refusal instanceof ProcessResult) {
             return $refusal;
         }
 
         $release = new InputStream();
-        $process = null === $toolsFrom
-            ? new Process($this->held($command), $directory, getenv(), $release, null)
-            : new Process($this->heldThenMoved($command, $directory), $toolsFrom, getenv(), $release, null);
+        $process->setInput($release);
         $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
         if (!$group instanceof ProcessGroup) {
-            return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
+            return $this->resultOf($process, self::CANNOT_RUN, $program);
         }
 
         $forwarding = StopSignalForwarding::through($group->stop(...));
@@ -168,16 +182,16 @@ final class ProcessRunner
         $forwarding->end();
 
         if (self::TIMED_OUT === $failure) {
-            $timedOut = $this->timedOut($command[0], $seconds);
+            $timedOut = $this->timedOut($program, $seconds);
 
             return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
         }
 
         if (null !== $failure && $process->isStarted() && $process->hasBeenSignaled()) {
-            return $this->signaled($process, $command[0]);
+            return $this->signaled($process, $program);
         }
 
-        return $this->resultOf($process, $failure, $command[0]);
+        return $this->resultOf($process, $failure, $program);
     }
 
     // Because Symfony's own timeout sends TERM and KILL at once, before the child can stop the contained run it started in a session of its own.
@@ -248,18 +262,6 @@ final class ProcessRunner
     {
         return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
     }
-
-    // Because a relative PATH entry resolves in the directory a program starts in, `setsid` and `sh` start where the tools are searched, then the command moves to its own directory.
-    /**
-     * @param list<string> $command
-     *
-     * @return list<string>
-     */
-    private function heldThenMoved(array $command, string $directory): array
-    {
-        return ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $directory, ...$command];
-    }
-
     private function refusal(string $program, int $seconds): ?ProcessResult
     {
         if (!function_exists('posix_kill')) {

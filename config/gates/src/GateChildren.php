@@ -32,7 +32,7 @@ final readonly class GateChildren
     private function reportOf(string $gate, array $arguments): GateReport
     {
         // Because the preflight finds `setsid` and `sh` from the workspace root, the child's launcher is searched from there too.
-        $child = $this->runner->runToItsEnd([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), toolsFrom: $this->root);
+        $child = $this->runner->runToItsEndWithToolsFrom($this->root, [PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory());
         fwrite(STDERR, $child->errors);
 
         return GateReport::fromChild($gate, $child);
