@@ -220,7 +220,7 @@ final readonly class Probe
 
     private function exitOf(int $exit, string $status): int
     {
-        // bin/instance names worker mode in its line; a line without a mode is the built-in server.
+        // Exact lines rather than decoded JSON, because anything else from the instance must count as not ready.
         if (in_array($status, ['{"status":"ready"}', '{"status":"ready","mode":"worker"}'], true)) {
             return $exit;
         }
