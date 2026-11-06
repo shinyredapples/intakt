@@ -168,29 +168,21 @@ final class LedgerRoundsTest extends TestCase
         yield 'shadow' => [',"mode":"shadow"', ProjectMode::Shadow];
         yield 'live' => [',"mode":"live"', ProjectMode::Live];
         yield 'recorded before the field existed' => ['', ProjectMode::Live];
+        yield 'unknown value' => [',"mode":"other"', ProjectMode::Live];
+        yield 'not a string' => [',"mode":3', ProjectMode::Live];
     }
 
-    #[DataProvider('unreadableModes')]
-    public function testAVerdictWithAModeOutsideTheKnownOnesIsSkipped(string $mode): void
+    public function testAVerdictWithADecisionOutsideTheKnownOnesIsSkipped(): void
     {
         $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
             $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.'}'),
-            $this->event(LedgerEventKind::VerdictReceived, '{'.$reviewer.',"decision":"approve","findings":0,"mode":'.$mode.'}'),
+            $this->event(LedgerEventKind::VerdictReceived, '{'.$reviewer.',"decision":"maybe","findings":0,"mode":"other"}'),
         );
 
         self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
-    }
-
-    /**
-     * @return iterable<string, array{string}>
-     */
-    public static function unreadableModes(): iterable
-    {
-        yield 'unknown value' => ['"other"'];
-        yield 'not a string' => ['3'];
     }
 
     public function testAStartInTodaysFormatPlacesTheRoundWithItsSource(): void
@@ -288,7 +280,7 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame([], $review?->rounds[0]->outcomes);
     }
 
-    public function testAJudgeRowWithAFindingWithoutTextIsSkippedAndLeavesTheRoundUnjudged(): void
+    public function testAJudgedFindingWithoutTextIsSkippedAndTheOthersKeepTheirCall(): void
     {
         $review = $this->reviewOf(
             'r1',
@@ -296,15 +288,37 @@ final class LedgerRoundsTest extends TestCase
             $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F2"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1"},{"id":"F2","severity":"P1","text":"Kept."}]}'),
         );
 
-        self::assertSame([ReviewState::InProgress, []], [$review?->rounds[0]->state, $review?->rounds[0]->findings]);
+        self::assertEquals([new RoundFinding('F2', 'P1', 'Kept.')->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
     }
 
-    public function testAMarkedIdWithoutAFindingEntryKeepsItsCall(): void
+    public function testAJudgeRowWithAnUnreadableFindingStillMarksItsRoundJudged(): void
     {
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[]}'),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"P9","text":"Odd."}]}'),
+        );
+
+        self::assertSame(ReviewState::Judged, $review?->rounds[0]->state);
+    }
+
+    public function testAJudgeRowWhoseMarksDoNotDeserializeIsSkipped(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":"F1","follow_ups":[],"findings":[]}'),
+        );
+
+        self::assertSame([ReviewState::InProgress, []], [$review?->rounds[0]->state, $review?->rounds[0]->findings]);
+    }
+
+    public function testAMarkedIdWhoseFindingTextIsUnreadableKeepsItsCall(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1"}]}'),
         );
 
         self::assertEquals([new RoundFinding('F1', null, null)->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);

@@ -138,6 +138,16 @@ final class LedgerReviewsTest extends TestCase
         self::assertSame([['r1', 'alpha', 3, ReviewState::Judged]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->project, $review->reviewers, $review->state], $reviews));
     }
 
+    public function testAJudgeRowWithAnUnreadableFindingListsItsRoundJudged(): void
+    {
+        $reviews = $this->reviewsOf(
+            $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2}'),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1"}]}'),
+        );
+
+        self::assertSame(ReviewState::Judged, $reviews[0]->state);
+    }
+
     public function testAJudgeRowThatDoesNotDeserializeLeavesItsRoundInProgress(): void
     {
         $reviews = $this->reviewsOf(
