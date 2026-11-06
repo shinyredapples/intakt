@@ -33,6 +33,12 @@ final readonly class TestDurations
         foreach ($reports as $report) {
             foreach ($this->testCases($report) as $case) {
                 $file = $this->relative($case->getAttribute('file'));
+
+                // Because a file outside the root keeps its machine path, which must reach neither the cache nor the CI logs.
+                if (null === $file) {
+                    continue;
+                }
+
                 $seconds[$file] = ($seconds[$file] ?? 0.0) + (float) $case->getAttribute('time');
             }
         }
@@ -159,10 +165,10 @@ final readonly class TestDurations
         return is_file($path) ? (int) filesize($path) : 0;
     }
 
-    private function relative(string $file): string
+    private function relative(string $file): ?string
     {
         $prefix = rtrim($this->root, '/').'/';
 
-        return str_starts_with($file, $prefix) ? substr($file, strlen($prefix)) : $file;
+        return str_starts_with($file, $prefix) ? substr($file, strlen($prefix)) : null;
     }
 }
