@@ -33,6 +33,22 @@ final class AiServiceStateTest extends TestCase
         self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
     }
 
+    public function testStateKeptThroughTheSecondReferenceIsReportedWhenTheSameOwnerGetsAnEmptyFirstReference(): void
+    {
+        $owner = $this->toolboxOf(new MemoryToolFactory());
+        $sharedFactory = new MemoryToolFactory();
+        $shared = $this->toolboxOf($sharedFactory);
+        $instanceMap = new ReflectionProperty($owner, 'instanceMap');
+        $instanceMap->setValue($owner, ['first' => $shared, 'second' => $shared]);
+        $before = AiServiceState::ofServices(['ai.toolbox' => $owner]);
+        $instanceMap->setValue($owner, ['first' => $this->toolboxOf(new MemoryToolFactory()), 'second' => $shared]);
+        $sharedFactory->addTool(new NamedTool(), 'kept_tool', 'A tool of the first run.');
+
+        $after = AiServiceState::ofServices(['ai.toolbox' => $owner]);
+
+        self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
+    }
+
     public function testAnObjectThatRefersBackToAnAncestorEndsTheWalkThere(): void
     {
         $toolbox = $this->toolboxOf(new MemoryToolFactory());
