@@ -30,7 +30,7 @@ final readonly class InstanceStatus
 
     public function inMode(string $mode): self
     {
-        return clone($this, ['mode' => $mode]);
+        return clone ($this, ['mode' => $mode]);
     }
 
     public function toJson(): string
@@ -592,7 +592,7 @@ $root = dirname(__DIR__);
 $frankenphp = executableOnPath('frankenphp');
 $web = null === $frankenphp ? new BuiltInServer($root) : new WorkerServer($root, $frankenphp);
 
-$instance = new Instance($root, $web, $command,$commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS, new DirectoryRemoval());
+$instance = new Instance($root, $web, $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS, new DirectoryRemoval());
 $status = $instance->run();
 
 // A command's own output is what the caller wants, so the server log is noise unless the boot failed.

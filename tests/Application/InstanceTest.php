@@ -278,7 +278,7 @@ final class InstanceTest extends TestCase
         file_put_contents($stubs.'/frankenphp', "#!/bin/sh\necho 'Error: loading initial config: listen tcp 127.0.0.1:1: bind: address already in use' >&2\nexit 1\n");
         chmod($stubs.'/frankenphp', 0o755);
 
-        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.self::pathWithoutFrankenphp()]);
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
 
         $status = json_decode($run['status'], true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($status);
@@ -420,7 +420,7 @@ final class InstanceTest extends TestCase
     {
         // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
         $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
-        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp', 'PATH' => self::pathWithoutFrankenphp()]);
+        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp', 'PATH' => $this->pathWithoutFrankenphp()]);
         $process->run();
 
         return $process;
@@ -461,7 +461,7 @@ final class InstanceTest extends TestCase
     private function environment(): array
     {
         // Without frankenphp on the PATH, so these runs cover the built-in server wherever they run.
-        return ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', 'PATH' => self::pathWithoutFrankenphp()];
+        return ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', 'PATH' => $this->pathWithoutFrankenphp()];
     }
 
     /**
@@ -475,7 +475,7 @@ final class InstanceTest extends TestCase
         return ['PATH' => $path];
     }
 
-    private static function pathWithoutFrankenphp(): string
+    private function pathWithoutFrankenphp(): string
     {
         $directories = array_filter(explode(':', (string) getenv('PATH')), static fn (string $directory): bool => !is_file($directory.'/frankenphp'));
 
