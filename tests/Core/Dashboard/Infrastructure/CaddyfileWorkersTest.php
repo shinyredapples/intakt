@@ -102,20 +102,23 @@ final class CaddyfileWorkersTest extends TestCase
         self::assertSame(['index.php' => 1, 'mcp.php' => 0], $this->requestsPerWorkerFile(1));
     }
 
+    // Alone, because ten worker restarts in a row compete for memory and CPU with the other workers' servers, and the server once ended in a full run.
+    #[Group('serial')]
     public function testAWorkerPastTheMemoryCeilingIsReplacedWithoutAFailedRequest(): void
     {
         $this->start(['WORKER_MEMORY_CEILING_MB' => (string) self::CEILING_MEGABYTES]);
 
         $statuses = [];
+        $log = '';
 
         for ($request = 0; $request < 10; ++$request) {
             // Read so the server's debug log never fills its pipe and blocks the next answer.
-            $this->server->getIncrementalErrorOutput();
+            $log = $this->server->getIncrementalErrorOutput();
             $statuses[] = $this->client->request('GET', $this->origin.'/projects')->getStatusCode();
         }
 
         self::assertSame(array_fill(0, 10, 200), $statuses);
-        self::assertTrue($this->server->isRunning());
+        self::assertTrue($this->server->isRunning(), sprintf("The server ended with status %s:\n%s", var_export($this->server->getExitCode(), true), $log.$this->server->getIncrementalErrorOutput()));
         self::assertSame(10, $this->requestsPerWorkerFile(10)['index.php']);
         self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheServingAppWorkers());
     }
