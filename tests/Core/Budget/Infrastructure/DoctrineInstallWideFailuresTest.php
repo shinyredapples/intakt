@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use Doctrine\DBAL\Exception\ConnectionLost;
 use Doctrine\DBAL\Exception\DriverException;
+use Doctrine\DBAL\Exception\ReadOnlyException;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -122,6 +123,19 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
     }
 
+    public function testAnItemFindsTheSameErrorAnotherItemCommittedJustBeforeItsOwnRecord(): void
+    {
+        $this->entities->getConnection()->insert('budget_item_failure', [
+            'item' => hash('sha256', 'head 8'),
+            'error' => hash('sha256', 'RuntimeException: CI endpoint down'),
+            'failed_at' => $this->clock->now(),
+        ], ['failed_at' => 'utc_datetime_immutable']);
+
+        $this->failures->itemFailed('head 7', new RuntimeException('CI endpoint down'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+    }
+
     public function testOnlyHashesOfTheItemAndTheErrorAreStored(): void
     {
         $this->failures->itemFailed('head 7', new RuntimeException('401 for key secret-one'));
@@ -146,7 +160,8 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
     public static function failuresNoItemCanAvoid(): iterable
     {
         yield 'a lost database connection' => [new ConnectionLost(new DriverFailure('server has gone away'), null)];
-        yield 'a lock store that fails' => [new LockStorageException('the lock store is down')];
+        yield 'a database that refuses writes' => [new ReadOnlyException(new DriverFailure('attempt to write a readonly database'), null)];
+        yield 'a lock store that fails' =>[new LockStorageException('the lock store is down')];
         yield 'a lock store that fails while acquiring' => [new LockAcquiringException('Failed to acquire the "x" lock.')];
         yield 'a lock store failure wrapped by a forge' => [new RuntimeException('read failed', 0, new LockStorageException('the lock store is down'))];
         yield 'a lock store that fails while releasing' => [new LockReleasingException('Failed to release the "x" lock.')];
