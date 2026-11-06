@@ -31,7 +31,7 @@ Checked on 2026-11-03.
 - **Pinned versions:** still fails. `php bin/console intakt:upstream:run`: `still fails  frankenphp-messenger-consume-sigterm`, the exit-code case under `frankenphp php-cli` fails with `Failed asserting that 139 is identical to 0`.
 - **Development branch:** not checked (no FrankenPHP development build in the sandbox); the owner can run the test against a newer build.
 - **Existing issue or pull request:** php/frankenphp#2479, named in plan T28 as the existing report (open, with a minimal reproduction and the root cause); php/frankenphp#2647 (open draft) is the likely fix.
-- **Searches:** none made (no network beyond the package registries).
-- **Decision:** `already reported` (php/frankenphp#2479). The comment in `COMMENT.md` adds the Symfony reproduction.
+- **Searches:** none beyond reading php/frankenphp#2479 and #2647 (titles and contents) in the 2026-11-06 refresh.
+- **Decision:** `already reported` (php/frankenphp#2479). The comment in `COMMENT.md` only records that v1.13.5 still crashes and names #2647; #2479 already has a minimal reproduction and the root cause.
 - **Refresh (2026-11-06, FrankenPHP v1.13.5):** still fails. The test run with the static x86_64 release binary of v1.13.5 (PHP 8.5.12 ZTS, Caddy v2.11.9) first on `PATH`: both `frankenphp php-cli` cases fail with `Failed asserting that 139 is identical to 0`, in flight and idle; the plain `php` cases pass. php/frankenphp#2479 ("php-cli queue:work segfaults (SIGSEGV) on SIGTERM/SIGINT graceful shutdown") already holds a minimal reproduction and the root cause, so `COMMENT.md` is now a two-line comment that says only that v1.13.5 still crashes, and names php/frankenphp#2647 (draft pull request, "Run Linux PHP CLI on a native thread with Go signals blocked") as the likely fix.
 - **Status:** `COMMENT.md` is ready; the owner approves it before it is posted.

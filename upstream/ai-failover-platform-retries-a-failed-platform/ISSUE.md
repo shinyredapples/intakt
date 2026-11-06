@@ -18,8 +18,49 @@ Separately, the limiter is created with `$platform::class` as its key. The OpenA
 
 ```php
 use Symfony\AI\Platform\Bridge\Failover\FailoverPlatform;
+use Symfony\AI\Platform\Model;
+use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
+use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Test\MockModelCatalog;
+use Symfony\AI\Platform\Test\MockResultConverter;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
+
+final class FailingPlatform implements PlatformInterface
+{
+    public int $calls = 0;
+
+    public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
+    {
+        ++$this->calls;
+
+        throw new RuntimeException('provider down');
+    }
+
+    public function getModelCatalog(): ModelCatalogInterface
+    {
+        return new MockModelCatalog();
+    }
+}
+
+final class WorkingPlatform implements PlatformInterface
+{
+    public int $calls = 0;
+
+    public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
+    {
+        ++$this->calls;
+
+        return new DeferredResult(new MockResultConverter(), new InMemoryRawResult(['text' => 'ok']));
+    }
+
+    public function getModelCatalog(): ModelCatalogInterface
+    {
+        return new MockModelCatalog();
+    }
+}
 
 $limiter = new RateLimiterFactory(['id' => 'failover', 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 hour'], new InMemoryStorage());
 $failing = new FailingPlatform();
@@ -32,7 +73,34 @@ $platform->invoke('model', 'second call');
 echo $failing->calls, ' ', $working->calls, PHP_EOL;
 ```
 
-For the shared key, wrap the factory in a `RateLimiterFactoryInterface` that records the keys passed to `create()`, and invoke a `FailoverPlatform` over `[new FailingPlatform(), new FailingPlatform(), new WorkingPlatform()]` once.
+For the shared key, pass a recording factory instead of the plain one and invoke a `FailoverPlatform` over `[new FailingPlatform(), new FailingPlatform(), new WorkingPlatform()]` once (the classes are the ones above):
+
+```php
+use Symfony\Component\RateLimiter\LimiterInterface;
+use Symfony\Component\RateLimiter\RateLimiterFactoryInterface;
+
+final class KeyRecordingLimiterFactory implements RateLimiterFactoryInterface
+{
+    /** @var list<string|null> */
+    public array $keys = [];
+
+    public function __construct(private readonly RateLimiterFactoryInterface $factory)
+    {
+    }
+
+    public function create(?string $key = null): LimiterInterface
+    {
+        $this->keys[] = $key;
+
+        return $this->factory->create($key);
+    }
+}
+
+$limiters = new KeyRecordingLimiterFactory($limiter);
+(new FailoverPlatform([new FailingPlatform(), new FailingPlatform(), new WorkingPlatform()], $limiters))->invoke('model', 'a call');
+
+echo implode(', ', $limiters->keys), PHP_EOL;
+```
 
 ### Actual behavior
 
