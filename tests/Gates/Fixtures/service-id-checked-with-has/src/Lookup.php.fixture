@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+final readonly class Lookup
+{
+    public function __construct(private ContainerInterface $container)
+    {
+    }
+
+    public function setAtRuntime(): ?object
+    {
+        if (!$this->container->has('set.at.runtime')) {
+            return null;
+        }
+
+        return $this->container->get('set.at.runtime');
+    }
+}
