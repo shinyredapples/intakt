@@ -9,10 +9,9 @@ const path = require('path');
 const MOCKS = path.resolve(__dirname, '..');
 const OUT = path.join(MOCKS, 'screens');
 
+// The board, Waiting on you, task, settings and components pages land with the next part of the mocks.
+// Their jobs below stay; allJobs() drops them until their page is listed here.
 const PAGES = {
-  index: 'Board',
-  waiting: 'Waiting on you',
-  task: 'Task #598',
   projects: 'Projects',
   project: 'Project acme-shop',
   'add-project': 'Add a project',
@@ -21,8 +20,6 @@ const PAGES = {
   'add-account': 'Add an account',
   history: 'History: ledger',
   trends: 'History: trends',
-  settings: 'Settings (incl. notifications)',
-  components: 'Components',
   setup: 'Setup',
 };
 
@@ -71,7 +68,7 @@ function allJobs() {
     ...jobsFor('light'),
     ...jobsFor('dark'),
     { page: 'index', theme: 'light', ...PHONE, full: true, variant: 'full', note: 'full page' },
-  ];
+  ].filter((job) => job.page in PAGES);
 }
 
 function fileName(job) {

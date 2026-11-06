@@ -4,22 +4,22 @@ Static HTML mocks of every dashboard page, with the design system they share. [D
 
 ## Opening the mocks
 
-Open `index.html` (the board) in a browser; the rail links to every other page. Some browsers limit pages opened from disk, so a local server is the safer way. From this folder, run one of:
+Open `projects.html` in a browser; the rail links to the other pages. The board (`index.html`), Waiting on you, task, settings and components pages and the logo land with the next part of the mocks: until then their rail links lead nowhere, the pages show the repository's lockup (`docs/assets/`) in place of the small lockup and the favicon in place of the mark. Some browsers limit pages opened from disk, so a local server is the safer way. From this folder, run one of:
 
 ```sh
 php -S localhost:8000
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000/`. The board has example states: `index.html?demo=stress`, `?demo=reconnecting`, `?demo=firstday` and `?demo=loading`. The setup and add-project pages take `?step=2` to `?step=5`.
+Then open `http://localhost:8000/projects.html`. The setup and add-project pages take `?step=2` to `?step=5`.
 
-Every page uses `assets/intakt.css` and `assets/intakt.js`; `components.html` shows the component set.
+Every page uses `assets/intakt.css` and `assets/intakt.js`.
 
 The mocks load their fonts from Google Fonts, so opening them or running `tools/screenshots.js` needs the network; without it the browser falls back to other fonts and the screenshots differ from the approved set. The mocks are design documents, not shipped code: the dashboard serves its fonts itself.
 
 ## Screenshots
 
-The screenshots are not committed. `tools/screenshots.js` writes all of them, light and dark, at 1440, 1920, 2560 and 390 wide, to `screens/` with an index in `screens/INDEX.md`. It needs Node.js and Playwright:
+The screenshots are not committed. `tools/screenshots.js` writes all of them for the pages in this folder, light and dark, at 1440 and 390 wide, to `screens/` with an index in `screens/INDEX.md`. It needs Node.js and Playwright:
 
 ```sh
 npm install --global playwright

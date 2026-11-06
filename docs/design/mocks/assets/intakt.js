@@ -146,9 +146,9 @@
       rail.setAttribute("aria-label", "Main");
       rail.innerHTML = `<div class="rail-in">` +
         `<a class="brand" href="index.html" aria-label="Intakt home">
-          <img class="logo-full logo-light" src="assets/intakt-lockup-small.svg" alt="Intakt">
-          <img class="logo-full logo-dark" src="assets/intakt-lockup-small-dark.svg" alt="Intakt">
-          <img class="mark" src="assets/intakt-small.svg" alt="Intakt"></a>` +
+          <img class="logo-full logo-light" src="../../assets/intakt-lockup.svg" alt="Intakt">
+          <img class="logo-full logo-dark" src="../../assets/intakt-lockup-dark.svg" alt="Intakt">
+          <img class="mark" src="assets/favicon-32.png" alt="Intakt"></a>` +
         NAV.map(([k, l, h]) =>
           `<a class="nav" data-k="${k}" href="${h}"${k === page || (k === "more" && ["history", "settings"].includes(page)) ? ' aria-current="page"' : ""} title="${l}">${icon(k)}<span class="label">${SHORT[k] ? `<span class="l-long">${l}</span><span class="l-short">${SHORT[k]}</span>` : l}</span>${
             k === "waiting" ? `<span class="count needs" aria-label="${WAITING_COUNT} items">${WAITING_COUNT}</span>` : ""}</a>`).join("") +
@@ -165,7 +165,7 @@
     if (top) {
       const proj = localStorage.getItem("intakt-project") || "all";
       top.innerHTML =
-        `<img class="brand-m logo-light" src="assets/intakt-lockup-small.svg" alt="Intakt"><img class="brand-m logo-dark" src="assets/intakt-lockup-small-dark.svg" alt="Intakt">
+        `<img class="brand-m logo-light" src="../../assets/intakt-lockup.svg" alt="Intakt"><img class="brand-m logo-dark" src="../../assets/intakt-lockup-dark.svg" alt="Intakt">
         <button class="search-trigger" type="button" aria-haspopup="dialog">${icon("search")}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>${isMac() ? "⌘K" : "Ctrl K"}</kbd></button>
         <div class="grow"></div>
         <label class="sr-only" for="projfilter">Project</label>
@@ -515,7 +515,7 @@
       document.querySelectorAll(".banner").forEach((b) => b.remove());
       lead.textContent = "Intakt is ready. Nothing to build yet.";
       main.querySelector(".page-head .actions")?.remove();
-      document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday"><img src="assets/intakt-small.svg" alt=""><div><h2>Give Intakt its first task</h2>
+      document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday"><img src="assets/favicon-32.png" alt=""><div><h2>Give Intakt its first task</h2>
         <ol><li>In <span class="mono">acme/field-notes</span>, add the label <strong>intakt</strong> to an issue that says what you want.</li>
         <li>Intakt picks it up within a minute. It shows up in Ready, then Planned.</li>
         <li>If the issue leaves a real choice open, the Tech lead asks you here and on your phone.</li></ol>
