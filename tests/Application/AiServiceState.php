@@ -131,40 +131,44 @@ final class AiServiceState
         return array_any(self::LIBRARIES, static fn (string $namespace): bool => str_starts_with($class, $namespace));
     }
 
+    // An object is skipped only while it is an ancestor on the current path (a cycle), not once it was reached elsewhere: an object two properties share is recorded under both paths, so a reset that replaces the first reference with an empty object while the second keeps the used one still shows under the second path.
     /**
-     * @param list<int|string> $path
+     * @param list<int|string>  $path
+     * @param array<int, true> $ancestors
      */
-    private function visit(mixed $value, array $path): void
+    private function visit(mixed $value, array $path, array $ancestors = []): void
     {
         if (is_array($value)) {
             foreach ($value as $key => $item) {
-                $this->visit($item, [...$path, $key]);
+                $this->visit($item, [...$path, $key], $ancestors);
             }
 
             return;
         }
 
         if ($value instanceof LazyObjectInterface) {
-            $this->visit($value->initializeLazyObject(), $path);
+            $this->visit($value->initializeLazyObject(), $path, $ancestors);
 
             return;
         }
 
-        if (!is_object($value) || isset($this->objects[spl_object_id($value)]) || !self::isLibrary($value::class)) {
+        if (!is_object($value) || isset($ancestors[spl_object_id($value)]) || !self::isLibrary($value::class)) {
             return;
         }
 
         $this->objects[spl_object_id($value)] = $value;
+        $ancestors[spl_object_id($value)] = true;
 
         foreach ($this->properties($value) as $property) {
-            $this->record($value, $property, $path);
+            $this->record($value, $property, $path, $ancestors);
         }
     }
 
     /**
-     * @param list<int|string> $path
+     * @param list<int|string>  $path
+     * @param array<int, true> $ancestors
      */
-    private function record(object $object, ReflectionProperty $property, array $path): void
+    private function record(object $object, ReflectionProperty $property, array $path, array $ancestors): void
     {
         $at = json_encode($path, JSON_THROW_ON_ERROR);
         $name = $property->getDeclaringClass()->getName().'::$'.$property->getName();
@@ -176,7 +180,7 @@ final class AiServiceState
 
         if ($property->isInitialized($object)) {
             $this->values[$at][$name] = self::fingerprint($property->getValue($object), 0);
-            $this->visit($property->getValue($object), [...$path, $name]);
+            $this->visit($property->getValue($object), [...$path, $name], $ancestors);
         }
     }
 

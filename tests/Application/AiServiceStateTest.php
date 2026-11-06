@@ -6,7 +6,9 @@ namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Agent\Toolbox\ChainToolbox;
 use Symfony\AI\Agent\Toolbox\Toolbox;
 use Symfony\AI\Agent\Toolbox\ToolFactory\MemoryToolFactory;
 
@@ -20,6 +22,27 @@ final class AiServiceStateTest extends TestCase
         $after = AiServiceState::ofServices(['ai.toolbox' => $this->toolboxOf(new MemoryToolFactory()->addTool(new NamedTool(), 'kept_tool', 'A tool of the first run.'))]);
 
         self::assertSame([MemoryToolFactory::class.'::$tools'], $after->changedSince($before));
+    }
+
+    public function testStateKeptThroughTheSecondReferenceToASharedObjectIsReportedWhenTheFirstIsReplaced(): void
+    {
+        $shared = new MemoryToolFactory();
+        $before = AiServiceState::ofServices(['ai.toolbox' => new ChainToolbox([$this->toolboxOf($shared), $this->toolboxOf($shared)])]);
+        $after = AiServiceState::ofServices(['ai.toolbox' => new ChainToolbox([$this->toolboxOf(new MemoryToolFactory()), $this->toolboxOf($shared->addTool(new NamedTool(), 'kept_tool', 'A tool of the first run.'))])]);
+
+        self::assertSame([MemoryToolFactory::class.'::$tools'], $after->changedSince($before));
+    }
+
+    public function testAnObjectThatRefersBackToAnAncestorEndsTheWalkThere(): void
+    {
+        $toolbox = $this->toolboxOf(new MemoryToolFactory());
+        $chain = new ChainToolbox([$toolbox]);
+        // The toolbox fills its instance map itself only while executing a tool, so the cycle back to its owner is put there directly.
+        new ReflectionProperty($toolbox, 'instanceMap')->setValue($toolbox, ['owner' => $chain]);
+
+        $state = AiServiceState::ofServices(['ai.toolbox' => $chain]);
+
+        self::assertContains(MemoryToolFactory::class.'::$tools', $state->mutableWithoutReset());
     }
 
     public function testANewObjectAsEmptyAsTheOneItReplacedLeavesNothingBehind(): void
