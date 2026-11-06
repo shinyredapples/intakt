@@ -107,7 +107,7 @@ final class LedgerRounds
         $judge = $withText ?? $this->payloads->judgeOf($recorded);
 
         if ($judge instanceof JudgeDone) {
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge), 'textRecorded' => null !== $withText]];
+            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge), 'textRecorded' => $withText instanceof JudgeDone]];
         }
     }
 
