@@ -13,7 +13,8 @@ final class ConsoleDisplay extends Constraint
 {
     private const string BREAK = "\u{E000}";
 
-    /** @var list<string> single characters, and runs of spaces kept whole because one break stands for the whole run */
+    // A run of spaces stays one token because one break stands for the whole run.
+    /** @var list<string> */
     private readonly array $tokens;
 
     private function __construct(private readonly string $text)
