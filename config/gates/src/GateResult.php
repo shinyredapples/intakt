@@ -7,7 +7,7 @@ namespace Intakt\Gates;
 final readonly class GateResult
 {
     private const int MAXIMUM_FINDINGS = 10;
-    private const int MAXIMUM_FINDING_LENGTH = 300;
+    public const int MAXIMUM_FINDING_LENGTH = 300;
 
     /**
      * @param list<string>                                         $findings

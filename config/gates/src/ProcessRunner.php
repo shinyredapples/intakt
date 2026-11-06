@@ -33,6 +33,8 @@ final class ProcessRunner
 
     private const string ZOMBIE = 'Z';
 
+    private const array STOPPING_SIGNALS = [1, 2, 15];
+
     private ?string $containment = null;
 
     public function __construct(
@@ -131,18 +133,31 @@ final class ProcessRunner
         return $results;
     }
 
-    // Because a gate child that times out must fail its gate with what it printed so far, not with the timeout alone.
+    // Because a gate child that times out must fail its gate with what it printed so far, not with the timeout alone,
+    // and no program it started may outlive it and overlap the next gate.
     /**
      * @param list<string> $command
      */
     public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
     {
-        if ($seconds < 1) {
-            return $this->timedOut($command[0], $seconds);
+        $refusal = $this->refusal($command[0], $seconds);
+
+        if ($refusal instanceof ProcessResult) {
+            return $refusal;
         }
 
-        $process = new Process($command, $directory, getenv(), null, $seconds);
-        $failure = $this->failuresOf([$process])[0] ?? null;
+        $release = new InputStream();
+        $process = new Process($this->held($command), $directory, getenv(), $release, $seconds);
+        $group = $this->startHeld($process, $release);
+
+        if (null === $group) {
+            return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
+        }
+
+        $previous = $this->stopGroupWithThisProcess($group);
+        $failure = $this->waitForAll([$process])[0] ?? null;
+        posix_kill(-$group, 9);
+        $this->restoreSignalHandlers($previous);
 
         if (self::TIMED_OUT === $failure) {
             $timedOut = $this->timedOut($command[0], $seconds);
@@ -190,13 +205,65 @@ final class ProcessRunner
      */
     private function contained(array $command): array
     {
-        $held = ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh'];
-
         if (self::PID_NAMESPACE === $this->containment()) {
-            return [...$held, $this->unshare, ...self::NAMESPACE_OPTIONS, ...$command];
+            return $this->held([$this->unshare, ...self::NAMESPACE_OPTIONS, ...$command]);
         }
 
-        return [...$held, ...$command];
+        return $this->held($command);
+    }
+
+    // Because a gate child runs the gate's own tools, which must see the real user and processes, it gets a session
+    // of its own but never a PID or user namespace: in one, git saw other owners and the child became PID 1.
+    /**
+     * @param list<string> $command
+     *
+     * @return list<string>
+     */
+    private function held(array $command): array
+    {
+        return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
+    }
+
+    // Because a child in a session of its own no longer gets the Ctrl-C or kill meant for bin/check.
+    /**
+     * @return array{bool, array<int, mixed>}|null
+     */
+    private function stopGroupWithThisProcess(int $group): ?array
+    {
+        if (!function_exists('pcntl_signal')) {
+            return null;
+        }
+
+        $handlers = [];
+
+        foreach (self::STOPPING_SIGNALS as $signal) {
+            $handlers[$signal] = pcntl_signal_get_handler($signal);
+            pcntl_signal($signal, static function (int $signal) use ($group): void {
+                posix_kill(-$group, 9);
+                pcntl_signal($signal, SIG_DFL);
+                posix_kill(getmypid(), $signal);
+            });
+        }
+
+        return [pcntl_async_signals(true), $handlers];
+    }
+
+    /**
+     * @param array{bool, array<int, mixed>}|null $previous
+     */
+    private function restoreSignalHandlers(?array $previous): void
+    {
+        if (null === $previous) {
+            return;
+        }
+
+        [$async, $handlers] = $previous;
+
+        foreach ($handlers as $signal => $handler) {
+            pcntl_signal($signal, $handler);
+        }
+
+        pcntl_async_signals($async);
     }
 
     private function refusal(string $program, int $seconds): ?ProcessResult
