@@ -51,6 +51,7 @@ use Symfony\Contracts\Service\ServiceProviderInterface;
 #[CoversNothing]
 final class ProjectTiersTest extends KernelTestCase
 {
+    // The compiled containers are keyed by these variables alone, so the container must not read any other variable at compile time, or a reused container would carry a stale value.
     private const array KEYS = [
         'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'INTAKT_CONFIG',
         'ANTHROPIC_API_KEY_TEAM', 'OPENAI_API_KEY_TEAM', 'OPENAI_COMPATIBLE_BASE_URL_TEAM', 'OPENAI_COMPATIBLE_API_KEY_TEAM', 'CLAUDE_CODE_OAUTH_TOKEN_TEAM',
@@ -61,8 +62,18 @@ final class ProjectTiersTest extends KernelTestCase
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
 
+    private mixed $cacheDirectory = null;
+
+    public static function tearDownAfterClass(): void
+    {
+        new Filesystem()->remove(self::compiledContainers());
+        parent::tearDownAfterClass();
+    }
+
     protected function setUp(): void
     {
+        $this->cacheDirectory = $_SERVER['APP_CACHE_DIR'] ?? null;
+
         foreach (self::KEYS as $name) {
             $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
             $this->unsetVariable($name);
@@ -105,7 +116,8 @@ final class ProjectTiersTest extends KernelTestCase
         }
 
         parent::tearDown();
-        new Filesystem()->remove([$this->file, self::createKernel()->getCacheDir()]);
+        $this->restoreTheCacheDirectory();
+        new Filesystem()->remove($this->file);
     }
 
     public function testTheContainerBuildsWithTwoProjectsThatMapTiersDifferently(): void
@@ -484,11 +496,36 @@ final class ProjectTiersTest extends KernelTestCase
 
     private function bootedContainer(): ContainerInterface
     {
-        new Filesystem()->remove(self::createKernel()->getCacheDir());
         self::ensureKernelShutdown();
+        $this->restoreTheCacheDirectory();
+        // One cache folder per config and keys, because the container is built from those alone, so a test with the same ones reuses it while one with another config never sees a container built for the old file.
+        $_SERVER['APP_CACHE_DIR'] = self::compiledContainers().'/'.$this->containerInputs();
         self::bootKernel();
 
         return self::getContainer();
+    }
+
+    // Beside the shared test cache rather than inside it, so the kernel tests that run after this class keep their compiled container.
+    private static function compiledContainers(): string
+    {
+        return self::createKernel()->getCacheDir().'-project-tiers';
+    }
+
+    // The keys without INTAKT_CONFIG, because its path changes per test while the file's content is what the container is built from.
+    private function containerInputs(): string
+    {
+        $keys = array_map(static fn (string $name): mixed => $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name), array_diff(self::KEYS, ['INTAKT_CONFIG']));
+
+        return hash('xxh128', serialize([(string) file_get_contents($this->file), $keys]));
+    }
+
+    private function restoreTheCacheDirectory(): void
+    {
+        unset($_SERVER['APP_CACHE_DIR']);
+
+        if (null !== $this->cacheDirectory) {
+            $_SERVER['APP_CACHE_DIR'] = $this->cacheDirectory;
+        }
     }
 
     private function unsetVariable(string $name): void

@@ -220,7 +220,8 @@ final readonly class Probe
 
     private function exitOf(int $exit, string $status): int
     {
-        if ('{"status":"ready"}' === $status) {
+        // Exact lines rather than decoded JSON, because anything else from the instance must count as not ready.
+        if (in_array($status, ['{"status":"ready"}', '{"status":"ready","mode":"worker"}'], true)) {
             return $exit;
         }
 
