@@ -89,6 +89,11 @@ final class StructuredOutputTest extends TestCase
         self::assertNull($object, 'a truncated stream must not give back an object');
         self::assertInstanceOf($expected, $thrown, 'a truncated stream must end in a typed platform exception');
         self::assertNotInstanceOf(IncompleteStreamException::class, $thrown, 'the stream is closed, so the exception must come from the cut, not from a missing end');
+
+        // A cassette request mismatch throws the same RuntimeException, so the message tells the decoder's refusal from a stale cassette.
+        if (RuntimeException::class === $expected) {
+            self::assertSame('Cannot json decode the streamed content.', $thrown->getMessage());
+        }
     }
 
     /**
@@ -103,7 +108,7 @@ final class StructuredOutputTest extends TestCase
 
     // The generic bridge raises MaxOutputTokensException for a cut tool call only; a cut text reaches the structured-output decoder, which refuses the broken JSON.
     /**
-     * @return iterable<string, array{string, string, class-string<ExceptionInterface>}>
+     * @return iterable<string, array{0: string, 1: string, 2: class-string<ExceptionInterface>}>
      */
     public static function truncations(): iterable
     {

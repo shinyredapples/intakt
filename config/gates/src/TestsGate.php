@@ -197,7 +197,7 @@ final class TestsGate implements Gate
 
     private function testJobs(Workspace $workspace, TestWorkers $workers): TestJobs
     {
-        $recorded = new TestDurations($workspace->root)->recorded($this->gatesCache());
+        $recorded = new TestDurations($workspace->root)->recorded(GatesCache::directory());
 
         return new TestJobs($workers, $workspace->root, fn (TestWorker $worker): array => $this->command($workspace, $worker, $this->testRun($worker)), $recorded);
     }
@@ -271,14 +271,9 @@ final class TestsGate implements Gate
     {
         $durations = new TestDurations($workspace->root);
         $seconds = $durations->read($workers->junitReports());
-        $durations->write($seconds, $this->gatesCache());
+        $durations->write($seconds, GatesCache::directory());
 
         return $durations->slowest($seconds);
-    }
-
-    private function gatesCache(): string
-    {
-        return $this->variable(TestWorker::GATES_CACHE_VARIABLE) ?? sys_get_temp_dir().'/intakt-gates';
     }
 
     private function scratchDirectory(): ?string

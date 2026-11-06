@@ -28,6 +28,16 @@ final readonly class Workspace
         return $this->home.'/vendor/bin/'.$name;
     }
 
+    public function instance(): string
+    {
+        return $this->home.'/bin/instance';
+    }
+
+    public function autoload(): string
+    {
+        return $this->home.'/vendor/autoload.php';
+    }
+
     public function console(): string
     {
         return $this->home.'/bin/console';
@@ -134,6 +144,14 @@ final readonly class Workspace
     public function command(array $command, array $environment = []): ProcessResult
     {
         return $this->runner->run($command, $this->root, $environment);
+    }
+
+    /**
+     * @param list<string> $command
+     */
+    public function containedCommand(array $command, int $seconds): ProcessResult
+    {
+        return $this->runner->runWithin($command, $this->root, $seconds);
     }
 
     /**
