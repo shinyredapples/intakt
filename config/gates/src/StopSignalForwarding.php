@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 // Because a child in a session of its own no longer gets the Ctrl-C or kill meant for bin/check.
-final class StopSignalForwarding
+final readonly class StopSignalForwarding
 {
     private const array STOPPING_SIGNALS = [1, 2, 15];
 
@@ -13,7 +13,7 @@ final class StopSignalForwarding
      * @param array<int, callable|int> $handlers
      */
     private function __construct(
-        private readonly array $handlers,
+        private array $handlers,
     ) {
     }
 
