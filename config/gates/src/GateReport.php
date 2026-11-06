@@ -53,8 +53,13 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
+    // Because the report holds one line per gate, so a valid object spread over several lines is no result line.
     private static function verdictOf(string $gate, string $line): ?bool
     {
+        if (strpbrk($line, "\r\n") !== false) {
+            return null;
+        }
+
         $report = json_decode($line, true);
 
         if (!is_array($report) || [] !== array_diff(array_keys($report), self::FIELDS) || $gate !== ($report['gate'] ?? null)) {
