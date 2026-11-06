@@ -38,15 +38,14 @@ final readonly class LedgerPayloads
      *
      * @param class-string<T>      $class
      * @param array<string, mixed> $unreadAs
-     * @param array<string, mixed> $absentAs
      *
      * @return T|null
      */
-    // A key in $unreadAs is never read from the row and takes the given value, for a reader that must not lose the rest of a row to that one key; $absentAs works as in of().
-    public function ofWithout(RecordedEvent $recorded, string $class, array $unreadAs, array $absentAs = []): ?object
+    // A key in $unreadAs is never read from the row and takes the given value, for a reader that must not lose the rest of a row to that one key.
+    public function ofWithout(RecordedEvent $recorded, string $class, array $unreadAs): ?object
     {
         return $this->deserialized($recorded->event->payload, $class, [
-            AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => [...$absentAs, ...$unreadAs]],
+            AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => $unreadAs],
             AbstractNormalizer::IGNORED_ATTRIBUTES => array_keys($unreadAs),
         ]);
     }
@@ -79,7 +78,7 @@ final readonly class LedgerPayloads
      *
      * @return T|null
      */
-    // An entry that does not encode again (a number too large for a float decodes to infinity) is as unreadable as one that does not deserialize.
+    // Skipped when it does not encode again, because a number too large for a float decodes to infinity and must not take the page down.
     private function entryOf(array $entry, string $class): ?object
     {
         try {

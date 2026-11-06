@@ -30,9 +30,6 @@ final readonly class RoundPayloads
 {
     private const array UNNAMED_START = ['change' => '', 'task' => ''];
 
-    // Read only after the numbered read failed and the number is missing or null, because the placeholder lets such a start deserialize and startOf() then gives it none.
-    private const array UNREAD_NUMBER = ['number' => 0];
-
     private const array UNMARKED_VERDICT = ['mode' => ProjectMode::Live];
     private const array UNRECORDED_FINDINGS = ['findings' => []];
 
@@ -48,15 +45,9 @@ final readonly class RoundPayloads
             return $this->reviewedRound($numbered, $numbered->number, $recorded);
         }
 
-        $number = $this->payloads->of($recorded, StartNumber::class);
+        $unnumbered = $this->payloads->of($recorded, UnnumberedStart::class);
 
-        if (!$number instanceof StartNumber || null !== $number->number) {
-            return null;
-        }
-
-        $unnumbered = $this->payloads->ofWithout($recorded, ReviewStarted::class, self::UNREAD_NUMBER, self::UNNAMED_START);
-
-        return $unnumbered instanceof ReviewStarted ? $this->reviewedRound($unnumbered, null, $recorded) : null;
+        return $unnumbered instanceof UnnumberedStart && null === $unnumbered->number ? $this->reviewedRound($unnumbered->asStarted(), null, $recorded) : null;
     }
 
     // Only the judge's marks, with no findings, because the call stands where the finding text was not recorded (rounds judged before it was) or an entry is unreadable; judgedFindingsOf() reads the findings.
