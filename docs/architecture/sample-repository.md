@@ -1,0 +1,3 @@
+## Sample repository
+
+`fixtures/sample-repository/` is data, not code; the demo's seed builds a git repository from it (see [The demo](demo-with-docker-compose.md)). `base/` is the tree of the base commit; `pull-request/` holds only the files the branch adds or changes. `issues.json` lists each deliberate issue (`id`, `kind` of bug, missing-test or security, `file`, `description`, and an `evidence` line that appears as an added line in the change). `SampleRepositoryTest` builds the repository with the test `TemporaryRepository` (base on `main`, then the overlay on `sample-change`) and checks that every listed issue is in the diff. It is JavaScript so the PHP gates do not scan it.
