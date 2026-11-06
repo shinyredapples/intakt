@@ -117,7 +117,7 @@ When the `tests` gate of `bin/check` runs, its line also lists the ten slowest t
 {"gate":"tests","ok":true,"findings":[],"omitted":0,"slowest":[{"file":"tests/Application/InstanceTest.php","seconds":45.722},...]}
 ```
 
-The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
+The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. A test file outside the project folder is left out of both the file and the `slowest` list, so no path of your machine shows up in them. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
 
 ## Running the tests in parallel
 
