@@ -19,7 +19,7 @@ final class InstallationTokenNotMinted extends RuntimeException
     {
         return new self(
             sprintf('GitHub refused the installation token exchange with status %d.', $status),
-            previous: 401 === $status ? new ForgeCredentialsRefused() : null,
+            previous: ForgeCredentialsRefused::STATUS === $status ? new ForgeCredentialsRefused() : null,
         );
     }
 
