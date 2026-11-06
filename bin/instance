@@ -477,6 +477,7 @@ final class WorkerServer implements Server
             }
 
             http://127.0.0.1:{$this->port} {
+            	bind 127.0.0.1
             	root "{$public}"
             	php_server {
             		worker {

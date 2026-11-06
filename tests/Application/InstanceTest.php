@@ -263,6 +263,20 @@ final class InstanceTest extends TestCase
         self::assertSame(0, $run['exit']);
     }
 
+    public function testInWorkerModeTheHttpListenerIsBoundToLoopbackOnly(): void
+    {
+        // A Caddy site address only matches the Host header, so the kernel's socket table tells where the listener really is.
+        $listeners = '$port = (int) parse_url((string) getenv("INTAKT_INSTANCE_URL"), PHP_URL_PORT); $addresses = []; '
+            .'foreach (["/proc/net/tcp", "/proc/net/tcp6"] as $table) { foreach (file($table) ?: [] as $line) { $columns = preg_split("/\s+/", trim($line)); '
+            .'[$address, $hexPort] = explode(":", $columns[1]); if ("0A" === ($columns[3] ?? "") && hexdec($hexPort) === $port) { $addresses[] = $address; } } } '
+            .'echo implode("\n", array_unique($addresses)), "\n";';
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $listeners], $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("0100007F\n", $run['output']);
+    }
+
     public function testAFrankenphpFoundThroughARelativePathEntryBootsInWorkerModeFromAnotherDirectory(): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');
