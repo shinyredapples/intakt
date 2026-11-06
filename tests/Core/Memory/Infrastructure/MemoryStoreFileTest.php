@@ -13,9 +13,9 @@ use Symfony\AI\Store\ManagedStoreInterface;
 #[Group('persistence')]
 final class MemoryStoreFileTest extends KernelTestCase
 {
-    public function testInTheTestEnvironmentTheMemoryStoreKeepsItsFileInTheShareDirectoryOfTheWorker(): void
+    public function testInTheTestEnvironmentTheMemoryStoreKeepsItsFileInTheCacheDirectoryOfTheWorker(): void
     {
-        $file = self::bootKernel()->getShareDir().'/memory.db';
+        $file = self::bootKernel()->getCacheDir().'/memory.db';
         if (is_file($file)) {
             unlink($file);
         }

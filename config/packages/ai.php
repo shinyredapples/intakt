@@ -254,8 +254,8 @@ return static function (ContainerConfigurator $container): void {
 
     // Project memory embeds with OpenAI because it is the only configured provider with an embedding model; without an enabled account the placeholder platform names the missing key when a worker indexes.
     $embeddings = array_key_exists(Provider::OpenAi->value, $enabledAccounts) ? Provider::OpenAi->accountsId() : EmbeddingsNotConfigured::class;
-    // In the test worker's own share directory, because the tests gate runs workers side by side and a test removes the file.
-    $memoryFile = 'test' === $container->env() ? '%kernel.share_dir%/memory.db' : '%kernel.project_dir%/var/memory_%kernel.environment%.db';
+    // In the test worker's own cache directory, because the tests gate runs workers side by side and a test removes the file; the kernel creates that directory before the store opens its file, which it does not do for the share directory.
+    $memoryFile = 'test' === $container->env() ? '%kernel.cache_dir%/memory.db' : '%kernel.project_dir%/var/memory_%kernel.environment%.db';
     $memory = [
         'store' => ['sqlite' => ['memory' => ['dsn' => 'sqlite:'.$memoryFile, 'table_name' => 'project_memory']]],
         'vectorizer' => ['memory' => ['platform' => $embeddings, 'model' => 'text-embedding-3-small']],

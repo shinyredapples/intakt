@@ -11,9 +11,9 @@ use Symfony\Component\Lock\LockFactory;
 #[CoversNothing]
 final class LockDirectoryTest extends KernelTestCase
 {
-    public function testInTheTestEnvironmentLocksLiveInTheShareDirectoryOfTheWorker(): void
+    public function testInTheTestEnvironmentLocksLiveInTheCacheDirectoryOfTheWorker(): void
     {
-        $directory = self::bootKernel()->getShareDir().'/locks';
+        $directory = self::bootKernel()->getCacheDir().'/locks';
         $locks = self::getContainer()->get(LockFactory::class);
         self::assertInstanceOf(LockFactory::class, $locks);
         $lock = $locks->createLock('lock-directory-test');
