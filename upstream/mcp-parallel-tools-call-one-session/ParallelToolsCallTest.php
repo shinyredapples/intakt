@@ -101,7 +101,7 @@ final class ParallelToolsCallTest extends TestCase
         self::assertStringNotContainsString('"properties":[]', $answer['body']);
     }
 
-    public function testACallWithEmptyArgumentsReachesTheToolAsAnEmptyObject(): void
+    public function testACallWithEmptyArgumentsReachesTheToolAsNoArgumentsThatEncodeAsAnEmptyObject(): void
     {
         $headers = $this->openSession('lock', self::PINNED);
 
@@ -109,6 +109,7 @@ final class ParallelToolsCallTest extends TestCase
 
         self::assertSame(200, $answer['status']);
         self::assertStringContainsString('done 104', $answer['body']);
+        self::assertSame(['104 [] {}'], file($this->dir.'/arguments', FILE_IGNORE_NEW_LINES), 'the tool must get no arguments, and its request must encode them as {}, not [] or missing');
     }
 
     /**

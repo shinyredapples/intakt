@@ -74,7 +74,7 @@ final class StructuredOutputTest extends TestCase
      * @param class-string<ExceptionInterface> $expected
      */
     #[DataProvider('truncations')]
-    public function testAStreamStoppedByTheTokenLimitMidArrayThrowsATypedExceptionAndReturnsNoObject(string $provider, string $model, string $expected): void
+    public function testAStreamStoppedByTheTokenLimitMidArrayThrowsATypedExceptionAndReturnsNoObject(string $provider, string $model, string $expected, ?string $message = null): void
     {
         $result = $this->platform($provider, 'stream-cut')->invoke($model, $this->messages(), ['response_format' => Plan::class, 'stream' => true]);
         $object = null;
@@ -89,6 +89,11 @@ final class StructuredOutputTest extends TestCase
         self::assertNull($object, 'a truncated stream must not give back an object');
         self::assertInstanceOf($expected, $thrown, 'a truncated stream must end in a typed platform exception');
         self::assertNotInstanceOf(IncompleteStreamException::class, $thrown, 'the stream is closed, so the exception must come from the cut, not from a missing end');
+
+        // A cassette request mismatch throws the same RuntimeException, so the message tells the decoder's refusal from a stale cassette.
+        if (null !== $message) {
+            self::assertSame($message, $thrown->getMessage());
+        }
     }
 
     /**
@@ -103,13 +108,13 @@ final class StructuredOutputTest extends TestCase
 
     // The generic bridge raises MaxOutputTokensException for a cut tool call only; a cut text reaches the structured-output decoder, which refuses the broken JSON.
     /**
-     * @return iterable<string, array{string, string, class-string<ExceptionInterface>}>
+     * @return iterable<string, array{0: string, 1: string, 2: class-string<ExceptionInterface>, 3?: string}>
      */
     public static function truncations(): iterable
     {
         yield 'anthropic' => ['anthropic', 'claude-haiku-4-5', MaxOutputTokensException::class];
         yield 'openai' => ['openai', 'gpt-4o', MaxOutputTokensException::class];
-        yield 'generic' => ['generic', 'local-model', RuntimeException::class];
+        yield 'generic' => ['generic', 'local-model', RuntimeException::class, 'Cannot json decode the streamed content.'];
     }
 
     private function platform(string $provider, string $case): PlatformInterface
