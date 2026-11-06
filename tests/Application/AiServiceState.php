@@ -12,6 +12,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\VarExporter\LazyObjectInterface;
+use Symfony\Contracts\Service\ResetInterface;
 use WeakMap;
 
 // The properties of every object behind the container's Symfony AI services, walked from the services, because a bridge factory builds a platform's providers inside it, where no service definition shows them.
@@ -21,19 +22,38 @@ final class AiServiceState
 
     private const int DEPTH = 3;
 
-    // Held, so no object of this snapshot is freed and its id given to another one before the comparison.
+    // Held, so no object of this snapshot is freed and its id given to another one while the walk still runs.
     /** @var array<int, object> */
     private array $objects = [];
 
-    /** @var array<string, string> */
+    // Keyed by the path from the service, not by object, so a reset that puts a new object in place is compared with the one it replaced.
+    /** @var array<string, array<string, string>> */
     private array $values = [];
+
+    /** @var array<string, true> */
+    private array $mutable = [];
 
     // Walked twice, because building a service or a lazy object on the first walk changes objects that walk had already read.
     public static function of(KernelInterface $kernel): self
     {
-        self::walk($kernel);
+        $services = self::services($kernel);
+        self::ofServices($services);
 
-        return self::walk($kernel);
+        return self::ofServices($services);
+    }
+
+    /**
+     * @param array<string, object> $services
+     */
+    public static function ofServices(array $services): self
+    {
+        $state = new self();
+
+        foreach ($services as $id => $service) {
+            $state->visit($service, [$id]);
+        }
+
+        return $state;
     }
 
     /**
@@ -44,31 +64,45 @@ final class AiServiceState
     {
         $changed = [];
 
-        foreach ($before->values as $key => $value) {
-            if (array_key_exists($key, $this->values) && $this->values[$key] !== $value) {
-                $changed[] = explode('#', $key, 2)[1];
+        foreach ($before->values as $path => $properties) {
+            foreach ($properties as $property => $value) {
+                if (isset($this->values[$path][$property]) && $this->values[$path][$property] !== $value) {
+                    $changed[] = $property;
+                }
             }
         }
 
-        $changed = array_values(array_unique($changed));
-        sort($changed);
-
-        return $changed;
+        return self::sorted($changed);
     }
 
-    private static function walk(KernelInterface $kernel): self
+    // Every property a request could write: not static, not readonly, on an object that has no reset() for the kernel to call.
+    /**
+     * @return list<string>
+     */
+    #[NoDiscard]
+    public function mutableWithoutReset(): array
     {
-        $state = new self();
+        return self::sorted(array_keys($this->mutable));
+    }
+
+    /**
+     * @return array<string, object>
+     */
+    private static function services(KernelInterface $kernel): array
+    {
         $container = $kernel->getContainer()->get('test.service_container');
         assert($container instanceof ContainerInterface);
+        $services = [];
 
         foreach (self::serviceIds($kernel) as $id) {
-            if ($container->has($id)) {
-                $state->visit($container->get($id));
+            $service = $container->has($id) ? $container->get($id) : null;
+
+            if (is_object($service)) {
+                $services[$id] = $service;
             }
         }
 
-        return $state;
+        return $services;
     }
 
     /**
@@ -97,16 +131,21 @@ final class AiServiceState
         return array_any(self::LIBRARIES, static fn (string $namespace): bool => str_starts_with($class, $namespace));
     }
 
-    private function visit(mixed $value): void
+    /**
+     * @param list<int|string> $path
+     */
+    private function visit(mixed $value, array $path): void
     {
         if (is_array($value)) {
-            array_walk($value, $this->visit(...));
+            foreach ($value as $key => $item) {
+                $this->visit($item, [...$path, $key]);
+            }
 
             return;
         }
 
         if ($value instanceof LazyObjectInterface) {
-            $this->visit($value->initializeLazyObject());
+            $this->visit($value->initializeLazyObject(), $path);
 
             return;
         }
@@ -116,14 +155,19 @@ final class AiServiceState
         }
 
         $this->objects[spl_object_id($value)] = $value;
+        $at = json_encode($path, JSON_THROW_ON_ERROR);
 
         foreach ($this->properties($value) as $property) {
-            $key = spl_object_id($value).'#'.$property->getDeclaringClass()->getName().'::$'.$property->getName();
-            $this->values[$key] = 'uninitialized';
+            $name = $property->getDeclaringClass()->getName().'::$'.$property->getName();
+            $this->values[$at][$name] = 'uninitialized';
+
+            if (!$property->isReadOnly() && !$value instanceof ResetInterface) {
+                $this->mutable[$name] = true;
+            }
 
             if ($property->isInitialized($value)) {
-                $this->values[$key] = self::fingerprint($property->getValue($value), 0);
-                $this->visit($property->getValue($value));
+                $this->values[$at][$name] = self::fingerprint($property->getValue($value), 0);
+                $this->visit($property->getValue($value), [...$path, $name]);
             }
         }
     }
@@ -134,6 +178,19 @@ final class AiServiceState
     private function properties(object $object): array
     {
         return array_values(array_filter(new ReflectionObject($object)->getProperties(), static fn (ReflectionProperty $property): bool => !$property->isStatic()));
+    }
+
+    /**
+     * @param array<string> $names
+     *
+     * @return list<string>
+     */
+    private static function sorted(array $names): array
+    {
+        $names = array_values(array_unique($names));
+        sort($names);
+
+        return $names;
     }
 
     // By content to a few levels, not by identity, because a reset that puts a fresh, empty object in place of the used one has left nothing behind.
