@@ -43,9 +43,11 @@ final class LoadTimeDeprecationResolverTest extends TestCase
     {
         $loader = static function (string $class): void {};
         $closure = new ReflectionFunction($loader);
+        $closureFile = $closure->getFileName();
+        self::assertIsString($closureFile);
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
-            ['function' => 'require', 'file' => $closure->getFileName()],
+            ['function' => 'require', 'file' => $closureFile],
             ['function' => $closure->getName()],
             ['function' => 'interface_exists', 'file' => '/app/tests/SomeTest.php'],
         ];
@@ -218,7 +220,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array{function: string, file: string, class?: class-string}>
      */
     private function loadTimeCallTrace(string $loadingFile, string $askingFile): array
     {
