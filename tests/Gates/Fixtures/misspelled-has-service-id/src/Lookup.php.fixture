@@ -12,12 +12,8 @@ final readonly class Lookup
     {
     }
 
-    public function setAtRuntime(): ?object
+    public function hasKernel(): bool
     {
-        if (!$this->container->has('set.at.runtime')) {
-            return null;
-        }
-
-        return $this->container->get('set.at.runtime');
+        return $this->container->has('kernal');
     }
 }

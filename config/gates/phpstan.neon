@@ -24,6 +24,8 @@ rules:
     - Intakt\Gates\PhpStan\ClockOnlyRule
     - Intakt\Gates\PhpStan\NoMockOptOutRule
     - Intakt\Gates\PhpStan\ImportFormRule
+    - Intakt\Gates\PhpStan\ContainerUnknownHasIdRule
+    - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
 
 services:
     -

@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Contracts\Service\ServiceProviderInterface;
+
+final readonly class Platforms
+{
+    /**
+     * @param ServiceProviderInterface<object> $platforms
+     */
+    public function __construct(private ServiceProviderInterface $platforms)
+    {
+    }
+
+    public function hasLocal(): bool
+    {
+        return $this->platforms->has('local');
+    }
+}

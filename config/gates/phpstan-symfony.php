@@ -6,6 +6,6 @@ use Intakt\Gates\ContainerDumpingGate;
 
 return ['parameters' => ['symfony' => [
     'containerXmlPath' => ContainerDumpingGate::containerXml(dirname(__DIR__, 2)),
-    // Because tests ask containers the dumped one cannot know (a test kernel, a locator, a service set at runtime), has() stays a plain bool, so a get() after it is accepted.
+    // Because phpstan-symfony would type has() on a service locator against container ids, a locator's own key would read as always false; ContainerUnknownHasIdRule reports an unknown container id instead.
     'constantHassers' => false,
 ]]];

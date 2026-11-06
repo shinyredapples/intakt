@@ -28,11 +28,6 @@ final class ContainerDumpingGateTest extends SandboxTestCase
         $this->assertAcceptedBy('phpstan', 'typed-container-parameter');
     }
 
-    public function testAServiceIdTheContainerConfirmsWithHasFirstPassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'service-id-checked-with-has');
-    }
-
     public function testTheContainerIsDumpedAgainWhenItsDumpIsGoneFromAFreshCache(): void
     {
         $sandbox = $this->sandboxWith('misspelled-service-id');

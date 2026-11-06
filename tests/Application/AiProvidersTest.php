@@ -8,11 +8,11 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
@@ -119,6 +119,7 @@ final class AiProvidersTest extends KernelTestCase
         self::assertFalse($container->has('ai.platform.openai'));
         $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
 
+        self::assertIsArray($disabled);
         self::assertArrayHasKey('openai', $disabled);
     }
 
@@ -142,6 +143,7 @@ final class AiProvidersTest extends KernelTestCase
 
         $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
 
+        self::assertIsArray($disabled);
         self::assertSame(['anthropic', 'openai', 'openai_compatible', 'claude_code'], array_keys($disabled));
     }
 
@@ -278,7 +280,7 @@ final class AiProvidersTest extends KernelTestCase
      * @param array<string, string> $values
      * @param list<string>          $keep
      */
-    private function bootWith(array $values, array $keep = []): ContainerInterface
+    private function bootWith(array $values, array $keep = []): RebuiltContainer
     {
         foreach (self::VARIABLES as $name) {
             if (in_array($name, $keep, true)) {
@@ -296,7 +298,7 @@ final class AiProvidersTest extends KernelTestCase
         self::ensureKernelShutdown();
         self::bootKernel();
 
-        return self::getContainer();
+        return new RebuiltContainer(self::getContainer());
     }
 
     private function vaultDirectory(): string

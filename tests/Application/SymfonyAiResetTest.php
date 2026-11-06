@@ -18,6 +18,7 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\KernelHttpClient;
 use Intakt\Tests\Core\Review\Infrastructure\RecordingHttpClient;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use Intakt\Tests\Support\RebuiltContainer;
 use NoDiscard;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
@@ -323,8 +324,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private function reviewer(KernelInterface $kernel, ToolboxInterface $tools, string $model): Agent
     {
-        $container = $this->container($kernel);
-        assert($container->has(AiPlatformKernel::PLATFORM));
+        $container = new RebuiltContainer($this->container($kernel));
         $platform = $container->get(AiPlatformKernel::PLATFORM);
         assert($platform instanceof PlatformInterface && '' !== $model);
 
@@ -397,8 +397,7 @@ final class SymfonyAiResetTest extends TestCase
      */
     private function providerRequests(KernelInterface $kernel): array
     {
-        $container = $this->container($kernel);
-        assert($container->has(ProviderAnswers::class));
+        $container = new RebuiltContainer($this->container($kernel));
         $answers = $container->get(ProviderAnswers::class);
         assert($answers instanceof ProviderAnswers);
 

@@ -5,3 +5,14 @@ services:
         decorates: logger
         factory: ['Intakt\Tests\Support\Log\RecordingLoggerFactory', 'create']
         arguments: ['@.inner']
+
+    # Set by a reviewer test once its scripted run is done; declared synthetic so the container, and static analysis, know the id it is set under.
+    test.reviewer_agent.ai_data_collector:
+        class: Symfony\AI\AiBundle\Profiler\DataCollector
+        synthetic: true
+        public: true
+
+    test.reviewer_verdict.ai_data_collector:
+        class: Symfony\AI\AiBundle\Profiler\DataCollector
+        synthetic: true
+        public: true

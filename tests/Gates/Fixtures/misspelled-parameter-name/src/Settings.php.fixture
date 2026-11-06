@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+final readonly class Settings
+{
+    public function __construct(private ContainerInterface $container)
+    {
+    }
+
+    public function debug(): mixed
+    {
+        return $this->container->getParameter('kernal.debug');
+    }
+}
