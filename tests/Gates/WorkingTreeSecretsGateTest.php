@@ -8,6 +8,7 @@ use Intakt\Gates\WorkingTreeSecretsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 
+// A sandbox and a scan per test, because a shared sandbox would let one planted secret fail the next test's clean scan, and most of a scan's second is the gate starting gitleaks twice (version check, then scan), which is the code under test.
 #[CoversClass(WorkingTreeSecretsGate::class)]
 final class WorkingTreeSecretsGateTest extends SandboxTestCase
 {

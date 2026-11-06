@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Plugin\SymfonyAiVendor\UseCase\ProbeProviders\ProbeProvidersCommand;
+use Intakt\Plugin\SymfonyAiVendor\UseCase\ProbeProviders\ProbeUsage;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -25,8 +26,11 @@ use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+use Symfony\Component\Serializer\Serializer;
 
 #[CoversClass(ProbeProvidersCommand::class)]
+#[UsesClass(ProbeUsage::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(Tier::class)]
@@ -161,7 +165,7 @@ final class ProbeProvidersCommandTest extends TestCase
     private function execute(TierResolver $resolver, TierInvoker $invoker): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ProbeProvidersCommand($resolver, $invoker));
+        $application->addCommand(new ProbeProvidersCommand($resolver, $invoker, new Serializer([new ObjectNormalizer()])));
         $tester = new CommandTester($application->find('intakt:vendor:probe'));
         $tester->execute([]);
 

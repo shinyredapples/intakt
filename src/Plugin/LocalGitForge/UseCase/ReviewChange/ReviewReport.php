@@ -6,28 +6,29 @@ namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Finding;
-use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
+use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncode;
+use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
+use Symfony\Component\Serializer\SerializerInterface;
 
 // The JSON follows docs/user/review-output.schema.json, because scripts validate against it.
 final readonly class ReviewReport
 {
-    public function __construct(private VisiblePath $text = new VisiblePath())
-    {
+    // The stored serializer, because its snake_case name converter gives the documented keys (round_id, exit_code, act_list).
+    public function __construct(
+        #[Target('stored')]
+        private SerializerInterface $serializer,
+        private VisiblePath $text = new VisiblePath(),
+    ) {
     }
 
     public function asJson(ChangeReview $review): string
     {
-        return json_encode([
-            'round_id' => $review->roundId,
-            'round' => $review->round,
-            'decision' => $review->decision->value,
-            'exit_code' => ReviewExit::of($review->decision)->value,
-            'verdicts' => array_map($this->verdictRow(...), $review->verdicts),
-            'act_list' => array_map($this->findingRow(...), $review->actList),
-            'tokens' => ['calls' => $review->tokens->calls, 'prompt' => $review->tokens->prompt, 'completion' => $review->tokens->completion, 'total' => $review->tokens->total],
-            'reasons' => $review->reasons,
-        ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        return $this->serializer->serialize(ReviewOutput::of($review), 'json', [
+            AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS,
+            JsonEncode::OPTIONS => JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
+        ]);
     }
 
     /**
@@ -55,30 +56,6 @@ final readonly class ReviewReport
         $lines[] = sprintf('tokens: %d calls, %d prompt, %d completion, %d total', $tokens->calls, $tokens->prompt, $tokens->completion, $tokens->total);
 
         return $lines;
-    }
-
-    /**
-     * @return array<string, int|string>
-     */
-    private function verdictRow(PanelVerdict $verdict): array
-    {
-        return ['tier' => $verdict->tier->value, 'decision' => $verdict->verdict->verdict->value, 'findings' => count($verdict->verdict->findings)];
-    }
-
-    /**
-     * @return array<string, int|string|null>
-     */
-    private function findingRow(Finding $finding): array
-    {
-        return [
-            'id' => $finding->id,
-            'severity' => $finding->severity->value,
-            'file' => $finding->file,
-            'line' => $finding->line,
-            'symbol' => $finding->symbol,
-            'text' => $finding->text,
-            'fixable_by' => $finding->fixable_by->value,
-        ];
     }
 
     private function place(Finding $finding): string
