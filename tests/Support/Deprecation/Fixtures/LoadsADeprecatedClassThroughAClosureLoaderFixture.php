@@ -16,7 +16,7 @@ final class LoadsADeprecatedClassThroughAClosureLoaderFixture extends TestCase
     {
         // Because the static analysis of this repository reports a deprecated class named in code, and this fixture must load one.
         $name = implode('\\', ['Symfony', 'Component', 'HttpKernel', 'DependencyInjection', 'ServicesResetterInterface']);
-        $file = array_values(ClassLoader::getRegisteredLoaders())[0]->findFile($name);
+        $file = array_first(ClassLoader::getRegisteredLoaders())->findFile($name);
         self::assertIsString($file);
 
         // Because a closure loader whose file is outside Intakt's source must not become the caller.
