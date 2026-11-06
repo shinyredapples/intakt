@@ -17,6 +17,7 @@ use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Throwable;
 
 #[AsCommand(name: 'intakt:vendor:probe', description: 'Make one real call per configured provider and print its token usage')]
@@ -27,6 +28,7 @@ final readonly class ProbeProvidersCommand
     public function __construct(
         private TierResolver $resolver,
         private TierInvoker $tiers,
+        private NormalizerInterface $normalizer,
     ) {
     }
 
@@ -106,14 +108,8 @@ final readonly class ProbeProvidersCommand
             return 'the provider reported no token usage';
         }
 
-        $figures = [
-            'model' => $usage->getModel(),
-            'prompt' => $usage->getPromptTokens(),
-            'completion' => $usage->getCompletionTokens(),
-            'cached' => $usage->getCachedTokens(),
-            'total' => $usage->getTotalTokens(),
-            'remaining' => $usage->getRemainingTokens(),
-        ];
+        /** @var array<string, int|string|null> $figures */
+        $figures = $this->normalizer->normalize(ProbeUsage::of($usage));
 
         return implode(', ', array_map(
             static fn (string $name, int|string|null $value): string => $name.' '.($value ?? 'n/a'),

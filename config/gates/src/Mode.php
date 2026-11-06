@@ -8,4 +8,5 @@ enum Mode
 {
     case Full;
     case ChangedFilesOnly;
+    case Journeys;
 }

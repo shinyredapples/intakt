@@ -33,6 +33,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Hold** | a pause that lifts by itself when its reason is gone | [how it works](how-intakt-works.md#when-something-gets-stuck) |
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
+| **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
 | **Judge step** | a quick call that sorts findings into fix now, later, or not needed | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Lane** | a line of work: the build slots and the review lane | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Lock** | a "one at a time" sign on something two jobs must not use together | [engine room](the-engine-room.md#locks-one-at-a-time) |
@@ -55,6 +56,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Protected files** | the project's rules: the checks, the CI setup, the agents' instructions | [safety](why-the-ai-cant-wreck-your-project.md) |
 | **Pull request (PR)** | a finished change waiting to be merged | |
 | **Queue** | the tasks waiting to be built, and the work waiting to be reviewed | [engine room](the-engine-room.md#queues-who-is-next) |
+| **Ratchet list** | the places that break a new rule of the checks when it is switched on, kept in a file that may only get shorter while they are fixed (planned) | [testing a new check](testing-a-new-check.md#switching-a-rule-on-before-the-code-is-clean) |
 | **Review cap** | how much finished work may wait for review before builders pause | [engine room](the-engine-room.md#queues-who-is-next) |
 | **Review credential** | a secret made for one review round; it lets a reviewer read that round and nothing else, and stops working once the round is judged | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Review lane** | the bench where finished work is reviewed and merged | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |

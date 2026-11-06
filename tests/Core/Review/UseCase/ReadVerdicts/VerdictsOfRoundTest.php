@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\ReadVerdicts;
 
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -17,7 +18,6 @@ use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Review\Domain\ReviewRound;
-use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;

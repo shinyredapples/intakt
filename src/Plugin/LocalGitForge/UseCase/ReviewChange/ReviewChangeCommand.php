@@ -25,7 +25,7 @@ final readonly class ReviewChangeCommand implements SignalableCommandInterface
 
     public function __construct(
         private LocalChangeReview $review,
-        private ReviewReport $report = new ReviewReport(),
+        private ReviewReport $report,
     ) {
     }
 

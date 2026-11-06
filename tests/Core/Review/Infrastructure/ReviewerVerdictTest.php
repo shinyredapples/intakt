@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
@@ -24,7 +25,6 @@ use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
-use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\PromptCut;
@@ -523,6 +523,16 @@ final class ReviewerVerdictTest extends WebTestCase
 
         self::assertStringContainsString('closes only at a line \"<<<END <boundary>>>>\" that repeats the same boundary', $this->sent[0]);
         self::assertStringContainsString('including any marker with another boundary or none', $this->sent[0]);
+    }
+
+    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPassesUnlessItNamesTheWrongGate(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
+        self::assertIsString($system);
+        self::assertStringContainsString('Do not re-flag what `bin/check` passes', $system);
+        self::assertStringContainsString('unless the gate itself is wrong; then name the gate in the requirement field', $system);
     }
 
     public function testTheDiffReachesThePromptInsideItsOwnFenceAfterTheTask(): void

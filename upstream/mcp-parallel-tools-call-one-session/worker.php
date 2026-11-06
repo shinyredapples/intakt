@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use GuzzleHttp\Psr7\ServerRequest;
+use Mcp\Schema\JsonRpc\Request;
+use Mcp\Schema\Request\CallToolRequest;
 use Mcp\Server;
 use Mcp\Server\RequestContext;
 use Mcp\Server\Session\FileSessionLock;
@@ -23,7 +25,9 @@ final class ProbeTools
 
     public function slow(RequestContext $context): string
     {
-        $id = (string) $context->getRequest()->getId();
+        $request = $context->getRequest();
+        $id = (string) $request->getId();
+        $this->logArguments($request, $id);
         $this->log('enter '.$id);
 
         // Without the lock all three requests are inside the tool at once before any leaves it; with the lock the others cannot get in, so the tool only lingers.
@@ -34,6 +38,19 @@ final class ProbeTools
         $this->log('exit '.$id);
 
         return 'done '.$id;
+    }
+
+    // The SDK decodes messages into arrays, so the tool sees {} as []; the second form is how its request encodes them again.
+    private function logArguments(Request $request, string $id): void
+    {
+        if (!$request instanceof CallToolRequest) {
+            return;
+        }
+
+        $encoded = json_encode($request, JSON_THROW_ON_ERROR);
+        $sent = json_decode($encoded, false, flags: JSON_THROW_ON_ERROR)->params->arguments ?? null;
+        $line = $id.' '.json_encode($request->arguments, JSON_THROW_ON_ERROR).' '.json_encode($sent, JSON_THROW_ON_ERROR);
+        file_put_contents($this->dir.'/arguments', $line.PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 
     private function log(string $line): void

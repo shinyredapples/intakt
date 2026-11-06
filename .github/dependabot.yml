@@ -6,6 +6,8 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    cooldown:
+      default-days: 3
     groups:
       actions:
         patterns: ['*']
@@ -17,6 +19,9 @@ updates:
       prefix: build
       include: scope
     versioning-strategy: increase
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
     groups:
       symfony-ai:
         patterns: ['symfony/ai-*', 'symfony/mcp-bundle', 'mcp/sdk']

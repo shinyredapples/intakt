@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Symfony\Component\Uid\Uuid;

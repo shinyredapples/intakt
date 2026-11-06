@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates\Fixtures;
+
+use Intakt\Tests\Journeys\Support\JourneyTestCase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+use Psr\Log\LoggerInterface;
+
+#[CoversNothing]
+#[Group('journeys')]
+final class NoticeJourneyTest extends JourneyTestCase
+{
+    protected function journey(): string
+    {
+        return 'notice';
+    }
+
+    public function testWalksThePath(): void
+    {
+        $this->step('open the first page', function (): void {
+            $this->createMock(LoggerInterface::class);
+            self::assertTrue(true);
+        });
+    }
+}
