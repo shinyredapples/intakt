@@ -20,6 +20,7 @@ use Intakt\Core\Budget\UseCase\ReplayDay\RolledBackReplay;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptedStep;
 use Intakt\Core\Budget\UseCase\ReplayDay\ScriptLineNotUnderstood;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Support\ConsoleDisplay;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -124,7 +125,7 @@ final class ReplayDayCommandTest extends KernelTestCase
         $this->command->execute(['script' => __DIR__.'/no-such-day.txt']);
 
         self::assertSame(Command::FAILURE, $this->command->getStatusCode());
-        self::assertStringContainsString('no-such-day.txt', $this->command->getDisplay());
+        self::assertStringContainsString(__DIR__.'/no-such-day.txt', ConsoleDisplay::unwrapped($this->command->getDisplay()));
     }
 
     public function testALineNotUnderstoodStopsTheReplayWithItsRule(): void

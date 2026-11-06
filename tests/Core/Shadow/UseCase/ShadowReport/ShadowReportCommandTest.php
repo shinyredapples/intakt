@@ -23,6 +23,7 @@ use Intakt\Core\Shadow\Domain\ReviewComparison;
 use Intakt\Core\Shadow\Infrastructure\RecordedHead;
 use Intakt\Core\Shadow\UseCase\ShadowReport\ReportFormat;
 use Intakt\Core\Shadow\UseCase\ShadowReport\ShadowReportCommand;
+use Intakt\Tests\Support\ConsoleDisplay;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -128,7 +129,25 @@ final class ShadowReportCommandTest extends TestCase
         }
 
         self::assertSame(Command::INVALID, $status);
-        self::assertStringContainsString('broken.json', $tester->getDisplay());
+        self::assertStringContainsString($folder.'/broken.json', ConsoleDisplay::unwrapped($tester->getDisplay()));
+    }
+
+    public function testAnUnreadableHeadDeepInTheTempFolderIsNamedInFullThoughTheErrorWraps(): void
+    {
+        $folder = sys_get_temp_dir().'/shadow-report-'.str_repeat('deep-', 30).bin2hex(random_bytes(4));
+        mkdir($folder);
+        file_put_contents($folder.'/broken.json', '{"identity": 1}');
+        $tester = $this->tester();
+
+        try {
+            $tester->execute(['folder' => $folder]);
+        } finally {
+            unlink($folder.'/broken.json');
+            rmdir($folder);
+        }
+
+        self::assertStringNotContainsString($folder.'/broken.json', $tester->getDisplay());
+        self::assertStringContainsString($folder.'/broken.json', ConsoleDisplay::unwrapped($tester->getDisplay()));
     }
 
     public function testAFolderWithPatternCharactersInItsNameStillFindsItsHeads(): void
