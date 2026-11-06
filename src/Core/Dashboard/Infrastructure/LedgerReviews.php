@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
-use DateTimeImmutable;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\JudgeDone;
 
-// Payloads are decoded only here, so the pages need nothing from the Review module that writes them.
 final readonly class LedgerReviews
 {
-    public function __construct(private Ledger $ledger)
-    {
+    public function __construct(
+        private Ledger $ledger,
+        private RoundPayloads $payloads,
+    ) {
     }
 
     /**
@@ -27,17 +29,11 @@ final readonly class LedgerReviews
         $judged = [];
 
         foreach ($this->ledger->readInOrder() as $recorded) {
-            $payload = $this->payloadOf($recorded);
-            $round = $payload['round'] ?? null;
-
-            if (!is_string($round)) {
-                continue;
-            }
-
             // Array union keeps the first entry, and an unreadable start adds none, so it cannot take its round's place in the order.
             match ($recorded->event->kind) {
-                LedgerEventKind::JudgeDone => $judged[$round] = true,
-                default => $started += $this->readableStart($round, $payload, $recorded->recordedAt),
+                LedgerEventKind::ReviewStarted => $started += $this->readableStart($recorded),
+                LedgerEventKind::JudgeDone => $judged += $this->judgedRound($recorded),
+                default => null,
             };
         }
 
@@ -45,20 +41,27 @@ final readonly class LedgerReviews
     }
 
     /**
-     * @param array<string, mixed> $payload
-     *
      * @return array<string, ReviewSummary>
      */
-    private function readableStart(string $round, array $payload, DateTimeImmutable $startedAt): array
+    private function readableStart(RecordedEvent $recorded): array
     {
-        $project = $payload['project'] ?? null;
-        $reviewers = $payload['reviewers'] ?? null;
+        $round = $this->payloads->startOf($recorded);
 
-        if (!is_string($project) || !is_int($reviewers)) {
+        if (!$round instanceof ReviewedRound) {
             return [];
         }
 
-        return [$round => new ReviewSummary(new RoundStart($round, $project, $reviewers), $startedAt)];
+        return [$round->round => new ReviewSummary(new RoundStart($round->round, $round->project, $round->reviewers), $round->startedAt)];
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function judgedRound(RecordedEvent $recorded): array
+    {
+        $judge = $this->payloads->judgeOf($recorded);
+
+        return $judge instanceof JudgeDone ? [$judge->round => true] : [];
     }
 
     /**
@@ -76,17 +79,5 @@ final readonly class LedgerReviews
         }
 
         return $reviews;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function payloadOf(RecordedEvent $recorded): array
-    {
-        if (!in_array($recorded->event->kind, [LedgerEventKind::ReviewStarted, LedgerEventKind::JudgeDone], true)) {
-            return [];
-        }
-
-        return LedgerPayload::of($recorded);
     }
 }

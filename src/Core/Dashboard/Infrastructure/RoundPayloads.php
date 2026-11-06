@@ -1,0 +1,120 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\Infrastructure;
+
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\RoundPlace;
+use Intakt\Core\Dashboard\Domain\RoundSource;
+use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\CatchUpOwed;
+use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\ReviewerBlocked;
+use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerStarted;
+use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\VerdictReceived;
+use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
+
+// The writers' payload classes describe today's rows, so a row written before a key existed is read with the value the pages always showed for it; any other row that does not deserialize reads as null and is skipped.
+final readonly class RoundPayloads
+{
+    private const array UNNAMED_START = ['change' => '', 'task' => ''];
+
+    // The number only lets a start written before rounds were numbered deserialize; startOf() gives such a round none.
+    private const array UNNUMBERED_START = [...self::UNNAMED_START, 'number' => 0];
+
+    private const array UNMARKED_VERDICT = ['mode' => ProjectMode::Live];
+    private const array UNRECORDED_FINDINGS = ['findings' => []];
+
+    public function __construct(private LedgerPayloads $payloads)
+    {
+    }
+
+    public function startOf(RecordedEvent $recorded): ?ReviewedRound
+    {
+        $numbered = $this->payloads->of($recorded, ReviewStarted::class, self::UNNAMED_START);
+
+        if ($numbered instanceof ReviewStarted) {
+            return $this->reviewedRound($numbered, $numbered->number, $recorded);
+        }
+
+        $unnumbered = $this->payloads->of($recorded, ReviewStarted::class, self::UNNUMBERED_START);
+
+        return $unnumbered instanceof ReviewStarted ? $this->reviewedRound($unnumbered, null, $recorded) : null;
+    }
+
+    // Any readable judge row; one written before the finding text was recorded reads with no findings.
+    public function judgeOf(RecordedEvent $recorded): ?JudgeDone
+    {
+        return $this->payloads->of($recorded, JudgeDone::class, self::UNRECORDED_FINDINGS);
+    }
+
+    public function judgeWithTextOf(RecordedEvent $recorded): ?JudgeDone
+    {
+        return $this->payloads->of($recorded, JudgeDone::class);
+    }
+
+    public function reviewerRowOf(RecordedEvent $recorded): ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed|null
+    {
+        return match ($recorded->event->kind) {
+            LedgerEventKind::ReviewerStarted => $this->payloads->of($recorded, ReviewerStarted::class),
+            LedgerEventKind::VerdictReceived => $this->payloads->of($recorded, VerdictReceived::class, self::UNMARKED_VERDICT),
+            LedgerEventKind::ReviewerFailed => $this->payloads->of($recorded, ReviewerFailed::class),
+            LedgerEventKind::ReviewerBlocked => $this->payloads->of($recorded, ReviewerBlocked::class),
+            LedgerEventKind::ReviewerStopped => $this->payloads->of($recorded, ReviewerStopped::class),
+            LedgerEventKind::CatchUpOwed => $this->payloads->of($recorded, CatchUpOwed::class),
+            default => null,
+        };
+    }
+
+    // Told apart by the row's phase, because an unsettled row also reads into UsageSettled.
+    public function usageOf(RecordedEvent $recorded): UsageStarted|UsageSettled|UsageUnsettled|null
+    {
+        $started = $this->payloads->of($recorded, UsageStarted::class);
+
+        if ('started' === $started?->phase) {
+            return $started;
+        }
+
+        $settled = $this->payloads->of($recorded, UsageSettled::class);
+
+        if ('settled' === $settled?->phase) {
+            return $settled;
+        }
+
+        $unsettled = $this->payloads->of($recorded, UsageUnsettled::class);
+
+        return 'unsettled' === $unsettled?->phase ? $unsettled : null;
+    }
+
+    private function reviewedRound(ReviewStarted $started, ?int $number, RecordedEvent $recorded): ReviewedRound
+    {
+        return new ReviewedRound(
+            new RoundStart($started->round, $started->project, $started->reviewers),
+            new RoundPlace($started->change, $number, $this->sourceOf($started)),
+            $recorded->recordedAt,
+        );
+    }
+
+    // Null unless all three are non-empty, because a start recorded before they existed must not be guessed at.
+    private function sourceOf(ReviewStarted $started): ?RoundSource
+    {
+        $repository = $started->repository ?? '';
+        $base = $started->base ?? '';
+
+        if ('' === $repository || '' === $base || '' === $started->task) {
+            return null;
+        }
+
+        return new RoundSource($repository, $base, $started->task);
+    }
+}
