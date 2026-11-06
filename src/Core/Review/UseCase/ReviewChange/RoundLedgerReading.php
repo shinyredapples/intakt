@@ -7,13 +7,21 @@ namespace Intakt\Core\Review\UseCase\ReviewChange;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 
 // Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded.
 final readonly class RoundLedgerReading
 {
-    public function __construct(private Ledger $ledger)
-    {
+    public function __construct(
+        private Ledger $ledger,
+        private LedgerPayloads $payloads,
+    ) {
     }
 
     /**
@@ -21,9 +29,11 @@ final readonly class RoundLedgerReading
      */
     public function actIdsOf(string $roundId): array
     {
-        foreach ($this->payloadsOf(LedgerEventKind::JudgeDone) as $payload) {
-            if (($payload['round'] ?? null) === $roundId && is_array($payload['act'] ?? null)) {
-                return array_values(array_filter($payload['act'], is_string(...)));
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $judged = $this->payloads->of($recorded, JudgeDone::class);
+
+            if ($roundId === $judged?->round) {
+                return $judged->act;
             }
         }
 
@@ -32,27 +42,33 @@ final readonly class RoundLedgerReading
 
     public function tokensOf(string $roundId): RoundTokens
     {
-        $payloads = iterator_to_array($this->payloadsOf(LedgerEventKind::UsageRecorded), false);
-        $calls = $this->callsStartedFor($roundId, $payloads);
-        $ended = array_values(array_filter($payloads, static fn (array $payload): bool => in_array($payload['call'] ?? null, $calls, true) && is_array($payload['usages'] ?? null)));
-        $rows = array_merge([], ...array_map($this->rowsOf(...), $ended));
+        $recorded = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false);
+        $calls = $this->callsStartedFor($roundId, $recorded);
+        $usages = array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
 
-        return new RoundTokens(count($calls), $this->sum($rows, 'prompt'), $this->sum($rows, 'completion'), $this->sum($rows, 'total'));
+        return new RoundTokens(
+            count($calls),
+            array_sum(array_map(static fn (TokenUsageRow $usage): int => $usage->prompt ?? 0, $usages)),
+            array_sum(array_map(static fn (TokenUsageRow $usage): int => $usage->completion ?? 0, $usages)),
+            array_sum(array_map(static fn (TokenUsageRow $usage): int => $usage->total ?? 0, $usages)),
+        );
     }
 
     /**
-     * @param list<array<array-key, mixed>> $payloads
+     * @param list<RecordedEvent> $recorded
      *
      * @return list<string>
      */
     // Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id.
-    private function callsStartedFor(string $roundId, array $payloads): array
+    private function callsStartedFor(string $roundId, array $recorded): array
     {
         $calls = [];
 
-        foreach ($payloads as $payload) {
-            if ('started' === ($payload['phase'] ?? null) && $roundId === ($payload['round'] ?? null) && is_string($payload['call'] ?? null)) {
-                $calls[] = $payload['call'];
+        foreach ($recorded as $row) {
+            $started = $this->payloads->of($row, UsageStarted::class);
+
+            if ('started' === $started?->phase && $roundId === $started->round) {
+                $calls[] = $started->call;
             }
         }
 
@@ -60,44 +76,28 @@ final readonly class RoundLedgerReading
     }
 
     /**
-     * @param array<array-key, mixed> $payload
+     * @param list<string> $calls
      *
-     * @return list<array<array-key, mixed>>
+     * @return list<TokenUsageRow>
      */
-    private function rowsOf(array $payload): array
+    private function usagesEndingOneOf(array $calls, RecordedEvent $row): array
     {
-        $usages = $payload['usages'] ?? [];
+        $ended = $this->endingOf($row);
 
-        return is_array($usages) ? array_values(array_filter($usages, is_array(...))) : [];
+        return null !== $ended && in_array($ended->call, $calls, true) ? $ended->usages : [];
     }
 
-    /**
-     * @param list<array<array-key, mixed>> $rows
-     */
-    private function sum(array $rows, string $key): int
+    // Tried as settled first, because an unsettled row also reads into UsageSettled and only its phase tells the two apart.
+    private function endingOf(RecordedEvent $row): UsageSettled|UsageUnsettled|null
     {
-        return array_sum(array_map(static fn (array $row): int => is_int($row[$key] ?? null) ? $row[$key] : 0, $rows));
-    }
+        $settled = $this->payloads->of($row, UsageSettled::class);
 
-    /**
-     * @return iterable<array<array-key, mixed>>
-     */
-    private function payloadsOf(LedgerEventKind $kind): iterable
-    {
-        foreach ($this->ledger->readInOrder() as $event) {
-            if ($kind === $event->event->kind) {
-                yield $this->payloadOf($event);
-            }
+        if ('settled' === $settled?->phase) {
+            return $settled;
         }
-    }
 
-    /**
-     * @return array<array-key, mixed>
-     */
-    private function payloadOf(RecordedEvent $event): array
-    {
-        $payload = json_decode($event->event->payload, true);
+        $unsettled = $this->payloads->of($row, UsageUnsettled::class);
 
-        return is_array($payload) ? $payload : [];
+        return 'unsettled' === $unsettled?->phase ? $unsettled : null;
     }
 }

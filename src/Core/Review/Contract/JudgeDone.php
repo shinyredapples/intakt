@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\UseCase\RunReviewRound;
+namespace Intakt\Core\Review\Contract;
 
 final readonly class JudgeDone
 {

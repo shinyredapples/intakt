@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\UseCase\RunReviewRound;
-
-use Intakt\Core\Review\Contract\Severity;
+namespace Intakt\Core\Review\Contract;
 
 final readonly class JudgeDoneFinding
 {

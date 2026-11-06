@@ -11,13 +11,14 @@ use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Mapping\Factory\ClassMetadataFactory;
 use Symfony\Component\Serializer\Mapping\Loader\AttributeLoader;
 use Symfony\Component\Serializer\NameConverter\CamelCaseToSnakeCaseNameConverter;
+use Symfony\Component\Serializer\Normalizer\ArrayDenormalizer;
 use Symfony\Component\Serializer\Normalizer\BackedEnumNormalizer;
 use Symfony\Component\Serializer\Normalizer\DateTimeNormalizer;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 use Symfony\Component\Serializer\Serializer;
 use Symfony\Component\Serializer\SerializerInterface;
 
-// Built by hand because these tests make a ledger writer without the container; it mirrors the `stored` serializer of config/packages/framework.yaml, which StoredSerializerFactoryTest pins.
+// Built by hand because these tests make a ledger writer or reader without the container; it mirrors the `stored` serializer of config/packages/framework.yaml, which StoredSerializerFactoryTest pins.
 final class StoredSerializerFactory
 {
     public static function create(): SerializerInterface
@@ -29,6 +30,6 @@ final class StoredSerializerFactory
             propertyTypeExtractor: $types,
         );
 
-        return new Serializer([new DateTimeNormalizer(), new BackedEnumNormalizer(), $objects], [new JsonEncoder()]);
+        return new Serializer([new DateTimeNormalizer(), new BackedEnumNormalizer(), new ArrayDenormalizer(), $objects], [new JsonEncoder()]);
     }
 }

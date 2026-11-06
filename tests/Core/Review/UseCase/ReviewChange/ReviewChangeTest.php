@@ -221,7 +221,7 @@ final class ReviewChangeTest extends KernelTestCase
             $bus ?? $this->commandBus(),
             $this->fixture->transactions(),
             $findings,
-            new RoundLedgerReading($this->fixture->ledger()),
+            new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads()),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
