@@ -34,7 +34,7 @@ final readonly class RatchetListFile
 
     private function namesCleanupIssue(): bool
     {
-        foreach ($this->lines() as $line) {
+        foreach (array_map(trim(...), $this->nonBlankLines()) as $line) {
             if (!str_starts_with($line, '#')) {
                 return false;
             }
@@ -50,19 +50,14 @@ final readonly class RatchetListFile
     // Because a list sits outside the protected paths, nothing in it but ignored errors may reach PHPStan: no other parameter, include or service.
     private function holdsOnlyIgnoredErrors(): bool
     {
-        $entryIndent = null;
+        $parameterIndent = null;
+        $settings = array_filter($this->nonBlankLines(), static fn (string $line): bool => !str_starts_with(ltrim($line), '#'));
 
-        foreach (preg_split('/\R/', $this->contents) ?: [] as $line) {
-            $text = trim($line);
+        foreach ($settings as $line) {
             $indent = strlen($line) - strlen(ltrim($line));
+            $parameterIndent ??= 0 === $indent ? null : $indent;
 
-            if ('' === $text || str_starts_with($text, '#')) {
-                continue;
-            }
-
-            $entryIndent ??= 0 === $indent ? null : $indent;
-
-            if ($this->isOutsideIgnoredErrors($text, $indent, $entryIndent)) {
+            if ($this->isOutsideIgnoredErrors(trim($line), $indent, $parameterIndent)) {
                 return false;
             }
         }
@@ -82,8 +77,10 @@ final readonly class RatchetListFile
     /**
      * @return list<string>
      */
-    private function lines(): array
+    private function nonBlankLines(): array
     {
-        return array_values(array_filter(array_map(trim(...), preg_split('/\R/', $this->contents) ?: []), static fn (string $line): bool => '' !== $line));
+        $lines = preg_split('/\R/', $this->contents);
+
+        return false === $lines ? [] : array_values(array_filter($lines, static fn (string $line): bool => '' !== trim($line)));
     }
 }

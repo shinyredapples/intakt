@@ -13,8 +13,9 @@ final readonly class PhpStanIncludes
     // Because the gate configuration and the installed packages are no lists: only what the analysis includes from the rest of the repository is.
     private const array NOT_LISTS = ['config/gates/', 'vendor/'];
 
+    // Because an include the gate cannot place could hide a list, an include that is not a relative path inside the repository on its own line yields null.
     /**
-     * @return list<string>|null the repository paths of the ratchet lists, null when an include is not a relative path inside the repository on its own line
+     * @return list<string>|null
      */
     public function ratchetListsIn(string $configuration): ?array
     {
@@ -41,11 +42,7 @@ final readonly class PhpStanIncludes
         $lines = [];
         $inIncludes = false;
 
-        foreach (preg_split('/\R/', $configuration) ?: [] as $line) {
-            if ('' === trim($line) || str_starts_with(ltrim($line), '#')) {
-                continue;
-            }
-
+        foreach ($this->meaningfulLines($configuration) as $line) {
             if (ltrim($line) === $line) {
                 $inIncludes = 'includes:' === rtrim($line);
                 continue;
@@ -57,6 +54,16 @@ final readonly class PhpStanIncludes
         }
 
         return $lines;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function meaningfulLines(string $configuration): array
+    {
+        $lines = preg_split('/\R/', $configuration);
+
+        return false === $lines ? [] : array_values(array_filter($lines, static fn (string $line): bool => '' !== trim($line) && !str_starts_with(ltrim($line), '#')));
     }
 
     private function repositoryPath(string $include): ?string

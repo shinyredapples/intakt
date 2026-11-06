@@ -7,7 +7,7 @@ namespace Intakt\Gates;
 final readonly class IgnoredErrors
 {
     /**
-     * @param array<string, int> $counts   by entry, an entry being its identifier, path and message pattern
+     * @param array<string, int> $counts
      * @param list<string>       $problems
      */
     public function __construct(

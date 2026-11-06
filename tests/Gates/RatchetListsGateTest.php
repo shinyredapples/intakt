@@ -69,7 +69,7 @@ final class RatchetListsGateTest extends SandboxTestCase
     {
         $run = $this->changeList(
             $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php', 'if.other')),
+            $this->listOf(self::HEADER, str_replace('if.condNotBoolean', 'if.other', $this->entry('#^Only booleans$#', 2, '../src/A.php'))),
         );
 
         self::assertTrue($run->failed('ratchet'), $run->output());
@@ -270,8 +270,8 @@ final class RatchetListsGateTest extends SandboxTestCase
         return $header."parameters:\n\tignoreErrors:\n".$entries;
     }
 
-    private function entry(string $message, int $count, string $path, string $identifier = 'if.condNotBoolean'): string
+    private function entry(string $message, int $count, string $path): string
     {
-        return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: ".$identifier."\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
+        return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
     }
 }

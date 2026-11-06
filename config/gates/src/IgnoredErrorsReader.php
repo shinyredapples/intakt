@@ -28,10 +28,18 @@ final readonly class IgnoredErrorsReader
         $results = $workspace->commandsConcurrently($commands);
 
         foreach (array_keys($lists) as $index => $name) {
-            $read[$name] = $this->ignoredErrorsOf($results[$index], (realpath($folders[$index]) ?: $folders[$index]).'/');
+            $read[$name] = $this->ignoredErrorsOf($results[$index], $this->resolved($folders[$index]).'/');
         }
 
         return $read;
+    }
+
+    // Because PHPStan prints the paths it resolved, which pass through any symbolic link in the scratch directory's path.
+    private function resolved(string $folder): string
+    {
+        $real = realpath($folder);
+
+        return false === $real ? $folder : $real;
     }
 
     // Because PHPStan resolves each entry's path from the list's own folder, a copy at the same place in a scratch tree yields repository paths for any version.

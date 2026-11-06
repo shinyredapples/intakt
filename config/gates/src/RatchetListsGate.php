@@ -60,7 +60,8 @@ final readonly class RatchetListsGate implements Gate
             return ['cannot read the includes of '.PhpStanIncludes::CONFIGURATION.' on the target branch'];
         }
 
-        [$lists, $findings] = $this->versionsOf($workspace, $mergeBase, $paths, $baseLists);
+        [$lists, $findings] = $this->versionsOf($workspace, $mergeBase, $paths);
+        array_push($findings, ...$this->listsAheadOfTheirInclude($lists, $paths, $baseLists));
 
         if (!$workspace->hasTool('phpstan')) {
             return [...$findings, 'missing tool phpstan'];
@@ -71,11 +72,10 @@ final readonly class RatchetListsGate implements Gate
 
     /**
      * @param list<string> $paths
-     * @param list<string> $baseLists
      *
      * @return array{array<string, RatchetListFile>, list<string>}
      */
-    private function versionsOf(Workspace $workspace, string $mergeBase, array $paths, array $baseLists): array
+    private function versionsOf(Workspace $workspace, string $mergeBase, array $paths): array
     {
         $lists = [];
         $findings = [];
@@ -94,12 +94,27 @@ final readonly class RatchetListsGate implements Gate
 
             if (null !== $base) {
                 $lists[self::BASE.$path] = new RatchetListFile($path, $base);
-            } elseif (in_array($path, $baseLists, true)) {
-                $findings[] = $path.': is not on the target branch, but its include is; a list arrives only with its include, in the change that switches its rule on';
             }
         }
 
         return [$lists, $findings];
+    }
+
+    /**
+     * @param array<string, RatchetListFile> $lists
+     * @param list<string>                   $paths
+     * @param list<string>                   $baseLists
+     *
+     * @return list<string>
+     */
+    private function listsAheadOfTheirInclude(array $lists, array $paths, array $baseLists): array
+    {
+        $new = array_filter($paths, static fn (string $path): bool => isset($lists[self::HEAD.$path]) && !isset($lists[self::BASE.$path]));
+
+        return array_values(array_map(
+            static fn (string $path): string => $path.': is not on the target branch, but its include is; a list arrives only with its include, in the change that switches its rule on',
+            array_intersect($new, $baseLists),
+        ));
     }
 
     /**
