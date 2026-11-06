@@ -98,11 +98,11 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
      */
     private function phpFilesUnder(string $root): array
     {
-        $excluded = self::pathsTheGateExcludes();
+        $excluded = $this->pathsTheGateExcludes();
         $files = [];
 
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
-            if ($file instanceof SplFileInfo && 'php' === $file->getExtension() && !self::isUnderAny(substr($file->getPathname(), strlen($root) + 1), $excluded)) {
+            if ($file instanceof SplFileInfo && 'php' === $file->getExtension() && !$this->isUnderAny(substr($file->getPathname(), strlen($root) + 1), $excluded)) {
                 $files[] = $file->getPathname();
             }
         }
@@ -116,7 +116,7 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
     /**
      * @return list<string>
      */
-    private static function pathsTheGateExcludes(): array
+    private function pathsTheGateExcludes(): array
     {
         preg_match('~^    excludePaths:\n((?:        - .+\n)+)~m', (string) file_get_contents(self::GATE_CONFIGURATION), $block);
         preg_match_all('~^        - %currentWorkingDirectory%/(\S+)~m', $block[1] ?? '', $paths);
@@ -127,7 +127,7 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
     /**
      * @param list<string> $folders
      */
-    private static function isUnderAny(string $relativePath, array $folders): bool
+    private function isUnderAny(string $relativePath, array $folders): bool
     {
         return array_any($folders, static fn (string $folder): bool => str_starts_with($relativePath, $folder.'/'));
     }

@@ -19,7 +19,7 @@ final class StaticAnalysisGateTest extends TestCase
 
     public function testStaticAnalysisOfEveryFixtureFailsInOneRun(): void
     {
-        $run = self::runOverEveryFixture();
+        $run = $this->runOverEveryFixture();
 
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('phpstan'), $run->output());
@@ -54,7 +54,7 @@ final class StaticAnalysisGateTest extends TestCase
         self::assertStringNotContainsString('ignoreErrors', $configuration);
     }
 
-    private static function runOverEveryFixture(): CheckRun
+    private function runOverEveryFixture(): CheckRun
     {
         if (self::$runOverEveryFixture instanceof CheckRun) {
             return self::$runOverEveryFixture;
@@ -71,6 +71,6 @@ final class StaticAnalysisGateTest extends TestCase
 
     private function assertRejectedInItsFolder(string $fixture, string $expectedFinding): void
     {
-        self::assertMatchesRegularExpression('~^'.preg_quote($fixture.'/src/', '~').'\S+ '.preg_quote($expectedFinding, '~').' ~m', self::runOverEveryFixture()->findingsOf('phpstan'));
+        self::assertMatchesRegularExpression('~^'.preg_quote($fixture.'/src/', '~').'\S+ '.preg_quote($expectedFinding, '~').' ~m', $this->runOverEveryFixture()->findingsOf('phpstan'));
     }
 }
