@@ -52,6 +52,7 @@ final class AiServiceState
         return $state;
     }
 
+    // A property at a path only one walk reached counts as changed, because two equal rounds with a reset between them reach the same paths: a path that came or went is itself state a round left behind.
     /**
      * @return list<string>
      */
@@ -60,9 +61,9 @@ final class AiServiceState
     {
         $changed = [];
 
-        foreach ($before->values as $path => $properties) {
-            foreach ($properties as $property => $value) {
-                if (isset($this->values[$path][$property]) && $this->values[$path][$property] !== $value) {
+        foreach ($before->values + $this->values as $path => $properties) {
+            foreach (array_keys($properties) as $property) {
+                if (($before->values[$path][$property] ?? null) !== ($this->values[$path][$property] ?? null)) {
                     $changed[] = $property;
                 }
             }

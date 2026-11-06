@@ -12,7 +12,15 @@ final class ProviderAnswers
     /**
      * @var list<array<mixed>>
      */
-    public array $requests = [];
+    private array $requests = [];
+
+    /**
+     * @return list<array<mixed>>
+     */
+    public function requests(): array
+    {
+        return $this->requests;
+    }
 
     /**
      * @param array{body: string} $options

@@ -59,7 +59,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private const string MCP_CONNECTION = 'Written while a round talks to the review server; ServerConnection::reset() disconnects at the next request, and the next connect writes it afresh.';
 
-    private const string PER_CALL = 'Cleared by the library when the call or the MCP request that wrote it ends.';
+    private const string PER_CALL = 'Cleared by the library when the call or the MCP request that wrote it ends or the next one starts.';
 
     private const string REFRESHED = 'Written afresh by every getTools(), which an agent runs before it calls a tool.';
 
@@ -404,7 +404,7 @@ final class SymfonyAiResetTest extends TestCase
         $answers = $this->container($kernel)->get(ProviderAnswers::class);
         assert($answers instanceof ProviderAnswers);
 
-        return $answers->requests;
+        return $answers->requests();
     }
 
     private function requestFor(ReviewRound $round): ReviewRequest

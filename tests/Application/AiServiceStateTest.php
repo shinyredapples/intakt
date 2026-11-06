@@ -21,7 +21,7 @@ final class AiServiceStateTest extends TestCase
         $before = AiServiceState::ofServices(['ai.toolbox' => $this->toolboxOf(new MemoryToolFactory())]);
         $after = AiServiceState::ofServices(['ai.toolbox' => $this->toolboxOf(new MemoryToolFactory()->addTool(new NamedTool(), 'kept_tool', 'A tool of the first run.'))]);
 
-        self::assertSame([MemoryToolFactory::class.'::$tools'], $after->changedSince($before));
+        self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
     }
 
     public function testStateKeptThroughTheSecondReferenceToASharedObjectIsReportedWhenTheFirstIsReplaced(): void
@@ -30,7 +30,7 @@ final class AiServiceStateTest extends TestCase
         $before = AiServiceState::ofServices(['ai.toolbox' => new ChainToolbox([$this->toolboxOf($shared), $this->toolboxOf($shared)])]);
         $after = AiServiceState::ofServices(['ai.toolbox' => new ChainToolbox([$this->toolboxOf(new MemoryToolFactory()), $this->toolboxOf($shared->addTool(new NamedTool(), 'kept_tool', 'A tool of the first run.'))])]);
 
-        self::assertSame([MemoryToolFactory::class.'::$tools'], $after->changedSince($before));
+        self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
     }
 
     public function testAnObjectThatRefersBackToAnAncestorEndsTheWalkThere(): void
@@ -43,6 +43,32 @@ final class AiServiceStateTest extends TestCase
         $state = AiServiceState::ofServices(['ai.toolbox' => $chain]);
 
         self::assertContains(MemoryToolFactory::class.'::$tools', $state->mutableWithoutReset());
+    }
+
+    public function testStateHeldByANewObjectThatReplacedACycleIsReportedAtItsNewPath(): void
+    {
+        $toolbox = $this->toolboxOf(new MemoryToolFactory());
+        $instanceMap = new ReflectionProperty($toolbox, 'instanceMap');
+        $instanceMap->setValue($toolbox, ['next' => $toolbox]);
+        $before = AiServiceState::ofServices(['ai.toolbox' => $toolbox]);
+        $instanceMap->setValue($toolbox, ['next' => $this->toolboxOf(new MemoryToolFactory()->addTool(new NamedTool(), 'kept_tool', 'A tool of the first run.'))]);
+
+        $after = AiServiceState::ofServices(['ai.toolbox' => $toolbox]);
+
+        self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
+    }
+
+    public function testAPathThatOnlyTheEarlierWalkReachedIsReported(): void
+    {
+        $toolbox = $this->toolboxOf(new MemoryToolFactory());
+        $instanceMap = new ReflectionProperty($toolbox, 'instanceMap');
+        $instanceMap->setValue($toolbox, ['kept' => $this->toolboxOf(new MemoryToolFactory())]);
+        $before = AiServiceState::ofServices(['ai.toolbox' => $toolbox]);
+        $instanceMap->setValue($toolbox, []);
+
+        $after = AiServiceState::ofServices(['ai.toolbox' => $toolbox]);
+
+        self::assertContains(MemoryToolFactory::class.'::$tools', $after->changedSince($before));
     }
 
     public function testANewObjectAsEmptyAsTheOneItReplacedLeavesNothingBehind(): void
