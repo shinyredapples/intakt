@@ -13,20 +13,47 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[CoversClass(ConsoleDisplay::class)]
 final class ConsoleDisplayTest extends TestCase
 {
-    public function testAPathThatAnErrorBlockWrapsIsWholeAgain(): void
+    public function testAPathThatAnErrorBlockWrapsIsFoundWhole(): void
     {
         $path = '/'.str_repeat('deep-folder/', 20).'broken.json';
-        $output = new BufferedOutput();
 
-        new SymfonyStyle(new ArrayInput([]), $output)->error('Cannot read '.$path.'.');
+        $display = $this->error('Cannot read '.$path.'.');
 
-        $display = $output->fetch();
         self::assertStringNotContainsString($path, $display);
-        self::assertStringContainsString($path.'.', ConsoleDisplay::unwrapped($display));
+        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($path.'.'), $display);
     }
 
-    public function testADisplayWithoutLineBreaksStaysTheSame(): void
+    public function testAPathWithSpacesThatAnErrorBlockWrapsIsFoundWhole(): void
     {
-        self::assertSame('one line  with spaces', ConsoleDisplay::unwrapped('one line  with spaces'));
+        $path = '/'.str_repeat('folder with spaces/', 15).'broken.json';
+
+        $display = $this->error('Cannot read '.$path.'.');
+
+        self::assertStringNotContainsString($path, $display);
+        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($path.'.'), $display);
+    }
+
+    public function testASpaceInTheTextIsNotFoundWhereTheDisplayHasNone(): void
+    {
+        self::assertDoesNotMatchRegularExpression(ConsoleDisplay::wrapped('/a b/broken.json'), '/ab/broken.json');
+    }
+
+    public function testCharactersTheDisplaySeparatesOnOneLineAreNotFound(): void
+    {
+        self::assertDoesNotMatchRegularExpression(ConsoleDisplay::wrapped('/ab/broken.json'), '/a b/broken.json');
+    }
+
+    public function testPatternCharactersInTheTextAreMatchedLiterally(): void
+    {
+        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped('/shadow[1]*?.json'), 'read /shadow[1]*?.json');
+        self::assertDoesNotMatchRegularExpression(ConsoleDisplay::wrapped('/shadow[1]*?.json'), 'read /shadow1.json');
+    }
+
+    private function error(string $message): string
+    {
+        $output = new BufferedOutput();
+        new SymfonyStyle(new ArrayInput([]), $output)->error($message);
+
+        return $output->fetch();
     }
 }

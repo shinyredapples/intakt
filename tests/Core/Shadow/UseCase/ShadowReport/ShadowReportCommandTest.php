@@ -29,9 +29,13 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
+use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(ShadowReportCommand::class)]
+#[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(ReportFormat::class)]
 #[UsesClass(RecordedHead::class)]
 #[UsesClass(LoopReviewReader::class)]
@@ -129,25 +133,32 @@ final class ShadowReportCommandTest extends TestCase
         }
 
         self::assertSame(Command::INVALID, $status);
-        self::assertStringContainsString($folder.'/broken.json', ConsoleDisplay::unwrapped($tester->getDisplay()));
+        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($folder.'/broken.json'), $tester->getDisplay());
     }
 
-    public function testAnUnreadableHeadDeepInTheTempFolderIsNamedInFullThoughTheErrorWraps(): void
+    public function testAnUnreadableHeadIsNamedInFullThoughTheErrorWrapsInsideTheFileName(): void
     {
-        $folder = sys_get_temp_dir().'/shadow-report-'.str_repeat('deep-', 30).bin2hex(random_bytes(4));
-        mkdir($folder);
-        file_put_contents($folder.'/broken.json', '{"identity": 1}');
-        $tester = $this->tester();
+        $columns = getenv('COLUMNS');
+        putenv('COLUMNS=80');
 
         try {
-            $tester->execute(['folder' => $folder]);
+            $folder = $this->folderWhoseErrorWrapsInsideTheFileName();
+            mkdir($folder);
+            file_put_contents($folder.'/broken.json', '{"identity": 1}');
+            $tester = $this->tester();
+
+            try {
+                $tester->execute(['folder' => $folder]);
+            } finally {
+                unlink($folder.'/broken.json');
+                rmdir($folder);
+            }
         } finally {
-            unlink($folder.'/broken.json');
-            rmdir($folder);
+            putenv(false === $columns ? 'COLUMNS' : 'COLUMNS='.$columns);
         }
 
-        self::assertStringNotContainsString($folder.'/broken.json', $tester->getDisplay());
-        self::assertStringContainsString($folder.'/broken.json', ConsoleDisplay::unwrapped($tester->getDisplay()));
+        self::assertStringNotContainsString('broken.json', $tester->getDisplay());
+        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped($folder.'/broken.json'), $tester->getDisplay());
     }
 
     public function testAFolderWithPatternCharactersInItsNameStillFindsItsHeads(): void
@@ -234,6 +245,22 @@ final class ShadowReportCommandTest extends TestCase
         $status = $tester->execute(['folder' => self::RECORDED.'/missing']);
 
         self::assertSame(Command::INVALID, $status);
+    }
+
+    // Because where the break falls depends on the length of the temp folder's path, the depth is chosen by wrapping the command's error at the same width.
+    private function folderWhoseErrorWrapsInsideTheFileName(): string
+    {
+        $parent = sys_get_temp_dir().'/shadow-report-'.bin2hex(random_bytes(4)).'-';
+        for ($depth = 0; $depth < SymfonyStyle::MAX_LINE_LENGTH; ++$depth) {
+            $folder = $parent.str_repeat('d', $depth);
+            $output = new BufferedOutput();
+            new SymfonyStyle(new ArrayInput([]), $output)->error(sprintf('Cannot read a recorded head from %s.', $folder.'/broken.json'));
+            if (!str_contains($output->fetch(), 'broken.json')) {
+                return $folder;
+            }
+        }
+
+        self::fail('No folder depth wraps the error inside the file name.');
     }
 
     private function tester(): CommandTester

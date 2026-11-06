@@ -35,6 +35,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[Group('serial')]
 #[CoversClass(ReplayDayCommand::class)]
 #[CoversClass(RolledBackReplay::class)]
+#[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(OutageWatch::class)]
 #[UsesClass(UsageReadingsStayedAway::class)]
 #[UsesClass(DayReplay::class)]
@@ -125,7 +126,7 @@ final class ReplayDayCommandTest extends KernelTestCase
         $this->command->execute(['script' => __DIR__.'/no-such-day.txt']);
 
         self::assertSame(Command::FAILURE, $this->command->getStatusCode());
-        self::assertStringContainsString(__DIR__.'/no-such-day.txt', ConsoleDisplay::unwrapped($this->command->getDisplay()));
+        self::assertMatchesRegularExpression(ConsoleDisplay::wrapped(__DIR__.'/no-such-day.txt'), $this->command->getDisplay());
     }
 
     public function testALineNotUnderstoodStopsTheReplayWithItsRule(): void
