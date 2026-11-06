@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
+use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\HttpKernel\Kernel as BaseKernel;
+
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
+
+final class Clock
+{
+}
+
+final readonly class Mailer
+{
+    public function __construct(public Transport $transport)
+    {
+    }
+}
+
+final class Transport
+{
+}
+
+final class Kernel extends BaseKernel
+{
+    use MicroKernelTrait;
+
+    public function registerBundles(): iterable
+    {
+        yield new FrameworkBundle();
+    }
+
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__);
+    }
+
+    protected function configureContainer(ContainerConfigurator $container): void
+    {
+        $container->extension('framework', ['secret' => 'fixture', 'http_method_override' => false]);
+        $container->services()->set(Clock::class);
+        $container->services()->set(Transport::class);
+        $container->services()->set(Mailer::class)->args([service(Clock::class)])->public();
+    }
+}
