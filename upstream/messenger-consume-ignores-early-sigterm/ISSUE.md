@@ -33,7 +33,7 @@ $application->run(new ArrayInput(['command' => 'messenger:consume', 'receivers' 
 
 ### Possible Solution
 
-Remember the signal in `handleSignal()` when there is no worker yet and stop the worker right after it is created Returning an exit code from `handleSignal()` is not a good alternative: it skips `console.terminate` for a worker that never ran. The fix looks small.
+Remember the signal in `handleSignal()` when there is no worker yet and stop the worker right after it is created. Returning an exit code from `handleSignal()` is not a good alternative: it skips `console.terminate` for a worker that never ran. The fix looks small.
 
 ### Additional Context
 
