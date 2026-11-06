@@ -111,32 +111,6 @@ final class ProcessRunner
      */
     public function runConcurrently(array $commands, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): array
     {
-        return $this->runAll($commands, $directory, $seconds, false);
-    }
-
-    // Because a gate child that times out must fail its gate with what it printed so far, not with the timeout alone.
-    /**
-     * @param list<string> $command
-     */
-    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
-    {
-        return $this->runAll(['command' => [$command, []]], $directory, $seconds, true)['command'];
-    }
-
-    private function runCall(GitCall $call): ProcessResult
-    {
-        return $this->run($call->command, $call->directory, $call->environment);
-    }
-
-    /**
-     * @template Name of array-key
-     *
-     * @param array<Name, array{list<string>, array<string, string|false>}> $commands
-     *
-     * @return array<Name, ProcessResult>
-     */
-    private function runAll(array $commands, string $directory, int $seconds, bool $keepPartialOutput): array
-    {
         if ($seconds < 1) {
             return array_map(fn (array $command): ProcessResult => $this->timedOut($command[0][0], $seconds), $commands);
         }
@@ -147,15 +121,53 @@ final class ProcessRunner
             $processes[$name] = new Process($command, $directory, [...getenv(), ...$environment], null, $seconds);
         }
 
-        $failures = $this->startAll($processes);
-        $failures += $this->waitForAll(array_diff_key($processes, $failures));
+        $failures = $this->failuresOf($processes);
         $results = [];
 
         foreach ($processes as $name => $process) {
-            $results[$name] = $this->resultOf($process, $failures[$name] ?? null, $commands[$name][0][0], $keepPartialOutput);
+            $results[$name] = $this->resultOf($process, $failures[$name] ?? null, $commands[$name][0][0]);
         }
 
         return $results;
+    }
+
+    // Because a gate child that times out must fail its gate with what it printed so far, not with the timeout alone.
+    /**
+     * @param list<string> $command
+     */
+    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
+    {
+        if ($seconds < 1) {
+            return $this->timedOut($command[0], $seconds);
+        }
+
+        $process = new Process($command, $directory, getenv(), null, $seconds);
+        $failure = $this->failuresOf([$process])[0] ?? null;
+
+        if (self::TIMED_OUT !== $failure) {
+            return $this->resultOf($process, $failure, $command[0]);
+        }
+
+        $timedOut = $this->timedOut($command[0], $seconds);
+
+        return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
+    }
+
+    private function runCall(GitCall $call): ProcessResult
+    {
+        return $this->run($call->command, $call->directory, $call->environment);
+    }
+
+    /**
+     * @param array<array-key, Process> $processes
+     *
+     * @return array<array-key, int>
+     */
+    private function failuresOf(array $processes): array
+    {
+        $failures = $this->startAll($processes);
+
+        return $failures + $this->waitForAll(array_diff_key($processes, $failures));
     }
 
     /**
@@ -325,14 +337,8 @@ final class ProcessRunner
         return null;
     }
 
-    private function resultOf(Process $process, ?int $failure, string $program, bool $keepPartialOutput = false): ProcessResult
+    private function resultOf(Process $process, ?int $failure, string $program): ProcessResult
     {
-        if (self::TIMED_OUT === $failure && $keepPartialOutput) {
-            $timedOut = $this->timedOut($program, (int) $process->getTimeout());
-
-            return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
-        }
-
         if (self::TIMED_OUT === $failure) {
             return $this->timedOut($program, (int) $process->getTimeout());
         }
