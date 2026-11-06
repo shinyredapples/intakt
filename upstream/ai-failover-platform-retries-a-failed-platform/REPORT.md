@@ -8,11 +8,13 @@ Draft, not posted. Versions: `symfony/ai-failover-platform` v1.0.0-BETA1, `symfo
 
 The limiter is also created with `$platform::class` as its key, and the OpenAi, Ollama and Anthropic factories all return `Symfony\AI\Platform\Platform`, so every platform shares one limiter (the documented Ollama-to-OpenAI example included), not only two accounts of one provider: a failure of one uses up the tokens of all. Successful calls consume a token too.
 
-`reproduce.php` gives the platform a failing and a working platform of one class and a limiter of one token per hour, calls it twice and prints:
+`reproduce.php` shows the two apart. First it gives the platform a failing and a working platform of two different classes (so each has a limiter of its own) and a limiter of one token per hour, and calls it twice. Then it records the limiter keys of one call over two failing platforms of one class and a working one. It prints:
 
 ```
-the failing platform was called 2 times, the working one 2 times
+retry: the failing platform was called 2 times, the working one 2 times
 a failed platform is called again on the next call
+limiter keys of two failing platforms and a working one: FailingPlatform, FailingPlatform, WorkingPlatform
+two platforms of one class share one limiter
 ```
 
 ## Expected
@@ -35,4 +37,5 @@ Checked on 2026-11-02.
 - **Pull request search (D12, 2026-11-03, `main` 17d320e7beee):** open with the prefix `[Platform][Failover]`: #1808 (`Add support for model override`); open touching `src/platform/src/Bridge/Failover/` or the failover class: #1808, and #1864 (`[Platform] Add ModelFailoverPlatform bridge`, a new `ModelFailover` bridge folder, no `Failover` prefix); merged since BETA1 on `src/platform/src/Bridge/Failover/`: none.
 - **Fix pull request:** `issue only`. The expected behavior is a design choice (skip a platform while its limiter has no room, and how each platform's limiter is keyed), and open pull requests #1808 and #1864 (checked 2026-11-03 against `main` 17d320e7beee) rewrite the constructor and the platform list of the same class, so a fix would conflict with them. Neither fixes the retry.
 - **Owner review (2026-11-03, `main` 17d320e7):** #1953 plans a `FailoverProvider` to replace this class, so the bug goes upstream as a comment there, so that the replacement does not repeat it. The limiter key is `$platform::class` and every bridge factory returns `Platform`, so all platforms share one limiter, and successful calls consume a token too. (The Ollama bridge is not installed in Intakt; its factory was checked on `main` by the owner session.)
-- **Status:** `recheck needed before filing`: the report has no "Checked" line, so the owner redoes the dated check against upstream first (see `upstream/README.md`). The comment is `COMMENT.md`.
+- **Refresh (2026-11-06, `main` 6747a33):** still fails; `src/platform/src/Bridge/Failover/` is unchanged since 17d320e7. #1953 has stalled and is about to be closed by the stale bot, so a comment there would be lost: the bug goes upstream as a new issue instead, and the issue names #1953 in one line. `reproduce.php` now uses two platform classes for the retry, so the retry shows on its own, and checks the shared limiter key in a second case.
+- **Status:** `recheck needed before filing` as a new issue: the refresh above names no newest release and no duplicate search, so the report has no "Checked" line; the owner records the dated check against upstream first (see `upstream/README.md`). The issue text is `ISSUE.md`.
