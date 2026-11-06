@@ -144,11 +144,8 @@ final class SampleProjectSeedTest extends KernelTestCase
         return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'sample-project-seed');
     }
 
-    /**
-     * The config's content rather than its path, which changes per test, and every key as each source holds it.
-     *
-     * @return array<mixed>
-     */
+    // The config's content rather than its path, because the path changes per test while the content is what the container is built from.
+    /** @return array<mixed> */
     private function buildInputs(): array
     {
         $keys = array_map(static fn (string $name): array => [$_SERVER[$name] ?? null, $_ENV[$name] ?? null, getenv($name)], array_diff(self::VARIABLES, ['INTAKT_CONFIG']));

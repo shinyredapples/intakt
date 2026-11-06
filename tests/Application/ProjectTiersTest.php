@@ -510,11 +510,8 @@ final class ProjectTiersTest extends KernelTestCase
         return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'project-tiers');
     }
 
-    /**
-     * The keys without INTAKT_CONFIG, because its path changes per test while the file's content is what the container is built from.
-     *
-     * @return array<mixed>
-     */
+    // The keys without INTAKT_CONFIG, because its path changes per test while the file's content is what the container is built from.
+    /** @return array<mixed> */
     private function containerInputs(): array
     {
         $keys = array_map(static fn (string $name): mixed => $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name), array_diff(self::KEYS, ['INTAKT_CONFIG']));

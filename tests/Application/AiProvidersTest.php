@@ -318,11 +318,8 @@ final class AiProvidersTest extends KernelTestCase
         return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'ai-providers');
     }
 
-    /**
-     * Every variable as each source holds it rather than as the config reads it, so a test of which source wins never reuses a container built for another.
-     *
-     * @return array<mixed>
-     */
+    // Every variable as each source holds it rather than as the config reads it, so a test of which source wins never reuses a container built for another.
+    /** @return array<mixed> */
     private function buildInputs(): array
     {
         $variables = [];
@@ -330,8 +327,9 @@ final class AiProvidersTest extends KernelTestCase
             $variables[$name] = [$_SERVER[$name] ?? null, $_ENV[$name] ?? null, getenv($name)];
         }
 
+        $files = glob($this->vaultDirectory().'/*');
         $vault = [];
-        foreach (glob($this->vaultDirectory().'/*') ?: [] as $file) {
+        foreach (false === $files ? [] : $files as $file) {
             $vault[basename($file)] = file_get_contents($file);
         }
 
