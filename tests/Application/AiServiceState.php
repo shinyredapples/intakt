@@ -117,7 +117,7 @@ final class AiServiceState
 
         $this->objects[spl_object_id($value)] = $value;
 
-        foreach (self::properties($value) as $property) {
+        foreach ($this->properties($value) as $property) {
             $key = spl_object_id($value).'#'.$property->getDeclaringClass()->getName().'::$'.$property->getName();
             $this->values[$key] = 'uninitialized';
 
@@ -131,7 +131,7 @@ final class AiServiceState
     /**
      * @return list<ReflectionProperty>
      */
-    private static function properties(object $object): array
+    private function properties(object $object): array
     {
         return array_values(array_filter(new ReflectionObject($object)->getProperties(), static fn (ReflectionProperty $property): bool => !$property->isStatic()));
     }
