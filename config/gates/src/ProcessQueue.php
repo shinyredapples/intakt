@@ -15,7 +15,7 @@ final readonly class ProcessQueue
 
     private const int POLL_MICROSECONDS = 10000;
 
-    public function __construct(private int $seconds)
+    public function __construct(private int $seconds, private int $overallSeconds)
     {
     }
 
@@ -32,8 +32,9 @@ final readonly class ProcessQueue
         $order = array_keys($jobs);
         $results = [];
         $running = [];
+        $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
 
-        while ([] !== $jobs || [] !== $running) {
+        while (([] !== $jobs || [] !== $running) && hrtime(true) < $deadline) {
             $idle = $this->idleWorkers($running, $workers);
             $taken = array_slice($jobs, 0, count($idle), true);
             $jobs = array_diff_key($jobs, $taken);
@@ -44,6 +45,8 @@ final readonly class ProcessQueue
 
             usleep(self::POLL_MICROSECONDS);
         }
+
+        $results = array_replace($results, $this->stoppedAtTheLimit($running), $this->neverStarted($jobs));
 
         return array_combine($order, array_map(static fn (int|string $name): ProcessResult => $results[$name], $order));
     }
@@ -101,6 +104,48 @@ final readonly class ProcessQueue
     }
 
     /**
+     * @template Name of array-key
+     *
+     * @param array<int, array{Name, Process|ProcessResult}> $running
+     *
+     * @return array<Name, ProcessResult>
+     */
+    private function stoppedAtTheLimit(array $running): array
+    {
+        $stopped = [];
+
+        foreach ($running as [$name, $process]) {
+            $stopped[$name] = $process instanceof Process ? $this->stopped($process) : $process;
+        }
+
+        return $stopped;
+    }
+
+    private function stopped(Process $process): ProcessResult
+    {
+        $process->stop(0);
+
+        return $this->timedOut($process, $this->overallLimit());
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs
+     *
+     * @return array<Name, ProcessResult>
+     */
+    private function neverStarted(array $jobs): array
+    {
+        return array_fill_keys(array_keys($jobs), new ProcessResult(ProcessRunner::TIMED_OUT, '', $this->overallLimit()."\n"));
+    }
+
+    private function overallLimit(): string
+    {
+        return 'timed out: the test pass reached its overall limit of '.$this->overallSeconds.' seconds';
+    }
+
+    /**
      * @param list<string>          $command
      * @param array<string, string> $environment
      */
@@ -122,7 +167,7 @@ final readonly class ProcessQueue
         try {
             $process->checkTimeout();
         } catch (ProcessTimedOutException) {
-            return $this->timedOut($process);
+            return $this->timedOut($process, 'timed out after '.$this->seconds.' seconds');
         }
 
         if ($process->isRunning()) {
@@ -133,12 +178,12 @@ final readonly class ProcessQueue
     }
 
     // Because a hung test names itself only in what it printed before it stopped answering.
-    private function timedOut(Process $process): ProcessResult
+    private function timedOut(Process $process, string $limit): ProcessResult
     {
         $errors = trim($process->getErrorOutput());
         $printed = preg_split('/\R/', '' === $errors ? trim($process->getOutput()) : $errors);
         $lastLine = false === $printed ? '' : (string) array_last($printed);
-        $reason = 'timed out after '.$this->seconds.' seconds'.('' === $lastLine ? '' : ', last output: '.$lastLine);
+        $reason = $limit.('' === $lastLine ? '' : ', last output: '.$lastLine);
 
         return new ProcessResult(ProcessRunner::TIMED_OUT, $process->getOutput(), $reason."\n".$process->getErrorOutput());
     }
