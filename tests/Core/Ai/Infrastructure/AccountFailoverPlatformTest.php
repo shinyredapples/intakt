@@ -379,7 +379,10 @@ final class AccountFailoverPlatformTest extends TestCase
 
     public function testAnAnswerReadFromAnAccountCarriesItsTokenUsageOnce(): void
     {
-        $usage = new TokenUsage(promptTokens: 10, totalTokens: 10);
+        $usage = new TokenUsage(
+            promptTokens: 10,
+            totalTokens: 10,
+        );
 
         $answer = $this->accounts($this->extracting($usage, static fn (): TextResult => new TextResult('ok')), $this->answering('second'))->invoke('big', 'Review.');
 
