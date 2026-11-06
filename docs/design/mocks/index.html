@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="board">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content wide" id="main">
+<div class="page-head">
+  <div>
+    <h1>Board</h1>
+    <p class="lead">Two builds and one review running. Three tasks wait on you.</p>
+  </div>
+  <div class="actions hide-phone">
+    <a class="btn secondary" href="waiting.html">Open Waiting on you</a>
+  </div>
+</div>
+
+<div class="banner broken" data-project="acme-shop" role="alert">
+  <button class="banner-toggle" type="button" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg><span>CI image build failing since 09:12</span><svg class="i s chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg>
+  <p><strong>CI image build failing since 09:12.</strong> acme-shop checks cannot run, so #205 stays in Checking. The Maintainer retries every 15 minutes.</p>
+  <a class="btn quiet sm" href="health.html">See the failing check</a>
+</div>
+<div class="banner" data-project="field-notes">
+  <button class="banner-toggle" type="button" aria-expanded="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg><span>field-notes is paused</span><svg class="i s chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg>
+  <p><strong>field-notes is paused.</strong> You paused it on Monday. Its tasks keep their place and nothing new starts.</p>
+  <button class="btn secondary sm" type="button" data-toast="field-notes resumed" data-undo="field-notes paused again">Resume</button>
+</div>
+
+<details class="working" id="working">
+  <summary><span class="w-title">Who is working</span><span class="w-dots" id="wdots" aria-hidden="true"></span><span class="w-sum" id="wsum"></span><svg class="i s chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary>
+  <div class="lanes" id="lanes"></div>
+</details>
+
+<section aria-labelledby="board-h">
+  <h2 id="board-h" class="sr-only">Tasks by state</h2>
+  <nav class="colswitch" id="colswitch" aria-label="Board columns"></nav>
+  <div class="stagemap" id="stagemap" hidden><span class="sm-text" id="smtext"></span><span class="sm-bar" id="smbar"></span></div>
+  <div class="board-wrap" id="boardwrap"><div class="board" id="board"></div></div>
+</section>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>
