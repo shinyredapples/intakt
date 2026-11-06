@@ -1,0 +1,42 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Intakt\Gates\GateReport;
+use Intakt\Gates\GateResult;
+use Intakt\Gates\ProcessResult;
+use Intakt\Gates\ProcessRunner;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(ProcessRunner::class)]
+#[UsesClass(GateReport::class)]
+#[UsesClass(GateResult::class)]
+#[UsesClass(ProcessResult::class)]
+final class GateChildTimeoutTest extends TestCase
+{
+    public function testAGateWhoseChildTimesOutFailsWithWhatTheChildPrintedBeforeIt(): void
+    {
+        $child = new ProcessRunner()->runToItsEnd([PHP_BINARY, '-r', 'fwrite(STDOUT, "gate progress marker\n"); fwrite(STDERR, "gate error marker\n"); sleep(30);'], sys_get_temp_dir(), 1);
+
+        $report = GateReport::fromChild('cs', $child);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $child->exitCode);
+        self::assertFalse($report->isPassing());
+        self::assertStringContainsString('timed out after 1 seconds', $report->line);
+        self::assertStringContainsString('gate progress marker', $report->line);
+        self::assertStringContainsString('gate error marker', $report->line);
+    }
+
+    public function testAGateChildWithinItsTimeKeepsItsOutputAndExitCode(): void
+    {
+        $child = new ProcessRunner()->runToItsEnd([PHP_BINARY, '-r', 'echo "out"; fwrite(STDERR, "err"); exit(1);'], sys_get_temp_dir(), 10);
+
+        self::assertSame(1, $child->exitCode);
+        self::assertSame('out', $child->output);
+        self::assertSame('err', $child->errors);
+    }
+}
