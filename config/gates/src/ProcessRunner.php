@@ -25,15 +25,11 @@ final class ProcessRunner
 
     private const int POLL_MICROSECONDS = 10000;
 
-    private const int STOP_GRACE_SECONDS = 2;
-
     private const array NAMESPACE_OPTIONS = ['--user', '--map-root-user', '--pid', '--fork', '--kill-child', '--mount-proc'];
 
     private const int PROBE_TIMEOUT_SECONDS = 10;
 
     private const string HOLD_UNTIL_RELEASED = 'read -r released && exec "$@"';
-
-    private const string ZOMBIE = 'Z';
 
     private ?string $containment = null;
 
@@ -93,16 +89,14 @@ final class ProcessRunner
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
-        $forwarding = StopSignalForwarding::through(static function () use ($group): void {
-            posix_kill(-$group, 9);
-        });
+        $forwarding = StopSignalForwarding::through($group->kill(...));
         $failure = $this->waitForAll([$process])[0] ?? null;
 
-        if (null === $failure && $this->groupOutlives($group, $deadline)) {
+        if (null === $failure && $group->outlives($deadline)) {
             $failure = self::TIMED_OUT;
         }
 
-        posix_kill(-$group, 9);
+        $group->kill();
         $forwarding->end();
 
         return $this->resultOf($process, $failure, $command[0]);
@@ -158,15 +152,15 @@ final class ProcessRunner
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
-        $forwarding = StopSignalForwarding::through(fn () => $this->stopGroup($group));
+        $forwarding = StopSignalForwarding::through($group->stop(...));
         $failure = $this->waitUntil($process, $deadline);
 
         if (self::TIMED_OUT === $failure) {
-            $this->stopGroup($group);
+            $group->stop();
             $this->waitForAll([$process]);
         }
 
-        posix_kill(-$group, 9);
+        $group->kill();
         $forwarding->end();
 
         if (self::TIMED_OUT === $failure) {
@@ -198,14 +192,6 @@ final class ProcessRunner
 
             usleep(self::POLL_MICROSECONDS);
         }
-    }
-
-    // Because only the gate child can reach the session of its contained run, it is asked to stop first and killed when it does not.
-    private function stopGroup(int $group): void
-    {
-        posix_kill(-$group, 15);
-        $this->groupOutlives($group, (hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS);
-        posix_kill(-$group, 9);
     }
 
     // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.
@@ -268,17 +254,19 @@ final class ProcessRunner
         return $seconds < 1 ? $this->timedOut($program, $seconds) : null;
     }
 
-    private function startHeld(Process $process, InputStream $release): ?int
+    private function startHeld(Process $process, InputStream $release): ?ProcessGroup
     {
-        $group = [] === $this->startAll([$process]) ? $process->getPid() : null;
+        $leader = [] === $this->startAll([$process]) ? $process->getPid() : null;
         $release->write("\n");
         $release->close();
 
-        if (null === $group) {
+        if (null === $leader) {
             $process->stop(0);
+
+            return null;
         }
 
-        return $group;
+        return new ProcessGroup($leader);
     }
 
     private function namespacesAreAvailable(): bool
@@ -290,43 +278,6 @@ final class ProcessRunner
         } catch (ExceptionInterface) {
             return false;
         }
-    }
-
-    private function groupOutlives(int $group, float $deadline): bool
-    {
-        while ($this->groupIsAlive($group) && (hrtime(true) / 1_000_000_000) < $deadline) {
-            usleep(self::POLL_MICROSECONDS);
-        }
-
-        return $this->groupIsAlive($group);
-    }
-
-    private function groupIsAlive(int $group): bool
-    {
-        if (!posix_kill(-$group, 0)) {
-            return false;
-        }
-
-        $statuses = glob('/proc/[0-9]*/stat');
-
-        if (false === $statuses || [] === $statuses) {
-            return true;
-        }
-
-        return [] !== array_filter($statuses, fn (string $status): bool => $this->isLiveMember($group, (string) @file_get_contents($status)));
-    }
-
-    private function isLiveMember(int $group, string $status): bool
-    {
-        $end = strrpos($status, ')');
-
-        if (false === $end) {
-            return false;
-        }
-
-        $fields = explode(' ', substr($status, $end + 2));
-
-        return self::ZOMBIE !== $fields[0] && (string) $group === ($fields[2] ?? '');
     }
 
     /**

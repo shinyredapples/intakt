@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
+use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\StopSignalForwarding;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ProcessRunner::class)]
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateResult::class)]
+#[UsesClass(ProcessGroup::class)]
 #[UsesClass(ProcessResult::class)]
 #[UsesClass(StopSignalForwarding::class)]
 final class GateChildCrashTest extends TestCase

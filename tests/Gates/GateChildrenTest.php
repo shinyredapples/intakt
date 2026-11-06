@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
+use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\StopSignalForwarding;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(GateChildren::class)]
 #[CoversClass(CheckCommand::class)]
 #[UsesClass(GateReport::class)]
+#[UsesClass(ProcessGroup::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
 #[UsesClass(StopSignalForwarding::class)]
