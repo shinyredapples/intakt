@@ -133,7 +133,7 @@ final class AiServiceState
 
     // An object is skipped only while it is an ancestor on the current path (a cycle), not once it was reached elsewhere: an object two properties share is recorded under both paths, so a reset that replaces the first reference with an empty object while the second keeps the used one still shows under the second path.
     /**
-     * @param list<int|string>  $path
+     * @param list<int|string> $path
      * @param array<int, true> $ancestors
      */
     private function visit(mixed $value, array $path, array $ancestors = []): void
@@ -165,7 +165,7 @@ final class AiServiceState
     }
 
     /**
-     * @param list<int|string>  $path
+     * @param list<int|string> $path
      * @param array<int, true> $ancestors
      */
     private function record(object $object, ReflectionProperty $property, array $path, array $ancestors): void
