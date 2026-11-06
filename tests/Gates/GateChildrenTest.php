@@ -15,6 +15,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(GateChildren::class)]
 #[CoversClass(CheckCommand::class)]
 #[UsesClass(GateReport::class)]
+#[UsesClass(ProcessRunner::class)]
+#[UsesClass(ProcessResult::class)]
 final class GateChildrenTest extends SandboxTestCase
 {
     public function testASlowPassingGateAndAFastFailingGateAreReportedInGateOrder(): void
