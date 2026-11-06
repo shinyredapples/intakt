@@ -7,6 +7,7 @@ namespace Intakt\Core\Budget\Infrastructure;
 use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -27,6 +28,7 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
 
     public function __construct(
         private EntityManagerInterface $entities,
+        private ManagerRegistry $doctrine,
         private Holds $holds,
         private ClockInterface $clock,
         private LoggerInterface $logger,
@@ -63,6 +65,7 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
 
     private function record(string $item, string $errorKey): void
     {
+        $this->reopenEntityManager();
         $now = $this->clock->now();
         $this->entities->createQueryBuilder()
             ->delete(ItemFailureRecord::class, 'failure')
@@ -105,7 +108,16 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
 
     private function backOff(string $cause, Throwable $failure): void
     {
+        $this->reopenEntityManager();
         $this->holds->hold(SharedHold::FailureBackOff, $this->clock->now()->add(new DateInterval(self::BACK_OFF)));
         $this->logger->error('The install-wide failure back-off started because {cause}.', ['cause' => $cause, 'exception' => $failure]);
+    }
+
+    // The failure being reported is often a failed flush, which closes the entity manager for every holder and Doctrine refuses to reopen it, so without a reset the hold could not be written.
+    private function reopenEntityManager(): void
+    {
+        if (!$this->entities->isOpen()) {
+            $this->doctrine->resetManager();
+        }
     }
 }

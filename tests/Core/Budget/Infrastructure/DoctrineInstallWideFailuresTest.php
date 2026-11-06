@@ -13,6 +13,7 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Domain\FullDisk;
 use Intakt\Core\Budget\Domain\ItemFailureRecord;
@@ -64,6 +65,26 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
     public function testAFailingDatabaseStartsTheFailureBackOff(): void
     {
         $this->failures->databaseFailed(new RuntimeException('connection refused'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertLoggedError('error', 'The install-wide failure back-off started because the database failed.');
+    }
+
+    public function testADatabaseFailureThatClosedTheEntityManagerStillStartsTheFailureBackOff(): void
+    {
+        $connection = $this->entities->getConnection();
+        $connection->executeStatement('PRAGMA query_only = ON');
+        try {
+            $this->entities->persist(new ItemFailureRecord('round-1', str_repeat('a', 64), $this->clock->now()));
+            $this->entities->flush();
+            self::fail('The write to a read-only database succeeded.');
+        } catch (ReadOnlyException $failure) {
+        } finally {
+            $connection->executeStatement('PRAGMA query_only = OFF');
+        }
+        self::assertFalse($this->entities->isOpen());
+
+        $this->failures->databaseFailed($failure);
 
         self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
         self::assertLoggedError('error', 'The install-wide failure back-off started because the database failed.');
@@ -190,7 +211,15 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         $records = LogRecords::ofThisRun();
         self::assertNotNull($records);
 
-        return new DoctrineInstallWideFailures($entities, new DoctrineHolds($entities, $this->clock), $this->clock, new RecordingLogger($records));
+        return new DoctrineInstallWideFailures($entities, $this->doctrine(), new DoctrineHolds($entities, $this->clock), $this->clock, new RecordingLogger($records));
+    }
+
+    private function doctrine(): ManagerRegistry
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+
+        return $doctrine;
     }
 
     // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
@@ -203,7 +232,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
     private function keyOfNotFound(): string
     {
-        $recorded = new DoctrineInstallWideFailures($this->entities, $this->holds, $this->clock, new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')));
+        $recorded = new DoctrineInstallWideFailures($this->entities, $this->doctrine(), $this->holds, $this->clock, new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')));
         $recorded->itemFailed('probe', new RuntimeException('record not found'));
         $key = $this->entities->getRepository(ItemFailureRecord::class)->findOneBy(['item' => 'probe'])?->errorKey;
         self::assertNotNull($key);
