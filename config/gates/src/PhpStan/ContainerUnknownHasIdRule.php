@@ -11,6 +11,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Symfony\ServiceDefinition;
 use PHPStan\Symfony\ServiceMap;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
@@ -43,7 +44,7 @@ final readonly class ContainerUnknownHasIdRule implements Rule
     {
         $id = $this->askedId($node, $scope);
 
-        if (null === $id || null !== $this->services->getService($id)) {
+        if (null === $id || $this->services->getService($id) instanceof ServiceDefinition) {
             return [];
         }
 
@@ -68,12 +69,6 @@ final readonly class ContainerUnknownHasIdRule implements Rule
             return false;
         }
 
-        foreach (self::CONTAINERS as $container) {
-            if ((new ObjectType($container))->isSuperTypeOf($receiver)->yes()) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(self::CONTAINERS, fn ($container) => new ObjectType($container)->isSuperTypeOf($receiver)->yes());
     }
 }

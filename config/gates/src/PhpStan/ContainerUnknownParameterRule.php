@@ -11,6 +11,7 @@ use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Symfony\ParameterDefinition;
 use PHPStan\Symfony\ParameterMap;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
@@ -39,7 +40,7 @@ final readonly class ContainerUnknownParameterRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $unknown = array_filter($this->readNames($node, $scope), fn (string $name): bool => null === $this->parameters->getParameter($name));
+        $unknown = array_filter($this->readNames($node, $scope), fn (string $name): bool => !$this->parameters->getParameter($name) instanceof ParameterDefinition);
 
         return array_values(array_map(
             static fn (string $name): IdentifierRuleError => RuleErrorBuilder::message(sprintf('Parameter "%s" is not defined in the container.', $name))->identifier('intakt.containerUnknownParameter')->build(),
@@ -63,12 +64,6 @@ final readonly class ContainerUnknownParameterRule implements Rule
 
     private function isContainer(Type $receiver): bool
     {
-        foreach (self::CONTAINERS as $container) {
-            if ((new ObjectType($container))->isSuperTypeOf($receiver)->yes()) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(self::CONTAINERS, fn ($container) => new ObjectType($container)->isSuperTypeOf($receiver)->yes());
     }
 }
