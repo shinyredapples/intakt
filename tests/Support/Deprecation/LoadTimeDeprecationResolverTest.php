@@ -91,7 +91,6 @@ final class LoadTimeDeprecationResolverTest extends TestCase
 
     public function testATraceOfTheAutoloaderAloneHasNoCaller(): void
     {
-        $this->autoloader();
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
             ['function' => 'loadClass', 'class' => ClassLoader::class],

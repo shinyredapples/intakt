@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support\Deprecation;
 
 use Closure;
+use LogicException;
 use PHPUnit\Runner\IssueTriggerResolver\Resolution;
 use PHPUnit\Runner\IssueTriggerResolver\Resolver;
 use ReflectionFunction;
@@ -55,11 +56,11 @@ final class LoadTimeDeprecationResolver implements Resolver
     private function identityOf(callable $autoloader): array
     {
         $reflection = match (true) {
-            $autoloader instanceof Closure => new ReflectionFunction($autoloader),
             is_array($autoloader) => new ReflectionMethod($autoloader[0], $autoloader[1]),
-            is_object($autoloader) => new ReflectionMethod($autoloader, '__invoke'),
             is_string($autoloader) && str_contains($autoloader, '::') => ReflectionMethod::createFromMethodName($autoloader),
-            is_string($autoloader) => new ReflectionFunction($autoloader),
+            $autoloader instanceof Closure, is_string($autoloader) => new ReflectionFunction($autoloader),
+            is_object($autoloader) => new ReflectionMethod($autoloader, '__invoke'),
+            default => throw new LogicException('An autoloader of an unknown callable shape is registered.'),
         };
 
         return $reflection instanceof ReflectionMethod
