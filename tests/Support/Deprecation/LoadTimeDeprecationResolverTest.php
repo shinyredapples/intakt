@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionFunction;
 use Symfony\Component\ErrorHandler\DebugClassLoader;
 use Symfony\Component\Process\Process;
 
@@ -26,15 +27,53 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         $autoloader = $this->autoloader();
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
-            ['function' => 'Composer\Autoload\{closure}', 'file' => $autoloader],
-            ['function' => 'loadClass', 'file' => $autoloader],
-            ['function' => 'testIt', 'file' => '/app/tests/SomeTest.php'],
+            ['function' => 'include', 'file' => $autoloader],
+            ['function' => '{closure:Composer\Autoload\ClassLoader::initializeIncludeClosure():575}', 'class' => ClassLoader::class, 'file' => $autoloader],
+            ['function' => 'loadClass', 'class' => ClassLoader::class],
+            ['function' => 'interface_exists', 'file' => '/app/tests/SomeTest.php'],
         ];
 
         $resolution = new LoadTimeDeprecationResolver()->resolve($trace, 'deprecated');
 
         self::assertSame('/vendor/a/Deprecated.php', $resolution->callee());
         self::assertSame('/app/tests/SomeTest.php', $resolution->caller());
+    }
+
+    public function testTheCodeThatMadeARegisteredClosureLoaderLoadTheClassIsTheCaller(): void
+    {
+        $loader = static function (string $class): void {};
+        $trace = [
+            ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
+            ['function' => 'require', 'file' => '/outside/loader.php'],
+            ['function' => new ReflectionFunction($loader)->getName()],
+            ['function' => 'interface_exists', 'file' => '/app/tests/SomeTest.php'],
+        ];
+
+        spl_autoload_register($loader);
+
+        try {
+            $resolution = new LoadTimeDeprecationResolver()->resolve($trace, 'deprecated');
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+
+        self::assertSame('/app/tests/SomeTest.php', $resolution->caller());
+    }
+
+    public function testAClassThatExtendsTheDeprecatedClassIsTheCaller(): void
+    {
+        $autoloader = $this->autoloader();
+        $trace = [
+            ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
+            ['function' => 'include', 'file' => $autoloader],
+            ['function' => 'loadClass', 'class' => ClassLoader::class, 'file' => '/vendor/b/Child.php'],
+            ['function' => 'include', 'file' => $autoloader],
+            ['function' => 'loadClass', 'class' => ClassLoader::class, 'file' => '/app/src/Caller.php'],
+        ];
+
+        $resolution = new LoadTimeDeprecationResolver()->resolve($trace, 'deprecated');
+
+        self::assertSame('/vendor/b/Child.php', $resolution->caller());
     }
 
     public function testACallerOutsideTheAutoloaderStaysTheCaller(): void
@@ -55,7 +94,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         $autoloader = $this->autoloader();
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
-            ['function' => 'loadClass', 'file' => $autoloader],
+            ['function' => 'loadClass', 'class' => ClassLoader::class],
         ];
 
         $resolution = new LoadTimeDeprecationResolver()->resolve($trace, 'deprecated');
@@ -90,6 +129,15 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         self::assertStringContainsString('LoadsADeprecatedClassThroughTheDebugClassLoaderFixture::testItLoadsAClassThatIsDeprecatedWhileTheDebugClassLoaderIsEnabled', $run->getOutput());
     }
 
+    public function testATestThatLoadsADeprecatedVendorClassThroughAClosureLoaderFailsTheRun(): void
+    {
+        $run = $this->runFixture(self::APPLICATION_CONFIGURATION, __DIR__.'/Fixtures/LoadsADeprecatedClassThroughAClosureLoaderFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
+        self::assertStringContainsString('LoadsADeprecatedClassThroughAClosureLoaderFixture::testItLoadsAClassThatIsDeprecatedThroughAClosureLoaderDefinedOutsideTheSource', $run->getOutput());
+    }
+
     public function testTheCodeThatMadeARegisteredAutoloaderLoadTheClassIsTheCaller(): void
     {
         $debugClassLoader = new ReflectionClass(DebugClassLoader::class)->getFileName();
@@ -97,6 +145,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
             ['function' => 'include', 'file' => $debugClassLoader],
+            ['function' => 'loadClass', 'class' => DebugClassLoader::class],
             ['function' => 'interface_exists', 'file' => '/app/tests/SomeTest.php'],
         ];
 
