@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Input\ArrayInput;
@@ -77,6 +78,13 @@ final class ConsoleDisplayTest extends TestCase
     {
         self::assertThat('read /shadow[1]*?.json', ConsoleDisplay::shows('/shadow[1]*?.json'));
         self::assertThat('read /shadow1.json', self::logicalNot(ConsoleDisplay::shows('/shadow[1]*?.json')));
+    }
+
+    public function testATextThatIsNotUtf8IsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        ConsoleDisplay::shows("/x/\xFF.json");
     }
 
     public function testAFailureNamesTheTextLookedFor(): void
