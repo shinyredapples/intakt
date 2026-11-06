@@ -120,7 +120,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 |---|---|---|---|
 | Quality gates | `bin/check` runs every gate locally and in CI; the user journeys run separately with `bin/check --journeys` | done | `bin/check`, `config/gates/` |
 | FrameworkBundle `lint:container` | the `container` gate of `bin/check` lints the service wiring of the `dev`, `test` and `prod` containers | done | #982, `config/gates/src/ContainerLintGate.php` |
-| FrameworkBundle debug container dump | the `phpstan` gate of `bin/check` warms the `test` cache with debug on, and phpstan-symfony reads the dumped container XML to check service ids and type `get()` and `getParameter()` | done | #983, `config/gates/src/ContainerDumpingGate.php` |
+| FrameworkBundle debug container dump | the `phpstan` gate of `bin/check` warms the `test` cache with debug on, and phpstan-symfony reads the dumped container XML to check service ids and parameter names and type `get()` and `getParameter()` | done | #983, `config/gates/src/ContainerDumpingGate.php` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
 | `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | in progress | T26 (#33), `src/Core/Upstream/` |
 | `intakt:change:summarize` | prints the change summary of a branch of a local repository | in progress | T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/` |
