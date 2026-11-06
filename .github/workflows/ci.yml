@@ -71,7 +71,8 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
-  # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
+  # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming
+  # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
   # main runs the engines regardless, so a change this filter misses is caught on main.
   changes:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
@@ -96,8 +97,8 @@ jobs:
             echo "persistence engines needed: always on main"
             exit 0
           fi
-          # Each diff is saved first and must succeed (set -e), so a failing git or an early-exiting grep can never
-          # read as "untouched"; it fails this job, and the run with it.
+          # .github/ci/persistence-needed.sh fails on a git error (it saves each diff first), and set -e then fails
+          # this step, and the run with it, so a failing git can never read as "untouched".
           base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
           touched=$(.github/ci/persistence-needed.sh "$base" "$HEAD_SHA")
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
