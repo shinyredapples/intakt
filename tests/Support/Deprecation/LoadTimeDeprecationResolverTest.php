@@ -42,10 +42,11 @@ final class LoadTimeDeprecationResolverTest extends TestCase
     public function testTheCodeThatMadeARegisteredClosureLoaderLoadTheClassIsTheCaller(): void
     {
         $loader = static function (string $class): void {};
+        $closure = new ReflectionFunction($loader);
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
-            ['function' => 'require', 'file' => '/outside/loader.php'],
-            ['function' => new ReflectionFunction($loader)->getName()],
+            ['function' => 'require', 'file' => $closure->getFileName()],
+            ['function' => $closure->getName()],
             ['function' => 'interface_exists', 'file' => '/app/tests/SomeTest.php'],
         ];
 
@@ -74,6 +75,20 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         $resolution = new LoadTimeDeprecationResolver()->resolve($trace, 'deprecated');
 
         self::assertSame('/vendor/b/Child.php', $resolution->caller());
+    }
+
+    public function testADeprecatedCallMadeWhileAnIntaktFileLoadsAtAVendorsRequestKeepsThatFileAsTheCaller(): void
+    {
+        $resolution = new LoadTimeDeprecationResolver()->resolve($this->loadTimeCallTrace('/app/tests/Source.php', '/vendor/Dispatcher.php'), 'deprecated');
+
+        self::assertSame('/app/tests/Source.php', $resolution->caller());
+    }
+
+    public function testADeprecatedCallMadeWhileAVendorFileLoadsAtTheTestsRequestKeepsTheVendorFileAsTheCaller(): void
+    {
+        $resolution = new LoadTimeDeprecationResolver()->resolve($this->loadTimeCallTrace('/vendor/Consumer.php', '/app/tests/Caller.php'), 'deprecated');
+
+        self::assertSame('/vendor/Consumer.php', $resolution->caller());
     }
 
     public function testACallerOutsideTheAutoloaderStaysTheCaller(): void
@@ -137,6 +152,23 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         self::assertStringContainsString('LoadsADeprecatedClassThroughAClosureLoaderFixture::testItLoadsAClassThatIsDeprecatedThroughAClosureLoaderDefinedOutsideTheSource', $run->getOutput());
     }
 
+    public function testAnIntaktFileWhoseLoadTimeCodeCallsADeprecatedVendorFunctionAtAVendorsRequestFailsTheRun(): void
+    {
+        $run = $this->runFixture(self::APPLICATION_CONFIGURATION, __DIR__.'/Fixtures/VendorCodeLoadsAFileThatCallsADeprecatedFunctionFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('intakt_deprecated_vendor_function() is deprecated', $run->getOutput());
+        self::assertStringContainsString('VendorCodeLoadsAFileThatCallsADeprecatedFunctionFixture::testVendorCodeAsksForAnIntaktFileWhoseLoadTimeCodeCallsADeprecatedVendorFunction', $run->getOutput());
+    }
+
+    public function testAVendorFileWhoseLoadTimeCodeCallsAnotherVendorsDeprecatedFunctionAtTheTestsRequestPassesTheRun(): void
+    {
+        $run = $this->runFixture(self::APPLICATION_CONFIGURATION, __DIR__.'/Fixtures/LoadsAVendorFileThatCallsADeprecatedFunctionFixture.php');
+
+        self::assertSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('OK (1 test, 2 assertions)', $run->getOutput());
+    }
+
     public function testTheCodeThatMadeARegisteredAutoloaderLoadTheClassIsTheCaller(): void
     {
         $debugClassLoader = new ReflectionClass(DebugClassLoader::class)->getFileName();
@@ -183,6 +215,19 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         self::assertIsString($file);
 
         return $file;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function loadTimeCallTrace(string $loadingFile, string $askingFile): array
+    {
+        return [
+            ['function' => 'trigger_deprecation', 'file' => '/vendor/Api.php'],
+            ['function' => 'oldMethod', 'file' => $loadingFile],
+            ['function' => 'include', 'file' => $this->autoloader()],
+            ['function' => 'loadClass', 'class' => ClassLoader::class, 'file' => $askingFile],
+        ];
     }
 
     private function gateFixture(string $file): string
