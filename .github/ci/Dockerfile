@@ -2,10 +2,10 @@
 # run it as uid 1000, never as root. PHP 8.5.12 or later (PHP2Shell, CVE-2026-109618 and CVE-2026-109619).
 FROM dunglas/frankenphp:1.13.4-php8.5.12-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e
 
-ARG COMPOSER_VERSION=2.11.0
-ARG COMPOSER_SHA256=9674f12a2a181100d889ebfd0b4510805b3e94cea57869b14b383753d602599b
-ARG GITLEAKS_VERSION=8.30.1
-ARG GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+# Taken from the tools' own images, pinned by tag and digest, so Dependabot's docker entry keeps them current. gitleaks
+# publishes its image on GHCR; its binary is static, so it runs on this Debian base.
+COPY --from=composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 /usr/bin/composer /usr/local/bin/composer
+COPY --from=ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f /usr/bin/gitleaks /usr/local/bin/gitleaks
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
 RUN set -eu; \
@@ -14,13 +14,8 @@ RUN set -eu; \
     rm -rf /var/lib/apt/lists/*; \
     docker-php-ext-install -j"$(nproc)" intl pcntl pdo_mysql pdo_pgsql zip; \
     echo 'memory_limit=-1' > "$PHP_INI_DIR/conf.d/ci.ini"; \
-    curl -fsSL -o /usr/local/bin/composer "https://getcomposer.org/download/$COMPOSER_VERSION/composer.phar"; \
-    echo "$COMPOSER_SHA256  /usr/local/bin/composer" | sha256sum --check --strict; \
-    chmod 755 /usr/local/bin/composer; \
-    curl -fsSL -o /tmp/gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v$GITLEAKS_VERSION/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"; \
-    echo "$GITLEAKS_SHA256  /tmp/gitleaks.tar.gz" | sha256sum --check --strict; \
-    tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks; \
-    rm /tmp/gitleaks.tar.gz; \
+    composer --version; \
+    gitleaks version; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
