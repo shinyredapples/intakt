@@ -161,7 +161,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
     {
         yield 'a lost database connection' => [new ConnectionLost(new DriverFailure('server has gone away'), null)];
         yield 'a database that refuses writes' => [new ReadOnlyException(new DriverFailure('attempt to write a readonly database'), null)];
-        yield 'a lock store that fails' =>[new LockStorageException('the lock store is down')];
+        yield 'a lock store that fails' => [new LockStorageException('the lock store is down')];
         yield 'a lock store that fails while acquiring' => [new LockAcquiringException('Failed to acquire the "x" lock.')];
         yield 'a lock store failure wrapped by a forge' => [new RuntimeException('read failed', 0, new LockStorageException('the lock store is down'))];
         yield 'a lock store that fails while releasing' => [new LockReleasingException('Failed to release the "x" lock.')];
