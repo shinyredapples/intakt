@@ -117,7 +117,7 @@ When the `tests` gate of `bin/check` runs, its line also lists the ten slowest t
 {"gate":"tests","ok":true,"findings":[],"omitted":0,"slowest":[{"file":"tests/Application/InstanceTest.php","seconds":45.722},...]}
 ```
 
-The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
+The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. A test file outside the project folder is left out of both the file and the `slowest` list, so no path of your machine shows up in them. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
 
 ## Running the tests in parallel
 
@@ -170,6 +170,10 @@ Tables inside a fenced code block (three or more backticks or tildes, indented a
 ## When `bin/check` reports a reproductions finding
 
 Every folder directly under `upstream/` is a reproduction of a likely library bug, and the `reproductions` gate of `bin/check` checks that each one is listed. A finding such as `upstream/messenger-lost-message/ has no row in "Found in the beta" of docs/highlights.md` names the folder. To resolve it, add a row to the "Found in the beta" table of `docs/highlights.md` that names the folder in its text, for example `` `upstream/messenger-lost-message/` `` in the Where column. Only a row of a table in that section counts (a table needs its header and its `---` line, not indented four or more spaces, and it ends at the first line that is blank, has no `|`, or starts a heading, a list item, a blockquote or an HTML comment, even when that line holds a `|`; only the cells under the header's columns count). A line without a `|` ends the table even where GitHub would still show it as a row: this is stricter than GitHub and can only make the gate fail, never pass wrongly. A mention in its prose, on a line that merely starts with `|`, under a heading or in a list right after the table, in another section or inside a fenced code block does not, and neither does a longer path such as `docs/upstream/messenger-lost-message/`. A file directly under `upstream/` (such as its `README.md`) needs no row. The gate reads the folders git tracks or would add (ignored files do not count), and the working tree when there is no git repository.
+
+## When `bin/check` reports a container finding
+
+The `container` gate of `bin/check` runs `bin/console lint:container` for the `dev`, `test` and `prod` environments, also with `--fast`. It catches a wrongly wired service before the first request does: a service argument of the wrong type, or a reference to a service or parameter that does not exist. A finding names the environment and Symfony's message, for example `prod: Invalid definition for service "App\Mailer": argument 1 of "App\Mailer::__construct()" accepts "App\Transport", "App\Clock" passed.` To resolve it, fix the service definition or the constructor type it names, then run `php bin/console lint:container --env=<environment>` to see it pass. Environment variables are not resolved, so a missing API key does not fail the gate.
 
 ## GitHub's test merge and the `commits` gate
 
