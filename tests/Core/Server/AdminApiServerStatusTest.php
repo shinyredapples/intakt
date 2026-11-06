@@ -30,28 +30,40 @@ final class AdminApiServerStatusTest extends TestCase
     {
         $reading = new RecordedAdminApi()->status()->read();
 
-        self::assertEquals(new WorkerThreads(busy: 0, idle: 2), $reading->threads);
+        self::assertEquals(new WorkerThreads(
+            busy: 0,
+            idle: 2,
+        ), $reading->threads);
     }
 
     public function testABusyWorkerThreadCountsAsBusy(): void
     {
         $api = new RecordedAdminApi()->answering('/frankenphp/threads', $this->threadsWithFirstWorker(['IsBusy' => true, 'IsWaiting' => false]));
 
-        self::assertEquals(new WorkerThreads(busy: 1, idle: 1), $api->status()->read()->threads);
+        self::assertEquals(new WorkerThreads(
+            busy: 1,
+            idle: 1,
+        ), $api->status()->read()->threads);
     }
 
     public function testARestartingWorkerThreadIsNeitherBusyNorIdle(): void
     {
         $api = new RecordedAdminApi()->answering('/frankenphp/threads', $this->threadsWithFirstWorker(['State' => 'restarting']));
 
-        self::assertEquals(new WorkerThreads(busy: 0, idle: 1), $api->status()->read()->threads);
+        self::assertEquals(new WorkerThreads(
+            busy: 0,
+            idle: 1,
+        ), $api->status()->read()->threads);
     }
 
     public function testRecordedMetricsGiveQueueDepthAndWorkerRestarts(): void
     {
         $reading = new RecordedAdminApi()->status()->read();
 
-        self::assertEquals(new ServerMetrics(queueDepth: 0, workerRestarts: 2), $reading->metrics);
+        self::assertEquals(new ServerMetrics(
+            queueDepth: 0,
+            workerRestarts: 2,
+        ), $reading->metrics);
     }
 
     public function testWorkerQueuesAddToTheQueueDepth(): void
@@ -59,7 +71,10 @@ final class AdminApiServerStatusTest extends TestCase
         $metrics = str_replace('frankenphp_queue_depth 0', "frankenphp_queue_depth 1\nfrankenphp_worker_queue_depth{worker=\"app\"} 3", RecordedAdminApi::fixture('metrics.txt'));
         $api = new RecordedAdminApi()->answering('/metrics', $metrics);
 
-        self::assertEquals(new ServerMetrics(queueDepth: 4, workerRestarts: 2), $api->status()->read()->metrics);
+        self::assertEquals(new ServerMetrics(
+            queueDepth: 4,
+            workerRestarts: 2,
+        ), $api->status()->read()->metrics);
     }
 
     public function testAServerThatNeverRestartedAWorkerCountsNoRestarts(): void
@@ -67,7 +82,10 @@ final class AdminApiServerStatusTest extends TestCase
         $metrics = preg_replace('/^frankenphp_worker_restarts.*$/m', '', RecordedAdminApi::fixture('metrics.txt'));
         $api = new RecordedAdminApi()->answering('/metrics', (string) $metrics);
 
-        self::assertEquals(new ServerMetrics(queueDepth: 0, workerRestarts: 0), $api->status()->read()->metrics);
+        self::assertEquals(new ServerMetrics(
+            queueDepth: 0,
+            workerRestarts: 0,
+        ), $api->status()->read()->metrics);
     }
 
     public function testRecordedHubReadinessIsHealthy(): void
@@ -148,7 +166,10 @@ final class AdminApiServerStatusTest extends TestCase
     {
         $api = new RecordedAdminApi()->answering('/metrics', RecordedAdminApi::fixture('metrics.txt').$sample);
 
-        self::assertEquals(new ServerMetrics(queueDepth: 0, workerRestarts: 2), $api->status()->read()->metrics);
+        self::assertEquals(new ServerMetrics(
+            queueDepth: 0,
+            workerRestarts: 2,
+        ), $api->status()->read()->metrics);
     }
 
     public function testASpecialValueInACountedSeriesIsDown(): void
@@ -169,7 +190,10 @@ final class AdminApiServerStatusTest extends TestCase
     {
         $reading = new RecordedAdminApi()->answering('/metrics', '', 500)->status()->read();
 
-        self::assertEquals(new WorkerThreads(busy: 0, idle: 2), $reading->threads);
+        self::assertEquals(new WorkerThreads(
+            busy: 0,
+            idle: 2,
+        ), $reading->threads);
         self::assertInstanceOf(EndpointDown::class, $reading->metrics);
         self::assertSame(HubHealth::Healthy, $reading->hub);
     }

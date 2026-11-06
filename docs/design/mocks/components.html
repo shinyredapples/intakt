@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Components | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="components">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content" id="main">
+<div class="page-head"><div><h1>Components</h1><p class="lead">Every component in every state, light and dark side by side. Builders copy from here; DESIGN.md has the rules.</p></div></div>
+<nav class="comp-nav" aria-label="Sections">
+  <a class="fchip" href="#c-buttons">Buttons</a><a class="fchip" href="#c-chips">Chips and badges</a><a class="fchip" href="#c-cards">Cards</a><a class="fchip" href="#c-rows">List rows</a><a class="fchip" href="#c-settings">Setting rows</a><a class="fchip" href="#c-inputs">Inputs</a><a class="fchip" href="#c-bars">Bars</a><a class="fchip" href="#c-banners">Banners</a><a class="fchip" href="#c-tabs">Tabs</a><a class="fchip" href="#c-search">Search</a><a class="fchip" href="#c-toast">Toasts</a><a class="fchip" href="#c-empty">Empty, loading, error</a>
+</nav>
+
+<section class="comp-sec" id="c-buttons"><h2>Buttons</h2><p>Primary for the main action, secondary for others, quiet for links, danger arms on first click, needs (amber) only for the one action a waiting item asks for.</p>
+<template data-spec>
+  <div class="cgrp"><h4>Primary</h4><div class="row-st"><button class="btn primary">Default</button><button class="btn primary is-hover">Hover</button><button class="btn primary is-focus">Focus</button><button class="btn primary is-active">Active</button><button class="btn primary" disabled>Disabled</button><button class="btn primary is-loading" aria-busy="true">Saving…</button></div></div>
+  <div class="cgrp"><h4>Secondary</h4><div class="row-st"><button class="btn secondary">Default</button><button class="btn secondary is-hover">Hover</button><button class="btn secondary is-focus">Focus</button><button class="btn secondary is-active">Active</button><button class="btn secondary" disabled>Disabled</button><button class="btn secondary is-loading" aria-busy="true">Testing…</button></div></div>
+  <div class="cgrp"><h4>Quiet</h4><div class="row-st"><button class="btn quiet">Default</button><button class="btn quiet is-hover">Hover</button><button class="btn quiet is-focus">Focus</button><button class="btn quiet" disabled>Disabled</button></div></div>
+  <div class="cgrp"><h4>Danger</h4><div class="row-st"><button class="btn danger">Pause everything</button><button class="btn danger is-hover">Hover</button><button class="btn danger" data-armed>Click again to pause</button><button class="btn danger" disabled>Disabled</button></div></div>
+  <div class="cgrp"><h4>Needs you</h4><div class="row-st"><button class="btn needs">Approve a3f9c21</button><button class="btn needs is-hover">Hover</button><button class="btn needs is-focus">Focus</button><button class="btn needs" disabled>Disabled</button><button class="btn needs is-loading" aria-busy="true">Approving…</button></div></div>
+  <div class="cgrp"><h4>Small and icon</h4><div class="row-st"><button class="btn secondary sm">Small</button><button class="icon-btn" aria-label="Theme"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5"/></svg></button><button class="icon-btn is-focus" aria-label="Theme, focus"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5"/></svg></button></div></div>
+</template></section>
+
+<section class="comp-sec" id="c-chips"><h2>Chips and badges</h2><p>Chips only for states and reasons. Plain facts use the meta line.</p>
+<template data-spec>
+  <div class="cgrp"><h4>State and reason</h4><div class="row-st"><span class="chip on-page strong"><span class="dot ok"></span>In review, round 2</span><span class="chip on-page strong"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg>Paused</span><span class="chip on-page broken"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg>CI broken</span><span class="chip on-page strong"><span class="dot needs"></span>Login expired</span></div></div>
+  <div class="cgrp"><h4>Counts and dots</h4><div class="row-st"><span class="count">3</span><span class="count needs">4</span><span class="dot ok"></span><span class="dot needs"></span><span class="dot broken"></span><span class="dot idle"></span></div></div>
+  <div class="cgrp"><h4>Meta line</h4><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>42 min</span><span>Slot 1, Model L</span><span>Round 2</span><span class="mono">9b3e5aa</span><span>Size M</span><span>$3.18</span></p></div>
+  <div class="cgrp"><h4>Term with its standard explanation</h4><p>Approve this <span class="term" data-term="version">version</span>, a <span class="term" data-term="protected">protected file</span>, the <span class="term" data-term="share">weekly share</span>.</p></div>
+</template></section>
+
+<section class="comp-sec" id="c-cards"><h2>Cards</h2><p>Flat tint, no border. Needs-you cards are the only amber ones. A blocker line sits right under the title.</p>
+<template data-spec>
+  <div class="cards-row">
+    <a class="card" href="#"><div class="top"><span>#612</span><span class="pname">intakt</span></div><div class="title">Command overlay for tasks and settings</div><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>42 min</span><span>Slot 1, Model L</span><span>Size M</span><span>$3.18</span></p></a>
+    <a class="card is-hover" href="#"><div class="top"><span>#612</span><span class="pname">intakt</span></div><div class="title">Hover</div><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>42 min</span><span>Size M</span></p></a>
+    <a class="card needs" href="#"><div class="top"><span class="dot needs"></span><span>#589</span><span class="pname">intakt</span></div><div class="title">Rotate the forge token without a restart</div><p class="blocker ask">Approve this version: it touches secret handling</p><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>1 h 05 min</span><span>Round 2</span></p></a>
+    <a class="card is-focus" href="#"><div class="top"><span>#626</span><span class="pname">intakt</span></div><div class="title">Search settings by their label</div><p class="blocker"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Needs #612 merged first</p><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>9 h</span><span>Size S</span></p></a>
+    <a class="card broken" href="#"><div class="top"><span>#205</span><span class="pname">acme-shop</span></div><div class="title">Refund emails include the order number</div><p class="blocker broken"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg>Waiting for CI: image build failing</p><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>1 h 50 min</span></p></a>
+    <a class="card" href="#"><div class="top"><span>#74</span><span class="pname">field-notes</span></div><div class="title">Strip photo location data before upload</div><p class="blocker"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg>Project paused</p><p class="meta"><span><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>2 d</span></p></a>
+  </div>
+</template></section>
+
+<section class="comp-sec" id="c-rows"><h2>List rows</h2><p>Hairline between rows, no box.</p>
+<template data-spec>
+  <div class="side"><ul><li><span class="dot ok"></span><a href="#">#612 is building</a><span class="when">42 min</span></li><li><span>Approved version <span class="mono">e81c40a</span> for #580</span><span class="when">09:14</span></li><li class="is-hover" style="background:var(--tint)"><span>Hover</span><span class="when">08:30</span></li></ul></div>
+</template></section>
+
+<section class="comp-sec" id="c-settings"><h2>Setting rows</h2><p>Label, one-line explanation, control. State sits left of the control.</p>
+<template data-spec>
+  <div class="srow"><div class="txt"><span class="l">Default</span><p class="d">Lets phones on your home network open the dashboard.</p></div><div class="ctl"><span class="sstate"></span><span class="switch"><input type="checkbox" role="switch" checked aria-label="Default"><span></span></span></div></div>
+  <div class="srow"><div class="txt"><span class="l">Saving</span><p class="d">Shown while the change is on its way.</p></div><div class="ctl"><span class="sstate saving">Saving…</span><span class="switch"><input type="checkbox" role="switch" checked aria-label="Saving"><span></span></span></div></div>
+  <div class="srow"><div class="txt"><span class="l">Saved</span><p class="d">Stays until the next change.</p></div><div class="ctl"><span class="sstate saved"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Saved</span><span class="switch"><input type="checkbox" role="switch" aria-label="Saved"><span></span></span></div></div>
+  <div class="srow"><div class="txt"><span class="l">Failed</span><p class="d">Names the value still in force.</p></div><div class="ctl"><span class="sstate failed">Not saved, still 22:00 to 07:00. <button class="linkbtn">Retry</button></span><select class="select" aria-label="Failed"><option>23:00 to 08:00</option></select></div></div>
+  <div class="srow"><div class="txt"><span class="l">Disabled</span><p class="d">Explain why next to it: set by the project.</p></div><div class="ctl"><span class="sstate"></span><span class="switch"><input type="checkbox" role="switch" disabled aria-label="Disabled"><span></span></span></div></div>
+</template></section>
+
+<section class="comp-sec" id="c-inputs"><h2>Inputs</h2>
+<template data-spec>
+  <div class="cgrp"><div class="row-st"><input class="input" style="width:180px" value="Default" aria-label="Default"><input class="input is-focus" style="width:180px" value="Focus" aria-label="Focus"><input class="input" style="width:180px" value="Disabled" disabled aria-label="Disabled"></div>
+  <div class="row-st"><input class="input is-error" aria-invalid="true" style="width:180px" value="80" aria-label="Error"><span class="field-error">Use a port from 1024 to 65535.</span></div>
+  <div class="row-st"><select class="select" aria-label="Select"><option>Europe/Berlin</option></select><div class="stepper" role="group" aria-label="Stepper"><button type="button">−</button><output>2</output><button type="button">+</button></div><span class="switch"><input type="checkbox" role="switch" checked aria-label="On"><span></span></span><span class="switch"><input type="checkbox" role="switch" aria-label="Off"><span></span></span></div>
+  <div class="copy" style="max-width:420px"><code>intakt account login home</code><button class="btn sm" type="button">Copy</button></div></div>
+</template></section>
+
+<section class="comp-sec" id="c-bars"><h2>Bars</h2>
+<template data-spec>
+  <div class="window"><div class="wl"><strong>Used, reserved, forecast</strong><span class="reset">Resets at 14:00</span></div><div class="bar"><i class="used" style="width:46%"></i><i class="reserved" style="left:46%;width:12%"></i><i class="forecast" style="left:58%;width:18%"></i></div></div>
+  <div class="window"><div class="wl"><strong>Full</strong><span class="reset">Share used up</span></div><div class="bar"><i class="used" style="width:100%"></i></div></div>
+  <div class="window"><div class="wl"><strong>Last known</strong><span class="reset">Unknown until logged in</span></div><div class="bar"><i class="used" style="width:22%;opacity:.5"></i></div></div>
+  <div class="legend"><span><i class="used"></i>Used</span><span><i class="reserved"></i>Reserved</span><span><i class="forecast"></i>Forecast</span></div>
+</template></section>
+
+<section class="comp-sec" id="c-banners"><h2>Banners</h2><p>Full on desktop; one line on phones that expands.</p>
+<template data-spec>
+  <div class="banner broken"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg><p><strong>CI image build failing since 09:12.</strong> acme-shop checks cannot run.</p><a class="btn quiet sm" href="#">Open health</a></div>
+  <div class="banner"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg><p><strong>field-notes is paused.</strong> Nothing new starts.</p><button class="btn secondary sm">Resume</button></div>
+  <div class="banner broken compact"><button class="banner-toggle" type="button" aria-expanded="false"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg><span>CI image build failing since 09:12</span><svg class="i s chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><p>acme-shop checks cannot run.</p><a class="btn quiet sm" href="#">Open health</a></div>
+  <div class="banner compact open"><button class="banner-toggle" type="button" aria-expanded="true"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg><span>field-notes is paused</span><svg class="i s chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><p>You paused it on Monday. Nothing new starts.</p><button class="btn secondary sm">Resume</button></div>
+  <div class="conn"><span class="conn-dot" aria-hidden="true"></span><p><strong>Reconnecting.</strong> Showing what Intakt knew at 11:12:04.</p><button class="btn secondary sm">Try now</button></div>
+</template></section>
+
+<section class="comp-sec" id="c-tabs"><h2>Tabs</h2>
+<template data-spec>
+  <nav class="subtabs" aria-label="Example"><a href="#" aria-current="page">Ledger</a><a href="#">Trends</a><a href="#" class="is-focus">Focus</a></nav>
+  <div class="seg" role="tablist"><button type="button" role="tab" aria-selected="true">Timeline</button><button type="button" role="tab" aria-selected="false">Live log</button></div>
+  <div class="row-st"><button class="fchip" aria-pressed="true">14 days</button><button class="fchip" aria-pressed="false">8 weeks</button></div>
+</template></section>
+
+<section class="comp-sec" id="c-search"><h2>Search</h2><p>Opaque panel over a scrim; full-screen sheet on phones.</p>
+<template data-spec>
+  <div class="palette static"><div class="q"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="text" value="gift" aria-label="Search"><kbd>Esc</kbd></div>
+  <div class="results"><div class="grp">Tasks</div><div class="res" aria-selected="true"><span class="lbl">#199 <mark>Gift</mark> cards: pick the stored currency</span><span class="sub">acme-shop, waiting on you</span></div><div class="res"><span class="lbl">Pull request 84: <mark>Gift</mark> cards</span><span class="sub">acme-shop, for #199</span></div></div></div>
+  <div class="palette static" style="margin-top:12px"><div class="results"><div class="none"><p><strong>No results for “zebra”</strong></p><p>Try a task number, a project or a setting.</p></div></div></div>
+</template></section>
+
+<section class="comp-sec" id="c-toast"><h2>Toasts</h2>
+<template data-spec>
+  <div class="row-st"><div class="toast static"><span>Saved</span><button type="button">Undo</button></div><div class="toast static"><span>Test notification sent to Phone (home)</span></div></div>
+</template></section>
+
+<section class="comp-sec" id="c-empty"><h2>Empty, loading, error</h2><p>Empty states say what happens next. Loading uses static skeletons in place of content, never a whole-page spinner. Errors say what failed and what still holds.</p>
+<template data-spec>
+  <div class="empty" style="padding:24px 8px"><img src="assets/intakt-small.svg" alt="" style="width:40px;height:40px"><h2 style="font-size:17px">Nothing needs you</h2><p class="muted">Intakt keeps building. When it needs a decision, it shows up here and on your phone.</p></div>
+  <div class="cards-row"><div class="card skel-card" aria-hidden="true"><span class="skel" style="width:40%"></span><span class="skel" style="width:90%"></span><span class="skel" style="width:60%"></span></div><div class="col-empty">Nothing here</div></div>
+  <div class="test-result err" style="margin-top:12px"><p><strong><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/></svg>Couldn't connect.</strong> The vendor said the key is not valid. Nothing was saved.</p></div>
+</template></section>
+
+<script>
+document.querySelectorAll("template[data-spec]").forEach(function (t) {
+  var cols = document.createElement("div"); cols.className = "spec-cols";
+  ["light", "dark"].forEach(function (th) {
+    var d = document.createElement("div"); d.className = "spec"; d.dataset.theme = th;
+    var h = document.createElement("h3"); h.className = "spec-theme"; h.textContent = th === "light" ? "Light" : "Dark"; d.appendChild(h);
+    d.appendChild(t.content.cloneNode(true)); cols.appendChild(d);
+  });
+  t.after(cols);
+});
+</script>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

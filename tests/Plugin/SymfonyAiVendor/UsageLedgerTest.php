@@ -55,7 +55,11 @@ final class UsageLedgerTest extends TestCase
         $this->settle($streamed, $round);
         $unstreamed = new InMemoryLedger();
         $text = new TextResult('{}');
-        $text->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120));
+        $text->getMetadata()->add('token_usage', new TokenUsage(
+            promptTokens: 100,
+            completionTokens: 20,
+            totalTokens: 120,
+        ));
 
         $this->settle($unstreamed, $this->roundAnswering($text));
 
@@ -81,7 +85,11 @@ final class UsageLedgerTest extends TestCase
         $deltas = (static function (): Generator {
             yield new TokenUsage(promptTokens: 100);
             yield new TextDelta('{}');
-            yield new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120);
+            yield new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+            );
         })();
 
         return new StreamResult($deltas, [new FinalStreamedUsage(), new StreamListener()]);
