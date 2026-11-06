@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use Symfony\Component\ErrorHandler\DebugClassLoader;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(LoadTimeDeprecationResolver::class)]
@@ -78,6 +79,36 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
         self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
         self::assertStringContainsString('LoadsADeprecatedClassThroughAHelperFixture::testItLoadsAClassThatIsDeprecatedThroughATestHelper', $run->getOutput());
+    }
+
+    public function testATestThatLoadsADeprecatedVendorClassThroughTheDebugClassLoaderFailsTheRun(): void
+    {
+        $run = $this->runFixture(self::APPLICATION_CONFIGURATION, __DIR__.'/Fixtures/LoadsADeprecatedClassThroughTheDebugClassLoaderFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
+        self::assertStringContainsString('LoadsADeprecatedClassThroughTheDebugClassLoaderFixture::testItLoadsAClassThatIsDeprecatedWhileTheDebugClassLoaderIsEnabled', $run->getOutput());
+    }
+
+    public function testTheCodeThatMadeARegisteredAutoloaderLoadTheClassIsTheCaller(): void
+    {
+        $debugClassLoader = new ReflectionClass(DebugClassLoader::class)->getFileName();
+        self::assertIsString($debugClassLoader);
+        $trace = [
+            ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
+            ['function' => 'include', 'file' => $debugClassLoader],
+            ['function' => 'interface_exists', 'file' => '/app/tests/SomeTest.php'],
+        ];
+
+        DebugClassLoader::enable();
+
+        try {
+            $resolution = new LoadTimeDeprecationResolver()->resolve($trace, 'deprecated');
+        } finally {
+            DebugClassLoader::disable();
+        }
+
+        self::assertSame('/app/tests/SomeTest.php', $resolution->caller());
     }
 
     public function testAGateTestThatLoadsADeprecatedVendorClassFailsTheGatesRun(): void

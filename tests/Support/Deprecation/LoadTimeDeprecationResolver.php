@@ -4,22 +4,22 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Support\Deprecation;
 
-use Composer\Autoload\ClassLoader;
 use PHPUnit\Runner\IssueTriggerResolver\Resolution;
 use PHPUnit\Runner\IssueTriggerResolver\Resolver;
 use ReflectionClass;
 
-// Because Composer's autoloader includes a class that deprecates itself on load, PHPUnit's default resolver would rate it as one vendor package causing it.
+// Because an autoloader includes a class that deprecates itself on load, PHPUnit's default resolver would rate it as one vendor package causing it.
 final class LoadTimeDeprecationResolver implements Resolver
 {
     public function resolve(array $trace, string $message): Resolution
     {
         $callee = $this->fileOf($trace[0] ?? []);
+        $autoloaders = $this->autoloaderFiles();
 
         foreach (array_slice($trace, 1) as $frame) {
             $file = $this->fileOf($frame);
 
-            if (null !== $file && !$this->isAutoloader($file)) {
+            if (null !== $file && !in_array($file, $autoloaders, true)) {
                 return new Resolution($callee, $file);
             }
         }
@@ -39,8 +39,21 @@ final class LoadTimeDeprecationResolver implements Resolver
         return is_string($file) && '' !== $file ? $file : null;
     }
 
-    private function isAutoloader(string $file): bool
+    /**
+     * Read from the registered autoloaders at the time of the deprecation, because a debug class loader (Symfony's DebugClassLoader) replaces Composer's and includes the class file itself.
+     *
+     * @return list<string>
+     */
+    private function autoloaderFiles(): array
     {
-        return new ReflectionClass(ClassLoader::class)->getFileName() === $file;
+        $files = [];
+
+        foreach (spl_autoload_functions() as $autoloader) {
+            if (is_array($autoloader)) {
+                $files[] = new ReflectionClass($autoloader[0])->getFileName();
+            }
+        }
+
+        return array_values(array_filter($files, is_string(...)));
     }
 }
