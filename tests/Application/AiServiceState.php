@@ -22,10 +22,6 @@ final class AiServiceState
 
     private const int DEPTH = 3;
 
-    // Held, so no object of this snapshot is freed and its id given to another one while the walk still runs.
-    /** @var array<int, object> */
-    private array $objects = [];
-
     // Keyed by the path from the service, not by object, so a reset that puts a new object in place is compared with the one it replaced.
     /** @var array<string, array<string, string>> */
     private array $values = [];
@@ -50,7 +46,7 @@ final class AiServiceState
         $state = new self();
 
         foreach ($services as $id => $service) {
-            $state->visit($service, [$id]);
+            $state->visit($service, Trail::fromService($id));
         }
 
         return $state;
@@ -132,45 +128,34 @@ final class AiServiceState
     }
 
     // An object is skipped only while it is an ancestor on the current path (a cycle), not once it was reached elsewhere: an object two properties share is recorded under both paths, so a reset that replaces the first reference with an empty object while the second keeps the used one still shows under the second path.
-    /**
-     * @param list<int|string> $path
-     * @param array<int, true> $ancestors
-     */
-    private function visit(mixed $value, array $path, array $ancestors = []): void
+    private function visit(mixed $value, Trail $trail): void
     {
         if (is_array($value)) {
             foreach ($value as $key => $item) {
-                $this->visit($item, [...$path, $key], $ancestors);
+                $this->visit($item, $trail->into($key));
             }
 
             return;
         }
 
         if ($value instanceof LazyObjectInterface) {
-            $this->visit($value->initializeLazyObject(), $path, $ancestors);
+            $this->visit($value->initializeLazyObject(), $trail);
 
             return;
         }
 
-        if (!is_object($value) || isset($ancestors[spl_object_id($value)]) || !self::isLibrary($value::class)) {
+        if (!is_object($value) || $trail->passed($value) || !self::isLibrary($value::class)) {
             return;
         }
-
-        $this->objects[spl_object_id($value)] = $value;
-        $ancestors[spl_object_id($value)] = true;
 
         foreach ($this->properties($value) as $property) {
-            $this->record($value, $property, $path, $ancestors);
+            $this->record($value, $property, $trail->through($value));
         }
     }
 
-    /**
-     * @param list<int|string> $path
-     * @param array<int, true> $ancestors
-     */
-    private function record(object $object, ReflectionProperty $property, array $path, array $ancestors): void
+    private function record(object $object, ReflectionProperty $property, Trail $trail): void
     {
-        $at = json_encode($path, JSON_THROW_ON_ERROR);
+        $at = $trail->key();
         $name = $property->getDeclaringClass()->getName().'::$'.$property->getName();
         $this->values[$at][$name] = 'uninitialized';
 
@@ -180,7 +165,7 @@ final class AiServiceState
 
         if ($property->isInitialized($object)) {
             $this->values[$at][$name] = self::fingerprint($property->getValue($object), 0);
-            $this->visit($property->getValue($object), [...$path, $name], $ancestors);
+            $this->visit($property->getValue($object), $trail->into($name));
         }
     }
 
