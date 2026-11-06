@@ -6,8 +6,6 @@
 <title>Settings | Intakt</title>
 <link rel="icon" type="image/png" href="assets/favicon-32.png">
 <script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="assets/intakt.css">
 </head>
 <body data-page="settings">
@@ -73,7 +71,7 @@
   <h2 id="g3">Notifications</h2>
   <p class="rule-note"><svg class="i s" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></svg>Intakt only notifies you about things that wait on you. Everything else stays on the dashboard. This is not a setting.</p>
   <div class="srow">
-    <div class="txt"><label class="l" for="s-push">Phone push</label><p class="d">To Pixel 9, added 12 Oct. <button type="button" class="linkbtn" data-toast="Test notification sent to Pixel 9">Send a test</button></p></div>
+    <div class="txt"><label class="l" for="s-push">Phone push</label><p class="d">To Phone (home), added 12 Oct. <button type="button" class="linkbtn" data-toast="Test notification sent to Phone (home)">Send a test</button></p></div>
     <div class="ctl"><span class="sstate"></span><span class="switch"><input id="s-push" type="checkbox" role="switch" checked data-setting><span></span></span></div>
   </div>
   <div class="srow">

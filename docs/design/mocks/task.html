@@ -6,8 +6,6 @@
 <title>#598 Hold pushes while main is red | Intakt</title>
 <link rel="icon" type="image/png" href="assets/favicon-32.png">
 <script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="assets/intakt.css">
 </head>
 <body data-page="task">
@@ -43,8 +41,8 @@
     <div>
       <h3 class="label-sm">Reviewers</h3>
       <ul class="sb-list">
-        <li><span class="dot ok"></span><span><strong>Code reviewer A</strong>, Opus. Checked R1-1 to R1-3: all fixed. Running the forge tests.</span><span class="r">11 min</span></li>
-        <li><span class="dot ok"></span><span><strong>Code reviewer B</strong>, Sonnet. Reading the whole diff again.</span><span class="r">9 min</span></li>
+        <li><span class="dot ok"></span><span><strong>Code reviewer A</strong>, Model L. Checked R1-1 to R1-3: all fixed. Running the forge tests.</span><span class="r">11 min</span></li>
+        <li><span class="dot ok"></span><span><strong>Code reviewer B</strong>, Model M. Reading the whole diff again.</span><span class="r">9 min</span></li>
         <li><svg class="i s ok" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg><span><strong>Security engineer</strong>. Round 1 approval still holds: no <span class="term" data-term="protected">protected file</span> changed.</span></li>
       </ul>
     </div>
@@ -78,7 +76,7 @@
       </li>
       <li id="ev-round1"><span class="node done"></span>
         <details class="ev"><summary class="ev-head"><h3>Round 1: changes requested</h3><span class="muted small">3 findings, 1 P1</span><time>09:10 to 10:05</time></summary>
-          <div class="ev-step"><h4>Build 1</h4><p class="meta"><span>Developer, Opus, slot 1</span><span class="mono">4e1b7d0</span><span>6 files</span><span>+214 −37</span><span>$2.10</span></p></div>
+          <div class="ev-step"><h4>Build 1</h4><p class="meta"><span>Developer, Model L, slot 1</span><span class="mono">4e1b7d0</span><span>6 files</span><span>+214 −37</span><span>$2.10</span></p></div>
           <div class="ev-step"><h4>Checks passed</h4><p class="meta"><span>Lint, static analysis and 412 tests</span><span>09:52</span></p></div>
           <div class="ev-step"><h4>Review</h4><p class="ev-body">Code reviewer A and B asked for changes. The Security engineer approved.</p></div>
           <div class="findings">
@@ -90,7 +88,7 @@
       </li>
       <li id="ev-round2"><span class="node live"></span>
         <div class="ev-head"><h3>Round 2: in review</h3><span class="muted small">Fixes R1-1, R1-2, R1-3</span><time>since 10:20</time></div>
-        <div class="ev-step"><h4>Build 2</h4><p class="meta"><span>Developer, Opus, slot 1</span><span class="mono">9b3e5aa</span><span>3 files</span><span>+58 −19</span><span>$1.44</span></p></div>
+        <div class="ev-step"><h4>Build 2</h4><p class="meta"><span>Developer, Model L, slot 1</span><span class="mono">9b3e5aa</span><span>3 files</span><span>+58 −19</span><span>$1.44</span></p></div>
         <div class="ev-step"><h4>Checks passed</h4><p class="meta"><span>Lint, static analysis and 417 tests</span><span>10:55</span></p></div>
         <div class="ev-step"><h4>Review in progress</h4><p class="ev-body">Both Code reviewers are working. One finding so far.</p></div>
         <div class="findings">
@@ -105,7 +103,7 @@
   </section>
 
   <aside class="log log-pane" aria-labelledby="log-h">
-    <header><span class="dot ok"></span><h2 id="log-h">Code reviewer A, live</h2><p class="meta" style="margin-left:auto"><span>Opus</span><span>11 min</span></p></header>
+    <header><span class="dot ok"></span><h2 id="log-h">Code reviewer A, live</h2><p class="meta" style="margin-left:auto"><span>Model L</span><span>11 min</span></p></header>
     <div class="log-main"><ol aria-live="off">
       <li><time>11:02:04</time><span><span class="tool">Read</span> pull request 611, round 1 findings</span></li>
       <li><time>11:02:09</time><span><span class="tool">Read</span> src/Forge/PushGate.php</span></li>
