@@ -95,7 +95,15 @@ php bin/instance 3>&1 >/dev/null
 
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
 
+When `frankenphp` is on your `PATH` (as in the container image), `bin/instance` serves the app with FrankenPHP in worker mode instead of PHP's built-in web server, and the line says so: `{"status":"ready","mode":"worker"}` or `{"status":"failed","mode":"worker","reason":"..."}`. A line without `mode` means the built-in server.
+
 Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
+
+## Walking the user journeys
+
+`bin/check --journeys` checks the product as a whole: for each journey in `tests/Journeys/` it boots a fresh instance with `bin/instance`, walks one path a user takes through the pages and the console, and checks what the user sees. Today there is one journey, first install and setup: the database is created, the projects page is empty, the sample project is seeded (a second seed keeps it), and the reviews page is empty. It needs no network and no keys. Each journey has up to 240 seconds, and anything it leaves running is stopped with its instance.
+
+The option runs alone (`--fast`, `--only`, `--skip`, `--base` and `--test-merge` are refused with exit code 2), and neither `bin/check` nor `bin/check --fast` runs the journeys. A passing run ends with `{"result":"pass","failed":[]}`; a failing journey is one finding that names its file, the journey, the step that broke and the first line of the reason, for example `FirstInstallJourneyTest.php: journey "first install and setup" failed at step "open the reviews page": Failed asserting that ...`. The plain-words guide is [Checking the whole product](../guide/checking-the-whole-product.md).
 
 ## The log
 
@@ -175,7 +183,7 @@ On a pull request, GitHub checks out a merge of the branch into the base branch,
 
 `php bin/probe tests/Probe/NAME.php` boots the same scratch instance and runs one small PHPUnit test (a name ending in `Test.php`) or PHP script against it, with the network cut, so anything that reaches for the network fails. The script or test finds the instance's address in the environment variable `INTAKT_INSTANCE_URL`. Its output is printed, followed by a line `exit code: N`, and the command exits with that code. A probe still running after 60 seconds is stopped with exit code 124. The instance, its files and anything the probe started are removed afterwards. It needs Linux with `unshare` and `ip`, which cut the network for the run.
 
-The instance and the probe do not inherit your whole environment, so a token you have set in your shell is not visible to them. They get only `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR` (when you set them), the application variables `bin/instance` sets itself (`APP_*` and `DATABASE_URL`) and `INTAKT_INSTANCE_URL`. `PWD` is also present: the `sh -c` wrapper in `bin/instance` sets it, it is not taken from your environment. `APP_ENV` and `APP_SECRET` keep your value when it is set and not empty or `0`.
+The instance and the probe do not inherit your whole environment, so a token you have set in your shell is not visible to them. They get only `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TZ` and `TMPDIR` (when you set them), the application variables `bin/instance` sets itself (`APP_*` and `DATABASE_URL`) and `INTAKT_INSTANCE_URL`; in worker mode also `INTAKT_INSTANCE_ADMIN_URL` (FrankenPHP's admin API) for the probe, and `XDG_DATA_HOME` and `XDG_CONFIG_HOME` (inside the scratch folder) for FrankenPHP. `PWD` is also present: the `sh -c` wrapper in `bin/instance` sets it, it is not taken from your environment. `APP_ENV` and `APP_SECRET` keep your value when it is set and not empty or `0`.
 
 A caller that already runs `bin/probe` without network access and in its own process namespace (as the build loop's sandbox does) sets the environment variable `PROBE_ISOLATED=1`. `bin/probe` then starts the instance directly and needs neither `unshare` nor `ip`, but first checks that the run really is offline: when `/proc/net/dev` cannot be read or lists something unexpected, when it shows a network interface other than `lo`, or when `lo` is down, it prints the reason and exits with code 2 before anything starts. The caller is responsible for ending whatever the probe leaves running. Any other value, or no value, keeps the `unshare` way.
 

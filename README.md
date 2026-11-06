@@ -47,9 +47,12 @@ What works without Docker or a provider key:
 
 ```
 composer install
-bin/check            # every quality gate, one JSON line per gate
+bin/check            # the quality gates every change passes (not the journeys), one JSON line per gate
+bin/check --journeys # the user journeys, each on a fresh install, run separately
 bin/console about    # the app boots on SQLite
 ```
+
+What the journeys cover and how to run one: [Checking the whole product](docs/guide/checking-the-whole-product.md).
 
 ## The first release: the review loop
 

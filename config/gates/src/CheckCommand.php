@@ -88,6 +88,11 @@ final readonly class CheckCommand
      */
     private function selectedGates(Options $options): array
     {
+        // Because the journeys boot whole installs and run on their own, never as part of the gates every change passes.
+        if (Mode::Journeys === $options->mode) {
+            return [new JourneysGate()];
+        }
+
         return array_values(array_filter(
             $this->gates($options->testMerge),
             static fn (Gate $gate): bool => ([] === $options->only || in_array($gate->name(), $options->only, true)) && !in_array($gate->name(), $options->skip, true),
