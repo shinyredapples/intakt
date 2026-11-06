@@ -26,6 +26,7 @@ Tests, in `ValidatorConstraintsDescriberTest`:
 
 - `Positive` now expects `['exclusiveMinimum' => 0]` instead of the boolean form.
 - `Numeric range` (`GreaterThan(10)`, `LessThanOrEqual(100)`, `DivisibleBy(3)`) now expects `'exclusiveMinimum' => 10` next to `'maximum' => 100`.
+- A property with both `GreaterThan` and `GreaterThanOrEqual` now keeps both `exclusiveMinimum` and `minimum`. Before, the later constraint overwrote `minimum`. Both keywords may appear together in draft 2020-12, so this is correct.
 - `Negative`, new, with a new `#[Negative]` property in `ValidatorConstraintsFixture`, covers the upper bound: `['exclusiveMaximum' => 0]`.
 
 All three fail without the change.
