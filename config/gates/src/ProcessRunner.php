@@ -262,6 +262,7 @@ final class ProcessRunner
     {
         return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
     }
+
     private function refusal(string $program, int $seconds): ?ProcessResult
     {
         if (!function_exists('posix_kill')) {
