@@ -17,8 +17,8 @@ final class DashboardMockLinksTest extends TestCase
         $outside = [];
 
         foreach ($pages as $page) {
-            preg_match_all('/(?:href|src)="([^"]*)"/', (string) file_get_contents((string) $page), $matches);
-            foreach ($matches[1] as $link) {
+            preg_match_all('/(?:href|src)=(["\'])(.*?)\1/', (string) file_get_contents((string) $page), $matches);
+            foreach ($matches[2] as $link) {
                 if (1 === preg_match('#^(?:[a-z][a-z0-9+.-]*:|//)#i', $link)) {
                     $outside[] = basename((string) $page).': '.$link;
                 }
