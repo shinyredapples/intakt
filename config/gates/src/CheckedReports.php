@@ -59,7 +59,7 @@ final readonly class CheckedReports
         return $this->readyToFile($lines) ? $this->checkFinding(implode("\n", $lines)) : null;
     }
 
-    // Other sections (a fix experiment, notes) may carry their own Status lines, which say nothing about filing.
+    // Only this section, because a Status line in another section (a fix experiment) would otherwise retire a ready report.
     /**
      * @param list<string> $lines
      *
