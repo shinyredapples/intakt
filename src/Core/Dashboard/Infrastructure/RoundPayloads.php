@@ -56,7 +56,7 @@ final readonly class RoundPayloads
     // Only the judge's marks, with no findings, because the call stands where the finding text was not recorded (rounds judged before it was) or an entry is unreadable; judgedFindingsOf() reads the findings.
     public function judgeOf(RecordedEvent $recorded): ?JudgeDone
     {
-        return $this->payloads->of($recorded, JudgeDone::class, self::UNRECORDED_FINDINGS, ['findings']);
+        return $this->payloads->ofWithout($recorded, JudgeDone::class, self::UNRECORDED_FINDINGS);
     }
 
     /**
@@ -105,7 +105,7 @@ final readonly class RoundPayloads
     private function verdictOf(RecordedEvent $recorded): ?VerdictReceived
     {
         return $this->payloads->of($recorded, VerdictReceived::class, self::UNMARKED_VERDICT)
-            ?? $this->payloads->of($recorded, VerdictReceived::class, self::UNMARKED_VERDICT, ['mode']);
+            ?? $this->payloads->ofWithout($recorded, VerdictReceived::class, self::UNMARKED_VERDICT);
     }
 
     private function reviewedRound(ReviewStarted $started, ?int $number, RecordedEvent $recorded): ReviewedRound
