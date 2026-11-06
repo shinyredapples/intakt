@@ -107,7 +107,8 @@ final class EntrypointSampleSeedTest extends TestCase
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
         $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
-        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
+        // The server notes its run late on purpose: the entrypoint starts it alongside the consumers, so the test must not rely on it writing first.
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) sleep 0.5;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
 
         return $programs;
@@ -117,7 +118,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
 
-        while (hrtime(true) < $deadline && !str_contains($this->calls(), 'messenger:consume scheduler_watcher')) {
+        while (hrtime(true) < $deadline && !(str_contains($this->calls(), 'frankenphp run') && str_contains($this->calls(), 'messenger:consume scheduler_watcher'))) {
             usleep(50_000);
         }
 
