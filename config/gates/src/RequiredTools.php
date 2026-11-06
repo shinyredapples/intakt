@@ -21,6 +21,9 @@ final readonly class RequiredTools
     // Because bin/check starts each gate's child process in a session of its own, through `setsid` and `sh`.
     private const array GATE_CHILD = ['sh', 'setsid'];
 
+    // Because a child in a session of its own gets no Ctrl-C from the terminal, so only these can stop its group.
+    private const array GATE_CHILD_EXTENSIONS = ['pcntl' => 'pcntl_signal', 'posix' => 'posix_kill'];
+
     private const array BY_GATE = [
         'audit' => ['composer'],
         'journeys' => ['sh', 'env', 'setsid'],
@@ -63,7 +66,16 @@ final readonly class RequiredTools
      */
     public function missingToRunEachInItsOwnProcess(array $gates): array
     {
-        return [] === $gates ? [] : $this->missingAmong([...$this->commandsOf($gates), ...self::GATE_CHILD]);
+        if ([] === $gates) {
+            return [];
+        }
+
+        $extensions = array_keys(array_filter(self::GATE_CHILD_EXTENSIONS, static fn (string $function): bool => !function_exists($function)));
+
+        return [
+            ...$this->missingAmong([...$this->commandsOf($gates), ...self::GATE_CHILD]),
+            ...array_map(static fn (string $extension): string => self::notFound('PHP extension '.$extension), $extensions),
+        ];
     }
 
     /**
