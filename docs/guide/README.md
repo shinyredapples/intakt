@@ -21,7 +21,7 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Why the AI can't wreck your project](why-the-ai-cant-wreck-your-project.md) | the safety layers |
 | [Your data](your-data.md) | what it stores, backups, moving, uninstalling |
 | [Writing a plugin](writing-a-plugin.md) | adding a forge, an AI company or a notifier |
-| [Testing a new check](testing-a-new-check.md) | how a rule of Intakt's own checks is tested |
+| [Testing a new check](testing-a-new-check.md) | how a rule of Intakt's own checks is tested, and switched on before the code is clean |
 | [Checking the whole product](checking-the-whole-product.md) | what the journey checks cover and how to run one |
 | [A demo walkthrough](demo-walkthrough.md) | a guided first run with the sample project |
 | [Glossary](glossary.md) | every word in the guides, with a link to where it is explained |
