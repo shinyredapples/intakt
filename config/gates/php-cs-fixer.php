@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Intakt\Gates\PhpCsFixer\MultilineNamedArgumentsFixer;
 use Intakt\Gates\PhpCsFixer\PlainFirstClassCallableFixer;
 use PhpCsFixer\Config;
 
@@ -11,9 +12,10 @@ $cacheDirectory = (is_string($cacheBase) && '' !== $cacheBase ? $cacheBase : sys
 return new Config()
     ->setRiskyAllowed(true)
     ->setCacheFile($cacheDirectory.'.cache')
-    ->registerCustomFixers([new PlainFirstClassCallableFixer()])
+    ->registerCustomFixers([new PlainFirstClassCallableFixer(), new MultilineNamedArgumentsFixer()])
     ->setRules([
         'Intakt/plain_first_class_callable' => true,
+        'Intakt/multiline_named_arguments' => true,
         '@PER-CS' => true,
         '@Symfony' => true,
         'declare_strict_types' => true,
