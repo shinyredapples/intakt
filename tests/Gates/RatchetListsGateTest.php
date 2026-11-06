@@ -250,6 +250,30 @@ final class RatchetListsGateTest extends SandboxTestCase
         self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
     }
 
+    public function testAnUnindentedIncludeItemDoesNotHideAGrowingList(): void
+    {
+        $run = $this->growListIncludedBy("includes:\n- ".self::INCLUDE."\nparameters:\n    level: max\n");
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+        self::assertStringContainsString('count rose from 1 to 5', $run->findingsOf('ratchet'));
+    }
+
+    public function testALoweredCountPassesWithAnUnindentedIncludeItem(): void
+    {
+        $run = $this->changeCountIncludedBy("includes:\n- ".self::INCLUDE."\nparameters:\n    level: max\n", 5, 1);
+
+        self::assertTrue($run->passed('ratchet'), $run->output());
+        self::assertStringNotContainsString('no ratchet lists', $run->output());
+    }
+
+    public function testAnIndentedConfigurationDoesNotHideAGrowingList(): void
+    {
+        $run = $this->growListIncludedBy("    includes:\n        - ".self::INCLUDE."\n    parameters:\n        level: max\n");
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+    }
+
     public function testDeletingTheLastEntryWithAnEmptyListPasses(): void
     {
         $run = $this->changeList($this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')), self::HEADER."parameters:\n\tignoreErrors: []\n");
@@ -283,9 +307,14 @@ final class RatchetListsGateTest extends SandboxTestCase
 
     private function growListIncludedBy(string $configuration): CheckRun
     {
-        $sandbox = $this->repositoryOnMain($configuration, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 1, '../src/A.php')));
-        $sandbox->write(self::LIST, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 5, '../src/A.php')));
-        $sandbox->commitAll('fix: grow the list');
+        return $this->changeCountIncludedBy($configuration, 1, 5);
+    }
+
+    private function changeCountIncludedBy(string $configuration, int $before, int $after): CheckRun
+    {
+        $sandbox = $this->repositoryOnMain($configuration, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', $before, '../src/A.php')));
+        $sandbox->write(self::LIST, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', $after, '../src/A.php')));
+        $sandbox->commitAll('fix: change the list');
 
         return $sandbox->check('--only=ratchet', '--base=main');
     }

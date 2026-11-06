@@ -56,7 +56,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Protected files** | the project's rules: the checks, the CI setup, the agents' instructions | [safety](why-the-ai-cant-wreck-your-project.md) |
 | **Pull request (PR)** | a finished change waiting to be merged | |
 | **Queue** | the tasks waiting to be built, and the work waiting to be reviewed | [engine room](the-engine-room.md#queues-who-is-next) |
-| **Ratchet list** | the places that break a new rule of the checks when it is switched on, kept in a file that may only get shorter while they are fixed (planned) | [testing a new check](testing-a-new-check.md#switching-a-rule-on-before-the-code-is-clean) |
+| **Ratchet list** | the places that break a new rule of the checks when it is switched on, kept in a file that may only get shorter while they are fixed | [testing a new check](testing-a-new-check.md#switching-a-rule-on-before-the-code-is-clean) |
 | **Review cap** | how much finished work may wait for review before builders pause | [engine room](the-engine-room.md#queues-who-is-next) |
 | **Review credential** | a secret made for one review round; it lets a reviewer read that round and nothing else, and stops working once the round is judged | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Review lane** | the bench where finished work is reviewed and merged | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |

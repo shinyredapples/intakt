@@ -8,14 +8,14 @@ final readonly class PhpStanIncludes
 {
     public const string CONFIGURATION = 'config/gates/phpstan.neon';
 
-    private const string INCLUDE_LINE = '/^\s+-\s+(?<path>[\w.\/-]+)\s*$/';
+    private const string INCLUDE_LINE = '/^\s*-\s+(?<path>[\w.\/-]+)\s*$/';
 
     private const string UNREADABLE_INCLUDES_KEY = '/^(?!includes:\h*\r?$)[\'"]?includes[\'"]?\h*:/m';
 
     // Because the gate configuration and the installed packages are no lists: only what the analysis includes from the rest of the repository is.
     private const array NOT_LISTS = ['config/gates/', 'vendor/'];
 
-    // Because an include the gate cannot place could hide a list, anything but a block of plain relative paths inside the repository, one per "- path" line, yields null: a flow list, a comment after the key or a %placeholder%.
+    // Because an include the gate cannot place could hide a list, anything but a block of plain relative paths inside the repository, one per "- path" line, yields null: a flow list, a comment after the key, a %placeholder% or a configuration whose first line is indented, where the top-level keys cannot be told apart. NEON lets a "- path" item sit at the indentation of its key, so such an item under "includes:" is an include like an indented one.
     /**
      * @return list<string>|null
      */
@@ -25,9 +25,15 @@ final readonly class PhpStanIncludes
             return null;
         }
 
+        $lines = $this->includeLines($configuration);
+
+        if (null === $lines) {
+            return null;
+        }
+
         $paths = [];
 
-        foreach ($this->includeLines($configuration) as $line) {
+        foreach ($lines as $line) {
             $path = 1 === preg_match(self::INCLUDE_LINE, $line, $match) ? $this->repositoryPath($match['path']) : null;
 
             if (null === $path) {
@@ -41,15 +47,20 @@ final readonly class PhpStanIncludes
     }
 
     /**
-     * @return list<string>
+     * @return list<string>|null
      */
-    private function includeLines(string $configuration): array
+    private function includeLines(string $configuration): ?array
     {
         $lines = [];
         $inIncludes = false;
+        $meaningfulLines = $this->meaningfulLines($configuration);
 
-        foreach ($this->meaningfulLines($configuration) as $line) {
-            if (ltrim($line) === $line) {
+        if ([] !== $meaningfulLines && ltrim($meaningfulLines[0]) !== $meaningfulLines[0]) {
+            return null;
+        }
+
+        foreach ($meaningfulLines as $line) {
+            if (ltrim($line) === $line && !str_starts_with($line, '-')) {
                 $inIncludes = 'includes:' === rtrim($line);
                 continue;
             }
