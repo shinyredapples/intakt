@@ -10,9 +10,9 @@ use RuntimeException;
 // Messages carry the status or the exception class only, because they are logged and shown and must not leak the key or a token.
 final class InstallationNotReadBack extends RuntimeException implements ReportableFailure
 {
-    public static function becauseNoTokenWasMinted(string $reason): self
+    public static function becauseNoTokenWasMinted(InstallationTokenNotMinted $notMinted): self
     {
-        return new self('The installation cannot be read back: '.$reason);
+        return new self('The installation cannot be read back: '.$notMinted->getMessage(), previous: $notMinted);
     }
 
     public static function becauseGitHubRefused(int $status): self
