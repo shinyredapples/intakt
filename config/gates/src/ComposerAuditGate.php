@@ -93,11 +93,6 @@ final class ComposerAuditGate implements Gate
             $findings[] = $package.' is abandoned, replacement: '.('' === $replacement->text() ? 'none' : $replacement->text());
         }
 
-        foreach ($report->get('cooldown')->entries() as $package => $release) {
-            $findings[] = $package.' '.$release->get('prettyVersion')->text().' published '.$release->get('releaseDate')->text()
-                .' is in the cooldown, available in '.$release->get('availableIn')->text();
-        }
-
         return $findings;
     }
 }

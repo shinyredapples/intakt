@@ -42,26 +42,6 @@ final class ComposerAuditGateTest extends SandboxTestCase
         self::assertStringContainsString('intakt/retired-package is abandoned', $run->findingsOf('audit'));
     }
 
-    // Because Composer compares the release time with its own clock, a release in the far future stays inside the period.
-    public function testALockedReleaseInsideTheCooldownFailsTheAuditNamingItsVersionAndAvailability(): void
-    {
-        $run = $this->sandboxWith('cooldown-dependency')->checkWith(self::OFFLINE, '--only=audit');
-
-        self::assertSame(1, $run->exitCode(), $run->output());
-        self::assertTrue($run->failed('audit'), $run->output());
-        self::assertStringContainsString('intakt/fresh-package 1.0.0 published 2999-01-01T00:00:00+00:00 is in the cooldown, available in ', $run->findingsOf('audit'));
-    }
-
-    public function testALockedReleaseOlderThanTheCooldownPassesTheAudit(): void
-    {
-        $sandbox = $this->sandboxWith('cooldown-dependency');
-        $sandbox->write('composer.lock', str_replace('2999-01-01', '2020-01-01', (string) file_get_contents($sandbox->root.'/composer.lock')));
-
-        $run = $sandbox->checkWith(self::OFFLINE, '--only=audit');
-
-        self::assertSame(0, $run->exitCode(), $run->output());
-    }
-
     public function testAGlobalComposerConfigCannotIgnoreAnAdvisory(): void
     {
         $sandbox = $this->sandboxWith('vulnerable-dependency');
