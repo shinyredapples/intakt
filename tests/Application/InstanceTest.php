@@ -332,6 +332,35 @@ final class InstanceTest extends TestCase
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
     }
 
+    public function testAnAnswerOnTheChosenPortBeforeFrankenphpServesDoesNotMakeTheInstanceReady(): void
+    {
+        // The stub answers one request on the port like an unrelated listener would, then fails to bind as the real FrankenPHP does behind it.
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', '#!'.PHP_BINARY."\n".<<<'PHP'
+            <?php
+            preg_match('~http://127\.0\.0\.1:(\d+)~', (string) file_get_contents($argv[array_search('--config', $argv, true) + 1]), $match);
+            $listener = stream_socket_server('tcp://127.0.0.1:'.$match[1]);
+            $connection = stream_socket_accept($listener, 3);
+            if (false !== $connection) {
+                fread($connection, 8192);
+                fwrite($connection, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                fclose($connection);
+            }
+            fwrite(STDERR, 'Error: loading initial config: listen tcp 127.0.0.1:'.$match[1].": bind: address already in use\n");
+            exit(1);
+            PHP);
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo "command ran\n";'], ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertMatchesRegularExpression('/^the server exited: Error: loading initial config: listen tcp 127\.0\.0\.1:\d+: bind: address already in use$/', $status['reason']);
+        self::assertStringNotContainsString('command ran', $run['output']);
+        self::assertSame(1, $run['exit']);
+    }
+
     public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
     {
         $notAFolder = $this->scratch.'/file';

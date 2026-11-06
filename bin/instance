@@ -424,9 +424,10 @@ final class WorkerServer implements Server
         return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config'];
     }
 
-    public function port(string $log): int
+    public function port(string $log): ?int
     {
-        return $this->port;
+        // Caddy logs this only once every listener is bound, so an unrelated listener on the chosen port cannot answer the readiness request in FrankenPHP's place.
+        return str_contains($log, 'serving initial configuration') ? $this->port : null;
     }
 
     public function commandEnvironment(): array
