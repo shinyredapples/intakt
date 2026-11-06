@@ -4,11 +4,11 @@ Title: [Config] A NaN value skips the type check and the `validate()` closures o
 
 ### Symfony version(s) affected
 
-6.4.49, 7.4.22, 8.1.5 (also 8.1.x-dev 4a0e7dd1645b and 8.2.x-dev 0d10198cc52a)
+6.4.49, 7.4.22, 8.1.11 and 8.2.0-BETA1 (target branch: 6.4)
 
 ### Description
 
-`BaseNode::merge()`, `normalize()` and `finalize()` detect a placeholder with `$value !== $placeholders = self::resolvePlaceholderValue($value)`. For `NAN` the method returns the value unchanged, but `NAN !== NAN` is true, so the node takes the placeholder branch: it iterates over a float (`foreach() argument must be of type array|object, float given`) and returns the value without its type check and without running its `validate()` closures. A YAML `.NaN` reaches a `floatNode()` this way, and nothing reports it.
+`BaseNode::merge()`, `normalize()` and `finalize()` detect a placeholder with `$value !== $placeholders = self::resolvePlaceholderValue($value)`. For `NAN` the method returns the value unchanged, but `NAN !== NAN` is true, so the node takes the placeholder branch: it iterates over a float (`foreach() argument must be of type array|object, float given`) and returns the value without its type check and without running its `validate()` closures. A YAML `.NaN` reaches a `floatNode()` this way, and nothing reports it. On PHP 8.5 with 8.2 there is one more warning: "unexpected NAN value was coerced to bool".
 
 `min()` and `max()` would not refuse it after a fix either, since `NAN < min` and `NAN > max` are both false; a `validate()` closure that tests `is_nan()` is what catches it, and today it never runs. The parent array nodes are not affected: `resolvePlaceholderValue()` returns the same array, which PHP treats as identical to itself even when it holds a NaN. With or without sibling keys, the NaN passes silently.
 
