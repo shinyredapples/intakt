@@ -75,7 +75,7 @@ final class AiServiceState
         return $this->sorted($changed);
     }
 
-    // Every property a request could write: not static, not readonly, on an object that has no reset() for the kernel to call.
+    // Static and readonly properties, and objects with a reset(), are left out, because a request cannot write the first two and the kernel's reset clears the last.
     /**
      * @return list<string>
      */
@@ -155,20 +155,28 @@ final class AiServiceState
         }
 
         $this->objects[spl_object_id($value)] = $value;
-        $at = json_encode($path, JSON_THROW_ON_ERROR);
 
         foreach ($this->properties($value) as $property) {
-            $name = $property->getDeclaringClass()->getName().'::$'.$property->getName();
-            $this->values[$at][$name] = 'uninitialized';
+            $this->record($value, $property, $path);
+        }
+    }
 
-            if (!$property->isReadOnly() && !$value instanceof ResetInterface) {
-                $this->mutable[$name] = true;
-            }
+    /**
+     * @param list<int|string> $path
+     */
+    private function record(object $object, ReflectionProperty $property, array $path): void
+    {
+        $at = json_encode($path, JSON_THROW_ON_ERROR);
+        $name = $property->getDeclaringClass()->getName().'::$'.$property->getName();
+        $this->values[$at][$name] = 'uninitialized';
 
-            if ($property->isInitialized($value)) {
-                $this->values[$at][$name] = self::fingerprint($property->getValue($value), 0);
-                $this->visit($property->getValue($value), [...$path, $name]);
-            }
+        if (!$property->isReadOnly() && !$object instanceof ResetInterface) {
+            $this->mutable[$name] = true;
+        }
+
+        if ($property->isInitialized($object)) {
+            $this->values[$at][$name] = self::fingerprint($property->getValue($object), 0);
+            $this->visit($property->getValue($object), [...$path, $name]);
         }
     }
 

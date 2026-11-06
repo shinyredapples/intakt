@@ -67,7 +67,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private const string LEAK = 'A leak, reproduced in upstream/ai-platform-provider-keeps-resolved-model/; not reachable in Intakt, which always routes through supports().';
 
-    // Every property a request could write on a Symfony AI or MCP SDK object without a reset(), judged one by one, also on paths the run-twice test does not take (structured output): a new one fails the test until it is judged.
+    // Judged one by one, because the run-twice test above cannot see state on paths it does not take (structured output), and a new entry is a leak until someone judges it.
     private const array MUTABLE_WITHOUT_RESET = [
         'Mcp\\Capability\\Discovery\\SchemaValidator::$decodedSchemas' => self::CACHE,
         'Mcp\\Capability\\Discovery\\SchemaValidator::$jsonSchemaValidator' => self::SET_UP,
