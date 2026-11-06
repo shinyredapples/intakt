@@ -43,6 +43,7 @@ final class EntrypointProcessesTest extends TestCase
 
     protected function setUp(): void
     {
+        // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
         if (null === new ExecutableFinder()->find('frankenphp')) {
             self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
         }

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\TokenCount;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
+use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id, wherever it sits in the ledger; excluded from the container because LedgerRounds builds one per read.
@@ -17,19 +20,15 @@ final class LedgerTokens
     /** @var array<string, TokenCount> */
     private array $usedByCall = [];
 
-    /**
-     * @param array<string, mixed> $payload
-     */
-    public function add(array $payload): void
+    public function add(UsageStarted|UsageSettled|UsageUnsettled $usage): void
     {
-        $call = $payload['call'] ?? null;
+        if ($usage instanceof UsageStarted) {
+            $this->tieToRound($usage);
 
-        if (!is_string($call)) {
             return;
         }
 
-        $this->tieToRound($call, $payload);
-        $this->countUsages($call, $payload['usages'] ?? null);
+        $this->countUsages($usage);
     }
 
     public function ofRound(string $round): TokenCount
@@ -45,36 +44,17 @@ final class LedgerTokens
         return $sum;
     }
 
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function tieToRound(string $call, array $payload): void
+    private function tieToRound(UsageStarted $started): void
     {
-        $round = $payload['round'] ?? null;
-
-        if ('started' === ($payload['phase'] ?? null) && is_string($round)) {
-            $this->roundOfCall[$call] = $round;
+        if (null !== $started->round) {
+            $this->roundOfCall[$started->call] = $started->round;
         }
     }
 
-    private function countUsages(string $call, mixed $usages): void
+    private function countUsages(UsageSettled|UsageUnsettled $ended): void
     {
-        if (!is_array($usages)) {
-            return;
+        foreach ($ended->usages as $row) {
+            $this->usedByCall[$ended->call] = ($this->usedByCall[$ended->call] ?? TokenCount::none())->plus(new TokenCount($row->prompt ?? 0, $row->completion ?? 0, $row->total ?? 0));
         }
-
-        foreach (array_filter($usages, is_array(...)) as $row) {
-            $this->usedByCall[$call] = ($this->usedByCall[$call] ?? TokenCount::none())->plus(new TokenCount($this->count($row, 'prompt'), $this->count($row, 'completion'), $this->count($row, 'total')));
-        }
-    }
-
-    /**
-     * @param array<array-key, mixed> $row
-     */
-    private function count(array $row, string $key): int
-    {
-        $count = $row[$key] ?? null;
-
-        return is_int($count) ? $count : 0;
     }
 }
