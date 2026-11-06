@@ -30,8 +30,8 @@ final readonly class RoundPayloads
 {
     private const array UNNAMED_START = ['change' => '', 'task' => ''];
 
-    // Read only after the numbered read failed, because the number lets a start written before rounds were numbered deserialize and startOf() then gives it none.
-    private const array UNNUMBERED_START = [...self::UNNAMED_START, 'number' => 0];
+    // Read only after the numbered read failed and the number is missing or null, because the placeholder lets such a start deserialize and startOf() then gives it none.
+    private const array UNREAD_NUMBER = ['number' => 0];
 
     private const array UNMARKED_VERDICT = ['mode' => ProjectMode::Live];
     private const array UNRECORDED_FINDINGS = ['findings' => []];
@@ -48,7 +48,13 @@ final readonly class RoundPayloads
             return $this->reviewedRound($numbered, $numbered->number, $recorded);
         }
 
-        $unnumbered = $this->payloads->of($recorded, ReviewStarted::class, self::UNNUMBERED_START);
+        $number = $this->payloads->of($recorded, StartNumber::class);
+
+        if (!$number instanceof StartNumber || null !== $number->number) {
+            return null;
+        }
+
+        $unnumbered = $this->payloads->ofWithout($recorded, ReviewStarted::class, self::UNREAD_NUMBER, self::UNNAMED_START);
 
         return $unnumbered instanceof ReviewStarted ? $this->reviewedRound($unnumbered, null, $recorded) : null;
     }

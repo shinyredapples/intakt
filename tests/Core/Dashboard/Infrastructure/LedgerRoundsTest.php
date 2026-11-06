@@ -199,6 +199,13 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(['', null], [$review?->change, $review?->rounds[0]->number]);
     }
 
+    public function testAStartWithANullNumberHasNoNumber(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":null}'));
+
+        self::assertSame(['feat/thing', null], [$review?->change, $review?->rounds[0]->number]);
+    }
+
     #[DataProvider('reviewerRows')]
     public function testAReviewerRowInTodaysFormatMovesTheReviewer(LedgerEventKind $kind, object $payload, ReviewerProgress $expected): void
     {
@@ -300,6 +307,17 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertSame(ReviewState::Judged, $review?->rounds[0]->state);
+    }
+
+    public function testAJudgedFindingWhoseTextOverflowsIsSkippedAndTheOthersKeepTheirCall(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F2"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1","text":1e400},{"id":"F2","severity":"P1","text":"Kept."}]}'),
+        );
+
+        self::assertEquals([ReviewState::Judged, [new RoundFinding('F2', 'P1', 'Kept.')->calledBy(JudgeCall::Act)]], [$review?->rounds[0]->state, $review?->rounds[0]->findings]);
     }
 
     public function testAJudgeRowWhoseMarksDoNotDeserializeIsSkipped(): void

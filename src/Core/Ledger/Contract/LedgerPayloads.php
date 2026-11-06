@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ledger\Contract;
 
+use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
@@ -37,14 +38,15 @@ final readonly class LedgerPayloads
      *
      * @param class-string<T>      $class
      * @param array<string, mixed> $unreadAs
+     * @param array<string, mixed> $absentAs
      *
      * @return T|null
      */
-    // A key in $unreadAs is never read from the row and takes the given value, for a reader that must not lose the rest of a row to that one key.
-    public function ofWithout(RecordedEvent $recorded, string $class, array $unreadAs): ?object
+    // A key in $unreadAs is never read from the row and takes the given value, for a reader that must not lose the rest of a row to that one key; $absentAs works as in of().
+    public function ofWithout(RecordedEvent $recorded, string $class, array $unreadAs, array $absentAs = []): ?object
     {
         return $this->deserialized($recorded->event->payload, $class, [
-            AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => $unreadAs],
+            AbstractNormalizer::DEFAULT_CONSTRUCTOR_ARGUMENTS => [$class => [...$absentAs, ...$unreadAs]],
             AbstractNormalizer::IGNORED_ATTRIBUTES => array_keys($unreadAs),
         ]);
     }
@@ -66,7 +68,27 @@ final readonly class LedgerPayloads
             return null;
         }
 
-        return array_values(array_filter(array_map(fn (array $entry): ?object => $this->deserialized(json_encode($entry, JSON_THROW_ON_ERROR), $class, []), array_filter($entries, is_array(...)))));
+        return array_values(array_filter(array_map(fn (array $entry): ?object => $this->entryOf($entry, $class), array_filter($entries, is_array(...)))));
+    }
+
+    /**
+     * @template T of object
+     *
+     * @param array<mixed>    $entry
+     * @param class-string<T> $class
+     *
+     * @return T|null
+     */
+    // An entry that does not encode again (a number too large for a float decodes to infinity) is as unreadable as one that does not deserialize.
+    private function entryOf(array $entry, string $class): ?object
+    {
+        try {
+            $json = json_encode($entry, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return null;
+        }
+
+        return $this->deserialized($json, $class, []);
     }
 
     /**
