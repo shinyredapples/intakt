@@ -54,7 +54,7 @@ final class ReviewOutputTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function whenTheReviewIsWritten(): array
     {
@@ -69,7 +69,6 @@ final class ReviewOutputTest extends TestCase
         $output = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($output);
 
-        /** @var array<string, mixed> $output */
         return $output;
     }
 }
