@@ -10,6 +10,7 @@ final readonly class GateChildren
 
     public function __construct(
         private string $home,
+        private string $root,
         private ProcessRunner $runner = new ProcessRunner(),
     ) {
     }
@@ -30,7 +31,8 @@ final readonly class GateChildren
      */
     private function reportOf(string $gate, array $arguments): GateReport
     {
-        $child = $this->runner->runToItsEnd([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory());
+        // Because the preflight finds `setsid` and `sh` from the workspace root, the child's launcher is searched from there too.
+        $child = $this->runner->runToItsEnd([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), toolsFrom: $this->root);
         fwrite(STDERR, $child->errors);
 
         return GateReport::fromChild($gate, $child);

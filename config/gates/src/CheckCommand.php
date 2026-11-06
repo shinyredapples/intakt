@@ -78,18 +78,18 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($names, $arguments);
+        return $this->runGates($names, $arguments, $options->root ?? $this->home);
     }
 
     /**
      * @param list<string> $names
      * @param list<string> $arguments
      */
-    private function runGates(array $names, array $arguments): int
+    private function runGates(array $names, array $arguments, string $root): int
     {
         $failed = [];
 
-        foreach (new GateChildren($this->home)->reportsOf($names, $arguments) as $report) {
+        foreach (new GateChildren($this->home, $root)->reportsOf($names, $arguments) as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {

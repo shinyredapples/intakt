@@ -31,6 +31,8 @@ final class ProcessRunner
 
     private const string HOLD_UNTIL_RELEASED = 'read -r released && exec "$@"';
 
+    private const string HOLD_THEN_MOVE = 'read -r released && cd -P -- "$1" && shift && exec "$@"';
+
     private ?string $containment = null;
 
     public function __construct(
@@ -135,7 +137,7 @@ final class ProcessRunner
     /**
      * @param list<string> $command
      */
-    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
+    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS, ?string $toolsFrom = null): ProcessResult
     {
         $refusal = $this->refusal($command[0], $seconds);
 
@@ -144,7 +146,9 @@ final class ProcessRunner
         }
 
         $release = new InputStream();
-        $process = new Process($this->held($command), $directory, getenv(), $release, null);
+        $process = null === $toolsFrom
+            ? new Process($this->held($command), $directory, getenv(), $release, null)
+            : new Process($this->heldThenMoved($command, $directory), $toolsFrom, getenv(), $release, null);
         $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
@@ -243,6 +247,17 @@ final class ProcessRunner
     private function held(array $command): array
     {
         return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
+    }
+
+    // Because a relative PATH entry resolves in the directory a program starts in, `setsid` and `sh` start where the tools are searched, then the command moves to its own directory.
+    /**
+     * @param list<string> $command
+     *
+     * @return list<string>
+     */
+    private function heldThenMoved(array $command, string $directory): array
+    {
+        return ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $directory, ...$command];
     }
 
     private function refusal(string $program, int $seconds): ?ProcessResult
