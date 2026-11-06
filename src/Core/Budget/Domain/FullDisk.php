@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Domain;
 
-use Doctrine\DBAL\Exception as DbalException;
+use Doctrine\DBAL\Exception;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Throwable;
 
-// Only the filesystem and the database speak with the system's own text; any other message can carry text from a pull request, which an author could use to start the hold on purpose.
+// Only the filesystem and the database speak with the system's own text, because any other message can carry pull request text that an author could use to start the hold on purpose.
 final readonly class FullDisk
 {
     private const array SYSTEM_TEXTS = ['no space left on device', 'database or disk is full'];
@@ -26,7 +26,7 @@ final readonly class FullDisk
 
     private static function speaksForTheSystem(Throwable $link): bool
     {
-        return $link instanceof IOException || $link instanceof DbalException;
+        return $link instanceof IOException || $link instanceof Exception;
     }
 
     private static function saysFull(string $message): bool

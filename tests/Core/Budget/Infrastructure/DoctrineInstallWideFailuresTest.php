@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Budget\Infrastructure;
 
 use Doctrine\Common\EventManager;
-use Doctrine\DBAL\Driver\PDO\Exception as PdoDriverException;
+use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\ReadOnlyException;
@@ -74,7 +74,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
      */
     public static function lockStoreFailures(): iterable
     {
-        yield 'a read-only store' => [new ReadOnlyException(PdoDriverException::new(new PDOException('attempt to write a readonly database')), null)];
+        yield 'a read-only store' => [new ReadOnlyException(Exception::new(new PDOException('attempt to write a readonly database')), null)];
         yield 'a lock that could not be released' => [new LockReleasingException('The lock could not be released.')];
     }
 
@@ -107,7 +107,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
     public function testAFullDiskReportedByTheDatabaseInsideAnotherExceptionStartsTheFailureBackOff(): void
     {
-        $full = new DriverException(PdoDriverException::new(new PDOException('SQLSTATE[HY000]: General error: 13 database or disk is full')), null);
+        $full = new DriverException(Exception::new(new PDOException('SQLSTATE[HY000]: General error: 13 database or disk is full')), null);
 
         $this->failures->itemFailed('round-1', new RuntimeException('The step failed.', 0, $full));
 
