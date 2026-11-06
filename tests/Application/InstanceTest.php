@@ -20,7 +20,29 @@ final class InstanceTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
 
+    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test. It is kept only while its installed packages are the checkout's (the same installed.json content), because a folder left by a killed run with the same process id may hold the vendor of an older checkout, and the autoload file keeps its inode across an in-place dependency update, so a copy that could not be linked is reused too.
+    private const string COPY = <<<'SH'
+        set -e
+        project=$1
+        shift
+        cd "$project"
+        find . -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +
+        if ! cmp -s vendor/composer/installed.json "$0"/vendor/composer/installed.json 2>/dev/null; then
+            rm -rf vendor vendor.partial
+            cp -al "$0"/vendor vendor.partial 2>/dev/null || { rm -rf vendor.partial && cp -a "$0"/vendor vendor.partial; }
+            mv vendor.partial vendor
+        fi
+        cd "$0"
+        cp -a "$@" "$project"/
+        SH;
+
+    // An instance per test, not per class, because each boot builds its container in a scratch folder it removes when it stops, which is what several tests prove, and most tests boot with another project, command or environment.
     private string $scratch;
+
+    public static function tearDownAfterClass(): void
+    {
+        new Filesystem()->remove(self::sharedProject());
+    }
 
     protected function setUp(): void
     {
@@ -128,6 +150,45 @@ final class InstanceTest extends TestCase
         $this->runInstance($project);
 
         self::assertSame($before, $this->treeOf($project));
+    }
+
+    public function testAVendorLeftByAnEarlierRunOfTheSharedProjectIsReplacedByTheCheckouts(): void
+    {
+        $vendor = self::sharedProject().'/vendor';
+        new Filesystem()->remove($vendor);
+        new Filesystem()->dumpFile($vendor.'/stale-marker', 'from an older checkout');
+
+        $project = $this->copyOfTheProject();
+
+        self::assertFileDoesNotExist($project.'/vendor/stale-marker');
+        self::assertFileExists($project.'/vendor/autoload.php');
+    }
+
+    public function testAVendorWithOtherPackagesThanTheCheckoutsIsReplacedEvenWhenItsAutoloadFileIsTheCheckouts(): void
+    {
+        $vendor = $this->copyOfTheProject().'/vendor';
+        new Filesystem()->remove($vendor.'/composer/installed.json');
+        new Filesystem()->dumpFile($vendor.'/composer/installed.json', '[]');
+        new Filesystem()->dumpFile($vendor.'/stale-marker', 'from an older checkout');
+
+        $project = $this->copyOfTheProject();
+
+        self::assertFileDoesNotExist($project.'/vendor/stale-marker');
+        self::assertFileEquals(self::ROOT.'/vendor/composer/installed.json', $project.'/vendor/composer/installed.json');
+    }
+
+    public function testAVendorCopiedWithoutLinksIsReusedWhenItsPackagesAreTheCheckouts(): void
+    {
+        $autoload = $this->copyOfTheProject().'/vendor/autoload.php';
+        new Filesystem()->remove($autoload);
+        new Filesystem()->copy(self::ROOT.'/vendor/autoload.php', $autoload);
+        clearstatcache();
+        $copied = fileinode($autoload);
+
+        $project = $this->copyOfTheProject();
+
+        clearstatcache();
+        self::assertSame($copied, fileinode($project.'/vendor/autoload.php'));
     }
 
     public function testWithoutDescriptorThreeNoStatusIsWrittenAndTheExitIsNonZero(): void
@@ -407,24 +468,19 @@ final class InstanceTest extends TestCase
 
     private function copyOfTheProject(): string
     {
-        $project = $this->scratch.'/project';
+        $project = self::sharedProject();
         new Filesystem()->mkdir($project);
-
-        // Hard links keep the vendor copy cheap; across file systems they fail partway, and cp -a would nest into the partial folder.
-        $copy = new Process(['sh', '-c', 'cp -al "$0"/vendor "$1"/vendor 2>/dev/null || { rm -rf "$1"/vendor && cp -a "$0"/vendor "$1"/vendor; }', self::ROOT, $project]);
+        $copy = new Process(['sh', '-c', self::COPY, self::ROOT, $project, 'bin', 'src', 'config', 'public', 'composer.json', '.env']);
         $copy->mustRun();
-
-        foreach (['bin', 'src', 'config', 'public'] as $directory) {
-            new Filesystem()->mirror(self::ROOT.'/'.$directory, $project.'/'.$directory);
-        }
-
-        foreach (['composer.json', '.env'] as $file) {
-            new Filesystem()->copy(self::ROOT.'/'.$file, $project.'/'.$file);
-        }
-
         new Filesystem()->remove($project.'/config/reference.php');
 
         return $project;
+    }
+
+    // Named by the process, because the copy outlives a test while two runs of this class side by side must not share it.
+    private static function sharedProject(): string
+    {
+        return sys_get_temp_dir().'/intakt-instance-test-project-'.getmypid();
     }
 
     // Regression guard: the caller holds descriptors 3 to 14 so a duplicate of descriptor 3 above 9 would show up, which a shell redirection cannot name.
