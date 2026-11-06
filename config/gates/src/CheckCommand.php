@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 use InvalidArgumentException;
+use Symfony\Component\Clock\NativeClock;
 
 final readonly class CheckCommand
 {
@@ -125,7 +126,7 @@ final readonly class CheckCommand
             new CommitSubjectsGate($testMerge),
             new LongDashesGate(),
             new HighlightsGate(new FencedCodeBlocks()),
-            new ReproductionRowsGate(new FencedCodeBlocks()),
+            new ReproductionRowsGate(new FencedCodeBlocks(), new NativeClock()),
             new ContainerLintGate(),
             new RatchetListsGate(),
         ];

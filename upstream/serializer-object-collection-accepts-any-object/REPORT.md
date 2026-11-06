@@ -32,4 +32,4 @@ Checked on 2026-11-02.
 - **Searches** (`symfony/symfony` issues and pull requests, open and closed): `label:Serializer stdClass TypeError`, `validateAndDenormalize stdClass`, `ArrayDenormalizer stdClass`, `label:Serializer "JsonDecode::ASSOCIATIVE"`, `serializer list object TypeError NotNormalizableValueException`.
 - **Decision:** `ready to file`.
 - **Owner review (2026-11-03, symfony/symfony 6.4 to 8.2):** an issue, with the narrow trigger stated (`JsonDecode::ASSOCIATIVE => false` or pre-built objects; `MapRequestPayload` users are not affected). The fix looks small: the fallback `TypeIdentifier::OBJECT => \is_object($data)` check accepts any object for the class `Item[]`. `reproduce.php` also fails with `symfony/serializer` v6.4.49 and v7.4.22 (scratch projects, 2026-11-03).
-- **Status:** `ready to file`; the issue text is `ISSUE.md`.
+- **Status:** `recheck needed before filing`: the report has no "Checked" line, so the owner redoes the dated check against upstream first (see `upstream/README.md`). The issue text is `ISSUE.md`.

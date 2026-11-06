@@ -29,3 +29,4 @@ Checked on 2026-11-03.
 - **Existing issue or pull request:** none found. Closest: #65633 (force quit on repeated SIGINT), #41906 (graceful shutdown under Supervisor), #47809 (commands exiting gracefully); none covers a signal before the worker exists.
 - **Searches** (`symfony/symfony` issues and pull requests, open and closed): `handleSignal messenger:consume`, `consume SIGTERM worker ignored`.
 - **Decision:** `ready to file`; the issue text is `ISSUE.md`.
+- **Status:** `recheck needed before filing`: the report has no "Checked" line, so the owner redoes the dated check against upstream first (see `upstream/README.md`). The issue text is `ISSUE.md`.

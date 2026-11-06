@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use DateTimeZone;
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\ReproductionRowsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\NativeClock;
 
 #[CoversClass(ReproductionRowsGate::class)]
 #[UsesClass(FencedCodeBlocks::class)]
@@ -246,6 +248,83 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $run = $sandbox->check('--only=reproductions');
 
         self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAReadyToFileReportWithoutACheckedLineFails(): void
+    {
+        $run = $this->checkReport("- **Decision:** `ready to file`.\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileReportCheckedThreeDaysAgoPasses(): void
+    {
+        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAReadyToFileReportCheckedFourteenDaysAgoStillPasses(): void
+    {
+        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(14)." against main.\n- **Decision:** `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAReadyToFileReportCheckedFifteenDaysAgoFails(): void
+    {
+        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(15)." against main.\n- **Decision:** `ready to file`.\n");
+
+        self::assertStringContainsString('older than 14 days', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileReportCheckedInTheFutureFails(): void
+    {
+        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(-3)." against main.\n- **Decision:** `ready to file`.\n");
+
+        self::assertStringContainsString('dated in the future', $run->findingsOf('reproductions'));
+    }
+
+    public function testACheckedLineWithoutAReadableDateFails(): void
+    {
+        $run = $this->checkReport("- **Checked:** yesterday.\n- **Decision:** `ready to file`.\n");
+
+        self::assertStringContainsString('does not start with a date', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReportThatIsNotReadyToFileNeedsNoCheckedLine(): void
+    {
+        $run = $this->checkReport("- **Decision:** `already reported`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAReportRetiredAsNotFiledNeedsNoCheckedLine(): void
+    {
+        $run = $this->checkReport("- **Decision:** `ready to file`.\n- **Status:** `not filed`, although it was `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAReadyToFileStatusInsideAFencedCodeBlockDoesNotCount(): void
+    {
+        $run = $this->checkReport("```\n- **Decision:** `ready to file`.\n```\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    private function daysAgo(int $days): string
+    {
+        return new NativeClock()->now()->setTimezone(new DateTimeZone('UTC'))->modify('-'.$days.' days')->format('Y-m-d');
+    }
+
+    private function checkReport(string $status): CheckRun
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('upstream/a-bug/REPORT.md', "# Report\n\n## Upstream status\n\n".$status);
+        $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::SECTION."| A | done | `upstream/a-bug/` | |\n");
+
+        return $sandbox->check('--only=reproductions');
     }
 
     /**
