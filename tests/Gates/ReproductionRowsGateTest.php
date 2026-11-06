@@ -315,6 +315,34 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
+    public function testANotFiledStatusInALaterSectionDoesNotRetireAReadyReport(): void
+    {
+        $run = $this->checkReport("- **Status:** `ready to file`\n\n## Fix experiment\n\n- **Status:** `not filed`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusOutsideTheUpstreamStatusSectionDoesNotCount(): void
+    {
+        $run = $this->checkReport("- **Status:** `not filed`\n\n## Fix experiment\n\n- **Status:** `ready to file`\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testACheckedLineOutsideTheUpstreamStatusSectionDoesNotCount(): void
+    {
+        $run = $this->checkReport("- **Decision:** `ready to file`.\n\n## Notes\n\n- **Checked:** ".$this->daysAgo(3)." against main.\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testASubheadingInsideTheUpstreamStatusSectionKeepsItsLines(): void
+    {
+        $run = $this->checkReport("### Check\n\n- **Checked:** ".$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
     private function daysAgo(int $days): string
     {
         return new NativeClock()->now()->setTimezone(new DateTimeZone('UTC'))->modify('-'.$days.' days')->format('Y-m-d');

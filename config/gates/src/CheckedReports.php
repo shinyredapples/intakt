@@ -12,6 +12,10 @@ final readonly class CheckedReports
 {
     private const int MAX_CHECK_AGE_DAYS = 14;
 
+    private const string STATUS_HEADING = '## Upstream status';
+
+    private const string SECTION_HEADING = '/^#{1,2}\s/';
+
     private const string READY_STATUS = '/^- \*\*(?:Decision|Status):\*\*\s*`(?<value>[^`]*)`/';
 
     private const string CHECKED_LINE = '/^- \*\*Checked:\*\*\s*(?<date>\S+)/m';
@@ -50,9 +54,35 @@ final readonly class CheckedReports
             return null;
         }
 
-        $lines = $this->codeBlocks->blanked(explode("\n", $contents));
+        $lines = $this->statusSection($this->codeBlocks->blanked(explode("\n", $contents)));
 
         return $this->readyToFile($lines) ? $this->checkFinding(implode("\n", $lines)) : null;
+    }
+
+    // Other sections (a fix experiment, notes) may carry their own Status lines, which say nothing about filing.
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function statusSection(array $lines): array
+    {
+        $section = [];
+        $inside = false;
+
+        foreach ($lines as $line) {
+            if (1 === preg_match(self::SECTION_HEADING, $line)) {
+                $inside = self::STATUS_HEADING === rtrim($line);
+
+                continue;
+            }
+
+            if ($inside) {
+                $section[] = $line;
+            }
+        }
+
+        return $section;
     }
 
     // The last Decision or Status line decides, because a later `not filed` line retires an earlier `ready to file`.
