@@ -88,6 +88,18 @@ final class ProbeTest extends TestCase
         self::assertSame(0, $run->getExitCode());
     }
 
+    public function testAProbeRunsAgainstTheBuiltInServerWhenFrankenphpIsNotOnThePath(): void
+    {
+        $this->skipWhenNetworkNamespacesAreRefused();
+        $this->probe('Answer.php', '<?php echo get_headers(getenv("INTAKT_INSTANCE_URL"))[0], "\n";');
+        $path = array_filter(explode(':', (string) getenv('PATH')), static fn (string $directory): bool => !is_file($directory.'/frankenphp'));
+
+        $run = $this->runProbe('tests/Probe/Answer.php', ['PATH' => implode(':', $path)]);
+
+        self::assertStringContainsString('404', $run->getOutput(), $this->transcriptOf($run));
+        self::assertSame(0, $run->getExitCode());
+    }
+
     public function testAProbeThatReachesForTheNetworkFails(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();

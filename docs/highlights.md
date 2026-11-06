@@ -95,7 +95,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Security | a voter decides which MCP tools may write; the `access_token` authenticator checks the owner's bearer token and, on the review server, a round's signed credential; the CSRF token manager guards the dashboard's start button (`CsrfTokenManagerInterface`, `csrf_token()` in Twig) | in progress | T15 (#20, parts #508 and #510), `src/Core/Mcp/Infrastructure/ToolAccessVoter.php`, `src/Core/Mcp/Infrastructure/OwnerTokenHandler.php`; T20 (#26, part #513), `src/Core/Dashboard/UseCase/StartReview/StartReviewController.php`; T16 (#21, part #578), `src/Core/Review/UseCase/ServeReviewTools/ReviewCredential.php`, `config/packages/security.yaml` |
 | Process | the local git forge; every git call hardened, in the forge and in the gates; one PHPUnit or script run per upstream reproduction, with a timeout; the gitleaks scan of a review text before the GitHub forge posts it, the text on standard input; the hardened git calls that build the demo's sample repository; the tests gate's queue of PHPUnit runs, one process per test file in each worker, with a timeout | in progress | T23 (#30, part #765), `src/Core/Review/UseCase/SeedSampleProject/SampleRepository.php`; #641 (part #657), `config/gates/src/ProcessQueue.php`; T6 (#11, part #58), `src/Plugin/LocalGitForge/Infrastructure/LocalGitForge.php`; T6 (#11, part #124), `src/Core/Git/Contract/HardenedGit.php`, `config/gates/src/HardenedGitCall.php`; T26 (#33), `src/Core/Upstream/Infrastructure/ReproductionRunner.php`; T18 (#23, #541), `src/Plugin/GitHubForge/Infrastructure/SecretScan.php` |
 | Runtime: FrankenPHP worker mode | decided: one booted kernel for the HTTP side through `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
-| Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | planned | T22 (#28), T29 (#29) |
+| Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | in progress | T22 (#28, part #703), `bin/instance` boots the `app` worker when `frankenphp` is on the `PATH`; T29 (#29) |
 
 ## FrankenPHP
 
@@ -118,7 +118,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
-| Quality gates | `bin/check` runs every gate locally and in CI | done | `bin/check`, `config/gates/` |
+| Quality gates | `bin/check` runs every gate locally and in CI; the user journeys run separately with `bin/check --journeys` | done | `bin/check`, `config/gates/` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
 | `intakt:upstream:run` | runs the `upstream/` reproductions against the pinned versions | in progress | T26 (#33), `src/Core/Upstream/` |
 | `intakt:change:summarize` | prints the change summary of a branch of a local repository | in progress | T6 (#11, part #59), `src/Plugin/LocalGitForge/UseCase/SummarizeChange/` |

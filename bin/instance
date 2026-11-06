@@ -9,8 +9,10 @@ final readonly class InstanceStatus
 {
     public bool $ready;
 
-    private function __construct(public string $reason)
-    {
+    private function __construct(
+        public string $reason,
+        public ?string $mode = null,
+    ) {
         // a failure always carries a reason, so the status without one is the ready status
         $this->ready = '' === $reason;
     }
@@ -25,9 +27,16 @@ final readonly class InstanceStatus
         return new self('' === trim($reason) ? 'unknown reason' : $reason);
     }
 
+    public function inMode(string $mode): self
+    {
+        return clone ($this, ['mode' => $mode]);
+    }
+
     public function toJson(): string
     {
-        $line = $this->ready ? ['status' => 'ready'] : ['status' => 'failed', 'reason' => $this->reason];
+        // A line without a mode means the built-in server, so its callers read the same line as before worker mode.
+        $line = ['status' => $this->ready ? 'ready' : 'failed', ...(null === $this->mode ? [] : ['mode' => $this->mode])];
+        $line = $this->ready ? $line : [...$line, 'reason' => $this->reason];
 
         return json_encode($line, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE).PHP_EOL;
     }
@@ -58,6 +67,7 @@ final class Instance
      */
     public function __construct(
         private readonly string $root,
+        private readonly Server $web,
         private readonly array $command,
         private readonly int $commandSeconds,
         private readonly DirectoryRemoval $directoryRemoval,
@@ -68,14 +78,16 @@ final class Instance
     public function run(): InstanceStatus
     {
         try {
-            return $this->boot();
+            $status = $this->boot();
         } catch (Throwable $failure) {
-            return InstanceStatus::failed($failure->getMessage());
+            $status = InstanceStatus::failed($failure->getMessage());
         } finally {
             $this->stop();
             $this->output = $this->readLog();
             $this->removeScratch();
         }
+
+        return $this->web->labeled($status);
     }
 
     public function log(): string
@@ -111,7 +123,7 @@ final class Instance
         // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
         $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
         $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR];
-        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort()];
+        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort(), ...$this->web->commandEnvironment()];
 
         $process = proc_open($command, $descriptors, $pipes, $this->root, $environment);
 
@@ -162,10 +174,7 @@ final class Instance
 
     private function start(): void
     {
-        // Port 0 lets the server bind a free port itself, so no other process can take it between a probe and the bind.
-        $address = '127.0.0.1:0';
-        // Without E in variables_order the runtime never sees the environment below, so it falls back to .env (dev, debug, var/).
-        $server = ['sh', '-c', 'exec "$@" 3>&-', 'sh', PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', $address, '-t', $this->root.'/public', $this->root.'/public/index.php'];
+        $server = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->web->launch($this->scratch)];
         // The caller's descriptor 3 has no close-on-exec flag, so the shell above closes it; the spec has no index 3 either.
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
@@ -173,10 +182,10 @@ final class Instance
             2 => ['file', $this->logPath(), 'a'],
         ];
 
-        $process = proc_open($server, $descriptors, $pipes, $this->root, $this->environment());
+        $process = proc_open($server, $descriptors, $pipes, $this->root, [...$this->environment(), ...$this->web->environment($this->scratch)]);
 
         if (false === $process) {
-            throw new RuntimeException('cannot start the PHP built-in web server');
+            throw new RuntimeException('cannot start the web server');
         }
 
         $this->server = $process;
@@ -269,7 +278,7 @@ final class Instance
 
     private function listeningPort(): ?int
     {
-        return 1 === preg_match('/Development Server \(http:\/\/127\.0\.0\.1:(\d+)\) started/', $this->readLog(), $match) ? (int) $match[1] : null;
+        return $this->web->port($this->readLog());
     }
 
     private function statusLineOf(?int $port): ?string
@@ -328,6 +337,163 @@ final class Instance
             // Another run may be using var/, so a plain rmdir that fails on a non-empty folder is the right check.
             @rmdir($this->root.'/var');
         }
+    }
+}
+
+interface Server
+{
+    /**
+     * @return list<string>
+     */
+    public function launch(string $scratch): array;
+
+    /**
+     * @return array<string, string>
+     */
+    public function environment(string $scratch): array;
+
+    public function port(string $log): ?int;
+
+    /**
+     * @return array<string, string>
+     */
+    public function commandEnvironment(): array;
+
+    public function labeled(InstanceStatus $status): InstanceStatus;
+}
+
+final readonly class BuiltInServer implements Server
+{
+    public function __construct(private string $root)
+    {
+    }
+
+    public function launch(string $scratch): array
+    {
+        // Port 0 lets the server bind a free port itself, so no other process can take it between a probe and the bind.
+        $address = '127.0.0.1:0';
+
+        // Without E in variables_order the runtime never sees the instance's environment, so it falls back to .env (dev, debug, var/).
+        return [PHP_BINARY, '-d', 'variables_order=EGPCS', '-S', $address, '-t', $this->root.'/public', $this->root.'/public/index.php'];
+    }
+
+    public function environment(string $scratch): array
+    {
+        return [];
+    }
+
+    public function port(string $log): ?int
+    {
+        return 1 === preg_match('/Development Server \(http:\/\/127\.0\.0\.1:(\d+)\) started/', $log, $match) ? (int) $match[1] : null;
+    }
+
+    public function commandEnvironment(): array
+    {
+        return [];
+    }
+
+    public function labeled(InstanceStatus $status): InstanceStatus
+    {
+        return $status;
+    }
+}
+
+final class WorkerServer implements Server
+{
+    private int $port = 0;
+
+    private int $adminPort = 0;
+
+    public function __construct(
+        private readonly string $root,
+        private readonly string $binary,
+    ) {
+    }
+
+    public function launch(string $scratch): array
+    {
+        [$this->port, $this->adminPort] = $this->freePorts();
+        file_put_contents($scratch.'/Caddyfile', $this->caddyfile());
+
+        return [$this->binary, 'run', '--config', $scratch.'/Caddyfile', '--adapter', 'caddyfile'];
+    }
+
+    public function environment(string $scratch): array
+    {
+        // Caddy keeps its autosaved config and data under these, so it writes nothing outside the scratch directory.
+        return ['XDG_DATA_HOME' => $scratch.'/xdg-data', 'XDG_CONFIG_HOME' => $scratch.'/xdg-config'];
+    }
+
+    public function port(string $log): ?int
+    {
+        // Caddy logs this only once every listener is bound, so an unrelated listener on the chosen port cannot answer the readiness request in FrankenPHP's place.
+        return str_contains($log, 'serving initial configuration') ? $this->port : null;
+    }
+
+    public function commandEnvironment(): array
+    {
+        return ['INTAKT_INSTANCE_ADMIN_URL' => 'http://127.0.0.1:'.$this->adminPort];
+    }
+
+    public function labeled(InstanceStatus $status): InstanceStatus
+    {
+        return $status->inMode('worker');
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function freePorts(): array
+    {
+        // FrankenPHP cannot report a port it picked itself; both sockets stay open until both ports are known, so they differ.
+        $sockets = [$this->freeSocket(), $this->freeSocket()];
+        $ports = array_map(static fn ($socket): int => (int) array_last(explode(':', (string) stream_socket_get_name($socket, false))), $sockets);
+        array_map(fclose(...), $sockets);
+
+        return $ports;
+    }
+
+    /**
+     * @return resource
+     */
+    private function freeSocket()
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
+
+        if (false === $socket) {
+            throw new RuntimeException('cannot find a free port: '.$message);
+        }
+
+        return $socket;
+    }
+
+    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from.
+    private function caddyfile(): string
+    {
+        $public = $this->root.'/public';
+
+        return <<<CADDYFILE
+            {
+            	admin 127.0.0.1:{$this->adminPort}
+            	frankenphp {
+            		php_ini log_errors 1
+            	}
+            }
+
+            http://127.0.0.1:{$this->port} {
+            	bind 127.0.0.1
+            	root "{$public}"
+            	php_server {
+            		worker {
+            			name app
+            			file "{$public}/index.php"
+            			num 1
+            			env FRANKENPHP_WORKER 1
+            		}
+            	}
+            }
+
+            CADDYFILE;
     }
 }
 
@@ -406,13 +572,46 @@ function statusChannel()
     return $unlinked && !$callersMemfd ? null : $channel;
 }
 
+function executableOnPath(string $name): ?string
+{
+    $path = getenv('PATH');
+
+    foreach (false === $path ? [] : explode(':', $path) as $directory) {
+        $candidate = executableIn($directory, $name);
+
+        if (null !== $candidate) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
+function executableIn(string $directory, string $name): ?string
+{
+    // An empty entry stands for the caller's directory, because that is how the shell reads PATH.
+    $candidate = '' === $directory ? $name : $directory.'/'.$name;
+
+    if (!is_file($candidate) || !is_executable($candidate)) {
+        return null;
+    }
+
+    // Absolute because the server starts from the project root, where a relative entry of the caller's PATH would point elsewhere.
+    return str_starts_with($candidate, '/') ? $candidate : getcwd().'/'.$candidate;
+}
+
 $argv ??= [];
 $command = array_slice($argv, 1);
 $command = '--' === array_first($command) ? array_slice($command, 1) : [];
 // Needed so a test can prove the cap without waiting for the full minute.
 $commandSeconds = (int) getenv('INTAKT_INSTANCE_COMMAND_SECONDS');
 
-$instance = new Instance(dirname(__DIR__), $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS, new DirectoryRemoval());
+$root = dirname(__DIR__);
+// The image ships frankenphp, so there the instance runs the app the way the image serves it.
+$frankenphp = executableOnPath('frankenphp');
+$web = null === $frankenphp ? new BuiltInServer($root) : new WorkerServer($root, $frankenphp);
+
+$instance = new Instance($root, $web, $command, $commandSeconds > 0 ? $commandSeconds : Instance::COMMAND_SECONDS, new DirectoryRemoval());
 $status = $instance->run();
 
 // A command's own output is what the caller wants, so the server log is noise unless the boot failed.
