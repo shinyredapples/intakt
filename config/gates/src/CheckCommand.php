@@ -49,7 +49,8 @@ final readonly class CheckCommand
             return 2;
         }
 
-        $gate = array_find($this->gates($options->testMerge), static fn (Gate $gate): bool => $gate->name() === $name);
+        // Because the child gets the arguments of bin/check, it finds its gate in the same selection the parent made.
+        $gate = array_find($this->selectedGates($options), static fn (Gate $gate): bool => $gate->name() === $name);
 
         if (!$gate instanceof Gate) {
             $this->print(['error' => 'unknown gate '.$name]);
