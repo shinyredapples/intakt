@@ -7,12 +7,14 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(CheckCommand::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(StopSignalForwarding::class)]
 final class GateChildSelectionTest extends SandboxTestCase
 {
     public function testAGateChildRunsAGateThatTheArgumentsOfBinCheckSelect(): void

@@ -9,6 +9,7 @@ use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -17,6 +18,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(GateReport::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(StopSignalForwarding::class)]
 final class GateChildrenTest extends SandboxTestCase
 {
     public function testASlowPassingGateAndAFastFailingGateAreReportedInGateOrder(): void

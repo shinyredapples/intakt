@@ -8,6 +8,7 @@ use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -16,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateResult::class)]
 #[UsesClass(ProcessResult::class)]
+#[UsesClass(StopSignalForwarding::class)]
 final class GateChildTimeoutTest extends TestCase
 {
     public function testAGateWhoseChildTimesOutFailsWithWhatTheChildPrintedBeforeIt(): void

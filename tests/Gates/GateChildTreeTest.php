@@ -6,11 +6,13 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ProcessRunner::class)]
+#[CoversClass(StopSignalForwarding::class)]
 #[UsesClass(ProcessResult::class)]
 final class GateChildTreeTest extends TestCase
 {

@@ -33,8 +33,6 @@ final class ProcessRunner
 
     private const string ZOMBIE = 'Z';
 
-    private const array STOPPING_SIGNALS = [1, 2, 15];
-
     private ?string $containment = null;
 
     public function __construct(
@@ -133,8 +131,7 @@ final class ProcessRunner
         return $results;
     }
 
-    // Because a gate child that times out must fail its gate with what it printed so far, not with the timeout alone,
-    // and no program it started may outlive it and overlap the next gate.
+    // Because a timed-out gate child must fail with what it printed so far, and nothing it started may overlap the next gate.
     /**
      * @param list<string> $command
      */
@@ -154,10 +151,10 @@ final class ProcessRunner
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
-        $previous = $this->stopGroupWithThisProcess($group);
+        $forwarding = StopSignalForwarding::toGroup($group);
         $failure = $this->waitForAll([$process])[0] ?? null;
         posix_kill(-$group, 9);
-        $this->restoreSignalHandlers($previous);
+        $forwarding->end();
 
         if (self::TIMED_OUT === $failure) {
             $timedOut = $this->timedOut($command[0], $seconds);
@@ -212,8 +209,7 @@ final class ProcessRunner
         return $this->held($command);
     }
 
-    // Because a gate child runs the gate's own tools, which must see the real user and processes, it gets a session
-    // of its own but never a PID or user namespace: in one, git saw other owners and the child became PID 1.
+    // Because in a PID and user namespace git saw other owners and a gate child became PID 1, a gate child gets only a session.
     /**
      * @param list<string> $command
      *
@@ -222,48 +218,6 @@ final class ProcessRunner
     private function held(array $command): array
     {
         return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
-    }
-
-    // Because a child in a session of its own no longer gets the Ctrl-C or kill meant for bin/check.
-    /**
-     * @return array{bool, array<int, mixed>}|null
-     */
-    private function stopGroupWithThisProcess(int $group): ?array
-    {
-        if (!function_exists('pcntl_signal')) {
-            return null;
-        }
-
-        $handlers = [];
-
-        foreach (self::STOPPING_SIGNALS as $signal) {
-            $handlers[$signal] = pcntl_signal_get_handler($signal);
-            pcntl_signal($signal, static function (int $signal) use ($group): void {
-                posix_kill(-$group, 9);
-                pcntl_signal($signal, SIG_DFL);
-                posix_kill(getmypid(), $signal);
-            });
-        }
-
-        return [pcntl_async_signals(true), $handlers];
-    }
-
-    /**
-     * @param array{bool, array<int, mixed>}|null $previous
-     */
-    private function restoreSignalHandlers(?array $previous): void
-    {
-        if (null === $previous) {
-            return;
-        }
-
-        [$async, $handlers] = $previous;
-
-        foreach ($handlers as $signal => $handler) {
-            pcntl_signal($signal, $handler);
-        }
-
-        pcntl_async_signals($async);
     }
 
     private function refusal(string $program, int $seconds): ?ProcessResult
