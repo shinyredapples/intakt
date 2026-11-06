@@ -22,7 +22,7 @@ final class DashboardMocksTest extends TestCase
 
         foreach ($this->assetLinksByPage($mocks) as $page => $assets) {
             foreach ($assets as $asset) {
-                // A path that climbs out of the mocks folder may exist on disk, yet a server rooted there answers it with 404.
+                // Because a path that climbs out of the mocks folder can exist on disk while a server rooted there answers it with 404.
                 if (str_starts_with($asset, '../') || !is_file($mocks.'/'.$asset)) {
                     $missing[] = $page.': '.$asset;
                 }
@@ -46,7 +46,7 @@ final class DashboardMocksTest extends TestCase
             foreach ($this->assetLinksByPage($mocks) as $page => $assets) {
                 $pageUrl = new Uri('http://'.$address.'/'.$page);
                 foreach ($assets as $asset) {
-                    // Resolve the link the way a browser does: RFC 3986 drops dot segments that climb above the root.
+                    // Resolved the way a browser does, because RFC 3986 drops the dot segments that climb above the root.
                     $status = $this->statusOf(new Uri($asset, $pageUrl)->toString());
                     if (!str_contains($status, ' 200 ')) {
                         $failed[] = $page.': '.$asset.' -> '.$status;
@@ -74,22 +74,19 @@ final class DashboardMocksTest extends TestCase
     }
 
     /**
-     * The shared scripts write their markup into every page, so their links count as links of each page that loads them.
-     *
      * @return array<string, list<string>>
      */
     private function assetLinksByPage(string $mocks): array
     {
-        $pages = (array) glob($mocks.'/*.html');
-        $scripts = (array) glob($mocks.'/assets/*.js');
-        self::assertNotSame([], $pages);
-        self::assertNotSame([], $scripts);
+        $pages = $this->filesMatching($mocks.'/*.html');
+        $scripts = $this->filesMatching($mocks.'/assets/*.js');
 
+        // The shared scripts write their markup into every page, so their links must count as links of each page that loads them.
         $shared = array_merge(...array_map($this->assetLinksIn(...), $scripts));
         $links = [];
 
         foreach ($pages as $page) {
-            $links[basename((string) $page)] = array_values(array_unique([...$this->assetLinksIn((string) $page), ...$shared]));
+            $links[basename($page)] = array_values(array_unique([...$this->assetLinksIn($page), ...$shared]));
         }
 
         return $links;
@@ -103,6 +100,18 @@ final class DashboardMocksTest extends TestCase
         preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents($file), $matches);
 
         return $matches[1];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function filesMatching(string $pattern): array
+    {
+        $files = glob($pattern);
+        self::assertNotFalse($files);
+        self::assertNotSame([], $files);
+
+        return $files;
     }
 
     private function freePort(): int
