@@ -573,7 +573,8 @@ function executableOnPath(string $name): ?string
         $candidate = $directory.'/'.$name;
 
         if ('' !== $directory && is_file($candidate) && is_executable($candidate)) {
-            return $candidate;
+            // The server starts from the project root, where a relative entry of the caller's PATH points elsewhere.
+            return str_starts_with($candidate, '/') ? $candidate : getcwd().'/'.$candidate;
         }
     }
 

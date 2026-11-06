@@ -263,6 +263,20 @@ final class InstanceTest extends TestCase
         self::assertSame(0, $run['exit']);
     }
 
+    public function testAFrankenphpFoundThroughARelativePathEntryBootsInWorkerModeFromAnotherDirectory(): void
+    {
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
+        self::assertNotNull($frankenphp, 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+        $caller = $this->scratch.'/caller';
+        mkdir($caller.'/tools', recursive: true);
+        symlink($frankenphp, $caller.'/tools/frankenphp');
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()], directory: $caller);
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
     public function testNothingIsLeftBehindAfterAWorkerModeBoot(): void
     {
         $this->runInstance(self::ROOT, environment: $this->environmentWithFrankenphp());
@@ -397,12 +411,12 @@ final class InstanceTest extends TestCase
      *
      * @return array{status: string, exit: int, output: string, errors: string}
      */
-    private function runInstance(string $project, array $command = [], array $environment = []): array
+    private function runInstance(string $project, array $command = [], array $environment = [], ?string $directory = null): array
     {
         $statusFile = $this->scratch.'/status';
         $arguments = [] === $command ? [] : ['--', ...$command];
         $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, $project.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($statusFile);
-        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$environment]);
+        $process = Process::fromShellCommandline($shell, $directory, [...$this->environment(), ...$environment]);
         $process->run();
 
         return [
