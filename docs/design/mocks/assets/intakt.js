@@ -146,8 +146,8 @@
       rail.setAttribute("aria-label", "Main");
       rail.innerHTML = `<div class="rail-in">` +
         `<a class="brand" href="index.html" aria-label="Intakt home">
-          <img class="logo-full logo-light" src="../../assets/intakt-lockup.svg" alt="Intakt">
-          <img class="logo-full logo-dark" src="../../assets/intakt-lockup-dark.svg" alt="Intakt">
+          <img class="logo-full logo-light" src="assets/intakt-lockup.svg" alt="Intakt">
+          <img class="logo-full logo-dark" src="assets/intakt-lockup-dark.svg" alt="Intakt">
           <img class="mark" src="assets/favicon-32.png" alt="Intakt"></a>` +
         NAV.map(([k, l, h]) =>
           `<a class="nav" data-k="${k}" href="${h}"${k === page || (k === "more" && ["history", "settings"].includes(page)) ? ' aria-current="page"' : ""} title="${l}">${icon(k)}<span class="label">${SHORT[k] ? `<span class="l-long">${l}</span><span class="l-short">${SHORT[k]}</span>` : l}</span>${
@@ -165,7 +165,7 @@
     if (top) {
       const proj = localStorage.getItem("intakt-project") || "all";
       top.innerHTML =
-        `<img class="brand-m logo-light" src="../../assets/intakt-lockup.svg" alt="Intakt"><img class="brand-m logo-dark" src="../../assets/intakt-lockup-dark.svg" alt="Intakt">
+        `<img class="brand-m logo-light" src="assets/intakt-lockup.svg" alt="Intakt"><img class="brand-m logo-dark" src="assets/intakt-lockup-dark.svg" alt="Intakt">
         <button class="search-trigger" type="button" aria-haspopup="dialog">${icon("search")}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>${isMac() ? "⌘K" : "Ctrl K"}</kbd></button>
         <div class="grow"></div>
         <label class="sr-only" for="projfilter">Project</label>

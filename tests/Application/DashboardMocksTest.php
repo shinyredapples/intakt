@@ -6,6 +6,8 @@ namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Process\Process;
+use Uri\Rfc3986\Uri;
 
 // Because a mock that loads a missing asset or a screenshot job for a missing page breaks the design documents.
 #[CoversNothing]
@@ -13,23 +15,49 @@ final class DashboardMocksTest extends TestCase
 {
     private const string MOCKS = '/docs/design/mocks';
 
-    public function testEveryAssetThePagesAndTheSharedScriptsLoadExists(): void
+    public function testEveryAssetThePagesAndTheSharedScriptsLoadExistsInsideTheMocksFolder(): void
     {
         $mocks = dirname(__DIR__, 2).self::MOCKS;
-        $sources = [...(array) glob($mocks.'/*.html'), ...(array) glob($mocks.'/assets/*.js')];
         $missing = [];
 
-        foreach ($sources as $source) {
-            preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents((string) $source), $matches);
-            foreach ($matches[1] as $asset) {
-                if (!is_file($mocks.'/'.$asset)) {
-                    $missing[] = basename((string) $source).': '.$asset;
+        foreach ($this->assetLinksByPage($mocks) as $page => $assets) {
+            foreach ($assets as $asset) {
+                // A path that climbs out of the mocks folder may exist on disk, yet a server rooted there answers it with 404.
+                if (str_starts_with($asset, '../') || !is_file($mocks.'/'.$asset)) {
+                    $missing[] = $page.': '.$asset;
                 }
             }
         }
 
-        self::assertNotSame([], $sources);
         self::assertSame([], $missing);
+    }
+
+    public function testEveryAssetLoadsOverTheServerTheReadmeDocuments(): void
+    {
+        $mocks = dirname(__DIR__, 2).self::MOCKS;
+        $address = '127.0.0.1:'.$this->freePort();
+        $server = new Process([PHP_BINARY, '-S', $address, '-t', $mocks]);
+        $server->start();
+
+        try {
+            $this->waitUntilServed('http://'.$address.'/projects.html');
+            $failed = [];
+
+            foreach ($this->assetLinksByPage($mocks) as $page => $assets) {
+                $pageUrl = new Uri('http://'.$address.'/'.$page);
+                foreach ($assets as $asset) {
+                    // Resolve the link the way a browser does: RFC 3986 drops dot segments that climb above the root.
+                    $status = $this->statusOf(new Uri($asset, $pageUrl)->toString());
+                    if (!str_contains($status, ' 200 ')) {
+                        $failed[] = $page.': '.$asset.' -> '.$status;
+                    }
+                }
+            }
+
+            self::assertSame([], $failed);
+        } finally {
+            $server->stop();
+        }
     }
 
     public function testEveryPageTheScreenshotGeneratorOpensExists(): void
@@ -43,5 +71,68 @@ final class DashboardMocksTest extends TestCase
 
         self::assertNotSame([], $pages[1]);
         self::assertSame([], $missing);
+    }
+
+    /**
+     * The shared scripts write their markup into every page, so their links count as links of each page that loads them.
+     *
+     * @return array<string, list<string>>
+     */
+    private function assetLinksByPage(string $mocks): array
+    {
+        $pages = (array) glob($mocks.'/*.html');
+        $scripts = (array) glob($mocks.'/assets/*.js');
+        self::assertNotSame([], $pages);
+        self::assertNotSame([], $scripts);
+
+        $shared = array_merge(...array_map($this->assetLinksIn(...), $scripts));
+        $links = [];
+
+        foreach ($pages as $page) {
+            $links[basename((string) $page)] = array_values(array_unique([...$this->assetLinksIn((string) $page), ...$shared]));
+        }
+
+        return $links;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function assetLinksIn(string $file): array
+    {
+        preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents($file), $matches);
+
+        return $matches[1];
+    }
+
+    private function freePort(): int
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0');
+        self::assertNotFalse($socket);
+        $port = (int) substr((string) stream_socket_get_name($socket, false), strlen('127.0.0.1:'));
+        fclose($socket);
+
+        return $port;
+    }
+
+    private function waitUntilServed(string $url): void
+    {
+        for ($attempt = 0; $attempt < 100; ++$attempt) {
+            if (str_contains($this->statusOf($url), ' 200 ')) {
+                return;
+            }
+            usleep(50_000);
+        }
+
+        self::fail('The built-in server did not answer '.$url.' in time.');
+    }
+
+    private function statusOf(string $url): string
+    {
+        $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 2]]);
+        $http_response_header = [];
+        @file_get_contents($url, false, $context);
+
+        return $http_response_header[0] ?? 'no response';
     }
 }

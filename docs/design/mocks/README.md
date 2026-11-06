@@ -4,7 +4,7 @@ Static HTML mocks of every dashboard page, with the design system they share. [D
 
 ## Opening the mocks
 
-Open `projects.html` in a browser; the rail links to the other pages. The board (`index.html`), Waiting on you, task, settings and components pages and the logo land with the next part of the mocks: until then their rail links lead nowhere, the pages show the repository's lockup (`docs/assets/`) in place of the small lockup and the favicon in place of the mark. Some browsers limit pages opened from disk, so a local server is the safer way. From this folder, run one of:
+Open `projects.html` in a browser; the rail links to the other pages. The board (`index.html`), Waiting on you, task, settings and components pages and the logo land with the next part of the mocks: until then their rail links lead nowhere, the pages show a copy of the repository's lockup (`assets/intakt-lockup.svg` and `assets/intakt-lockup-dark.svg`, copied from `docs/assets/` so that a server rooted in this folder can serve them) in place of the small lockup and the favicon in place of the mark. Some browsers limit pages opened from disk, so a local server is the safer way. From this folder, run one of:
 
 ```sh
 php -S localhost:8000
