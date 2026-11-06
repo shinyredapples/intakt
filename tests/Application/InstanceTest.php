@@ -305,6 +305,20 @@ final class InstanceTest extends TestCase
         self::assertSame(0, $run['exit']);
     }
 
+    public function testAFrankenphpInTheCallersDirectoryIsFoundThroughAnEmptyPathEntry(): void
+    {
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
+        self::assertNotNull($frankenphp, 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+        $caller = $this->scratch.'/caller';
+        mkdir($caller);
+        symlink($frankenphp, $caller.'/frankenphp');
+
+        $run = $this->runInstanceFrom($caller, ['PATH' => ':'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
     public function testNothingIsLeftBehindAfterAWorkerModeBoot(): void
     {
         $this->runInstance(self::ROOT, environment: $this->environmentWithFrankenphp());

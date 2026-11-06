@@ -575,10 +575,13 @@ function statusChannel()
 
 function executableOnPath(string $name): ?string
 {
-    foreach (explode(':', (string) getenv('PATH')) as $directory) {
-        $candidate = $directory.'/'.$name;
+    $path = getenv('PATH');
 
-        if ('' !== $directory && is_file($candidate) && is_executable($candidate)) {
+    foreach (false === $path ? [] : explode(':', $path) as $directory) {
+        // An empty entry means the caller's directory, as the shell reads it.
+        $candidate = '' === $directory ? $name : $directory.'/'.$name;
+
+        if (is_file($candidate) && is_executable($candidate)) {
             // Absolute because the server starts from the project root, where a relative entry of the caller's PATH would point elsewhere.
             return str_starts_with($candidate, '/') ? $candidate : getcwd().'/'.$candidate;
         }
