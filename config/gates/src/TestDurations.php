@@ -10,6 +10,7 @@ use DOMXPath;
 use JsonException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
 
 final readonly class TestDurations
 {
@@ -33,6 +34,12 @@ final readonly class TestDurations
         foreach ($reports as $report) {
             foreach ($this->testCases($report) as $case) {
                 $file = $this->relative($case->getAttribute('file'));
+
+                // Because a file outside the root keeps its machine path, which must reach neither the cache nor the CI logs.
+                if (null === $file) {
+                    continue;
+                }
+
                 $seconds[$file] = ($seconds[$file] ?? 0.0) + (float) $case->getAttribute('time');
             }
         }
@@ -159,10 +166,15 @@ final readonly class TestDurations
         return is_file($path) ? (int) filesize($path) : 0;
     }
 
-    private function relative(string $file): string
+    private function relative(string $file): ?string
     {
-        $prefix = rtrim($this->root, '/').'/';
+        // Because a report path may climb out of the root with dot segments, containment is checked on the canonical form.
+        if (!Path::isAbsolute($file) || !Path::isBasePath($this->root, $file)) {
+            return null;
+        }
 
-        return str_starts_with($file, $prefix) ? substr($file, strlen($prefix)) : $file;
+        $relative = Path::makeRelative($file, $this->root);
+
+        return '' === $relative ? null : $relative;
     }
 }
