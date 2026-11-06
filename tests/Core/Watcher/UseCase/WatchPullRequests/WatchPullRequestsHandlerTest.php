@@ -426,8 +426,11 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(1, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z')));
         self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame('7', $this->ledger->payloads()[1]['change']);
-        $notRecorded = array_values(array_filter($this->logger->logged, static fn (array $line): bool => 'The install-wide failure record failed; the head still backs off alone.' === $line[0]));
-        self::assertSame('budget_item_failure is locked', array_first($notRecorded)[1]['exception']->getMessage());
+        $notRecorded = array_first(array_filter($this->logger->logged, static fn (array $line): bool => 'The install-wide failure record failed; the head still backs off alone.' === $line[0]));
+        self::assertIsArray($notRecorded);
+        $exception = $notRecorded[1]['exception'] ?? null;
+        self::assertInstanceOf(RuntimeException::class, $exception);
+        self::assertSame('budget_item_failure is locked', $exception->getMessage());
     }
 
     public function testAHeadThatFailsIsLoggedAsAnErrorWithItsException(): void
