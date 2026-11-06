@@ -31,6 +31,7 @@ final readonly class GateChildren
     private function reportOf(string $gate, array $arguments): GateReport
     {
         $child = $this->runner->run([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory());
+        fwrite(STDERR, $child->errors);
 
         return GateReport::fromChild($gate, $child);
     }

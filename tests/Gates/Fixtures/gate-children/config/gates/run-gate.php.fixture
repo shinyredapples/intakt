@@ -6,6 +6,7 @@ $gate = $argv[1] ?? '';
 
 if ('cs' === $gate) {
     usleep(500000);
+    fwrite(STDERR, "Warning: the cs child warned\n");
     echo '{"gate":"cs","ok":true,"findings":[],"omitted":0}', "\n";
     exit(0);
 }
