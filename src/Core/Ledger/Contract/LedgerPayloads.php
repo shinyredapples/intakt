@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\Infrastructure;
+namespace Intakt\Core\Ledger\Contract;
 
-use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\SerializerInterface;

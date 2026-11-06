@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReadVerdicts;
 
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\ReviewRound;
-use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Contract\ProjectModes;
 
