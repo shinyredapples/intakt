@@ -38,6 +38,7 @@ final class DashboardMocksTest extends TestCase
         $script = (string) file_get_contents($mocks.'/tools/screenshots.js');
 
         self::assertSame(1, preg_match('/const PAGES = \{(.*?)\};/s', $script, $block));
+        self::assertArrayHasKey(1, $block);
         preg_match_all("/^\\s*'?([a-z-]+)'?:/m", $block[1], $pages);
         $missing = array_values(array_filter($pages[1], static fn (string $page): bool => !is_file($mocks.'/'.$page.'.html')));
 
