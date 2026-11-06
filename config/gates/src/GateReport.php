@@ -56,7 +56,7 @@ final readonly class GateReport
     // Because the report holds one line per gate, so a valid object spread over several lines is no result line.
     private static function verdictOf(string $gate, string $line): ?bool
     {
-        if (strpbrk($line, "\r\n") !== false) {
+        if (false !== strpbrk($line, "\r\n")) {
             return null;
         }
 
