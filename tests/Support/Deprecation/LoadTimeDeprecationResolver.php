@@ -39,9 +39,8 @@ final class LoadTimeDeprecationResolver implements Resolver
         return is_string($file) && '' !== $file ? $file : null;
     }
 
+    // Because a debug class loader (Symfony's DebugClassLoader) replaces Composer's autoloader and includes the class file itself.
     /**
-     * Read from the registered autoloaders at the time of the deprecation, because a debug class loader (Symfony's DebugClassLoader) replaces Composer's and includes the class file itself.
-     *
      * @return list<string>
      */
     private function autoloaderFiles(): array
