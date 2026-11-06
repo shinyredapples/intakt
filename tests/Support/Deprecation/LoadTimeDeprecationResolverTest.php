@@ -16,6 +16,10 @@ use Symfony\Component\Process\Process;
 #[Group('serial')]
 final class LoadTimeDeprecationResolverTest extends TestCase
 {
+    private const string APPLICATION_CONFIGURATION = 'phpunit.dist.xml';
+
+    private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
+
     public function testTheCodeThatMadeTheAutoloaderLoadTheClassIsTheCaller(): void
     {
         $autoloader = $this->autoloader();
@@ -60,7 +64,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
 
     public function testATestThatLoadsADeprecatedVendorClassFailsTheRun(): void
     {
-        $run = $this->runFixture('LoadsADeprecatedClassFixture.php');
+        $run = $this->runFixture(self::APPLICATION_CONFIGURATION, __DIR__.'/Fixtures/LoadsADeprecatedClassFixture.php');
 
         self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
         self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
@@ -69,11 +73,29 @@ final class LoadTimeDeprecationResolverTest extends TestCase
 
     public function testATestHelperThatLoadsADeprecatedVendorClassFailsTheRun(): void
     {
-        $run = $this->runFixture('LoadsADeprecatedClassThroughAHelperFixture.php');
+        $run = $this->runFixture(self::APPLICATION_CONFIGURATION, __DIR__.'/Fixtures/LoadsADeprecatedClassThroughAHelperFixture.php');
 
         self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
         self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
         self::assertStringContainsString('LoadsADeprecatedClassThroughAHelperFixture::testItLoadsAClassThatIsDeprecatedThroughATestHelper', $run->getOutput());
+    }
+
+    public function testAGateTestThatLoadsADeprecatedVendorClassFailsTheGatesRun(): void
+    {
+        $run = $this->runFixture(self::GATES_CONFIGURATION, $this->gateFixture('LoadsADeprecatedClassGateFixture.php'));
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
+        self::assertStringContainsString('LoadsADeprecatedClassGateFixture::testItLoadsAClassThatIsDeprecatedInTheVendorPackage', $run->getOutput());
+    }
+
+    public function testAGateTestHelperThatLoadsADeprecatedVendorClassFailsTheGatesRun(): void
+    {
+        $run = $this->runFixture(self::GATES_CONFIGURATION, $this->gateFixture('LoadsADeprecatedClassThroughAHelperGateFixture.php'));
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
+        self::assertStringContainsString('LoadsADeprecatedClassThroughAHelperGateFixture::testItLoadsAClassThatIsDeprecatedThroughAGateTestHelper', $run->getOutput());
     }
 
     private function autoloader(): string
@@ -84,10 +106,15 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         return $file;
     }
 
-    private function runFixture(string $file): Process
+    private function gateFixture(string $file): string
+    {
+        return dirname(__DIR__, 2).'/Gates/Deprecation/'.$file;
+    }
+
+    private function runFixture(string $configuration, string $file): Process
     {
         $root = dirname(__DIR__, 3);
-        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--configuration', $root.'/phpunit.dist.xml', __DIR__.'/Fixtures/'.$file], $root);
+        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--configuration', $root.'/'.$configuration, $file], $root);
         $run->run();
 
         return $run;
