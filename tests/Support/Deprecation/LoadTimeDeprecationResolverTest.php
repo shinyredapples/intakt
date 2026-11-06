@@ -67,6 +67,15 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         self::assertStringContainsString('LoadsADeprecatedClassFixture::testItLoadsAClassThatIsDeprecatedInTheVendorPackage', $run->getOutput());
     }
 
+    public function testATestHelperThatLoadsADeprecatedVendorClassFailsTheRun(): void
+    {
+        $run = $this->runFixture('LoadsADeprecatedClassThroughAHelperFixture.php');
+
+        self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
+        self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
+        self::assertStringContainsString('LoadsADeprecatedClassThroughAHelperFixture::testItLoadsAClassThatIsDeprecatedThroughATestHelper', $run->getOutput());
+    }
+
     private function autoloader(): string
     {
         $file = new ReflectionClass(ClassLoader::class)->getFileName();
