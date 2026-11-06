@@ -271,6 +271,25 @@ final class InstanceTest extends TestCase
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
     }
 
+    public function testAFrankenphpThatFailsToStartReportsFailedWithItsReasonAndLeavesNothing(): void
+    {
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', "#!/bin/sh\necho 'Error: loading initial config: listen tcp 127.0.0.1:1: bind: address already in use' >&2\nexit 1\n");
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.self::pathWithoutFrankenphp()]);
+
+        $status = json_decode($run['status'], true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($status);
+        self::assertSame(['status', 'mode', 'reason'], array_keys($status));
+        self::assertSame(['failed', 'worker'], [$status['status'], $status['mode']]);
+        self::assertSame('the server exited: Error: loading initial config: listen tcp 127.0.0.1:1: bind: address already in use', $status['reason']);
+        self::assertSame(1, $run['exit']);
+        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
+    }
+
     public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
     {
         $notAFolder = $this->scratch.'/file';
