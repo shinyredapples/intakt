@@ -7,7 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\ContainerDumpingGate;
 use Intakt\Gates\PhpStan\ContainerUnknownParameterRule;
 use Intakt\Gates\StaticAnalysisGate;
-use PHPStan\Symfony\DefaultParameterMap;
+use PHPStan\Symfony\ParameterMap;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -21,7 +21,7 @@ final class ContainerUnknownParameterRuleTest extends PhpStanRuleTestCase
 {
     protected function ruleFor(string $root): ContainerUnknownParameterRule
     {
-        return new ContainerUnknownParameterRule(new DefaultParameterMap([]));
+        return new ContainerUnknownParameterRule(self::createStub(ParameterMap::class));
     }
 
     public function testReadingAMisspelledParameterNameFailsStaticAnalysis(): void

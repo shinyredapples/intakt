@@ -7,8 +7,6 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\ContainerDumpingGate;
 use Intakt\Gates\PhpStan\ContainerUnknownHasIdRule;
 use Intakt\Gates\StaticAnalysisGate;
-use PHPStan\Symfony\DefaultServiceMap;
-use PHPStan\Symfony\Service;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -22,7 +20,7 @@ final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
 {
     protected function ruleFor(string $root): ContainerUnknownHasIdRule
     {
-        return new ContainerUnknownHasIdRule(new DefaultServiceMap(['kernel' => new Service('kernel', null, public: true, synthetic: true, alias: null)]));
+        return new ContainerUnknownHasIdRule(new NoServices());
     }
 
     public function testAskingTheContainerForAMisspelledServiceIdFailsStaticAnalysis(): void
