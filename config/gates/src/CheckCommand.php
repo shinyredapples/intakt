@@ -155,6 +155,7 @@ final readonly class CheckCommand
             new LongDashesGate(),
             new HighlightsGate(new FencedCodeBlocks()),
             new ReproductionRowsGate(new FencedCodeBlocks()),
+            new ContainerLintGate(),
         ];
     }
 
