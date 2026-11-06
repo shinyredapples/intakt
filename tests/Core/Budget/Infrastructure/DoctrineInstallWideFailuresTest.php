@@ -9,6 +9,7 @@ use Doctrine\DBAL\Driver\PDO\Exception;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\ReadOnlyException;
+use Doctrine\DBAL\Exception\TableNotFoundException;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Events;
@@ -72,15 +73,13 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
     public function testADatabaseFailureThatClosedTheEntityManagerStillStartsTheFailureBackOff(): void
     {
-        $connection = $this->entities->getConnection();
-        $connection->executeStatement('PRAGMA query_only = ON');
+        // Dropping the table fails the flush the same way on every engine the persistence group runs on.
+        $this->entities->getConnection()->executeStatement('DROP TABLE budget_item_failure');
         try {
             $this->entities->persist(new ItemFailureRecord('round-1', str_repeat('a', 64), $this->clock->now()));
             $this->entities->flush();
-            self::fail('The write to a read-only database succeeded.');
-        } catch (ReadOnlyException $failure) {
-        } finally {
-            $connection->executeStatement('PRAGMA query_only = OFF');
+            self::fail('The write to a missing table succeeded.');
+        } catch (TableNotFoundException $failure) {
         }
         self::assertFalse($this->entities->isOpen());
 
