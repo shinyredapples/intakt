@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-// Where a state walk stands: the path from the service (service id, then property names and array keys) and the objects it passed on the way there.
 final readonly class Trail
 {
     /**
