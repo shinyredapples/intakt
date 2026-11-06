@@ -85,7 +85,7 @@ final class ProcessRunner
         $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
-        if (null === $group) {
+        if (!$group instanceof ProcessGroup) {
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
@@ -148,7 +148,7 @@ final class ProcessRunner
         $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
-        if (null === $group) {
+        if (!$group instanceof ProcessGroup) {
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
