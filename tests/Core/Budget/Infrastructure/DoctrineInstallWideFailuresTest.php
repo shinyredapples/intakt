@@ -73,7 +73,7 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
     public function testADatabaseFailureThatClosedTheEntityManagerStillStartsTheFailureBackOff(): void
     {
-        // Dropping the table fails the flush the same way on every engine the persistence group runs on.
+        // A missing table, because the persistence group runs on every engine and a read-only switch exists only in SQLite.
         $this->entities->getConnection()->executeStatement('DROP TABLE budget_item_failure');
         try {
             $this->entities->persist(new ItemFailureRecord('round-1', str_repeat('a', 64), $this->clock->now()));
