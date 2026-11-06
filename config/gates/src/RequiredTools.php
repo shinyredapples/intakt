@@ -18,6 +18,9 @@ final readonly class RequiredTools
     // Every gate reads git, so git is not listed per gate, but a run that selects no gate reads nothing.
     private const array COMMON = ['git'];
 
+    // Because bin/check starts each gate's child process in a session of its own, through `setsid` and `sh`.
+    private const array GATE_CHILD = ['sh', 'setsid'];
+
     private const array BY_GATE = [
         'audit' => ['composer'],
         'journeys' => ['sh', 'env', 'setsid'],
@@ -50,16 +53,42 @@ final readonly class RequiredTools
      */
     public function missingFor(array $gates): array
     {
-        if ([] === $gates) {
-            return [];
-        }
+        return [] === $gates ? [] : $this->missingAmong($this->commandsOf($gates));
+    }
 
+    /**
+     * @param list<string> $gates
+     *
+     * @return list<string>
+     */
+    public function missingToRunEachInItsOwnProcess(array $gates): array
+    {
+        return [] === $gates ? [] : $this->missingAmong([...$this->commandsOf($gates), ...self::GATE_CHILD]);
+    }
+
+    /**
+     * @param list<string> $gates
+     *
+     * @return list<string>
+     */
+    private function commandsOf(array $gates): array
+    {
         $commands = [...self::COMMON];
 
         foreach ($gates as $gate) {
             array_push($commands, ...(self::BY_GATE[$gate] ?? []));
         }
 
+        return $commands;
+    }
+
+    /**
+     * @param list<string> $commands
+     *
+     * @return list<string>
+     */
+    private function missingAmong(array $commands): array
+    {
         $entries = explode(PATH_SEPARATOR, $this->searchPath());
 
         // Because the override may name a command another gate needs too, names are deduplicated after it applies.

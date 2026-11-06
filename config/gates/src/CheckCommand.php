@@ -70,7 +70,7 @@ final readonly class CheckCommand
     private function runGatesWhenToolsExist(Options $options, array $arguments): int
     {
         $names = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
-        $missing = new RequiredTools($options->root ?? $this->home)->missingFor($names);
+        $missing = new RequiredTools($options->root ?? $this->home)->missingToRunEachInItsOwnProcess($names);
 
         if ([] !== $missing) {
             $this->print(['error' => 'missing tools', 'missing' => $missing]);
