@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use DateTimeZone;
+use Intakt\Gates\CheckedReports;
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\ReproductionRowsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\NativeClock;
 
 #[CoversClass(ReproductionRowsGate::class)]
+#[CoversClass(CheckedReports::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 final class ReproductionRowsGateTest extends SandboxTestCase
 {
@@ -259,28 +261,28 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
     public function testAReadyToFileReportCheckedThreeDaysAgoPasses(): void
     {
-        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
 
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
     public function testAReadyToFileReportCheckedFourteenDaysAgoStillPasses(): void
     {
-        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(14)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(14)." against main.\n- **Decision:** `ready to file`.\n");
 
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
     public function testAReadyToFileReportCheckedFifteenDaysAgoFails(): void
     {
-        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(15)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(15)." against main.\n- **Decision:** `ready to file`.\n");
 
         self::assertStringContainsString('older than 14 days', $run->findingsOf('reproductions'));
     }
 
     public function testAReadyToFileReportCheckedInTheFutureFails(): void
     {
-        $run = $this->checkReport("- **Checked:** ".$this->daysAgo(-3)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(-3)." against main.\n- **Decision:** `ready to file`.\n");
 
         self::assertStringContainsString('dated in the future', $run->findingsOf('reproductions'));
     }
