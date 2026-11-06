@@ -7,6 +7,7 @@ namespace Intakt\Tests\Support\Deprecation;
 use Composer\Autoload\ClassLoader;
 use PHPUnit\Runner\IssueTriggerResolver\Resolution;
 use PHPUnit\Runner\IssueTriggerResolver\Resolver;
+use ReflectionClass;
 
 // Because Composer's autoloader includes a class that deprecates itself on load, PHPUnit's default resolver would rate it as one vendor package causing it.
 final class LoadTimeDeprecationResolver implements Resolver
@@ -35,11 +36,11 @@ final class LoadTimeDeprecationResolver implements Resolver
     {
         $file = $frame['file'] ?? null;
 
-        return \is_string($file) && '' !== $file ? $file : null;
+        return is_string($file) && '' !== $file ? $file : null;
     }
 
     private function isAutoloader(string $file): bool
     {
-        return new \ReflectionClass(ClassLoader::class)->getFileName() === $file;
+        return new ReflectionClass(ClassLoader::class)->getFileName() === $file;
     }
 }

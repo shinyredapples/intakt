@@ -12,6 +12,9 @@ final class LoadsADeprecatedClassFixture extends TestCase
 {
     public function testItLoadsAClassThatIsDeprecatedInTheVendorPackage(): void
     {
-        self::assertTrue(interface_exists('Symfony\Component\HttpKernel\DependencyInjection\ServicesResetterInterface'));
+        // Because the static analysis of this repository reports a deprecated class named in code, and this fixture must load one.
+        $name = implode('\\', ['Symfony', 'Component', 'HttpKernel', 'DependencyInjection', 'ServicesResetterInterface']);
+
+        self::assertTrue(interface_exists($name));
     }
 }

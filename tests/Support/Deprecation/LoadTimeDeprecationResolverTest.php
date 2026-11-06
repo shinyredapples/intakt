@@ -8,6 +8,7 @@ use Composer\Autoload\ClassLoader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(LoadTimeDeprecationResolver::class)]
@@ -17,7 +18,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
 {
     public function testTheCodeThatMadeTheAutoloaderLoadTheClassIsTheCaller(): void
     {
-        $autoloader = new \ReflectionClass(ClassLoader::class)->getFileName();
+        $autoloader = $this->autoloader();
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
             ['function' => 'Composer\Autoload\{closure}', 'file' => $autoloader],
@@ -46,7 +47,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
 
     public function testATraceOfTheAutoloaderAloneHasNoCaller(): void
     {
-        $autoloader = new \ReflectionClass(ClassLoader::class)->getFileName();
+        $autoloader = $this->autoloader();
         $trace = [
             ['function' => 'trigger_deprecation', 'file' => '/vendor/a/Deprecated.php'],
             ['function' => 'loadClass', 'file' => $autoloader],
@@ -64,6 +65,14 @@ final class LoadTimeDeprecationResolverTest extends TestCase
         self::assertNotSame(0, $run->getExitCode(), $run->getOutput());
         self::assertStringContainsString('ServicesResetterInterface" interface is deprecated', $run->getOutput());
         self::assertStringContainsString('LoadsADeprecatedClassFixture::testItLoadsAClassThatIsDeprecatedInTheVendorPackage', $run->getOutput());
+    }
+
+    private function autoloader(): string
+    {
+        $file = new ReflectionClass(ClassLoader::class)->getFileName();
+        self::assertIsString($file);
+
+        return $file;
     }
 
     private function runFixture(string $file): Process
