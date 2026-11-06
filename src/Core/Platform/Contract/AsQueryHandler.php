@@ -12,6 +12,11 @@ final class AsQueryHandler extends AsMessageHandler
 {
     public function __construct(?string $handles = null, ?string $method = null, int $priority = 0)
     {
-        parent::__construct(bus: Bus::Query->value, handles: $handles, method: $method, priority: $priority);
+        parent::__construct(
+            bus: Bus::Query->value,
+            handles: $handles,
+            method: $method,
+            priority: $priority,
+        );
     }
 }

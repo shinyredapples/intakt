@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waiting on you | Intakt</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("intakt-theme");if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";d.dataset.theme=t;if(localStorage.getItem("intakt-rail")==="collapsed")d.dataset.rail="collapsed";})();</script>
+<link rel="stylesheet" href="assets/intakt.css">
+</head>
+<body data-page="waiting">
+<div class="shell">
+<aside class="rail" id="rail"></aside>
+<div class="main">
+<header class="topbar" id="topbar"></header>
+<main class="content roomy" id="main">
+<div class="page-head">
+  <div>
+    <h1>Waiting on you</h1>
+    <p class="lead">Four things only you can do, oldest first. Everything else keeps running while these wait.</p>
+  </div>
+</div>
+
+<div class="split">
+<div class="wait-list">
+<article class="wait-item" data-project="all" id="w-login">
+  <h3><span class="dot needs"></span>Home subscription is logged out</h3>
+  <p class="meta"><span>All projects</span><span data-icon="clock" data-icon-cls="s">Waiting 4 h 12 min</span></p>
+  <p class="conseq">Until you log in, builds run one slot short on the Work subscription.</p>
+  <div class="act">
+    <div class="copy"><code>intakt account login home</code><button class="btn sm" type="button" data-copy="intakt account login home" data-icon="copy" data-icon-cls="s">Copy</button></div>
+    <p class="act-note">Run it in a terminal on the Intakt machine.</p>
+  </div>
+  <details class="why"><summary>Why</summary>
+    <p>The login expired at 06:40, so Intakt can't use this account. <a href="team.html">Open the account</a></p>
+  </details>
+</article>
+
+<article class="wait-item" data-project="intakt" id="w-589">
+  <h3><span class="dot needs"></span>#589 needs your approval: it touches secret handling</h3>
+  <p class="meta"><span>intakt</span><span class="mono">a3f9c21</span><span>Round 2</span><span data-icon="clock" data-icon-cls="s">Waiting 1 h 05 min</span></p>
+  <p class="conseq">Approving lets Intakt merge a change to secret handling.</p>
+  <div class="act">
+    <button class="btn needs" type="button" data-toast="Approved a3f9c21. Merging #589" data-undo="Approval withdrawn">Approve a3f9c21</button>
+    <a class="btn secondary sm" href="task.html">See the diff</a>
+  </div>
+  <details class="why"><summary>Why</summary>
+    <p>Rotate the forge token without a restart. Both Code reviewers and the Security engineer approved round 2. It changes <code>src/Secret/TokenStore.php</code>, a <span class="term" data-term="protected">protected file</span>, so Intakt merges it only with your approval of exactly this <span class="term" data-term="version">version</span>. <a href="task.html">Open #589</a></p>
+  </details>
+</article>
+
+<article class="wait-item" data-project="acme-shop" id="w-199">
+  <h3><span class="dot needs"></span>#199: which currency should gift cards keep?</h3>
+  <p class="meta"><span>acme-shop</span><span>Tech lead</span><span data-icon="clock" data-icon-cls="s">Waiting 52 min</span></p>
+  <p class="conseq">Your answer lets the Tech lead finish planning #199.</p>
+  <div class="act">
+    <div class="answer-opts" role="radiogroup" aria-label="Your answer">
+      <label><input type="radio" name="a199" checked> Shop's base currency (EUR), convert at checkout</label>
+      <label><input type="radio" name="a199"> The currency it was bought in</label>
+      <label><input type="radio" name="a199"> Something else</label>
+      <label class="sr-only" for="a199o">Your own answer</label>
+      <input class="input" id="a199o" type="text" placeholder="Your own answer, if none of these fit">
+    </div>
+    <button class="btn needs" type="button" data-toast="Answer sent. Planning #199 again" data-undo="Answer withdrawn">Send the answer</button>
+  </div>
+  <details class="why"><summary>Why</summary>
+    <p>Gift cards: pick the stored currency. Planning stopped because the issue doesn't say, and the answer changes the database design. <a href="task.html">Open #199</a></p>
+  </details>
+</article>
+
+<article class="wait-item" data-project="intakt" id="w-594">
+  <h3><span class="dot needs"></span>#594 push is on hold: it edits CI</h3>
+  <p class="meta"><span>intakt</span><span class="mono">7c02e4b</span><span data-icon="clock" data-icon-cls="s">Waiting 34 min</span></p>
+  <p class="conseq">Releasing starts checks and reviews on this <span class="term" data-term="version">version</span>.</p>
+  <div class="act">
+    <button class="btn needs" type="button" data-toast="Push released. Checks starting on 7c02e4b" data-undo="Push held again">Release 7c02e4b</button>
+    <button class="btn secondary sm" type="button" data-toast="Sent back to the Developer: keep CI unchanged" data-undo="Send-back withdrawn">Send back: keep CI unchanged</button>
+  </div>
+  <details class="why"><summary>Why</summary>
+    <p>Cache forge responses for 30 seconds. The push also changes <code>.github/workflows/ci.yml</code>. Intakt puts any push that edits CI <span class="term" data-term="hold">on hold</span>, because CI decides what counts as green. <a href="task.html">Open #594</a></p>
+  </details>
+</article>
+
+<section class="section" aria-labelledby="empty-h">
+  <h2 id="empty-h" class="small muted" style="font-weight:500;margin-bottom:12px">Empty state (shown when the list above is clear)</h2>
+  <div class="empty">
+    <img src="assets/intakt-small.svg" alt="">
+    <h2>Nothing needs you</h2>
+    <p class="muted">Intakt keeps building and reviewing. When it needs a decision, it shows up here and on your phone.</p>
+  </div>
+</section>
+</div>
+<aside class="side" aria-label="Meanwhile">
+  <div class="block">
+    <h2>Meanwhile</h2>
+    <ul>
+      <li><span class="dot ok"></span><a href="task.html">#612 is building</a><span class="when">42 min</span></li>
+      <li><span class="dot ok"></span><a href="task.html">#208 is building</a><span class="when">18 min</span></li>
+      <li><span class="dot ok"></span><a href="task.html">#598 is in review, round 2</a><span class="when">11 min</span></li>
+    </ul>
+  </div>
+  <div class="block">
+    <h2>You handled today</h2>
+    <ul>
+      <li><span>Approved version <span class="mono">e81c40a</span> for #580</span><span class="when">09:14</span></li>
+      <li><span>Answered the Tech lead on #211</span><span class="when">08:52</span></li>
+      <li><span>Released a push on hold for #577</span><span class="when">08:30</span></li>
+    </ul>
+  </div>
+  <p class="muted small">New items also go to your phone. <a href="settings.html#notifications">Change notifications</a></p>
+</aside>
+</div>
+</main>
+</div>
+</div>
+<script src="assets/intakt.js"></script>
+</body>
+</html>

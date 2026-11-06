@@ -30,4 +30,12 @@ Architecture:
 13. [Dashboard](05-architecture/13-dashboard.md)
 14. [Threat model: prompt injection and third-party text](05-architecture/14-threat-model.md)
 
+Dashboard mocks (static pages in [`mocks/`](mocks/), with made-up projects):
+
+- [Board](mocks/index.html)
+- [Waiting on you](mocks/waiting.html)
+- [Task](mocks/task.html)
+- [Settings](mocks/settings.html)
+- [Components](mocks/components.html)
+
 The single-file draft this folder was split from is in the git history (`docs/design.md`).

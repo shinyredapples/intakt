@@ -13,7 +13,8 @@ use Symfony\Component\Process\Process;
 #[CoversNothing]
 final class EntrypointSampleSeedTest extends TestCase
 {
-    private const int SECONDS_TO_WAIT = 10;
+    // Generous because the parallel test workers can hold the stubbed steps back for more than ten seconds; the wait still ends at the first consumer.
+    private const int SECONDS_TO_WAIT = 60;
 
     private const string SECRET = 'entrypoint-sample-seed-test-secret-value';
 

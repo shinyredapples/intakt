@@ -41,7 +41,12 @@ final class McpServerClient
             $server['HTTP_AUTHORIZATION'] = 'Bearer '.$this->bearer;
         }
 
-        $response = $this->kernel->handle(Request::create('http://localhost'.$this->path, 'POST', server: $server, content: $body));
+        $response = $this->kernel->handle(Request::create(
+            'http://localhost'.$this->path,
+            'POST',
+            server: $server,
+            content: $body,
+        ));
         $this->session ??= $response->headers->get('Mcp-Session-Id');
 
         $this->lastBody = $response instanceof StreamedResponse ? $this->streamed($response) : (string) $response->getContent();

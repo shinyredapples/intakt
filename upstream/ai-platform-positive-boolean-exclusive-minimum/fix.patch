@@ -1,0 +1,79 @@
+From 03fdc86549cd1dc478135cf75dee13b0836f2c9a Mon Sep 17 00:00:00 2001
+From: Intakt Builder <builder@localhost>
+Date: Fri, 6 Nov 2026 11:20:08 +0000
+Subject: [PATCH] [Platform] Describe exclusive bounds with the numeric
+ exclusiveMinimum and exclusiveMaximum
+
+ValidatorConstraintsDescriber described GreaterThan and Positive as minimum plus "exclusiveMinimum": true, and LessThan and Negative as maximum plus "exclusiveMaximum": true. That boolean form is JSON Schema draft 4; in draft 2020-12, which most structured output providers and current validators use, both keywords take the bound itself, so a draft 2020-12 validator refuses the schema. The bound is now written as "exclusiveMinimum": <value> or "exclusiveMaximum": <value>, the form Factory already produces for #[Schema].
+---
+ .../Describer/ValidatorConstraintsDescriber.php        | 10 ++--------
+ .../Describer/ValidatorConstraintsDescriberTest.php    |  5 +++--
+ .../StructuredOutput/ValidatorConstraintsFixture.php   |  3 +++
+ 3 files changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/src/platform/src/Contract/JsonSchema/Describer/ValidatorConstraintsDescriber.php b/src/platform/src/Contract/JsonSchema/Describer/ValidatorConstraintsDescriber.php
+index 0e49ac61..379fa76b 100644
+--- a/src/platform/src/Contract/JsonSchema/Describer/ValidatorConstraintsDescriber.php
++++ b/src/platform/src/Contract/JsonSchema/Describer/ValidatorConstraintsDescriber.php
+@@ -239,10 +239,7 @@ final class ValidatorConstraintsDescriber implements PropertyDescriberInterface
+             return;
+         }
+ 
+-        $schema['minimum'] = $constraint->value;
+-        if ($exclusive) {
+-            $schema['exclusiveMinimum'] = true;
+-        }
++        $schema[$exclusive ? 'exclusiveMinimum' : 'minimum'] = $constraint->value;
+     }
+ 
+     /**
+@@ -260,10 +257,7 @@ final class ValidatorConstraintsDescriber implements PropertyDescriberInterface
+             return;
+         }
+ 
+-        $schema['maximum'] = $constraint->value;
+-        if ($exclusive) {
+-            $schema['exclusiveMaximum'] = true;
+-        }
++        $schema[$exclusive ? 'exclusiveMaximum' : 'maximum'] = $constraint->value;
+     }
+ 
+     /**
+diff --git a/src/platform/tests/Contract/JsonSchema/Describer/ValidatorConstraintsDescriberTest.php b/src/platform/tests/Contract/JsonSchema/Describer/ValidatorConstraintsDescriberTest.php
+index 346108df..f3b717fe 100644
+--- a/src/platform/tests/Contract/JsonSchema/Describer/ValidatorConstraintsDescriberTest.php
++++ b/src/platform/tests/Contract/JsonSchema/Describer/ValidatorConstraintsDescriberTest.php
+@@ -96,13 +96,14 @@ final class ValidatorConstraintsDescriberTest extends TestCase
+         yield 'Json' => ['json', null, ['contentMediaType' => 'application/json']];
+         yield 'Length string' => ['lengthString', null, ['minLength' => 2, 'maxLength' => 4]];
+         yield 'MacAddress' => ['macAddress', null, ['description' => 'MAC address, accepted type: all.']];
++        yield 'Negative' => ['strictlyNegativeNumber', null, ['exclusiveMaximum' => 0]];
+         yield 'Negative or zero' => ['negativeNumber', null, ['maximum' => 0]];
+         yield 'NotBlank string' => ['notBlankString', ['type' => 'string'], ['type' => 'string', 'nullable' => false, 'minLength' => 1]];
+         yield 'NotNull nullable false' => ['notNull', null, ['nullable' => false]];
+         yield 'NotNull with null type' => ['notNull', ['type' => ['string', 'null']], ['type' => 'string', 'nullable' => false]];
+         yield 'NotEqualTo' => ['notEqualTo', null, ['not' => ['enum' => ['bar']]]];
+-        yield 'Numeric range' => ['numberRange', null, ['multipleOf' => 3, 'minimum' => 10, 'exclusiveMinimum' => true, 'maximum' => 100]];
+-        yield 'Positive' => ['positiveNumber', null, ['minimum' => 0, 'exclusiveMinimum' => true]];
++        yield 'Numeric range' => ['numberRange', null, ['multipleOf' => 3, 'exclusiveMinimum' => 10, 'maximum' => 100]];
++        yield 'Positive' => ['positiveNumber', null, ['exclusiveMinimum' => 0]];
+         yield 'Range constraint' => ['rangedNumber', null, ['minimum' => 5, 'maximum' => 15]];
+         yield 'Regex string' => ['regexString', null, ['pattern' => '[a-z]+']];
+         yield 'Time pattern' => ['time', null, ['pattern' => '^([01]\d|2[0-3]):[0-5]\d$']];
+diff --git a/src/platform/tests/Fixtures/StructuredOutput/ValidatorConstraintsFixture.php b/src/platform/tests/Fixtures/StructuredOutput/ValidatorConstraintsFixture.php
+index 2c823b35..b5cafa40 100644
+--- a/src/platform/tests/Fixtures/StructuredOutput/ValidatorConstraintsFixture.php
++++ b/src/platform/tests/Fixtures/StructuredOutput/ValidatorConstraintsFixture.php
+@@ -115,6 +115,9 @@ final class ValidatorConstraintsFixture
+     #[Assert\NegativeOrZero]
+     public int $negativeNumber;
+ 
++    #[Assert\Negative]
++    public int $strictlyNegativeNumber;
++
+     #[Assert\NotBlank]
+     public string $notBlankString;
+ 
+-- 
+2.47.3
+

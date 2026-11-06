@@ -116,7 +116,10 @@ final class VerdictIdentityTest extends TestCase
 
     public function testACleanMergeOfTheBaseKeepsTheVerdictExceptForWhatTheMergeTouched(): void
     {
-        $current = $this->identity(head: self::NEW_HEAD, base: self::NEW_BASE);
+        $current = $this->identity(
+            head: self::NEW_HEAD,
+            base: self::NEW_BASE,
+        );
 
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::CleanMergeOfBase, 'src/Main.php'));
 
@@ -148,7 +151,10 @@ final class VerdictIdentityTest extends TestCase
 
     public function testADocumentationOnlyChangeThatAlsoMovedTheBaseMakesTheVerdictStale(): void
     {
-        $current = $this->identity(head: self::NEW_HEAD, base: self::NEW_BASE);
+        $current = $this->identity(
+            head: self::NEW_HEAD,
+            base: self::NEW_BASE,
+        );
 
         $standing = $this->reviewed()->standingAt($current, $this->move(HeadMoveKind::Commits, 'docs/user/README.md'));
 

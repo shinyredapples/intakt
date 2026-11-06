@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\Evidence;
+use Intakt\Core\Review\Contract\Finding;
 use stdClass;
 
 final readonly class BrokenFieldRules
@@ -88,7 +90,7 @@ final readonly class BrokenFieldRules
         yield 'type: text is null' => [$design->withFinding('text', null)->json(), '"text" attribute'];
         yield 'type: repeat is a string' => [$design->withFinding('repeat', 'false')->json(), '"repeat" attribute'];
         yield 'type: requirement is a number' => [$design->withFinding('requirement', 1)->json(), '"requirement" attribute'];
-        yield 'type: evidence is a string' => [$design->withFinding('evidence', 'probe.php')->json(), 'Contract\Evidence'];
+        yield 'type: evidence is a string' => [$design->withFinding('evidence', 'probe.php')->json(), '"evidence" attribute for class "'.Finding::class.'" must be one of "'.Evidence::class.'"'];
         yield 'type: evidence probe is a number' => [$design->withFinding('evidence', ['probe' => 1, 'output' => '...'])->json(), '"probe" attribute'];
         yield 'type: evidence output is a number' => [$design->withFinding('evidence', ['probe' => '...', 'output' => 1])->json(), '"output" attribute'];
     }
