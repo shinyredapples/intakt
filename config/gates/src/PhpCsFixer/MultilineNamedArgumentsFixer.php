@@ -53,7 +53,7 @@ final readonly class MultilineNamedArgumentsFixer implements FixerInterface
         }
     }
 
-    // Runs before statement_indentation, which then indents the contents of arguments that span several lines.
+    // Ahead of statement_indentation (-3) because that fixer indents the inner lines of an argument this one moves.
     public function getPriority(): int
     {
         return 0;
@@ -66,7 +66,7 @@ final readonly class MultilineNamedArgumentsFixer implements FixerInterface
 
     private function splitWhenNamedTwice(Tokens $tokens, int $openIndex): void
     {
-        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS_BRACE, $openIndex);
+        $closeIndex = $tokens->findBlockEnd(Tokens::BLOCK_TYPE_PARENTHESIS, $openIndex);
         $topLevel = $this->topLevelTokens($tokens, $openIndex, $closeIndex);
         $namedCount = count(array_filter($topLevel, static fn (Token $token): bool => $token->isGivenKind(CT::T_NAMED_ARGUMENT_NAME)));
 
@@ -102,13 +102,13 @@ final readonly class MultilineNamedArgumentsFixer implements FixerInterface
         return $topLevel;
     }
 
-    private function lineIndent(Tokens $tokens, int $index): string
+    private function lineIndent(Tokens $tokens, int $openIndex): string
     {
-        for ($index = $index - 1; $index >= 0; --$index) {
+        for ($index = $openIndex - 1; $index >= 0; --$index) {
             $content = $tokens[$index]->getContent();
 
             if (($tokens[$index]->isWhitespace() || $tokens[$index]->isGivenKind(T_OPEN_TAG)) && str_contains($content, "\n")) {
-                return substr($content, strrpos($content, "\n") + 1);
+                return explode("\n", $content) |> array_last(...);
             }
         }
 
