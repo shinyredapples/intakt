@@ -10,7 +10,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final class TestsGate implements Gate
+final readonly class TestsGate implements Gate
 {
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
@@ -27,8 +27,8 @@ final class TestsGate implements Gate
     private const int FILE_TIMEOUT_SECONDS = 600;
 
     public function __construct(
-        private readonly int $fileTimeoutSeconds = self::FILE_TIMEOUT_SECONDS,
-        private readonly int $passTimeoutSeconds = self::PASS_TIMEOUT_SECONDS,
+        private int $fileTimeoutSeconds = self::FILE_TIMEOUT_SECONDS,
+        private int $passTimeoutSeconds = self::PASS_TIMEOUT_SECONDS,
     ) {
     }
 
