@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates\Fixtures;
+
+use Intakt\Tests\Journeys\Support\JourneyTestCase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+
+#[CoversNothing]
+#[Group('journeys')]
+final class ChildJourneyTest extends JourneyTestCase
+{
+    protected function journey(): string
+    {
+        return 'leaving a child';
+    }
+
+    public function testWalksThePath(): void
+    {
+        $this->step('start a child that outlives the journey', static function (): void {
+            $quiet = [0 => ['file', '/dev/null', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']];
+            $shell = proc_open(['sh', '-c', '(: > "$1"; exec sleep "$2") &', 'sh', 'MARKER', 'SLEEP_SECONDS'], $quiet, $pipes);
+
+            self::assertNotFalse($shell);
+            self::assertSame(0, proc_close($shell));
+        });
+    }
+}

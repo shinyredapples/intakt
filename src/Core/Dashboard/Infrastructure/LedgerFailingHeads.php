@@ -11,7 +11,7 @@ use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 
-// Payloads are decoded only here, as in LedgerReviews, so the card needs nothing from the Watcher module that writes them.
+// Payloads are decoded to arrays here, because the Watcher module writes its lines without payload classes, so the card needs nothing from it.
 final readonly class LedgerFailingHeads
 {
     private const array FAILED = [LedgerEventKind::HeadFailed, LedgerEventKind::HeadHandedOver];

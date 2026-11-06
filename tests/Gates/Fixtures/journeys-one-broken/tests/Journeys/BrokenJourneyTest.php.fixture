@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates\Fixtures;
+
+use Intakt\Tests\Journeys\Support\JourneyTestCase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+
+#[CoversNothing]
+#[Group('journeys')]
+final class BrokenJourneyTest extends JourneyTestCase
+{
+    protected function journey(): string
+    {
+        return 'broken';
+    }
+
+    public function testWalksThePath(): void
+    {
+        $this->step('open the first page', static fn () => self::assertTrue(true));
+        $this->step('read the second page', static fn () => self::assertSame('welcome', 'error page'));
+    }
+}
