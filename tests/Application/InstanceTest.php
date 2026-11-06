@@ -277,6 +277,20 @@ final class InstanceTest extends TestCase
         self::assertSame("0100007F\n", $run['output']);
     }
 
+    public function testInWorkerModeABrokenKernelConfigReportsFailedWithTheErrorAndExitsNonZero(): void
+    {
+        $project = $this->copyOfTheProject();
+        file_put_contents($project.'/config/packages/broken.yaml', "framework:\n    no_such_option: true\n");
+
+        $run = $this->runInstance($project, environment: $this->environmentWithFrankenphp());
+
+        $status = $this->decoded($run['status']);
+        self::assertSame('failed', $status['status']);
+        self::assertStringContainsString('"mode":"worker"', $run['status']);
+        self::assertStringContainsString('no_such_option', $status['reason']);
+        self::assertSame(1, $run['exit']);
+    }
+
     public function testAFrankenphpFoundThroughARelativePathEntryBootsInWorkerModeFromAnotherDirectory(): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');

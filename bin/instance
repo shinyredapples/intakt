@@ -467,6 +467,7 @@ final class WorkerServer implements Server
     }
 
     // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker.
+    // FrankenPHP runs PHP with log_errors off, so without the php_ini line a fatal error during the boot only reaches the response body, never the log the failure reason is read from.
     private function caddyfile(): string
     {
         $public = $this->root.'/public';
@@ -474,6 +475,9 @@ final class WorkerServer implements Server
         return <<<CADDYFILE
             {
             	admin 127.0.0.1:{$this->adminPort}
+            	frankenphp {
+            		php_ini log_errors 1
+            	}
             }
 
             http://127.0.0.1:{$this->port} {
