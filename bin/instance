@@ -467,8 +467,7 @@ final class WorkerServer implements Server
         return $socket;
     }
 
-    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker.
-    // FrankenPHP runs PHP with log_errors off, so without the php_ini line a fatal error during the boot only reaches the response body, never the log the failure reason is read from.
+    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from.
     private function caddyfile(): string
     {
         $public = $this->root.'/public';
@@ -578,16 +577,27 @@ function executableOnPath(string $name): ?string
     $path = getenv('PATH');
 
     foreach (false === $path ? [] : explode(':', $path) as $directory) {
-        // An empty entry means the caller's directory, as the shell reads it.
-        $candidate = '' === $directory ? $name : $directory.'/'.$name;
+        $candidate = executableIn($directory, $name);
 
-        if (is_file($candidate) && is_executable($candidate)) {
-            // Absolute because the server starts from the project root, where a relative entry of the caller's PATH would point elsewhere.
-            return str_starts_with($candidate, '/') ? $candidate : getcwd().'/'.$candidate;
+        if (null !== $candidate) {
+            return $candidate;
         }
     }
 
     return null;
+}
+
+function executableIn(string $directory, string $name): ?string
+{
+    // An empty entry stands for the caller's directory, because that is how the shell reads PATH.
+    $candidate = '' === $directory ? $name : $directory.'/'.$name;
+
+    if (!is_file($candidate) || !is_executable($candidate)) {
+        return null;
+    }
+
+    // Absolute because the server starts from the project root, where a relative entry of the caller's PATH would point elsewhere.
+    return str_starts_with($candidate, '/') ? $candidate : getcwd().'/'.$candidate;
 }
 
 $argv ??= [];
