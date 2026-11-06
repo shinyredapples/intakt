@@ -8,6 +8,9 @@ final readonly class RatchetListFile
 {
     private const string CLEANUP_ISSUE = '/^#\s*Cleanup issue:\s*#\d+\s*$/';
 
+    // Because deleting the last entry leaves an empty list, the key may also hold an empty flow list.
+    private const string IGNORE_ERRORS = '/^ignoreErrors:(\s*\[\s*\])?$/';
+
     public function __construct(
         public string $path,
         public string $contents,
@@ -71,7 +74,7 @@ final readonly class RatchetListFile
             return 'parameters:' !== $text;
         }
 
-        return $indent < (int) $parameterIndent || ($indent === $parameterIndent && 'ignoreErrors:' !== $text);
+        return $indent < (int) $parameterIndent || ($indent === $parameterIndent && 1 !== preg_match(self::IGNORE_ERRORS, $text));
     }
 
     /**

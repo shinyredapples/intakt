@@ -226,6 +226,45 @@ final class RatchetListsGateTest extends SandboxTestCase
         self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
     }
 
+    public function testAFlowFormIncludeDoesNotHideAGrowingList(): void
+    {
+        $run = $this->growListIncludedBy("includes: [../../ratchet/loose-conditions.neon]\nparameters:\n    level: max\n");
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+    }
+
+    public function testAPlaceholderIncludeDoesNotHideAGrowingList(): void
+    {
+        $run = $this->growListIncludedBy("includes:\n    - %currentWorkingDirectory%/ratchet/loose-conditions.neon\nparameters:\n    level: max\n");
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+    }
+
+    public function testAnIncludesKeyFollowedByACommentDoesNotHideAGrowingList(): void
+    {
+        $run = $this->growListIncludedBy("includes: # lists\n    - ".self::INCLUDE."\nparameters:\n    level: max\n");
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+    }
+
+    public function testDeletingTheLastEntryWithAnEmptyListPasses(): void
+    {
+        $run = $this->changeList($this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')), self::HEADER."parameters:\n\tignoreErrors: []\n");
+
+        self::assertTrue($run->passed('ratchet'), $run->output());
+    }
+
+    public function testAnEmptyListThatSetsAnotherParameterFails(): void
+    {
+        $run = $this->changeList(self::HEADER."parameters:\n\tignoreErrors: []\n", self::HEADER."parameters:\n\tignoreErrors: []\n\treportUnmatchedIgnoredErrors: false\n");
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+        self::assertStringContainsString('holds more than parameters.ignoreErrors', $run->findingsOf('ratchet'));
+    }
+
     public function testAListWithoutABaseBranchFails(): void
     {
         $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE));
@@ -238,6 +277,15 @@ final class RatchetListsGateTest extends SandboxTestCase
         $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE), $before);
         $sandbox->write(self::LIST, $after);
         $sandbox->commitAll('fix: change the list');
+
+        return $sandbox->check('--only=ratchet', '--base=main');
+    }
+
+    private function growListIncludedBy(string $configuration): CheckRun
+    {
+        $sandbox = $this->repositoryOnMain($configuration, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 1, '../src/A.php')));
+        $sandbox->write(self::LIST, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 5, '../src/A.php')));
+        $sandbox->commitAll('fix: grow the list');
 
         return $sandbox->check('--only=ratchet', '--base=main');
     }

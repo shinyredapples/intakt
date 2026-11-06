@@ -8,20 +8,28 @@ final readonly class PhpStanIncludes
 {
     public const string CONFIGURATION = 'config/gates/phpstan.neon';
 
-    private const string INCLUDE_LINE = '/^\s+-\s+(?<path>[^\s#\'"]+)\s*$/';
+    private const string INCLUDE_LINE = '/^\s+-\s+(?<path>[\w.\/-]+)\s*$/';
+
+    private const string INCLUDES_KEY = '/^[\'"]?includes[\'"]?\s*:/';
 
     // Because the gate configuration and the installed packages are no lists: only what the analysis includes from the rest of the repository is.
     private const array NOT_LISTS = ['config/gates/', 'vendor/'];
 
-    // Because an include the gate cannot place could hide a list, an include that is not a relative path inside the repository on its own line yields null.
+    // Because an include the gate cannot place could hide a list, anything but a block of plain relative paths inside the repository, one per "- path" line, yields null: a flow list, a comment after the key or a %placeholder%.
     /**
      * @return list<string>|null
      */
     public function ratchetListsIn(string $configuration): ?array
     {
+        $lines = $this->includeLines($configuration);
+
+        if (null === $lines) {
+            return null;
+        }
+
         $paths = [];
 
-        foreach ($this->includeLines($configuration) as $line) {
+        foreach ($lines as $line) {
             $path = 1 === preg_match(self::INCLUDE_LINE, $line, $match) ? $this->repositoryPath($match['path']) : null;
 
             if (null === $path) {
@@ -35,16 +43,21 @@ final readonly class PhpStanIncludes
     }
 
     /**
-     * @return list<string>
+     * @return list<string>|null
      */
-    private function includeLines(string $configuration): array
+    private function includeLines(string $configuration): ?array
     {
         $lines = [];
         $inIncludes = false;
 
         foreach ($this->meaningfulLines($configuration) as $line) {
             if (ltrim($line) === $line) {
-                $inIncludes = 'includes:' === rtrim($line);
+                $inIncludes = 1 === preg_match(self::INCLUDES_KEY, $line);
+
+                if ($inIncludes && 'includes:' !== rtrim($line)) {
+                    return null;
+                }
+
                 continue;
             }
 
