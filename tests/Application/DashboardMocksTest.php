@@ -139,9 +139,8 @@ final class DashboardMocksTest extends TestCase
     private function statusOf(string $url): string
     {
         $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 2]]);
-        $http_response_header = [];
-        @file_get_contents($url, false, $context);
+        file_get_contents($url, false, $context);
 
-        return $http_response_header[0] ?? 'no response';
+        return http_get_last_response_headers()[0] ?? 'no response';
     }
 }
