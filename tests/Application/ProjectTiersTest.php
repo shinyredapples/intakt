@@ -51,7 +51,7 @@ use Symfony\Contracts\Service\ServiceProviderInterface;
 #[CoversNothing]
 final class ProjectTiersTest extends KernelTestCase
 {
-    // The compiled containers are keyed by these variables alone, so the container must not read any other variable at compile time, or a reused container would carry a stale value.
+    // The compiled containers are keyed by these variables alone, so the container must not read at compile time any other variable that a test changes, or a reused container would carry a stale value.
     private const array KEYS = [
         'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'INTAKT_CONFIG',
         'ANTHROPIC_API_KEY_TEAM', 'OPENAI_API_KEY_TEAM', 'OPENAI_COMPATIBLE_BASE_URL_TEAM', 'OPENAI_COMPATIBLE_API_KEY_TEAM', 'CLAUDE_CODE_OAUTH_TOKEN_TEAM',
