@@ -232,6 +232,45 @@ final class InstanceTest extends TestCase
         self::assertSame('{"status":"ready"}', $run['status']);
     }
 
+    public function testWithoutFrankenphpACommandGetsNoAdminUrl(): void
+    {
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo var_export(getenv("INTAKT_INSTANCE_ADMIN_URL"), true), "\n";']);
+
+        self::assertSame('{"status":"ready"}', $run['status']);
+        self::assertSame("false\n", $run['output']);
+    }
+
+    public function testWithFrankenphpOnThePathTheBootReportsReadyInWorkerMode(): void
+    {
+        $run = $this->runInstance(self::ROOT, environment: $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    public function testInWorkerModeTheAppWorkerServedTheReadinessRequest(): void
+    {
+        // FrankenPHP counts a request once the worker has finished it, after the answer is sent, so the command polls.
+        $threads = 'for ($i = 0; $i < 100; ++$i) { '
+            .'$states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? []; '
+            .'foreach ($states as $state) { if (str_starts_with($state["Name"], "Worker ") && $state["RequestCount"] > 0) { echo $state["Name"], " served ", $state["RequestCount"], "\n"; exit(0); } } '
+            .'usleep(100_000); } exit(3);';
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $threads], $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertMatchesRegularExpression('#^Worker PHP Thread - '.preg_quote((string) realpath(self::ROOT), '#').'/public/index\.php served [1-9]\d*$#m', $run['output']);
+        self::assertSame(0, $run['exit']);
+    }
+
+    public function testNothingIsLeftBehindAfterAWorkerModeBoot(): void
+    {
+        $this->runInstance(self::ROOT, environment: $this->environmentWithFrankenphp());
+
+        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
+    }
+
     public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
     {
         $notAFolder = $this->scratch.'/file';
@@ -362,7 +401,7 @@ final class InstanceTest extends TestCase
     {
         // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
         $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
-        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp']);
+        $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp', 'PATH' => self::pathWithoutFrankenphp()]);
         $process->run();
 
         return $process;
@@ -402,7 +441,37 @@ final class InstanceTest extends TestCase
      */
     private function environment(): array
     {
-        return ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test'];
+        // Without frankenphp on the PATH, so these runs cover the built-in server wherever they run.
+        return ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', 'PATH' => self::pathWithoutFrankenphp()];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function environmentWithFrankenphp(): array
+    {
+        $path = (string) getenv('PATH');
+        self::assertNotNull(new ExecutableFinder()->find('frankenphp'), 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+
+        return ['PATH' => $path];
+    }
+
+    private static function pathWithoutFrankenphp(): string
+    {
+        $directories = array_filter(explode(':', (string) getenv('PATH')), static fn (string $directory): bool => !is_file($directory.'/frankenphp'));
+
+        return implode(':', $directories);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function processesNaming(string $path): array
+    {
+        return array_values(array_filter(
+            $this->matching('/proc/[0-9]*'),
+            static fn (string $directory): bool => str_contains((string) @file_get_contents($directory.'/cmdline'), $path),
+        ));
     }
 
     private function copyOfTheProject(): string
