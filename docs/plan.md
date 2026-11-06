@@ -262,7 +262,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
   1. Worker-mode state: one kernel, alternating requests with two models and two MCP sessions; no model or tool list crosses over, and memory stays flat over 1,000 calls (see T29).
   2. Structured output with enums and nested lists per provider, and a stream truncated mid-array: a typed exception, never a half-filled object.
   3. MCP: three parallel `tools/call` on one session over Streamable HTTP, with and without `session.lock`; each response and progress token arrives once. Repeat with the client pinned to protocol 2025-11-25. Empty parameters encode as `{}`.
-  4. FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 receives SIGTERM and stops cleanly, with the message in flight finished or requeued. If it still crashes, a Symfony reproduction under `upstream/` for the existing upstream issue (php/frankenphp#2479); the owner approves before it is posted.
+  4. FrankenPHP: `messenger:consume` under `frankenphp php-cli` on 1.13.4 receives SIGTERM and stops cleanly, with the message in flight finished or requeued. If it still crashes, a Symfony reproduction under `upstream/` that records the existing upstream issue (php/frankenphp#2479); it adds nothing to that thread, so no comment is posted.
 - **PHP 8.5:** the pipe operator for the trimming steps.
 - **Waits for:** T7, T16. **Size:** M. **Labels:** `class:core`, `priority:normal`, `model:strong`.
 
