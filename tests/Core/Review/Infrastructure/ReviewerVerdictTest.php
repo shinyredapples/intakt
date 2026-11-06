@@ -525,6 +525,16 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('including any marker with another boundary or none', $this->sent[0]);
     }
 
+    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPassesUnlessItNamesTheWrongGate(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
+        self::assertIsString($system);
+        self::assertStringContainsString('Do not re-flag what `bin/check` passes', $system);
+        self::assertStringContainsString('unless the gate itself is wrong; then name the gate in the requirement field', $system);
+    }
+
     public function testTheDiffReachesThePromptInsideItsOwnFenceAfterTheTask(): void
     {
         $diff = "diff --git a/src/Old.php b/src/Old.php\ndeleted file mode 100644\n-final class Old {}\n";

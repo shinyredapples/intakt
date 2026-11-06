@@ -17,7 +17,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31, T36 | 2026-11-02 |
+| M1 Review core | one reviewer returns a schema-valid verdict for a local branch, recorded in the ledger; Intakt boots and runs probes offline | T1 to T7, T31, T36, T83 | 2026-11-02 |
 | M2 Panel and rounds | a configured panel, quorum, persistent finding ids, the judge, a console command | T8 to T14 | 2026-11-09 |
 | M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
@@ -41,6 +41,12 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Acceptance:** a mutable service fails; with `ResetInterface` it passes; a `final readonly` service, an entity and a value object pass; the rule runs in `bin/check` and main passes.
 - **Evidence:** the rule's test run and `bin/check` on main.
 - **Waits for:** none. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
+
+### T83 A shrink-only ratchet list for a new PHPStan rule
+- **Description:** The gate support for [Ratchet lists](design/04-constraints.md#ratchet-lists-for-a-new-rule-decided-2026-11-06), built before the next PHPStan rule part that lands with a list. A new gate (its own class and tests, appended to the gate list of `bin/check`) reads the lists from the includes of `config/gates/phpstan.neon` that point outside `config/gates/`, compares each with the target branch's version (main for a pull request) and fails when an entry is added, a `count` rises, or an entry's identifier, message pattern or path changes; deleting entries and lowering counts pass. A list absent on the target branch passes only in the change that adds its include. A list names its cleanup issue in its header. PHPStan's `reportUnmatchedIgnoredErrors` stays on, so a stale entry fails the `phpstan` gate. `docs/guide/testing-a-new-check.md` drops its "planned" mark.
+- **Acceptance:** an added entry, a raised count, a widened message pattern (`#.*#`) and a changed path each fail; a deleted entry and a lowered count each pass; a new list fails without its include in the same change and passes with it; a list without a cleanup issue in its header fails; a listed violation in a moved file fails; a violation not in the list and an entry that matches nothing each fail the `phpstan` gate; `bin/check` on main passes.
+- **Evidence:** the gate's test run listing the cases; `bin/check` on a temporary branch that adds a list entry (fails) and on one that deletes one (passes).
+- **Waits for:** none. **Size:** M. **Labels:** `class:tooling`, `priority:high`.
 
 ### T31 `bin/instance` and `bin/probe` for reviewers and the boot gate
 - **Description:** `bin/instance` boots Intakt from a clean checkout after `composer install` with the plain Symfony runtime (PHP's built-in web server on a free local port, SQLite in a scratch directory), checks that it answers, prints one JSON status line (`ready` or `failed` with the reason), and stops cleanly. `bin/probe <file>` boots the same instance and runs a reviewer's small PHPUnit test or PHP script against it, with network access cut, and prints its output and exit code. Both work offline, so the build loop can run reviewer probes and a boot gate on Intakt itself. FrankenPHP is a binary, not a Composer package, so worker mode arrives with the image in T22, which switches `bin/instance` to it inside the image.
@@ -346,7 +352,7 @@ T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.m
 
 ## Parallel paths
 
-- From the start: T1, T2, T4, T6, T31, T26, T27.
+- From the start: T1, T2, T4, T6, T31, T26, T27; T83 before the next PHPStan rule part that lands with a ratchet list.
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
