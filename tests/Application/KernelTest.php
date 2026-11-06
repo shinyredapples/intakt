@@ -10,6 +10,8 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\AI\AiBundle\AiBundle;
 use Symfony\AI\McpBundle\McpBundle;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 #[CoversClass(Kernel::class)]
@@ -27,11 +29,26 @@ final class KernelTest extends KernelTestCase
     public function testTheApplicationPassesAuthorizeToolCallsBeforeOptimization(): void
     {
         $container = new ContainerBuilder();
+        $earlier = new class implements CompilerPassInterface {
+            public function process(ContainerBuilder $container): void
+            {
+            }
+        };
+        $later = new class implements CompilerPassInterface {
+            public function process(ContainerBuilder $container): void
+            {
+            }
+        };
+        $container->addCompilerPass($earlier, PassConfig::TYPE_BEFORE_OPTIMIZATION, -9);
+        $container->addCompilerPass($later, PassConfig::TYPE_BEFORE_OPTIMIZATION, -11);
 
         Kernel::addApplicationPasses($container);
 
         $passes = array_map(get_class(...), $container->getCompilerPassConfig()->getBeforeOptimizationPasses());
-        self::assertContains(AuthorizeToolCallsPass::class, $passes);
+        $position = array_search(AuthorizeToolCallsPass::class, $passes, true);
+        self::assertIsInt($position);
+        self::assertSame($earlier::class, $passes[$position - 1]);
+        self::assertSame($later::class, $passes[$position + 1]);
     }
 
     public function testTheDefaultDatabaseIsSqlite(): void
