@@ -8,7 +8,7 @@ use PHPUnit\Runner\IssueTriggerResolver\Resolution;
 use PHPUnit\Runner\IssueTriggerResolver\Resolver;
 
 // Because an autoloader includes a class that deprecates itself on load, PHPUnit's default resolver would rate it as one vendor package causing it.
-final class LoadTimeDeprecationResolver implements Resolver
+final readonly class LoadTimeDeprecationResolver implements Resolver
 {
     public function resolve(array $trace, string $message): Resolution
     {

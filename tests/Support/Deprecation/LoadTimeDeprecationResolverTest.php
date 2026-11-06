@@ -7,6 +7,7 @@ namespace Intakt\Tests\Support\Deprecation;
 use Composer\Autoload\ClassLoader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionFunction;
@@ -14,6 +15,7 @@ use Symfony\Component\ErrorHandler\DebugClassLoader;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(LoadTimeDeprecationResolver::class)]
+#[UsesClass(RegisteredAutoloader::class)]
 // Because the PHPUnit runs it starts keep their result cache in var/cache/ of the checkout, which every test worker shares.
 #[Group('serial')]
 final class LoadTimeDeprecationResolverTest extends TestCase
