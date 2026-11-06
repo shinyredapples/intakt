@@ -1,0 +1,16 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Tests;
+
+final readonly class ServiceIdsTest
+{
+    /**
+     * @return array{string, string}
+     */
+    public function pinned(): array
+    {
+        return ['intakt.ai.platform.codex', 'codex'];
+    }
+}

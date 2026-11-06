@@ -8,9 +8,12 @@ use Generator;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -24,7 +27,9 @@ use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ReviewerStopping::class)]
 #[CoversClass(StopRequests::class)]
+#[CoversClass(LedgerPayloads::class)]
 #[UsesClass(ReviewerConversation::class)]
+#[UsesClass(ReviewerStopped::class)]
 final class ReviewerStoppingTest extends TestCase
 {
     private DashboardLedger $ledger;
@@ -115,6 +120,23 @@ final class ReviewerStoppingTest extends TestCase
         self::assertSame(ExecutionStatus::Cancelled, $this->statusAfterRunning($this->conversation(new UuidV7())));
     }
 
+    public function testAReviewerStoppedRowThatIsNotJsonIsSkippedSoTheRequestStillStopsTheRun(): void
+    {
+        $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStopped, '{"round": "'.$this->round->toRfc4122().'"'))->succeeded());
+
+        self::assertSame(ExecutionStatus::Cancelled, $this->statusAfterRunning($this->conversation(new UuidV7())));
+    }
+
+    public function testAReviewerStoppedRowOfAnUnknownTierIsSkippedSoTheRequestStillStopsTheRun(): void
+    {
+        $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
+        $stopped = str_replace('"strong"', '"giant"', $this->payloadOf(LedgerEventKind::ReviewerStopped, $this->reviewer));
+        self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStopped, $stopped))->succeeded());
+
+        self::assertSame(ExecutionStatus::Cancelled, $this->statusAfterRunning($this->conversation(new UuidV7())));
+    }
+
     public function testAReviewerOutsideARoundIsNeverStopped(): void
     {
         $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
@@ -129,15 +151,22 @@ final class ReviewerStoppingTest extends TestCase
 
     private function record(LedgerEventKind $kind, Uuid $reviewer): void
     {
-        $payload = json_encode(['round' => $this->round->toRfc4122(), 'reviewer' => $reviewer->toRfc4122()], JSON_THROW_ON_ERROR);
-        $appended = $this->ledger->append(new LedgerEvent($kind, $payload));
+        $appended = $this->ledger->append(new LedgerEvent($kind, $this->payloadOf($kind, $reviewer)));
         self::assertTrue($appended->succeeded());
+    }
+
+    // A stop row carries role and tier, because RoundLedger writes it so and a row without them no longer reads back.
+    private function payloadOf(LedgerEventKind $kind, Uuid $reviewer): string
+    {
+        $pair = ['round' => $this->round->toRfc4122(), 'reviewer' => $reviewer->toRfc4122()];
+
+        return json_encode(LedgerEventKind::ReviewerStopped === $kind ? $pair + ['role' => 'security', 'tier' => 'strong'] : $pair, JSON_THROW_ON_ERROR);
     }
 
     // Drives the run as the verdict path does, through its updates, and keeps the stages that reached the agent's loop.
     private function statusAfterRunning(ReviewerConversation $reviewer): ExecutionStatus
     {
-        $execution = new ReviewerStopping(new StopRequests($this->ledger))->watching(new Execution(function (): Generator {
+        $execution = new ReviewerStopping(new StopRequests($this->ledger, new LedgerPayloads(StoredSerializerFactory::create())))->watching(new Execution(function (): Generator {
             $this->reached[] = Progress::STAGE_MODEL_REQUEST;
             yield new Progress(Progress::STAGE_MODEL_REQUEST, 'Invoking model.', 'reviewer-model');
             $this->reached[] = Progress::STAGE_TOOL_CALL;

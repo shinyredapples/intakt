@@ -42,6 +42,7 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
@@ -203,7 +204,7 @@ final readonly class RoundFixture
     // The modes come with the read, so a test can switch a project's mode between recording its verdicts and counting them.
     public function verdictsReadWith(ProjectModes $modes, VerdictsOfRound $query): RoundVerdicts
     {
-        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $this->ledger))($query);
+        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $this->ledger, $this->ledgerPayloads()))($query);
     }
 
     // A reader with its own entity manager, because a worker commits the first reviewer's verdict right after the reader's ledger read, the order in which a commit lands between the two reads of the query.
@@ -212,7 +213,7 @@ final readonly class RoundFixture
         $reader = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
         $ledger = new AfterLedgerRead($this->ledger, fn () => $this->deliver($this->bus->messages[0], new ScriptedVendor()));
 
-        return new VerdictsOfRoundHandler($reader, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $ledger))($query);
+        return new VerdictsOfRoundHandler($reader, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $ledger, $this->ledgerPayloads()))($query);
     }
 
     /**
@@ -381,6 +382,11 @@ final readonly class RoundFixture
         return $this->ledger;
     }
 
+    public function ledgerPayloads(): LedgerPayloads
+    {
+        return new LedgerPayloads($this->serializer);
+    }
+
     /**
      * @return list<LedgerEventKind>
      */
@@ -401,7 +407,7 @@ final readonly class RoundFixture
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes, $this->serializer), $this->serializer, new StopRequests($ledger ?? $this->ledger));
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes, $this->serializer), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
     }

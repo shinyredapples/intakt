@@ -24,6 +24,7 @@ use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
+use Intakt\Core\Review\Infrastructure\LedgerPayloads;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
 use Intakt\Core\Review\Infrastructure\PromptCut;
@@ -45,6 +46,7 @@ use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\Repository\ReviewCheckout;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -523,6 +525,16 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('including any marker with another boundary or none', $this->sent[0]);
     }
 
+    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPassesUnlessItNamesTheWrongGate(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
+        self::assertIsString($system);
+        self::assertStringContainsString('Do not re-flag what `bin/check` passes', $system);
+        self::assertStringContainsString('unless the gate itself is wrong; then name the gate in the requirement field', $system);
+    }
+
     public function testTheDiffReachesThePromptInsideItsOwnFenceAfterTheTask(): void
     {
         $diff = "diff --git a/src/Old.php b/src/Old.php\ndeleted file mode 100644\n-final class Old {}\n";
@@ -790,7 +802,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, new MockClock()), new ReviewerStopping(new StopRequests($this->ledger))));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, new MockClock()), new ReviewerStopping(new StopRequests($this->ledger, new LedgerPayloads(StoredSerializerFactory::create())))));
 
         $verdict = $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
 
