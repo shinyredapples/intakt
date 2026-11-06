@@ -43,7 +43,6 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Serializer\SerializerInterface;
 
 // Covers nothing because it proves the application as configured: a project's mode from its config, its whole round, then its post through the container's forge writes.
 #[CoversNothing]
@@ -145,7 +144,6 @@ final class ShadowRoundTest extends KernelTestCase
     private function countedFor(ChangeReview $review): RoundVerdicts
     {
         $handler = self::getContainer()->get(VerdictsOfRoundHandler::class);
-        assert($handler instanceof VerdictsOfRoundHandler);
 
         return $handler(new VerdictsOfRound($review->roundId, SampleIdentity::of(RoundFixture::TASK, $this->panel()), new HeadMove(HeadMoveKind::Unmoved, [])));
     }
@@ -174,7 +172,6 @@ final class ShadowRoundTest extends KernelTestCase
     private function modes(): ProjectModes
     {
         $modes = self::getContainer()->get(ProjectModes::class);
-        assert($modes instanceof ProjectModes);
 
         return $modes;
     }
@@ -184,7 +181,6 @@ final class ShadowRoundTest extends KernelTestCase
     {
         $review = $this->reviewChange()->review($this->request($project));
         $forge = self::getContainer()->get(ForgeWrites::class);
-        assert($forge instanceof ForgeWrites);
 
         $forge->postReview($project, ReviewToPost::change(RoundFixture::CHANGE), ReviewToPost::comment($review->decision->value));
 
@@ -204,7 +200,6 @@ final class ShadowRoundTest extends KernelTestCase
             }
         };
         $serializer = self::getContainer()->get('serializer.stored');
-        assert($serializer instanceof SerializerInterface);
         $handler = $this->fixture->startHandlerOn($this->fixture->bus);
 
         return new ReviewChange(
@@ -238,7 +233,6 @@ final class ShadowRoundTest extends KernelTestCase
     private function forge(): WriteRefusingForge
     {
         $forge = self::getContainer()->get(WriteRefusingForge::class);
-        assert($forge instanceof WriteRefusingForge);
 
         return $forge;
     }

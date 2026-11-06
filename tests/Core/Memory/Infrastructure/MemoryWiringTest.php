@@ -33,7 +33,6 @@ final class MemoryWiringTest extends KernelTestCase
     public function testWithoutAnOpenAiAccountIndexingFailsNamingTheMissingEmbeddingModel(): void
     {
         $index = self::getContainer()->get(MemoryIndex::class);
-        assert($index instanceof MemoryIndex);
 
         $this->expectException(LogicException::class);
         $this->expectExceptionMessageMatches('/needs an embedding model/');

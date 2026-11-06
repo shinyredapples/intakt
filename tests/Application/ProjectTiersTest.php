@@ -321,6 +321,7 @@ final class ProjectTiersTest extends KernelTestCase
     {
         $platforms = $this->bootedContainer()->get(AiServices::PROVIDER_PLATFORMS);
         self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
+        self::assertTrue($platforms->has(Provider::Anthropic->value));
         $anthropic = $platforms->get(Provider::Anthropic->value);
         self::assertInstanceOf(PlatformInterface::class, $anthropic);
 
@@ -337,6 +338,7 @@ final class ProjectTiersTest extends KernelTestCase
         $container = $this->bootedContainer();
         $platforms = $container->get(AiServices::PROVIDER_PLATFORMS);
         self::assertInstanceOf(ServiceProviderInterface::class, $platforms);
+        self::assertTrue($platforms->has(Provider::Anthropic->value));
         $anthropic = $platforms->get(Provider::Anthropic->value);
 
         self::assertSame(['team', 'default'], $this->accountsOf($container)[Provider::Anthropic->value]);
@@ -352,14 +354,14 @@ final class ProjectTiersTest extends KernelTestCase
 
         self::assertSame(['default'], $this->accountsOf($container)[Provider::Anthropic->value]);
         self::assertSame(['Account "team" of provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.'], $container->getParameter(AiServices::DISABLED_ACCOUNTS));
-        self::assertArrayNotHasKey(Provider::Anthropic->value, (array) $container->getParameter(AiServices::DISABLED_PROVIDERS));
+        self::assertArrayNotHasKey(Provider::Anthropic->value, $container->getParameter(AiServices::DISABLED_PROVIDERS));
     }
 
     public function testAProviderWhoseEveryListedAccountLacksItsKeyIsDisabled(): void
     {
         $this->listAccounts('anthropic: [team]');
 
-        $disabled = (array) $this->bootedContainer()->getParameter(AiServices::DISABLED_PROVIDERS);
+        $disabled = $this->bootedContainer()->getParameter(AiServices::DISABLED_PROVIDERS);
 
         self::assertSame('Provider "anthropic" is disabled: set ANTHROPIC_API_KEY_TEAM to enable it.', $disabled[Provider::Anthropic->value]);
     }

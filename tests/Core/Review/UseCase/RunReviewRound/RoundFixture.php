@@ -10,7 +10,6 @@ use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
-use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -74,8 +73,8 @@ use Intakt\Tests\Core\Budget\ScriptedAccountGuard;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Clock\MockClock;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\Lock\LockFactory;
@@ -107,15 +106,12 @@ final readonly class RoundFixture
     private SerializerInterface $serializer;
 
     public function __construct(
-        private ContainerInterface $container,
+        private TestContainer $container,
         private ProjectModes $modes = new ConfiguredProjectModes([]),
     ) {
         $entities = $container->get('doctrine.orm.entity_manager');
-        assert($entities instanceof EntityManagerInterface);
         $this->entities = $entities;
-        $serializer = $container->get('serializer.stored');
-        assert($serializer instanceof SerializerInterface);
-        $this->serializer = $serializer;
+        $this->serializer = $container->get('serializer.stored');
         $this->bus = new RecordingBus();
         $this->clock = new MockClock('2026-10-30 12:00:00', 'UTC');
         $this->log = new BufferingLogger();
@@ -123,7 +119,6 @@ final readonly class RoundFixture
         $this->updates = new RecordedRoundUpdates();
         $this->locks = new LockFactory(new InMemoryStore());
         $registry = $container->get('doctrine');
-        assert($registry instanceof ManagerRegistry);
         $this->ledger = new DoctrineLedger($registry, $this->clock);
         $this->events->addListener(RoundJudged::class, new PublishJudgedRound($this->liveProgress($this->entities)));
 
@@ -224,10 +219,8 @@ final readonly class RoundFixture
         $this->entities->clear();
         $stored = $this->entities->find(ChangeFindings::class, ['project' => 'alpha', 'change' => $change]);
         assert($stored instanceof ChangeFindings);
-        $tracked = $this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json');
-        assert(is_array($tracked));
 
-        return array_values(array_filter($tracked, static fn (mixed $finding): bool => $finding instanceof TrackedFinding));
+        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json'));
     }
 
     /**

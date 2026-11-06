@@ -215,7 +215,6 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function findingsResource(): RoundFindingsResource
     {
         $stored = self::getContainer()->get('serializer.stored');
-        assert($stored instanceof SerializerInterface);
 
         return new RoundFindingsResource($this->readable(), $this->fixture->findingStore(), $stored);
     }
@@ -228,7 +227,6 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function serializer(): SerializerInterface
     {
         $serializer = self::getContainer()->get(SerializerInterface::class);
-        assert($serializer instanceof SerializerInterface);
 
         return $serializer;
     }

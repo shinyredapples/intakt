@@ -119,7 +119,6 @@ final class AiProvidersTest extends KernelTestCase
         self::assertFalse($container->has('ai.platform.openai'));
         $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
 
-        self::assertIsArray($disabled);
         self::assertArrayHasKey('openai', $disabled);
     }
 
@@ -143,7 +142,6 @@ final class AiProvidersTest extends KernelTestCase
 
         $disabled = $container->getParameter(AiServices::DISABLED_PROVIDERS);
 
-        self::assertIsArray($disabled);
         self::assertSame(['anthropic', 'openai', 'openai_compatible', 'claude_code'], array_keys($disabled));
     }
 
