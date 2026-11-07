@@ -172,6 +172,24 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, $cost->unpriced]);
     }
 
+    public function testAnUnsettledCallOfAModelWithoutAPriceThatRecordedNoUsageHasAnUnknownCostNamingTheModel(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'strong', 'round' => self::ROUND, 'model' => 'unpriced']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'unsettled', 'failure' => 'RuntimeException', 'usages' => []]);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, ['unpriced']], [$cost->usd, $cost->unpriced]);
+    }
+
+    public function testAnUnsettledCallOfAPricedModelThatRecordedNoUsageCostsNothing(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'strong', 'round' => self::ROUND, 'model' => 'big']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'unsettled', 'failure' => 'RuntimeException', 'usages' => []]);
+
+        self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
+    }
+
     public function testARoundWithoutCallsCostsNothing(): void
     {
         $this->recordCall('c1', self::OTHER_ROUND, 'settled');

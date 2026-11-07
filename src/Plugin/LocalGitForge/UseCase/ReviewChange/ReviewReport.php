@@ -61,11 +61,13 @@ final readonly class ReviewReport
         return $lines;
     }
 
-    // Unknown rather than 0, so a missing price is never read as a free round.
+    // Unknown rather than 0, so a missing price is never read as a free round, and a priced cost too small to show is never read as free either.
     private function costOf(Cost $cost): string
     {
         if (null !== $cost->usd) {
-            return sprintf('%.4f USD', $cost->usd);
+            $dollars = sprintf('%.4f', $cost->usd);
+
+            return '0.0000' === $dollars && $cost->usd > 0.0 ? 'less than 0.0001 USD' : $dollars.' USD';
         }
 
         return [] === $cost->unpriced ? 'unknown' : 'unknown, no price for '.implode(', ', array_map($this->text->of(...), $cost->unpriced));

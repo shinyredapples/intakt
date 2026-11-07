@@ -95,11 +95,12 @@ final readonly class RoundLedgerReading
     /**
      * @param array<string, string|null> $models
      */
+    // A call without usages is still priced, because its model's price may be unknown, and that must not read as zero.
     private function costOfEnding(RecordedEvent $row, array $models): Cost
     {
         $ended = $this->endingOf($row);
 
-        if (null === $ended || [] === $ended->usages || !array_key_exists($ended->call, $models)) {
+        if (null === $ended || !array_key_exists($ended->call, $models)) {
             return Cost::none();
         }
 

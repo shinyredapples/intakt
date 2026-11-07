@@ -8,7 +8,7 @@
 {% block body %}
 <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
 {% set total = review.tokens %}
-<p class="summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: no price, because Intakt has no price table yet.</p>
+<p class="summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: no price, because the dashboard does not read the price list yet.</p>
 {% if review.source is not null and review.nextNumber is not null %}
 <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">

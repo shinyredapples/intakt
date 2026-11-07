@@ -157,6 +157,26 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertStringEndsWith("cost: 0.0459 USD\n", $tester->getDisplay());
     }
 
+    public function testTheCostLineOfACostTooSmallForFourDecimalsIsNotPrintedAsZero(): void
+    {
+        $reviews = $this->createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.000038)));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("cost: less than 0.0001 USD\n", $tester->getDisplay());
+    }
+
+    public function testTheCostLineOfACostOfNothingIsPrintedAsZero(): void
+    {
+        $reviews = $this->createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.0)));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("cost: 0.0000 USD\n", $tester->getDisplay());
+    }
+
     public function testTheCostLineSaysTheCostIsUnknownAndNamesTheModelsWithoutAPrice(): void
     {
         $reviews = self::createStub(ChangeReviews::class);
