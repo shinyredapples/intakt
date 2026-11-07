@@ -64,6 +64,6 @@ final readonly class ContainerUnknownParameterRule implements Rule
 
     private function isContainer(Type $receiver): bool
     {
-        return array_any(self::CONTAINERS, fn ($container) => new ObjectType($container)->isSuperTypeOf($receiver)->yes());
+        return array_any(self::CONTAINERS, static fn (string $container): bool => new ObjectType($container)->isSuperTypeOf($receiver)->yes());
     }
 }

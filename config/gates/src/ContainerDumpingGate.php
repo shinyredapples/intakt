@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-final readonly class ContainerDumpingGate implements Gate
+// Because dumping the test container boots the analysed tree's kernel, this gate runs the change's code.
+final readonly class ContainerDumpingGate implements RunsTheChangesCode
 {
     // Because a debug kernel dumps its compiled container as XML beside the compiled class, where phpstan-symfony reads the service ids and parameter types.
     private const string CONTAINER_XML = '/test/Intakt_KernelTestDebugContainer.xml';
