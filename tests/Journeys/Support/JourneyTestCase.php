@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Intakt\Kernel;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\BrowserKit\HttpBrowser;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\Mercure\Update;
 use Symfony\Component\Process\Process;
 
 // Journeys run only under `bin/check --journeys`, which starts bin/instance and so sets the address below.
@@ -18,6 +20,7 @@ abstract class JourneyTestCase extends TestCase
     private const string ROOT = __DIR__.'/../../..';
     // The instance runs in the test environment, so it reads the same file.
     private const string TEST_SETTINGS = '.env.test';
+    private const string ENVIRONMENT = 'test';
     private const int CONSOLE_SECONDS = 60;
 
     private JourneySteps $steps;
@@ -65,6 +68,17 @@ abstract class JourneyTestCase extends TestCase
         self::assertTrue($process->isSuccessful(), 'bin/console '.implode(' ', $arguments).' failed: '.trim($process->getErrorOutput().$process->getOutput()));
 
         return $process->getOutput();
+    }
+
+    /**
+     * @return list<Update>
+     */
+    final protected function publishedUpdates(): array
+    {
+        // Asked of the kernel, because it alone decides where the instance's hub records, from the APP_SHARE_DIR bin/instance gives the journey too.
+        $directory = new Kernel(self::ENVIRONMENT, false)->getShareDir();
+
+        return RecordingHub::updatesIn($directory ?? self::fail('the instance has no share directory, so its hub records nowhere'));
     }
 
     // Because the dashboard refuses any other host name or port than its own, and the instance listens on a free port.

@@ -33,4 +33,4 @@ Checked on 2026-11-02, refreshed on 2026-11-06.
 - **Decision:** `ready to file`.
 - **Owner review (2026-11-03, symfony/symfony 6.4 to 8.2):** an issue, with the narrow trigger stated (`JsonDecode::ASSOCIATIVE => false` or pre-built objects; `MapRequestPayload` users are not affected). The fix looks small: the fallback `TypeIdentifier::OBJECT => \is_object($data)` check accepts any object for the class `Item[]`. `reproduce.php` also fails with `symfony/serializer` v6.4.49 and v7.4.22 (scratch projects, 2026-11-03).
 - **Refresh (2026-11-06):** still reproduces on 6.4.49, 7.4.22, 8.1.11 and 8.2.0-BETA1. The suggested guard is `null !== $class && str_ends_with($class, '[]')`: a plain `object` type has a null class, and `str_ends_with(null, ...)` is deprecated.
-- **Status:** `ready to file`; the issue text is `ISSUE.md`.
+- **Status:** `recheck needed before filing`: the refresh above names no duplicate search as a dated "Checked" line, so the owner records the check against upstream first (see `upstream/README.md`). The issue text is `ISSUE.md`.
