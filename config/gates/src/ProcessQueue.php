@@ -28,12 +28,12 @@ final readonly class ProcessQueue
      */
     public function run(array $jobs, int $workers, string $directory): array
     {
-        // A job builder must return without waiting, because the running processes are polled only between builds.
         // Because the workers take the jobs in the order given, and each job is built for the index of the worker that takes it.
         $order = array_keys($jobs);
         $results = [];
         $running = [];
         $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
+        // A job builder must return without waiting, because the running processes are polled only between builds.
         $start = fn (int $worker, Closure $job): ?array => hrtime(true) < $deadline ? $this->started($this->built($job, $worker), $directory, $deadline) : null;
 
         while ([] !== $jobs || [] !== $running) {
