@@ -93,9 +93,10 @@ final class ProcessQueueTest extends SandboxTestCase
     public function testAJobStartedJustBeforeTheOverallLimitIsStoppedAtTheLimitEvenWhenItsOwnTimeoutIsNotLonger(): void
     {
         $late = static function (int $worker): array {
-            usleep(900_000);
+            // Half a second short of the limit, because a build that a busy runner lets overrun the limit never starts its job, and the job still runs past the limit.
+            usleep(500_000);
 
-            return [['php', '-r', 'usleep(700000); echo "done";'], []];
+            return [['php', '-r', 'usleep(900000); echo "done";'], []];
         };
         $started = hrtime(true);
 
