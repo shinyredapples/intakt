@@ -11,37 +11,66 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(OwnCgroup::class)]
 final class OwnCgroupTest extends TestCase
 {
-    public function testAFileTheCgroupDoesNotHaveIsEmpty(): void
+    private string $tree;
+
+    protected function setUp(): void
     {
-        self::assertSame('', OwnCgroup::file('no-such-limit'));
+        $this->tree = sys_get_temp_dir().'/intakt-cgroup-'.bin2hex(random_bytes(6));
+        mkdir($this->tree.'/root/a/b', recursive: true);
     }
 
-    public function testALimitFileOfTheOwnCgroupIsRead(): void
+    protected function tearDown(): void
     {
-        $cgroup = (string) @file_get_contents('/proc/self/cgroup');
-
-        if (1 !== preg_match('/^0::(\/.*)$/m', $cgroup, $path) || !is_readable('/sys/fs/cgroup'.rtrim($path[1], '/').'/cgroup.type')) {
-            self::assertSame('', OwnCgroup::file('cgroup.type'));
-
-            return;
+        foreach (['root/a/b', 'root/a', 'root', ''] as $directory) {
+            array_map(unlink(...), array_filter((array) glob($this->tree.'/'.$directory.'/*'), is_file(...)));
+            rmdir($this->tree.'/'.$directory);
         }
+    }
 
-        self::assertSame(file_get_contents('/sys/fs/cgroup'.rtrim($path[1], '/').'/cgroup.type'), OwnCgroup::file('cgroup.type'));
+    // Because in a private cgroup namespace the process sits at the root, whose limits are the container's own.
+    public function testTheLimitsOfACgroupNamespaceRootAreRead(): void
+    {
+        $this->given('0::/', ['root/memory.max' => '4294967296', 'root/cpu.max' => '200000 100000']);
+
+        self::assertSame('4294967296', $this->cgroup()->file('memory.max'));
+        self::assertSame('200000 100000', $this->cgroup()->file('cpu.max'));
     }
 
     public function testTheOwnCgroupComesFirstThenEachParentUpToTheRoot(): void
     {
-        $cgroup = (string) @file_get_contents('/proc/self/cgroup');
+        $this->given('0::/a/b', ['root/a/b/memory.max' => 'own', 'root/a/memory.max' => 'parent', 'root/memory.max' => 'root']);
 
-        if (1 !== preg_match('/^0::(\/.*)$/m', $cgroup, $path)) {
-            self::assertSame([], OwnCgroup::fileAndAncestors('cgroup.type'));
+        self::assertSame(['own', 'parent', 'root'], $this->cgroup()->fileAndAncestors('memory.max'));
+    }
 
-            return;
+    public function testAFileTheCgroupDoesNotHaveIsEmpty(): void
+    {
+        $this->given('0::/a/b', []);
+
+        self::assertSame('', $this->cgroup()->file('memory.max'));
+    }
+
+    public function testOutsideCgroupV2NoFileIsRead(): void
+    {
+        $this->given('4:memory:/a/b', ['root/a/b/memory.max' => 'own']);
+
+        self::assertSame([], $this->cgroup()->fileAndAncestors('memory.max'));
+    }
+
+    /**
+     * @param array<string, string> $files
+     */
+    private function given(string $processCgroup, array $files): void
+    {
+        file_put_contents($this->tree.'/cgroup', $processCgroup."\n");
+
+        foreach ($files as $file => $contents) {
+            file_put_contents($this->tree.'/'.$file, $contents);
         }
+    }
 
-        $files = OwnCgroup::fileAndAncestors('cgroup.type');
-
-        self::assertCount(substr_count(rtrim($path[1], '/'), '/'), $files);
-        self::assertSame(OwnCgroup::file('cgroup.type'), $files[0] ?? '');
+    private function cgroup(): OwnCgroup
+    {
+        return new OwnCgroup($this->tree.'/cgroup', $this->tree.'/root');
     }
 }

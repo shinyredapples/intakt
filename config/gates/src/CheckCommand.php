@@ -120,7 +120,7 @@ final readonly class CheckCommand
     {
         $testWorkers = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax()) ?? 1;
 
-        $memoryLimits = [...OwnCgroup::fileAndAncestors('memory.max'), ...OwnCgroup::fileAndAncestors('memory.high')];
+        $memoryLimits = [...new OwnCgroup()->fileAndAncestors('memory.max'), ...new OwnCgroup()->fileAndAncestors('memory.high')];
 
         $byDefault = GateSlots::byDefault(Processors::available(Processors::status(), Processors::cpuMax()), $memoryLimits, $testWorkers);
 

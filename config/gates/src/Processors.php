@@ -20,7 +20,7 @@ final class Processors
 
     public static function cpuMax(): string
     {
-        return OwnCgroup::file('cpu.max');
+        return new OwnCgroup()->file('cpu.max');
     }
 
     // Because the processors the gate may run on (its affinity list) are what it sees, not every processor of the machine.
