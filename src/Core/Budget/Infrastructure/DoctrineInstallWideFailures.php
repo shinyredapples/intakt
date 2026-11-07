@@ -64,6 +64,18 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         }
     }
 
+    #[Override]
+    public function forgeCredentialsRefused(Throwable $failure): void
+    {
+        $this->backOff("the forge refused Intakt's credentials", $failure);
+    }
+
+    #[Override]
+    public function handOverFailed(Throwable $failure): void
+    {
+        $this->backOff('a hand-over failed', $failure);
+    }
+
     private function record(string $item, string $errorKey): void
     {
         $this->reopenEntityManager();
