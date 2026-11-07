@@ -11,20 +11,12 @@ final readonly class HighlightFragments
 
     private const string DIRECTORY = 'docs/highlights.d';
 
-    private const string LAYOUT = self::DIRECTORY.'/layout.md';
-
     private const string FRAGMENT_NAME = '/^\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/';
-
-    private const string SECTION_HEADING = '/^## (.+)$/';
-
-    private const string SEPARATOR_ROW = '/^\|?(?:\s*:?-+:?\s*\|)*\s*:?-+:?\s*\|?$/';
-
-    private const string CELL_BORDER = '/(?<!\\\\)\|/';
 
     /**
      * @return list<string>
      */
-    public function findingsAgainst(string $root, ?string $assembled): array
+    public function findingsOn(string $root): array
     {
         if (!is_dir($root.'/'.self::DIRECTORY)) {
             return [];
@@ -36,7 +28,7 @@ final readonly class HighlightFragments
             return $assembly->findings;
         }
 
-        if ($assembly->text === $assembled) {
+        if ($assembly->text === $this->contentsOf($root.'/'.self::ASSEMBLED)) {
             return [];
         }
 
@@ -45,68 +37,24 @@ final readonly class HighlightFragments
 
     public function assembled(string $root): HighlightAssembly
     {
-        $layout = $this->linesOf($root.'/'.self::LAYOUT);
+        $layout = $this->linesOf($root.'/'.HighlightLayout::FILE);
 
         if (null === $layout) {
-            return new HighlightAssembly('', ['cannot read '.self::LAYOUT]);
+            return new HighlightAssembly('', ['cannot read '.HighlightLayout::FILE]);
         }
 
-        [$preamble, $sections] = $this->sectionsOf($layout);
+        $layout = HighlightLayout::fromLines($layout);
         $names = $this->fragmentNames($root);
         $findings = $this->nameFindings($names);
-        $rows = array_fill_keys(array_keys($sections), []);
+        $rows = [];
 
         foreach ($this->fragmentsInOrder($names) as $name) {
-            [$fragmentRows, $fragmentFindings] = $this->rowsOf($name, $this->linesOf($root.'/'.self::DIRECTORY.'/'.$name), $sections);
+            [$fragmentRows, $fragmentFindings] = $this->rowsOf($root, $name, $layout);
             $findings = [...$findings, ...$fragmentFindings];
             $rows = $this->withReplacedRows($rows, $fragmentRows);
         }
 
-        return new HighlightAssembly([] === $findings ? $this->textOf($preamble, $sections, $rows) : '', $findings);
-    }
-
-    /**
-     * @param list<string> $layout
-     *
-     * @return array{list<string>, array<string, array{lines: list<string>, kind: HighlightRowKind}>}
-     */
-    private function sectionsOf(array $layout): array
-    {
-        $preamble = [];
-        $bodies = [];
-        $current = null;
-
-        foreach ($layout as $line) {
-            if (1 === preg_match(self::SECTION_HEADING, $line, $heading)) {
-                $current = $heading[1];
-                $bodies[$current] = [];
-
-                continue;
-            }
-
-            if (null === $current) {
-                $preamble[] = $line;
-
-                continue;
-            }
-
-            $bodies[$current][] = $line;
-        }
-
-        return [$preamble, array_map($this->sectionOf(...), $bodies)];
-    }
-
-    /**
-     * @param list<string> $body
-     *
-     * @return array{lines: list<string>, kind: HighlightRowKind}
-     */
-    private function sectionOf(array $body): array
-    {
-        $lines = $this->withoutTrailingBlanks($body);
-        $isTable = 1 === preg_match(self::SEPARATOR_ROW, array_last($lines) ?? '');
-
-        return ['lines' => $lines, 'kind' => $isTable ? HighlightRowKind::TableRow : HighlightRowKind::ListItem];
+        return new HighlightAssembly([] === $findings ? $layout->assembledWith($rows) : '', $findings);
     }
 
     /**
@@ -120,7 +68,7 @@ final readonly class HighlightFragments
             return [];
         }
 
-        return array_values(array_diff($entries, ['.', '..', basename(self::LAYOUT)]));
+        return array_values(array_diff($entries, ['.', '..', basename(HighlightLayout::FILE)]));
     }
 
     /**
@@ -154,94 +102,14 @@ final readonly class HighlightFragments
     }
 
     /**
-     * @param list<string>|null                                                $lines
-     * @param array<string, array{lines: list<string>, kind: HighlightRowKind}> $sections
-     *
      * @return array{array<string, array<string, string>>, list<string>}
      */
-    private function rowsOf(string $name, ?array $lines, array $sections): array
+    private function rowsOf(string $root, string $name, HighlightLayout $layout): array
     {
         $file = self::DIRECTORY.'/'.$name;
+        $lines = $this->linesOf($root.'/'.$file);
 
-        if (null === $lines) {
-            return [[], ['cannot read '.$file]];
-        }
-
-        $rows = [];
-        $findings = [];
-        $inSection = false;
-        $section = null;
-
-        foreach ($lines as $index => $line) {
-            $at = $file.':'.($index + 1).': ';
-
-            if ('' === trim($line)) {
-                continue;
-            }
-
-            if (1 === preg_match(self::SECTION_HEADING, $line, $heading)) {
-                $inSection = true;
-                $section = isset($sections[$heading[1]]) ? $heading[1] : null;
-
-                if (null === $section) {
-                    $findings[] = $at.'section "'.$heading[1].'" is not a section of '.self::LAYOUT;
-                }
-
-                continue;
-            }
-
-            if (!$inSection) {
-                $findings[] = $at.'the line is outside a section, start the fragment with a "## <section>" heading of '.self::LAYOUT;
-
-                continue;
-            }
-
-            // The heading was reported already, so its rows add nothing.
-            if (null === $section) {
-                continue;
-            }
-
-            $finding = $this->rowFinding($line, $section, $sections[$section]['kind'], $rows[$section] ?? []);
-
-            if (null !== $finding) {
-                $findings[] = $at.$finding;
-
-                continue;
-            }
-
-            $rows[$section][$this->keyOf($line, $sections[$section]['kind'])] = $line;
-        }
-
-        return [$rows, $findings];
-    }
-
-    /**
-     * @param array<string, string> $sectionRows
-     */
-    private function rowFinding(string $line, string $section, HighlightRowKind $kind, array $sectionRows): ?string
-    {
-        if (!str_starts_with($line, $kind->value)) {
-            return 'section "'.$section.'" holds '.$kind->noun().', each starting with "'.$kind->value.'"';
-        }
-
-        if (HighlightRowKind::TableRow === $kind && 1 === preg_match(self::SEPARATOR_ROW, $line)) {
-            return 'a fragment holds rows only, the table header is in '.self::LAYOUT;
-        }
-
-        $key = $this->keyOf($line, $kind);
-
-        return isset($sectionRows[$key]) ? 'row "'.$key.'" appears twice in this fragment' : null;
-    }
-
-    private function keyOf(string $line, HighlightRowKind $kind): string
-    {
-        if (HighlightRowKind::ListItem === $kind) {
-            return $line;
-        }
-
-        $cells = preg_split(self::CELL_BORDER, substr($line, 1));
-
-        return trim(false === $cells ? $line : $cells[0]);
+        return null === $lines ? [[], ['cannot read '.$file]] : new HighlightFragment($file, $layout)->rowsOf($lines);
     }
 
     /**
@@ -262,50 +130,19 @@ final readonly class HighlightFragments
     }
 
     /**
-     * @param list<string>                                                     $preamble
-     * @param array<string, array{lines: list<string>, kind: HighlightRowKind}> $sections
-     * @param array<string, array<string, string>>                             $rows
-     */
-    private function textOf(array $preamble, array $sections, array $rows): string
-    {
-        $lines = [...$this->withoutTrailingBlanks($preamble), ''];
-
-        foreach ($sections as $name => $section) {
-            $sectionRows = array_values($rows[$name] ?? []);
-            $lines = [...$lines, '## '.$name, ...$section['lines']];
-
-            // A list needs a blank line after its heading, while table rows continue the header.
-            if (HighlightRowKind::ListItem === $section['kind'] && [] !== $sectionRows) {
-                $lines[] = '';
-            }
-
-            $lines = [...$lines, ...$sectionRows, ''];
-        }
-
-        return implode("\n", $lines);
-    }
-
-    /**
-     * @param list<string> $lines
-     *
-     * @return list<string>
-     */
-    private function withoutTrailingBlanks(array $lines): array
-    {
-        while ([] !== $lines && '' === trim((string) array_last($lines))) {
-            array_pop($lines);
-        }
-
-        return $lines;
-    }
-
-    /**
      * @return list<string>|null
      */
     private function linesOf(string $file): ?array
     {
+        $contents = $this->contentsOf($file);
+
+        return null === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
+    }
+
+    private function contentsOf(string $file): ?string
+    {
         $contents = is_file($file) ? file_get_contents($file) : false;
 
-        return false === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
+        return false === $contents ? null : $contents;
     }
 }

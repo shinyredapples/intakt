@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\HighlightAssembly;
+use Intakt\Gates\HighlightFragment;
 use Intakt\Gates\HighlightFragments;
+use Intakt\Gates\HighlightLayout;
 use Intakt\Gates\HighlightRowKind;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,6 +16,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(HighlightFragments::class)]
 #[UsesClass(HighlightAssembly::class)]
 #[UsesClass(HighlightRowKind::class)]
+#[CoversClass(HighlightFragment::class)]
+#[CoversClass(HighlightLayout::class)]
 final class HighlightFragmentsTest extends SandboxTestCase
 {
     private const string LAYOUT = "# Highlights\n\nIntro.\n\n## Tooling\n\n| Feature | Status | Where |\n|---|---|---|\n\n## PHP 8.5 in use\n";
@@ -130,17 +134,18 @@ final class HighlightFragmentsTest extends SandboxTestCase
     public function testACurrentAssembledFileHasNoFindings(): void
     {
         $this->sandbox->write('docs/highlights.d/1-gates.md', "## Tooling\n| Gates | done | T1 (#5) |\n");
+        $this->sandbox->write('docs/highlights.md', $this->assembled()->text);
 
-        self::assertSame([], new HighlightFragments()->findingsAgainst($this->sandbox->root, $this->assembled()->text));
+        self::assertSame([], new HighlightFragments()->findingsOn($this->sandbox->root));
     }
 
     public function testAHandEditedAssembledFileFails(): void
     {
-        $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
+        $this->sandbox->write('docs/highlights.md', $this->assembled()->text."\n- Hand edit\n");
 
         self::assertSame(
             ['docs/highlights.md is not the assembly of docs/highlights.d/ (edited by hand or not rebuilt): add or change a fragment there and run bin/highlights'],
-            new HighlightFragments()->findingsAgainst($this->sandbox->root, self::LAYOUT."\n- Hand edit\n"),
+            new HighlightFragments()->findingsOn($this->sandbox->root),
         );
     }
 
@@ -148,12 +153,14 @@ final class HighlightFragmentsTest extends SandboxTestCase
     {
         $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
 
-        self::assertCount(1, new HighlightFragments()->findingsAgainst($this->sandbox->root, null));
+        self::assertCount(1, new HighlightFragments()->findingsOn($this->sandbox->root));
     }
 
     public function testATreeWithoutFragmentsHasNoFindings(): void
     {
-        self::assertSame([], new HighlightFragments()->findingsAgainst($this->sandbox->root, 'anything'));
+        $this->sandbox->write('docs/highlights.md', 'anything');
+
+        self::assertSame([], new HighlightFragments()->findingsOn($this->sandbox->root));
     }
 
     private function assembled(): HighlightAssembly

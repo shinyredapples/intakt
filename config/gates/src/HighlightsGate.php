@@ -41,20 +41,16 @@ final readonly class HighlightsGate implements Gate
     public function run(Workspace $workspace): GateResult
     {
         $file = $workspace->root.'/'.self::FILE;
-        $contents = is_file($file) ? file_get_contents($file) : null;
+        $assemblyFindings = $this->fragments->findingsOn($workspace->root);
+
+        if (!is_file($file)) {
+            return GateResult::withFindings($this->name(), $assemblyFindings)->noted(self::FILE.' does not exist');
+        }
+
+        $contents = file_get_contents($file);
 
         if (false === $contents) {
             return GateResult::failedBecause($this->name(), 'cannot read '.self::FILE);
-        }
-
-        $assemblyFindings = $this->fragments->findingsAgainst($workspace->root, $contents);
-
-        if ([] !== $assemblyFindings) {
-            return GateResult::withFindings($this->name(), $assemblyFindings);
-        }
-
-        if (null === $contents) {
-            return GateResult::passedBecause($this->name(), self::FILE.' does not exist');
         }
 
         $tracked = $workspace->hasGit() ? $workspace->git(['ls-files', '-z', '--cached']) : null;
@@ -63,7 +59,7 @@ final readonly class HighlightsGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $findings = $this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked));
+        $findings = [...$assemblyFindings, ...$this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked))];
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }

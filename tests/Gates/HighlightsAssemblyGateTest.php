@@ -6,7 +6,9 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
 use Intakt\Gates\HighlightAssembly;
+use Intakt\Gates\HighlightFragment;
 use Intakt\Gates\HighlightFragments;
+use Intakt\Gates\HighlightLayout;
 use Intakt\Gates\HighlightRowKind;
 use Intakt\Gates\HighlightsGate;
 use Intakt\Gates\HighlightStatus;
@@ -19,6 +21,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(HighlightFragments::class)]
 #[UsesClass(HighlightAssembly::class)]
 #[UsesClass(HighlightRowKind::class)]
+#[UsesClass(HighlightFragment::class)]
+#[UsesClass(HighlightLayout::class)]
 final class HighlightsAssemblyGateTest extends SandboxTestCase
 {
     private const string LAYOUT = "# Highlights\n\n## Tooling\n\n| Feature | Status | Where |\n|---|---|---|\n";
