@@ -42,10 +42,13 @@
         "tokens": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["calls", "prompt", "completion", "total"],
+            "required": ["calls", "prompt", "cache_read", "cache_write", "cached", "completion", "total"],
             "properties": {
                 "calls": {"type": "integer", "minimum": 0},
                 "prompt": {"type": "integer", "minimum": 0},
+                "cache_read": {"type": "integer", "minimum": 0},
+                "cache_write": {"type": "integer", "minimum": 0},
+                "cached": {"type": "integer", "minimum": 0},
                 "completion": {"type": "integer", "minimum": 0},
                 "total": {"type": "integer", "minimum": 0}
             }

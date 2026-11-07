@@ -35,7 +35,7 @@ final class NoPollingTest extends DashboardPageTestCase
     }
 
     #[DataProvider('pages')]
-    public function testNoDashboardPageContainsAScriptARefreshTagOrAPollingCall(string $path): void
+    public function testADashboardListPageHoldsOnlyTheThemeScriptAndNoRefreshTagOrPollingCall(string $path): void
     {
         $this->ledger->startRound('round-1', 'alpha');
 
@@ -45,7 +45,10 @@ final class NoPollingTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('<table', $page);
 
-        foreach (['<script', 'http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'eventsource', 'websocket'] as $polling) {
+        self::assertSame(1, substr_count($page, '<script'));
+        self::assertStringContainsString('<script>(() => {', $page);
+        self::assertStringContainsString('prefers-color-scheme', $page);
+        foreach (['http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'eventsource', 'websocket', '<script src', 'type="module"'] as $polling) {
             self::assertStringNotContainsString($polling, $page);
         }
     }

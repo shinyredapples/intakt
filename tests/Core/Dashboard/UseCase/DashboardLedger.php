@@ -104,9 +104,17 @@ final class DashboardLedger implements Ledger
 
     public function useTokens(string $round, int $prompt, int $completion): void
     {
+        $this->useRecordedTokens($round, ['prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]);
+    }
+
+    /**
+     * @param array<string, int|string|null> $usage
+     */
+    public function useRecordedTokens(string $round, array $usage): void
+    {
         $call = Uuid::v7()->toRfc4122();
         $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round]);
-        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'model-a', 'prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]]]);
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => 'model-a'] + $usage]]);
     }
 
     public function failHead(string $project, string $change, int $failures): void

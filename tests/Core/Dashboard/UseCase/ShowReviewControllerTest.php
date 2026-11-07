@@ -12,7 +12,6 @@ use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Domain\TokenCount;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -21,6 +20,8 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -34,7 +35,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ReviewedRound::class)]
 #[CoversClass(ReviewerOutcome::class)]
 #[CoversClass(RoundFinding::class)]
-#[CoversClass(TokenCount::class)]
+#[CoversClass(TokenFigures::class)]
+#[UsesClass(TokenUsageRow::class)]
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(LedgerReviews::class)]
@@ -174,9 +176,19 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['1500', '500', '2000', 'no price']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
-        self::assertSame([['700', '100', '800', 'no price']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
+        self::assertSame([['1500', '0', '0', '0', '500', '2000', 'no price']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
+        self::assertSame([['700', '0', '0', '0', '100', '800', 'no price']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
         self::assertSelectorTextContains('p.summary', '2 rounds, 2800 tokens in all. Cost: no price');
+    }
+
+    public function testAnAnthropicRoundShowsItsCacheReadsAndWritesWithinThePromptAndTheirSumAsTotal(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->useRecordedTokens('round-1', ['account' => 'anthropic.default', 'prompt' => 4, 'completion' => 700, 'cached' => 39500, 'cache_creation' => 1500, 'cache_read' => 38000, 'total' => null]);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'no price']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testTokensOfACallStartedForAnotherRoundAreNotCounted(): void
@@ -186,7 +198,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['0', '0', '0', 'no price']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['0', '0', '0', '0', '0', '0', 'no price']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testARoundStartedWithoutAChangeNameIsAReviewOfItsOwn(): void

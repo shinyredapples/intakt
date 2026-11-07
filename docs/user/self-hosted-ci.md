@@ -1,6 +1,6 @@
 # Running Intakt's CI on your own runner
 
-Intakt's own CI (`.github/workflows/ci.yml`) runs on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
+Intakt's own CI (`.github/workflows/ci.yml` and `.github/workflows/first-start.yml`) runs on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
 
 ## Choosing the runner
 
@@ -10,7 +10,7 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 ["self-hosted","linux","x64","intakt-ci"]
 ```
 
-Every job (`check`, `changes`, `persistence` and `image`) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
+Every job (`check`, `changes`, `persistence` and `image` from `ci.yml`, and `first-start` from `first-start.yml`) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
 ## The runner must be ephemeral
 
@@ -33,8 +33,9 @@ The script that registers your ephemeral runner should do three things before ea
 
 | Need | Why |
 |---|---|
-| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | every job builds or reuses the CI image and runs the code in it; the `persistence` job starts a service container for each database engine |
+| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | every `ci.yml` job builds or reuses the CI image and runs the code in it; the `persistence` job starts a service container for each database engine; the `first-start` job builds the full application image from the repository's `Dockerfile` on the host, creates a Docker volume and runs the image on it |
 | `bash`, `git`, `grep`, `sh`, `sha256sum`, `cut`, `mktemp` and `rm` | the `changes` job reads the diff on the host in a temporary folder; `build-image.sh` hashes the Dockerfile |
+| `openssl`, `bash` and `sleep` | `docker/verify-first-start.sh` (the `first-start` job) generates the random secrets for the started container with `openssl` on the host and waits with `sleep` until the container answers |
 | Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them) |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; the workflow lifts AppArmor only on GitHub's runners, never on yours |
 

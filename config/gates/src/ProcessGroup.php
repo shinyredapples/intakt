@@ -25,9 +25,14 @@ final readonly class ProcessGroup
     // Because only the gate child can reach the session of its contained run, it is asked to stop first and killed when it does not.
     public function stop(): void
     {
-        posix_kill(-$this->id, 15);
+        $this->askToStop();
         $this->outlives((hrtime(true) / 1_000_000_000) + self::STOP_GRACE_SECONDS);
         $this->kill();
+    }
+
+    public function askToStop(): void
+    {
+        posix_kill(-$this->id, 15);
     }
 
     public function outlives(float $deadline): bool

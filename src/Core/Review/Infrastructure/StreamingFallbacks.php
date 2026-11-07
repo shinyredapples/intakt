@@ -29,7 +29,8 @@ final readonly class StreamingFallbacks
             return;
         }
 
-        $payload = json_encode(['round' => $round->toRfc4122(), 'reviewer' => $reviewer->id->toRfc4122()], JSON_THROW_ON_ERROR);
+        // The ledger's reviewer id when there is one, because a retry runs under a new conversation id.
+        $payload = json_encode(['round' => $round->toRfc4122(), 'reviewer' => ($reviewer->reviewerId ?? $reviewer->id)->toRfc4122()], JSON_THROW_ON_ERROR);
         $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::StreamingFellBack, $payload));
 
         // Logged, not thrown, because the review goes on unstreamed without its record.

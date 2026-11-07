@@ -20,6 +20,7 @@ use NoDiscard;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\Service\ServiceProviderInterface;
@@ -69,7 +70,21 @@ final readonly class TierPlatform implements TierInvoker
     #[NoDiscard('the answer is only in the result')]
     public function invoke(ResolvedModel $model, TierRequest $request): DeferredResult
     {
-        return $this->platforms->get($model->provider->value)->invoke($model->model, $request->input, $request->options);
+        return $this->platforms->get($model->provider->value)->invoke($model->model, $request->input, $this->withOutputLimit($model, $request->options));
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     *
+     * @return array<string, mixed>
+     */
+    private function withOutputLimit(ResolvedModel $model, array $options): array
+    {
+        if (null === $model->maxOutput || !$model->provider->limitsOutput()) {
+            return $options;
+        }
+
+        return $options + [PlatformOptions::MAX_OUTPUT_TOKENS => $model->maxOutput];
     }
 
     // A tier without substitutes keeps the wait of its one provider, so a reviewer on it waits as before instead of ending blocked, but not for keys that were all rejected, because no wait brings them back.
