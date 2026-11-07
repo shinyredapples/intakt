@@ -157,6 +157,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(FinalStreamedUsage::class)]
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewerRuns::class)]
+#[UsesClass(StreamingFallbacks::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReviewerMcpToolboxFactory::class)]
@@ -303,6 +304,29 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(2, $calls);
         self::assertNotSame([], $updates->seen);
         self::assertSame([], array_filter($updates->seen, static fn (string $update): bool => !str_contains($update, $reviewerId->toRfc4122())));
+    }
+
+    public function testAStreamingFallbackNamesTheLedgersReviewerIdWhenItIsSet(): void
+    {
+        $ledger = new InMemoryLedger();
+        $round = new UuidV7();
+        $conversation = new UuidV7();
+        $reviewerId = new UuidV7();
+
+        new StreamingFallbacks($ledger, new NullLogger())->record(new ReviewerConversation('You review.', $conversation, $round, $reviewerId));
+
+        self::assertSame([['round' => $round->toRfc4122(), 'reviewer' => $reviewerId->toRfc4122()]], $ledger->payloads());
+    }
+
+    public function testAStreamingFallbackNamesTheConversationWhenNoReviewerIdIsSet(): void
+    {
+        $ledger = new InMemoryLedger();
+        $round = new UuidV7();
+        $conversation = new UuidV7();
+
+        new StreamingFallbacks($ledger, new NullLogger())->record(new ReviewerConversation('You review.', $conversation, $round));
+
+        self::assertSame([['round' => $round->toRfc4122(), 'reviewer' => $conversation->toRfc4122()]], $ledger->payloads());
     }
 
     public function testARetryOnATierWithoutAnOutputLimitGetsTwiceTheTiersDefault(): void
