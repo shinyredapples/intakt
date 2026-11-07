@@ -45,8 +45,6 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
-| `docker`, `bash`, `openssl`, `sleep` | `verify-first-start.sh` (the `first-start` job) | the app's image on an empty volume, random secrets, the panel command | yes |
-
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
 
 ## To smoke-test the container image
@@ -58,6 +56,10 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 | `docker` (CLI, a running daemon and the `buildx` plugin) | `volume create`, `run`, `port`, `inspect`, `exec`, `logs`, `rm -f`, `volume rm -f`, `image inspect` for the image digest, `buildx imagetools inspect` for the base image tag's digest | for a run against an image |
 | `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `env`, `timeout`, `sleep` | the HTTP and admin API checks from the host, reading the `FROM` tag, the run's random secrets, the time limits | yes |
 | `php`, `curl` inside the image (or on the host with `--local`) | reading the `mcp.php` request count from the admin API's `/frankenphp/threads`, asking the admin API where the server runs | yes (both are in the image) |
+
+## To check the demo's first start
+
+`docker/verify-first-start.sh` (`.github/workflows/first-start.yml`) calls `docker` (CLI and a running daemon), `bash`, `openssl` (random secrets) and `sleep` on the host that runs it.
 
 ## Called when a tier maps to `claude_code`
 

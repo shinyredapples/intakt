@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# End to end proof of the demo's first start: the real image on an empty volume, then the review command the first start prints.
-# No model is called, because intakt:review:panel only shows the panel; the key is a placeholder that lets the seed run.
+# Smoke check of the demo's first start on the real image and an empty volume; a single run may pass even with a stale container.
+# intakt:review:panel calls no model, so the key is a placeholder that only lets the seed run.
 image=intakt-first-start-check
 volume=intakt-first-start-check-data
 name=intakt-first-start-check
