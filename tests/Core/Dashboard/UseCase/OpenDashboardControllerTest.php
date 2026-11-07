@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ListReviews\OpenDashboardController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Response;
 
 #[CoversClass(OpenDashboardController::class)]
@@ -41,7 +42,7 @@ final class OpenDashboardControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(['round-1'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
+        self::assertSame(['round-1'], $crawler->filter('tbody tr td:first-child')->each(static fn (Crawler $cell): string => $cell->text()));
     }
 
     public function testTheRootAddressRefusesAHostThatDoesNotNameTheDashboard(): void
