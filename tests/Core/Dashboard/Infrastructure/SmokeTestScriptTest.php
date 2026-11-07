@@ -131,6 +131,32 @@ final class SmokeTestScriptTest extends TestCase
         self::assertMatchesRegularExpression('#^curl (?!.*--header).* http://localhost:8000/projects$#m', $this->dockerCalls());
     }
 
+    public function testTheInstanceStatusIsReadFromDescriptorThree(): void
+    {
+        $process = $this->instanceCheck();
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('bin/instance reported ready in worker mode', $process->getOutput());
+    }
+
+    // The stand-in docker runs the entrypoint without descriptor 3, as a container does; the stand-in php writes its status there, as bin/instance does.
+    private function instanceCheck(): Process
+    {
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($this->directory.'/docker', <<<'BASH'
+            #!/bin/bash
+            while [[ $1 != --entrypoint ]]; do shift; done
+            entrypoint=$2
+            shift 3
+            exec 3>&-
+            exec "$entrypoint" "$@"
+            BASH);
+        $filesystem->dumpFile($this->directory.'/php', "#!/bin/bash\necho 'worker log line'\necho '{\"status\":\"ready\",\"mode\":\"worker\"}' >&3");
+        chmod($this->directory.'/php', 0o755);
+
+        return $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; smoke=s; containers=(); check_instance'], []);
+    }
+
     private function dashboardCheck(string $steps): Process
     {
         new Filesystem()->dumpFile($this->directory.'/curl', "#!/bin/bash\n".'echo "curl $*" >> "${0%/*}/calls"; printf "<title>Intakt</title>\n200"');

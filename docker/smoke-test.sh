@@ -195,7 +195,8 @@ check_instance() {
     local output
     begin instance
     containers+=("$smoke-instance")
-    output=$(timeout 180 docker run --rm --name "$smoke-instance" --entrypoint php "$image" bin/instance 2>&1) || fail "bin/instance failed: $output"
+    # bin/instance writes its status to descriptor 3, which a container does not open.
+    output=$(timeout 180 docker run --rm --name "$smoke-instance" --entrypoint sh "$image" -c 'exec php bin/instance 3>&1 >/dev/null' 2>&1) || fail "bin/instance failed: $output"
     grep -qFx '{"status":"ready","mode":"worker"}' <<<"$output" || fail "bin/instance did not report ready in worker mode: $output"
     echo "bin/instance reported ready in worker mode"
 }
