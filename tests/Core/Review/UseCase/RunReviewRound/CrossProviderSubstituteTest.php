@@ -272,7 +272,12 @@ final class CrossProviderSubstituteTest extends KernelTestCase
     {
         return MockPlatformFactory::createPlatform(static function () use ($decision): TextResult {
             $answer = new TextResult(VerdictDocument::fromTheDesign()->with('verdict', $decision)->with('resolved', [])->with('findings', 'approve' === $decision ? [] : VerdictDocument::fromTheDesign()->decoded()['findings'])->json());
-            $answer->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 100, completionTokens: 20, totalTokens: 120, model: 'other'));
+            $answer->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+                model: 'other',
+            ));
 
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);

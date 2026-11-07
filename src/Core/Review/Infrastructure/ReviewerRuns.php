@@ -45,7 +45,14 @@ final readonly class ReviewerRuns
      */
     public function agent(ToolboxInterface $toolbox, PlatformInterface $platform, string $model): Agent
     {
-        return new Agent($platform, $model, name: 'reviewer', toolbox: $toolbox, maxToolCalls: self::MAX_ROUNDS, messageStore: $this->conversations);
+        return new Agent(
+            $platform,
+            $model,
+            name: 'reviewer',
+            toolbox: $toolbox,
+            maxToolCalls: self::MAX_ROUNDS,
+            messageStore: $this->conversations,
+        );
     }
 
     public function fellBackToUnstreamed(ReviewerConversation $reviewer): void

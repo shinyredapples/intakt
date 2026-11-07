@@ -25,6 +25,8 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
 {
     use UsesSandboxes;
 
+    private const string GATE_CONFIGURATION = __DIR__.'/../../config/gates/phpstan.neon';
+
     private string $root = '';
 
     private ?Closure $autoloader = null;
@@ -96,10 +98,11 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
      */
     private function phpFilesUnder(string $root): array
     {
+        $excluded = $this->pathsTheGateExcludes();
         $files = [];
 
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
-            if ($file instanceof SplFileInfo && 'php' === $file->getExtension()) {
+            if ($file instanceof SplFileInfo && 'php' === $file->getExtension() && !$this->isUnderAny(substr($file->getPathname(), strlen($root) + 1), $excluded)) {
                 $files[] = $file->getPathname();
             }
         }
@@ -107,6 +110,26 @@ abstract class PhpStanRuleTestCase extends RuleTestCase
         sort($files);
 
         return $files;
+    }
+
+    // because the in-process analysis must see the files `bin/check --only=phpstan` sees, the list comes from the gate's configuration, not a copy of it
+    /**
+     * @return list<string>
+     */
+    private function pathsTheGateExcludes(): array
+    {
+        preg_match('~^    excludePaths:\n((?:        - .+\n)+)~m', (string) file_get_contents(self::GATE_CONFIGURATION), $block);
+        preg_match_all('~^        - %currentWorkingDirectory%/(\S+)~m', $block[1] ?? '', $paths);
+
+        return $paths[1];
+    }
+
+    /**
+     * @param list<string> $folders
+     */
+    private function isUnderAny(string $relativePath, array $folders): bool
+    {
+        return array_any($folders, static fn (string $folder): bool => str_starts_with($relativePath, $folder.'/'));
     }
 
     // because the test container finds a class only through an autoloader, while `phpstan analyse` also scans the analyzed files

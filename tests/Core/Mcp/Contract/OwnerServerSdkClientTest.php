@@ -104,7 +104,10 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     public function testStartingAReviewWithTheOwnerTokenAnswersWithTheDecisionAndTheActList(): void
     {
-        $result = $this->start($this->connected(withWrites: true, bearer: $this->ownerToken));
+        $result = $this->start($this->connected(
+            withWrites: true,
+            bearer: $this->ownerToken,
+        ));
 
         self::assertFalse($result->isError);
         $answer = $this->structured($result);
@@ -115,7 +118,10 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     public function testTheActListOfAStartedReviewIsReadBackThroughTheReadTool(): void
     {
-        $client = $this->connected(withWrites: true, bearer: $this->ownerToken);
+        $client = $this->connected(
+            withWrites: true,
+            bearer: $this->ownerToken,
+        );
         $started = $this->structured($this->start($client));
 
         $act = $this->structured($client->callTool('review_act_list', ['roundId' => $started['roundId']]));
@@ -128,7 +134,10 @@ final class OwnerServerSdkClientTest extends KernelTestCase
     {
         $steps = [];
 
-        $this->start($this->connected(withWrites: true, bearer: $this->ownerToken), onProgress: static function (float $progress, ?float $total, ?string $message) use (&$steps): void {
+        $this->start($this->connected(
+            withWrites: true,
+            bearer: $this->ownerToken,
+        ), onProgress: static function (float $progress, ?float $total, ?string $message) use (&$steps): void {
             $steps[] = [$progress, $total, $message];
         });
 
@@ -146,7 +155,11 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     public function testStartingAReviewWithAWrongTokenIsRefused(): void
     {
-        $client = $this->connected(withWrites: true, bearer: bin2hex(random_bytes(16)), connect: false);
+        $client = $this->connected(
+            withWrites: true,
+            bearer: bin2hex(random_bytes(16)),
+            connect: false,
+        );
 
         $this->expectException(ConnectionException::class);
         $client->connect($this->transport());
@@ -154,7 +167,10 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     public function testStartingAReviewWithTheTokenWhileTheConfigForbidsWritesIsAnMcpError(): void
     {
-        $result = $this->start($this->connected(withWrites: false, bearer: $this->ownerToken));
+        $result = $this->start($this->connected(
+            withWrites: false,
+            bearer: $this->ownerToken,
+        ));
 
         self::assertTrue($result->isError);
         self::assertStringContainsString('not granted', $this->text($result));
@@ -179,7 +195,10 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     public function testARoundNumberThatIsNotNextIsAnMcpErrorWithoutAStackTrace(): void
     {
-        $result = $this->start($this->connected(withWrites: true, bearer: $this->ownerToken), ['round' => 2]);
+        $result = $this->start($this->connected(
+            withWrites: true,
+            bearer: $this->ownerToken,
+        ), ['round' => 2]);
 
         self::assertTrue($result->isError);
         self::assertStringContainsString('Round 2 was asked for', $this->text($result));

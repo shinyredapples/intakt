@@ -233,7 +233,10 @@ final class StartedRoundsTest extends KernelTestCase
     public function testAReturningHeadWhoseStaleRoundStillOwesItsQueuedLineStartsNoRound(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
-        $this->markStored(stale: true, recorded: false);
+        $this->markStored(
+            stale: true,
+            recorded: false,
+        );
         $started = 0;
 
         $this->rounds->startOnce('alpha', $this->green(), static function () use (&$started): QueuedRound {
@@ -316,7 +319,10 @@ final class StartedRoundsTest extends KernelTestCase
     public function testAFailedStartOnAReturningHeadKeepsItsStaleRound(): void
     {
         $this->rounds->startOnce('alpha', $this->green(), static fn (): QueuedRound => RecordingCommandBus::queued(1));
-        $this->markStored(stale: true, recorded: true);
+        $this->markStored(
+            stale: true,
+            recorded: true,
+        );
         $this->entities->getConnection()->executeStatement('DROP TABLE watcher_pending_head');
 
         try {
