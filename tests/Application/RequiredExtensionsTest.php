@@ -20,11 +20,11 @@ final class RequiredExtensionsTest extends TestCase
         $lock = $this->decode('composer.lock');
         $needed = [];
 
-        foreach ([...$lock['packages'], ...$lock['packages-dev']] as $package) {
+        foreach ([...$this->list($lock, 'packages'), ...$this->list($lock, 'packages-dev')] as $package) {
             self::assertIsArray($package);
 
-            foreach (array_keys($package['require'] ?? []) as $requirement) {
-                if (str_starts_with((string) $requirement, 'ext-') && !in_array($requirement, self::ALWAYS_COMPILED, true)) {
+            foreach ($this->extensionKeys($package['require'] ?? []) as $requirement) {
+                if (!in_array($requirement, self::ALWAYS_COMPILED, true)) {
                     $needed[$requirement][] = $package['name'];
                 }
             }
@@ -37,9 +37,9 @@ final class RequiredExtensionsTest extends TestCase
 
     public function testTheLockPlatformBlockMirrorsTheDeclaredExtensions(): void
     {
-        $platform = array_filter(array_keys($this->decode('composer.lock')['platform']), static fn (string $name): bool => str_starts_with($name, 'ext-'));
+        $platform = $this->extensionKeys($this->decode('composer.lock')['platform'] ?? null);
 
-        self::assertSame($this->declaredExtensions(), array_values($platform));
+        self::assertSame($this->declaredExtensions(), $platform);
     }
 
     /**
@@ -47,9 +47,30 @@ final class RequiredExtensionsTest extends TestCase
      */
     private function declaredExtensions(): array
     {
-        $required = array_keys($this->decode('composer.json')['require']);
+        return $this->extensionKeys($this->decode('composer.json')['require'] ?? null);
+    }
 
-        return array_values(array_filter($required, static fn (string $name): bool => str_starts_with($name, 'ext-')));
+    /**
+     * @return list<string>
+     */
+    private function extensionKeys(mixed $requirements): array
+    {
+        self::assertIsArray($requirements);
+        $names = array_map(strval(...), array_keys($requirements));
+
+        return array_values(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'ext-')));
+    }
+
+    /**
+     * @param array<string, mixed> $lock
+     *
+     * @return list<mixed>
+     */
+    private function list(array $lock, string $key): array
+    {
+        self::assertIsArray($lock[$key]);
+
+        return array_values($lock[$key]);
     }
 
     /**
@@ -60,6 +81,12 @@ final class RequiredExtensionsTest extends TestCase
         $decoded = json_decode((string) file_get_contents(self::ROOT.'/'.$file), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($decoded);
 
-        return $decoded;
+        $byKey = [];
+
+        foreach ($decoded as $key => $value) {
+            $byKey[(string) $key] = $value;
+        }
+
+        return $byKey;
     }
 }
