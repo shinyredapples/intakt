@@ -74,9 +74,9 @@ final readonly class RoundLedgerReading
     /**
      * @param list<RecordedEvent> $recorded
      *
-     * @return array<string, string|null> the model of each call, by call id
+     * @return array<string, string|null>
      */
-    // Only the started row names the round and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
+    // Keyed by call id with the model as value, because only the started row names the round and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
     private function callsStartedFor(string $roundId, array $recorded): array
     {
         $calls = [];

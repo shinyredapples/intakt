@@ -223,7 +223,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::UsageRecorded, 'unsettled' === $ending ? $ended + ['failure' => 'RuntimeException'] : $ended);
     }
 
-    // Written through the payload classes, in the format UsageLedger writes, from what the vendor's extractor read.
+    // Written through the payload classes from what the vendor's extractor read, because a row written by hand could carry a model the vendor never reports.
     private function recordAnswer(string $call, string $tierModel, ?TokenUsageInterface $usage): void
     {
         self::assertNotNull($usage);
