@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Identifier;
 use PHPStan\Analyser\Scope;
@@ -29,13 +30,25 @@ final readonly class AskedServiceIds
      */
     public function of(MethodCall $call, Scope $scope, string $method): array
     {
-        $argument = $call->getArgs()[0] ?? null;
+        $argument = $this->idArgument($call);
 
         if (!$call->name instanceof Identifier || $method !== $call->name->toLowerString() || null === $argument || !$this->isContainer($scope->getType($call->var))) {
             return [];
         }
 
         return array_map(static fn (ConstantStringType $id): string => $id->getValue(), $scope->getType($argument->value)->getConstantStrings());
+    }
+
+    // because named arguments may put invalidBehavior: before id:, so the id is not always the first argument
+    private function idArgument(MethodCall $call): ?Arg
+    {
+        $first = $call->getArgs()[0] ?? null;
+
+        if (null === $first || null === $first->name) {
+            return $first;
+        }
+
+        return array_find($call->getArgs(), static fn (Arg $argument): bool => 'id' === $argument->name?->toString());
     }
 
     private function isContainer(Type $receiver): bool

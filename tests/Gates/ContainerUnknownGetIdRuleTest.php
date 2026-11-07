@@ -35,6 +35,16 @@ final class ContainerUnknownGetIdRuleTest extends PhpStanRuleTestCase
         $this->assertAcceptedBy('phpstan', 'registered-get-service-ids-in-union');
     }
 
+    public function testGettingEitherAKnownOrAMisspelledServiceIdNamedAfterTheInvalidBehaviorFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'misspelled-get-service-id-in-union-named-last', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container');
+    }
+
+    public function testGettingEitherOfTwoRegisteredServiceIdsNamedAfterTheInvalidBehaviorPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'registered-get-service-ids-in-union-named-last');
+    }
+
     public function testGettingEitherAKnownOrAPrivateServiceIdFailsStaticAnalysis(): void
     {
         $this->assertRejectedBy('phpstan', 'private-get-service-id-in-union', 'src/Lookup.php:20 symfonyContainer.privateService Service "Intakt\Core\Review\Infrastructure\ReviewerPrompt" is private');
