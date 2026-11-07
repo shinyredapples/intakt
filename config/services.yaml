@@ -121,6 +121,8 @@ when@test:
         - { resource: '../tests/Core/Watcher/services.yaml', ignore_errors: not_found }
         # The start guard under a public test name, so its test proves the alias this file wires and the ceilings config/packages/ai.php binds.
         - { resource: '../tests/Core/Budget/services.yaml', ignore_errors: not_found }
+        # A vendor that never calls a model and a hub that records, so a journey runs a review round on an instance and reads what the dashboard published.
+        - { resource: '../tests/Journeys/services.yaml', ignore_errors: not_found }
     services:
         # In the worker's own cache directory, because the tests gate runs workers side by side and a lock one worker holds would skip another's notice.
         Symfony\Component\Lock\Store\FlockStore:
