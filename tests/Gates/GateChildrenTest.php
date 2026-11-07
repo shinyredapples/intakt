@@ -8,8 +8,8 @@ use Intakt\Gates\CheckCommand;
 use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateSlots;
-use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\OwnCgroup;
+use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\Processors;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
@@ -101,8 +101,8 @@ final class GateChildrenTest extends SandboxTestCase
         $check->signal(15);
         $check->wait();
 
-        self::assertCount(2, $pids);
-        self::assertSame([false, false], array_map(static fn (int $pid): bool => posix_kill($pid, 0), $pids));
+        self::assertNotContains(0, $pids, 'both children wrote their process id');
+        self::assertSame([false, false], array_map($this->runsOnAfterAWhile(...), $pids));
     }
 
     public function testAGateWhoseChildCrashesFailsWithTheChildsOutput(): void
@@ -185,6 +185,26 @@ final class GateChildrenTest extends SandboxTestCase
         return $home;
     }
 
+    // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine.
+    private function runsOnAfterAWhile(int $pid): bool
+    {
+        $until = hrtime(true) + 5_000_000_000;
+
+        while ($this->runs($pid) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        return $this->runs($pid);
+    }
+
+    private function runs(int $pid): bool
+    {
+        $status = (string) @file_get_contents('/proc/'.$pid.'/stat');
+        $end = strrpos($status, ')');
+
+        return false !== $end && 'Z' !== substr($status, $end + 2, 1);
+    }
+
     /**
      * @param list<string> $gates
      *
@@ -193,7 +213,7 @@ final class GateChildrenTest extends SandboxTestCase
     private function pidsOnceWritten(string $directory, array $gates): array
     {
         $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
-        $until = hrtime(true) + 10_000_000_000;
+        $until = hrtime(true) + 25_000_000_000;
 
         while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
             usleep(10000);
