@@ -70,6 +70,13 @@ final class WorkerPortsTest extends TestCase
         new WorkerPorts('20099-20000');
     }
 
+    public function testARangeThatStartsAtPortZeroIsRefused(): void
+    {
+        $this->expectExceptionObject(new LogicException('INTAKT_TEST_PORTS must name a range of ports such as 20000-20099, not "0-0".'));
+
+        new WorkerPorts('0-0');
+    }
+
     public function testWithoutARangeTheSystemPicksTheFreePort(): void
     {
         self::assertGreaterThan(0, new WorkerPorts(null)->next());

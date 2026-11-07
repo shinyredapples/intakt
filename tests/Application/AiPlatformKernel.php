@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Intakt\Core\Mcp\Infrastructure\AuthorizeToolCallsPass;
+use Intakt\Kernel as IntaktKernel;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\Config\Loader\LoaderInterface;
-use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -40,6 +39,6 @@ final class AiPlatformKernel extends Kernel
 
     protected function build(ContainerBuilder $container): void
     {
-        $container->addCompilerPass(new AuthorizeToolCallsPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
+        IntaktKernel::addApplicationPasses($container);
     }
 }

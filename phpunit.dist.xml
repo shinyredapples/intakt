@@ -38,7 +38,12 @@
     >
         <include>
             <directory>src</directory>
+            <directory>tests</directory>
         </include>
+
+        <issueTriggerResolvers>
+            <issueTriggerResolver className="Intakt\Tests\Support\Deprecation\LoadTimeDeprecationResolver"/>
+        </issueTriggerResolvers>
 
         <deprecationTrigger>
             <method>Doctrine\Deprecations\Deprecation::trigger</method>
