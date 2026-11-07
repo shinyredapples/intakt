@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\IgnoredErrors;
 use Intakt\Gates\IgnoredErrorsReader;
 use Intakt\Gates\PhpStanIncludes;
 use Intakt\Gates\RatchetListFile;
 use Intakt\Gates\RatchetListsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(RatchetListsGate::class)]
 #[CoversClass(PhpStanIncludes::class)]
 #[CoversClass(RatchetListFile::class)]
 #[CoversClass(IgnoredErrorsReader::class)]
+#[UsesClass(IgnoredErrors::class)]
 final class RatchetListsGateTest extends SandboxTestCase
 {
     private const string LIST = 'ratchet/loose-conditions.neon';
