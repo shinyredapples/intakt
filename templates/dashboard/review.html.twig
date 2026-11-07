@@ -87,10 +87,13 @@
 
     <h3>Tokens and cost</h3>
     <table class="tokens">
-        <thead><tr><th>Prompt</th><th>Completion</th><th>Total</th><th>Cost</th></tr></thead>
+        <thead><tr><th>Prompt</th><th>Cache read</th><th>Cache write</th><th>Cached</th><th>Completion</th><th>Total</th><th>Cost</th></tr></thead>
         <tbody>
             <tr>
                 <td>{{ reviewed.tokens.prompt }}</td>
+                <td>{{ reviewed.tokens.cacheRead }}</td>
+                <td>{{ reviewed.tokens.cacheWrite }}</td>
+                <td>{{ reviewed.tokens.cached }}</td>
                 <td>{{ reviewed.tokens.completion }}</td>
                 <td>{{ reviewed.tokens.total }}</td>
                 <td>no price</td>

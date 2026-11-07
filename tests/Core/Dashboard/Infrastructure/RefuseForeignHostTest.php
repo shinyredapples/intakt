@@ -10,7 +10,6 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Domain\TokenCount;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -20,6 +19,7 @@ use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardPageTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -43,7 +43,7 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(ShowReviewController::class)]
-#[UsesClass(TokenCount::class)]
+#[UsesClass(TokenFigures::class)]
 final class RefuseForeignHostTest extends DashboardPageTestCase
 {
     /**

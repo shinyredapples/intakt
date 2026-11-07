@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+
 final readonly class Review
 {
     public string $project;
@@ -32,8 +34,8 @@ final readonly class Review
         return null === $latest ? null : $latest + 1;
     }
 
-    public function tokens(): TokenCount
+    public function tokens(): TokenFigures
     {
-        return array_reduce($this->rounds, static fn (TokenCount $sum, ReviewedRound $round): TokenCount => $sum->plus($round->tokens), TokenCount::none());
+        return array_reduce($this->rounds, static fn (TokenFigures $sum, ReviewedRound $round): TokenFigures => $sum->plus($round->tokens), TokenFigures::none());
     }
 }

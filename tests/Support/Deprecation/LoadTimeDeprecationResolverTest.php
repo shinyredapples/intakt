@@ -6,7 +6,6 @@ namespace Intakt\Tests\Support\Deprecation;
 
 use Composer\Autoload\ClassLoader;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -16,8 +15,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(LoadTimeDeprecationResolver::class)]
 #[UsesClass(RegisteredAutoloader::class)]
-// Because the PHPUnit runs it starts keep their result cache in var/cache/ of the checkout, which every test worker shares.
-#[Group('serial')]
+// Because each run keeps its result cache under the TMPDIR of its test worker, not in the checkout.
 final class LoadTimeDeprecationResolverTest extends TestCase
 {
     private const string APPLICATION_CONFIGURATION = 'phpunit.dist.xml';
@@ -242,7 +240,7 @@ final class LoadTimeDeprecationResolverTest extends TestCase
     private function runFixture(string $configuration, string $file): Process
     {
         $root = dirname(__DIR__, 3);
-        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--configuration', $root.'/'.$configuration, $file], $root);
+        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--cache-directory', sys_get_temp_dir().'/phpunit-cache', '--configuration', $root.'/'.$configuration, $file], $root);
         $run->run();
 
         return $run;

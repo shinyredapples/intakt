@@ -4,7 +4,7 @@ The dashboard is a board in your browser that shows everything Intakt is doing, 
 
 ## What you can open today
 
-Three pages are built. They show what Intakt has written down about its reviews. The lists never refresh by themselves: reload them to see news. The page of a review that is still running updates by itself while the round goes on, and if the live connection is down it simply shows what is written down when you reload.
+Three pages are built. They show what Intakt has written down about its reviews. Opening the dashboard's address without a page name takes you to **Reviews**. The lists never refresh by themselves: reload them to see news. The page of a review that is still running updates by itself while the round goes on, and if the live connection is down it simply shows what is written down when you reload.
 
 - **Projects** (`/projects`): one row per project that has had a review, with how many review rounds it has had and how many of them reached the judge.
 - **Reviews** (`/reviews`): one row per review round, newest first, with its project, how many reviewers took part, when it started, and whether it is still running or the judge has decided. Add `?project=name` to the address to show one project only. Click a round to open its review. Above the rounds, a card for each pull request that failed the last time Intakt tried it says why, how many times in a row, when it is tried next, and whether it went to the maintainer agent; the card goes away once that pull request moves on or is closed.
