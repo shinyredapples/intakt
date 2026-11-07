@@ -267,6 +267,20 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(MaxOutputTokensException::class, $ledger->payloads()[1]['failure']);
     }
 
+    public function testTheRetryOfACallStoppedByTheOutputLimitIsReservedUnderTheSameModel(): void
+    {
+        $ledger = new InMemoryLedger();
+        $calls = 0;
+        $answer = static function () use (&$calls): string {
+            return 1 === ++$calls ? throw new MaxOutputTokensException('Truncated at the output limit.') : VerdictDocument::fromTheDesign()->json();
+        };
+
+        $this->vendorWithOutputLimit($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        $started = array_values(array_filter($ledger->payloads(), static fn (array $payload): bool => 'started' === $payload['phase']));
+        self::assertSame(['big', 'big'], array_column($started, 'model'));
+    }
+
     public function testACallStoppedByTheOutputLimitAgainOnItsRetryFailsTheReviewer(): void
     {
         $ledger = new InMemoryLedger();
@@ -590,7 +604,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
         $ledger = new InMemoryLedger();
-        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW));
 
         $vendor->review('alpha', Tier::Strong, $this->request());
 
