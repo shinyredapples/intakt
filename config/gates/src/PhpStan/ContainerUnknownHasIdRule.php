@@ -51,7 +51,7 @@ final readonly class ContainerUnknownHasIdRule implements Rule
         ));
     }
 
-    // every constant string, not ServiceMap::getServiceIdFromNode(), which gives up on a union and lets a misspelled branch through
+    // because ServiceMap::getServiceIdFromNode() gives up on a union of constant ids and would let a misspelled branch through
     /**
      * @return list<string>
      */
