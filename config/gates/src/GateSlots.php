@@ -28,14 +28,22 @@ final readonly class GateSlots
         return new self($count, max(1, min($testWorkers, $count - 1)));
     }
 
-    // Because the gates share the memory of their cgroup (`memory.max`), each slot gets the most one gate asks for, PHPStan's limit; `max` or anything unreadable sets no cap.
-    public static function byDefault(int $processors, string $memoryMax): int
+    /**
+     * Because the gates share the memory of their cgroups (`memory.max`, `memory.high`), each gate and each test worker gets the most one gate asks for, PHPStan's limit, and the test workers hold theirs first; `max` or anything unreadable sets no cap.
+     *
+     * @param list<string> $memoryLimits
+     */
+    public static function byDefault(int $processors, array $memoryLimits, int $testWorkers): int
     {
-        if (1 !== preg_match('/^[1-9]\d*$/', trim($memoryMax))) {
+        $limits = array_map(intval(...), array_filter(array_map(trim(...), $memoryLimits), static fn (string $limit): bool => 1 === preg_match('/^[1-9]\d*$/', $limit)));
+
+        if ([] === $limits) {
             return $processors;
         }
 
-        return max(1, min($processors, intdiv((int) trim($memoryMax), StaticAnalysisGate::MEMORY_LIMIT_GIB * 1024 ** 3)));
+        $perGate = StaticAnalysisGate::MEMORY_LIMIT_GIB * 1024 ** 3;
+
+        return max(1, min($processors, intdiv(min($limits), $perGate) - $testWorkers + 1));
     }
 
     /**

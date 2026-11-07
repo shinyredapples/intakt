@@ -68,17 +68,27 @@ final class GateSlotsTest extends TestCase
 
     public function testAMemoryLimitAllowsOneGatePerTwoGibibytes(): void
     {
-        self::assertSame([4, 1, 1], [GateSlots::byDefault(12, "8589934592\n"), GateSlots::byDefault(12, "3758096384\n"), GateSlots::byDefault(12, '1048576')]);
+        self::assertSame([4, 1, 1], [GateSlots::byDefault(12, ["8589934592\n"], 1), GateSlots::byDefault(12, ["3758096384\n"], 1), GateSlots::byDefault(12, ['1048576'], 1)]);
+    }
+
+    public function testTheTestWorkersHoldTheirMemoryBeforeOtherGatesRunBesideThem(): void
+    {
+        self::assertSame([5, 2, 1], [GateSlots::byDefault(12, ['17179869184'], 4), GateSlots::byDefault(12, ['10737418240'], 4), GateSlots::byDefault(12, ['4831838208'], 4)]);
+    }
+
+    public function testTheLowestMemoryLimitOfTheCgroupAndItsParentsCounts(): void
+    {
+        self::assertSame(1, GateSlots::byDefault(12, ["max\n", "4831838208\n", "20401094656\n", ''], 4));
     }
 
     public function testAMemoryLimitAboveWhatTheProcessorsUseLeavesTheirCount(): void
     {
-        self::assertSame(4, GateSlots::byDefault(4, "17179869184\n"));
+        self::assertSame(4, GateSlots::byDefault(4, ["17179869184\n"], 1));
     }
 
     public function testNoReadableMemoryLimitLeavesTheProcessorCount(): void
     {
-        self::assertSame([12, 12, 12], array_map(static fn (string $memoryMax): int => GateSlots::byDefault(12, $memoryMax), ["max\n", '', '0']));
+        self::assertSame(12, GateSlots::byDefault(12, ["max\n", '', '0'], 4));
     }
 
     public function testTheTestsGateStartsFirstAndTheOthersKeepTheirOrder(): void
