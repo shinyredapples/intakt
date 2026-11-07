@@ -60,6 +60,20 @@ final class TestPortsTest extends TestCase
         self::assertNotNull(TestPorts::forWorkers(127, null));
     }
 
+    public function testAnInheritedRangeThatReachesThePortsTheSystemPicksIsRefused(): void
+    {
+        self::assertNull(TestPorts::forWorkers(4, '1-65535'));
+        self::assertNull(TestPorts::forWorkers(1, '20000-32768'));
+    }
+
+    public function testAnInheritedRangeThatEndsBelowThePortsTheSystemPicksIsKept(): void
+    {
+        $ports = TestPorts::forWorkers(2, '20000-32767');
+
+        self::assertNotNull($ports);
+        self::assertSame('26384-32767', $ports->block(1));
+    }
+
     public function testAWorkerBeyondTheCountHasNoBlock(): void
     {
         $ports = TestPorts::forWorkers(2, '20100-20199');

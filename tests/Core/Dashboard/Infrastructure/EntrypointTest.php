@@ -54,7 +54,7 @@ final class EntrypointTest extends TestCase
     private function entrypointWith(array $overrides): Process
     {
         $env = ['APP_SECRET' => 'x', 'MERCURE_JWT_SECRET' => 'y', 'MERCURE_JWT_ISSUER' => 'http://localhost:7781'];
-        $process = new Process(['sh', 'docker/entrypoint.sh'], dirname(__DIR__, 4), [...$env, ...$overrides]);
+        $process = new Process(['bash', 'docker/entrypoint.sh'], dirname(__DIR__, 4), [...$env, ...$overrides]);
         $process->run();
 
         return $process;

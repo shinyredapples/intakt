@@ -35,6 +35,7 @@ use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\WorkerOnSleep;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
+use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -55,6 +56,14 @@ final class ShadowRoundTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
+    private CompiledContainers $containers;
+
+    public static function tearDownAfterClass(): void
+    {
+        self::compiledContainers()->remove();
+        parent::tearDownAfterClass();
+    }
+
     protected function setUp(): void
     {
         $this->savedConfig = $_SERVER['INTAKT_CONFIG'] ?? null;
@@ -70,7 +79,9 @@ final class ShadowRoundTest extends KernelTestCase
                         standard: { provider: anthropic, model: big }
             YAML);
         $_SERVER['INTAKT_CONFIG'] = $this->file;
-        new Filesystem()->remove(self::createKernel()->getCacheDir());
+        $this->containers = self::compiledContainers();
+        // Keyed by the config's content, because its path changes per test while the content is the only build input this class sets.
+        $this->containers->useFor([(string) file_get_contents($this->file)]);
         $this->fixture = new RoundFixture(self::getContainer(), $this->modes());
     }
 
@@ -82,7 +93,8 @@ final class ShadowRoundTest extends KernelTestCase
         }
 
         parent::tearDown();
-        new Filesystem()->remove([$this->file, self::createKernel()->getCacheDir()]);
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->file);
     }
 
     public function testAShadowProjectsRoundRunsItsWholePanelAndPostsNothingToTheForge(): void
@@ -226,6 +238,11 @@ final class ShadowRoundTest extends KernelTestCase
         );
 
         return new Panel($members, QuorumPolicy::All);
+    }
+
+    private static function compiledContainers(): CompiledContainers
+    {
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'shadow-round');
     }
 
     private function forge(): WriteRefusingForge
