@@ -139,7 +139,7 @@ final class SmokeTestScriptTest extends TestCase
         self::assertStringContainsString('bin/instance reported ready in worker mode', $process->getOutput());
     }
 
-    // The stand-in docker runs the entrypoint without descriptor 3, as a container does; the stand-in php writes its status there, as bin/instance does.
+    // The stand-in docker closes descriptor 3 because a container starts without it, which is why bin/instance failed in CI.
     private function instanceCheck(): Process
     {
         $filesystem = new Filesystem();
