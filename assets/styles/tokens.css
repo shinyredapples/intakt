@@ -1,0 +1,30 @@
+/* Every token of the dashboard design system (docs/design/mocks/DESIGN.md). Pages use these, never raw values. */
+
+:root, [data-theme="light"] {
+  --page: #F7FAF9; --raised: #FFFFFF; --tint: #EEF5F2; --tint-2: #E3EEEA; --hairline: #DCE8E4;
+  --ink: #0A2B23; --muted: #4F6B64; --primary: #1E9A7A; --deep: #136B55;
+  --selected: #C4EFE2; --amber: #F2A541; --amber-tint: #FDF1DF; --red: #C2410C;
+  --link: var(--deep); --on-btn: #FFFFFF; --ink-fixed: #0A2B23;
+  --backdrop: rgba(10, 43, 35, .55);
+  --f-head: "Outfit", system-ui, sans-serif;
+  --f-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --t13: 13px; --t15: 15px; --t17: 17px; --t21: 21px; --t28: 28px;
+  --s4: 4px; --s8: 8px; --s12: 12px; --s16: 16px; --s24: 24px; --s32: 32px; --s48: 48px;
+  --r-chip: 6px; --r-btn: 8px; --r-card: 12px; --r-overlay: 18px; --r-round: 999px;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --page: #121816; --raised: #18201E; --tint: #1E2826; --tint-2: #252F2D; --hairline: #2A3532;
+  --ink: #E6ECEA; --muted: #9AA8A4; --primary: #3CC29C; --deep: #1E9A7A;
+  --selected: #1D3B34; --amber: #F2A541; --amber-tint: #332816; --red: #F07B4F;
+  --link: var(--primary); --on-btn: #121816;
+  --backdrop: rgba(0, 0, 0, .72);
+  color-scheme: dark;
+}
+
+/* Phone floor: no text under 15 px. */
+@media (max-width: 760px) {
+  :root { --t13: 15px; }
+}
