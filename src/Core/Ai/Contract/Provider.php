@@ -39,7 +39,7 @@ enum Provider: string
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
     }
 
-    // Anthropic's usage counts cache reads and writes apart from input_tokens, also through the Claude Code CLI, while the OpenAI forms count cached tokens within the prompt.
+    // Needed because Anthropic's usage counts cache reads and writes apart from input_tokens, also through the Claude Code CLI, while the OpenAI forms count cached tokens within the prompt.
     public function countsCacheApartFromPrompt(): bool
     {
         return in_array($this, [self::Anthropic, self::ClaudeCode], true);

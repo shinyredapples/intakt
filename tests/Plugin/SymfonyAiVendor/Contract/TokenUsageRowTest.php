@@ -22,7 +22,7 @@ use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 #[CoversClass(Provider::class)]
 final class TokenUsageRowTest extends TestCase
 {
-    // The usage block of a recorded Anthropic answer: a cached system prompt read back, a little new input written to the cache, and no total.
+    // The usage block of a recorded Anthropic answer, because there a cached prompt leaves input_tokens at a few tokens and the vendor reports no total.
     private const array ANTHROPIC_USAGE = ['input_tokens' => 4, 'cache_creation_input_tokens' => 1500, 'cache_read_input_tokens' => 38000, 'output_tokens' => 700];
 
     public function testAnAnthropicPromptCountsItsCacheReadsAndWritesEachShownApart(): void

@@ -62,7 +62,7 @@ final readonly class ReviewReport
     // Only the parts a vendor reported, so a round without caching reads as before.
     private function cacheParts(RoundTokens $tokens): string
     {
-        $parts = array_filter(['cache read' => $tokens->cacheRead, 'cache write' => $tokens->cacheWrite, 'cached' => $tokens->cached]);
+        $parts = array_filter(['cache read' => $tokens->cacheRead, 'cache write' => $tokens->cacheWrite, 'cached' => $tokens->cached], static fn (int $count): bool => 0 < $count);
         if ([] === $parts) {
             return '';
         }
