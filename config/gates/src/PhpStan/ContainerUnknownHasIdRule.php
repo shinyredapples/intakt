@@ -13,6 +13,7 @@ use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Symfony\ServiceDefinition;
 use PHPStan\Symfony\ServiceMap;
+use PHPStan\Type\Constant\ConstantStringType;
 use PHPStan\Type\ObjectType;
 use PHPStan\Type\Type;
 use Psr\Container\ContainerInterface as PsrContainer;
@@ -42,24 +43,27 @@ final readonly class ContainerUnknownHasIdRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        $id = $this->askedId($node, $scope);
+        $unknown = array_filter($this->askedIds($node, $scope), fn (string $id): bool => !$this->services->getService($id) instanceof ServiceDefinition);
 
-        if (null === $id || $this->services->getService($id) instanceof ServiceDefinition) {
-            return [];
-        }
-
-        return [RuleErrorBuilder::message(sprintf('Service "%s" is not registered in the container.', $id))->identifier('intakt.containerUnknownHasId')->build()];
+        return array_values(array_map(
+            static fn (string $id): IdentifierRuleError => RuleErrorBuilder::message(sprintf('Service "%s" is not registered in the container.', $id))->identifier('intakt.containerUnknownHasId')->build(),
+            $unknown,
+        ));
     }
 
-    private function askedId(MethodCall $call, Scope $scope): ?string
+    // every constant string, not ServiceMap::getServiceIdFromNode(), which gives up on a union and lets a misspelled branch through
+    /**
+     * @return list<string>
+     */
+    private function askedIds(MethodCall $call, Scope $scope): array
     {
         $argument = $call->getArgs()[0] ?? null;
 
         if (!$call->name instanceof Identifier || 'has' !== $call->name->toLowerString() || null === $argument || !$this->isContainer($scope->getType($call->var))) {
-            return null;
+            return [];
         }
 
-        return $this->services::getServiceIdFromNode($argument->value, $scope);
+        return array_map(static fn (ConstantStringType $id): string => $id->getValue(), $scope->getType($argument->value)->getConstantStrings());
     }
 
     private function isContainer(Type $receiver): bool

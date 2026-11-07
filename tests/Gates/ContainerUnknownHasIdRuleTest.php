@@ -33,6 +33,16 @@ final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
         $this->assertAcceptedBy('phpstan', 'registered-has-service-id');
     }
 
+    public function testAskingTheContainerForEitherAKnownOrAMisspelledServiceIdFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'misspelled-has-service-id-in-union', 'src/Lookup.php:19 intakt.containerUnknownHasId Service "kernal" is not registered in the container');
+    }
+
+    public function testAskingTheContainerForEitherOfTwoRegisteredServiceIdsPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'registered-has-service-ids-in-union');
+    }
+
     public function testAskingAServiceLocatorForOneOfItsOwnKeysIsAllowed(): void
     {
         $this->assertRuleAccepts('locator-has-local-key');
