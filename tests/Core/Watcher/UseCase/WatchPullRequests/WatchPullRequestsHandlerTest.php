@@ -925,7 +925,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide),$decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide), $decisions, $settle));
     }
 
     private function panel(): Panel
