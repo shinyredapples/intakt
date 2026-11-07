@@ -413,6 +413,69 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
+    public function testAReadyToFileStatusWithoutBackticksFails(): void
+    {
+        $run = $this->checkReport("- **Status:** ready to file\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusInAStarListItemFails(): void
+    {
+        $run = $this->checkReport("* **Status:** `ready to file`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusInAnOrderedListItemFails(): void
+    {
+        $run = $this->checkReport("1. **Status:** `ready to file`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusWithoutAListMarkerFails(): void
+    {
+        $run = $this->checkReport("**Status:** `ready to file`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusInCapitalsFails(): void
+    {
+        $run = $this->checkReport("- **Status:** `Ready to file`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusWithTextAfterItInsideTheBackticksFails(): void
+    {
+        $run = $this->checkReport("- **Status:** `ready to file as a new issue`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileStatusWithTheColonAfterTheBoldLabelFails(): void
+    {
+        $run = $this->checkReport("- **Status**: `ready to file`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testANotFiledStatusInAStarListItemRetiresAReadyReport(): void
+    {
+        $run = $this->checkReport("- **Decision:** `ready to file`.\n* **Status:** not filed, the owner declined it.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAStatusThatOnlyLaterMentionsReadyToFileNeedsNoCheckedLine(): void
+    {
+        $run = $this->checkReport("- **Status:** `recheck needed before filing`, it was ready to file.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
     private function daysAgo(int $days): string
     {
         return new NativeClock()->now()->setTimezone(new DateTimeZone('UTC'))->modify('-'.$days.' days')->format('Y-m-d');

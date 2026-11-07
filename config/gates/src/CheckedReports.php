@@ -17,7 +17,11 @@ final readonly class CheckedReports
     // Allows up to three spaces because Markdown still renders such a line as a heading, so it must bound the section too.
     private const string SECTION_HEADING = '/^ {0,3}#{1,2}\s/';
 
-    private const string READY_STATUS = '/^- \*\*(?:Decision|Status):\*\*\s*`(?<value>[^`]*)`/';
+    // Any list marker or none, and either colon placement, because a status written otherwise would hide an unchecked report.
+    private const string STATUS_LINE = '/^\s*(?:(?:[-*+]|\d{1,9}[.)])\s+)?\*\*(?:Decision|Status)(?::\*\*|\*\*:)\s*(?<value>.*)$/i';
+
+    // Read as the start of the value, so `ready to file as a new issue` counts and `recheck needed before filing` does not.
+    private const string READY = '/^[`*_\s]*ready to file\b/i';
 
     private const string CHECKED_LINE = '/^- \*\*Checked:\*\*\s*(?<rest>.*)$/m';
 
@@ -62,12 +66,12 @@ final readonly class CheckedReports
 
         // Without the heading the rule fails closed, because a heading written otherwise would hide an unchecked report.
         if (null === $section) {
-            return in_array('ready to file', $this->statusValues($lines), true)
+            return in_array(true, array_map($this->isReady(...), $this->statusValues($lines)), true)
                 ? 'but has no "'.self::STATUS_HEADING.'" section: the gate reads the status and the "Checked" line only under that heading, written exactly'
                 : null;
         }
 
-        return 'ready to file' === array_last($this->statusValues($section))
+        return $this->isReady(array_last($this->statusValues($section)) ?? '')
             ? $this->checkFinding(implode("\n", $section))
             : null;
     }
@@ -110,12 +114,17 @@ final readonly class CheckedReports
         $values = [];
 
         foreach ($lines as $line) {
-            if (1 === preg_match(self::READY_STATUS, $line, $match)) {
+            if (1 === preg_match(self::STATUS_LINE, $line, $match)) {
                 $values[] = $match['value'];
             }
         }
 
         return $values;
+    }
+
+    private function isReady(string $value): bool
+    {
+        return 1 === preg_match(self::READY, $value);
     }
 
     private function checkFinding(string $report): ?string
