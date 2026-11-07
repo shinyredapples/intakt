@@ -6,6 +6,8 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Budget\Contract\InstallWideFailures;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Domain\HeadFailure;
@@ -33,6 +35,7 @@ final readonly class FailedHeads
         private Connection $connection,
         private InstallWideFailures $installWide,
         private LoggerInterface $logger,
+        private ManagerRegistry $doctrine,
     ) {
     }
 
@@ -53,6 +56,17 @@ final readonly class FailedHeads
             $this->reportCauseOf($item, $failure);
         } catch (Throwable $notReported) {
             $this->logger->error('The install-wide failure record failed; the head still backs off alone.', ['exception' => $notReported]);
+            $this->reopenEntityManager();
+        }
+    }
+
+    // Budget's failed flush closes the entity manager for every holder and Doctrine refuses to reopen it, so without a reset the next head's step would fail with a cause it never had.
+    private function reopenEntityManager(): void
+    {
+        $entities = $this->doctrine->getManager();
+
+        if ($entities instanceof EntityManagerInterface && !$entities->isOpen()) {
+            $this->doctrine->resetManager();
         }
     }
 

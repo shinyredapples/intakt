@@ -276,6 +276,22 @@ final class FailedHeadsTest extends KernelTestCase
         self::assertSame('budget_shared_hold is locked', $exception->getMessage());
     }
 
+    public function testAnInstallWideRecordWhoseFlushFailsLeavesTheEntityManagerOpenForTheNextHead(): void
+    {
+        [$first, $next] = $this->twoQueuedHeads();
+        // A trigger, so the real flush fails as a locked Budget table would and closes the entity manager every holder shares.
+        $this->entities->getConnection()->executeStatement("CREATE TRIGGER refuse_item_failure BEFORE INSERT ON budget_item_failure BEGIN SELECT RAISE(ABORT, 'Budget write refused'); END");
+        $failed = $this->failedHeads(new DashboardLedger());
+
+        $failed->backOff('alpha', $first, new RuntimeException('CI endpoint down'));
+        $failed->backOff('alpha', $next, new RuntimeException('CI endpoint down'));
+
+        self::assertTrue($this->entities->isOpen());
+        self::assertSame(1, $this->pending->failuresOf('alpha', $first));
+        self::assertSame(1, $this->pending->failuresOf('alpha', $next));
+        self::assertLoggedErrors(2, 'The install-wide failure record failed; the head still backs off alone.');
+    }
+
     /**
      * @return array{OpenChange, OpenChange}
      */
@@ -311,6 +327,9 @@ final class FailedHeadsTest extends KernelTestCase
         $redactor = self::getContainer()->get(Redactor::class);
         self::assertInstanceOf(Redactor::class, $redactor);
 
-        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger);
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+
+        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine);
     }
 }
