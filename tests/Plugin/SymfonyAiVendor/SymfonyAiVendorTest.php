@@ -475,6 +475,28 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(Provider::OpenAi, $review->substitute);
     }
 
+    public function testTheStartedRowOfAReviewNamesTheModelItsTierResolvedTo(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()), $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame('big', $ledger->payloads()[0]['model']);
+    }
+
+    public function testTheStartedRowOfAReviewAnsweredByASubstituteNamesTheSubstitutesModel(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
+        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
+        $ledger = new InMemoryLedger();
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit);
+
+        $vendor->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame('sub', $ledger->payloads()[0]['model']);
+    }
+
     public function testATierWithoutSubstitutesWhoseEveryKeyWasRejectedIsARejectedKeyWithoutReservingUsage(): void
     {
         $ledger = new InMemoryLedger();

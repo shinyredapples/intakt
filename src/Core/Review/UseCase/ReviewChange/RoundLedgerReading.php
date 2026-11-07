@@ -47,20 +47,20 @@ final readonly class RoundLedgerReading
     public function tokensOf(string $roundId): RoundTokens
     {
         $recorded = $this->usageRows();
-        $calls = $this->callsStartedFor($roundId, $recorded);
+        $calls = array_keys($this->callsStartedFor($roundId, $recorded));
 
-        $figures = array_reduce($this->usagesOf($calls, $recorded), static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+        $figures = $this->figuresOf($this->usagesOf($calls, $recorded));
 
         return RoundTokens::of(count($calls), $figures);
     }
 
-    // Priced per usage entry, because a round's reviewers and its judge may each run on another model.
+    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot.
     public function costOf(string $roundId): Cost
     {
         $recorded = $this->usageRows();
-        $usages = $this->usagesOf($this->callsStartedFor($roundId, $recorded), $recorded);
+        $models = $this->callsStartedFor($roundId, $recorded);
 
-        return array_reduce($usages, fn (Cost $sum, TokenUsageRow $usage): Cost => $sum->plus($this->prices->costOf($usage->model, $usage->figures())), Cost::none());
+        return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
     }
 
     /**
@@ -74,9 +74,9 @@ final readonly class RoundLedgerReading
     /**
      * @param list<RecordedEvent> $recorded
      *
-     * @return list<string>
+     * @return array<string, string|null> the model of each call, by call id
      */
-    // Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id.
+    // Only the started row names the round and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
     private function callsStartedFor(string $roundId, array $recorded): array
     {
         $calls = [];
@@ -85,11 +85,33 @@ final readonly class RoundLedgerReading
             $started = $this->payloads->of($row, UsageStarted::class);
 
             if ('started' === $started?->phase && $roundId === $started->round) {
-                $calls[] = $started->call;
+                $calls[$started->call] = $started->model;
             }
         }
 
-        return array_values(array_unique($calls));
+        return $calls;
+    }
+
+    /**
+     * @param array<string, string|null> $models
+     */
+    private function costOfEnding(RecordedEvent $row, array $models): Cost
+    {
+        $ended = $this->endingOf($row);
+
+        if (null === $ended || [] === $ended->usages || !array_key_exists($ended->call, $models)) {
+            return Cost::none();
+        }
+
+        return $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
+    }
+
+    /**
+     * @param list<TokenUsageRow> $usages
+     */
+    private function figuresOf(array $usages): TokenFigures
+    {
+        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
     }
 
     /**

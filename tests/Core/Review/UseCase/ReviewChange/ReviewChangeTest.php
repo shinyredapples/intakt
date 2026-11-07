@@ -286,9 +286,9 @@ final class ReviewChangeTest extends KernelTestCase
     // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
     private function recordUsage(string $call, int $total, ?string $round = null): void
     {
-        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
         $this->append(null === $round ? $started : $started + ['round' => $round]);
-        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => 'big', 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
+        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => null,'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
     }
 
     /**

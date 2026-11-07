@@ -59,7 +59,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->verdictOn($answering, $this->usage->reserve($project, $tier, $request->conversation->round), $request)),
+            $this->readOrRefused($answering->provider, $this->verdictOn($answering, $this->usage->reserve($project, new AnsweringTier($tier, $answering), $request->conversation->round), $request)),
             $substitute,
         ));
     }
@@ -109,7 +109,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $answering = $this->answering($project, Tier::Light);
 
-        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, Tier::Light, $request->round), $request));
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(Tier::Light, $answering), $request->round), $request));
     }
 
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement

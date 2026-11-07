@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 final readonly class ConfiguredPrices implements Prices
 {
-    // Named in place of a model a usage row left out, so the cost line still says why it is unknown.
+    // Named in place of a model a call's started row left out (written before the model was kept), so the cost line still says why it is unknown.
     public const string NO_MODEL = '(no model)';
 
     private const int TOKENS_PER_PRICE = 1_000_000;

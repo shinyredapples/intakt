@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -25,6 +26,10 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\AI\Platform\Bridge\ClaudeCode\TokenUsageExtractor as ClaudeCodeUsage;
+use Symfony\AI\Platform\Bridge\Generic\Completions\TokenUsageExtractor as CompletionsUsage;
+use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 
 #[Group('persistence')]
 #[CoversClass(RoundLedgerReading::class)]
@@ -131,12 +136,40 @@ final class RoundLedgerReadingTest extends KernelTestCase
     public function testARoundWithACallOfAModelWithoutAPriceHasAnUnknownCostNamingTheModel(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::ROUND]);
-        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'settled', 'usages' => [['model' => 'small'] + $this->usage()]]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::ROUND, 'model' => 'small']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'settled', 'usages' => [$this->usage()]]);
 
         $cost = $this->reading()->costOf(self::ROUND);
 
         self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+    }
+
+    public function testAClaudeCodeCallWhoseAnswerNamesNoModelIsPricedByTheModelItsTierResolvedTo(): void
+    {
+        $usage = new ClaudeCodeUsage()->extract(new InMemoryRawResult(['usage' => ['input_tokens' => 100, 'output_tokens' => 20]]));
+
+        $this->recordAnswer('c1', 'big', $usage);
+
+        self::assertEqualsWithDelta((100 * 2.0 + 20 * 10.0) / 1_000_000, $this->reading()->costOf(self::ROUND)->usd, 1e-12);
+    }
+
+    public function testAnApiCallAnsweredByADatedSnapshotIsPricedByTheModelItsTierNamed(): void
+    {
+        $usage = new CompletionsUsage()->extract(new InMemoryRawResult(['model' => 'big-2026-08-07', 'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 20, 'total_tokens' => 120]]));
+
+        $this->recordAnswer('c1', 'big', $usage);
+
+        self::assertEqualsWithDelta((100 * 2.0 + 20 * 10.0) / 1_000_000, $this->reading()->costOf(self::ROUND)->usd, 1e-12);
+    }
+
+    public function testACallStartedBeforeTheModelWasKeptHasAnUnknownCostSayingSo(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [$this->usage()]]);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, [ConfiguredPrices::NO_MODEL]], [$cost->usd, $cost->unpriced]);
     }
 
     public function testARoundWithoutCallsCostsNothing(): void
@@ -184,10 +217,22 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     private function recordCall(string $call, ?string $round, string $ending): void
     {
-        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
         $this->append(LedgerEventKind::UsageRecorded, null === $round ? $started : $started + ['round' => $round]);
         $ended = ['call' => $call, 'phase' => $ending, 'usages' => [$this->usage()]];
         $this->append(LedgerEventKind::UsageRecorded, 'unsettled' === $ending ? $ended + ['failure' => 'RuntimeException'] : $ended);
+    }
+
+    // Written through the payload classes, in the format UsageLedger writes, from what the vendor's extractor read.
+    private function recordAnswer(string $call, string $tierModel, ?TokenUsageInterface $usage): void
+    {
+        self::assertNotNull($usage);
+        $row = new TokenUsageRow('claude_code.default', $usage->getModel(), $usage->getPromptTokens(), $usage->getCompletionTokens(), $usage->getThinkingTokens(), $usage->getToolTokens(), $usage->getCachedTokens(), $usage->getCacheCreationTokens(), $usage->getCacheReadTokens(), $usage->getTotalTokens(), $usage->getRemainingTokens(), $usage->getRemainingTokensMinute(), $usage->getRemainingTokensMonth());
+        $serializer = StoredSerializerFactory::create();
+
+        foreach ([new UsageStarted($call, 'started', 'alpha', Tier::Standard, self::ROUND, $tierModel), new UsageSettled($call, 'settled', [$row])] as $payload) {
+            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $serializer->serialize($payload, 'json')))->succeeded());
+        }
     }
 
     /**
