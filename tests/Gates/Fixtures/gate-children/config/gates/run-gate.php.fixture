@@ -4,16 +4,92 @@ declare(strict_types=1);
 
 $gate = $argv[1] ?? '';
 
+// Because a marker file left by one child and awaited by another forces the order a test needs; the limit only ends a hang, it never decides a test.
+$awaited = static function (string $marker): bool {
+    $until = hrtime(true) + 120_000_000_000;
+
+    while (!file_exists($marker) && hrtime(true) < $until) {
+        usleep(10000);
+    }
+
+    return file_exists($marker);
+};
+
+$reported = static function (string $gate, string $finding): never {
+    echo json_encode(['gate' => $gate, 'ok' => '' === $finding, 'findings' => '' === $finding ? [] : [$finding], 'omitted' => 0], JSON_UNESCAPED_SLASHES), "\n";
+    exit('' === $finding ? 0 : 1);
+};
+
+$askedForLowPriority = '1' === getenv('INTAKT_GATE_LOW_PRIORITY');
+
+$only = array_find($argv, static fn (string $argument): bool => str_starts_with($argument, '--only='));
+$selected = null === $only ? [] : explode(',', substr($only, strlen('--only=')));
+
+// Because the parent starts a gate that runs the change's code only once every static gate's child has exited, a static gate's end marker must exist by then.
+$staticGatesStillRunning = static fn (): array => array_values(array_filter(
+    array_intersect(['audit', 'comments'], $selected),
+    static fn (string $static): bool => !file_exists($static.'-ended'),
+));
+
 if ('cs' === $gate) {
-    usleep(500000);
+    $beside = (int) getenv('INTAKT_GATE_SLOTS') > 1;
     fwrite(STDERR, "Warning: the cs child warned\n");
-    echo '{"gate":"cs","ok":true,"findings":[],"omitted":0}', "\n";
-    exit(0);
+    $reported('cs', !$beside || $awaited('phpstan-ended') ? '' : 'phpstan never ended beside cs');
 }
 
 if ('phpstan' === $gate) {
-    echo '{"gate":"phpstan","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}', "\n";
-    exit(1);
+    touch('phpstan-ended');
+    $reported('phpstan', 'src/Report.php:3 broken');
+}
+
+if ('comments' === $gate) {
+    touch('comments-started');
+    touch('comments-ended');
+    $reported('comments', $askedForLowPriority ? 'comments was asked to run at low priority' : '');
+}
+
+if ('tests' === $gate) {
+    $early = $staticGatesStillRunning();
+    touch('tests-started');
+    $reported('tests', match (true) {
+        $askedForLowPriority => 'tests was asked to run at low priority',
+        [] !== $early => 'tests started before '.implode(',', $early).' ended',
+        default => '',
+    });
+}
+
+if ('architecture' === $gate) {
+    $reported('architecture', $awaited('comments-started') ? '' : 'comments never ran beside architecture');
+}
+
+if ('highlights' === $gate) {
+    touch('highlights-ended');
+    $reported('highlights', '');
+}
+
+if ('reproductions' === $gate) {
+    $reported('reproductions', file_exists('highlights-ended') ? '' : 'reproductions ran beside highlights');
+}
+
+if ('audit' === $gate) {
+    $beside = in_array('comments', $selected, true) && !$awaited('comments-started') ? 'comments never ran beside audit' : '';
+    touch('audit-ended');
+    $reported('audit', $beside);
+}
+
+if ('container' === $gate) {
+    $early = $staticGatesStillRunning();
+    $reported('container', match (true) {
+        $askedForLowPriority => 'container was asked to run at low priority',
+        [] !== $early => 'container started before '.implode(',', $early).' ended',
+        default => '',
+    });
+}
+
+if ('commits' === $gate || 'dashes' === $gate) {
+    file_put_contents($gate.'.pid', (string) getmypid());
+    sleep(120);
+    exit(0);
 }
 
 echo 'Fatal error: the rector child crashed', "\n";
