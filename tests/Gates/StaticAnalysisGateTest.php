@@ -6,49 +6,44 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Depends;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StaticAnalysisGate::class)]
 final class StaticAnalysisGateTest extends TestCase
 {
-    // every case asks the gate's configuration about one file, so one run answers them all, each fixture in its own folder
-    private const array FIXTURES = ['loose-condition', 'deprecated-call', 'too-complex-method', 'class-too-complex'];
+    private const array EXPECTED_FINDINGS = [
+        'loose-condition' => 'if.condNotBoolean',
+        'deprecated-call' => 'function.deprecated',
+        'too-complex-method' => 'complexity.functionLike',
+        'class-too-complex' => 'complexity.classLike',
+    ];
 
-    public function testStaticAnalysisOfEveryFixtureFailsInOneRun(): CheckRun
+    /**
+     * @return iterable<string, array{string, string, CheckRun}>
+     */
+    public static function fixturesOfOneRun(): iterable
     {
-        $sandbox = Sandbox::withFixturesInFolders(...self::FIXTURES);
-        $run = $sandbox->check('--only=phpstan');
-        $sandbox->remove();
+        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder, and a case still runs alone under --filter
+        $sandbox = Sandbox::withFixturesInFolders(...array_keys(self::EXPECTED_FINDINGS));
 
+        try {
+            $run = $sandbox->check('--only=phpstan');
+        } finally {
+            $sandbox->remove();
+        }
+
+        foreach (self::EXPECTED_FINDINGS as $fixture => $expectedFinding) {
+            yield $fixture => [$fixture, $expectedFinding, $run];
+        }
+    }
+
+    #[DataProvider('fixturesOfOneRun')]
+    public function testEachFixtureFailsStaticAnalysisWithItsOwnFinding(string $fixture, string $expectedFinding, CheckRun $run): void
+    {
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('phpstan'), $run->output());
-
-        return $run;
-    }
-
-    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
-    public function testANonBooleanConditionFailsStaticAnalysis(CheckRun $run): void
-    {
-        $this->assertRejectedInItsFolder($run, 'loose-condition', 'if.condNotBoolean');
-    }
-
-    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
-    public function testADeprecatedCallFailsStaticAnalysis(CheckRun $run): void
-    {
-        $this->assertRejectedInItsFolder($run, 'deprecated-call', 'function.deprecated');
-    }
-
-    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
-    public function testAMethodAboveTheCognitiveComplexityLimitFailsStaticAnalysis(CheckRun $run): void
-    {
-        $this->assertRejectedInItsFolder($run, 'too-complex-method', 'complexity.functionLike');
-    }
-
-    #[Depends('testStaticAnalysisOfEveryFixtureFailsInOneRun')]
-    public function testAClassAboveTheCognitiveComplexityLimitFailsStaticAnalysisEvenWhenEveryMethodIsSimple(CheckRun $run): void
-    {
-        $this->assertRejectedInItsFolder($run, 'class-too-complex', 'complexity.classLike');
+        self::assertMatchesRegularExpression('~^'.preg_quote($fixture.'/src/', '~').'\S+ '.preg_quote($expectedFinding, '~').' ~m', $run->findingsOf('phpstan'));
     }
 
     public function testStaticAnalysisRunsAtMaxLevelWithoutABaseline(): void
@@ -58,10 +53,5 @@ final class StaticAnalysisGateTest extends TestCase
         self::assertStringContainsString('level: max', $configuration);
         self::assertStringNotContainsStringIgnoringCase('baseline', $configuration);
         self::assertStringNotContainsString('ignoreErrors', $configuration);
-    }
-
-    private function assertRejectedInItsFolder(CheckRun $run, string $fixture, string $expectedFinding): void
-    {
-        self::assertMatchesRegularExpression('~^'.preg_quote($fixture.'/src/', '~').'\S+ '.preg_quote($expectedFinding, '~').' ~m', $run->findingsOf('phpstan'));
     }
 }
