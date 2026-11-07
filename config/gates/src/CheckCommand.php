@@ -67,6 +67,10 @@ final readonly class CheckCommand
             return 2;
         }
 
+        if (LowPriority::isFor($name)) {
+            new LowPriority()->take();
+        }
+
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
         fwrite(STDOUT, $result->toJson()."\n");
 

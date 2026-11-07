@@ -75,7 +75,6 @@ final readonly class TestsGate implements Gate
         }
     }
 
-    // Because the quota that binds the gate is the one of its own cgroup, named in the `0::<path>` line of cgroup v2.
     private function whyNotReady(Workspace $workspace): ?string
     {
         if (!$workspace->hasTool('phpunit')) {
