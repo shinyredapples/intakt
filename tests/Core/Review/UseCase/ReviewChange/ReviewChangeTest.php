@@ -288,7 +288,7 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
         $this->append(null === $round ? $started : $started + ['round' => $round]);
-        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => null,'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
+        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
     }
 
     /**
