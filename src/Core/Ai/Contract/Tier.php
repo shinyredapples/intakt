@@ -11,6 +11,9 @@ enum Tier: string
     case Light = 'light';
 
     // Because a full verdict with its findings must fit, and the strong tier writes the longest reviews.
+    /**
+     * @return positive-int
+     */
     public function defaultMaxOutput(): int
     {
         return match ($this) {

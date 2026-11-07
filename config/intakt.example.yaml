@@ -24,7 +24,7 @@ codex: { model: gpt-5.3-codex, effort: high }
 projects:
     alpha:
         tiers:
-            # A tier may also set max_output, the most one answer may have, as a whole number (defaults: strong 16000, standard 8000, light 4000).
+            # A tier may also set max_output, the most one answer may have, as a whole number (defaults: strong 16000, standard 8000, light 4000); a reviewer stopped at it runs once more with twice the room.
             strong: { provider: anthropic, model: claude-opus-5-5 }
             # A tier may list substitutes, in order, for when every account of its provider is out (a review then runs on the first one that can answer):
             # standard: { provider: anthropic, model: claude-sonnet-5-5, substitutes: [{ provider: openai, model: gpt-5-mini }] }
