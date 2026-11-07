@@ -94,19 +94,18 @@ final readonly class CheckCommand
 
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
 
-        return $this->runGates($names, $runningTheChangesCode, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots));
+        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
     }
 
     /**
      * @param list<string> $names
-     * @param list<string> $runningTheChangesCode
      * @param list<string> $arguments
      */
-    private function runGates(array $names, array $runningTheChangesCode, array $arguments, GateChildren $children): int
+    private function runGates(array $names, array $arguments, GateChildren $children): int
     {
         $failed = [];
 
-        foreach ($children->reportsOf($names, $runningTheChangesCode, $arguments) as $report) {
+        foreach ($children->reportsOf($names, $arguments) as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {
