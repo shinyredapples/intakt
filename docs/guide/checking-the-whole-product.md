@@ -23,4 +23,4 @@ Journeys never call an AI company or a forge and need no keys; they use the samp
 
 A nightly run, and a run you start on demand in GitHub, that files an urgent task when a journey fails, are planned too.
 
-The technical side is in [Journeys](../architecture/README.md#journeys).
+The technical side is in [Journeys](../architecture/journeys.md).

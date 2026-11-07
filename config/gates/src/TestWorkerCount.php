@@ -10,13 +10,13 @@ final class TestWorkerCount
 
     private const int MOST_BY_DEFAULT = 4;
 
-    public static function chosen(?string $override, string $processStatus): ?int
+    public static function chosen(?string $override, string $processStatus, string $cpuMax): ?int
     {
         if (null !== $override) {
             return 1 === preg_match('/^[1-9]\d{0,2}$/', $override) && (int) $override <= self::most() ? (int) $override : null;
         }
 
-        return min(self::processorsIn($processStatus), self::MOST_BY_DEFAULT);
+        return min(self::processorsIn($processStatus), self::quotaIn($cpuMax), self::MOST_BY_DEFAULT);
     }
 
     // Because each worker needs a block of the default ports, a count beyond them would fail on ports the user never set.
@@ -40,5 +40,15 @@ final class TestWorkerCount
         }
 
         return max(1, $processors);
+    }
+
+    // Because a CPU quota (cgroup v2 `cpu.max`, `<quota> <period>`) caps a container below its affinity list; `max` or anything unreadable sets no cap.
+    private static function quotaIn(string $cpuMax): int
+    {
+        if (1 !== preg_match('/^([1-9]\d*) ([1-9]\d*)$/', trim($cpuMax), $quota)) {
+            return PHP_INT_MAX;
+        }
+
+        return max(1, (int) ceil((int) $quota[1] / (int) $quota[2]));
     }
 }

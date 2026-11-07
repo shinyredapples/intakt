@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\GateResult;
+use Intakt\Gates\Mode;
 use Intakt\Gates\PhpunitReport;
 use Intakt\Gates\ProcessQueue;
 use Intakt\Gates\TestDurations;
@@ -14,6 +15,7 @@ use Intakt\Gates\TestsGate;
 use Intakt\Gates\TestWorker;
 use Intakt\Gates\TestWorkerCount;
 use Intakt\Gates\TestWorkers;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
@@ -27,6 +29,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(PhpunitReport::class)]
 #[UsesClass(TestDurations::class)]
 #[UsesClass(GateResult::class)]
+#[UsesClass(Workspace::class)]
 final class TestsGateParallelTest extends SandboxTestCase
 {
     private const array TWO_WORKERS = [TestWorkerCount::VARIABLE => '2'];
@@ -109,6 +112,23 @@ final class TestsGateParallelTest extends SandboxTestCase
 
         self::assertTrue($run->failed('tests'), $run->output());
         self::assertStringContainsString('Class MissingTest cannot be found in', $run->findingsOf('tests'));
+    }
+
+    public function testATestFileThatHangsIsStoppedAtTheFileTimeoutAndFailsTheGateNamingItsLastOutput(): void
+    {
+        $sandbox = $this->sandboxWithPassingFiles(1);
+        $sandbox->write('tests/HangingTest.php', $this->testFile('HangingTest', 'fwrite(STDERR, "waiting for the server\n"); sleep(60);'));
+        $workers = getenv(TestWorkerCount::VARIABLE);
+        putenv(TestWorkerCount::VARIABLE.'=2');
+
+        try {
+            $result = new TestsGate(fileTimeoutSeconds: 2)->run(new Workspace($sandbox->root, dirname(__DIR__, 2), Mode::Full, null));
+        } finally {
+            putenv(false === $workers ? TestWorkerCount::VARIABLE : TestWorkerCount::VARIABLE.'='.$workers);
+        }
+
+        self::assertFalse($result->isPassing());
+        self::assertContains('sqlite tests/HangingTest.php: phpunit exited with code 124: timed out after 2 seconds, last output: waiting for the server', $result->findings);
     }
 
     public function testTwoFilesRunAtTheSameTimeInWorkersOfTheirOwn(): void

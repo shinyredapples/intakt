@@ -1,6 +1,6 @@
 # Testing a new check, in plain words
 
-Intakt's own checks (`bin/check`) include rules of its own for the static analysis (PHPStan): for example "no flag parameters" or "time only through the clock". This page explains how such a rule is tested, for anyone who adds one. The technical details are in the [architecture](../architecture/README.md#quality-gates).
+Intakt's own checks (`bin/check`) include rules of its own for the static analysis (PHPStan): for example "no flag parameters" or "time only through the clock". This page explains how such a rule is tested, for anyone who adds one. The technical details are in the [architecture](../architecture/quality-gates.md).
 
 ## Two kinds of test for one rule
 

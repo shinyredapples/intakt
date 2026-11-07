@@ -34,7 +34,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 - Worker mode: services keep no per-request state; what must reset implements `ResetInterface`.
 - Handlers use Intakt's `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`. A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
 - Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>`.
-- Logging, Doctrine mapping and the dependency policy: see [Conventions](docs/architecture/README.md#conventions).
+- Logging, Doctrine mapping and the dependency policy: see [Conventions](docs/architecture/conventions.md).
 
 ## Tests
 
@@ -60,6 +60,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 ## Docs, pull requests, commits
 
 - User-visible changes update `docs/user/` and `docs/architecture/` in the same change; docs state only what the code does.
+- `docs/architecture/` has one page per topic, listed in its `README.md`: a change updates the page of the topic it touches (`quality-gates.md` for a gate, `ai-providers.md` for a provider, `review-flow.md` for the path of a review), and a new topic gets its own page and one line in that index, never a section in the index itself.
 - A change that starts using, or stops using, a Symfony or Symfony AI feature updates its row in `docs/highlights.md` (status, task and issue, path; never the pull request number) in the same change.
 - A change that adds, removes or changes an external command Intakt or its gates call updates `docs/architecture/requirements.md` in the same change.
 - A change that alters behavior a plain-words guide in `docs/guide/` describes updates that guide in the same change, in the same plain words (no jargon, diagrams kept true); a guide that describes a planned part marks it planned until it is built. A change that adds something a newcomer would need explained (a new concept, workflow, screen or command) that no guide covers adds a section or page to `docs/guide/`, or names it as a follow-up in the pull request.

@@ -30,3 +30,4 @@ Checked on 2026-11-03, refreshed on 2026-11-06.
 - **Searches** (`symfony/symfony` issues and pull requests, open and closed): `handleSignal messenger:consume`, `consume SIGTERM worker ignored`.
 - **Refresh (2026-11-06):** still reproduces on 6.4.49, 7.4.22, 8.1.10 and 8.2.0-BETA1; not fixed upstream. In the snippet, `addCommand()` is `add()` before 8.x, and on 8.2 the command's dispatcher argument must also implement `ListenerIntrospectionInterface`. Preferred fix: remember the signal and stop the worker right after it is created.
 - **Decision:** `ready to file`; the issue text is `ISSUE.md`.
+- **Status:** `recheck needed before filing`: the report has no "Checked" line, so the owner redoes the dated check against upstream first (see `upstream/README.md`). The issue text is `ISSUE.md`.
