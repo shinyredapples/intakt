@@ -29,6 +29,7 @@ final readonly class HighlightsGate implements Gate
 
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
+        private HighlightFragments $fragments,
     ) {
     }
 
@@ -40,15 +41,20 @@ final readonly class HighlightsGate implements Gate
     public function run(Workspace $workspace): GateResult
     {
         $file = $workspace->root.'/'.self::FILE;
-
-        if (!is_file($file)) {
-            return GateResult::passedBecause($this->name(), self::FILE.' does not exist');
-        }
-
-        $contents = file_get_contents($file);
+        $contents = is_file($file) ? file_get_contents($file) : null;
 
         if (false === $contents) {
             return GateResult::failedBecause($this->name(), 'cannot read '.self::FILE);
+        }
+
+        $assemblyFindings = $this->fragments->findingsAgainst($workspace->root, $contents);
+
+        if ([] !== $assemblyFindings) {
+            return GateResult::withFindings($this->name(), $assemblyFindings);
+        }
+
+        if (null === $contents) {
+            return GateResult::passedBecause($this->name(), self::FILE.' does not exist');
         }
 
         $tracked = $workspace->hasGit() ? $workspace->git(['ls-files', '-z', '--cached']) : null;
