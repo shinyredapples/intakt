@@ -30,24 +30,36 @@ final class ContainerDumpingGateTest extends SandboxTestCase
 
     public function testTheContainerIsDumpedAgainWhenItsDumpIsGoneFromAFreshCache(): void
     {
-        $sandbox = $this->sandboxWith('misspelled-service-id');
-        $sandbox->borrowKernel();
-        $cache = ['APP_CACHE_DIR' => $sandbox->root.'/var/fresh-cache'];
-        $sandbox->checkWith($cache, '--only=phpstan');
-        unlink($sandbox->root.'/var/fresh-cache/test/Intakt_KernelTestDebugContainer.xml');
+        $sandbox = $this->kernelSandbox();
+        $sandbox->check('--only=phpstan');
+        $dump = $sandbox->root.'/var/cache/test/Intakt_KernelTestDebugContainer.xml';
+        unlink($dump);
 
-        $run = $sandbox->checkWith($cache, '--only=phpstan');
+        $run = $sandbox->check('--only=phpstan');
 
-        self::assertStringContainsString('symfonyContainer.serviceNotFound Service "kernal" is not registered in the container.', $run->findingsOf('phpstan'));
+        self::assertTrue($run->passed('phpstan'), $run->output());
+        self::assertFileExists($dump);
     }
 
     public function testAServiceOnlyTheAnalysedTreeRegistersPassesStaticAnalysis(): void
     {
-        $sandbox = $this->kernelSandbox();
-
-        $run = $sandbox->checkWith($this->ownCache($sandbox), '--only=phpstan');
+        $run = $this->kernelSandbox()->check('--only=phpstan');
 
         self::assertTrue($run->passed('phpstan'), $run->output());
+    }
+
+    public function testATreeIsJudgedByItsOwnContainerWhenTheCallerSharesACacheAnotherTreeBuilt(): void
+    {
+        $registering = $this->kernelSandbox();
+        $removing = $this->kernelSandbox();
+        $removing->write('config/services.yaml', "services: {}\n");
+        $shared = ['APP_CACHE_DIR' => $registering->root.'/var/cache'];
+        $first = $registering->checkWith($shared, '--only=phpstan');
+        self::assertTrue($first->passed('phpstan'), $first->output());
+
+        $second = $removing->checkWith($shared, '--only=phpstan');
+
+        self::assertStringContainsString('src/Lookup.php:17 symfonyContainer.serviceNotFound Service "fixture.mailer" is not registered in the container.', $second->findingsOf('phpstan'));
     }
 
     public function testAFailingConsoleInTheAnalysedTreeFailsStaticAnalysis(): void
@@ -77,18 +89,9 @@ final class ContainerDumpingGateTest extends SandboxTestCase
         $sandbox->write('config/services.yaml', "services: {}\n");
         $sandbox->commitAll('fix: remove the mailer');
 
-        $run = $sandbox->checkWith($this->ownCache($sandbox), '--only=phpstan', '--fast', '--base=baseline');
+        $run = $sandbox->check('--only=phpstan', '--fast', '--base=baseline');
 
         self::assertStringContainsString('src/Lookup.php:17 symfonyContainer.serviceNotFound Service "fixture.mailer" is not registered in the container.', $run->findingsOf('phpstan'));
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function ownCache(Sandbox $sandbox): array
-    {
-        // Because a test worker's APP_CACHE_DIR already holds this repository's container under the same class name, the fixture kernel would load that one.
-        return ['APP_CACHE_DIR' => $sandbox->root.'/var/cache'];
     }
 
     private function kernelSandbox(): Sandbox

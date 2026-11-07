@@ -55,19 +55,14 @@ final readonly class Sandbox
         file_put_contents($target, $contents);
     }
 
-    // Because a fixture is a fragment without a kernel, the phpstan gate dumps this repository's test container through a link to its console and finds the dump through a link to its cache.
+    // Because a fixture is a fragment without a kernel, the phpstan gate dumps this repository's test container through a link to its console, into the sandbox's own var/cache: the kernel bakes that folder into the container and cache:warmup writes to the baked one, so a cache shared through links under other paths would write into a removed sandbox.
     public function borrowKernel(): void
     {
-        $home = dirname(__DIR__, 2);
-
-        foreach ([$home.'/var/cache', $this->root.'/bin', $this->root.'/var'] as $folder) {
-            if (!is_dir($folder)) {
-                mkdir($folder, 0o777, true);
-            }
+        if (!is_dir($this->root.'/bin')) {
+            mkdir($this->root.'/bin', 0o777, true);
         }
 
-        $this->symlink('bin/console', $home.'/bin/console');
-        $this->symlink('var/cache', $home.'/var/cache');
+        $this->symlink('bin/console', dirname(__DIR__, 2).'/bin/console');
     }
 
     public function git(string ...$arguments): ProcessResult

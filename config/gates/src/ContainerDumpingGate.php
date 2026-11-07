@@ -13,12 +13,9 @@ final readonly class ContainerDumpingGate implements Gate
     {
     }
 
-    // Because the kernel builds in APP_CACHE_DIR when it is set, as each test worker does, the dump is read from where it was written.
     public static function containerXml(string $root): string
     {
-        $cache = getenv('APP_CACHE_DIR');
-
-        return (is_string($cache) && '' !== $cache ? $cache : $root.'/var/cache').self::CONTAINER_XML;
+        return self::cacheDirectory($root).self::CONTAINER_XML;
     }
 
     public function name(): string
@@ -44,12 +41,18 @@ final readonly class ContainerDumpingGate implements Gate
         return $this->analysis->run($workspace);
     }
 
+    // Because a cache the caller's APP_CACHE_DIR names (each test worker sets one) can hold another tree's container, which a debug kernel keeps as fresh since its .meta file names that tree's files, the dump goes into the analysed tree's own cache.
+    private static function cacheDirectory(string $root): string
+    {
+        return $root.'/var/cache';
+    }
+
     private function dumpTestContainer(Workspace $workspace, string $console): ProcessResult
     {
         // Because a fresh cache is not compiled again, a dump that is gone comes back only when the cache is cleared.
         $command = is_file(self::containerXml($workspace->root)) ? 'cache:warmup' : 'cache:clear';
         // Because the caller's debug or verbosity setting would skip the XML dump or silence the reason.
-        $environment = ['APP_DEBUG' => '1', 'SHELL_VERBOSITY' => false];
+        $environment = ['APP_CACHE_DIR' => self::cacheDirectory($workspace->root), 'APP_DEBUG' => '1', 'SHELL_VERBOSITY' => false];
 
         return $workspace->command([PHP_BINARY, $console, $command, '--env=test', '--no-optional-warmers', '--no-ansi', '--no-interaction'], $environment);
     }
