@@ -33,18 +33,12 @@ final readonly class ProcessQueue
         $results = [];
         $running = [];
         $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
+        $start = fn (int $worker, Closure $job): ?array => hrtime(true) < $deadline ? $this->started($this->built($job, $worker), $directory, $deadline) : null;
 
         while ([] !== $jobs || [] !== $running) {
-            foreach ($this->idleWorkers($running, $workers) as $worker) {
-                if ([] === $jobs || hrtime(true) >= $deadline) {
-                    break;
-                }
-
-                $name = array_key_first($jobs);
-                [$command, $environment] = $jobs[$name]($worker);
-                unset($jobs[$name]);
-                $running[$worker] = [$name, ...$this->started($command, $directory, $environment, $deadline)];
-            }
+            $launched = $this->launchedOn($this->idleWorkers($running, $workers), $jobs, $start);
+            $jobs = array_diff_key($jobs, array_flip(array_column($launched, 0)));
+            $running += $launched;
 
             // Because a job left waiting at the overall limit would otherwise keep the queue going after its running jobs ended.
             if (hrtime(true) >= $deadline) {
@@ -70,6 +64,33 @@ final readonly class ProcessQueue
     private function idleWorkers(array $running, int $workers): array
     {
         return array_values(array_diff(range(0, $workers - 1), array_keys($running)));
+    }
+
+    /**
+     * @template Name of array-key
+     *
+     * @param list<int>                                                                                                     $idle
+     * @param array<Name, Closure(int): array{list<string>, array<string, string>}>                                         $jobs
+     * @param Closure(int, Closure(int): array{list<string>, array<string, string>}): ?array{Process|ProcessResult, string} $start
+     *
+     * @return array<int, array{Name, Process|ProcessResult, string}>
+     */
+    private function launchedOn(array $idle, array $jobs, Closure $start): array
+    {
+        $launched = [];
+
+        foreach (array_slice(array_keys($jobs), 0, count($idle)) as $index => $name) {
+            $started = $start($idle[$index], $jobs[$name]);
+
+            // Because the overall limit may pass while a job is built, and no job may start after it.
+            if (null === $started) {
+                break;
+            }
+
+            $launched[$idle[$index]] = [$name, ...$started];
+        }
+
+        return $launched;
     }
 
     /**
@@ -117,13 +138,23 @@ final readonly class ProcessQueue
     }
 
     /**
-     * @param list<string>          $command
-     * @param array<string, string> $environment
+     * @param Closure(int): array{list<string>, array<string, string>} $job
+     *
+     * @return array{list<string>, array<string, string>}
+     */
+    private function built(Closure $job, int $worker): array
+    {
+        return $job($worker);
+    }
+
+    /**
+     * @param array{list<string>, array<string, string>} $built
      *
      * @return array{Process|ProcessResult, string}
      */
-    private function started(array $command, string $directory, array $environment, int|float $deadline): array
+    private function started(array $built, string $directory, int|float $deadline): array
     {
+        [$command, $environment] = $built;
         $left = ($deadline - hrtime(true)) / 1_000_000_000;
 
         // Because building the job may itself have used up the rest of the pass.
