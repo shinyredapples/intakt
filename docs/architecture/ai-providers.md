@@ -10,7 +10,6 @@ The fourth provider, `claude_code`, runs the `claude` CLI through `symfony/ai-cl
 
 Every reviewer and judge call carries the output limit of its tier (`max_output`, see [Capability tiers](capability-tiers.md)) as `PlatformOptions::MAX_OUTPUT_TOKENS`, so a verdict is not cut off at a model's default, which raised `MaxOutputTokensException` on the strong tier; the subscription CLIs take none.
 
-
 When the container is built, a provider is included only if each of its variables has a value. This is decided at build time because an unset `%env()%` makes the service fail when it is first built. The key itself stays a `%env()%` reference, so no secret is written into the compiled container. The consequence is that a changed key needs a cache clear.
 
 **Where a value comes from.** A variable counts when it is non-empty in `$_ENV`, `$_SERVER` or the process environment, or has a non-empty value in the Symfony secrets vault. These are the sources of Symfony's env processor, which falls back to the vault for an empty variable.
