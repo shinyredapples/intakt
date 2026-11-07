@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Intakt\Kernel;
+use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\BrowserKit\HttpBrowser;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Process\Process;
 
 // Journeys run only under `bin/check --journeys`, which starts bin/instance and so sets the address below.
@@ -26,6 +29,8 @@ abstract class JourneyTestCase extends TestCase
     private JourneySteps $steps;
 
     private HttpBrowser $browser;
+
+    private ?Kernel $driverKernel = null;
 
     abstract protected function journey(): string;
 
@@ -79,6 +84,28 @@ abstract class JourneyTestCase extends TestCase
         $directory = new Kernel(self::ENVIRONMENT, false)->getShareDir();
 
         return RecordingHub::updatesIn($directory ?? self::fail('the instance has no share directory, so its hub records nowhere'));
+    }
+
+    final protected function liveRoundDriver(): LiveRoundDriver
+    {
+        // A kernel of the journey's own, on the instance's database and share directory, because a round is queued through the command bus the dashboard uses and the console has no door for it.
+        $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
+        $this->driverKernel->boot();
+        $container = $this->driverKernel->getContainer()->get('test.service_container');
+        $bus = $container instanceof ContainerInterface ? $container->get(MessageBusInterface::class) : null;
+
+        return new LiveRoundDriver(
+            $bus instanceof MessageBusInterface ? $bus : self::fail('the test container has no message bus'),
+            fn (array $arguments): string => $this->console($arguments),
+            fn (): array => $this->publishedUpdates(),
+        );
+    }
+
+    #[After]
+    final protected function shutDownDriverKernel(): void
+    {
+        $this->driverKernel?->shutdown();
+        $this->driverKernel = null;
     }
 
     // Because the dashboard refuses any other host name or port than its own, and the instance listens on a free port.

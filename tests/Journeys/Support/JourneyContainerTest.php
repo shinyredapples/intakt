@@ -18,6 +18,7 @@ use Symfony\Component\Mercure\Update;
 #[UsesClass(JourneyVendor::class)]
 #[UsesClass(RecordingHub::class)]
 #[UsesClass(JourneySteps::class)]
+#[UsesClass(LiveRoundDriver::class)]
 final class JourneyContainerTest extends JourneyTestCase
 {
     private ?Kernel $kernel = null;
@@ -50,6 +51,11 @@ final class JourneyContainerTest extends JourneyTestCase
         $hub->publish(new Update('review/rounds/1', '<turbo-stream>changed</turbo-stream>', true));
 
         self::assertEquals([new Update('review/rounds/1', '<turbo-stream>changed</turbo-stream>', true)], $this->publishedUpdates());
+    }
+
+    public function testTheJourneyGetsALiveRoundDriverOnTheTestContainersCommandBus(): void
+    {
+        self::assertInstanceOf(LiveRoundDriver::class, $this->liveRoundDriver());
     }
 
     private function container(): ContainerInterface
