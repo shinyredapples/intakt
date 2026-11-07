@@ -149,7 +149,7 @@ abstract class JourneyTestCase extends TestCase
     {
         $defaults = [...$this->settingsIn(self::DEFAULT_SETTINGS), ...$this->settingsIn(self::TEST_SETTINGS)];
         // Because a variable the process has (the instance's database and directories) wins over a file, as in Dotenv's own loading.
-        $unset = array_filter($defaults, static fn (string $name): bool => !array_key_exists($name, $_ENV) && !(array_key_exists($name, $_SERVER) && !str_starts_with($name, 'HTTP_')) && false === getenv($name), ARRAY_FILTER_USE_KEY);
+        $unset = array_filter($defaults, static fn (string $name): bool => !array_key_exists($name, $_ENV) && (!array_key_exists($name, $_SERVER) || str_starts_with($name, 'HTTP_')) && false === getenv($name), ARRAY_FILTER_USE_KEY);
 
         return [...$unset, self::QUEUE_VARIABLE => self::SHARED_QUEUE];
     }
