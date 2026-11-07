@@ -31,7 +31,7 @@ final class ProcessRunner
 
     private const string HOLD_UNTIL_RELEASED = 'read -r released && exec "$@"';
 
-    private const string ZOMBIE = 'Z';
+    private const string HOLD_THEN_MOVE = 'read -r released && cd -P -- "$1" && shift && exec "$@"';
 
     private ?string $containment = null;
 
@@ -87,17 +87,19 @@ final class ProcessRunner
         $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
         $group = $this->startHeld($process, $release);
 
-        if (null === $group) {
+        if (!$group instanceof ProcessGroup) {
             return $this->resultOf($process, self::CANNOT_RUN, $command[0]);
         }
 
+        $forwarding = StopSignalForwarding::through($group->kill(...));
         $failure = $this->waitForAll([$process])[0] ?? null;
 
-        if (null === $failure && $this->groupOutlives($group, $deadline)) {
+        if (null === $failure && $group->outlives($deadline)) {
             $failure = self::TIMED_OUT;
         }
 
-        posix_kill(-$group, 9);
+        $group->kill();
+        $forwarding->end();
 
         return $this->resultOf($process, $failure, $command[0]);
     }
@@ -121,8 +123,7 @@ final class ProcessRunner
             $processes[$name] = new Process($command, $directory, [...getenv(), ...$environment], null, $seconds);
         }
 
-        $failures = $this->startAll($processes);
-        $failures += $this->waitForAll(array_diff_key($processes, $failures));
+        $failures = $this->failuresOf($processes);
         $results = [];
 
         foreach ($processes as $name => $process) {
@@ -132,9 +133,131 @@ final class ProcessRunner
         return $results;
     }
 
+    // Because a timed-out gate child must fail with what it printed so far, and nothing it started may overlap the next gate.
+    /**
+     * @param list<string> $command
+     */
+    public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
+    {
+        return $this->toItsEnd($this->startedHeld(new Process($this->held($command), $directory, getenv(), null, null), $command[0], $seconds));
+    }
+
+    // Because a relative PATH entry resolves in the directory a program starts in, `setsid` and `sh` start where the tools are searched, then the command moves to its own directory.
+    public function startToItsEndWithToolsFrom(string $toolsFrom, ChildCommand $child): RunningChild|ProcessResult
+    {
+        $held = ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $child->directory, ...$child->command];
+
+        return $this->startedHeld(new Process($held, $toolsFrom, [...getenv(), ...$child->environment], null, null), $child->command[0], self::OVERALL_TIMEOUT_SECONDS);
+    }
+
+    // Because Symfony's own timeout sends TERM and KILL at once, before the child can stop the contained run it started in a session of its own.
+    public function endOf(RunningChild $child): ?ProcessResult
+    {
+        $failure = $this->poll($child->process);
+
+        if (self::STILL_RUNNING === $failure && (hrtime(true) / 1_000_000_000) < $child->deadline) {
+            return null;
+        }
+
+        // Because a timeout after an hour is rare, the other children may wait out this one's stop grace of at most 2 seconds.
+        if (self::STILL_RUNNING === $failure) {
+            $failure = self::TIMED_OUT;
+            $child->group->stop();
+            $this->waitForAll([$child->process]);
+        }
+
+        $child->group->kill();
+
+        return $this->endedWith($child, $failure);
+    }
+
+    private function startedHeld(Process $process, string $program, int $seconds): RunningChild|ProcessResult
+    {
+        $refusal = $this->refusal($program, $seconds);
+
+        if ($refusal instanceof ProcessResult) {
+            return $refusal;
+        }
+
+        $release = new InputStream();
+        $process->setInput($release);
+        $deadline = (hrtime(true) / 1_000_000_000) + $seconds;
+        $group = $this->startHeld($process, $release);
+
+        if (!$group instanceof ProcessGroup) {
+            return $this->resultOf($process, self::CANNOT_RUN, $program);
+        }
+
+        return new RunningChild($process, $group, $deadline, $program, $seconds);
+    }
+
+    private function toItsEnd(RunningChild|ProcessResult $child): ProcessResult
+    {
+        if ($child instanceof ProcessResult) {
+            return $child;
+        }
+
+        $forwarding = StopSignalForwarding::through($child->group->stop(...));
+        $result = $this->waitedFor($child);
+        $forwarding->end();
+
+        return $result;
+    }
+
+    private function waitedFor(RunningChild $child): ProcessResult
+    {
+        while (true) {
+            $result = $this->endOf($child);
+
+            if ($result instanceof ProcessResult) {
+                return $result;
+            }
+
+            usleep(self::POLL_MICROSECONDS);
+        }
+    }
+
+    private function endedWith(RunningChild $child, ?int $failure): ProcessResult
+    {
+        $process = $child->process;
+
+        if (self::TIMED_OUT === $failure) {
+            $timedOut = $this->timedOut($child->program, $child->seconds);
+
+            return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
+        }
+
+        if (null !== $failure && $process->isStarted() && $process->hasBeenSignaled()) {
+            return $this->signaled($process, $child->program);
+        }
+
+        return $this->resultOf($process, $failure, $child->program);
+    }
+
+    // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.
+    private function signaled(Process $process, string $program): ProcessResult
+    {
+        $signal = $process->getTermSignal();
+        $ended = $program.' was killed by signal '.$signal;
+
+        return new ProcessResult($process->getExitCode() ?? 128 + $signal, $process->getOutput(), trim($process->getErrorOutput()."\n".$ended));
+    }
+
     private function runCall(GitCall $call): ProcessResult
     {
         return $this->run($call->command, $call->directory, $call->environment);
+    }
+
+    /**
+     * @param array<array-key, Process> $processes
+     *
+     * @return array<array-key, int>
+     */
+    private function failuresOf(array $processes): array
+    {
+        $failures = $this->startAll($processes);
+
+        return $failures + $this->waitForAll(array_diff_key($processes, $failures));
     }
 
     /**
@@ -144,13 +267,22 @@ final class ProcessRunner
      */
     private function contained(array $command): array
     {
-        $held = ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh'];
-
         if (self::PID_NAMESPACE === $this->containment()) {
-            return [...$held, $this->unshare, ...self::NAMESPACE_OPTIONS, ...$command];
+            return $this->held([$this->unshare, ...self::NAMESPACE_OPTIONS, ...$command]);
         }
 
-        return [...$held, ...$command];
+        return $this->held($command);
+    }
+
+    // Because in a PID and user namespace git saw other owners and a gate child became PID 1, a gate child gets only a session.
+    /**
+     * @param list<string> $command
+     *
+     * @return list<string>
+     */
+    private function held(array $command): array
+    {
+        return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
     }
 
     private function refusal(string $program, int $seconds): ?ProcessResult
@@ -162,17 +294,19 @@ final class ProcessRunner
         return $seconds < 1 ? $this->timedOut($program, $seconds) : null;
     }
 
-    private function startHeld(Process $process, InputStream $release): ?int
+    private function startHeld(Process $process, InputStream $release): ?ProcessGroup
     {
-        $group = [] === $this->startAll([$process]) ? $process->getPid() : null;
+        $leader = [] === $this->startAll([$process]) ? $process->getPid() : null;
         $release->write("\n");
         $release->close();
 
-        if (null === $group) {
+        if (null === $leader) {
             $process->stop(0);
+
+            return null;
         }
 
-        return $group;
+        return new ProcessGroup($leader);
     }
 
     private function namespacesAreAvailable(): bool
@@ -184,43 +318,6 @@ final class ProcessRunner
         } catch (ExceptionInterface) {
             return false;
         }
-    }
-
-    private function groupOutlives(int $group, float $deadline): bool
-    {
-        while ($this->groupIsAlive($group) && (hrtime(true) / 1_000_000_000) < $deadline) {
-            usleep(self::POLL_MICROSECONDS);
-        }
-
-        return $this->groupIsAlive($group);
-    }
-
-    private function groupIsAlive(int $group): bool
-    {
-        if (!posix_kill(-$group, 0)) {
-            return false;
-        }
-
-        $statuses = glob('/proc/[0-9]*/stat');
-
-        if (false === $statuses || [] === $statuses) {
-            return true;
-        }
-
-        return [] !== array_filter($statuses, fn (string $status): bool => $this->isLiveMember($group, (string) @file_get_contents($status)));
-    }
-
-    private function isLiveMember(int $group, string $status): bool
-    {
-        $end = strrpos($status, ')');
-
-        if (false === $end) {
-            return false;
-        }
-
-        $fields = explode(' ', substr($status, $end + 2));
-
-        return self::ZOMBIE !== $fields[0] && (string) $group === ($fields[2] ?? '');
     }
 
     /**

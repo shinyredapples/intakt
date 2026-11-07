@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support\Log;
 
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
@@ -16,8 +15,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(WarnOnErrorsAfterTheRun::class)]
 #[UsesClass(LogRecords::class)]
 #[UsesClass(RecordingLogger::class)]
-// Because the PHPUnit runs it starts keep their result cache in var/cache/ of the checkout, which every test worker shares.
-#[Group('serial')]
+// Because each run keeps its result cache under the TMPDIR of its test worker, not in the checkout.
 final class UnassertedErrorLogExtensionTest extends TestCase
 {
     public function testATestThatEndsWithAnUnassertedErrorRecordFailsNamingTheRecord(): void
@@ -97,7 +95,7 @@ final class UnassertedErrorLogExtensionTest extends TestCase
     {
         $root = dirname(__DIR__, 3);
         $tests = array_map(static fn (string $file): string => __DIR__.'/Fixtures/'.$file, $files);
-        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--configuration', __DIR__.'/Fixtures/'.$configuration, ...$tests], $root);
+        $run = new Process([PHP_BINARY, $root.'/vendor/bin/phpunit', '--no-progress', '--cache-directory', sys_get_temp_dir().'/phpunit-cache', '--configuration', __DIR__.'/Fixtures/'.$configuration, ...$tests], $root);
         $run->run();
 
         return $run;

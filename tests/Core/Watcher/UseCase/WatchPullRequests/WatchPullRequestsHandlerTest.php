@@ -12,6 +12,13 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\InstallWideFailures;
+use Intakt\Core\Budget\Contract\SharedHold;
+use Intakt\Core\Budget\Domain\FullDisk;
+use Intakt\Core\Budget\Domain\ItemFailureRecord;
+use Intakt\Core\Budget\Domain\SharedHoldRecord;
+use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
+use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -68,6 +75,10 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
+use Symfony\Component\Lock\Exception\LockReleasingException;
+use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
 
 #[Group('persistence')]
@@ -92,6 +103,12 @@ use Symfony\Component\Lock\LockFactory;
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
 #[UsesClass(WatchPullRequests::class)]
+#[UsesClass(DoctrineInstallWideFailures::class)]
+#[UsesClass(ItemFailureRecord::class)]
+#[UsesClass(FullDisk::class)]
+#[UsesClass(DoctrineHolds::class)]
+#[UsesClass(SharedHoldRecord::class)]
+#[UsesClass(SharedHold::class)]
 #[UsesClass(FindChangedPullRequests::class)]
 #[UsesClass(SeenListings::class)]
 #[UsesClass(AdmitHeads::class)]
@@ -249,6 +266,139 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertEquals(new CommitId(str_repeat(self::GREEN, 40)), $this->commands->started[0]->head);
     }
 
+    public function testALockStoreThatFailsWhileAHeadLockIsTakenStartsTheFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->locks->beforeChangeLock = static fn () => throw new LockStorageException('the lock store is down');
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockAcquiringException) {
+            // Expected: the tick fails, so the head stays due for the next one.
+        }
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([], $this->commands->started);
+    }
+
+    public function testALockStoreThatFailsWhileAHeadLockIsGivenBackStartsTheFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException) {
+            // Expected, because the tick must fail; the lock lapses with its time to live.
+        }
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+    }
+
+    public function testAHeadLockHeldByAnotherTickStartsNoFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        // Not released on destruction, because the other tick still holds it when this tick tries.
+        $this->locks->beforeChangeLock = fn (Key $key): bool => new LockFactory($this->locks)->createLock((string) $key, autoRelease: false)->acquire();
+
+        $this->tick();
+
+        self::assertSame([], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([], $this->commands->started);
+    }
+
+    public function testEveryHeadLockIsGivenBackBeforeTheFailureOfTheFirstIsReportedOnce(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+        $givenBackWhenReported = [];
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('lockStoreFailed')->willReturnCallback(function () use (&$givenBackWhenReported): void {
+            $givenBackWhenReported[] = $this->locks->changeLocksGivenBack;
+        });
+        $this->handler = $this->handler($installWide);
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException $failure) {
+            self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
+        }
+
+        self::assertCount(1, $givenBackWhenReported);
+        self::assertCount(1, $givenBackWhenReported[0]);
+    }
+
+    public function testAFailureOfTheTickIsRethrownWhenGivingBackItsHeadLockFailsToo(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->useLedger(new InMemoryLedger(0));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+
+        $this->tickExpectingFailure();
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        $reported = array_first(array_filter($this->logger->logged, static fn (array $line): bool => 'the lock store failed' === ($line[1]['cause'] ?? null)));
+        self::assertIsArray($reported);
+        $exception = $reported[1]['exception'] ?? null;
+        self::assertInstanceOf(LockReleasingException::class, $exception);
+        self::assertSame('the lock store is down', $exception->getPrevious()?->getMessage());
+    }
+
+    public function testAFailureOfTheTickIsRethrownWhenTheLockStoreStaysDownWhileItsHeadLockIsGivenBack(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->useLedger(new InMemoryLedger(0));
+        $this->locks->changeLocksStayDown = true;
+
+        $this->tickExpectingFailure();
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+    }
+
+    public function testTheFirstFailedGiveBackIsRethrownWhenTheLockStoreStaysDown(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->changeLocksStayDown = true;
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException $failure) {
+            self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
+        }
+    }
+
+    public function testAFailureOfTheTickIsRethrownWhenReportingTheLockStoreFailureFailsToo(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->useLedger(new InMemoryLedger(0));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+        $this->handler = $this->handler($this->installWideThatCannotRecordAHold());
+
+        $this->tickExpectingFailure();
+
+        self::assertTrue($this->loggedTheUnwrittenHold());
+    }
+
+    public function testAFailedGiveBackIsRethrownWhenReportingItFailsToo(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+        $this->handler = $this->handler($this->installWideThatCannotRecordAHold());
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException $failure) {
+            self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
+        }
+
+        self::assertTrue($this->loggedTheUnwrittenHold());
+    }
+
     public function testAFailedStartIsTriedAgainOnceItsBackOffHasPassedEvenWhenTheListingIsUnchanged(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
@@ -354,6 +504,35 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame(['change' => '6', 'cause' => 'LogicException: Not a recording: ', 'failures' => 1, 'retry_at' => '2026-11-02T10:01:00+00:00'], array_intersect_key($this->ledger->payloads()[0], array_flip(['change', 'cause', 'failures', 'retry_at'])));
         self::assertSame('7', $this->ledger->payloads()[1]['change']);
+    }
+
+    public function testAHeadWhoseInstallWideRecordFailsStillBacksOffAloneAndTheNextHeadStartsItsRound(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('itemFailed')->willThrowException(new RuntimeException('budget_item_failure is locked'));
+        $this->handler = $this->handler($installWide);
+
+        $this->tick();
+
+        self::assertSame(1, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z')));
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame('7', $this->ledger->payloads()[1]['change']);
+        $notRecorded = array_find($this->logger->logged, static fn (array $line): bool => 'The install-wide failure record failed; the head still backs off alone.' === $line[0]);
+        self::assertIsArray($notRecorded);
+        $exception = $notRecorded[1]['exception'] ?? null;
+        self::assertInstanceOf(RuntimeException::class, $exception);
+        self::assertSame('budget_item_failure is locked', $exception->getMessage());
+    }
+
+    public function testTheSameErrorOnTwoHeadsOfOneTickStartsTheFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::HeadFailed], $this->ledger->kinds());
     }
 
     public function testAHeadThatFailsIsLoggedAsAnErrorWithItsException(): void
@@ -756,6 +935,23 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         }
     }
 
+    private function loggedTheUnwrittenHold(): bool
+    {
+        return array_any($this->logger->logged, static function (array $line): bool {
+            $exception = $line[1]['exception'] ?? null;
+
+            return $exception instanceof RuntimeException && 'the hold cannot be written' === $exception->getMessage();
+        });
+    }
+
+    private function installWideThatCannotRecordAHold(): InstallWideFailures
+    {
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('lockStoreFailed')->willThrowException(new RuntimeException('the hold cannot be written'));
+
+        return $installWide;
+    }
+
     private function tickExpectingFailure(): void
     {
         try {
@@ -779,7 +975,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         return (bool) $this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round WHERE head = ?', [str_repeat($head, 40)]);
     }
 
-    private function handler(): WatchPullRequestsHandler
+    private function handler(?InstallWideFailures $installWide = null): WatchPullRequestsHandler
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
@@ -791,13 +987,14 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection()), $doctrine, $logger);
+        $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 use InvalidArgumentException;
+use Symfony\Component\Clock\NativeClock;
 
 final readonly class CheckCommand
 {
@@ -33,14 +34,57 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGatesWhenToolsExist($options);
+        $slots = $this->slots();
+
+        if (!$slots instanceof GateSlots) {
+            $this->print(['error' => GateSlots::VARIABLE.' names no number of gates to run at once from 1 to '.GateSlots::MOST]);
+
+            return 2;
+        }
+
+        return $this->runGatesWhenToolsExist($options, $arguments, $slots);
     }
 
-    private function runGatesWhenToolsExist(Options $options): int
+    /**
+     * @param list<string> $arguments
+     */
+    public function runGate(string $name, array $arguments): int
     {
-        $gates = $this->selectedGates($options);
-        $names = array_map(static fn (Gate $gate): string => $gate->name(), $gates);
-        $missing = new RequiredTools($options->root ?? $this->home)->missingFor($names);
+        try {
+            $options = Options::fromArguments($arguments);
+        } catch (InvalidArgumentException $exception) {
+            $this->print(['error' => $exception->getMessage()]);
+
+            return 2;
+        }
+
+        // Because the child gets the arguments of bin/check, it finds its gate in the same selection the parent made.
+        $gate = array_find($this->selectedGates($options), static fn (Gate $gate): bool => $gate->name() === $name);
+
+        if (!$gate instanceof Gate) {
+            $this->print(['error' => 'unknown gate '.$name]);
+
+            return 2;
+        }
+
+        if (LowPriority::isAskedIn(getenv())) {
+            new LowPriority()->take();
+        }
+
+        $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
+        fwrite(STDOUT, $result->toJson()."\n");
+
+        return $result->isPassing() ? 0 : 1;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function runGatesWhenToolsExist(Options $options, array $arguments, GateSlots $slots): int
+    {
+        $selected = $this->selectedGates($options);
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $selected);
+        $missing = new RequiredTools($options->root ?? $this->home)->missingToRunEachInItsOwnProcess($names);
 
         if ([] !== $missing) {
             $this->print(['error' => 'missing tools', 'missing' => $missing]);
@@ -48,29 +92,49 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($gates, $options);
+        $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
+
+        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
     }
 
     /**
-     * @param list<Gate> $gates
+     * @param list<string> $names
+     * @param list<string> $arguments
      */
-    private function runGates(array $gates, Options $options): int
+    private function runGates(array $names, array $arguments, GateChildren $children): int
     {
-        $workspace = new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base);
         $failed = [];
 
-        foreach ($gates as $gate) {
-            $result = $this->resultOf($gate, $workspace);
-            fwrite(STDOUT, $result->toJson()."\n");
+        foreach ($children->reportsOf($names, $arguments) as $report) {
+            fwrite(STDOUT, $report->line."\n");
 
-            if (!$result->isPassing()) {
-                $failed[] = $gate->name();
+            if (!$report->isPassing()) {
+                $failed[] = $report->gate;
             }
         }
 
         $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
 
         return [] === $failed ? 0 : 1;
+    }
+
+    // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.
+    private function slots(): ?GateSlots
+    {
+        $testWorkers = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax()) ?? 1;
+
+        $memoryLimits = [...new OwnCgroup()->fileAndAncestors('memory.max'), ...new OwnCgroup()->fileAndAncestors('memory.high')];
+
+        $byDefault = GateSlots::byDefault(Processors::available(Processors::status(), Processors::cpuMax()), $memoryLimits, $testWorkers);
+
+        return GateSlots::chosen($this->variable(GateSlots::VARIABLE), $byDefault, $testWorkers);
+    }
+
+    private function variable(string $name): ?string
+    {
+        $value = getenv($name);
+
+        return is_string($value) && '' !== $value ? $value : null;
     }
 
     private function resultOf(Gate $gate, Workspace $workspace): GateResult
@@ -125,7 +189,7 @@ final readonly class CheckCommand
             new CommitSubjectsGate($testMerge),
             new LongDashesGate(),
             new HighlightsGate(new FencedCodeBlocks()),
-            new ReproductionRowsGate(new FencedCodeBlocks()),
+            new ReproductionRowsGate(new FencedCodeBlocks(), new CheckedReports(new FencedCodeBlocks(), new NativeClock())),
             new ContainerLintGate(),
             new RatchetListsGate(),
         ];

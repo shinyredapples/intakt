@@ -11,13 +11,11 @@ use Symfony\AI\Store\ManagedStoreInterface;
 
 #[CoversNothing]
 #[Group('persistence')]
-// Because the memory store's file is var/memory_test.db of the checkout, not the worker's database, and the test removes it.
-#[Group('serial')]
 final class MemoryStoreFileTest extends KernelTestCase
 {
-    public function testTheMemoryStoreKeepsItsFileForTheKernelEnvironment(): void
+    public function testInTheTestEnvironmentTheMemoryStoreKeepsItsFileInTheCacheDirectoryOfTheWorker(): void
     {
-        $file = self::bootKernel()->getProjectDir().'/var/memory_test.db';
+        $file = self::bootKernel()->getCacheDir().'/memory.db';
         if (is_file($file)) {
             unlink($file);
         }

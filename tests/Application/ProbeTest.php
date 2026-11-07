@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Intakt\Tests\Support\ProjectCopy;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
@@ -15,22 +16,6 @@ use Symfony\Component\Process\Process;
 final class ProbeTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../..';
-
-    // Vendor is hard-linked once per class (a symlink would resolve the project to the real checkout, and a link that fails partway across file systems never counts as vendor), because no test writes to it and linking it cost over half a second per test. It is kept only while its installed packages are the checkout's (the same installed.json content), because a folder left by a killed run with the same process id may hold the vendor of an older checkout, and the autoload file keeps its inode across an in-place dependency update, so a copy that could not be linked is reused too.
-    private const string COPY = <<<'SH'
-        set -e
-        project=$1
-        shift
-        cd "$project"
-        find . -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +
-        if ! cmp -s vendor/composer/installed.json "$0"/vendor/composer/installed.json 2>/dev/null; then
-            rm -rf vendor vendor.partial
-            cp -al "$0"/vendor vendor.partial 2>/dev/null || { rm -rf vendor.partial && cp -a "$0"/vendor vendor.partial; }
-            mv vendor.partial vendor
-        fi
-        cd "$0"
-        cp -a "$@" "$project"/
-        SH;
 
     private string $scratch;
 
@@ -56,7 +41,7 @@ final class ProbeTest extends TestCase
     public function testAScriptRunsAgainstTheInstanceAndItsOutputAndExitCodeAreReported(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Answer.php', '<?php echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL"))[0])[1], "\n"; exit(7);');
+        $this->probe('Answer.php', '<?php echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL")."/no-such-page")[0])[1], "\n"; exit(7);');
 
         $run = $this->runProbe('tests/Probe/Answer.php');
 
@@ -77,7 +62,7 @@ final class ProbeTest extends TestCase
         {
             public function testTheInstanceAnswers(): void
             {
-                self::assertStringContainsString('404', get_headers(getenv('INTAKT_INSTANCE_URL'))[0]);
+                self::assertStringContainsString('404', get_headers(getenv('INTAKT_INSTANCE_URL').'/no-such-page')[0]);
             }
         }
         PHP_WRAP);
@@ -91,7 +76,7 @@ final class ProbeTest extends TestCase
     public function testAProbeRunsAgainstTheBuiltInServerWhenFrankenphpIsNotOnThePath(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Answer.php', '<?php echo get_headers(getenv("INTAKT_INSTANCE_URL"))[0], "\n";');
+        $this->probe('Answer.php', '<?php echo get_headers(getenv("INTAKT_INSTANCE_URL")."/no-such-page")[0], "\n";');
         $path = array_filter(explode(':', (string) getenv('PATH')), static fn (string $directory): bool => !is_file($directory.'/frankenphp'));
 
         $run = $this->runProbe('tests/Probe/Answer.php', ['PATH' => implode(':', $path)]);
@@ -393,8 +378,7 @@ final class ProbeTest extends TestCase
     {
         $project = self::sharedProject();
         new Filesystem()->mkdir($project);
-        $copy = new Process(['sh', '-c', self::COPY, self::ROOT, $project, 'bin', 'src', 'config', 'public', 'composer.json', '.env', '.env.test']);
-        $copy->mustRun();
+        ProjectCopy::refresh(self::ROOT, $project, 'bin', 'src', 'config', 'public', 'composer.json', '.env', '.env.test');
         new Filesystem()->copy(self::ROOT.'/tests/bootstrap.php', $project.'/tests/bootstrap.php');
         new Filesystem()->remove($project.'/config/reference.php');
 

@@ -7,9 +7,9 @@ namespace Intakt\Tests\Application;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\Group;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -17,8 +17,6 @@ use Symfony\Component\Filesystem\Filesystem;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
-// Because it writes and removes the vault in config/secrets/ai_providers_test/ of the checkout, which every test worker shares.
-#[Group('serial')]
 final class AiProvidersTest extends KernelTestCase
 {
     private const array VARIABLES = [
@@ -30,13 +28,23 @@ final class AiProvidersTest extends KernelTestCase
     ];
 
     // A runtime environment of its own, so the test vault never mixes with a real one under config/secrets/.
-    private const string VAULT_ENVIRONMENT = 'ai_providers_test';
+    private const string VAULT_ENVIRONMENT_PREFIX = 'ai_providers_test';
 
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
 
+    private CompiledContainers $containers;
+
+    public static function tearDownAfterClass(): void
+    {
+        self::compiledContainers()->remove();
+        parent::tearDownAfterClass();
+    }
+
     protected function setUp(): void
     {
+        $this->containers = self::compiledContainers();
+
         foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET'] as $name) {
             $this->saved[$name] = [
                 'server' => $_SERVER[$name] ?? null,
@@ -62,7 +70,8 @@ final class AiProvidersTest extends KernelTestCase
         }
 
         parent::tearDown();
-        new Filesystem()->remove([self::createKernel()->getCacheDir(), $this->vaultDirectory()]);
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->vaultDirectory());
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
@@ -162,7 +171,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
@@ -176,7 +185,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', '');
-        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
@@ -192,7 +201,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('UNRELATED_VAULT_ENTRY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         $this->useMalformedDecryptionSecret();
 
         $container = $this->bootWith($this->allSet());
@@ -208,7 +217,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         $this->useMalformedDecryptionSecret();
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
@@ -228,7 +237,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory(), $keyPair);
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         $_SERVER['SYMFONY_DECRYPTION_SECRET'] = strtr(base64_encode($keyPair), '+/', '-_');
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
@@ -242,9 +251,9 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        unlink($this->vaultDirectory().'/'.self::VAULT_ENVIRONMENT.'.encrypt.public.php');
-        unlink($this->vaultDirectory().'/'.self::VAULT_ENVIRONMENT.'.decrypt.private.php');
-        $_SERVER['APP_RUNTIME_ENV'] = self::VAULT_ENVIRONMENT;
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.encrypt.public.php');
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         // Only characters base64 ignores, so the secret decodes to an empty key.
         $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
 
@@ -293,17 +302,46 @@ final class AiProvidersTest extends KernelTestCase
             }
         }
 
-        // The build decides on the variables, so every case needs a fresh container; teardown removes it so later tests rebuild.
-        new Filesystem()->remove(self::createKernel()->getCacheDir());
         self::ensureKernelShutdown();
+        // The build decides on the variables and the vault, so every set of them needs a container of its own.
+        $this->containers->useFor($this->buildInputs());
         self::bootKernel();
 
         return self::getContainer();
     }
 
+    private static function compiledContainers(): CompiledContainers
+    {
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'ai-providers');
+    }
+
+    // Every variable as each source holds it rather than as the config reads it, so a test of which source wins never reuses a container built for another.
+    /** @return array<mixed> */
+    private function buildInputs(): array
+    {
+        $variables = [];
+        foreach (array_keys($this->saved) as $name) {
+            $variables[$name] = [$_SERVER[$name] ?? null, $_ENV[$name] ?? null, getenv($name)];
+        }
+
+        $files = glob($this->vaultDirectory().'/*');
+        $vault = [];
+        foreach (false === $files ? [] : $files as $file) {
+            $vault[basename($file)] = file_get_contents($file);
+        }
+
+        return [$variables, $vault];
+    }
+
     private function vaultDirectory(): string
     {
-        return self::createKernel()->getProjectDir().'/config/secrets/'.self::VAULT_ENVIRONMENT;
+        return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
+    }
+
+    // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
+    private function vaultEnvironment(): string
+    {
+        return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
     }
 
     private function unsetVariable(string $name): void

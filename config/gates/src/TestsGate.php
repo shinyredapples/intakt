@@ -10,7 +10,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final class TestsGate implements Gate
+final readonly class TestsGate implements RunsTheChangesCode
 {
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';
@@ -19,10 +19,15 @@ final class TestsGate implements Gate
         '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky',
         '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation', '--fail-on-phpunit-deprecation',
     ];
-    private const string PROCESS_STATUS = '/proc/self/status';
     private const int PASS_TIMEOUT_SECONDS = 3600;
     // Because the slowest test file takes under a minute, ten minutes on one file means it hangs.
     private const int FILE_TIMEOUT_SECONDS = 600;
+
+    public function __construct(
+        private int $fileTimeoutSeconds = self::FILE_TIMEOUT_SECONDS,
+        private int $passTimeoutSeconds = self::PASS_TIMEOUT_SECONDS,
+    ) {
+    }
 
     public function name(): string
     {
@@ -43,7 +48,7 @@ final class TestsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $count = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), $this->processStatus());
+        $count = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax());
 
         if (null === $count) {
             return GateResult::failedBecause($this->name(), TestWorkerCount::VARIABLE.' names no number of test workers from 1 to '.TestWorkerCount::most());
@@ -68,11 +73,6 @@ final class TestsGate implements Gate
         } finally {
             $this->remove($scratch);
         }
-    }
-
-    private function processStatus(): string
-    {
-        return is_readable(self::PROCESS_STATUS) ? (string) file_get_contents(self::PROCESS_STATUS) : '';
     }
 
     private function whyNotReady(Workspace $workspace): ?string
@@ -209,9 +209,9 @@ final class TestsGate implements Gate
      */
     private function queued(Workspace $workspace, TestWorkers $workers, array $jobs): array
     {
-        $seconds = 1 === $workers->count ? self::PASS_TIMEOUT_SECONDS : self::FILE_TIMEOUT_SECONDS;
+        $seconds = 1 === $workers->count ? $this->passTimeoutSeconds : $this->fileTimeoutSeconds;
 
-        return new ProcessQueue($seconds)->run($jobs, $workers->slots(), $workspace->root);
+        return new ProcessQueue($seconds, $this->passTimeoutSeconds)->run($jobs, $workers->slots(), $workspace->root);
     }
 
     /**

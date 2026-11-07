@@ -7,7 +7,8 @@ namespace Intakt\Gates;
 final readonly class GateResult
 {
     private const int MAXIMUM_FINDINGS = 10;
-    private const int MAXIMUM_FINDING_LENGTH = 300;
+    public const int MAXIMUM_FINDING_LENGTH = 300;
+    public const int JSON_FLAGS = JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
 
     /**
      * @param list<string>                                         $findings
@@ -75,7 +76,7 @@ final readonly class GateResult
         $report += isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
         $report += [] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()];
 
-        return json_encode($report, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return json_encode($report, self::JSON_FLAGS);
     }
 
     /**
@@ -95,6 +96,13 @@ final readonly class GateResult
     private function shorten(string $finding): string
     {
         $oneLine = trim((string) preg_replace('/\s+/', ' ', $finding));
+
+        // The environment gate reports a missing mbstring through here, so the cut must work without it.
+        if (!function_exists('mb_strimwidth')) {
+            $characters = preg_split('//u', $oneLine, -1, PREG_SPLIT_NO_EMPTY);
+
+            return false === $characters || count($characters) <= self::MAXIMUM_FINDING_LENGTH ? $oneLine : implode('', array_slice($characters, 0, self::MAXIMUM_FINDING_LENGTH - 3)).'...';
+        }
 
         return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...');
     }
