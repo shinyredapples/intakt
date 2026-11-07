@@ -7,6 +7,7 @@ namespace Intakt\Tests\Application;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
@@ -35,8 +36,18 @@ final class AiProvidersTest extends KernelTestCase
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
 
+    private CompiledContainers $containers;
+
+    public static function tearDownAfterClass(): void
+    {
+        self::compiledContainers()->remove();
+        parent::tearDownAfterClass();
+    }
+
     protected function setUp(): void
     {
+        $this->containers = self::compiledContainers();
+
         foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET'] as $name) {
             $this->saved[$name] = [
                 'server' => $_SERVER[$name] ?? null,
@@ -62,7 +73,8 @@ final class AiProvidersTest extends KernelTestCase
         }
 
         parent::tearDown();
-        new Filesystem()->remove([self::createKernel()->getCacheDir(), $this->vaultDirectory()]);
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->vaultDirectory());
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
@@ -293,12 +305,35 @@ final class AiProvidersTest extends KernelTestCase
             }
         }
 
-        // The build decides on the variables, so every case needs a fresh container; teardown removes it so later tests rebuild.
-        new Filesystem()->remove(self::createKernel()->getCacheDir());
         self::ensureKernelShutdown();
+        // The build decides on the variables and the vault, so every set of them needs a container of its own.
+        $this->containers->useFor($this->buildInputs());
         self::bootKernel();
 
         return self::getContainer();
+    }
+
+    private static function compiledContainers(): CompiledContainers
+    {
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'ai-providers');
+    }
+
+    // Every variable as each source holds it rather than as the config reads it, so a test of which source wins never reuses a container built for another.
+    /** @return array<mixed> */
+    private function buildInputs(): array
+    {
+        $variables = [];
+        foreach (array_keys($this->saved) as $name) {
+            $variables[$name] = [$_SERVER[$name] ?? null, $_ENV[$name] ?? null, getenv($name)];
+        }
+
+        $files = glob($this->vaultDirectory().'/*');
+        $vault = [];
+        foreach (false === $files ? [] : $files as $file) {
+            $vault[basename($file)] = file_get_contents($file);
+        }
+
+        return [$variables, $vault];
     }
 
     private function vaultDirectory(): string

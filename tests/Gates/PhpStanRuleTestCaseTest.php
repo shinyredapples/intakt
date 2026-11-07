@@ -36,12 +36,43 @@ final class PhpStanRuleTestCaseTest extends PhpStanRuleTestCase
         self::assertSame('', $this->findingsWithLegacy("class Legacy\n{\n}\n"));
     }
 
+    public function testAFileInAFolderTheGateExcludesIsNotAnalyzed(): void
+    {
+        $sandbox = $this->sandboxWithDeprecatedLegacy();
+        $this->writeConsumer($sandbox, 'vendor/acme/package/VendorConsumer.php', 'VendorConsumer');
+        $this->writeConsumer($sandbox, 'var/cache/CacheConsumer.php', 'CacheConsumer');
+        $this->writeConsumer($sandbox, 'upstream/report/ReproductionConsumer.php', 'ReproductionConsumer');
+
+        self::assertSame('', $this->ruleFindingsIn($sandbox));
+    }
+
+    public function testAFolderWhoseNameOnlyStartsLikeAnExcludedOneIsAnalyzed(): void
+    {
+        $sandbox = $this->sandboxWithDeprecatedLegacy();
+        $this->writeConsumer($sandbox, 'variants/VariantConsumer.php', 'VariantConsumer');
+
+        self::assertStringContainsString('variants/VariantConsumer.php:11 intakt.deprecatedReference', $this->ruleFindingsIn($sandbox));
+    }
+
     private function findingsWithLegacy(string $legacy): string
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/Legacy.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\n".$legacy);
-        $sandbox->write('src/Consumer.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal class Consumer\n{\n    public function make(): object\n    {\n        return new Legacy();\n    }\n}\n");
+        $this->writeConsumer($sandbox, 'src/Consumer.php', 'Consumer');
 
         return $this->ruleFindingsIn($sandbox);
+    }
+
+    private function sandboxWithDeprecatedLegacy(): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('src/Legacy.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\n/**\n * @deprecated\n */\nclass Legacy\n{\n}\n");
+
+        return $sandbox;
+    }
+
+    private function writeConsumer(Sandbox $sandbox, string $path, string $class): void
+    {
+        $sandbox->write($path, "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Sample;\n\nfinal class ".$class."\n{\n    public function make(): object\n    {\n        return new Legacy();\n    }\n}\n");
     }
 }
