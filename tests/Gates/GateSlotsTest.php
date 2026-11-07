@@ -91,12 +91,20 @@ final class GateSlotsTest extends TestCase
         self::assertSame(12, GateSlots::byDefault(12, ["max\n", '', '0'], 4));
     }
 
-    public function testTheTestsGateStartsFirstAndTheOthersKeepTheirOrder(): void
+    public function testTheStaticGatesStartFirstInTheirOrder(): void
     {
         $slots = GateSlots::chosen(null, 4, 1);
 
         self::assertInstanceOf(GateSlots::class, $slots);
-        self::assertSame(['tests', 'cs', 'phpstan', 'secrets'], $slots->launchOrder(['cs', 'phpstan', 'tests', 'secrets']));
-        self::assertSame(['cs', 'phpstan'], $slots->launchOrder(['cs', 'phpstan']));
+        self::assertSame(['cs', 'phpstan', 'secrets', 'tests'], $slots->launchOrder(['cs', 'phpstan', 'tests', 'secrets'], ['tests']));
+        self::assertSame(['cs', 'phpstan'], $slots->launchOrder(['cs', 'phpstan'], []));
+    }
+
+    public function testTheTestsGateStartsFirstOfTheGatesThatRunTheChangesCode(): void
+    {
+        $slots = GateSlots::chosen(null, 4, 1);
+
+        self::assertInstanceOf(GateSlots::class, $slots);
+        self::assertSame(['cs', 'secrets', 'tests', 'container'], $slots->launchOrder(['cs', 'container', 'tests', 'secrets'], ['container', 'tests']));
     }
 }

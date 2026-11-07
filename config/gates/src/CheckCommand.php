@@ -82,7 +82,8 @@ final readonly class CheckCommand
      */
     private function runGatesWhenToolsExist(Options $options, array $arguments, GateSlots $slots): int
     {
-        $names = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
+        $selected = $this->selectedGates($options);
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $selected);
         $missing = new RequiredTools($options->root ?? $this->home)->missingToRunEachInItsOwnProcess($names);
 
         if ([] !== $missing) {
@@ -91,18 +92,21 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots));
+        $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
+
+        return $this->runGates($names, $runningTheChangesCode, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots));
     }
 
     /**
      * @param list<string> $names
+     * @param list<string> $runningTheChangesCode
      * @param list<string> $arguments
      */
-    private function runGates(array $names, array $arguments, GateChildren $children): int
+    private function runGates(array $names, array $runningTheChangesCode, array $arguments, GateChildren $children): int
     {
         $failed = [];
 
-        foreach ($children->reportsOf($names, $arguments) as $report) {
+        foreach ($children->reportsOf($names, $runningTheChangesCode, $arguments) as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {

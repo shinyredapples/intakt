@@ -20,29 +20,31 @@ final readonly class GateChildren
 
     /**
      * @param list<string> $gates
+     * @param list<string> $runningTheChangesCode
      * @param list<string> $arguments
      *
      * @return list<GateReport>
      */
-    public function reportsOf(array $gates, array $arguments): array
+    public function reportsOf(array $gates, array $runningTheChangesCode, array $arguments): array
     {
-        $results = $this->resultsOf($this->slots->launchOrder($gates), $this->childrenOf($gates, $arguments));
+        $results = $this->resultsOf($this->slots->launchOrder($gates, $runningTheChangesCode), $runningTheChangesCode, $this->childrenOf($gates, $runningTheChangesCode, $arguments));
 
         return array_map(static fn (string $gate): GateReport => GateReport::fromChild($gate, $results[$gate]), $gates);
     }
 
     /**
      * @param list<string> $gates
+     * @param list<string> $runningTheChangesCode
      * @param list<string> $arguments
      *
      * @return array<string, ChildCommand>
      */
-    private function childrenOf(array $gates, array $arguments): array
+    private function childrenOf(array $gates, array $runningTheChangesCode, array $arguments): array
     {
         $children = [];
 
         foreach ($gates as $gate) {
-            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $gates, $this->slots));
+            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $runningTheChangesCode, $this->slots));
         }
 
         return $children;
@@ -50,11 +52,12 @@ final readonly class GateChildren
 
     /**
      * @param list<string>                $waiting
+     * @param list<string>                $runningTheChangesCode
      * @param array<string, ChildCommand> $children
      *
      * @return array<string, ProcessResult>
      */
-    private function resultsOf(array $waiting, array $children): array
+    private function resultsOf(array $waiting, array $runningTheChangesCode, array $children): array
     {
         $running = [];
         $results = [];
@@ -64,7 +67,7 @@ final readonly class GateChildren
         });
 
         while ([] !== $waiting || [] !== $running) {
-            [$waiting, $started] = $this->launched($waiting, $running, $children);
+            [$waiting, $started] = $this->launched($waiting, $running, $runningTheChangesCode, $children);
             $running += $started;
             $ended = $this->ended($running);
             $running = array_diff_key($running, $ended);
@@ -81,20 +84,33 @@ final readonly class GateChildren
     /**
      * @param list<string>                              $waiting
      * @param array<string, RunningChild|ProcessResult> $running
+     * @param list<string>                              $runningTheChangesCode
      * @param array<string, ChildCommand>               $children
      *
      * @return array{list<string>, array<string, RunningChild|ProcessResult>}
      */
-    private function launched(array $waiting, array $running, array $children): array
+    private function launched(array $waiting, array $running, array $runningTheChangesCode, array $children): array
     {
         $started = [];
 
-        while ([] !== $waiting && $this->slots->allow([...array_keys($running), ...array_keys($started)], $waiting[0])) {
+        while ([] !== $waiting && $this->mayStart($waiting, [...array_keys($running), ...array_keys($started)], $runningTheChangesCode)) {
             $gate = array_shift($waiting);
             $started[$gate] = $this->started($children[$gate]);
         }
 
         return [$waiting, $started];
+    }
+
+    /**
+     * @param non-empty-list<string> $waiting
+     * @param list<string>           $running
+     * @param list<string>           $runningTheChangesCode
+     */
+    private function mayStart(array $waiting, array $running, array $runningTheChangesCode): bool
+    {
+        $staticGatesLeft = [] !== array_diff([...$waiting, ...$running], $runningTheChangesCode);
+
+        return $this->slots->allow($running, $waiting[0]) && !($staticGatesLeft && in_array($waiting[0], $runningTheChangesCode, true));
     }
 
     private function started(ChildCommand $child): RunningChild|ProcessResult

@@ -10,7 +10,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final readonly class TestsGate implements Gate
+final readonly class TestsGate implements RunsTheChangesCode
 {
     private const string CONFIGURATION = 'phpunit.dist.xml';
     private const string GATES_CONFIGURATION = 'phpunit.gates.xml';

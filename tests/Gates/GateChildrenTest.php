@@ -108,15 +108,31 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame(0, $run->exitCode(), $run->output());
     }
 
-    public function testTheTestsGateStartsBeforeTheGatesListedAheadOfIt(): void
+    public function testAStaticGateSelectedWithTheTestsGateIsNotAskedToRunAtLowPriority(): void
     {
-        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=audit,tests');
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '4'], '--only=comments,tests');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+    }
+
+    // Because a test of the change could otherwise alter the tools or inputs of a static gate while that gate judges the head.
+    public function testAGateThatRunsTheChangesCodeStartsOnlyAfterTheLastStaticGateHasEnded(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '4'], '--only=tests,audit,comments');
 
         self::assertSame([
+            '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"gate":"tests","ok":true,"findings":[],"omitted":0}',
             '{"result":"pass","failed":[]}',
         ], $run->lines());
+    }
+
+    public function testTheContainerGateAlsoWaitsForTheStaticGates(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '4'], '--only=container,audit');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
     }
 
     public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void

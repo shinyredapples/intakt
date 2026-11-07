@@ -19,16 +19,16 @@ final readonly class LowPriority
     ) {
     }
 
-    // Because only the tests gate's workers gain the processor time the other gates give up, and only while those run beside them; a child never keeps an ask it inherited.
+    // Because only the tests gate's workers gain the processor time the other gates give up, and only the gates that also run the change's code run beside them; a child never keeps an ask it inherited.
     /**
-     * @param list<string> $gates
+     * @param list<string> $runningTheChangesCode
      *
      * @return array<string, string|false>
      */
-    public static function environmentFor(string $gate, array $gates, GateSlots $slots): array
+    public static function environmentFor(string $gate, array $runningTheChangesCode, GateSlots $slots): array
     {
         $tests = new TestsGate()->name();
-        $asked = $tests !== $gate && in_array($tests, $gates, true) && $slots->runSeveralAtOnce();
+        $asked = $tests !== $gate && in_array($gate, $runningTheChangesCode, true) && in_array($tests, $runningTheChangesCode, true) && $slots->runSeveralAtOnce();
 
         return [self::VARIABLE => $asked ? self::ASKED : false];
     }

@@ -22,6 +22,15 @@ $reported = static function (string $gate, string $finding): never {
 
 $askedForLowPriority = '1' === getenv('INTAKT_GATE_LOW_PRIORITY');
 
+$only = array_find($argv, static fn (string $argument): bool => str_starts_with($argument, '--only='));
+$selected = null === $only ? [] : explode(',', substr($only, strlen('--only=')));
+
+// Because the parent starts a gate that runs the change's code only once every static gate's child has exited, a static gate's end marker must exist by then.
+$staticGatesStillRunning = static fn (): array => array_values(array_filter(
+    array_intersect(['audit', 'comments'], $selected),
+    static fn (string $static): bool => !file_exists($static.'-ended'),
+));
+
 if ('cs' === $gate) {
     $beside = (int) getenv('INTAKT_GATE_SLOTS') > 1;
     fwrite(STDERR, "Warning: the cs child warned\n");
@@ -35,12 +44,18 @@ if ('phpstan' === $gate) {
 
 if ('comments' === $gate) {
     touch('comments-started');
-    $reported('comments', '');
+    touch('comments-ended');
+    $reported('comments', $askedForLowPriority ? 'comments was asked to run at low priority' : '');
 }
 
 if ('tests' === $gate) {
+    $early = $staticGatesStillRunning();
     touch('tests-started');
-    $reported('tests', $askedForLowPriority ? 'tests was asked to run at low priority' : '');
+    $reported('tests', match (true) {
+        $askedForLowPriority => 'tests was asked to run at low priority',
+        [] !== $early => 'tests started before '.implode(',', $early).' ended',
+        default => '',
+    });
 }
 
 if ('architecture' === $gate) {
@@ -57,11 +72,18 @@ if ('reproductions' === $gate) {
 }
 
 if ('audit' === $gate) {
-    $reported('audit', file_exists('tests-started') ? '' : 'tests did not start first');
+    $beside = in_array('comments', $selected, true) && !$awaited('comments-started') ? 'comments never ran beside audit' : '';
+    touch('audit-ended');
+    $reported('audit', $beside);
 }
 
 if ('container' === $gate) {
-    $reported('container', $askedForLowPriority ? 'container was asked to run at low priority' : '');
+    $early = $staticGatesStillRunning();
+    $reported('container', match (true) {
+        $askedForLowPriority => 'container was asked to run at low priority',
+        [] !== $early => 'container started before '.implode(',', $early).' ended',
+        default => '',
+    });
 }
 
 if ('commits' === $gate || 'dashes' === $gate) {

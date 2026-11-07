@@ -47,15 +47,17 @@ final readonly class GateSlots
 
     /**
      * @param list<string> $gates
+     * @param list<string> $runningTheChangesCode
      *
      * @return list<string>
      */
-    public function launchOrder(array $gates): array
+    public function launchOrder(array $gates, array $runningTheChangesCode): array
     {
         $tests = [new TestsGate()->name()];
+        $running = array_values(array_intersect($gates, $runningTheChangesCode));
 
-        // Because the tests gate takes longest by far, it starts first and never waits for a slot.
-        return [...array_values(array_intersect($gates, $tests)), ...array_values(array_diff($gates, $tests))];
+        // Because the tests gate takes longest by far, it starts first of the gates that run the change's code and never waits for a slot.
+        return [...array_values(array_diff($gates, $running)), ...array_values(array_intersect($running, $tests)), ...array_values(array_diff($running, $tests))];
     }
 
     public function runSeveralAtOnce(): bool

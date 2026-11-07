@@ -32,22 +32,27 @@ final class LowPriorityTest extends TestCase
 
     public function testAGateBesideTheTestsGateIsAskedToRunAtLowPriorityWhenSeveralRunAtOnce(): void
     {
-        self::assertSame([LowPriority::VARIABLE => '1'], LowPriority::environmentFor('phpstan', ['phpstan', 'tests'], $this->slots('2')));
+        self::assertSame([LowPriority::VARIABLE => '1'], LowPriority::environmentFor('container', ['container', 'tests'], $this->slots('2')));
     }
 
     public function testTheTestsGateIsNotAskedToRunAtLowPriority(): void
     {
-        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('tests', ['phpstan', 'tests'], $this->slots('2')));
+        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('tests', ['container', 'tests'], $this->slots('2')));
+    }
+
+    public function testAStaticGateThatEndsBeforeTheTestsGateStartsIsNotAskedToRunAtLowPriority(): void
+    {
+        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('phpstan', ['container', 'tests'], $this->slots('2')));
     }
 
     public function testWithoutTheTestsGateNoGateIsAskedToRunAtLowPriority(): void
     {
-        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('phpstan', ['cs', 'phpstan'], $this->slots('2')));
+        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('container', ['container'], $this->slots('2')));
     }
 
     public function testWithOneSlotNoGateIsAskedToRunAtLowPriority(): void
     {
-        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('phpstan', ['phpstan', 'tests'], $this->slots('1')));
+        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('container', ['container', 'tests'], $this->slots('1')));
     }
 
     public function testAChildThatIsAskedTakesTheLowPriority(): void
