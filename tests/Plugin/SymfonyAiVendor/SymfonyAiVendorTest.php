@@ -180,6 +180,8 @@ final class SymfonyAiVendorTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
 
+    private const int OUTPUT_LIMIT = 16000;
+
     private VendorAccountLimit $limit;
 
     #[Override]
@@ -256,7 +258,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
             return 1 === count($limits) ? throw new MaxOutputTokensException('Truncated at the output limit.') : VerdictDocument::fromTheDesign()->json();
         };
 
-        $verdict = $this->vendorWithOutputLimit($answer, 16000, $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendorWithOutputLimit($answer, $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame([16000, 32000], $limits);
@@ -275,7 +277,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         };
 
         try {
-            $this->vendorWithOutputLimit($answer, 16000, $ledger)->review('alpha', Tier::Strong, $this->request());
+            $this->vendorWithOutputLimit($answer, $ledger)->review('alpha', Tier::Strong, $this->request());
             self::fail('A reviewer stopped by the limit twice must fail.');
         } catch (MaxOutputTokensException) {
             // Expected, because the reviewer that cannot fit its verdict in the bigger room counts as failed.
@@ -289,15 +291,13 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $calls = 0;
         $answer = static function () use (&$calls): StreamResult {
-            return 1 === ++$calls ? throw new MaxOutputTokensException('Truncated at the output limit.') : new StreamResult((static function (): Generator {
-                yield new TextDelta(VerdictDocument::fromTheDesign()->json());
-            })());
+            return 1 === ++$calls ? throw new MaxOutputTokensException('Truncated at the output limit.') : new StreamResult((static function (): Generator { yield new TextDelta(VerdictDocument::fromTheDesign()->json()); })());
         };
         $updates = new RecordedRoundUpdates();
         $reviewerId = new UuidV7();
         $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
 
-        $verdict = $this->vendorWithOutputLimit($answer, 16000, new InMemoryLedger(), $updates)->review('alpha', Tier::Strong, $request)->verdict;
+        $verdict = $this->vendorWithOutputLimit($answer, new InMemoryLedger(), $updates)->review('alpha', Tier::Strong, $request)->verdict;
 
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(2, $calls);
@@ -986,13 +986,10 @@ final class SymfonyAiVendorTest extends KernelTestCase
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW));
     }
 
-    /**
-     * @param positive-int $maxOutput
-     */
-    private function vendorWithOutputLimit(Closure $answer, int $maxOutput, InMemoryLedger $ledger, RecordedRoundUpdates $updates = new RecordedRoundUpdates()): SymfonyAiVendor
+    private function vendorWithOutputLimit(Closure $answer, InMemoryLedger $ledger, RecordedRoundUpdates $updates = new RecordedRoundUpdates()): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver([
-            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => $maxOutput]]],
+            'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::OUTPUT_LIMIT]]],
         ], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
