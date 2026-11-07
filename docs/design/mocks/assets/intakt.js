@@ -56,11 +56,11 @@
     { n: 626, p: "intakt", t: "Search settings by their label", s: "S", col: "Ready", age: "9 h", reason: ["link", "Needs #612 merged first"] },
     { n: 618, p: "intakt", t: "Pause a single lane without pausing the project", s: "M", col: "Planned", age: "2 h", cost: "0.41" },
     { n: 74, p: "field-notes", t: "Strip photo location data before upload", s: "S", col: "Planned", age: "2 d", reason: ["pause", "Project paused"] },
-    { n: 612, p: "intakt", t: "Command overlay for tasks and settings", s: "M", col: "Building", age: "42 min", slot: "Slot 1", model: "Opus", cost: "3.18" },
-    { n: 208, p: "acme-shop", t: "Round cart totals per line, not per order", s: "S", col: "Building", age: "18 min", slot: "Slot 2", model: "Sonnet", cost: "0.92" },
+    { n: 612, p: "intakt", t: "Command overlay for tasks and settings", s: "M", col: "Building", age: "42 min", slot: "Slot 1", model: "Model L", cost: "3.18" },
+    { n: 208, p: "acme-shop", t: "Round cart totals per line, not per order", s: "S", col: "Building", age: "18 min", slot: "Slot 2", model: "Model M", cost: "0.92" },
     { n: 603, p: "intakt", t: "Reviewer findings link to file and line", s: "S", col: "Checking", age: "4 min", cost: "1.07" },
     { n: 205, p: "acme-shop", t: "Refund emails include the order number", s: "S", col: "Checking", age: "1 h 50 min", cost: "0.66", reason: ["broken", "Waiting for CI: image build failing"], broken: true },
-    { n: 598, p: "intakt", t: "Hold pushes while main is red", s: "M", col: "In review", age: "11 min", slot: "Code reviewers", model: "Opus", cost: "5.62", round: 2 },
+    { n: 598, p: "intakt", t: "Hold pushes while main is red", s: "M", col: "In review", age: "11 min", slot: "Code reviewers", model: "Model L", cost: "5.62", round: 2 },
     { n: 71, p: "field-notes", t: "Filter trails by difficulty", s: "S", col: "In review", age: "1 d", cost: "1.24", round: 1, reason: ["pause", "Project paused"] },
     { n: 589, p: "intakt", t: "Rotate the forge token without a restart", s: "M", col: "Waiting on you", age: "1 h 05 min", cost: "4.30", round: 2, needs: "Approve this version: it touches secret handling" },
     { n: 199, p: "acme-shop", t: "Gift cards: pick the stored currency", s: "M", col: "Waiting on you", age: "52 min", cost: "0.38", needs: "The Tech lead has a question" },
@@ -71,11 +71,11 @@
     { n: 69, p: "field-notes", t: "Elevation profile under each trail", s: "M", col: "Done", age: "Mon", cost: "3.70" },
   ];
   const LANES = [
-    { who: "Build slot 1", role: "Developer", model: "Opus", task: 612, p: "intakt", t: "Command overlay for tasks and settings", el: "42 min" },
-    { who: "Build slot 2", role: "Developer", model: "Sonnet", task: 208, p: "acme-shop", t: "Round cart totals per line", el: "18 min" },
+    { who: "Build slot 1", role: "Developer", model: "Model L", task: 612, p: "intakt", t: "Command overlay for tasks and settings", el: "42 min" },
+    { who: "Build slot 2", role: "Developer", model: "Model M", task: 208, p: "acme-shop", t: "Round cart totals per line", el: "18 min" },
     { who: "Build slot 3", idle: "Idle: acme-shop weekly share used up" },
-    { who: "Code reviewer A", role: "Code reviewers", model: "Opus", task: 598, p: "intakt", t: "Hold pushes while main is red, round 2", el: "11 min" },
-    { who: "Code reviewer B", role: "Code reviewers", model: "Sonnet", task: 598, p: "intakt", t: "Hold pushes while main is red, round 2", el: "9 min" },
+    { who: "Code reviewer A", role: "Code reviewers", model: "Model L", task: 598, p: "intakt", t: "Hold pushes while main is red, round 2", el: "11 min" },
+    { who: "Code reviewer B", role: "Code reviewers", model: "Model M", task: 598, p: "intakt", t: "Hold pushes while main is red, round 2", el: "9 min" },
     { who: "Security engineer", idle: "Idle: nothing to look at" },
   ];
   const SETTINGS = [

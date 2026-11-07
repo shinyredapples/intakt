@@ -36,8 +36,14 @@ final class Kernel extends BaseKernel
         }
     }
 
-    protected function build(ContainerBuilder $container): void
+    // Public and static, because the test kernels that stand beside this final one must build the same wiring.
+    public static function addApplicationPasses(ContainerBuilder $container): void
     {
         $container->addCompilerPass(new AuthorizeToolCallsPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, -10);
+    }
+
+    protected function build(ContainerBuilder $container): void
+    {
+        self::addApplicationPasses($container);
     }
 }
