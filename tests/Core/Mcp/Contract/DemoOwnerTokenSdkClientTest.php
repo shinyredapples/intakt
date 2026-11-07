@@ -111,9 +111,9 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
         $seed = new CommandTester(new Application($kernel)->find('intakt:sample:seed'));
         $seed->execute(['repository' => $this->directory.'/sample-repository', 'configuration' => $this->directory.'/intakt.yaml']);
 
-        self::assertSame(1, preg_match('/^Connect an MCP client: .* --header "Authorization: Bearer (\S+)"$/m', $seed->getDisplay(), $line), $seed->getDisplay());
+        preg_match('/^Connect an MCP client: .* --header "Authorization: Bearer (\S+)"$/m', $seed->getDisplay(), $line);
 
-        return $line[1];
+        return $line[1] ?? self::fail('The seed printed no MCP setup: '.$seed->getDisplay());
     }
 
     private function connectedWith(string $bearer): Client
