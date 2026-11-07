@@ -82,6 +82,37 @@ final class ProcessQueueTest extends SandboxTestCase
         self::assertLessThan(20 * 1_000_000_000, hrtime(true) - $started);
     }
 
+    public function testAJobWhoseOwnTimeoutEqualsTheOverallLimitIsStoppedAtItsOwnTimeout(): void
+    {
+        $results = new ProcessQueue(2, 2)->run(['sqlite' => $this->php('echo "waiting for the server\n"; sleep(30);')], 2, $this->emptySandbox()->root);
+
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['sqlite']->exitCode);
+        self::assertSame('timed out after 2 seconds, last output: waiting for the server', $results['sqlite']->firstErrorLine());
+    }
+
+    public function testAJobBuiltPastTheOverallLimitDoesNotStartAndNoJobAfterItIsBuilt(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $lateBuilt = false;
+        $slowBuild = function (int $worker): array {
+            usleep(1_200_000);
+
+            return $this->appending('slow')($worker);
+        };
+        $late = function (int $worker) use (&$lateBuilt): array {
+            $lateBuilt = true;
+
+            return $this->appending('late')($worker);
+        };
+
+        $results = new ProcessQueue(30, 1)->run(['slowBuild' => $slowBuild, 'late' => $late], 2, $sandbox->root);
+
+        self::assertFalse($lateBuilt);
+        self::assertSame([ProcessRunner::TIMED_OUT, ProcessRunner::TIMED_OUT], [$results['slowBuild']->exitCode, $results['late']->exitCode]);
+        self::assertSame('timed out: the test pass reached its overall limit of 1 seconds', $results['late']->firstErrorLine());
+        self::assertFileDoesNotExist($sandbox->root.'/order');
+    }
+
     public function testJobsThatEndBeforeTheOverallLimitKeepTheirResults(): void
     {
         $results = new ProcessQueue(30, 30)->run(['first' => $this->php(''), 'second' => $this->php('exit(3);')], 1, $this->emptySandbox()->root);

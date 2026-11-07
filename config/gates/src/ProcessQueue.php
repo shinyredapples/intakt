@@ -34,19 +34,30 @@ final readonly class ProcessQueue
         $running = [];
         $deadline = hrtime(true) + $this->overallSeconds * 1_000_000_000;
 
-        while (([] !== $jobs || [] !== $running) && hrtime(true) < $deadline) {
-            $idle = $this->idleWorkers($running, $workers);
-            $taken = array_slice($jobs, 0, count($idle), true);
-            $jobs = array_diff_key($jobs, $taken);
-            $running += $this->startedOn($idle, $taken, $directory);
+        while ([] !== $jobs || [] !== $running) {
+            foreach ($this->idleWorkers($running, $workers) as $worker) {
+                if ([] === $jobs || hrtime(true) >= $deadline) {
+                    break;
+                }
+
+                $name = array_key_first($jobs);
+                [$command, $environment] = $jobs[$name]($worker);
+                unset($jobs[$name]);
+                $running[$worker] = [$name, ...$this->started($command, $directory, $environment, $deadline)];
+            }
+
+            // Because a job left waiting at the overall limit would otherwise keep the queue going after its running jobs ended.
+            if (hrtime(true) >= $deadline) {
+                $results = array_replace($results, $this->neverStarted($jobs));
+                $jobs = [];
+            }
+
             $finished = $this->finishedOf($running);
             $running = array_diff_key($running, $finished);
             $results = array_replace($results, array_column($finished, 1, 0));
 
             usleep(self::POLL_MICROSECONDS);
         }
-
-        $results = array_replace($results, $this->stoppedAtTheLimit($running), $this->neverStarted($jobs));
 
         return array_combine($order, array_map(static fn (int|string $name): ProcessResult => $results[$name], $order));
     }
@@ -64,27 +75,7 @@ final readonly class ProcessQueue
     /**
      * @template Name of array-key
      *
-     * @param list<int>                                                             $idle
-     * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $taken
-     *
-     * @return array<int, array{Name, Process|ProcessResult}>
-     */
-    private function startedOn(array $idle, array $taken, string $directory): array
-    {
-        $started = [];
-
-        foreach (array_keys($taken) as $index => $name) {
-            [$command, $environment] = $taken[$name]($idle[$index]);
-            $started[$idle[$index]] = [$name, $this->started($command, $directory, $environment)];
-        }
-
-        return $started;
-    }
-
-    /**
-     * @template Name of array-key
-     *
-     * @param array<int, array{Name, Process|ProcessResult}> $running
+     * @param array<int, array{Name, Process|ProcessResult, string}> $running
      *
      * @return array<int, array{Name, ProcessResult}>
      */
@@ -92,8 +83,8 @@ final readonly class ProcessQueue
     {
         $finished = [];
 
-        foreach ($running as $worker => [$name, $process]) {
-            $result = $process instanceof ProcessResult ? $process : $this->finished($process);
+        foreach ($running as $worker => [$name, $process, $limit]) {
+            $result = $process instanceof ProcessResult ? $process : $this->finished($process, $limit);
 
             if ($result instanceof ProcessResult) {
                 $finished[$worker] = [$name, $result];
@@ -106,38 +97,18 @@ final readonly class ProcessQueue
     /**
      * @template Name of array-key
      *
-     * @param array<int, array{Name, Process|ProcessResult}> $running
-     *
-     * @return array<Name, ProcessResult>
-     */
-    private function stoppedAtTheLimit(array $running): array
-    {
-        $stopped = [];
-
-        foreach ($running as [$name, $process]) {
-            $stopped[$name] = $process instanceof Process ? $this->stopped($process) : $process;
-        }
-
-        return $stopped;
-    }
-
-    private function stopped(Process $process): ProcessResult
-    {
-        $process->stop(0);
-
-        return $this->timedOut($process, $this->overallLimit());
-    }
-
-    /**
-     * @template Name of array-key
-     *
      * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs
      *
      * @return array<Name, ProcessResult>
      */
     private function neverStarted(array $jobs): array
     {
-        return array_fill_keys(array_keys($jobs), new ProcessResult(ProcessRunner::TIMED_OUT, '', $this->overallLimit()."\n"));
+        return array_fill_keys(array_keys($jobs), $this->notStarted());
+    }
+
+    private function notStarted(): ProcessResult
+    {
+        return new ProcessResult(ProcessRunner::TIMED_OUT, '', $this->overallLimit()."\n");
     }
 
     private function overallLimit(): string
@@ -148,26 +119,37 @@ final readonly class ProcessQueue
     /**
      * @param list<string>          $command
      * @param array<string, string> $environment
+     *
+     * @return array{Process|ProcessResult, string}
      */
-    private function started(array $command, string $directory, array $environment): Process|ProcessResult
+    private function started(array $command, string $directory, array $environment, int|float $deadline): array
     {
-        $process = new Process($command, $directory, [...getenv(), ...$environment], null, $this->seconds);
+        $left = ($deadline - hrtime(true)) / 1_000_000_000;
+
+        // Because building the job may itself have used up the rest of the pass.
+        if ($left <= 0) {
+            return [$this->notStarted(), ''];
+        }
+
+        // Because the limits are whole seconds: a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it.
+        $ownTimeout = $this->seconds <= ceil($left);
+        $process = new Process($command, $directory, [...getenv(), ...$environment], null, $ownTimeout ? $this->seconds : $left);
 
         try {
             $process->start();
         } catch (ExceptionInterface) {
-            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$command[0]);
+            return [new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$command[0]), ''];
         }
 
-        return $process;
+        return [$process, $ownTimeout ? 'timed out after '.$this->seconds.' seconds' : $this->overallLimit()];
     }
 
-    private function finished(Process $process): ?ProcessResult
+    private function finished(Process $process, string $limit): ?ProcessResult
     {
         try {
             $process->checkTimeout();
         } catch (ProcessTimedOutException) {
-            return $this->timedOut($process, 'timed out after '.$this->seconds.' seconds');
+            return $this->timedOut($process, $limit);
         }
 
         if ($process->isRunning()) {
