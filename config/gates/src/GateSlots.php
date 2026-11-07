@@ -28,9 +28,8 @@ final readonly class GateSlots
         return new self($count, max(1, min($testWorkers, $count - 1)));
     }
 
+    // Because the gates share the memory of their cgroups (`memory.max`, `memory.high`), each gate and each test worker gets the most one gate asks for, PHPStan's limit, and the test workers hold theirs first; `max` or anything unreadable sets no cap.
     /**
-     * Because the gates share the memory of their cgroups (`memory.max`, `memory.high`), each gate and each test worker gets the most one gate asks for, PHPStan's limit, and the test workers hold theirs first; `max` or anything unreadable sets no cap.
-     *
      * @param list<string> $memoryLimits
      */
     public static function byDefault(int $processors, array $memoryLimits, int $testWorkers): int

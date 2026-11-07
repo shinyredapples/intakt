@@ -16,9 +16,8 @@ final class OwnCgroup
         return self::fileAndAncestors($name)[0] ?? '';
     }
 
+    // Because a parent cgroup's limit binds this process as much as its own, the file of every cgroup from the own one up to the root counts.
     /**
-     * Because a parent cgroup's limit binds this process as much as its own, the file of every cgroup from the own one up to the root counts.
-     *
      * @return list<string>
      */
     public static function fileAndAncestors(string $name): array
