@@ -47,6 +47,16 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
 
+## To smoke-test the container image
+
+`docker/smoke-test.sh` calls these on the host that runs it. The tests gate runs it with a fake `docker` first on the `PATH` (`tests/Core/Dashboard/Infrastructure/SmokeTestScriptTest.php`), so `bin/check` needs everything below except Docker.
+
+| Command | What for | Needed |
+|---|---|---|
+| `docker` (CLI, a running daemon and the `buildx` plugin) | `volume create`, `run`, `port`, `inspect`, `exec`, `logs`, `rm -f`, `volume rm -f`, `image inspect` for the image digest, `buildx imagetools inspect` for the base image tag's digest | for a run against an image |
+| `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `env`, `timeout`, `sleep` | the HTTP and admin API checks from the host, reading the `FROM` tag, the run's random secrets, the time limits | yes |
+| `php`, `curl` inside the image (or on the host with `--local`) | reading the `mcp.php` request count from the admin API's `/frankenphp/threads`, asking the admin API where the server runs | yes (both are in the image) |
+
 ## Called when a tier maps to `claude_code`
 
 | Command | Called by | What for | Needed | Version | In the image |
