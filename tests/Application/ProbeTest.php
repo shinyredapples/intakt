@@ -41,7 +41,7 @@ final class ProbeTest extends TestCase
     public function testAScriptRunsAgainstTheInstanceAndItsOutputAndExitCodeAreReported(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Answer.php', '<?php echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL"))[0])[1], "\n"; exit(7);');
+        $this->probe('Answer.php', '<?php echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL")."/no-such-page")[0])[1], "\n"; exit(7);');
 
         $run = $this->runProbe('tests/Probe/Answer.php');
 
@@ -62,7 +62,7 @@ final class ProbeTest extends TestCase
         {
             public function testTheInstanceAnswers(): void
             {
-                self::assertStringContainsString('404', get_headers(getenv('INTAKT_INSTANCE_URL'))[0]);
+                self::assertStringContainsString('404', get_headers(getenv('INTAKT_INSTANCE_URL').'/no-such-page')[0]);
             }
         }
         PHP_WRAP);
@@ -76,7 +76,7 @@ final class ProbeTest extends TestCase
     public function testAProbeRunsAgainstTheBuiltInServerWhenFrankenphpIsNotOnThePath(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Answer.php', '<?php echo get_headers(getenv("INTAKT_INSTANCE_URL"))[0], "\n";');
+        $this->probe('Answer.php', '<?php echo get_headers(getenv("INTAKT_INSTANCE_URL")."/no-such-page")[0], "\n";');
         $path = array_filter(explode(':', (string) getenv('PATH')), static fn (string $directory): bool => !is_file($directory.'/frankenphp'));
 
         $run = $this->runProbe('tests/Probe/Answer.php', ['PATH' => implode(':', $path)]);
