@@ -79,7 +79,15 @@ final readonly class CheckedReports
                 : 'is ready to file but has no "'.self::STATUS_HEADING.'" section: the gate reads the status and the "Checked" line only under that heading, written exactly';
         }
 
-        $section = $this->statusSection($lines);
+        return $this->sectionFinding($this->statusSection($lines), $readyLines);
+    }
+
+    /**
+     * @param array<int, string> $section
+     * @param array<int, string> $readyLines
+     */
+    private function sectionFinding(array $section, array $readyLines): ?string
+    {
         $statuses = $this->statusValues($section, self::STATUS_LINE);
 
         if ([] !== array_diff_key($readyLines, $statuses)) {
