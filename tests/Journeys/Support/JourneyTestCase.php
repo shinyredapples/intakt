@@ -8,6 +8,7 @@ use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\BrowserKit\HttpBrowser;
+use Symfony\Component\Clock\MonotonicClock;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Dotenv\Dotenv;
@@ -23,14 +24,21 @@ abstract class JourneyTestCase extends TestCase
     private const string ROOT = __DIR__.'/../../..';
     // The instance runs in the test environment, so it reads the same file.
     private const string TEST_SETTINGS = '.env.test';
+    private const string DEFAULT_SETTINGS = '.env';
     private const string ENVIRONMENT = 'test';
     private const int CONSOLE_SECONDS = 60;
+    private const string QUEUE_VARIABLE = 'MESSENGER_TRANSPORT_DSN';
+    // The instance's database, because the worker that steps a round is a console process of its own, which would never see a message queued in memory here.
+    private const string SHARED_QUEUE = 'doctrine://default';
 
     private JourneySteps $steps;
 
     private HttpBrowser $browser;
 
     private ?Kernel $driverKernel = null;
+
+    /** @var array<string,?string> */
+    private array $environmentBefore = [];
 
     abstract protected function journey(): string;
 
@@ -88,6 +96,13 @@ abstract class JourneyTestCase extends TestCase
 
     final protected function liveRoundDriver(): LiveRoundDriver
     {
+        // Read from $_ENV first by the container, and put back after the test, so the harness's other tests keep what .env.test gives them.
+        foreach ($this->driverEnvironment() as $name => $value) {
+            $before = $_ENV[$name] ?? null;
+            $this->environmentBefore[$name] = is_string($before) ? $before : null;
+            $_ENV[$name] = $value;
+        }
+
         // A kernel of the journey's own, on the instance's database and share directory, because a round is queued through the command bus the dashboard uses and the console has no door for it.
         $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
         $this->driverKernel->boot();
@@ -96,22 +111,59 @@ abstract class JourneyTestCase extends TestCase
 
         return new LiveRoundDriver(
             $bus instanceof MessageBusInterface ? $bus : self::fail('the test container has no message bus'),
-            fn (array $arguments): string => $this->console($arguments),
+            fn (array $arguments): string => $this->console($arguments, [self::QUEUE_VARIABLE => self::SHARED_QUEUE]),
             fn (): array => $this->publishedUpdates(),
+            new MonotonicClock(),
         );
     }
 
     #[After]
     final protected function shutDownDriverKernel(): void
     {
-        $this->driverKernel?->shutdown();
+        if (null === $this->driverKernel) {
+            return;
+        }
+
+        $this->driverKernel->shutdown();
         $this->driverKernel = null;
+
+        foreach ($this->environmentBefore as $name => $before) {
+            if (null === $before) {
+                unset($_ENV[$name]);
+            } else {
+                $_ENV[$name] = $before;
+            }
+        }
+
+        $this->environmentBefore = [];
+    }
+
+    /**
+     * The journey's PHPUnit loads no Dotenv, so the driver's kernel gets the defaults bin/console reads, without Dotenv's list of loaded names: a worker given that list would load the in-memory queue of .env.test over the shared one.
+     *
+     * @return array<string,string>
+     */
+    private function driverEnvironment(): array
+    {
+        $defaults = [...$this->settingsIn(self::DEFAULT_SETTINGS), ...$this->settingsIn(self::TEST_SETTINGS)];
+        // As in Dotenv's own loading, a variable the process has (the instance's database and directories) wins over a file.
+        $unset = array_filter($defaults, static fn (string $name): bool => false === getenv($name), ARRAY_FILTER_USE_KEY);
+
+        return [...$unset, self::QUEUE_VARIABLE => self::SHARED_QUEUE];
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function settingsIn(string $file): array
+    {
+        return new Dotenv()->parse((string) file_get_contents(self::ROOT.'/'.$file));
     }
 
     // Because the dashboard refuses any other host name or port than its own, and the instance listens on a free port.
     private function dashboardPort(): string
     {
-        $port = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/'.self::TEST_SETTINGS))['DASHBOARD_PORT'] ?? null;
+        $port = $this->settingsIn(self::TEST_SETTINGS)['DASHBOARD_PORT'] ?? null;
 
         return is_string($port) && '' !== $port ? $port : self::fail('DASHBOARD_PORT is not set in '.self::TEST_SETTINGS);
     }

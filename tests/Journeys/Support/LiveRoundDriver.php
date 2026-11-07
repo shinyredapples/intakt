@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use RuntimeException;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
@@ -21,9 +22,10 @@ final readonly class LiveRoundDriver
 {
     private const string TRANSPORT = 'async';
     private const int FIRST_ROUND = 1;
-    private const int STEP_SECONDS = 20;
-    // A round of the sample project queues a reviewer message per panel member and one judgement, so this leaves room to spare.
-    private const int STEP_CEILING = 30;
+    // A step with an empty queue waits this long, so a stalled round reaches the deadline below in few steps.
+    private const int STEP_SECONDS = 5;
+    // Well inside the journeys gate's 240 seconds per journey, so a stalled round fails with this driver's message, not the gate's timeout, while the journey's other steps keep their share.
+    private const int STEPPING_SECONDS = 150;
     // Matched on this text because the template of the round_changed stream prints it once the judge has ruled and the update carries no other flag.
     private const string ENDED_TEXT = 'Judged.';
 
@@ -35,6 +37,7 @@ final readonly class LiveRoundDriver
         private MessageBusInterface $commands,
         private Closure $console,
         private Closure $updates,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -47,9 +50,9 @@ final readonly class LiveRoundDriver
         return is_string($id) ? $id : throw new RuntimeException('The review start returned no round id.');
     }
 
-    public function step(): void
+    public function step(int $seconds = self::STEP_SECONDS): void
     {
-        ($this->console)(['messenger:consume', self::TRANSPORT, '--limit=1', '--time-limit='.self::STEP_SECONDS]);
+        ($this->console)(['messenger:consume', self::TRANSPORT, '--limit=1', '--time-limit='.$seconds]);
     }
 
     /**
@@ -57,8 +60,10 @@ final readonly class LiveRoundDriver
      */
     public function stepUntilEnded(string $round): array
     {
-        for ($steps = 0; $steps < self::STEP_CEILING; ++$steps) {
-            $this->step();
+        $deadline = $this->clock->now()->getTimestamp() + self::STEPPING_SECONDS;
+
+        while (($left = $deadline - $this->clock->now()->getTimestamp()) > 0) {
+            $this->step(min(self::STEP_SECONDS, $left));
             $published = $this->updatesOf($round);
 
             if ($this->ended($published)) {
@@ -68,7 +73,7 @@ final readonly class LiveRoundDriver
 
         $last = array_last($this->updatesOf($round));
 
-        throw new RuntimeException(sprintf('Round %s did not end within %d steps; the last update was %s.', $round, self::STEP_CEILING, $last?->getData() ?? 'none'));
+        throw new RuntimeException(sprintf('Round %s did not end within %d seconds of steps; the last update was %s.', $round, self::STEPPING_SECONDS, $last?->getData() ?? 'none'));
     }
 
     /**

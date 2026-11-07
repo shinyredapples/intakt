@@ -12,7 +12,7 @@ It starts a new copy for each journey and stops everything that journey started 
 
 Journeys never call an AI company or a forge and need no keys; they use the sample project only.
 
-A third helper, the round driver, starts a review on the sample project and moves it forward one small piece of work at a time, reading the live updates after each piece until the review ends. Two stand-ins make that possible once a journey runs a review. In the copy a journey starts, every reviewer is a pretend one that approves at once, without asking an AI. And the live updates the review page would receive are written to a file instead of being sent, so the journey can read them afterwards and check what a person watching the page would have seen. No journey runs a review yet: the live progress journey below will be the first.
+A third helper, the round driver, starts a review on the sample project and moves it forward one small piece of work at a time, reading the live updates after each piece until the review ends; if the review has not ended after two and a half minutes, it stops and says which review got stuck and what it last showed, before the journey's own time runs out. Two stand-ins make that possible once a journey runs a review. In the copy a journey starts, every reviewer is a pretend one that approves at once, without asking an AI. And the live updates the review page would receive are written to a file instead of being sent, so the journey can read them afterwards and check what a person watching the page would have seen. No journey runs a review yet: the live progress journey below will be the first.
 
 ## What is covered
 
