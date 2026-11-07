@@ -7,6 +7,7 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PhpParser\Node\Expr\MethodCall;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -64,7 +65,7 @@ final readonly class ContainerUnknownGetIdRule implements Rule
             return true;
         }
 
-        return null !== $caller && array_any(
+        return $caller instanceof ClassReflection && array_any(
             [KernelTestCase::class, ServiceSubscriberInterface::class],
             static fn (string $reaching): bool => $caller->is($reaching),
         );
