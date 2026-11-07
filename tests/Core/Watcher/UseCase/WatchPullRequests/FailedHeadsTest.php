@@ -266,7 +266,7 @@ final class FailedHeadsTest extends KernelTestCase
             $this->failedHeadsWith($this->refusingLedger(), $installWide, $logger)->backOff('alpha', $head, new RuntimeException('down'));
             self::fail('The refused hand-over was swallowed.');
         } catch (WatcherEventNotRecorded) {
-            // Expected: the hand-over's own failure, not the back-off's, fails the tick.
+            // Expected, because the hand-over's own failure, not the back-off's, must fail the tick.
         }
 
         $notStarted = array_find($logger->logged, static fn (array $line): bool => 'The failed hand-over could not start the install-wide failure back-off.' === $line[0]);
