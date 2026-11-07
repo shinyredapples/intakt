@@ -42,12 +42,21 @@ final class EntrypointSampleSeedTest extends TestCase
 
         self::assertSame([
             'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
-            'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
             'bin/console intakt:sample:seed /data/sample /data/intakt.yaml',
-            'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
         ], $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testTheContainerOfTheImageIsRemovedBeforeEachWarmup(): void
+    {
+        $stale = $this->directory.'/var/cache/test/stale-container';
+        new Filesystem()->dumpFile($stale, 'old');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => '/data/intakt.yaml']);
+
+        $this->waitForTheServer();
+
+        self::assertFileDoesNotExist($stale);
     }
 
     public function testWithoutASampleRepositoryNothingIsSeeded(): void
@@ -85,7 +94,9 @@ final class EntrypointSampleSeedTest extends TestCase
      */
     private function startEntrypoint(array $environment): void
     {
-        $this->entrypoint = new Process(['docker/entrypoint.sh'], dirname(__DIR__, 4), [
+        // Run inside the test's own directory with APP_ENV=test, so the entrypoint's removal of the cache directory never touches this checkout.
+        $this->entrypoint = new Process([dirname(__DIR__, 4).'/docker/entrypoint.sh'], $this->directory, [
+            'APP_ENV' => 'test',
             'PATH' => $this->stubPrograms().':'.getenv('PATH'),
             'CALLS' => $this->callsFile(),
             'APP_SECRET' => self::SECRET,
