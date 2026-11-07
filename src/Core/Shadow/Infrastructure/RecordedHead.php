@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Shadow\Contract\PullRequestComment;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use JsonException;
 use TypeError;
 use ValueError;
@@ -98,7 +99,13 @@ final readonly class RecordedHead
             decision: Decision::Changes,
             verdicts: $verdicts,
             actList: [],
-            tokens: new RoundTokens($tokens['calls'], $tokens['prompt'], $tokens['completion'], $tokens['prompt'] + $tokens['completion']),
+            tokens: RoundTokens::of($tokens['calls'], new TokenFigures(
+                prompt: $tokens['prompt'],
+                cacheRead: 0,
+                cacheWrite: 0,
+                cached: 0,
+                completion: $tokens['completion'],
+            )),
         );
     }
 

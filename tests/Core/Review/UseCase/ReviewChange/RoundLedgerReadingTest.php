@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
@@ -33,6 +34,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(UsageSettled::class)]
 #[UsesClass(UsageUnsettled::class)]
 #[UsesClass(TokenUsageRow::class)]
+#[UsesClass(TokenFigures::class)]
 final class RoundLedgerReadingTest extends KernelTestCase
 {
     private const string ROUND = '0192a000-0000-7000-8000-000000000001';
@@ -51,6 +53,16 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->recordCall('c1', self::ROUND, 'settled');
 
         self::assertSame([1, 100, 20, 120], $this->tokensOf(self::ROUND));
+    }
+
+    public function testAnAnthropicCallCountsItsCacheReadsAndWritesInThePromptAndSumsTheTotal(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [['account' => 'anthropic.default', 'prompt' => 4, 'cached' => 39500, 'cache_creation' => 1500, 'cache_read' => 38000, 'total' => null] + $this->usage()]]);
+
+        $tokens = $this->reading()->tokensOf(self::ROUND);
+
+        self::assertEquals(new RoundTokens(1, 39504, 38000, 1500, 0, 20, 39524), $tokens);
     }
 
     public function testTheTokensAnUnsettledCallSpentAreCounted(): void

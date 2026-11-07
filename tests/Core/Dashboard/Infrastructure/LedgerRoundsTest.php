@@ -17,13 +17,13 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Domain\RoundStart;
-use Intakt\Core\Dashboard\Domain\TokenCount;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
@@ -70,7 +70,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
-#[UsesClass(TokenCount::class)]
+#[UsesClass(TokenFigures::class)]
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(ProjectMode::class)]
@@ -385,7 +385,7 @@ final class LedgerRoundsTest extends TestCase
             $this->event(LedgerEventKind::UsageRecorded, '{"call":"c1","phase":"started","project":"alpha","tier":"standard","round":"r1"}'),
         );
 
-        self::assertEquals(new TokenCount(10, 0, 12), $review?->rounds[0]->tokens);
+        self::assertEquals(new TokenFigures(10, 0, 0, 0, 0), $review?->rounds[0]->tokens);
     }
 
     public function testUsageRowsInTodaysFormatCountForTheRoundTheirCallStartedIn(): void
@@ -399,7 +399,7 @@ final class LedgerRoundsTest extends TestCase
             $this->row(LedgerEventKind::UsageRecorded, new UsageSettled('c2', 'settled', [$this->usage(50, 50)])),
         );
 
-        self::assertEquals(new TokenCount(8, 4, 12), $review?->rounds[0]->tokens);
+        self::assertEquals(new TokenFigures(8, 0, 0, 0, 4), $review?->rounds[0]->tokens);
     }
 
     public function testAUsageRowWithACountThatIsNoNumberIsSkipped(): void
@@ -411,7 +411,7 @@ final class LedgerRoundsTest extends TestCase
             $this->event(LedgerEventKind::UsageRecorded, '{"call":"c1","phase":"settled","usages":[{"prompt":10,"completion":"many","total":12}]}'),
         );
 
-        self::assertEquals(TokenCount::none(), $review?->rounds[0]->tokens);
+        self::assertEquals(TokenFigures::none(), $review?->rounds[0]->tokens);
     }
 
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review

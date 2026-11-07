@@ -37,7 +37,7 @@ final class ComparisonBuilder
 
     public static function round(Verdict $verdict, int $tokens = 100): ChangeReview
     {
-        return new ChangeReview('r1', 1, $verdict->verdict, [new PanelVerdict(Tier::Strong, $verdict)], [], new RoundTokens(1, $tokens, 0, $tokens));
+        return new ChangeReview('r1', 1, $verdict->verdict, [new PanelVerdict(Tier::Strong, $verdict)], [], new RoundTokens(1, $tokens, 0, 0, 0, 0, $tokens));
     }
 
     public static function changes(Finding ...$findings): Verdict
