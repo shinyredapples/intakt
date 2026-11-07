@@ -13,6 +13,13 @@ final readonly class HighlightFragments
 
     private const string FRAGMENT_NAME = '/^\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/';
 
+    private const string COMMIT = '/^[0-9a-f]{40,64}$/';
+
+    public function __construct(
+        private ProcessRunner $runner = new ProcessRunner(),
+    ) {
+    }
+
     public function areOn(string $root): bool
     {
         return is_dir($root.'/'.self::DIRECTORY);
@@ -57,12 +64,18 @@ final readonly class HighlightFragments
             return new HighlightAssembly('', ['cannot read '.HighlightLayout::FILE]);
         }
 
+        $history = $this->additionsOn($root);
+
+        if (is_string($history)) {
+            return new HighlightAssembly('', [$history]);
+        }
+
         $layout = HighlightLayout::fromLines($layout);
         $names = $this->fragmentNames($root);
         $findings = $this->nameFindings($names);
         $rows = [];
 
-        foreach ($this->fragmentsInOrder($names) as $name) {
+        foreach ($this->fragmentsInOrder($names, $history) as $name) {
             [$fragmentRows, $fragmentFindings] = $this->rowsOf($root, $name, $layout);
             $findings = [...$findings, ...$fragmentFindings];
             $rows = $this->withReplacedRows($rows, $fragmentRows);
@@ -101,18 +114,50 @@ final readonly class HighlightFragments
     }
 
     /**
-     * @param list<string> $names
+     * @param list<string>       $names
+     * @param array<string, int> $history
      *
      * @return list<string>
      */
-    private function fragmentsInOrder(array $names): array
+    private function fragmentsInOrder(array $names, array $history): array
     {
         $fragments = array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::FRAGMENT_NAME, $name)));
 
-        // Natural order, so fragment 10 applies after fragment 2 and replaces a row it shares with it.
-        usort($fragments, strnatcmp(...));
+        // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order they reached the branch; an uncommitted fragment is the newest.
+        usort($fragments, static fn (string $a, string $b): int => (($history[$a] ?? PHP_INT_MAX) <=> ($history[$b] ?? PHP_INT_MAX)) ?: strnatcmp($a, $b));
 
         return $fragments;
+    }
+
+    /**
+     * The first-parent history follows merge order on the main branch: a merge commit or a squashed one adds a change's fragment when it is merged, not when it was written.
+     *
+     * @return array<string, int>|string the commit index each fragment was last added at, or a finding
+     */
+    private function additionsOn(string $root): array|string
+    {
+        if (!file_exists($root.'/.git') || !$this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root)->succeeded()) {
+            return [];
+        }
+
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
+
+        if (!$log->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
+        }
+
+        $history = [];
+        $commit = 0;
+
+        foreach (explode("\n", $log->output) as $line) {
+            if (1 === preg_match(self::COMMIT, $line)) {
+                ++$commit;
+            } elseif ('' !== $line) {
+                $history[basename($line)] = $commit;
+            }
+        }
+
+        return $history;
     }
 
     /**

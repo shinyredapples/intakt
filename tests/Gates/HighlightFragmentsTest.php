@@ -60,6 +60,70 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringContainsString("|---|---|---|\n|  Gates | done | T1 (#3) |\n| Clock | planned | T2 (#2) |\n\n", $this->assembled()->text);
     }
 
+    public function testALowerNumberedFragmentCommittedLaterReplacesTheRowOfAnEarlierCommittedOne(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1050-clock.md', "## Tooling\n| Clock | planned | T2 (#1050) |\n");
+        $this->commitFragment('900-clock-done.md', "## Tooling\n| Clock | done | T2 (#900) |\n");
+
+        $assembly = $this->assembled();
+
+        self::assertStringContainsString("|---|---|---|\n| Clock | done | T2 (#900) |\n\n", $assembly->text);
+        self::assertStringNotContainsString('planned', $assembly->text);
+    }
+
+    public function testAHigherNumberedFragmentCommittedLaterReplacesTheRowOfAnEarlierCommittedOne(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('900-clock.md', "## Tooling\n| Clock | planned | T2 (#900) |\n");
+        $this->commitFragment('1050-clock-done.md', "## Tooling\n| Clock | done | T2 (#1050) |\n");
+
+        self::assertStringContainsString("|---|---|---|\n| Clock | done | T2 (#1050) |\n\n", $this->assembled()->text);
+    }
+
+    public function testAFragmentAppliesInTheOrderItsBranchWasMergedNotTheOrderItWasWritten(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->git('checkout', '--quiet', '-b', 'older-issue');
+        $this->commitFragment('900-clock-done.md', "## Tooling\n| Clock | done | T2 (#900) |\n");
+        $this->sandbox->git('checkout', '--quiet', 'main');
+        $this->commitFragment('1050-clock.md', "## Tooling\n| Clock | planned | T2 (#1050) |\n");
+        $this->sandbox->git('merge', '--quiet', '--no-ff', '--no-edit', 'older-issue');
+
+        self::assertStringContainsString("| Gates | done | T1 (#1) |\n| Clock | done | T2 (#900) |\n\n", $this->assembled()->text);
+    }
+
+    public function testAnUncommittedFragmentAppliesAfterTheCommittedOnes(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1050-clock.md', "## Tooling\n| Clock | planned | T2 (#1050) |\n");
+        $this->sandbox->write('docs/highlights.d/900-clock-done.md', "## Tooling\n| Clock | done | T2 (#900) |\n");
+
+        self::assertStringContainsString("|---|---|---|\n| Clock | done | T2 (#900) |\n\n", $this->assembled()->text);
+    }
+
+    public function testARepositoryWithoutCommitsAppliesFragmentsInTheNaturalOrderOfTheirNumbers(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->sandbox->write('docs/highlights.d/2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+
+        $assembly = $this->assembled();
+
+        self::assertSame([], $assembly->findings);
+        self::assertStringContainsString("|---|---|---|\n| Clock | done | T10 (#10) |\n\n", $assembly->text);
+    }
+
+    public function testFragmentsAddedInOneCommitApplyInTheNaturalOrderOfTheirNumbers(): void
+    {
+        $this->sandbox->startRepository();
+        $this->sandbox->write('docs/highlights.d/10-later.md', "## Tooling\n| Clock | done | T10 (#10) |\n");
+        $this->commitFragment('2-earlier.md', "## Tooling\n| Clock | planned | T2 (#2) |\n");
+
+        self::assertStringContainsString("|---|---|---|\n| Clock | done | T10 (#10) |\n\n", $this->assembled()->text);
+    }
+
     public function testALaterListItemWithTheSameTextBeforeItsStatusReplacesTheEarlierOneInPlace(): void
     {
         $this->sandbox->write('docs/highlights.d/0-before.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (in progress, T1).\n- Clone with: `b.php` (in progress, T8 (#13, part #222)).\n");
@@ -203,5 +267,15 @@ final class HighlightFragmentsTest extends SandboxTestCase
         }
 
         return new HighlightFragments()->assembled($this->sandbox->root);
+    }
+
+    private function commitFragment(string $name, string $rows): void
+    {
+        if (!is_file($this->sandbox->root.'/docs/highlights.d/layout.md')) {
+            $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
+        }
+
+        $this->sandbox->write('docs/highlights.d/'.$name, $rows);
+        $this->sandbox->commitAll('docs(highlights): add '.$name);
     }
 }
