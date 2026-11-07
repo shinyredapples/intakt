@@ -26,6 +26,17 @@
     <source ignoreSuppressionOfDeprecations="true" ignoreIndirectDeprecations="true" restrictNotices="true" restrictWarnings="true">
         <include>
             <directory>config/gates/src</directory>
+            <directory>tests/Gates</directory>
         </include>
+
+        <issueTriggerResolvers>
+            <issueTriggerResolver className="Intakt\Tests\Support\Deprecation\LoadTimeDeprecationResolver"/>
+        </issueTriggerResolvers>
+
+        <deprecationTrigger>
+            <method>Doctrine\Deprecations\Deprecation::trigger</method>
+            <method>Doctrine\Deprecations\Deprecation::delegateTriggerToBackend</method>
+            <function>trigger_deprecation</function>
+        </deprecationTrigger>
     </source>
 </phpunit>

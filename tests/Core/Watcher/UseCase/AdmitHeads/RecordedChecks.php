@@ -86,9 +86,15 @@ final class RecordedChecks implements HeadChecks
      */
     private function read(string $file): array
     {
+        $path = __DIR__.'/recorded/'.$file.'.json';
+
+        if (!is_file($path)) {
+            throw new LogicException('Not a recording: '.$file);
+        }
+
         try {
             /** @var array<string, list<Recorded>> $recorded */
-            $recorded = json_decode((string) file_get_contents(__DIR__.'/recorded/'.$file.'.json'), true, flags: JSON_THROW_ON_ERROR);
+            $recorded = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
             throw new LogicException('Not a recording: '.$file, 0, $e);
         }

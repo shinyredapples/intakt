@@ -23,7 +23,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `setsid` (util-linux) | the gate runner | putting each gate's child process and each contained run in its own session, so it can be stopped as a whole | for `bin/check` | any | development only |
 | `bash` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`, `ReleaseLabelsTest.php`, `tests/Core/Dashboard/Infrastructure/EntrypointProcessesTest.php`, `EntrypointSampleSeedTest.php`, `EntrypointTest.php`), `docs/showcase/figures.sh`; the image's `docker/entrypoint.sh` | running the showcase script and the release-labels workflow script offline against fixtures; starting the web server, the queue consumers and the scheduler and starting an ended consumer again (a poll with `kill -0` and `wait <pid>`) | for `bin/check` and in the image | 5.1 or later | yes (base image) |
 | `seq`, `sleep` (coreutils) | the image's `docker/entrypoint.sh`, so also `tests/Core/Dashboard/Infrastructure/EntrypointProcessesTest.php` | `seq "$MESSENGER_CONSUMERS"` counts the queue consumers to start; `sleep 1` paces the poll for ended children, `sleep 0.1` the wait for children to stop after SIGTERM | for `bin/check` and in the image | a `sleep` that takes fractions of a second (GNU coreutils) | yes (base image, Debian's coreutils) |
-| `find` (findutils), `cmp` (diffutils), `cp`, `mv`, `rm` (coreutils) | the tests gate (`tests/Application/InstanceTest.php` and `ProbeTest.php`, through `sh`) | emptying the shared project folder except its vendor (`find -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +`); keeping that vendor while its `composer/installed.json` is the checkout's (`cmp -s`), otherwise hard-linking the checkout's vendor again (`cp -al`, falling back to `cp -a` across file systems); copying the rest of the project per test (`cp -a`) | for `bin/check` | a `find` with `-mindepth`, `-maxdepth` and `-exec {} +`; a `cmp` with `-s`; a `cp` with `-l` (GNU coreutils) | development only |
+| `find` (findutils), `cmp` (diffutils), `cp`, `mv`, `rm` (coreutils) | the tests gate (`tests/Application/InstanceTest.php` and `ProbeTest.php`, through the `sh` script in `tests/Support/ProjectCopy.php`) | emptying the shared project folder except its vendor (`find -mindepth 1 -maxdepth 1 ! -name vendor -exec rm -rf {} +`); keeping that vendor while its `composer/installed.json` is the checkout's (`cmp -s`), otherwise hard-linking the checkout's vendor again (`cp -al`, falling back to `cp -a` across file systems); copying the rest of the project per test (`cp -a`) | for `bin/check` | a `find` with `-mindepth`, `-maxdepth` and `-exec {} +`; a `cmp` with `-s`; a `cp` with `-l` (GNU coreutils) | development only |
 | `jq` | the tests gate (`tests/Gates/ShowcaseFiguresTest.php`, its fake `gh`), `docs/showcase/figures.sh` | computing the showcase figures from the API's JSON | for `bin/check` | 1.7 or later | development only |
 | `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner | reading pull requests and comments from the GitHub API; labeling a pull request | only for the showcase figures | any | no |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
@@ -46,6 +46,16 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
+
+## To smoke-test the container image
+
+`docker/smoke-test.sh` calls these on the host that runs it. The tests gate runs it with a fake `docker` first on the `PATH` (`tests/Core/Dashboard/Infrastructure/SmokeTestScriptTest.php`), so `bin/check` needs everything below except Docker.
+
+| Command | What for | Needed |
+|---|---|---|
+| `docker` (CLI, a running daemon and the `buildx` plugin) | `volume create`, `run`, `port`, `inspect`, `exec`, `logs`, `rm -f`, `volume rm -f`, `image inspect` for the image digest, `buildx imagetools inspect` for the base image tag's digest | for a run against an image |
+| `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `env`, `timeout`, `sleep` | the HTTP and admin API checks from the host, reading the `FROM` tag, the run's random secrets, the time limits | yes |
+| `php`, `curl` inside the image (or on the host with `--local`) | reading the `mcp.php` request count from the admin API's `/frankenphp/threads`, asking the admin API where the server runs | yes (both are in the image) |
 
 ## Called when a tier maps to `claude_code`
 
