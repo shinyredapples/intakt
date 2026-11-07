@@ -380,7 +380,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tickExpectingFailure();
 
-        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === ($line[1]['exception'] ?? null)?->getMessage()));
+        self::assertTrue($this->loggedTheUnwrittenHold());
     }
 
     public function testAFailedGiveBackIsRethrownWhenReportingItFailsToo(): void
@@ -396,7 +396,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
             self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
         }
 
-        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === ($line[1]['exception'] ?? null)?->getMessage()));
+        self::assertTrue($this->loggedTheUnwrittenHold());
     }
 
     public function testAFailedStartIsTriedAgainOnceItsBackOffHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -933,6 +933,15 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
             $this->tick();
             $this->clock->modify($interval);
         }
+    }
+
+    private function loggedTheUnwrittenHold(): bool
+    {
+        return array_any($this->logger->logged, static function (array $line): bool {
+            $exception = $line[1]['exception'] ?? null;
+
+            return $exception instanceof RuntimeException && 'the hold cannot be written' === $exception->getMessage();
+        });
     }
 
     private function installWideThatCannotRecordAHold(): InstallWideFailures
