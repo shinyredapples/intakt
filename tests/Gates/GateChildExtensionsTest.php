@@ -1,0 +1,56 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Gates;
+
+use Intakt\Gates\CheckCommand;
+use Intakt\Gates\ProcessResult;
+use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\RequiredTools;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+
+#[CoversClass(RequiredTools::class)]
+#[UsesClass(CheckCommand::class)]
+#[UsesClass(ProcessRunner::class)]
+#[UsesClass(ProcessResult::class)]
+final class GateChildExtensionsTest extends SandboxTestCase
+{
+    public function testBinCheckRefusesToStartAGateWithoutPcntl(): void
+    {
+        $check = $this->runBinCheck('pcntl_signal');
+
+        self::assertSame('{"error":"missing tools","missing":["'.RequiredTools::notFound('PHP extension pcntl').'"]}', trim($check->output));
+        self::assertSame(2, $check->exitCode);
+    }
+
+    public function testBinCheckRefusesToStartAGateWithoutPosix(): void
+    {
+        $check = $this->runBinCheck('posix_kill');
+
+        self::assertSame('{"error":"missing tools","missing":["'.RequiredTools::notFound('PHP extension posix').'"]}', trim($check->output));
+        self::assertSame(2, $check->exitCode);
+    }
+
+    public function testBinCheckRunsAGateWhenPcntlAndPosixAreLoaded(): void
+    {
+        $check = $this->runBinCheck('');
+
+        self::assertStringContainsString('{"result":"pass","failed":[]}', $check->output, $check->errors);
+        self::assertSame(0, $check->exitCode);
+    }
+
+    private function runBinCheck(string $disabledFunction): ProcessResult
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('README.md', "plain words\n");
+        $sandbox->commitAll('chore: start');
+
+        return new ProcessRunner()->run(
+            ['php', '-d', 'disable_functions='.$disabledFunction, dirname(__DIR__, 2).'/bin/check', '--only=dashes', '--root='.$sandbox->root],
+            $sandbox->root,
+        );
+    }
+}

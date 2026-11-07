@@ -107,6 +107,22 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         self::assertLoggedError('error', 'The install-wide failure back-off started because the lock store failed.');
     }
 
+    public function testRefusedForgeCredentialsStartTheFailureBackOff(): void
+    {
+        $this->failures->forgeCredentialsRefused(new RuntimeException('GitHub answered 401 to a read.'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertLoggedError('error', "The install-wide failure back-off started because the forge refused Intakt's credentials.");
+    }
+
+    public function testAFailedHandOverStartsTheFailureBackOff(): void
+    {
+        $this->failures->handOverFailed(new RuntimeException('the ledger is read-only'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertLoggedError('error', 'The install-wide failure back-off started because a hand-over failed.');
+    }
+
     public function testTheBackOffEndsAfterItsLength(): void
     {
         $this->failures->databaseFailed(new RuntimeException('connection refused'));
