@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CheckCommand;
+use Intakt\Gates\ChildCommand;
 use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
-use Intakt\Gates\ChildCommand;
 use Intakt\Gates\GateSlots;
 use Intakt\Gates\LowPriority;
 use Intakt\Gates\OwnCgroup;
