@@ -32,7 +32,7 @@ final readonly class AskedServiceIds
     {
         $argument = $this->idArgument($call);
 
-        if (!$call->name instanceof Identifier || $method !== $call->name->toLowerString() || null === $argument || !$this->isContainer($scope->getType($call->var))) {
+        if (!$call->name instanceof Identifier || $method !== $call->name->toLowerString() || !$argument instanceof Arg || !$this->isContainer($scope->getType($call->var))) {
             return [];
         }
 
