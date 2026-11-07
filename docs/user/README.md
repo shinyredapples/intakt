@@ -123,7 +123,7 @@ The time of every test file, not only the ten slowest, is kept in `tests/duratio
 
 The profile of the PHP that builds, reviews and CI use is in the repository: `config.platform.php` and the `ext-*` entries under `require` in `composer.json`, and the ini settings in `config/gates/php/check.ini` (for example `zend.assertions=1`). Load the settings by adding `config/gates/php` to `PHP_INI_SCAN_DIR`, after the directories PHP already scans.
 
-The `EnvironmentGate` class checks the running PHP against that profile: it names a PHP older than the platform version, a missing extension, a setting that differs from the check ini, and a setting in the check ini that the gate does not allow. The CI image is built from this profile (its extensions, and the check ini in its PHP configuration), and the Intakt image installs the same extensions but keeps PHP's production settings. `bin/check` does not run the gate yet.
+The `EnvironmentGate` class checks the running PHP against that profile: it names a PHP older than the platform version, a missing extension, a setting that differs from the check ini, and a setting in the check ini that the gate does not allow. `bin/check` does not run it yet: it will once CI loads the profile.
 
 ## Running the tests in parallel
 

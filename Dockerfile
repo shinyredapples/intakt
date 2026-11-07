@@ -1,13 +1,10 @@
 # Pinned by digest to FrankenPHP 1.13.4 on PHP 8.5.12, the digest pin #705 asks for; 1.13.4 is the first release with every worker-mode state-leak fix.
 FROM dunglas/frankenphp:1.13.4-php8.5.12-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e AS base
 
-WORKDIR /app
+# pcntl lets a consumer finish its message on SIGTERM instead of being cut off.
+RUN install-php-extensions intl pdo_sqlite opcache zip pcntl
 
-# The extensions are the ext-* entries of composer.json (pcntl lets a consumer finish its message on SIGTERM).
-COPY composer.json docker/profile-extensions.php ./
-RUN install-php-extensions $(php profile-extensions.php) \
-    && missing="$(php profile-extensions.php)" && [ -z "$missing" ] \
-    && rm profile-extensions.php
+WORKDIR /app
 
 FROM base AS vendor
 
