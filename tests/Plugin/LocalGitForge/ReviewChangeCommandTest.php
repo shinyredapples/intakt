@@ -41,6 +41,7 @@ use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewExit;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewOutput;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewOutputVerdict;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use InvalidArgumentException;
@@ -67,6 +68,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(OutputFormat::class)]
 #[UsesClass(ReviewOutput::class)]
 #[UsesClass(ReviewOutputVerdict::class)]
+#[UsesClass(RoundTokens::class)]
+#[UsesClass(TokenFigures::class)]
 final class ReviewChangeCommandTest extends TestCase
 {
     private const string SCHEMA = __DIR__.'/../../../docs/user/review-output.schema.json';
@@ -120,6 +123,26 @@ final class ReviewChangeCommandTest extends TestCase
             "changes (round 1)\nstrong reviewer: changes, 1 findings\nstandard reviewer: approve, 0 findings\nact list: 1 findings\nF1 P1 src/Feature.php:3: Missing check.\ntokens: 2 calls, 100 prompt, 20 completion, 120 total\n",
             $tester->getDisplay(),
         );
+    }
+
+    public function testTheTokenLineShowsTheCacheReadsAndWritesThePromptIncludes(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, RoundTokens::of(3, new TokenFigures(39504, 38000, 1500, 0, 700))));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("tokens: 3 calls, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total\n", $tester->getDisplay());
+    }
+
+    public function testTheTokenLineShowsCachedTokensAVendorDoesNotSplit(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, RoundTokens::of(1, new TokenFigures(39504, 0, 0, 39500, 700))));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("tokens: 1 calls, 39504 prompt (39500 cached), 700 completion, 40204 total\n", $tester->getDisplay());
     }
 
     #[DataProvider('decisions')]
@@ -374,15 +397,16 @@ final class ReviewChangeCommandTest extends TestCase
         return $reviews;
     }
 
-    private function outcome(Decision $decision): ChangeReview
+    private function outcome(Decision $decision, ?RoundTokens $tokens = null): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
         $verdicts = [
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
         ];
+        $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
 
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], new RoundTokens(2, 100, 20, 120), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
     }
 
     /**

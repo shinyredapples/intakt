@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
@@ -46,12 +47,9 @@ final readonly class RoundLedgerReading
         $calls = $this->callsStartedFor($roundId, $recorded);
         $usages = array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
 
-        return new RoundTokens(
-            count($calls),
-            array_sum(array_map(static fn (TokenUsageRow $usage): int => $usage->prompt ?? 0, $usages)),
-            array_sum(array_map(static fn (TokenUsageRow $usage): int => $usage->completion ?? 0, $usages)),
-            array_sum(array_map(static fn (TokenUsageRow $usage): int => $usage->total ?? 0, $usages)),
-        );
+        $figures = array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+
+        return RoundTokens::of(count($calls), $figures);
     }
 
     /**

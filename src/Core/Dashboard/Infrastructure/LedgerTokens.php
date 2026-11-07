@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
-use Intakt\Core\Dashboard\Domain\TokenCount;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
@@ -17,7 +17,7 @@ final class LedgerTokens
     /** @var array<string, string> */
     private array $roundOfCall = [];
 
-    /** @var array<string, TokenCount> */
+    /** @var array<string, TokenFigures> */
     private array $usedByCall = [];
 
     public function add(UsageStarted|UsageSettled|UsageUnsettled $usage): void
@@ -31,9 +31,9 @@ final class LedgerTokens
         $this->countUsages($usage);
     }
 
-    public function ofRound(string $round): TokenCount
+    public function ofRound(string $round): TokenFigures
     {
-        $sum = TokenCount::none();
+        $sum = TokenFigures::none();
 
         foreach ($this->usedByCall as $call => $used) {
             if (($this->roundOfCall[$call] ?? null) === $round) {
@@ -54,7 +54,7 @@ final class LedgerTokens
     private function countUsages(UsageSettled|UsageUnsettled $ended): void
     {
         foreach ($ended->usages as $row) {
-            $this->usedByCall[$ended->call] = ($this->usedByCall[$ended->call] ?? TokenCount::none())->plus(new TokenCount($row->prompt ?? 0, $row->completion ?? 0, $row->total ?? 0));
+            $this->usedByCall[$ended->call] = ($this->usedByCall[$ended->call] ?? TokenFigures::none())->plus($row->figures());
         }
     }
 }
