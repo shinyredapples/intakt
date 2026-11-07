@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use ArrayObject;
-use LogicException;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
@@ -19,6 +18,7 @@ use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -264,7 +264,7 @@ final class TierPlatformTest extends TestCase
                 $model = $name;
             }
 
-            $options = array_filter($options, static fn (mixed $key): bool => is_string($key), ARRAY_FILTER_USE_KEY);
+            $options = array_filter($options, is_string(...), ARRAY_FILTER_USE_KEY);
             $sent[$name] = $options;
 
             return $inner->invoke($model, $input, $options);
