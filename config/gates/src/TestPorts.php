@@ -13,7 +13,6 @@ final readonly class TestPorts
     private const int FIRST_PORT = 20000;
     private const int FIRST_EPHEMERAL_PORT = 32768;
     private const int PORTS_PER_WORKER = 100;
-    private const int LAST_PORT = 65535;
 
     private function __construct(private int $first, private int $perWorker, private int $workers)
     {
@@ -34,7 +33,7 @@ final readonly class TestPorts
         [$first, $last] = [(int) $bounds[1], (int) $bounds[2]];
         $perWorker = intdiv($last - $first + 1, $workers);
 
-        return $first >= 1 && $last <= self::LAST_PORT && $perWorker >= 1 ? new self($first, $perWorker, $workers) : null;
+        return $first >= 1 && $last < self::FIRST_EPHEMERAL_PORT && $perWorker >= 1 ? new self($first, $perWorker, $workers) : null;
     }
 
     public static function mostWorkersByDefault(): int
