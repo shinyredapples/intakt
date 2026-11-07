@@ -25,6 +25,7 @@ use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\PlatformOptions;
+use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -194,52 +195,52 @@ final class TierPlatformTest extends TestCase
 
     public function testTheTiersOutputLimitReachesTheVendorCallOfThatTier(): void
     {
-        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
+        /** @var ArrayObject<string, array<string, mixed>> $sent */
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
         $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review'))->asText();
         $platform->invoke($platform->answering('limited', Tier::Light), new TierRequest('review'))->asText();
 
-        self::assertSame(['big', 16000], [$sent[0][0], $sent[0][1][PlatformOptions::MAX_OUTPUT_TOKENS]]);
-        self::assertSame(['small', 4000], [$sent[1][0], $sent[1][1][PlatformOptions::MAX_OUTPUT_TOKENS]]);
+        self::assertSame(16000, $sent['big'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
+        self::assertSame(4000, $sent['small'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
     }
 
     public function testALimitTheCallerSetsIsKept(): void
     {
-        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
+        /** @var ArrayObject<string, array<string, mixed>> $sent */
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
         $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review', [PlatformOptions::MAX_OUTPUT_TOKENS => 99]))->asText();
 
-        self::assertSame(99, $sent[0][1][PlatformOptions::MAX_OUTPUT_TOKENS]);
+        self::assertSame(99, $sent['big'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
     }
 
     public function testATierWithoutALimitSendsNone(): void
     {
-        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
+        /** @var ArrayObject<string, array<string, mixed>> $sent */
         $sent = new ArrayObject();
 
         $platform = $this->limitedPlatform($sent);
         $platform->invoke($platform->answering('unlimited', Tier::Strong), new TierRequest('review'))->asText();
 
-        self::assertSame([], $sent[0][1]);
+        self::assertSame([], $sent['big'] ?? null);
     }
 
     public function testACliProviderGetsNoLimitOption(): void
     {
-        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
+        /** @var ArrayObject<string, array<string, mixed>> $sent */
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
         $platform->invoke(new ResolvedModel(Provider::ClaudeCode, 'cli', 16000), new TierRequest('review'))->asText();
 
-        self::assertSame([], $sent[0][1]);
+        self::assertSame([], $sent['cli'] ?? null);
     }
 
     /**
-     * @param ArrayObject<int, array{string, array<string, mixed>}> $sent
+     * @param ArrayObject<string, array<string, mixed>> $sent
      */
     private function limitedPlatform(ArrayObject $sent): TierPlatform
     {
@@ -252,8 +253,10 @@ final class TierPlatformTest extends TestCase
         ], []);
         $inner = MockPlatformFactory::createPlatform('ok', name: 'anthropic');
         $recording = self::createStub(PlatformInterface::class);
-        $recording->method('invoke')->willReturnCallback(static function (string $model, mixed $input, array $options) use ($sent, $inner) {
-            $sent[] = [$model, $options];
+        $recording->method('invoke')->willReturnCallback(static function (string $model, array|string|object $input, array $options) use ($sent, $inner): DeferredResult {
+            /* @var array<string, mixed> $options */
+            /* @var non-empty-string $model */
+            $sent[$model] = $options;
 
             return $inner->invoke($model, $input, $options);
         });
