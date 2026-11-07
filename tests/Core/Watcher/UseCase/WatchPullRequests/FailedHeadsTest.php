@@ -6,6 +6,14 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Core\Budget\Contract\InstallWideFailures;
+use Intakt\Core\Budget\Contract\SharedHold;
+use Intakt\Core\Budget\Domain\FullDisk;
+use Intakt\Core\Budget\Domain\ItemFailureRecord;
+use Intakt\Core\Budget\Domain\SharedHoldRecord;
+use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
+use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
@@ -20,14 +28,23 @@ use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\PendingHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
+use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordedForge;
+use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger as WatcherRecordingLogger;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
+use Intakt\Tests\Support\Log\LogRecords;
+use Intakt\Tests\Support\Log\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\Uuid;
@@ -45,14 +62,25 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
+#[UsesClass(DoctrineInstallWideFailures::class)]
+#[UsesClass(ItemFailureRecord::class)]
+#[UsesClass(FullDisk::class)]
+#[UsesClass(DoctrineHolds::class)]
+#[UsesClass(SharedHoldRecord::class)]
+#[UsesClass(SharedHold::class)]
+#[UsesClass(WatcherEventNotRecorded::class)]
+#[UsesClass(ForgeCredentialsRefused::class)]
 final class FailedHeadsTest extends KernelTestCase
 {
+    use AssertsLoggedErrors;
+
     // This name because config/services.yaml lists it among the held credentials, and this value because no secret shape matches it, so only the held-credential redaction can catch it.
     private const string HELD_NAME = 'OPENAI_COMPATIBLE_API_KEY';
     private const string HELD_VALUE = 'plainheldkeyvalue0123456789';
     private MockClock $clock;
     private EntityManagerInterface $entities;
     private PendingHeads $pending;
+    private DoctrineHolds $holds;
 
     protected function setUp(): void
     {
@@ -63,6 +91,7 @@ final class FailedHeadsTest extends KernelTestCase
         $this->clock = new MockClock('2026-11-04T10:00:00+00:00');
         $this->entities = $entities;
         $this->pending = new PendingHeads($entities, $this->clock);
+        $this->holds = new DoctrineHolds($entities, $this->clock);
     }
 
     protected function tearDown(): void
@@ -133,12 +162,155 @@ final class FailedHeadsTest extends KernelTestCase
         self::assertSame(1, $this->pending->failuresOf('alpha', $head));
     }
 
-    // The container's redactor, so the test proves the wiring: the names config/services.yaml holds, behind the Platform contract.
+    public function testTheSameErrorOnASecondHeadWithinAnHourStartsTheFailureBackOff(): void
+    {
+        [$first, $second] = $this->twoQueuedHeads();
+        $failedHeads = $this->failedHeads(new DashboardLedger());
+        $failedHeads->backOff('alpha', $first, new RuntimeException('CI endpoint down'));
+        $this->clock->sleep(3599);
+
+        $failedHeads->backOff('alpha', $second, new RuntimeException('CI endpoint down'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertLoggedError('error', 'The install-wide failure back-off started because two items failed with the same error within an hour.');
+    }
+
+    public function testTheSameErrorOnTheSameHeadAgainStartsNoFailureBackOff(): void
+    {
+        [$first] = $this->twoQueuedHeads();
+        $failedHeads = $this->failedHeads(new DashboardLedger());
+        $failedHeads->backOff('alpha', $first, new RuntimeException('CI endpoint down'));
+        $this->clock->sleep(60);
+
+        $failedHeads->backOff('alpha', $first, new RuntimeException('CI endpoint down'));
+
+        self::assertSame([], $this->holds->sharedInEffect());
+    }
+
+    public function testTheSameChangeInAnotherProjectIsAnotherHead(): void
+    {
+        $head = RecordedForge::change('7', 'a', '2026-11-04T09:00:00Z');
+        $this->pending->enqueue('alpha', [$head]);
+        $this->pending->enqueue('beta', [$head]);
+        $failedHeads = $this->failedHeads(new DashboardLedger());
+        $failedHeads->backOff('alpha', $head, new RuntimeException('CI endpoint down'));
+
+        $failedHeads->backOff('beta', $head, new RuntimeException('CI endpoint down'));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertLoggedError('error', 'The install-wide failure back-off started because two items failed with the same error within an hour.');
+    }
+
+    public function testRefusedForgeCredentialsOnOneHeadStartTheFailureBackOffAndStillBackTheHeadOff(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+        $refused = new ForgeReadFailed('GitHub answered 401 to a read.', previous: new ForgeCredentialsRefused());
+
+        $this->failedHeads(new DashboardLedger())->backOff('alpha', $head, new RuntimeException('CI read failed', 0, $refused));
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertSame(1, $this->pending->failuresOf('alpha', $head));
+        self::assertLoggedError('error', "The install-wide failure back-off started because the forge refused Intakt's credentials.");
+    }
+
+    public function testAForgeReadFailureWithoutRefusedCredentialsOnOneHeadStartsNoFailureBackOff(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+
+        $this->failedHeads(new DashboardLedger())->backOff('alpha', $head, new ForgeReadFailed('GitHub answered 403 to a read.'));
+
+        self::assertSame([], $this->holds->sharedInEffect());
+    }
+
+    public function testAHandOverTheLedgerRefusesStartsTheFailureBackOffAndFailsTheTick(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+        $this->pending->backOff(new HeadFailure('alpha', $head, 'RuntimeException: down'), 3, $this->clock->now());
+
+        try {
+            $this->failedHeads($this->refusingLedger())->backOff('alpha', $head, new RuntimeException('down'));
+            self::fail('The refused hand-over was swallowed.');
+        } catch (WatcherEventNotRecorded) {
+            // Expected: the tick fails, so the hand-over is tried again.
+        }
+
+        self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
+        self::assertSame(3, $this->pending->failuresOf('alpha', $head));
+        self::assertLoggedError('error', 'The install-wide failure back-off started because a hand-over failed.');
+    }
+
+    public function testAFailureLineTheLedgerRefusesBeforeTheHandOverStartsNoFailureBackOff(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+        $this->pending->backOff(new HeadFailure('alpha', $head, 'RuntimeException: down'), 2, $this->clock->now());
+
+        try {
+            $this->failedHeads($this->refusingLedger())->backOff('alpha', $head, new RuntimeException('down'));
+            self::fail('The refused failure line was swallowed.');
+        } catch (WatcherEventNotRecorded) {
+            // Expected: the tick fails, so the line is tried again.
+        }
+
+        self::assertSame([], $this->holds->sharedInEffect());
+    }
+
+    public function testAHandOverFailureIsRethrownAndTheFailedBackOffLoggedWhenTheBackOffCannotStartEither(): void
+    {
+        [$head] = $this->twoQueuedHeads();
+        $this->pending->backOff(new HeadFailure('alpha', $head, 'RuntimeException: down'), 3, $this->clock->now());
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('handOverFailed')->willThrowException(new RuntimeException('budget_shared_hold is locked'));
+        $logger = new WatcherRecordingLogger();
+
+        try {
+            $this->failedHeadsWith($this->refusingLedger(), $installWide, $logger)->backOff('alpha', $head, new RuntimeException('down'));
+            self::fail('The refused hand-over was swallowed.');
+        } catch (WatcherEventNotRecorded) {
+            // Expected: the hand-over's own failure, not the back-off's, fails the tick.
+        }
+
+        $notStarted = array_find($logger->logged, static fn (array $line): bool => 'The failed hand-over could not start the install-wide failure back-off.' === $line[0]);
+        self::assertIsArray($notStarted);
+        $exception = $notStarted[1]['exception'] ?? null;
+        self::assertInstanceOf(RuntimeException::class, $exception);
+        self::assertSame('budget_shared_hold is locked', $exception->getMessage());
+    }
+
+    /**
+     * @return array{OpenChange, OpenChange}
+     */
+    private function twoQueuedHeads(): array
+    {
+        $heads = [RecordedForge::change('7', 'a', '2026-11-04T09:00:00Z'), RecordedForge::change('8', 'b', '2026-11-04T09:00:00Z')];
+        $this->pending->enqueue('alpha', $heads);
+
+        return $heads;
+    }
+
+    private function refusingLedger(): Ledger
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturn(AppendResult::failed('the ledger is read-only'));
+
+        return $ledger;
+    }
+
     private function failedHeads(Ledger $ledger): FailedHeads
+    {
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
+        $logger = new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.'));
+        $installWide = new DoctrineInstallWideFailures($this->entities, $doctrine, $this->holds, $this->clock, $logger);
+
+        return $this->failedHeadsWith($ledger, $installWide, $logger);
+    }
+
+    // The container's redactor, so the test proves the wiring: the names config/services.yaml holds, behind the Platform contract.
+    private function failedHeadsWith(Ledger $ledger, InstallWideFailures $installWide, LoggerInterface $logger): FailedHeads
     {
         $redactor = self::getContainer()->get(Redactor::class);
         self::assertInstanceOf(Redactor::class, $redactor);
 
-        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection());
+        return new FailedHeads($this->pending, new WatcherLedger($ledger), $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger);
     }
 }
