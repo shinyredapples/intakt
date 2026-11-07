@@ -162,6 +162,20 @@ check_admin_unpublished() {
         fail "port 2019 is published"
     fi
     echo "port 2019 is not published"
+    check_admin_on_container_addresses
+}
+
+# A Linux host reaches a container's own addresses without any published port, so the admin API must answer on loopback only.
+check_admin_on_container_addresses() {
+    local addresses address
+    read -ra addresses <<<"$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$web")"
+    ((${#addresses[@]} > 0)) || fail "$web has no network address to check the admin API on"
+    for address in "${addresses[@]}"; do
+        if "${in_server[@]}" curl --silent --output /dev/null --max-time 5 "http://$address:2019/config/"; then
+            fail "the admin API answers on $address:2019, the container's network address"
+        fi
+        echo "nothing answers on $address:2019, the container's network address"
+    done
 }
 
 check_user() {
@@ -202,4 +216,7 @@ main() {
     smoke_image "$1"
 }
 
-main "$@"
+# Sourced, the script only defines its checks, so tests can run one at a time.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+    main "$@"
+fi

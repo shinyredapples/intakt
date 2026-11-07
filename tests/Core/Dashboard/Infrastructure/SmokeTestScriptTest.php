@@ -25,6 +25,16 @@ final class SmokeTestScriptTest extends TestCase
         esac
         BASH;
 
+    // A running container with the admin API unpublished; ADMIN_ON_ADDRESS makes it answer on the container's own address too.
+    private const string FAKE_RUNNING_DOCKER = <<<'BASH'
+        #!/bin/bash
+        case "$1" in
+            port) exit 1 ;;
+            inspect) echo "192.0.2.2 " ;;
+            exec) [[ -n ${ADMIN_ON_ADDRESS:-} || $* != *192.0.2.2:2019* ]] || exit 7 ;;
+        esac
+        BASH;
+
     private string $directory;
 
     protected function setUp(): void
@@ -80,13 +90,47 @@ final class SmokeTestScriptTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/SECRET=/', $this->dockerCalls());
     }
 
+    public function testAnUnpublishedAdminApiThatAnswersOnTheContainersAddressFails(): void
+    {
+        $process = $this->adminUnpublishedCheck(['ADMIN_ON_ADDRESS' => '1']);
+
+        self::assertSame(1, $process->getExitCode());
+        self::assertStringContainsString("failed at step 'admin-unpublished': the admin API answers on 192.0.2.2:2019", $process->getErrorOutput());
+    }
+
+    public function testAnAdminApiThatAnswersOnLoopbackOnlyPasses(): void
+    {
+        $process = $this->adminUnpublishedCheck([]);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('nothing answers on 192.0.2.2:2019', $process->getOutput());
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private function adminUnpublishedCheck(array $environment): Process
+    {
+        new Filesystem()->dumpFile($this->directory.'/docker', self::FAKE_RUNNING_DOCKER);
+
+        return $this->script(
+            ['bash', '-c', 'source docker/smoke-test.sh; web=test; in_server=(docker exec test); check_admin_unpublished'],
+            $environment,
+        );
+    }
+
     private function smokeTest(string ...$arguments): Process
     {
-        $process = new Process(
-            ['bash', 'docker/smoke-test.sh', ...$arguments],
-            dirname(__DIR__, 4),
-            ['PATH' => $this->directory.':'.getenv('PATH')],
-        );
+        return $this->script(['bash', 'docker/smoke-test.sh', ...$arguments], []);
+    }
+
+    /**
+     * @param list<string>          $command
+     * @param array<string, string> $environment
+     */
+    private function script(array $command, array $environment): Process
+    {
+        $process = new Process($command, dirname(__DIR__, 4), ['PATH' => $this->directory.':'.getenv('PATH'), ...$environment]);
         $process->run();
 
         return $process;
