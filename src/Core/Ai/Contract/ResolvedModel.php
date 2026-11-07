@@ -16,4 +16,12 @@ final readonly class ResolvedModel
         public ?int $maxOutput = null,
     ) {
     }
+
+    /**
+     * @param positive-int $maxOutput
+     */
+    public function withMaxOutput(int $maxOutput): self
+    {
+        return clone ($this, ['maxOutput' => $maxOutput]);
+    }
 }

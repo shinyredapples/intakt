@@ -21,7 +21,7 @@ There is no way to name another folder or branch: paths outside the repository, 
 Starting a review changes things, so it is off until you turn it on in `.env.local` (never in a committed file):
 
 - `MCP_OWNER_ACCESS=mcp_tool_write` allows write tools. The default, `mcp_tool_read`, refuses them.
-- `MCP_OWNER_TOKEN` is the secret your client sends. Choose a long random value. While it is empty, no token is accepted.
+- `MCP_OWNER_TOKEN` is the secret your client sends. Choose a long random value. While it is empty, no token is accepted. The docker compose demo needs neither setting: its first start makes the token and allows writes, and prints the `claude mcp add` line for it ([the demo](README.md#the-demo-with-docker-compose)); a token you set in `.env.local` wins.
 
 Then give the client the token as a bearer header: `claude mcp add --transport http intakt http://localhost:8000/mcp/owner --header "Authorization: Bearer $MCP_OWNER_TOKEN"`. Both must hold: a client with the right token is still refused while `MCP_OWNER_ACCESS` is `mcp_tool_read`, and a client without the token is refused while writes are allowed. A client that sends a wrong token is refused for every call, reads included. A token sent as a tool argument counts for nothing.
 
