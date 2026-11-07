@@ -8,7 +8,7 @@ final readonly class EnvironmentGate implements Gate
 {
     private const string MANIFEST = 'composer.json';
     private const string CHECK_INI = 'config/gates/php/check.ini';
-    private const string LOAD_HINT = 'Load the profile by adding config/gates/php to PHP_INI_SCAN_DIR (after the directories PHP already scans), for example PHP_INI_SCAN_DIR="$(php --ini | sed -n \'s/^Scan for additional .ini files in: //p\'):config/gates/php"';
+    private const string LOAD_HINT = 'Load the profile by adding config/gates/php to PHP_INI_SCAN_DIR, after the directories PHP already scans (php --ini lists them), for example PHP_INI_SCAN_DIR=/etc/php/8.5/cli/conf.d:config/gates/php';
     private const array ALLOWED_SETTINGS = [
         'zend.assertions',
         'assert.exception',
@@ -165,6 +165,12 @@ final readonly class EnvironmentGate implements Gate
     // The raw text keeps E_ALL as written; the running PHP reports the number.
     private function resolved(string $expected): string
     {
-        return 1 === preg_match('/^E_[A-Z_]+$/', $expected) && defined($expected) ? (string) constant($expected) : $expected;
+        if (1 !== preg_match('/^E_[A-Z_]+$/', $expected) || !defined($expected)) {
+            return $expected;
+        }
+
+        $value = constant($expected);
+
+        return is_int($value) ? (string) $value : $expected;
     }
 }
