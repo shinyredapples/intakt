@@ -29,7 +29,7 @@ Intakt can treat a branch of a local git repository as a pull request: the branc
 
 ## The dashboard
 
-Intakt serves three pages in the browser, built from the ledger of review events alone (no forge, no model call):
+Intakt serves three pages in the browser, built from the ledger of review events alone (no forge, no model call). The dashboard's own address (`/`, for example `http://localhost:7781` in the container) sends the browser on to `/reviews`.
 
 - `/projects` lists the projects that started a review, with how many rounds each has had and how many of them the judge has decided.
 - `/reviews` lists every round, newest first, with its project, its number of reviewers, when it started (UTC) and its state: `judged` once the judge has decided it, `in progress` before. `/reviews?project=<name>` keeps one project's rounds; each project on the first page links there. Above the rounds, a card for each watched pull request whose head failed last time it was tried shows the cause, the failures in a row, the next try (UTC) and whether it was handed over to the maintainer agent; the card goes once the head is read, its round is queued or its pull request is closed. The cause is redacted like a log line, so a configured key or token never appears on it.
