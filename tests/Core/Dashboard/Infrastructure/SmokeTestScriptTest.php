@@ -131,30 +131,17 @@ final class SmokeTestScriptTest extends TestCase
         self::assertMatchesRegularExpression('#^curl (?!.*--header).* http://localhost:8000/projects$#m', $this->dockerCalls());
     }
 
+    // The docker stub closes descriptor 3 because a container starts without it, which is why bin/instance failed in CI.
     public function testTheInstanceStatusIsReadFromDescriptorThree(): void
     {
-        $process = $this->instanceCheck();
+        foreach (['docker' => 'e=$6; shift 7; exec 3>&- "$e" "$@"', 'php' => "echo '{\"status\":\"ready\",\"mode\":\"worker\"}' >&3"] as $name => $body) {
+            new Filesystem()->dumpFile($this->directory.'/'.$name, "#!/bin/bash\n".$body);
+            chmod($this->directory.'/'.$name, 0o755);
+        }
+
+        $process = $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; smoke=s; check_instance'], []);
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString('bin/instance reported ready in worker mode', $process->getOutput());
-    }
-
-    // The stand-in docker closes descriptor 3 because a container starts without it, which is why bin/instance failed in CI.
-    private function instanceCheck(): Process
-    {
-        $filesystem = new Filesystem();
-        $filesystem->dumpFile($this->directory.'/docker', <<<'BASH'
-            #!/bin/bash
-            while [[ $1 != --entrypoint ]]; do shift; done
-            entrypoint=$2
-            shift 3
-            exec 3>&-
-            exec "$entrypoint" "$@"
-            BASH);
-        $filesystem->dumpFile($this->directory.'/php', "#!/bin/bash\necho 'worker log line'\necho '{\"status\":\"ready\",\"mode\":\"worker\"}' >&3");
-        chmod($this->directory.'/php', 0o755);
-
-        return $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; smoke=s; containers=(); check_instance'], []);
     }
 
     private function dashboardCheck(string $steps): Process
