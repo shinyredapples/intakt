@@ -4,7 +4,7 @@ Title: [Serializer] A list of objects accepts any object, and the constructor th
 
 ### Symfony version(s) affected
 
-6.4.49, 7.4.22, 8.1.9 (also 8.1.x-dev d627c85fa91e and 8.2.x-dev 744d620413a5)
+6.4.49, 7.4.22, 8.1.9, 8.1.11 and 8.2.0-BETA1 (target branch: 6.4). Related: #51003.
 
 ### Description
 
@@ -48,11 +48,11 @@ Actual:
 TypeError: Basket::__construct(): Argument #1 ($items) must be of type array, stdClass given
 ```
 
-Expected: a `NotNormalizableValueException` saying that `items` expects an array.
+Expected: a `NotNormalizableValueException` saying that `items` expects an array (the message may name the type as `Item[]`).
 
 ### Possible Solution
 
-In the fallback check, treat a class name ending in `[]` as a collection, so only an array (or an iterable) matches it, for example `TypeIdentifier::OBJECT => \is_object($data) && !str_ends_with($class, '[]')`. 6.4 has the same fallback in its `'is_'.$builtinType` check.
+In the fallback check, treat a class name ending in `[]` as a collection, so only an array (or an iterable) matches it, for example `TypeIdentifier::OBJECT => \is_object($data) && !(null !== $class && str_ends_with($class, '[]'))`. The `null !== $class` check is needed: a plain `object` type has a null class, and `str_ends_with(null, ...)` is deprecated. 6.4 has the same fallback in its `'is_'.$builtinType` check.
 
 ### Additional Context
 

@@ -12,6 +12,13 @@ use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\InstallWideFailures;
+use Intakt\Core\Budget\Contract\SharedHold;
+use Intakt\Core\Budget\Domain\FullDisk;
+use Intakt\Core\Budget\Domain\ItemFailureRecord;
+use Intakt\Core\Budget\Domain\SharedHoldRecord;
+use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
+use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -92,6 +99,12 @@ use Symfony\Component\Lock\LockFactory;
 #[CoversClass(WatchedProjects::class)]
 #[CoversClass(WatchedProject::class)]
 #[UsesClass(WatchPullRequests::class)]
+#[UsesClass(DoctrineInstallWideFailures::class)]
+#[UsesClass(ItemFailureRecord::class)]
+#[UsesClass(FullDisk::class)]
+#[UsesClass(DoctrineHolds::class)]
+#[UsesClass(SharedHoldRecord::class)]
+#[UsesClass(SharedHold::class)]
 #[UsesClass(FindChangedPullRequests::class)]
 #[UsesClass(SeenListings::class)]
 #[UsesClass(AdmitHeads::class)]
@@ -354,6 +367,35 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame(['change' => '6', 'cause' => 'LogicException: Not a recording: ', 'failures' => 1, 'retry_at' => '2026-11-02T10:01:00+00:00'], array_intersect_key($this->ledger->payloads()[0], array_flip(['change', 'cause', 'failures', 'retry_at'])));
         self::assertSame('7', $this->ledger->payloads()[1]['change']);
+    }
+
+    public function testAHeadWhoseInstallWideRecordFailsStillBacksOffAloneAndTheNextHeadStartsItsRound(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('itemFailed')->willThrowException(new RuntimeException('budget_item_failure is locked'));
+        $this->handler = $this->handler($installWide);
+
+        $this->tick();
+
+        self::assertSame(1, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z')));
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame('7', $this->ledger->payloads()[1]['change']);
+        $notRecorded = array_find($this->logger->logged, static fn (array $line): bool => 'The install-wide failure record failed; the head still backs off alone.' === $line[0]);
+        self::assertIsArray($notRecorded);
+        $exception = $notRecorded[1]['exception'] ?? null;
+        self::assertInstanceOf(RuntimeException::class, $exception);
+        self::assertSame('budget_item_failure is locked', $exception->getMessage());
+    }
+
+    public function testTheSameErrorOnTwoHeadsOfOneTickStartsTheFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'), RecordedForge::change('8', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::HeadFailed], $this->ledger->kinds());
     }
 
     public function testAHeadThatFailsIsLoggedAsAnErrorWithItsException(): void
@@ -779,7 +821,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         return (bool) $this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round WHERE head = ?', [str_repeat($head, 40)]);
     }
 
-    private function handler(): WatchPullRequestsHandler
+    private function handler(?InstallWideFailures $installWide = null): WatchPullRequestsHandler
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
@@ -791,7 +833,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection()), $doctrine, $logger);
+        $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);

@@ -4,7 +4,7 @@ Title: [Messenger] `messenger:consume` ignores a SIGTERM received before the wor
 
 ### Symfony version(s) affected
 
-8.1.10 (the same code on the 8.1 and 8.2 branches)
+6.4.49, 7.4.22, 8.1.10 and 8.2.0-BETA1 (target branch: 6.4). Related: #65633, #66950.
 
 ### Description
 
@@ -25,13 +25,15 @@ $application->addCommand(new ConsumeMessagesCommand(
     new EventDispatcher(),
 ));
 
+// `addCommand()` is `add()` before 8.x; on 8.2 the command's dispatcher
+// argument must also implement `ListenerIntrospectionInterface`.
 // Returns after 5 s instead of stopping at once.
 $application->run(new ArrayInput(['command' => 'messenger:consume', 'receivers' => ['memory'], '--time-limit' => 5]), new NullOutput());
 ```
 
 ### Possible Solution
 
-Remember the signal in `handleSignal()` when there is no worker yet and stop the worker right after it is created (or return the exit code, since no message was received). The fix looks small.
+Remember the signal in `handleSignal()` when there is no worker yet and stop the worker right after it is created. Returning an exit code from `handleSignal()` is not a good alternative: it skips `console.terminate` for a worker that never ran. The fix looks small.
 
 ### Additional Context
 

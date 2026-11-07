@@ -1,0 +1,20 @@
+<?php
+
+declare(strict_types=1);
+
+$gate = $argv[1] ?? '';
+
+if ('cs' === $gate) {
+    usleep(500000);
+    fwrite(STDERR, "Warning: the cs child warned\n");
+    echo '{"gate":"cs","ok":true,"findings":[],"omitted":0}', "\n";
+    exit(0);
+}
+
+if ('phpstan' === $gate) {
+    echo '{"gate":"phpstan","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}', "\n";
+    exit(1);
+}
+
+echo 'Fatal error: the rector child crashed', "\n";
+exit(255);

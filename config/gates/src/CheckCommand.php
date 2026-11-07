@@ -33,14 +33,44 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGatesWhenToolsExist($options);
+        return $this->runGatesWhenToolsExist($options, $arguments);
     }
 
-    private function runGatesWhenToolsExist(Options $options): int
+    /**
+     * @param list<string> $arguments
+     */
+    public function runGate(string $name, array $arguments): int
     {
-        $gates = $this->selectedGates($options);
-        $names = array_map(static fn (Gate $gate): string => $gate->name(), $gates);
-        $missing = new RequiredTools($options->root ?? $this->home)->missingFor($names);
+        try {
+            $options = Options::fromArguments($arguments);
+        } catch (InvalidArgumentException $exception) {
+            $this->print(['error' => $exception->getMessage()]);
+
+            return 2;
+        }
+
+        // Because the child gets the arguments of bin/check, it finds its gate in the same selection the parent made.
+        $gate = array_find($this->selectedGates($options), static fn (Gate $gate): bool => $gate->name() === $name);
+
+        if (!$gate instanceof Gate) {
+            $this->print(['error' => 'unknown gate '.$name]);
+
+            return 2;
+        }
+
+        $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
+        fwrite(STDOUT, $result->toJson()."\n");
+
+        return $result->isPassing() ? 0 : 1;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function runGatesWhenToolsExist(Options $options, array $arguments): int
+    {
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
+        $missing = new RequiredTools($options->root ?? $this->home)->missingToRunEachInItsOwnProcess($names);
 
         if ([] !== $missing) {
             $this->print(['error' => 'missing tools', 'missing' => $missing]);
@@ -48,23 +78,22 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($gates, $options);
+        return $this->runGates($names, $arguments, $options->root ?? $this->home);
     }
 
     /**
-     * @param list<Gate> $gates
+     * @param list<string> $names
+     * @param list<string> $arguments
      */
-    private function runGates(array $gates, Options $options): int
+    private function runGates(array $names, array $arguments, string $root): int
     {
-        $workspace = new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base);
         $failed = [];
 
-        foreach ($gates as $gate) {
-            $result = $this->resultOf($gate, $workspace);
-            fwrite(STDOUT, $result->toJson()."\n");
+        foreach (new GateChildren($this->home, $root)->reportsOf($names, $arguments) as $report) {
+            fwrite(STDOUT, $report->line."\n");
 
-            if (!$result->isPassing()) {
-                $failed[] = $gate->name();
+            if (!$report->isPassing()) {
+                $failed[] = $report->gate;
             }
         }
 

@@ -26,7 +26,7 @@ final class RecordingLogger extends AbstractLogger
      */
     private function filledIn(string $message, array $context): string
     {
-        // Like Symfony's logger: only scalar and Stringable values fill a placeholder, so the record shows the text that was logged.
+        // PSR-3 placeholder interpolation: only scalar and Stringable values fill a placeholder, so the record shows the text that was logged.
         $replacements = [];
         foreach ($context as $key => $value) {
             if (is_scalar($value) || $value instanceof Stringable) {
