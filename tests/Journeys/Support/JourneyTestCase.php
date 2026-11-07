@@ -75,7 +75,7 @@ abstract class JourneyTestCase extends TestCase
      */
     final protected function publishedUpdates(): array
     {
-        // The instance's kernel decides where its hub records, from the APP_SHARE_DIR that bin/instance gives the journey too.
+        // Asked of the kernel, because it alone decides where the instance's hub records, from the APP_SHARE_DIR bin/instance gives the journey too.
         $directory = new Kernel(self::ENVIRONMENT, false)->getShareDir();
 
         return RecordingHub::updatesIn($directory ?? self::fail('the instance has no share directory, so its hub records nowhere'));
