@@ -40,7 +40,6 @@ use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -92,12 +91,11 @@ final class OutputLimitRetryTest extends KernelTestCase
         self::assertSame([MaxOutputTokensException::class], $this->failures());
     }
 
-    // Every call carries the tier's limit, so a stop is answered only while the limit is the one the tier sent.
     private function vendorStoppingTheFirstCalls(int $stops): SymfonyAiVendor
     {
         $calls = 0;
-        $answer = static function (mixed $model, mixed $input, array $options) use (&$calls, $stops): string {
-            return ++$calls <= $stops ? throw new MaxOutputTokensException(sprintf('Truncated after %d output tokens.', $options[PlatformOptions::MAX_OUTPUT_TOKENS] ?? 0)) : VerdictDocument::fromTheDesign()->json();
+        $answer = static function () use (&$calls, $stops): string {
+            return ++$calls <= $stops ? throw new MaxOutputTokensException('Truncated at the output limit.') : VerdictDocument::fromTheDesign()->json();
         };
 
         return $this->vendor($answer);

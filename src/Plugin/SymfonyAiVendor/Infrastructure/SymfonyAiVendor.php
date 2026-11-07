@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
@@ -63,24 +64,35 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $answering = $this->answering($project, $tier);
         $substitute = $this->substituteOf($project, $tier, $answering);
+        $attempt = fn (ResolvedModel $model, ReviewRequest $asked): Verdict => $this->verdictOn($model, $this->usage->reserve($project, $tier, $asked->conversation->round), $asked);
+        $first = fn (): Verdict => $attempt($answering, $request);
+        $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->verdictWithinTheLimit($project, $tier, $answering, $request)),
+            $this->readOrRefused($answering->provider, $this->retriedOnceAtTheLimit($first, $retry)),
             $substitute,
         ));
     }
 
-    // Retried once with more room, because a call stopped by the output limit leaves no verdict and the same room would stop it again; a second stop fails the reviewer.
-    private function verdictWithinTheLimit(string $project, Tier $tier, ResolvedModel $answering, ReviewRequest $request): Verdict
+    // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again; a second stop fails the reviewer.
+    /**
+     * @param Closure(): Verdict $first
+     * @param Closure(): Verdict $retry
+     */
+    private function retriedOnceAtTheLimit(Closure $first, Closure $retry): Verdict
     {
         try {
-            return $this->verdictOn($answering, $this->usage->reserve($project, $tier, $request->conversation->round), $request);
+            return $first();
         } catch (MaxOutputTokensException) {
-            $roomier = $answering->withMaxOutput(self::RETRY_ROOM * ($answering->maxOutput ?? $tier->defaultMaxOutput()));
-
-            return $this->verdictOn($roomier, $this->usage->reserve($project, $tier, $request->conversation->round), $this->inNewConversation($request));
+            return $retry();
         }
+    }
+
+    // Twice the tier's default when the mapping sent none, because the model's own default stopped the call then.
+    private function withMoreRoom(ResolvedModel $answering, Tier $tier): ResolvedModel
+    {
+        return $answering->withMaxOutput(self::RETRY_ROOM * ($answering->maxOutput ?? $tier->defaultMaxOutput()));
     }
 
     // A new conversation, because the stopped one is stored under its id and the store refuses a second start under it.
