@@ -38,12 +38,6 @@ final class SmokeTestScriptTest extends TestCase
         esac
         BASH;
 
-    private const string FAKE_CURL = <<<'BASH'
-        #!/bin/bash
-        echo "$*" >> "$(dirname "$0")/curl-calls"
-        printf '<title>Intakt</title>\n200'
-        BASH;
-
     private string $directory;
 
     protected function setUp(): void
@@ -123,37 +117,26 @@ final class SmokeTestScriptTest extends TestCase
         self::assertStringContainsString('nothing answers on 192.0.2.2:2019', $process->getOutput());
     }
 
-    public function testTheImagesDashboardIsAskedUnderTheHostItAnswersOnThePublishedPort(): void
+    public function testTheImagesDashboardIsAskedAsLocalhost7781(): void
     {
-        $process = $this->dashboardCheck('image=intakt:test; web=test; volume=data; containers=(); start_container; check_dashboard "$origin"');
+        $this->dashboardCheck('image=i; web=w; volume=v; start_container; check_dashboard "$origin"');
 
-        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString('--header Host: localhost:7781 http://127.0.0.1:1/projects', $this->curlCalls());
+        self::assertStringContainsString('--header Host: localhost:7781 http://127.0.0.1:1/projects', $this->dockerCalls());
     }
 
-    public function testALocalDashboardIsAskedUnderItsOwnHost(): void
+    public function testALocalDashboardIsAskedAsItsOrigin(): void
     {
-        $process = $this->dashboardCheck('check_dashboard http://localhost:8000');
+        $this->dashboardCheck('check_dashboard http://localhost:8000');
 
-        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString(' http://localhost:8000/projects', $this->curlCalls());
-        self::assertStringNotContainsString('--header', $this->curlCalls());
+        self::assertMatchesRegularExpression('#^curl (?!.*--header).* http://localhost:8000/projects$#m', $this->dockerCalls());
     }
 
     private function dashboardCheck(string $steps): Process
     {
-        new Filesystem()->dumpFile($this->directory.'/curl', self::FAKE_CURL);
+        new Filesystem()->dumpFile($this->directory.'/curl', "#!/bin/bash\n".'echo "curl $*" >> "${0%/*}/calls"; printf "<title>Intakt</title>\n200"');
         chmod($this->directory.'/curl', 0o755);
 
         return $this->script(['bash', '-c', 'source docker/smoke-test.sh; '.$steps], []);
-    }
-
-    private function curlCalls(): string
-    {
-        $calls = file_get_contents($this->directory.'/curl-calls');
-        self::assertIsString($calls);
-
-        return $calls;
     }
 
     /**

@@ -31,7 +31,7 @@ check_server() {
     check_admin_closed "$3"
 }
 
-# The dashboard refuses a Host other than loopback on DASHBOARD_PORT (RefuseForeignHost), and the image's port is published elsewhere.
+# The dashboard answers only a loopback Host on its own port, which the image publishes elsewhere.
 dashboard_host=()
 
 check_dashboard() {
