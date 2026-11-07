@@ -124,18 +124,21 @@ final readonly class HighlightFragments
         $fragments = array_values(array_filter($names, static fn (string $name): bool => 1 === preg_match(self::FRAGMENT_NAME, $name)));
 
         // A later change replaces an earlier one's row whatever their issue numbers, so fragments apply in the order they reached the branch; an uncommitted fragment is the newest.
-        usort($fragments, static fn (string $a, string $b): int => (($history[$a] ?? PHP_INT_MAX) <=> ($history[$b] ?? PHP_INT_MAX)) ?: strnatcmp($a, $b));
+        usort($fragments, static function (string $a, string $b) use ($history): int {
+            $byHistory = ($history[$a] ?? PHP_INT_MAX) <=> ($history[$b] ?? PHP_INT_MAX);
+
+            return 0 === $byHistory ? strnatcmp($a, $b) : $byHistory;
+        });
 
         return $fragments;
     }
 
     /**
-     * The first-parent history follows merge order on the main branch: a merge commit or a squashed one adds a change's fragment when it is merged, not when it was written.
-     *
-     * @return array<string, int>|string the commit index each fragment was last added at, or a finding
+     * @return array<string, int>|string
      */
     private function additionsOn(string $root): array|string
     {
+        // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
         if (!file_exists($root.'/.git') || !$this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root)->succeeded()) {
             return [];
         }
