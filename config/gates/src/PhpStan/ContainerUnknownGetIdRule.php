@@ -44,24 +44,14 @@ final readonly class ContainerUnknownGetIdRule implements Rule
             return [];
         }
 
-        $privateFails = !$this->reachesPrivateServices($node, $scope);
+        $unknown = array_filter($ids, fn (string $id): bool => !$this->services->getService($id) instanceof ServiceDefinition);
+        $private = $this->reachesPrivateServices($node, $scope) ? [] : array_filter($ids, fn (string $id): bool => false === $this->services->getService($id)?->isPublic());
 
-        return array_values(array_filter(array_map(
-            fn (string $id): ?IdentifierRuleError => $this->findingFor($id, $privateFails),
-            $ids,
-        )));
-    }
-
-    // because these are the identifiers and messages phpstan-symfony gives for a single id, so both read and are searched the same way
-    private function findingFor(string $id, bool $privateFails): ?IdentifierRuleError
-    {
-        $service = $this->services->getService($id);
-
-        return match (true) {
-            !$service instanceof ServiceDefinition => RuleErrorBuilder::message(sprintf('Service "%s" is not registered in the container.', $id))->identifier('symfonyContainer.serviceNotFound')->build(),
-            $privateFails && !$service->isPublic() => RuleErrorBuilder::message(sprintf('Service "%s" is private.', $id))->identifier('symfonyContainer.privateService')->build(),
-            default => null,
-        };
+        // because these are the identifiers and messages phpstan-symfony gives for a single id, so both read and are searched the same way
+        return [
+            ...array_map(static fn (string $id): IdentifierRuleError => RuleErrorBuilder::message(sprintf('Service "%s" is not registered in the container.', $id))->identifier('symfonyContainer.serviceNotFound')->build(), array_values($unknown)),
+            ...array_map(static fn (string $id): IdentifierRuleError => RuleErrorBuilder::message(sprintf('Service "%s" is private.', $id))->identifier('symfonyContainer.privateService')->build(), array_values($private)),
+        ];
     }
 
     // because the test container and a subscriber's locator hand out private services, as phpstan-symfony's private service rule allows
