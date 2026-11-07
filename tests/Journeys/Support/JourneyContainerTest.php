@@ -73,8 +73,8 @@ final class JourneyContainerTest extends JourneyTestCase
 
     public function testTheDriversKernelGetsTheDefaultSettingsAJourneyProcessHasNotLoaded(): void
     {
-        $uri = $_ENV['DEFAULT_URI'] ?? null;
-        unset($_ENV['DEFAULT_URI']);
+        [$environment, $server] = [$_ENV, $_SERVER];
+        unset($_ENV['DEFAULT_URI'], $_SERVER['DEFAULT_URI']);
 
         try {
             $this->liveRoundDriver();
@@ -82,7 +82,7 @@ final class JourneyContainerTest extends JourneyTestCase
             self::assertSame('http://localhost', $_ENV['DEFAULT_URI'] ?? null);
         } finally {
             $this->shutDownDriverKernel();
-            $_ENV['DEFAULT_URI'] = $uri;
+            [$_ENV, $_SERVER] = [$environment, $server];
         }
     }
 
@@ -94,6 +94,36 @@ final class JourneyContainerTest extends JourneyTestCase
         $this->shutDownDriverKernel();
 
         self::assertSame($before, $_ENV);
+    }
+
+    public function testTheDriverKeepsASettingTheProcessAlreadyHasInItsEnvironment(): void
+    {
+        $before = $_ENV;
+        $_ENV['DEFAULT_URI'] = 'http://localhost:8080';
+
+        try {
+            $this->liveRoundDriver();
+
+            self::assertSame('http://localhost:8080', $_ENV['DEFAULT_URI']);
+        } finally {
+            $this->shutDownDriverKernel();
+            $_ENV = $before;
+        }
+    }
+
+    public function testAskingForTheDriverTwiceStillLeavesTheEnvironmentAsItFoundIt(): void
+    {
+        $before = $_ENV;
+
+        try {
+            $this->liveRoundDriver();
+            $this->liveRoundDriver();
+            $this->shutDownDriverKernel();
+
+            self::assertSame($before, $_ENV);
+        } finally {
+            $_ENV = $before;
+        }
     }
 
     private function container(): ContainerInterface

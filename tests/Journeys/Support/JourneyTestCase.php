@@ -96,6 +96,9 @@ abstract class JourneyTestCase extends TestCase
 
     final protected function liveRoundDriver(): LiveRoundDriver
     {
+        // Because a second call would otherwise save the first call's settings as the ones to put back.
+        $this->shutDownDriverKernel();
+
         // Read from $_ENV first by the container, and put back after the test, so the harness's other tests keep what .env.test gives them.
         foreach ($this->driverEnvironment() as $name => $value) {
             $before = $_ENV[$name] ?? null;
@@ -146,7 +149,7 @@ abstract class JourneyTestCase extends TestCase
     {
         $defaults = [...$this->settingsIn(self::DEFAULT_SETTINGS), ...$this->settingsIn(self::TEST_SETTINGS)];
         // Because a variable the process has (the instance's database and directories) wins over a file, as in Dotenv's own loading.
-        $unset = array_filter($defaults, static fn (string $name): bool => false === getenv($name), ARRAY_FILTER_USE_KEY);
+        $unset = array_filter($defaults, static fn (string $name): bool => !array_key_exists($name, $_ENV) && !(array_key_exists($name, $_SERVER) && !str_starts_with($name, 'HTTP_')) && false === getenv($name), ARRAY_FILTER_USE_KEY);
 
         return [...$unset, self::QUEUE_VARIABLE => self::SHARED_QUEUE];
     }
