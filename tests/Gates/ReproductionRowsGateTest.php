@@ -343,6 +343,76 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
+    public function testANotFiledStatusUnderALaterHeadingIndentedOneSpaceDoesNotRetireAReadyReport(): void
+    {
+        $run = $this->checkReport("- **Status:** `ready to file`\n\n ## Fix experiment\n\n- **Status:** `not filed`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testANotFiledStatusUnderALaterHeadingIndentedThreeSpacesDoesNotRetireAReadyReport(): void
+    {
+        $run = $this->checkReport("- **Status:** `ready to file`\n\n   ## Fix experiment\n\n- **Status:** `not filed`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testAHeadingIndentedFourSpacesIsCodeAndKeepsTheSectionOpen(): void
+    {
+        $run = $this->checkReport("- **Status:** `ready to file`\n\n    ## Fix experiment\n\n- **Status:** `not filed`\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAnUpstreamStatusHeadingIndentedThreeSpacesOpensTheSection(): void
+    {
+        $run = $this->checkReportText("# Report\n\n   ## Upstream status\n\n- **Status:** `ready to file`\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
+    }
+
+    public function testACheckedDateFollowedByAColonIsRead(): void
+    {
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3).": main abc1234, 7.3.5.\n- **Status:** `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testACheckedDateFollowedByAPeriodIsRead(): void
+    {
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3).".\n- **Status:** `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testACheckedLineWithADateGluedToMoreDigitsFails(): void
+    {
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3)."1 against main.\n- **Status:** `ready to file`.\n");
+
+        self::assertStringContainsString('does not start with a date', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileReportWithoutAnUpstreamStatusHeadingFails(): void
+    {
+        $run = $this->checkReportText("# Report\n\n## Upstream status (2026-11)\n\n- **Checked:** ".$this->daysAgo(3)." against main.\n- **Status:** `ready to file`.\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "## Upstream status" section', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReadyToFileReportUnderAnUpstreamStatusHeadingInAnotherCaseFails(): void
+    {
+        $run = $this->checkReportText("# Report\n\n## Upstream Status\n\n- **Status:** `ready to file`.\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "## Upstream status" section', $run->findingsOf('reproductions'));
+    }
+
+    public function testAReportWithoutAnUpstreamStatusHeadingThatIsNotReadyToFilePasses(): void
+    {
+        $run = $this->checkReportText("# Report\n\n## Status\n\n- **Status:** `already reported`, it was never `ready to file`.\n");
+
+        self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
     private function daysAgo(int $days): string
     {
         return new NativeClock()->now()->setTimezone(new DateTimeZone('UTC'))->modify('-'.$days.' days')->format('Y-m-d');
@@ -350,8 +420,13 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
     private function checkReport(string $status): CheckRun
     {
+        return $this->checkReportText("# Report\n\n## Upstream status\n\n".$status);
+    }
+
+    private function checkReportText(string $report): CheckRun
+    {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('upstream/a-bug/REPORT.md', "# Report\n\n## Upstream status\n\n".$status);
+        $sandbox->write('upstream/a-bug/REPORT.md', $report);
         $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::SECTION."| A | done | `upstream/a-bug/` | |\n");
 
         return $sandbox->check('--only=reproductions');

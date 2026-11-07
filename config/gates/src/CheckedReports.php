@@ -14,11 +14,14 @@ final readonly class CheckedReports
 
     private const string STATUS_HEADING = '## Upstream status';
 
-    private const string SECTION_HEADING = '/^#{1,2}\s/';
+    // Up to three spaces of indentation still make a Markdown heading; four make indented code.
+    private const string SECTION_HEADING = '/^ {0,3}#{1,2}\s/';
 
     private const string READY_STATUS = '/^- \*\*(?:Decision|Status):\*\*\s*`(?<value>[^`]*)`/';
 
-    private const string CHECKED_LINE = '/^- \*\*Checked:\*\*\s*(?<date>\S+)/m';
+    private const string CHECKED_LINE = '/^- \*\*Checked:\*\*\s*(?<rest>.*)$/m';
+
+    private const string LEADING_DATE = '/^(?<date>\d{4}-\d{2}-\d{2})\b/';
 
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
@@ -54,25 +57,36 @@ final readonly class CheckedReports
             return null;
         }
 
-        $lines = $this->statusSection($this->codeBlocks->blanked(explode("\n", $contents)));
+        $lines = $this->codeBlocks->blanked(explode("\n", $contents));
+        $section = $this->statusSection($lines);
 
-        return $this->readyToFile($lines) ? $this->checkFinding(implode("\n", $lines)) : null;
+        // Without the heading the rule fails closed, because a heading written otherwise would hide an unchecked report.
+        if (null === $section) {
+            return in_array('ready to file', $this->statusValues($lines), true)
+                ? 'but has no "'.self::STATUS_HEADING.'" section: the gate reads the status and the "Checked" line only under that heading, written exactly'
+                : null;
+        }
+
+        return 'ready to file' === array_last($this->statusValues($section))
+            ? $this->checkFinding(implode("\n", $section))
+            : null;
     }
 
     // Only this section, because a Status line in another section (a fix experiment) would otherwise retire a ready report.
     /**
      * @param list<string> $lines
      *
-     * @return list<string>
+     * @return list<string>|null
      */
-    private function statusSection(array $lines): array
+    private function statusSection(array $lines): ?array
     {
-        $section = [];
+        $section = null;
         $inside = false;
 
         foreach ($lines as $line) {
             if (1 === preg_match(self::SECTION_HEADING, $line)) {
-                $inside = self::STATUS_HEADING === rtrim($line);
+                $inside = self::STATUS_HEADING === trim($line);
+                $section ??= $inside ? [] : null;
 
                 continue;
             }
@@ -88,24 +102,30 @@ final readonly class CheckedReports
     // The last Decision or Status line decides, because a later `not filed` line retires an earlier `ready to file`.
     /**
      * @param list<string> $lines
+     *
+     * @return list<string>
      */
-    private function readyToFile(array $lines): bool
+    private function statusValues(array $lines): array
     {
-        $current = null;
+        $values = [];
 
         foreach ($lines as $line) {
             if (1 === preg_match(self::READY_STATUS, $line, $match)) {
-                $current = $match['value'];
+                $values[] = $match['value'];
             }
         }
 
-        return 'ready to file' === $current;
+        return $values;
     }
 
     private function checkFinding(string $report): ?string
     {
         if (1 !== preg_match(self::CHECKED_LINE, $report, $match)) {
             return 'but has no "Checked" line (date, upstream commit or tag, duplicate search, preferred form and target branch)';
+        }
+
+        if (1 !== preg_match(self::LEADING_DATE, $match['rest'], $match)) {
+            return 'but its "Checked" line does not start with a date as YYYY-MM-DD';
         }
 
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $match['date'], new DateTimeZone('UTC'));
