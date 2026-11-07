@@ -1,0 +1,24 @@
+Issue #1026: serial pass and per-file timings, merge base 8dc8b27a against head a7201f70.
+All runs: taskset -c 0-3, PHP 8.5.12, PHPUnit 13.4.6, base and head run one after the other.
+The host carried other load (load average 20 to 29 on 12 CPUs), so whole-gate totals vary by minutes between runs.
+
+Serial pass (vendor/bin/phpunit -c <config> --group=serial; PHPUnit "Time:")
+  config              base                         head
+  phpunit.dist.xml    47 tests, 146 assertions,    7 tests, 36 assertions,
+                      40.0 s (41.8 s wall)         4.6 s (5.9 s wall)
+  phpunit.gates.xml   1 test, 3 assertions,        1 test, 3 assertions,
+                      1.9 s (5.6 s wall)           1.5 s (5.1 s wall)
+
+Per changed file, single process (vendor/bin/phpunit <file>; PHPUnit "Time:")
+  file                                                         base      head      tests/assertions (both)
+  tests/Application/AiProvidersTest.php                        25.2 s    22.1 s    14 / 48
+  tests/Support/KernelTestCaseTest.php                          0.7 s     1.0 s     2 / 4
+  tests/Support/Deprecation/LoadTimeDeprecationResolverTest.php 2.3 s     3.3 s    16 / 38
+  tests/Support/Log/UnassertedErrorLogExtensionTest.php         2.6 s     3.5 s     8 / 20
+
+bin/check --only=tests (wall seconds, all passed: {"result":"pass","failed":[]})
+  run                                   base     head (gates pass run, --base=HEAD)   head (gates pass skipped)
+  INTAKT_TEST_WORKERS=1                 567.5    679                                  466.6
+  default worker count                  390.3    468                                  342.1
+The base tree is checked out at the merge base, so its gate counts the whole tree as changed and runs the gates pass;
+--base=HEAD does the same on the head. The plain head runs skip the gates pass, as a branch that leaves the gate code unchanged does.
