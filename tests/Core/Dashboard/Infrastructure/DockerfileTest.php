@@ -36,9 +36,14 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+MESSENGER_CONSUMERS=\d+/m', $this->dockerfile());
     }
 
-    public function testTheImageInstallsPcntlSoAConsumerFinishesItsMessageOnStop(): void
+    public function testTheImageInstallsTheExtensionsTheProfileLists(): void
     {
-        self::assertMatchesRegularExpression('/^RUN install-php-extensions .*\bpcntl\b/m', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^RUN install-php-extensions \$\(php profile-extensions\.php\)/m', $this->dockerfile());
+    }
+
+    public function testTheProfileListsPcntlSoAConsumerFinishesItsMessageOnStop(): void
+    {
+        self::assertStringContainsString('"ext-pcntl": "*"', (string) file_get_contents(__DIR__.'/../../../../composer.json'));
     }
 
     public function testTheImageInstallsGitForTheForgeAndTheSampleRepository(): void

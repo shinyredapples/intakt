@@ -10,20 +10,26 @@ FROM dunglas/frankenphp:1.13.4-php8.5.12-trixie@sha256:6f86f003f1478bafa7befe6ec
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
+# The PHP profile (build-image.sh sends these files as the context): composer.json's extensions and the check ini.
+COPY composer.json docker/profile-extensions.php /usr/local/share/intakt/
+COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
+# pdo_mysql and pdo_pgsql are not in the profile: only the persistence group in CI uses them.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
-    docker-php-ext-install -j"$(nproc)" intl pcntl pdo_mysql pdo_pgsql zip; \
-    echo 'memory_limit=-1' > "$PHP_INI_DIR/conf.d/ci.ini"; \
+    profile='/usr/local/share/intakt/profile-extensions.php /usr/local/share/intakt/composer.json'; \
+    docker-php-ext-install -j"$(nproc)" $(php $profile) pdo_mysql pdo_pgsql; \
+    missing="$(php $profile)"; [ -z "$missing" ] || { echo "missing PHP extensions: $missing" >&2; exit 1; }; \
+    php --ini; \
     composer --version; \
     gitleaks version; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
-    php -r 'foreach (["intl", "pcntl", "zip", "pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
+    php -r 'foreach (["pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
     useradd --uid 1000 --user-group --create-home ci; \
     chown -R ci:ci /config/caddy /data/caddy
 
