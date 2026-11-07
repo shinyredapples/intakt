@@ -8,7 +8,7 @@ use Intakt\Kernel;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
@@ -52,12 +52,12 @@ final class JourneyContainerTest extends JourneyTestCase
         self::assertEquals([new Update('review/rounds/1', '<turbo-stream>changed</turbo-stream>', true)], $this->publishedUpdates());
     }
 
-    private function container(): ContainerInterface
+    private function container(): TestContainer
     {
         $this->kernel = new Kernel('test', false);
         $this->kernel->boot();
         $container = $this->kernel->getContainer()->get('test.service_container');
-        self::assertInstanceOf(ContainerInterface::class, $container);
+        self::assertInstanceOf(TestContainer::class, $container);
 
         return $container;
     }
