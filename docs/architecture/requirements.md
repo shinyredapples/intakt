@@ -38,6 +38,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | Command | Called by | What for | Needed |
 |---|---|---|---|
 | `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the runner for the `persistence` service container | building the CI image, running `bin/check` and the persistence group in it, the database service | yes |
+| `docker build` and what `docker/smoke-test.sh` calls ([below](#to-smoke-test-the-container-image)) | the `image` job | building the app image and smoke-testing it | yes |
 | `docker run` security options | the `check` job | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
 | `sudo sysctl` | the `check` job, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from the Dockerfile's hash | yes |

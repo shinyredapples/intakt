@@ -177,3 +177,17 @@ jobs:
           "mysql 8.4|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
           "mariadb 11.4|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
           "postgresql 17|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
+  # The app image from the Dockerfile, built on the runner and never pushed, then docker/smoke-test.sh against it. Every
+  # check lives in the script, so it runs the same outside CI; it prints the image's and the base image's digests.
+  image:
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the app image
+        run: docker build --tag intakt:ci .
+      - name: Smoke-test the app image
+        run: docker/smoke-test.sh intakt:ci
