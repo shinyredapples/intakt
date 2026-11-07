@@ -27,7 +27,7 @@ final class ProjectsConfigurationTest extends TestCase
     {
         $config = $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini']]]]]);
 
-        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini', 'substitutes' => []]]]], $config['projects']);
+        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini', 'max_output' => 4000, 'substitutes' => []]]]], $config['projects']);
     }
 
     public function testATierKeepsItsSubstitutesInOrder(): void
@@ -35,7 +35,7 @@ final class ProjectsConfigurationTest extends TestCase
         $substitutes = [['provider' => 'openai', 'model' => 'mini'], ['provider' => 'anthropic', 'model' => 'small']];
         $config = $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'sonnet', 'substitutes' => $substitutes]]]]]);
 
-        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'sonnet', 'substitutes' => $substitutes]]]], $config['projects']);
+        self::assertSame(['alpha' => ['tiers' => ['light' => ['provider' => 'claude_code', 'model' => 'sonnet', 'substitutes' => $substitutes, 'max_output' => 4000]]]], $config['projects']);
     }
 
     public function testASubstituteNeedsAKnownProviderAndAModel(): void
@@ -43,6 +43,29 @@ final class ProjectsConfigurationTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         $this->process(['projects' => ['alpha' => ['tiers' => ['light' => ['provider' => 'openai', 'model' => 'mini', 'substitutes' => [['provider' => 'nowhere', 'model' => 'x']]]]]]]);
+    }
+
+    public function testEachTierHasItsOwnDefaultOutputLimit(): void
+    {
+        $tiers = ['strong' => ['provider' => 'anthropic', 'model' => 'a'], 'standard' => ['provider' => 'anthropic', 'model' => 'b'], 'light' => ['provider' => 'anthropic', 'model' => 'c']];
+
+        $config = $this->process(['projects' => ['alpha' => ['tiers' => $tiers]]]);
+
+        self::assertSame([16000, 8000, 4000], array_column($config['projects']['alpha']['tiers'], 'max_output'));
+    }
+
+    public function testATierKeepsTheOutputLimitTheOwnerSets(): void
+    {
+        $config = $this->process(['projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'a', 'max_output' => 32000]]]]]);
+
+        self::assertSame(32000, $config['projects']['alpha']['tiers']['strong']['max_output']);
+    }
+
+    public function testAnOutputLimitBelowOneIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'a', 'max_output' => 0]]]]]);
     }
 
     public function testNoProjectsIsValid(): void

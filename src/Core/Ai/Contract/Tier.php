@@ -9,4 +9,14 @@ enum Tier: string
     case Strong = 'strong';
     case Standard = 'standard';
     case Light = 'light';
+
+    // Room for a full verdict with its findings; the strong tier writes the longest reviews.
+    public function defaultMaxOutput(): int
+    {
+        return match ($this) {
+            self::Strong => 16000,
+            self::Standard => 8000,
+            self::Light => 4000,
+        };
+    }
 }

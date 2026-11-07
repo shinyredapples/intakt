@@ -39,6 +39,12 @@ enum Provider: string
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
     }
 
+    // Not the subscription CLIs, because their bridges take no output limit option.
+    public function limitsOutput(): bool
+    {
+        return $this->readsTheCheckout();
+    }
+
     // Needed because Anthropic's usage counts cache reads and writes apart from input_tokens, also through the Claude Code CLI, while the OpenAI forms count cached tokens within the prompt.
     public function countsCacheApartFromPrompt(): bool
     {

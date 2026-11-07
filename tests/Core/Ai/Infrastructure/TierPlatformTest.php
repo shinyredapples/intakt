@@ -24,6 +24,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -189,6 +190,74 @@ final class TierPlatformTest extends TestCase
         $answer = $this->tierPlatform()->invoke(new ResolvedModel(Provider::OpenAi, 'sub-openai'), new TierRequest('review'))->asText();
 
         self::assertSame('openai answered as sub-openai', $answer);
+    }
+
+    public function testTheTiersOutputLimitReachesTheVendorCallOfThatTier(): void
+    {
+        $sent = new ArrayObject();
+        $platform = $this->limitedPlatform($sent);
+
+        $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review'))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Light), new TierRequest('review'))->asText();
+
+        self::assertSame([['big' => 16000], ['small' => 4000]], array_map(static fn (array $call): array => [$call[0] => $call[1][PlatformOptions::MAX_OUTPUT_TOKENS]], $sent->getArrayCopy()));
+    }
+
+    public function testALimitTheCallerSetsIsKept(): void
+    {
+        $sent = new ArrayObject();
+        $platform = $this->limitedPlatform($sent);
+
+        $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review', [PlatformOptions::MAX_OUTPUT_TOKENS => 99]))->asText();
+
+        self::assertSame(99, $sent[0][1][PlatformOptions::MAX_OUTPUT_TOKENS]);
+    }
+
+    public function testATierWithoutALimitSendsNone(): void
+    {
+        $sent = new ArrayObject();
+
+        $platform = $this->limitedPlatform($sent);
+        $platform->invoke($platform->answering('unlimited', Tier::Strong), new TierRequest('review'))->asText();
+
+        self::assertSame([], $sent[0][1]);
+    }
+
+    public function testACliProviderGetsNoLimitOption(): void
+    {
+        $sent = new ArrayObject();
+        $platform = $this->limitedPlatform($sent);
+
+        $platform->invoke(new ResolvedModel(Provider::ClaudeCode, 'cli', 16000), new TierRequest('review'))->asText();
+
+        self::assertSame([], $sent[0][1]);
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, array<string, mixed>}> $sent
+     */
+    private function limitedPlatform(ArrayObject $sent): TierPlatform
+    {
+        $resolver = new ConfiguredTierResolver([
+            'limited' => ['tiers' => [
+                'strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 16000],
+                'light' => ['provider' => 'anthropic', 'model' => 'small', 'max_output' => 4000],
+            ]],
+            'unlimited' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
+        ], []);
+        $inner = MockPlatformFactory::createPlatform('ok', name: 'anthropic');
+        $recording = self::createStub(PlatformInterface::class);
+        $recording->method('invoke')->willReturnCallback(static function (string $model, mixed $input, array $options) use ($sent, $inner) {
+            $sent[] = [$model, $options];
+
+            return $inner->invoke($model, $input, $options);
+        });
+        $platforms = new ServiceLocator([
+            Provider::Anthropic->value => fn (): PlatformInterface => $recording,
+            Provider::ClaudeCode->value => fn (): PlatformInterface => $recording,
+        ]);
+
+        return new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger());
     }
 
     private function out(Provider ...$providers): AccountCooldowns

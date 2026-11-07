@@ -17,7 +17,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final readonly class ConfiguredTierResolver implements TierResolver
 {
     /**
-     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}>}> $projects
+     * @param array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, max_output?: positive-int, substitutes?: list<array{provider: string, model: non-empty-string}>}>}> $projects
      * @param array<string, string>                                                                                                                                              $disabledProviders
      */
     public function __construct(
@@ -48,7 +48,7 @@ final readonly class ConfiguredTierResolver implements TierResolver
     {
         $mapping = $this->mapping($project, $tier);
 
-        return new ResolvedModel(Provider::from($mapping['provider']), $mapping['model']);
+        return new ResolvedModel(Provider::from($mapping['provider']), $mapping['model'], $mapping['max_output'] ?? null);
     }
 
     public function isDisabled(Provider $provider): bool
@@ -64,7 +64,7 @@ final readonly class ConfiguredTierResolver implements TierResolver
             $provider = Provider::from($substitute['provider']);
 
             if (!$this->isDisabled($provider)) {
-                $substitutes[] = new ResolvedModel($provider, $substitute['model']);
+                $substitutes[] = new ResolvedModel($provider, $substitute['model'], $this->mapping($project, $tier)['max_output'] ?? null);
             }
         }
 
@@ -77,7 +77,7 @@ final readonly class ConfiguredTierResolver implements TierResolver
     }
 
     /**
-     * @return array{provider: string, model: non-empty-string, substitutes?: list<array{provider: string, model: non-empty-string}>}
+     * @return array{provider: string, model: non-empty-string, max_output?: positive-int, substitutes?: list<array{provider: string, model: non-empty-string}>}
      */
     private function mapping(string $project, Tier $tier): array
     {
