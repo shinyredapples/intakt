@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\SeedSampleProject;
 
 use Intakt\Core\Ai\Contract\Provider;
+use SensitiveParameter;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
 
 #[AsCommand(name: 'intakt:sample:seed', description: 'Build the sample repository and write the sample project with its review panel, each only when it does not exist yet')]
@@ -19,6 +21,11 @@ final readonly class SeedSampleProjectCommand
         private SampleRepository $repository,
         private SampleProject $project,
         private LockFactory $locks,
+        #[Autowire(env: 'REVIEW_MCP_BASE_URL')]
+        private string $baseUrl,
+        #[SensitiveParameter]
+        #[Autowire(env: 'MCP_OWNER_TOKEN')]
+        private string $ownerToken,
     ) {
     }
 
@@ -44,8 +51,22 @@ final readonly class SeedSampleProjectCommand
             SampleRepository::BASE,
             SampleProject::TASK,
         )));
+        $this->printMcpSetup($io);
 
         return Command::SUCCESS;
+    }
+
+    private function printMcpSetup(SymfonyStyle $io): void
+    {
+        if ('' === $this->ownerToken) {
+            return;
+        }
+
+        $io->writeln(OutputFormatter::escape(sprintf(
+            'Connect an MCP client: claude mcp add --transport http intakt %s/mcp/owner --header "Authorization: Bearer %s"',
+            rtrim($this->baseUrl, '/'),
+            $this->ownerToken,
+        )));
     }
 
     private function seedProject(SymfonyStyle $io, string $configuration): bool

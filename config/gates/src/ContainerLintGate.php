@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-final class ContainerLintGate implements Gate
+final class ContainerLintGate implements RunsTheChangesCode
 {
     // Because `when@` blocks make the container differ per environment, each one the kernel ships is linted.
     private const array ENVIRONMENTS = ['dev', 'test', 'prod'];

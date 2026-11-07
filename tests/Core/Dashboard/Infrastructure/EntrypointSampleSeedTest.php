@@ -36,7 +36,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testTheDemoBuildsTheContainerAgainBeforeAndAfterTheSeed(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => '/data/intakt.yaml']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
 
         $this->waitForTheServer();
 
@@ -44,10 +44,71 @@ final class EntrypointSampleSeedTest extends TestCase
             'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
             'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
-            'bin/console intakt:sample:seed /data/sample /data/intakt.yaml',
+            'bin/console intakt:sample:seed /data/sample '.$this->directory.'/intakt.yaml',
             'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
         ], $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testTheDemoMakesOneOwnerTokenAndKeepsItOnTheDataVolume(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        $kept = trim(new Filesystem()->readFile($this->directory.'/mcp-owner-token'));
+
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $kept);
+        self::assertSame($kept.' mcp_tool_write', trim($this->seen()));
+    }
+
+    public function testATokenTheOwnerSetWinsAndIsNotWrittenToTheVolume(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'MCP_OWNER_TOKEN' => 'chosen-by-the-owner', 'MCP_OWNER_ACCESS' => 'mcp_tool_read']);
+        $this->waitForTheServer();
+
+        self::assertSame('chosen-by-the-owner mcp_tool_read', trim($this->seen()));
+        self::assertFileDoesNotExist($this->directory.'/mcp-owner-token');
+    }
+
+    public function testTwoFirstStartsAtOnceShareOneOwnerToken(): void
+    {
+        $first = $this->startHeldAtTheToken('1');
+        $second = $this->startHeldAtTheToken('2');
+        $this->awaitFile($this->directory.'/ready-1');
+        $this->awaitFile($this->directory.'/ready-2');
+
+        new Filesystem()->touch($this->directory.'/go-2');
+        $second->wait();
+        new Filesystem()->touch($this->directory.'/go-1');
+        $first->wait();
+
+        $kept = trim(new Filesystem()->readFile($this->directory.'/mcp-owner-token'));
+        self::assertSame($kept.' mcp_tool_write', trim(new Filesystem()->readFile($this->callsFile().'-1.seen')), $first->getErrorOutput());
+        self::assertSame($kept.' mcp_tool_write', trim(new Filesystem()->readFile($this->callsFile().'-2.seen')), $second->getErrorOutput());
+        self::assertSame(0600, fileperms($this->directory.'/mcp-owner-token') & 0777);
+    }
+
+    public function testAnOwnerTokenThatCannotBeStoredStopsTheStartBeforeTheSeed(): void
+    {
+        new Filesystem()->mkdir($this->directory.'/mcp-owner-token');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('could not make or read the MCP owner token', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
+    }
+
+    public function testAMissingDataFolderStopsTheStartBeforeTheSeed(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/missing/intakt.yaml']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('could not make or read the MCP owner token', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
     }
 
     public function testWithoutASampleRepositoryNothingIsSeeded(): void
@@ -61,7 +122,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testAFailedSeedStopsTheEntrypointBeforeTheServerStarts(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => '/data/intakt.yaml', 'SEED_STATUS' => '1']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SEED_STATUS' => '1']);
 
         $this->entrypoint?->wait();
 
@@ -85,20 +146,64 @@ final class EntrypointSampleSeedTest extends TestCase
      */
     private function startEntrypoint(array $environment): void
     {
-        $this->entrypoint = new Process(['docker/entrypoint.sh'], dirname(__DIR__, 4), [
+        $this->entrypoint = $this->entrypointWith($environment);
+        $this->entrypoint->start();
+    }
+
+    // A stand-in od holds each start after the token check until the test lets it go, so the test forces both starts past the check before either writes.
+    private function startHeldAtTheToken(string $start): Process
+    {
+        $held = $this->directory.'/held';
+        new Filesystem()->dumpFile($held.'/od', "#!/bin/bash\ntouch \"\$HELD/ready-\$START\"\nfor _ in {1..600}; do [[ -e \$HELD/go-\$START ]] && break; sleep 0.1; done\nprintf '%064d' \"\$START\"\n");
+        new Filesystem()->chmod($held.'/od', 0755);
+
+        $process = $this->entrypointWith([
+            'PATH' => $held.':'.$this->stubPrograms().':'.getenv('PATH'),
+            'HELD' => $this->directory,
+            'START' => $start,
+            'CALLS' => $this->callsFile().'-'.$start,
+            'INTAKT_SAMPLE_REPOSITORY' => '/data/sample',
+            'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
+            'SEED_STATUS' => '1',
+        ]);
+        $process->start();
+
+        return $process;
+    }
+
+    private function awaitFile(string $file): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && !file_exists($file)) {
+            usleep(10_000);
+        }
+
+        self::assertFileExists($file);
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private function entrypointWith(array $environment): Process
+    {
+        $process = new Process(['docker/entrypoint.sh'], dirname(__DIR__, 4), [
             'PATH' => $this->stubPrograms().':'.getenv('PATH'),
             'CALLS' => $this->callsFile(),
             'APP_SECRET' => self::SECRET,
             'MERCURE_JWT_SECRET' => self::SECRET,
             'MERCURE_JWT_ISSUER' => 'http://localhost',
+            'MCP_OWNER_TOKEN' => false,
+            'MCP_OWNER_ACCESS' => false,
             'MESSENGER_CONSUMERS' => '1',
             'WORKER_MEMORY_CEILING_MB' => '256',
             'INTAKT_SAMPLE_REPOSITORY' => false,
             'INTAKT_CONFIG' => false,
             ...$environment,
         ]);
-        $this->entrypoint->setTimeout(self::SECONDS_TO_WAIT * 2);
-        $this->entrypoint->start();
+        $process->setTimeout(self::SECONDS_TO_WAIT * 2);
+
+        return $process;
     }
 
     // Stand-ins that note each call; the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
@@ -106,7 +211,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
@@ -142,6 +247,11 @@ final class EntrypointSampleSeedTest extends TestCase
         }
 
         return $calls;
+    }
+
+    private function seen(): string
+    {
+        return new Filesystem()->readFile($this->callsFile().'.seen');
     }
 
     private function calls(): string

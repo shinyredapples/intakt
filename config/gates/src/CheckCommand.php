@@ -34,7 +34,15 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGatesWhenToolsExist($options, $arguments);
+        $slots = $this->slots();
+
+        if (!$slots instanceof GateSlots) {
+            $this->print(['error' => GateSlots::VARIABLE.' names no number of gates to run at once from 1 to '.GateSlots::MOST]);
+
+            return 2;
+        }
+
+        return $this->runGatesWhenToolsExist($options, $arguments, $slots);
     }
 
     /**
@@ -59,6 +67,10 @@ final readonly class CheckCommand
             return 2;
         }
 
+        if (LowPriority::isAskedIn(getenv())) {
+            new LowPriority()->take();
+        }
+
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
         fwrite(STDOUT, $result->toJson()."\n");
 
@@ -68,9 +80,10 @@ final readonly class CheckCommand
     /**
      * @param list<string> $arguments
      */
-    private function runGatesWhenToolsExist(Options $options, array $arguments): int
+    private function runGatesWhenToolsExist(Options $options, array $arguments, GateSlots $slots): int
     {
-        $names = array_map(static fn (Gate $gate): string => $gate->name(), $this->selectedGates($options));
+        $selected = $this->selectedGates($options);
+        $names = array_map(static fn (Gate $gate): string => $gate->name(), $selected);
         $missing = new RequiredTools($options->root ?? $this->home)->missingToRunEachInItsOwnProcess($names);
 
         if ([] !== $missing) {
@@ -79,18 +92,20 @@ final readonly class CheckCommand
             return 2;
         }
 
-        return $this->runGates($names, $arguments, $options->root ?? $this->home);
+        $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
+
+        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
     }
 
     /**
      * @param list<string> $names
      * @param list<string> $arguments
      */
-    private function runGates(array $names, array $arguments, string $root): int
+    private function runGates(array $names, array $arguments, GateChildren $children): int
     {
         $failed = [];
 
-        foreach (new GateChildren($this->home, $root)->reportsOf($names, $arguments) as $report) {
+        foreach ($children->reportsOf($names, $arguments) as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {
@@ -101,6 +116,25 @@ final readonly class CheckCommand
         $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
 
         return [] === $failed ? 0 : 1;
+    }
+
+    // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.
+    private function slots(): ?GateSlots
+    {
+        $testWorkers = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax()) ?? 1;
+
+        $memoryLimits = [...new OwnCgroup()->fileAndAncestors('memory.max'), ...new OwnCgroup()->fileAndAncestors('memory.high')];
+
+        $byDefault = GateSlots::byDefault(Processors::available(Processors::status(), Processors::cpuMax()), $memoryLimits, $testWorkers);
+
+        return GateSlots::chosen($this->variable(GateSlots::VARIABLE), $byDefault, $testWorkers);
+    }
+
+    private function variable(string $name): ?string
+    {
+        $value = getenv($name);
+
+        return is_string($value) && '' !== $value ? $value : null;
     }
 
     private function resultOf(Gate $gate, Workspace $workspace): GateResult
