@@ -39,7 +39,7 @@ final class LiveRoundDriverTest extends TestCase
                 && SampleRepository::BASE === $command->source->base
                 && '/sample' === $command->source->repository
                 && 1 === $command->round->number,
-        ))->willReturn(new Envelope(new stdClass(),[new HandledStamp(self::ROUND, 'handler')]));
+        ))->willReturn(new Envelope(new stdClass(), [new HandledStamp(self::ROUND, 'handler')]));
 
         $driver = new LiveRoundDriver($bus, static fn (array $arguments): string => '', static fn (): array => []);
 
@@ -49,7 +49,7 @@ final class LiveRoundDriverTest extends TestCase
     public function testAStepConsumesExactlyOneQueuedMessage(): void
     {
         $calls = [];
-        $driver = new LiveRoundDriver($this->createStub(MessageBusInterface::class), static function (array $arguments) use (&$calls): string {
+        $driver = new LiveRoundDriver(self::createStub(MessageBusInterface::class), static function (array $arguments) use (&$calls): string {
             $calls[] = $arguments;
 
             return '';
@@ -65,14 +65,15 @@ final class LiveRoundDriverTest extends TestCase
     public function testTheDriverStepsUntilTheUpdatesShowTheRoundEndedAndReturnsThem(): void
     {
         $steps = 0;
-        $driver = new LiveRoundDriver($this->createStub(MessageBusInterface::class), static function (array $arguments) use (&$steps): string {
+        $reads = 0;
+        $driver = new LiveRoundDriver(self::createStub(MessageBusInterface::class), static function (array $arguments) use (&$steps): string {
             ++$steps;
 
             return '';
-        }, function () use (&$steps): array {
-            $updates = [$this->updateFor(self::ROUND, '1 of 2 reviewers finished.')];
+        }, function () use (&$reads): array {
+            $progress = $this->updateFor(self::ROUND, '1 of 2 reviewers finished.');
 
-            return $steps >= 3 ? [...$updates, $this->updateFor(self::ROUND, 'Judged.')] : $updates;
+            return 3 === ++$reads ? [$progress, $this->updateFor(self::ROUND, 'Judged.')] : [$progress];
         });
 
         $published = $driver->stepUntilEnded(self::ROUND);
@@ -84,7 +85,7 @@ final class LiveRoundDriverTest extends TestCase
 
     public function testARoundThatNeverEndsFailsNamingTheRoundAndTheLastUpdate(): void
     {
-        $driver = new LiveRoundDriver($this->createStub(MessageBusInterface::class), static fn (array $arguments): string => '', fn (): array => [$this->updateFor(self::ROUND, '0 of 2 reviewers finished.')]);
+        $driver = new LiveRoundDriver(self::createStub(MessageBusInterface::class), static fn (array $arguments): string => '', fn (): array => [$this->updateFor(self::ROUND, '0 of 2 reviewers finished.')]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageMatches('/Round '.self::ROUND.' did not end within \d+ steps.*0 of 2 reviewers finished\./');
@@ -94,7 +95,7 @@ final class LiveRoundDriverTest extends TestCase
 
     public function testUpdatesPublishedForAnotherRoundDoNotEndTheDrivenRound(): void
     {
-        $driver = new LiveRoundDriver($this->createStub(MessageBusInterface::class), static fn (array $arguments): string => '', fn (): array => [$this->updateFor(self::OTHER_ROUND, 'Judged.')]);
+        $driver = new LiveRoundDriver(self::createStub(MessageBusInterface::class), static fn (array $arguments): string => '', fn (): array => [$this->updateFor(self::OTHER_ROUND, 'Judged.')]);
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessageMatches('/the last update was none/');
@@ -106,5 +107,4 @@ final class LiveRoundDriverTest extends TestCase
     {
         return new Update(MercureRoundUpdates::topicOf($round), '<p>'.$text.'</p>', true);
     }
-
 }

@@ -12,9 +12,9 @@ use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use RuntimeException;
+use Symfony\Component\Mercure\Update;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
-use Symfony\Component\Mercure\Update;
 
 // Starts a round the way the dashboard does (the command bus) and lets the worker run one message at a time, so a journey can read the live updates between steps.
 final readonly class LiveRoundDriver
@@ -24,7 +24,7 @@ final readonly class LiveRoundDriver
     private const int STEP_SECONDS = 20;
     // A round of the sample project queues a reviewer message per panel member and one judgement, so this leaves room to spare.
     private const int STEP_CEILING = 30;
-    // What the round_changed stream template prints once the judge has ruled.
+    // Matched on this text because the template of the round_changed stream prints it once the judge has ruled and the update carries no other flag.
     private const string ENDED_TEXT = 'Judged.';
 
     /**
@@ -53,7 +53,7 @@ final readonly class LiveRoundDriver
     }
 
     /**
-     * @return list<Update> the updates published for the round, the last one reporting its end
+     * @return list<Update>
      */
     public function stepUntilEnded(string $round): array
     {
