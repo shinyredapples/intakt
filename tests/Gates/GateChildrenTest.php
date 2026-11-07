@@ -9,6 +9,7 @@ use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateSlots;
 use Intakt\Gates\ProcessGroup;
+use Intakt\Gates\OwnCgroup;
 use Intakt\Gates\Processors;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
@@ -22,6 +23,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(CheckCommand::class)]
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateSlots::class)]
+#[UsesClass(OwnCgroup::class)]
 #[UsesClass(Processors::class)]
 #[UsesClass(RunningChild::class)]
 #[UsesClass(ProcessGroup::class)]

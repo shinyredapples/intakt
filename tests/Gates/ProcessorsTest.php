@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\OwnCgroup;
 use Intakt\Gates\Processors;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Processors::class)]
+#[UsesClass(OwnCgroup::class)]
 final class ProcessorsTest extends TestCase
 {
     public function testTheProcessorsAreCountedFromTheAffinityList(): void

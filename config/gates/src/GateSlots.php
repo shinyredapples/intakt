@@ -28,6 +28,16 @@ final readonly class GateSlots
         return new self($count, max(1, min($testWorkers, $count - 1)));
     }
 
+    // Because the gates share the memory of their cgroup (`memory.max`), each slot gets the most one gate asks for, PHPStan's limit; `max` or anything unreadable sets no cap.
+    public static function byDefault(int $processors, string $memoryMax): int
+    {
+        if (1 !== preg_match('/^[1-9]\d*$/', trim($memoryMax))) {
+            return $processors;
+        }
+
+        return max(1, min($processors, intdiv((int) trim($memoryMax), StaticAnalysisGate::MEMORY_LIMIT_GIB * 1024 ** 3)));
+    }
+
     /**
      * @param list<string> $gates
      *

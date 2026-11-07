@@ -8,10 +8,6 @@ final class Processors
 {
     private const string PROCESS_STATUS = '/proc/self/status';
 
-    private const string PROCESS_CGROUP = '/proc/self/cgroup';
-
-    private const string CGROUP_ROOT = '/sys/fs/cgroup';
-
     public static function available(string $processStatus, string $cpuMax): int
     {
         return min(self::processorsIn($processStatus), self::quotaIn($cpuMax));
@@ -24,11 +20,7 @@ final class Processors
 
     public static function cpuMax(): string
     {
-        if (1 !== preg_match('/^0::(\/.*)$/m', self::contentsOf(self::PROCESS_CGROUP), $cgroup)) {
-            return '';
-        }
-
-        return self::contentsOf(rtrim(self::CGROUP_ROOT.$cgroup[1], '/').'/cpu.max');
+        return OwnCgroup::file('cpu.max');
     }
 
     // Because the processors the gate may run on (its affinity list) are what it sees, not every processor of the machine.

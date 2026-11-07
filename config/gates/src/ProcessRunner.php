@@ -200,17 +200,23 @@ final class ProcessRunner
         }
 
         $forwarding = StopSignalForwarding::through($child->group->stop(...));
-
-        $result = $this->endOf($child);
-
-        while (!$result instanceof ProcessResult) {
-            usleep(self::POLL_MICROSECONDS);
-            $result = $this->endOf($child);
-        }
-
+        $result = $this->waitedFor($child);
         $forwarding->end();
 
         return $result;
+    }
+
+    private function waitedFor(RunningChild $child): ProcessResult
+    {
+        while (true) {
+            $result = $this->endOf($child);
+
+            if ($result instanceof ProcessResult) {
+                return $result;
+            }
+
+            usleep(self::POLL_MICROSECONDS);
+        }
     }
 
     private function endedWith(RunningChild $child, ?int $failure): ProcessResult

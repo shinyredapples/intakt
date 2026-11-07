@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\GateSlots;
+use Intakt\Gates\TestsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GateSlots::class)]
+#[UsesClass(TestsGate::class)]
 final class GateSlotsTest extends TestCase
 {
     public function testWithoutAnOverrideAsManyGatesRunAtOnceAsThereAreProcessors(): void
@@ -61,6 +64,21 @@ final class GateSlotsTest extends TestCase
         self::assertTrue($slots->allow([], 'tests'));
         self::assertTrue($slots->allow(['tests'], 'cs'));
         self::assertFalse($slots->allow(['tests', 'cs'], 'phpstan'));
+    }
+
+    public function testAMemoryLimitAllowsOneGatePerTwoGibibytes(): void
+    {
+        self::assertSame([4, 1, 1], [GateSlots::byDefault(12, "8589934592\n"), GateSlots::byDefault(12, "3758096384\n"), GateSlots::byDefault(12, '1048576')]);
+    }
+
+    public function testAMemoryLimitAboveWhatTheProcessorsUseLeavesTheirCount(): void
+    {
+        self::assertSame(4, GateSlots::byDefault(4, "17179869184\n"));
+    }
+
+    public function testNoReadableMemoryLimitLeavesTheProcessorCount(): void
+    {
+        self::assertSame([12, 12, 12], array_map(static fn (string $memoryMax): int => GateSlots::byDefault(12, $memoryMax), ["max\n", '', '0']));
     }
 
     public function testTheTestsGateStartsFirstAndTheOthersKeepTheirOrder(): void
