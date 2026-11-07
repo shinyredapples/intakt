@@ -40,17 +40,10 @@ final readonly class HighlightsGate implements Gate
 
     public function run(Workspace $workspace): GateResult
     {
-        $file = $workspace->root.'/'.self::FILE;
-        $assembled = $this->fragments->areOn($workspace->root);
+        $page = $this->fragments->pageOn($workspace->root);
 
-        if (!$assembled && !is_file($file)) {
+        if (!$page instanceof HighlightAssembly) {
             return GateResult::passedBecause($this->name(), self::FILE.' does not exist');
-        }
-
-        $contents = $assembled ? $this->fragments->assembled($workspace->root) : file_get_contents($file);
-
-        if (false === $contents) {
-            return GateResult::failedBecause($this->name(), 'cannot read '.self::FILE);
         }
 
         $tracked = $workspace->hasGit() ? $workspace->git(['ls-files', '-z', '--cached']) : null;
@@ -59,24 +52,13 @@ final readonly class HighlightsGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $findings = $contents instanceof HighlightAssembly
-            ? [...$this->committedPageFindings($tracked), ...$contents->findings, ...$this->findingsOf($contents->text, $this->existenceOn($workspace->root, $tracked))]
-            : $this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked));
+        $findings = [
+            ...$this->fragments->committedPageFindings($workspace->root, $tracked),
+            ...$page->findings,
+            ...$this->findingsOf($page->text, $this->existenceOn($workspace->root, $tracked)),
+        ];
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function committedPageFindings(?ProcessResult $tracked): array
-    {
-        // Without git nothing is committed, and a page bin/highlights wrote locally is fine.
-        if (!$tracked instanceof ProcessResult || !in_array(self::FILE, explode("\0", $tracked->output), true)) {
-            return [];
-        }
-
-        return [$this->fragments->committedPageFinding()];
     }
 
     /**

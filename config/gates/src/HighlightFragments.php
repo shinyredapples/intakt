@@ -19,21 +19,34 @@ final readonly class HighlightFragments
     }
 
     // The gates read the page as bin/highlights would write it, so a stale or hand-edited local copy never counts.
-    // Broken fragments read as an empty page, which the highlights gate explains; null means the page cannot be read.
-    public function pageOn(string $root): ?string
+    public function pageOn(string $root): ?HighlightAssembly
     {
         if ($this->areOn($root)) {
-            return $this->assembled($root)->text;
+            return $this->assembled($root);
         }
 
         $file = $root.'/'.self::ASSEMBLED;
 
-        return is_file($file) ? $this->contentsOf($file) : '';
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $contents = $this->contentsOf($file);
+
+        return null === $contents ? new HighlightAssembly('', ['cannot read '.self::ASSEMBLED]) : new HighlightAssembly($contents, []);
     }
 
-    public function committedPageFinding(): string
+    /**
+     * @return list<string>
+     */
+    public function committedPageFindings(string $root, ?ProcessResult $tracked): array
     {
-        return self::ASSEMBLED.' is committed, but bin/highlights generates it from '.self::DIRECTORY.'/ and git ignores it: remove it from the index (git rm --cached '.self::ASSEMBLED.') and put the change in a fragment';
+        // Only a tracked page reaches other changes, because a local copy is ignored; without fragments the page is hand-written by design.
+        if (!$tracked instanceof ProcessResult || !$this->areOn($root) || !in_array(self::ASSEMBLED, explode("\0", $tracked->output), true)) {
+            return [];
+        }
+
+        return [self::ASSEMBLED.' is committed, but bin/highlights generates it from '.self::DIRECTORY.'/ and git ignores it: remove it from the index (git rm --cached '.self::ASSEMBLED.') and put the change in a fragment'];
     }
 
     public function assembled(string $root): HighlightAssembly

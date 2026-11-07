@@ -7,7 +7,6 @@ namespace Intakt\Tests\Gates;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
-// bin/highlights is a script, not a class; the documentation tells people to run it directly.
 #[CoversNothing]
 final class HighlightsCommandTest extends TestCase
 {

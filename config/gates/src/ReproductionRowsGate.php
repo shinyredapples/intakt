@@ -47,12 +47,13 @@ final readonly class ReproductionRowsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $contents = $this->highlights->pageOn($workspace->root);
+        $page = $this->highlights->pageOn($workspace->root);
 
-        if (null === $contents) {
-            return GateResult::failedBecause($this->name(), 'cannot read '.self::HIGHLIGHTS);
+        if (null !== $page && [] !== $page->findings) {
+            return GateResult::failedBecause($this->name(), 'cannot read '.self::HIGHLIGHTS.': '.$page->findings[0]);
         }
 
+        $contents = $page->text ?? '';
         $findings = array_map(
             static fn (string $folder): string => 'upstream/'.$folder.'/ has no row in "Found in the beta" of '.self::HIGHLIGHTS,
             array_values(array_diff($folders, $this->foldersWithARow($contents))),

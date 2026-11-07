@@ -136,27 +136,27 @@ final class HighlightFragmentsTest extends SandboxTestCase
         $this->sandbox->write('docs/highlights.md', $this->assembled()->text);
         $this->sandbox->write('docs/highlights.d/1045-new-feature.md', "## Tooling\n| New feature | done | #1045 |\n");
 
-        self::assertStringContainsString('| New feature | done | #1045 |', (string) new HighlightFragments()->pageOn($this->sandbox->root));
+        self::assertStringContainsString('| New feature | done | #1045 |', (string) new HighlightFragments()->pageOn($this->sandbox->root)?->text);
     }
 
-    public function testBrokenFragmentsReadAsAnEmptyPage(): void
+    public function testBrokenFragmentsGiveAPageWithTheirFindings(): void
     {
         $this->sandbox->write('docs/highlights.d/1-gates.md', "## Tools\n| Gates | done | T1 (#5) |\n");
         $this->assembled();
 
-        self::assertSame('', new HighlightFragments()->pageOn($this->sandbox->root));
+        self::assertCount(1, new HighlightFragments()->pageOn($this->sandbox->root)->findings ?? []);
     }
 
     public function testWithoutFragmentsThePageIsTheFileItself(): void
     {
         $this->sandbox->write('docs/highlights.md', 'anything');
 
-        self::assertSame('anything', new HighlightFragments()->pageOn($this->sandbox->root));
+        self::assertSame('anything', new HighlightFragments()->pageOn($this->sandbox->root)?->text);
     }
 
-    public function testWithoutFragmentsOrAFileThePageIsEmpty(): void
+    public function testWithoutFragmentsOrAFileThereIsNoPage(): void
     {
-        self::assertSame('', new HighlightFragments()->pageOn($this->sandbox->root));
+        self::assertNull(new HighlightFragments()->pageOn($this->sandbox->root));
     }
 
     private function assembled(): HighlightAssembly
