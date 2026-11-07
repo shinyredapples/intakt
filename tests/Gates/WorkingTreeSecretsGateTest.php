@@ -215,7 +215,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
 
     public function testThePinnedVersionMatchesTheOneTheCiImageInstalls(): void
     {
-        self::assertMatchesRegularExpression('/^ARG GITLEAKS_VERSION=8\.30\.1$/m', Workflow::ciImageDefinition());
+        self::assertMatchesRegularExpression('#^FROM ghcr\.io/gitleaks/gitleaks:v8\.30\.1@sha256:[0-9a-f]{64} AS gitleaks$#m', Workflow::ciImageDefinition());
     }
 
     public function testAPlantedSecretInTheWorkingTreeFailsTheScan(): void
