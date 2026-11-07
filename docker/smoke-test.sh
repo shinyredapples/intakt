@@ -23,8 +23,6 @@ fail() {
 
 # The admin API answers only where the server runs, so in the image it is read through docker exec.
 in_server=()
-# The dashboard refuses a Host that is not loopback on DASHBOARD_PORT (RefuseForeignHost), so the image is asked as localhost:7781 and curl connects to the published port.
-reach=()
 
 check_server() {
     check_dashboard "$1"
@@ -33,10 +31,13 @@ check_server() {
     check_admin_closed "$3"
 }
 
+# The dashboard refuses a Host other than loopback on DASHBOARD_PORT (RefuseForeignHost), and the image's port is published elsewhere.
+dashboard_host=()
+
 check_dashboard() {
     local answer status
     begin dashboard
-    answer=$(curl --silent --show-error --max-time 10 --write-out '\n%{http_code}' "${reach[@]}" "$1/projects") || fail "GET /projects did not answer"
+    answer=$(curl --silent --show-error --max-time 10 --write-out '\n%{http_code}' "${dashboard_host[@]}" "$1/projects") || fail "GET /projects did not answer"
     status=${answer##*$'\n'}
     [[ $status == 200 ]] || fail "GET /projects answered $status, not 200"
     grep -q '<title>[^<]*Intakt</title>' <<<"$answer" || fail "GET /projects has no Intakt title"
@@ -47,7 +48,7 @@ check_mcp_worker() {
     local before after
     begin mcp-worker
     before=$(mcp_requests "$2") || fail "the admin API on $2 lists no mcp.php worker thread"
-    curl --silent --output /dev/null --max-time 10 --request POST "${reach[@]}" "$1/mcp/owner" || fail "POST /mcp/owner did not answer"
+    curl --silent --output /dev/null --max-time 10 --request POST "$1/mcp/owner" || fail "POST /mcp/owner did not answer"
     # FrankenPHP counts a request only when the worker has finished it, after the answer is sent.
     for _ in {1..20}; do
         after=$(mcp_requests "$2") || fail "the admin API on $2 lists no mcp.php worker thread"
@@ -133,10 +134,9 @@ start_container() {
     docker volume create "$volume" >/dev/null || fail "docker cannot create the volume $volume"
     containers+=("$web")
     docker run -d --name "$web" -e APP_SECRET -e MERCURE_JWT_SECRET --volume "$volume:/app/var/data" --publish 127.0.0.1::7781 "$image" >/dev/null || fail "docker cannot start $image"
-    published=$(docker port "$web" 7781/tcp | head -n 1)
-    origin=http://localhost:7781
-    reach=(--connect-to "localhost:7781:$published")
-    echo "started $web on $published"
+    origin=http://$(docker port "$web" 7781/tcp | head -n 1)
+    dashboard_host=(--header "Host: localhost:7781")
+    echo "started $web on $origin"
 }
 
 random_secret() {
@@ -150,7 +150,7 @@ wait_until_migrated() {
             docker logs "$web" >&2 || true
             fail "the container stopped"
         fi
-        if docker exec "$web" php bin/console doctrine:migrations:up-to-date --no-interaction >/dev/null 2>&1 && curl --silent --output /dev/null --max-time 5 "${reach[@]}" "$origin/"; then
+        if docker exec "$web" php bin/console doctrine:migrations:up-to-date --no-interaction >/dev/null 2>&1 && curl --silent --output /dev/null --max-time 5 "$origin/"; then
             echo "migrated, and the server answers"
             return
         fi

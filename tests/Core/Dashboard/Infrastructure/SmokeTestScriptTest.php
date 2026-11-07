@@ -123,21 +123,21 @@ final class SmokeTestScriptTest extends TestCase
         self::assertStringContainsString('nothing answers on 192.0.2.2:2019', $process->getOutput());
     }
 
-    public function testTheImagesDashboardIsAskedUnderTheHostItAnswersAndReachedOnThePublishedPort(): void
+    public function testTheImagesDashboardIsAskedUnderTheHostItAnswersOnThePublishedPort(): void
     {
         $process = $this->dashboardCheck('image=intakt:test; web=test; volume=data; containers=(); start_container; check_dashboard "$origin"');
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString('--connect-to localhost:7781:127.0.0.1:1 http://localhost:7781/projects', $this->curlCalls());
+        self::assertStringContainsString('--header Host: localhost:7781 http://127.0.0.1:1/projects', $this->curlCalls());
     }
 
-    public function testALocalDashboardIsAskedAtTheOriginAsGiven(): void
+    public function testALocalDashboardIsAskedUnderItsOwnHost(): void
     {
         $process = $this->dashboardCheck('check_dashboard http://localhost:8000');
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
         self::assertStringContainsString(' http://localhost:8000/projects', $this->curlCalls());
-        self::assertStringNotContainsString('--connect-to', $this->curlCalls());
+        self::assertStringNotContainsString('--header', $this->curlCalls());
     }
 
     private function dashboardCheck(string $steps): Process
