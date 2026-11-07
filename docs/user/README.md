@@ -216,7 +216,7 @@ Intakt knows five providers: `anthropic`, `openai`, `openai_compatible` (any end
 |---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` |
 | `openai` | `OPENAI_API_KEY` |
-| `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY` |
+| `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY` (for Hugging Face, see [Running the demo on a Hugging Face token](#running-the-demo-on-a-hugging-face-token)) |
 | `claude_code` | `CLAUDE_CODE_OAUTH_TOKEN` |
 
 A provider whose variables are not all set (empty counts as not set, and so does a secret Intakt cannot decrypt when the container is built), neither in the environment nor in the secrets, is switched off, and Intakt still starts. A provider with several accounts (see below) stays on as long as one of its accounts is fully set. Each console command prints a line on standard error for every switched-off provider, for example `Provider "openai" is disabled: set OPENAI_API_KEY to enable it.` The same text is in the container parameter `intakt.ai.disabled_providers`. `php bin/console debug:config ai` lists the providers that are on, except `claude_code`, which is not part of the AI Bundle's configuration: `php bin/console debug:container intakt.ai.platform.claude_code` finds that service only when it is on. Whether a key is set is decided when the container is built, so after you add or remove a key, run `php bin/console cache:clear`.
@@ -508,12 +508,12 @@ cp .env.dist .env.local   # fill in one or two provider keys and the two secrets
 docker compose up
 ```
 
-`.env.local` needs `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or both, and `APP_SECRET` and `MERCURE_JWT_SECRET` (generate each with `openssl rand -hex 32`). The image is built from the `Dockerfile`, the dashboard answers on `http://localhost:7781` (on this computer only), and the data lives in the volume `intakt-data`.
+`.env.local` needs at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `HF_TOKEN`, and `APP_SECRET` and `MERCURE_JWT_SECRET` (generate each with `openssl rand -hex 32`). The image is built from the `Dockerfile`, the dashboard answers on `http://localhost:7781` (on this computer only), and the data lives in the volume `intakt-data`.
 
 The first start seeds the demo, in the volume:
 
 - the sample repository at `/app/var/data/sample-repository`, with the branch `sample-change` to review against `main`;
-- the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI.
+- the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one Anthropic or OpenAI key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI. With `HF_TOKEN` beside one or both keys, `security` moves to Hugging Face, so the two reviewers use two providers; with `HF_TOKEN` alone, see [Running the demo on a Hugging Face token](#running-the-demo-on-a-hugging-face-token).
 
 The log then shows the command that reviews the sample change. Run it inside the container, for example:
 
@@ -531,4 +531,18 @@ Run it, then ask your agent to start a review with the values of the review comm
 
 The token is a secret that sits in the log (`docker compose logs intakt`) and in the volume; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
 
-Later starts keep both as they are (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the first start stops with `Set ANTHROPIC_API_KEY or OPENAI_API_KEY to seed the sample project.`; without one of the secrets it stops naming the missing one.
+Later starts keep both as they are (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the first start stops with `Set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN to seed the sample project.`; an `openai_compatible` endpoint other than the Hugging Face router does not count for the seed, because the seeded models are router models. Without one of the secrets it stops naming the missing one.
+
+### Running the demo on a Hugging Face token
+
+`HF_TOKEN` lets you try the demo without a paid Anthropic or OpenAI key. Create a fine-grained token on Hugging Face with only the permission "Make calls to Inference Providers". The container hands it to the `openai_compatible` provider, with `https://router.huggingface.co` as the base URL, unless you set `OPENAI_COMPATIBLE_BASE_URL` or `OPENAI_COMPATIBLE_API_KEY` in the environment yourself (then yours win and the token is not used).
+
+- With `HF_TOKEN` alone, the two reviewers run on models of two different makers through it: `correctness` on `moonshotai/Kimi-K3:deepinfra` and `security` on `openai/gpt-oss-120b:novita`.
+- With `HF_TOKEN` and `ANTHROPIC_API_KEY`, `correctness` stays on Anthropic and `security` runs on `moonshotai/Kimi-K3:deepinfra`. Two separate providers are the stronger setup: one token is one outage, one rate limit and one bill.
+
+Two things to know when you set up Hugging Face yourself, for example as `openai_compatible` in your own configuration:
+
+- The base URL is `https://router.huggingface.co`, without `/v1` at the end. Intakt adds `/v1/chat/completions` itself; with `/v1` in the base URL the call goes to `/v1/v1/chat/completions` and fails with a plain "Bad Request".
+- Name the router provider after the model, as the seeded models do (`:deepinfra`, `:novita`). Every reviewer call uses tools together with structured output, and some router providers refuse that combination: Groq and Cerebras did. DeepInfra and Baseten (for `moonshotai/Kimi-K3`), Novita (for `openai/gpt-oss-120b`) and DeepInfra (for `deepseek-ai/DeepSeek-V4.1-Flash`) accepted it. The router's default provider may be one that refuses, and the error then says only "Bad Request".
+
+Project memory still needs an OpenAI key: a Hugging Face token alone gives no embeddings.
