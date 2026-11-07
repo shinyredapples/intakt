@@ -9,6 +9,7 @@ use Intakt\Gates\HighlightFragment;
 use Intakt\Gates\HighlightFragments;
 use Intakt\Gates\HighlightLayout;
 use Intakt\Gates\HighlightRowKind;
+use Intakt\Gates\RepositoryAttributesRefused;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -113,6 +114,31 @@ final class HighlightFragmentsTest extends SandboxTestCase
 
         self::assertSame([], $assembly->findings);
         self::assertStringContainsString("|---|---|---|\n| Clock | done | T10 (#10) |\n\n", $assembly->text);
+    }
+
+    public function testAHistoryTheHardenedGitCallRefusesStopsTheAssembly(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->sandbox->write('.git/info/attributes', "* diff=planted\n");
+
+        $this->expectException(RepositoryAttributesRefused::class);
+
+        $this->assembled();
+    }
+
+    public function testAHistoryGitCannotReadFailsTheAssembly(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1-gates.md', "## Tooling\n| Gates | done | T1 (#1) |\n");
+        $this->commitFragment('2-clock.md', "## Tooling\n| Clock | done | T2 (#2) |\n");
+        $tree = trim($this->sandbox->git('rev-parse', 'HEAD~1^{tree}')->output);
+        unlink($this->sandbox->root.'/.git/objects/'.substr($tree, 0, 2).'/'.substr($tree, 2));
+
+        $assembly = $this->assembled();
+
+        self::assertSame('', $assembly->text);
+        self::assertStringStartsWith('cannot read the history of docs/highlights.d/: ', $assembly->findings[0] ?? '');
     }
 
     public function testFragmentsAddedInOneCommitApplyInTheNaturalOrderOfTheirNumbers(): void
