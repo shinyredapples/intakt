@@ -98,6 +98,7 @@ use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Model;
+use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
@@ -213,6 +214,34 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testEveryReviewerOfTheSeededTiersEndsWithAVerdictAndItsTiersOutputLimitOnItsCall(): void
+    {
+        /** @var array<string, mixed> $limits */
+        $limits = [];
+        $answer = static function (Model $model, array|string|object $input, array $options) use (&$limits): string {
+            $limits[$model->getName()] = $options[PlatformOptions::MAX_OUTPUT_TOKENS] ?? null;
+
+            return VerdictDocument::fromTheDesign()->json();
+        };
+        $resolver = new ConfiguredTierResolver([
+            'alpha' => ['tiers' => [
+                'strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 16000],
+                'standard' => ['provider' => 'anthropic', 'model' => 'middle', 'max_output' => 8000],
+            ]],
+        ], []);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
+        $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit);
+
+        $correctness = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
+        $security = $vendor->review('alpha', Tier::Standard, $this->request())->verdict;
+
+        self::assertSame(Decision::Changes, $correctness->verdict);
+        self::assertSame(Decision::Changes, $security->verdict);
+        self::assertSame(['F1', 'F2'], $security->resolved);
+        self::assertSame(['big' => 16000, 'middle' => 8000], $limits);
     }
 
     public function testAnAnswerThatIsNotAVerdictCountsAsChanges(): void

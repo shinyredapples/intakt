@@ -201,9 +201,11 @@ final class TierPlatformTest extends TestCase
         $platform = $this->limitedPlatform($sent);
 
         $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review'))->asText();
+        $platform->invoke($platform->answering('limited', Tier::Standard), new TierRequest('review'))->asText();
         $platform->invoke($platform->answering('limited', Tier::Light), new TierRequest('review'))->asText();
 
         self::assertSame(16000, $sent['big'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
+        self::assertSame(8000, $sent['middle'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
         self::assertSame(4000, $sent['small'][PlatformOptions::MAX_OUTPUT_TOKENS] ?? null);
     }
 
@@ -248,6 +250,7 @@ final class TierPlatformTest extends TestCase
         $resolver = new ConfiguredTierResolver([
             'limited' => ['tiers' => [
                 'strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 16000],
+                'standard' => ['provider' => 'anthropic', 'model' => 'middle', 'max_output' => 8000],
                 'light' => ['provider' => 'anthropic', 'model' => 'small', 'max_output' => 4000],
             ]],
             'unlimited' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
