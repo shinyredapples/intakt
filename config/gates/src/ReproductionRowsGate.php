@@ -49,7 +49,7 @@ final readonly class ReproductionRowsGate implements Gate
 
         $page = $this->highlights->pageOn($workspace->root);
 
-        if (null !== $page && [] !== $page->findings) {
+        if ($page instanceof HighlightAssembly && [] !== $page->findings) {
             return GateResult::failedBecause($this->name(), 'cannot read '.self::HIGHLIGHTS.': '.$page->findings[0]);
         }
 
