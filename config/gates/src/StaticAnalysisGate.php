@@ -6,6 +6,8 @@ namespace Intakt\Gates;
 
 final readonly class StaticAnalysisGate extends PhpFilesToolGate
 {
+    public const int MEMORY_LIMIT_GIB = 2;
+
     public function name(): string
     {
         return 'phpstan';
@@ -19,7 +21,7 @@ final readonly class StaticAnalysisGate extends PhpFilesToolGate
     protected function arguments(Workspace $workspace, array $files): array
     {
         return [
-            'analyse', '--error-format=json', '--no-progress', '--no-interaction', '--memory-limit=2G',
+            'analyse', '--error-format=json', '--no-progress', '--no-interaction', '--memory-limit='.self::MEMORY_LIMIT_GIB.'G',
             '--configuration='.$workspace->config('phpstan.neon'),
             ...$files,
         ];
