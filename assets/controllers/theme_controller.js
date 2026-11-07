@@ -1,6 +1,6 @@
 import { Controller } from '@hotwired/stimulus';
 
-// The inline script in templates/dashboard/base.html.twig reads this key before the first paint.
+// Must equal the key the inline script in templates/dashboard/base.html.twig reads, or a flipped theme is lost on reload.
 const STORAGE_KEY = 'intakt-theme';
 
 export default class extends Controller {

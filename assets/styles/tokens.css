@@ -1,5 +1,3 @@
-/* Every token of the dashboard design system (docs/design/mocks/DESIGN.md). Pages use these, never raw values. */
-
 :root, [data-theme="light"] {
   --page: #F7FAF9; --raised: #FFFFFF; --tint: #EEF5F2; --tint-2: #E3EEEA; --hairline: #DCE8E4;
   --ink: #0A2B23; --muted: #4F6B64; --primary: #1E9A7A; --deep: #136B55;
@@ -24,7 +22,6 @@
   color-scheme: dark;
 }
 
-/* Phone floor: no text under 15 px. */
 @media (max-width: 760px) {
   :root { --t13: 15px; }
 }

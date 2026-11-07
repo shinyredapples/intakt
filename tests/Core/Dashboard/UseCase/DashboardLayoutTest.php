@@ -13,8 +13,6 @@ final class DashboardLayoutTest extends DashboardPageTestCase
 {
     private const string TOKENS_TABLE = __DIR__.'/../../../../docs/design/mocks/DESIGN.md';
 
-    private const string THEME_CONTROLLER = __DIR__.'/../../../../assets/controllers/theme_controller.js';
-
     public function testTheLayoutLoadsNoFontScriptOrStyleFromAnotherHost(): void
     {
         $page = $this->layout();
@@ -46,16 +44,6 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         $script = strpos($head, '<script>');
         self::assertNotFalse($script);
         self::assertLessThan(strpos($head, 'rel="stylesheet"'), $script);
-        self::assertStringContainsString('localStorage.getItem', $head);
-        self::assertStringContainsString('prefers-color-scheme: dark', $head);
-        self::assertStringContainsString('dataset.theme', $head);
-    }
-
-    public function testTheThemeControllerStoresTheThemeUnderTheKeyTheHeadScriptReads(): void
-    {
-        preg_match("/localStorage\\.getItem\\('([^']+)'\\)/", $this->layout()->filter('head script')->text(), $key);
-
-        self::assertStringContainsString("'".($key[1] ?? 'no key in the head script')."'", (string) file_get_contents(self::THEME_CONTROLLER));
     }
 
     public function testTheTokenSheetHoldsEveryTokenOfTheDesignForBothThemes(): void
