@@ -10,7 +10,7 @@ enum Tier: string
     case Standard = 'standard';
     case Light = 'light';
 
-    // Room for a full verdict with its findings; the strong tier writes the longest reviews.
+    // Because a full verdict with its findings must fit, and the strong tier writes the longest reviews.
     public function defaultMaxOutput(): int
     {
         return match ($this) {

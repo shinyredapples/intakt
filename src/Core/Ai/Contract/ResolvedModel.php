@@ -8,7 +8,7 @@ final readonly class ResolvedModel
 {
     /**
      * @param non-empty-string  $model
-     * @param positive-int|null $maxOutput the tier's limit on the answer, in tokens; null sends none
+     * @param positive-int|null $maxOutput
      */
     public function __construct(
         public Provider $provider,

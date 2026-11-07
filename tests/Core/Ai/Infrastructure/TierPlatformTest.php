@@ -194,17 +194,20 @@ final class TierPlatformTest extends TestCase
 
     public function testTheTiersOutputLimitReachesTheVendorCallOfThatTier(): void
     {
+        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
         $platform->invoke($platform->answering('limited', Tier::Strong), new TierRequest('review'))->asText();
         $platform->invoke($platform->answering('limited', Tier::Light), new TierRequest('review'))->asText();
 
-        self::assertSame([['big' => 16000], ['small' => 4000]], array_map(static fn (array $call): array => [$call[0] => $call[1][PlatformOptions::MAX_OUTPUT_TOKENS]], $sent->getArrayCopy()));
+        self::assertSame(['big', 16000], [$sent[0][0], $sent[0][1][PlatformOptions::MAX_OUTPUT_TOKENS]]);
+        self::assertSame(['small', 4000], [$sent[1][0], $sent[1][1][PlatformOptions::MAX_OUTPUT_TOKENS]]);
     }
 
     public function testALimitTheCallerSetsIsKept(): void
     {
+        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 
@@ -215,6 +218,7 @@ final class TierPlatformTest extends TestCase
 
     public function testATierWithoutALimitSendsNone(): void
     {
+        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
         $sent = new ArrayObject();
 
         $platform = $this->limitedPlatform($sent);
@@ -225,6 +229,7 @@ final class TierPlatformTest extends TestCase
 
     public function testACliProviderGetsNoLimitOption(): void
     {
+        /** @var ArrayObject<int, array{string, array<string, mixed>}> $sent */
         $sent = new ArrayObject();
         $platform = $this->limitedPlatform($sent);
 

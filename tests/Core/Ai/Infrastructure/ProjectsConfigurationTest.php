@@ -51,14 +51,18 @@ final class ProjectsConfigurationTest extends TestCase
 
         $config = $this->process(['projects' => ['alpha' => ['tiers' => $tiers]]]);
 
-        self::assertSame([16000, 8000, 4000], array_column($config['projects']['alpha']['tiers'], 'max_output'));
+        /** @var array{alpha: array{tiers: array<string, array{max_output: int}>}} $projects */
+        $projects = $config['projects'];
+        self::assertSame([16000, 8000, 4000], array_column($projects['alpha']['tiers'], 'max_output'));
     }
 
     public function testATierKeepsTheOutputLimitTheOwnerSets(): void
     {
         $config = $this->process(['projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'a', 'max_output' => 32000]]]]]);
 
-        self::assertSame(32000, $config['projects']['alpha']['tiers']['strong']['max_output']);
+        /** @var array{alpha: array{tiers: array{strong: array{max_output: int}}}} $projects */
+        $projects = $config['projects'];
+        self::assertSame(32000, $projects['alpha']['tiers']['strong']['max_output']);
     }
 
     public function testAnOutputLimitBelowOneIsRefused(): void
