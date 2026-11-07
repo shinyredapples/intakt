@@ -29,6 +29,7 @@ final readonly class ReproductionRowsGate implements Gate
 
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
+        private CheckedReports $reports,
     ) {
     }
 
@@ -55,6 +56,8 @@ final readonly class ReproductionRowsGate implements Gate
             static fn (string $folder): string => 'upstream/'.$folder.'/ has no row in "Found in the beta" of '.self::HIGHLIGHTS,
             array_values(array_diff($folders, $this->foldersWithARow($contents))),
         );
+
+        $findings = [...$findings, ...$this->reports->findings($workspace, $folders)];
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }
