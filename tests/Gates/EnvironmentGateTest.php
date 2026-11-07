@@ -10,6 +10,7 @@ use Intakt\Gates\Mode;
 use Intakt\Gates\PhpRuntime;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Process\Process;
 
@@ -99,14 +100,30 @@ final class EnvironmentGateTest extends SandboxTestCase
         self::assertSame('{"gate":"environment","ok":true,"findings":[],"omitted":0}', $process->getOutput());
     }
 
-    public function testTheRepositoryProfileRequiresTheFilterExtension(): void
+    #[TestWith(['filter'])]
+    #[TestWith(['tokenizer'])]
+    #[TestWith(['fileinfo'])]
+    #[TestWith(['xml'])]
+    public function testTheRepositoryProfileRequiresTheExtension(string $extension): void
     {
         $root = dirname(__DIR__, 2);
-        $runtime = $this->runtime(extensions: array_values(array_diff(array_map(strtolower(...), get_loaded_extensions()), ['filter'])));
+        $runtime = $this->runtime(extensions: array_values(array_diff(array_map(strtolower(...), get_loaded_extensions()), [$extension])));
 
         $result = new EnvironmentGate($runtime)->run(new Workspace($root, $root, Mode::Full, null));
 
-        self::assertContains('PHP extension filter is required by composer.json but not loaded', $result->findings);
+        self::assertContains('PHP extension '.$extension.' is required by composer.json but not loaded', $result->findings);
+    }
+
+    public function testAPhpWithoutXmlAndFileinfoFailsNamingBoth(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $runtime = $this->runtime(extensions: array_values(array_diff(array_map(strtolower(...), get_loaded_extensions()), ['xml', 'fileinfo'])));
+
+        $result = new EnvironmentGate($runtime)->run(new Workspace($root, $root, Mode::Full, null));
+
+        self::assertFalse($result->isPassing());
+        self::assertContains('PHP extension fileinfo is required by composer.json but not loaded', $result->findings);
+        self::assertContains('PHP extension xml is required by composer.json but not loaded', $result->findings);
     }
 
     public function testASettingPhpDoesNotKnowIsReportedAsUnset(): void
