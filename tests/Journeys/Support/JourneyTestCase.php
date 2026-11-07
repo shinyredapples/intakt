@@ -120,7 +120,7 @@ abstract class JourneyTestCase extends TestCase
     #[After]
     final protected function shutDownDriverKernel(): void
     {
-        if (null === $this->driverKernel) {
+        if (!$this->driverKernel instanceof Kernel) {
             return;
         }
 
@@ -138,15 +138,14 @@ abstract class JourneyTestCase extends TestCase
         $this->environmentBefore = [];
     }
 
+    // The defaults bin/console reads, because the journey's PHPUnit loads no Dotenv; parsed rather than loaded, because a worker handed Dotenv's list of loaded names would load the in-memory queue of .env.test over the shared one.
     /**
-     * The journey's PHPUnit loads no Dotenv, so the driver's kernel gets the defaults bin/console reads, without Dotenv's list of loaded names: a worker given that list would load the in-memory queue of .env.test over the shared one.
-     *
      * @return array<string,string>
      */
     private function driverEnvironment(): array
     {
         $defaults = [...$this->settingsIn(self::DEFAULT_SETTINGS), ...$this->settingsIn(self::TEST_SETTINGS)];
-        // As in Dotenv's own loading, a variable the process has (the instance's database and directories) wins over a file.
+        // Because a variable the process has (the instance's database and directories) wins over a file, as in Dotenv's own loading.
         $unset = array_filter($defaults, static fn (string $name): bool => false === getenv($name), ARRAY_FILTER_USE_KEY);
 
         return [...$unset, self::QUEUE_VARIABLE => self::SHARED_QUEUE];
@@ -157,7 +156,15 @@ abstract class JourneyTestCase extends TestCase
      */
     private function settingsIn(string $file): array
     {
-        return new Dotenv()->parse((string) file_get_contents(self::ROOT.'/'.$file));
+        $settings = [];
+
+        foreach (new Dotenv()->parse((string) file_get_contents(self::ROOT.'/'.$file)) as $name => $value) {
+            if (is_string($value)) {
+                $settings[(string) $name] = $value;
+            }
+        }
+
+        return $settings;
     }
 
     // Because the dashboard refuses any other host name or port than its own, and the instance listens on a free port.

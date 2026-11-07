@@ -33,7 +33,7 @@ final class LiveRoundDriverTest extends TestCase
 {
     private const string ROUND = '0198a1b2-0000-7000-8000-000000000001';
     private const string OTHER_ROUND = '0198a1b2-0000-7000-8000-000000000002';
-    // What a console process of the worker takes to boot and stop around its wait, generously.
+    // Generous, because a console process of the worker boots and stops around its wait and the deadline must hold with that time too.
     private const int CONSOLE_OVERHEAD_SECONDS = 3;
 
     public function testStartingARoundReviewsTheSamplePullRequestAndReturnsTheRoundId(): void
@@ -115,7 +115,9 @@ final class LiveRoundDriverTest extends TestCase
             self::assertStringContainsString('did not end', $failure->getMessage());
         }
 
-        $journeySeconds = (int) new ReflectionClassConstant(JourneysGate::class, 'JOURNEY_SECONDS')->getValue();
+        $journeySeconds = new ReflectionClassConstant(JourneysGate::class, 'JOURNEY_SECONDS')->getValue();
+        self::assertIsNumeric($journeySeconds);
+        $journeySeconds = (int) $journeySeconds;
         self::assertLessThan($journeySeconds, $clock->now()->getTimestamp() - $started->getTimestamp());
     }
 
@@ -130,12 +132,15 @@ final class LiveRoundDriverTest extends TestCase
         $driver->stepUntilEnded(self::ROUND);
     }
 
-    // A worker on an empty queue: it waits its whole time limit and handles nothing.
+    // Waits its whole time limit and handles nothing, because that is the slowest a worker on an empty queue can be.
+    /**
+     * @return Closure(list<string>): string
+     */
     private function waitingWorker(MockClock $clock): Closure
     {
         return static function (array $arguments) use ($clock): string {
-            $limit = array_find($arguments, static fn (string $argument): bool => str_starts_with($argument, '--time-limit='));
-            $clock->sleep((int) substr($limit ?? '', strlen('--time-limit=')) + self::CONSOLE_OVERHEAD_SECONDS);
+            $limit = array_find($arguments, static fn (mixed $argument): bool => is_string($argument) && str_starts_with($argument, '--time-limit='));
+            $clock->sleep((int) substr(is_string($limit) ? $limit : '', strlen('--time-limit=')) + self::CONSOLE_OVERHEAD_SECONDS);
 
             return '';
         };
