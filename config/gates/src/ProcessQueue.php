@@ -20,6 +20,8 @@ final readonly class ProcessQueue
     }
 
     /**
+     * A job builder must return without waiting: the running processes are polled only between builds.
+     *
      * @template Name of array-key
      *
      * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs

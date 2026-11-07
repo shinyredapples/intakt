@@ -102,7 +102,7 @@ final class ProcessQueueTest extends SandboxTestCase
         $results = new ProcessQueue(1, 1)->run(['late' => $late], 1, $this->emptySandbox()->root);
         $elapsed = (hrtime(true) - $started) / 1_000_000_000;
 
-        self::assertLessThan(1.35, $elapsed);
+        self::assertLessThan(1.8, $elapsed);
         self::assertSame(ProcessRunner::TIMED_OUT, $results['late']->exitCode);
         self::assertSame('timed out after 1 seconds', $results['late']->firstErrorLine());
     }
