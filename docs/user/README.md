@@ -516,4 +516,12 @@ The log then shows the command that reviews the sample change. Run it inside the
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
 ```
 
+The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The log prints, after the review command, a line to connect an MCP client:
+
+```
+claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"
+```
+
+The token is a secret that sits in the log (`docker compose logs intakt`) and in the volume; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
+
 Later starts keep both as they are (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the first start stops with `Set ANTHROPIC_API_KEY or OPENAI_API_KEY to seed the sample project.`; without one of the secrets it stops naming the missing one.

@@ -15,9 +15,19 @@ rebuild_container() {
     php bin/console cache:warmup --no-interaction
 }
 
+owner_token() {
+    if [[ ! -s $1 ]]; then
+        (umask 077 && od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$1")
+    fi
+    cat "$1"
+}
+
 # Set by compose.yaml for the demo. The image's container was built without the provider keys, which arrive only now, so it is built again before the seed reads them and again after it writes the project.
 if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     : "${INTAKT_CONFIG:?set INTAKT_CONFIG to the project file the sample project is written to}"
+    # A token the owner set wins; otherwise one is made once and kept on the data volume, so the printed token keeps working after a restart. Writes are allowed for the demo, because its point is to start a review from a client.
+    export MCP_OWNER_ACCESS="${MCP_OWNER_ACCESS:-mcp_tool_write}"
+    export MCP_OWNER_TOKEN="${MCP_OWNER_TOKEN:-$(owner_token "$(dirname "$INTAKT_CONFIG")/mcp-owner-token")}"
     rebuild_container
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
     rebuild_container

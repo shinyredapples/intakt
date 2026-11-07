@@ -36,7 +36,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testTheDemoBuildsTheContainerAgainBeforeAndAfterTheSeed(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => '/data/intakt.yaml']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
 
         $this->waitForTheServer();
 
@@ -44,10 +44,30 @@ final class EntrypointSampleSeedTest extends TestCase
             'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
             'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
-            'bin/console intakt:sample:seed /data/sample /data/intakt.yaml',
+            'bin/console intakt:sample:seed /data/sample '.$this->directory.'/intakt.yaml',
             'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
         ], $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testTheDemoMakesOneOwnerTokenAndKeepsItOnTheDataVolume(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        $kept = trim(new Filesystem()->readFile($this->directory.'/mcp-owner-token'));
+
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $kept);
+        self::assertSame($kept.' mcp_tool_write', trim($this->seen()));
+    }
+
+    public function testATokenTheOwnerSetWinsAndIsNotWrittenToTheVolume(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'MCP_OWNER_TOKEN' => 'chosen-by-the-owner', 'MCP_OWNER_ACCESS' => 'mcp_tool_read']);
+        $this->waitForTheServer();
+
+        self::assertSame('chosen-by-the-owner mcp_tool_read', trim($this->seen()));
+        self::assertFileDoesNotExist($this->directory.'/mcp-owner-token');
     }
 
     public function testWithoutASampleRepositoryNothingIsSeeded(): void
@@ -61,7 +81,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testAFailedSeedStopsTheEntrypointBeforeTheServerStarts(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => '/data/intakt.yaml', 'SEED_STATUS' => '1']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SEED_STATUS' => '1']);
 
         $this->entrypoint?->wait();
 
@@ -91,6 +111,8 @@ final class EntrypointSampleSeedTest extends TestCase
             'APP_SECRET' => self::SECRET,
             'MERCURE_JWT_SECRET' => self::SECRET,
             'MERCURE_JWT_ISSUER' => 'http://localhost',
+            'MCP_OWNER_TOKEN' => false,
+            'MCP_OWNER_ACCESS' => false,
             'MESSENGER_CONSUMERS' => '1',
             'WORKER_MEMORY_CEILING_MB' => '256',
             'INTAKT_SAMPLE_REPOSITORY' => false,
@@ -106,7 +128,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
@@ -142,6 +164,11 @@ final class EntrypointSampleSeedTest extends TestCase
         }
 
         return $calls;
+    }
+
+    private function seen(): string
+    {
+        return new Filesystem()->readFile($this->callsFile().'.seen');
     }
 
     private function calls(): string
