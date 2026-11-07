@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Override;
+use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Jwt\TokenFactoryInterface;
@@ -35,9 +36,26 @@ final readonly class RecordingHub implements HubInterface
             return [];
         }
 
-        $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $handle = fopen($file, 'r');
 
-        return array_map(self::updateOf(...), false === $lines ? [] : $lines);
+        if (false === $handle) {
+            throw new RuntimeException('cannot open the recorded updates: '.$file);
+        }
+
+        // Shared lock, because a line read while the writer holds its exclusive lock may be only half appended.
+        try {
+            if (!flock($handle, LOCK_SH)) {
+                throw new RuntimeException('cannot lock the recorded updates: '.$file);
+            }
+
+            $recording = stream_get_contents($handle);
+        } finally {
+            fclose($handle);
+        }
+
+        $lines = array_filter(explode(PHP_EOL, false === $recording ? '' : $recording), static fn (string $line): bool => '' !== $line);
+
+        return array_map(self::updateOf(...), array_values($lines));
     }
 
     #[Override]

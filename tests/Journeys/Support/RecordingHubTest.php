@@ -10,6 +10,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Process\Process;
 use UnexpectedValueException;
 
 #[CoversClass(RecordingHub::class)]
@@ -64,6 +65,30 @@ final class RecordingHubTest extends TestCase
         $this->expectException(UnexpectedValueException::class);
 
         RecordingHub::updatesIn($this->directory);
+    }
+
+    public function testAnUpdateBeingAppendedIsReadOnlyOnceItIsComplete(): void
+    {
+        new Filesystem()->mkdir($this->directory);
+        $writer = <<<'PHP'
+            $handle = fopen($argv[1], 'ab');
+            flock($handle, LOCK_EX);
+            fwrite($handle, '{"topics":["review/rounds/1"],');
+            fflush($handle);
+            echo "ready\n";
+            usleep(300000);
+            fwrite($handle, '"data":"changed","private":true}'."\n");
+            flock($handle, LOCK_UN);
+            fclose($handle);
+            PHP;
+        $process = new Process([PHP_BINARY, '-r', $writer, '--', $this->directory.'/'.RecordingHub::FILE]);
+        $process->start();
+        $process->waitUntil(static fn (string $type, string $output): bool => str_contains($output, 'ready'));
+
+        $updates = RecordingHub::updatesIn($this->directory);
+        $process->wait();
+
+        self::assertEquals([new Update('review/rounds/1', 'changed', true)], $updates);
     }
 
     public function testTheSubscriberSettingsAreTheHubItStandsIn(): void
