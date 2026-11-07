@@ -171,7 +171,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::vaultEnvironment();
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
@@ -185,7 +185,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', '');
-        $_SERVER['APP_RUNTIME_ENV'] = self::vaultEnvironment();
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
@@ -201,7 +201,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('UNRELATED_VAULT_ENTRY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::vaultEnvironment();
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         $this->useMalformedDecryptionSecret();
 
         $container = $this->bootWith($this->allSet());
@@ -217,7 +217,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::vaultEnvironment();
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         $this->useMalformedDecryptionSecret();
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
@@ -237,7 +237,7 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory(), $keyPair);
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        $_SERVER['APP_RUNTIME_ENV'] = self::vaultEnvironment();
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         $_SERVER['SYMFONY_DECRYPTION_SECRET'] = strtr(base64_encode($keyPair), '+/', '-_');
 
         $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
@@ -251,9 +251,9 @@ final class AiProvidersTest extends KernelTestCase
         $vault = new SodiumVault($this->vaultDirectory());
         $vault->generateKeys();
         $vault->seal('ANTHROPIC_API_KEY', 'test-value');
-        unlink($this->vaultDirectory().'/'.self::vaultEnvironment().'.encrypt.public.php');
-        unlink($this->vaultDirectory().'/'.self::vaultEnvironment().'.decrypt.private.php');
-        $_SERVER['APP_RUNTIME_ENV'] = self::vaultEnvironment();
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.encrypt.public.php');
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
         // Only characters base64 ignores, so the secret decodes to an empty key.
         $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
 
@@ -335,11 +335,11 @@ final class AiProvidersTest extends KernelTestCase
 
     private function vaultDirectory(): string
     {
-        return self::createKernel()->getProjectDir().'/config/secrets/'.self::vaultEnvironment();
+        return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
     }
 
     // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
-    private static function vaultEnvironment(): string
+    private function vaultEnvironment(): string
     {
         return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
     }
