@@ -168,9 +168,10 @@ check_admin_unpublished() {
 # A Linux host reaches a container's own addresses without any published port, so the admin API must answer on loopback only.
 check_admin_on_container_addresses() {
     local addresses address
-    read -ra addresses <<<"$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$web")"
+    read -ra addresses <<<"$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{.GlobalIPv6Address}} {{end}}' "$web")"
     ((${#addresses[@]} > 0)) || fail "$web has no network address to check the admin API on"
     for address in "${addresses[@]}"; do
+        [[ $address == *:* ]] && address="[$address]"
         if "${in_server[@]}" curl --silent --output /dev/null --max-time 5 "http://$address:2019/config/"; then
             fail "the admin API answers on $address:2019, the container's network address"
         fi

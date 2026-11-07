@@ -30,8 +30,11 @@ final class SmokeTestScriptTest extends TestCase
         #!/bin/bash
         case "$1" in
             port) exit 1 ;;
-            inspect) echo "192.0.2.2 " ;;
-            exec) [[ -n ${ADMIN_ON_ADDRESS:-} || $* != *192.0.2.2:2019* ]] || exit 7 ;;
+            inspect) echo "192.0.2.2 2001:db8::2 " ;;
+            exec)
+                [[ -n ${ADMIN_ON_ADDRESS:-} || $* != *192.0.2.2:2019* ]] || exit 7
+                [[ -n ${ADMIN_ON_IPV6:-} || $* != *[[]2001:db8::2]:2019* ]] || exit 7
+                ;;
         esac
         BASH;
 
@@ -96,6 +99,14 @@ final class SmokeTestScriptTest extends TestCase
 
         self::assertSame(1, $process->getExitCode());
         self::assertStringContainsString("failed at step 'admin-unpublished': the admin API answers on 192.0.2.2:2019", $process->getErrorOutput());
+    }
+
+    public function testAnAdminApiThatAnswersOnTheIpv6AddressOnlyFails(): void
+    {
+        $process = $this->adminUnpublishedCheck(['ADMIN_ON_IPV6' => '1']);
+
+        self::assertSame(1, $process->getExitCode());
+        self::assertStringContainsString("failed at step 'admin-unpublished': the admin API answers on [2001:db8::2]:2019", $process->getErrorOutput());
     }
 
     public function testAnAdminApiThatAnswersOnLoopbackOnlyPasses(): void
