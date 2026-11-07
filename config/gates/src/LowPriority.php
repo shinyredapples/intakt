@@ -33,9 +33,12 @@ final readonly class LowPriority
         return [self::VARIABLE => $asked ? self::ASKED : false];
     }
 
-    public static function isAsked(string|false $value): bool
+    /**
+     * @param array<string, string> $environment
+     */
+    public static function isAskedIn(array $environment): bool
     {
-        return self::ASKED === $value;
+        return self::ASKED === ($environment[self::VARIABLE] ?? null);
     }
 
     // Because the gates beside the tests gate would otherwise take the processors its workers wait for, they get only what the workers leave idle.

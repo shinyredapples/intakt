@@ -52,12 +52,12 @@ final class LowPriorityTest extends TestCase
 
     public function testAChildThatIsAskedTakesTheLowPriority(): void
     {
-        self::assertTrue(LowPriority::isAsked('1'));
+        self::assertTrue(LowPriority::isAskedIn([LowPriority::VARIABLE => '1']));
     }
 
     public function testAChildStartedWithoutTheAskKeepsItsPriority(): void
     {
-        self::assertFalse(LowPriority::isAsked(false));
+        self::assertFalse(LowPriority::isAskedIn(['PATH' => '/usr/bin']));
     }
 
     public function testTheSessionTakesTheLowestPriorityThroughItsAutogroup(): void

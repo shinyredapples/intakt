@@ -13,6 +13,11 @@ final class OwnCgroupTest extends TestCase
 {
     private string $tree;
 
+    /**
+     * @var list<string>
+     */
+    private array $written = [];
+
     protected function setUp(): void
     {
         $this->tree = sys_get_temp_dir().'/intakt-cgroup-'.bin2hex(random_bytes(6));
@@ -21,8 +26,9 @@ final class OwnCgroupTest extends TestCase
 
     protected function tearDown(): void
     {
+        array_map(unlink(...), $this->written);
+
         foreach (['root/a/b', 'root/a', 'root', ''] as $directory) {
-            array_map(unlink(...), array_filter((array) glob($this->tree.'/'.$directory.'/*'), is_file(...)));
             rmdir($this->tree.'/'.$directory);
         }
     }
@@ -62,10 +68,9 @@ final class OwnCgroupTest extends TestCase
      */
     private function given(string $processCgroup, array $files): void
     {
-        file_put_contents($this->tree.'/cgroup', $processCgroup."\n");
-
-        foreach ($files as $file => $contents) {
+        foreach (['cgroup' => $processCgroup."\n", ...$files] as $file => $contents) {
             file_put_contents($this->tree.'/'.$file, $contents);
+            $this->written[] = $this->tree.'/'.$file;
         }
     }
 
