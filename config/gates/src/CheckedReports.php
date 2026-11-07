@@ -14,7 +14,7 @@ final readonly class CheckedReports
 
     private const string STATUS_HEADING = '## Upstream status';
 
-    // Up to three spaces of indentation still make a Markdown heading; four make indented code.
+    // Allows up to three spaces because Markdown still renders such a line as a heading, so it must bound the section too.
     private const string SECTION_HEADING = '/^ {0,3}#{1,2}\s/';
 
     private const string READY_STATUS = '/^- \*\*(?:Decision|Status):\*\*\s*`(?<value>[^`]*)`/';
