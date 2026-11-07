@@ -99,13 +99,7 @@ final readonly class RecordedHead
             decision: Decision::Changes,
             verdicts: $verdicts,
             actList: [],
-            tokens: RoundTokens::of($tokens['calls'], new TokenFigures(
-                prompt: $tokens['prompt'],
-                cacheRead: 0,
-                cacheWrite: 0,
-                cached: 0,
-                completion: $tokens['completion'],
-            )),
+            tokens: RoundTokens::of($tokens['calls'], new TokenFigures($tokens['prompt'], 0, 0, 0, $tokens['completion'])),
         );
     }
 
