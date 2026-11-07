@@ -12,7 +12,7 @@ budget:
     shadow_ceilings:
         five-hour: 70
         weekly: 70
-    # Optional: the price of each model, keyed by the model name a tier uses, in US dollars per million tokens, for the cost line of a review.
+    # Optional: the price of each model, keyed by the model name exactly as a tier (or substitute) names it, never the name a provider's answer reports, in US dollars per million tokens, for the cost line of a review.
     # input and output are required; cache_read and cache_write default to input. A round that used a model without a price shows its cost as unknown.
     prices:
         claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }
