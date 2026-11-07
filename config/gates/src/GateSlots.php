@@ -58,6 +58,11 @@ final readonly class GateSlots
         return [...array_values(array_intersect($gates, $tests)), ...array_values(array_diff($gates, $tests))];
     }
 
+    public function runSeveralAtOnce(): bool
+    {
+        return $this->count > 1;
+    }
+
     /**
      * @param list<string> $running
      */

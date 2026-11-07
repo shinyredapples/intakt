@@ -7,7 +7,9 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
+use Intakt\Gates\ChildCommand;
 use Intakt\Gates\GateSlots;
+use Intakt\Gates\LowPriority;
 use Intakt\Gates\OwnCgroup;
 use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\Processors;
@@ -21,8 +23,10 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(GateChildren::class)]
 #[CoversClass(CheckCommand::class)]
+#[UsesClass(ChildCommand::class)]
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateSlots::class)]
+#[UsesClass(LowPriority::class)]
 #[UsesClass(OwnCgroup::class)]
 #[UsesClass(Processors::class)]
 #[UsesClass(RunningChild::class)]
@@ -32,9 +36,11 @@ use Symfony\Component\Process\Process;
 #[UsesClass(StopSignalForwarding::class)]
 final class GateChildrenTest extends SandboxTestCase
 {
+    private const int SAFETY_LIMIT_NANOSECONDS = 90_000_000_000;
+
     public function testASlowPassingGateAndAFastFailingGateAreReportedInGateOrder(): void
     {
-        $run = $this->checkWithFakeGates('--only=phpstan,cs');
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=phpstan,cs');
 
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
@@ -66,10 +72,40 @@ final class GateChildrenTest extends SandboxTestCase
 
     public function testOneSlotRunsTheGatesOneAfterAnother(): void
     {
-        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=architecture,comments');
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=highlights,reproductions');
 
-        self::assertStringContainsString('comments never ran beside architecture', $run->findingsOf('architecture'));
-        self::assertSame(1, $run->exitCode());
+        self::assertFalse($run->failed('reproductions'), $run->output());
+        self::assertSame(0, $run->exitCode());
+    }
+
+    public function testAGateBesideTheTestsGateIsAskedToRunAtLowPriority(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '2'], '--only=tests,container');
+
+        self::assertSame('container was asked to run at low priority', $run->findingsOf('container'));
+        self::assertFalse($run->failed('tests'), $run->output());
+    }
+
+    public function testOneSlotAsksNoGateToRunAtLowPriority(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=tests,container');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+    }
+
+    public function testWithoutTheTestsGateNoGateIsAskedToRunAtLowPriority(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '2'], '--only=container,audit');
+
+        self::assertFalse($run->failed('container'), $run->output());
+    }
+
+    // Because a nested run, such as the gate tests start, inherits the environment of a child that may have been asked.
+    public function testAnAskBinCheckInheritedReachesNoChild(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1', LowPriority::VARIABLE => '1'], '--only=tests,container');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
     }
 
     public function testTheTestsGateStartsBeforeTheGatesListedAheadOfIt(): void
@@ -160,7 +196,7 @@ final class GateChildrenTest extends SandboxTestCase
 
     private function runWithFakeGates(string ...$arguments): ProcessResult
     {
-        return $this->runWithFakeGatesIn([], ...$arguments);
+        return $this->runWithFakeGatesIn([GateSlots::VARIABLE => '1'], ...$arguments);
     }
 
     // Because the children run the home's own child entry, a home whose entry fakes the gates fixes their timing and outcome.
@@ -185,10 +221,10 @@ final class GateChildrenTest extends SandboxTestCase
         return $home;
     }
 
-    // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine.
+    // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine; the limit only ends a hang.
     private function runsOnAfterAWhile(int $pid): bool
     {
-        $until = hrtime(true) + 5_000_000_000;
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
 
         while ($this->runs($pid) && hrtime(true) < $until) {
             usleep(10000);
@@ -213,7 +249,7 @@ final class GateChildrenTest extends SandboxTestCase
     private function pidsOnceWritten(string $directory, array $gates): array
     {
         $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
-        $until = hrtime(true) + 25_000_000_000;
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
 
         while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
             usleep(10000);

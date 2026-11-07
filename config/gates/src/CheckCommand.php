@@ -67,7 +67,7 @@ final readonly class CheckCommand
             return 2;
         }
 
-        if (LowPriority::isFor($name)) {
+        if (LowPriority::isAsked(getenv(LowPriority::VARIABLE))) {
             new LowPriority()->take();
         }
 

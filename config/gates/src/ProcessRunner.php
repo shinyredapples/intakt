@@ -143,14 +143,11 @@ final class ProcessRunner
     }
 
     // Because a relative PATH entry resolves in the directory a program starts in, `setsid` and `sh` start where the tools are searched, then the command moves to its own directory.
-    /**
-     * @param list<string> $command
-     */
-    public function startToItsEndWithToolsFrom(string $toolsFrom, array $command, string $directory): RunningChild|ProcessResult
+    public function startToItsEndWithToolsFrom(string $toolsFrom, ChildCommand $child): RunningChild|ProcessResult
     {
-        $held = ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $directory, ...$command];
+        $held = ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $child->directory, ...$child->command];
 
-        return $this->startedHeld(new Process($held, $toolsFrom, getenv(), null, null), $command[0], self::OVERALL_TIMEOUT_SECONDS);
+        return $this->startedHeld(new Process($held, $toolsFrom, [...getenv(), ...$child->environment], null, null), $child->command[0], self::OVERALL_TIMEOUT_SECONDS);
     }
 
     // Because Symfony's own timeout sends TERM and KILL at once, before the child can stop the contained run it started in a session of its own.

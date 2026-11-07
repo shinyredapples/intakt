@@ -26,18 +26,35 @@ final readonly class GateChildren
      */
     public function reportsOf(array $gates, array $arguments): array
     {
-        $results = $this->resultsOf($this->slots->launchOrder($gates), $arguments);
+        $results = $this->resultsOf($this->slots->launchOrder($gates), $this->childrenOf($gates, $arguments));
 
         return array_map(static fn (string $gate): GateReport => GateReport::fromChild($gate, $results[$gate]), $gates);
     }
 
     /**
-     * @param list<string> $waiting
+     * @param list<string> $gates
      * @param list<string> $arguments
+     *
+     * @return array<string, ChildCommand>
+     */
+    private function childrenOf(array $gates, array $arguments): array
+    {
+        $children = [];
+
+        foreach ($gates as $gate) {
+            $children[$gate] = new ChildCommand([PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory(), LowPriority::environmentFor($gate, $gates, $this->slots));
+        }
+
+        return $children;
+    }
+
+    /**
+     * @param list<string>                $waiting
+     * @param array<string, ChildCommand> $children
      *
      * @return array<string, ProcessResult>
      */
-    private function resultsOf(array $waiting, array $arguments): array
+    private function resultsOf(array $waiting, array $children): array
     {
         $running = [];
         $results = [];
@@ -47,7 +64,7 @@ final readonly class GateChildren
         });
 
         while ([] !== $waiting || [] !== $running) {
-            [$waiting, $started] = $this->launched($waiting, $running, $arguments);
+            [$waiting, $started] = $this->launched($waiting, $running, $children);
             $running += $started;
             $ended = $this->ended($running);
             $running = array_diff_key($running, $ended);
@@ -64,29 +81,26 @@ final readonly class GateChildren
     /**
      * @param list<string>                              $waiting
      * @param array<string, RunningChild|ProcessResult> $running
-     * @param list<string>                              $arguments
+     * @param array<string, ChildCommand>               $children
      *
      * @return array{list<string>, array<string, RunningChild|ProcessResult>}
      */
-    private function launched(array $waiting, array $running, array $arguments): array
+    private function launched(array $waiting, array $running, array $children): array
     {
         $started = [];
 
         while ([] !== $waiting && $this->slots->allow([...array_keys($running), ...array_keys($started)], $waiting[0])) {
             $gate = array_shift($waiting);
-            $started[$gate] = $this->started($gate, $arguments);
+            $started[$gate] = $this->started($children[$gate]);
         }
 
         return [$waiting, $started];
     }
 
-    /**
-     * @param list<string> $arguments
-     */
-    private function started(string $gate, array $arguments): RunningChild|ProcessResult
+    private function started(ChildCommand $child): RunningChild|ProcessResult
     {
         // Because the preflight finds `setsid` and `sh` from the workspace root, the child's launcher is searched from there too.
-        return $this->runner->startToItsEndWithToolsFrom($this->root, [PHP_BINARY, $this->home.'/'.self::ENTRY, $gate, ...$arguments], $this->directory());
+        return $this->runner->startToItsEndWithToolsFrom($this->root, $child);
     }
 
     /**
