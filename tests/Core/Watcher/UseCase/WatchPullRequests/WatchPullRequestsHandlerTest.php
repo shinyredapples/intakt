@@ -380,7 +380,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tickExpectingFailure();
 
-        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === (($line[1]['exception'] ?? null)?->getMessage())));
+        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === ($line[1]['exception'] ?? null)?->getMessage()));
     }
 
     public function testAFailedGiveBackIsRethrownWhenReportingItFailsToo(): void
@@ -396,7 +396,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
             self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
         }
 
-        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === (($line[1]['exception'] ?? null)?->getMessage())));
+        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === ($line[1]['exception'] ?? null)?->getMessage()));
     }
 
     public function testAFailedStartIsTriedAgainOnceItsBackOffHasPassedEvenWhenTheListingIsUnchanged(): void
@@ -985,7 +985,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger),$decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
     private function panel(): Panel
