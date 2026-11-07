@@ -159,6 +159,7 @@ final class ProcessRunner
             return null;
         }
 
+        // Because a timeout after an hour is rare, the other children may wait out this one's stop grace of at most 2 seconds.
         if (self::STILL_RUNNING === $failure) {
             $failure = self::TIMED_OUT;
             $child->group->stop();
