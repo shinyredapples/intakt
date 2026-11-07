@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use ArrayObject;
+use LogicException;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
@@ -253,10 +254,18 @@ final class TierPlatformTest extends TestCase
         ], []);
         $inner = MockPlatformFactory::createPlatform('ok', name: 'anthropic');
         $recording = self::createStub(PlatformInterface::class);
-        $recording->method('invoke')->willReturnCallback(static function (string $model, array|string|object $input, array $options) use ($sent, $inner): DeferredResult {
-            /* @var array<string, mixed> $options */
-            /* @var non-empty-string $model */
-            $sent[$model] = $options;
+        $recording->method('invoke')->willReturnCallback(static function (Model|string $model, array|string|object $input, array $options) use ($sent, $inner): DeferredResult {
+            $name = $model instanceof Model ? $model->getName() : $model;
+            if ('' === $name) {
+                throw new LogicException('The model name is empty.');
+            }
+
+            if (is_string($model)) {
+                $model = $name;
+            }
+
+            $options = array_filter($options, static fn (mixed $key): bool => is_string($key), ARRAY_FILTER_USE_KEY);
+            $sent[$name] = $options;
 
             return $inner->invoke($model, $input, $options);
         });
