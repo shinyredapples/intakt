@@ -16,5 +16,36 @@ if ('phpstan' === $gate) {
     exit(1);
 }
 
+// Because a marker file left by one child and awaited by another shows whether the two ran at the same time, and which started first.
+if ('comments' === $gate || 'tests' === $gate) {
+    touch($gate.'-started');
+    echo '{"gate":"'.$gate.'","ok":true,"findings":[],"omitted":0}', "\n";
+    exit(0);
+}
+
+if ('architecture' === $gate) {
+    $until = hrtime(true) + 3_000_000_000;
+
+    while (!file_exists('comments-started') && hrtime(true) < $until) {
+        usleep(10000);
+    }
+
+    $ran = file_exists('comments-started') ? '' : '"comments never ran beside architecture"';
+    echo '{"gate":"architecture","ok":'.('' === $ran ? 'true' : 'false').',"findings":['.$ran.'],"omitted":0}', "\n";
+    exit('' === $ran ? 0 : 1);
+}
+
+if ('audit' === $gate) {
+    $first = file_exists('tests-started');
+    echo '{"gate":"audit","ok":'.($first ? 'true' : 'false').',"findings":['.($first ? '' : '"tests did not start first"').'],"omitted":0}', "\n";
+    exit($first ? 0 : 1);
+}
+
+if ('commits' === $gate || 'dashes' === $gate) {
+    file_put_contents($gate.'.pid', (string) getmypid());
+    sleep(30);
+    exit(0);
+}
+
 echo 'Fatal error: the rector child crashed', "\n";
 exit(255);

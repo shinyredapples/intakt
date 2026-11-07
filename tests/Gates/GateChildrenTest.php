@@ -7,16 +7,23 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\GateChildren;
 use Intakt\Gates\GateReport;
+use Intakt\Gates\GateSlots;
+use Intakt\Gates\Processors;
+use Intakt\Gates\RunningChild;
 use Intakt\Gates\ProcessGroup;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\StopSignalForwarding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(GateChildren::class)]
 #[CoversClass(CheckCommand::class)]
 #[UsesClass(GateReport::class)]
+#[UsesClass(GateSlots::class)]
+#[UsesClass(Processors::class)]
+#[UsesClass(RunningChild::class)]
 #[UsesClass(ProcessGroup::class)]
 #[UsesClass(ProcessRunner::class)]
 #[UsesClass(ProcessResult::class)]
@@ -33,6 +40,67 @@ final class GateChildrenTest extends SandboxTestCase
             '{"result":"fail","failed":["phpstan"]}',
         ], $run->lines());
         self::assertSame(1, $run->exitCode());
+    }
+
+    public function testASlowPassingGateAndAFastFailingGateRunningAtOnceAreReportedInGateOrder(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '2'], '--only=phpstan,cs');
+
+        self::assertSame([
+            '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
+            '{"gate":"phpstan","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
+            '{"result":"fail","failed":["phpstan"]}',
+        ], $run->lines());
+        self::assertSame(1, $run->exitCode());
+    }
+
+    public function testTwoSlotsRunALaterGateWhileAnEarlierOneIsStillRunning(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '2'], '--only=architecture,comments');
+
+        self::assertFalse($run->failed('architecture'), $run->output());
+        self::assertSame(0, $run->exitCode());
+    }
+
+    public function testOneSlotRunsTheGatesOneAfterAnother(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=architecture,comments');
+
+        self::assertStringContainsString('comments never ran beside architecture', $run->findingsOf('architecture'));
+        self::assertSame(1, $run->exitCode());
+    }
+
+    public function testTheTestsGateStartsBeforeTheGatesListedAheadOfIt(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=audit,tests');
+
+        self::assertSame([
+            '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
+            '{"gate":"tests","ok":true,"findings":[],"omitted":0}',
+            '{"result":"pass","failed":[]}',
+        ], $run->lines());
+    }
+
+    public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => 'all'], '--only=comments');
+
+        self::assertSame(['{"error":"INTAKT_GATE_SLOTS names no number of gates to run at once from 1 to 999"}'], $run->lines());
+        self::assertSame(2, $run->exitCode());
+    }
+
+    public function testAnInterruptedCheckStopsEveryChildRunningAtThatMoment(): void
+    {
+        $home = $this->fakeGatesHome();
+        $check = new Process([PHP_BINARY, $home->root.'/bin/check', '--root='.$this->emptySandbox()->root, '--only=commits,dashes'], $home->root, [GateSlots::VARIABLE => '2']);
+        $check->start();
+        $pids = $this->pidsOnceWritten($home->root, ['commits', 'dashes']);
+
+        $check->signal(15);
+        $check->wait();
+
+        self::assertCount(2, $pids);
+        self::assertSame([false, false], array_map(static fn (int $pid): bool => posix_kill($pid, 0), $pids));
     }
 
     public function testAGateWhoseChildCrashesFailsWithTheChildsOutput(): void
@@ -80,15 +148,55 @@ final class GateChildrenTest extends SandboxTestCase
         return new CheckRun($this->runWithFakeGates(...$arguments));
     }
 
-    // Because the children run the home's own child entry, a home whose entry fakes the gates fixes their timing and outcome.
+    /**
+     * @param array<string, string> $environment
+     */
+    private function checkWithFakeGatesIn(array $environment, string ...$arguments): CheckRun
+    {
+        return new CheckRun($this->runWithFakeGatesIn($environment, ...$arguments));
+    }
+
     private function runWithFakeGates(string ...$arguments): ProcessResult
+    {
+        return $this->runWithFakeGatesIn([], ...$arguments);
+    }
+
+    // Because the children run the home's own child entry, a home whose entry fakes the gates fixes their timing and outcome.
+    /**
+     * @param array<string, string> $environment
+     */
+    private function runWithFakeGatesIn(array $environment, string ...$arguments): ProcessResult
+    {
+        $home = $this->fakeGatesHome();
+        $repository = $this->emptySandbox();
+
+        return new ProcessRunner()->run(['php', $home->root.'/bin/check', '--root='.$repository->root, ...array_values($arguments)], $home->root, $environment);
+    }
+
+    private function fakeGatesHome(): Sandbox
     {
         $real = dirname(__DIR__, 2);
         $home = $this->sandboxWith('gate-children');
         $home->write('bin/check', (string) file_get_contents($real.'/bin/check'));
         $home->symlink('vendor', $real.'/vendor');
-        $repository = $this->emptySandbox();
 
-        return new ProcessRunner()->run(['php', $home->root.'/bin/check', '--root='.$repository->root, ...array_values($arguments)], $home->root);
+        return $home;
+    }
+
+    /**
+     * @param list<string> $gates
+     *
+     * @return list<int>
+     */
+    private function pidsOnceWritten(string $directory, array $gates): array
+    {
+        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
+        $until = hrtime(true) + 10_000_000_000;
+
+        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
     }
 }

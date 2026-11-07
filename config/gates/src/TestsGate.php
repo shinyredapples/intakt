@@ -19,9 +19,6 @@ final readonly class TestsGate implements Gate
         '--fail-on-empty-test-suite', '--fail-on-skipped', '--fail-on-incomplete', '--fail-on-risky',
         '--fail-on-warning', '--fail-on-notice', '--fail-on-phpunit-notice', '--fail-on-deprecation', '--fail-on-phpunit-deprecation',
     ];
-    private const string PROCESS_STATUS = '/proc/self/status';
-    private const string PROCESS_CGROUP = '/proc/self/cgroup';
-    private const string CGROUP_ROOT = '/sys/fs/cgroup';
     private const int PASS_TIMEOUT_SECONDS = 3600;
     // Because the slowest test file takes under a minute, ten minutes on one file means it hangs.
     private const int FILE_TIMEOUT_SECONDS = 600;
@@ -51,7 +48,7 @@ final readonly class TestsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $count = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), $this->contentsOf(self::PROCESS_STATUS), $this->cpuMax());
+        $count = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax());
 
         if (null === $count) {
             return GateResult::failedBecause($this->name(), TestWorkerCount::VARIABLE.' names no number of test workers from 1 to '.TestWorkerCount::most());
@@ -79,20 +76,6 @@ final readonly class TestsGate implements Gate
     }
 
     // Because the quota that binds the gate is the one of its own cgroup, named in the `0::<path>` line of cgroup v2.
-    private function cpuMax(): string
-    {
-        if (1 !== preg_match('/^0::(\/.*)$/m', $this->contentsOf(self::PROCESS_CGROUP), $cgroup)) {
-            return '';
-        }
-
-        return $this->contentsOf(rtrim(self::CGROUP_ROOT.$cgroup[1], '/').'/cpu.max');
-    }
-
-    private function contentsOf(string $file): string
-    {
-        return is_readable($file) ? (string) file_get_contents($file) : '';
-    }
-
     private function whyNotReady(Workspace $workspace): ?string
     {
         if (!$workspace->hasTool('phpunit')) {

@@ -139,21 +139,41 @@ final class ProcessRunner
      */
     public function runToItsEnd(array $command, string $directory, int $seconds = self::OVERALL_TIMEOUT_SECONDS): ProcessResult
     {
-        return $this->toItsEnd(new Process($this->held($command), $directory, getenv(), null, null), $command[0], $seconds);
+        return $this->toItsEnd($this->startedHeld(new Process($this->held($command), $directory, getenv(), null, null), $command[0], $seconds));
     }
 
     // Because a relative PATH entry resolves in the directory a program starts in, `setsid` and `sh` start where the tools are searched, then the command moves to its own directory.
     /**
      * @param list<string> $command
      */
-    public function runToItsEndWithToolsFrom(string $toolsFrom, array $command, string $directory): ProcessResult
+    public function startToItsEndWithToolsFrom(string $toolsFrom, array $command, string $directory): RunningChild|ProcessResult
     {
         $held = ['setsid', 'sh', '-c', self::HOLD_THEN_MOVE, 'sh', $directory, ...$command];
 
-        return $this->toItsEnd(new Process($held, $toolsFrom, getenv(), null, null), $command[0], self::OVERALL_TIMEOUT_SECONDS);
+        return $this->startedHeld(new Process($held, $toolsFrom, getenv(), null, null), $command[0], self::OVERALL_TIMEOUT_SECONDS);
     }
 
-    private function toItsEnd(Process $process, string $program, int $seconds): ProcessResult
+    // Because Symfony's own timeout sends TERM and KILL at once, before the child can stop the contained run it started in a session of its own.
+    public function endOf(RunningChild $child): ?ProcessResult
+    {
+        $failure = $this->poll($child->process);
+
+        if (self::STILL_RUNNING === $failure && (hrtime(true) / 1_000_000_000) < $child->deadline) {
+            return null;
+        }
+
+        if (self::STILL_RUNNING === $failure) {
+            $failure = self::TIMED_OUT;
+            $child->group->stop();
+            $this->waitForAll([$child->process]);
+        }
+
+        $child->group->kill();
+
+        return $this->endedWith($child, $failure);
+    }
+
+    private function startedHeld(Process $process, string $program, int $seconds): RunningChild|ProcessResult
     {
         $refusal = $this->refusal($program, $seconds);
 
@@ -170,46 +190,44 @@ final class ProcessRunner
             return $this->resultOf($process, self::CANNOT_RUN, $program);
         }
 
-        $forwarding = StopSignalForwarding::through($group->stop(...));
-        $failure = $this->waitUntil($process, $deadline);
+        return new RunningChild($process, $group, $deadline, $program, $seconds);
+    }
 
-        if (self::TIMED_OUT === $failure) {
-            $group->stop();
-            $this->waitForAll([$process]);
+    private function toItsEnd(RunningChild|ProcessResult $child): ProcessResult
+    {
+        if ($child instanceof ProcessResult) {
+            return $child;
         }
 
-        $group->kill();
+        $forwarding = StopSignalForwarding::through($child->group->stop(...));
+
+        $result = $this->endOf($child);
+
+        while (!$result instanceof ProcessResult) {
+            usleep(self::POLL_MICROSECONDS);
+            $result = $this->endOf($child);
+        }
+
         $forwarding->end();
 
+        return $result;
+    }
+
+    private function endedWith(RunningChild $child, ?int $failure): ProcessResult
+    {
+        $process = $child->process;
+
         if (self::TIMED_OUT === $failure) {
-            $timedOut = $this->timedOut($program, $seconds);
+            $timedOut = $this->timedOut($child->program, $child->seconds);
 
             return new ProcessResult(self::TIMED_OUT, $process->getOutput(), trim($process->getErrorOutput()."\n".$timedOut->errors));
         }
 
         if (null !== $failure && $process->isStarted() && $process->hasBeenSignaled()) {
-            return $this->signaled($process, $program);
+            return $this->signaled($process, $child->program);
         }
 
-        return $this->resultOf($process, $failure, $program);
-    }
-
-    // Because Symfony's own timeout sends TERM and KILL at once, before the child can stop the contained run it started in a session of its own.
-    private function waitUntil(Process $process, float $deadline): ?int
-    {
-        while (true) {
-            $failure = $this->poll($process);
-
-            if (self::STILL_RUNNING !== $failure) {
-                return $failure;
-            }
-
-            if ((hrtime(true) / 1_000_000_000) >= $deadline) {
-                return self::TIMED_OUT;
-            }
-
-            usleep(self::POLL_MICROSECONDS);
-        }
+        return $this->resultOf($process, $failure, $child->program);
     }
 
     // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.
