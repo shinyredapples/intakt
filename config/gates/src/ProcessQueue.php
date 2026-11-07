@@ -20,8 +20,6 @@ final readonly class ProcessQueue
     }
 
     /**
-     * A job builder must return without waiting: the running processes are polled only between builds.
-     *
      * @template Name of array-key
      *
      * @param array<Name, Closure(int): array{list<string>, array<string, string>}> $jobs
@@ -30,6 +28,7 @@ final readonly class ProcessQueue
      */
     public function run(array $jobs, int $workers, string $directory): array
     {
+        // A job builder must return without waiting, because the running processes are polled only between builds.
         // Because the workers take the jobs in the order given, and each job is built for the index of the worker that takes it.
         $order = array_keys($jobs);
         $results = [];
