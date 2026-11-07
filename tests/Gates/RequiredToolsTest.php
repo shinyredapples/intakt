@@ -181,6 +181,18 @@ final class RequiredToolsTest extends TestCase
         self::assertSame(['composer reports no version, 2.11 or later is required for policy.cooldown, see '.RequiredTools::REQUIREMENTS], $this->tools()->missingFor(['audit']));
     }
 
+    public function testAComposerWhoseVersionCannotBeQueriedIsRefused(): void
+    {
+        $this->installComposerReporting('2.11.0');
+        $code = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).';'
+            .'echo json_encode((new '.RequiredTools::class.'('.var_export($this->root, true).'))->missingFor(["audit"]));';
+        $child = new Process([PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $code]);
+
+        $child->run();
+
+        self::assertSame(json_encode(['composer version could not be queried, 2.11 or later is required for policy.cooldown, see '.RequiredTools::REQUIREMENTS]), $child->getOutput(), $child->getErrorOutput());
+    }
+
     public function testWithoutAPathAToolOnTheDefaultPathIsFound(): void
     {
         putenv('PATH');

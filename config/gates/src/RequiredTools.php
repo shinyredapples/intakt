@@ -122,7 +122,7 @@ final readonly class RequiredTools
             $query = new Process(['composer', '--version', '--no-ansi', '--no-plugins', '--no-interaction'], $this->root);
             $query->run();
         } catch (ExceptionInterface) {
-            return null;
+            return self::composerRefused('composer version could not be queried');
         }
 
         $found = 1 === preg_match('/^Composer version (\d+\.\d+\.\d+)/m', $query->getOutput(), $match) ? $match[1] : null;
@@ -131,8 +131,12 @@ final readonly class RequiredTools
             return null;
         }
 
-        return (null === $found ? 'composer reports no version' : 'composer '.$found.' found')
-            .', '.self::COMPOSER_MINIMUM.' or later is required for policy.cooldown, see '.self::REQUIREMENTS;
+        return self::composerRefused(null === $found ? 'composer reports no version' : 'composer '.$found.' found');
+    }
+
+    private static function composerRefused(string $finding): string
+    {
+        return $finding.', '.self::COMPOSER_MINIMUM.' or later is required for policy.cooldown, see '.self::REQUIREMENTS;
     }
 
     private function searchPath(): string
