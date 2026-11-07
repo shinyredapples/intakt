@@ -110,7 +110,7 @@ final readonly class GateChildren
     {
         $staticGatesLeft = [] !== array_diff([...$waiting, ...$running], $runningTheChangesCode);
 
-        return $this->slots->allow($running, $waiting[0]) && !($staticGatesLeft && in_array($waiting[0], $runningTheChangesCode, true));
+        return $this->slots->allow($running, $waiting[0]) && (!$staticGatesLeft || !in_array($waiting[0], $runningTheChangesCode, true));
     }
 
     private function started(ChildCommand $child): RunningChild|ProcessResult
