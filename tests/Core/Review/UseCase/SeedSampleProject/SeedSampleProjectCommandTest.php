@@ -58,6 +58,8 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private string $ownerToken = '';
 
+    private ?string $compatibleBaseUrl = SampleProject::HUGGING_FACE_ROUTER;
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
@@ -92,6 +94,42 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringContainsString('its panel on anthropic and openai', $display);
     }
 
+    public function testAHuggingFaceTokenAlonePutsTheTwoReviewersOnModelsOfTwoMakers(): void
+    {
+        $display = $this->seed(Provider::OpenAiCompatible)->getDisplay();
+
+        self::assertSame(['openai_compatible'], $this->panelProviders());
+        self::assertSame(['moonshotai/Kimi-K3:deepinfra', 'openai/gpt-oss-120b:novita'], $this->reviewerModels());
+        self::assertStringContainsString('its panel on openai_compatible', $display);
+    }
+
+    public function testWithAnAnthropicKeyTheSecurityReviewerMovesToHuggingFace(): void
+    {
+        $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
+
+        self::assertSame(['anthropic', 'openai_compatible'], $this->panelProviders());
+        self::assertSame(['claude-opus-5-5', 'moonshotai/Kimi-K3:deepinfra'], $this->reviewerModels());
+    }
+
+    public function testAnOpenAiCompatibleEndpointOtherThanTheHuggingFaceRouterSeedsNothing(): void
+    {
+        $this->compatibleBaseUrl = 'https://llm.example.test';
+
+        $tester = $this->seed(Provider::OpenAiCompatible);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertFileDoesNotExist($this->configuration());
+    }
+
+    public function testAnOpenAiCompatibleEndpointBesideAnotherKeyStaysOffThePanel(): void
+    {
+        $this->compatibleBaseUrl = 'https://llm.example.test';
+
+        $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
+
+        self::assertSame(['anthropic'], $this->panelProviders());
+    }
+
     public function testEachReviewerRunsOnTheProviderItsTierMapsTo(): void
     {
         $this->seed(Provider::Anthropic, Provider::OpenAi);
@@ -108,7 +146,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $tester = $this->seed();
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('Set ANTHROPIC_API_KEY or OPENAI_API_KEY', $tester->getDisplay());
+        self::assertStringContainsString('Set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN', $tester->getDisplay());
         self::assertFileDoesNotExist($this->configuration());
         self::assertDirectoryDoesNotExist($this->repository());
     }
@@ -226,7 +264,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
 
-        return new SampleProject($accounts);
+        return new SampleProject($accounts, $this->compatibleBaseUrl);
     }
 
     /**
@@ -235,6 +273,16 @@ final class SeedSampleProjectCommandTest extends TestCase
     private function panelProviders(): array
     {
         return array_values(array_unique(array_column($this->writtenProject()['review']['reviewers'], 'provider')));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function reviewerModels(): array
+    {
+        $project = $this->writtenProject();
+
+        return array_map(static fn (array $reviewer): string => $project['tiers'][$reviewer['tier']]['model'], $project['review']['reviewers']);
     }
 
     /**

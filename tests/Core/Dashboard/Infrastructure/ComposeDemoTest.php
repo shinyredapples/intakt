@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Dotenv\Dotenv;
@@ -44,7 +45,7 @@ final class ComposeDemoTest extends TestCase
     {
         $template = $this->envTemplate();
 
-        foreach ([...Provider::Anthropic->variables(), ...Provider::OpenAi->variables()] as $key) {
+        foreach ([...Provider::Anthropic->variables(), ...Provider::OpenAi->variables(), SampleProject::HUGGING_FACE_TOKEN] as $key) {
             self::assertArrayHasKey($key, $template);
             self::assertSame('', $template[$key]);
         }
