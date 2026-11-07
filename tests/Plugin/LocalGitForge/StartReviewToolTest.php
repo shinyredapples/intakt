@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -131,7 +132,7 @@ final class StartReviewToolTest extends TestCase
         $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$seen, $finding): ChangeReview {
             $seen = $request;
 
-            return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 10, 0, 0, 0, 2, 12));
+            return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 10, 0, 0, 0, 2, 12), Cost::none());
         });
 
         return $reviews;

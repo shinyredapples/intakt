@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Shadow\Domain;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -37,7 +38,7 @@ final class ComparisonBuilder
 
     public static function round(Verdict $verdict, int $tokens = 100): ChangeReview
     {
-        return new ChangeReview('r1', 1, $verdict->verdict, [new PanelVerdict(Tier::Strong, $verdict)], [], new RoundTokens(1, $tokens, 0, 0, 0, 0, $tokens));
+        return new ChangeReview('r1', 1, $verdict->verdict, [new PanelVerdict(Tier::Strong, $verdict)], [], new RoundTokens(1, $tokens, 0, 0, 0, 0, $tokens), Cost::unknown());
     }
 
     public static function changes(Finding ...$findings): Verdict

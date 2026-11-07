@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -22,6 +24,7 @@ final readonly class RoundLedgerReading
     public function __construct(
         private Ledger $ledger,
         private LedgerPayloads $payloads,
+        private Prices $prices,
     ) {
     }
 
@@ -43,13 +46,29 @@ final readonly class RoundLedgerReading
 
     public function tokensOf(string $roundId): RoundTokens
     {
-        $recorded = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false);
+        $recorded = $this->usageRows();
         $calls = $this->callsStartedFor($roundId, $recorded);
-        $usages = array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
 
-        $figures = array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+        $figures = array_reduce($this->usagesOf($calls, $recorded), static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
 
         return RoundTokens::of(count($calls), $figures);
+    }
+
+    // Priced per usage entry, because a round's reviewers and its judge may each run on another model.
+    public function costOf(string $roundId): Cost
+    {
+        $recorded = $this->usageRows();
+        $usages = $this->usagesOf($this->callsStartedFor($roundId, $recorded), $recorded);
+
+        return array_reduce($usages, fn (Cost $sum, TokenUsageRow $usage): Cost => $sum->plus($this->prices->costOf($usage->model, $usage->figures())), Cost::none());
+    }
+
+    /**
+     * @return list<RecordedEvent>
+     */
+    private function usageRows(): array
+    {
+        return iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false);
     }
 
     /**
@@ -71,6 +90,17 @@ final readonly class RoundLedgerReading
         }
 
         return array_values(array_unique($calls));
+    }
+
+    /**
+     * @param list<string>        $calls
+     * @param list<RecordedEvent> $recorded
+     *
+     * @return list<TokenUsageRow>
+     */
+    private function usagesOf(array $calls, array $recorded): array
+    {
+        return array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
     }
 
     /**

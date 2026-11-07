@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Shadow;
 
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -223,7 +224,7 @@ final class ShadowRoundTest extends KernelTestCase
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),
             $this->fixture->transactions(),
             new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round')),
-            new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads()),
+            new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([])),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),

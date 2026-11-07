@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
@@ -211,7 +212,7 @@ final class ShadowRoundHoldTest extends KernelTestCase
             $bus,
             $fixture->transactions(),
             new StoredFindings($fixture->entities, $serializer, $fixture->machine('state_machine.review_round')),
-            new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads()),
+            new RoundLedgerReading($fixture->ledger(), $fixture->ledgerPayloads(), new ConfiguredPrices([])),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($fixture->clock, static function (): void {

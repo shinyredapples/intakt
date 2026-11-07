@@ -12,6 +12,11 @@ budget:
     shadow_ceilings:
         five-hour: 70
         weekly: 70
+    # Optional: the price of each model, keyed by the model name a tier uses, in US dollars per million tokens, for the cost line of a review.
+    # input and output are required; cache_read and cache_write default to input. A round that used a model without a price shows its cost as unknown.
+    prices:
+        claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }
+        claude-haiku-5-5: { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 }
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 # A tier on provider codex must name this model: { provider: codex, model: gpt-5.3-codex }.
 codex: { model: gpt-5.3-codex, effort: high }

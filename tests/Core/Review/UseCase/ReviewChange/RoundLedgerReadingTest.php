@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -28,6 +30,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(LedgerPayloads::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(JudgeDone::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(UsageStarted::class)]
@@ -116,6 +120,32 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([0, 0, 0, 0], $this->tokensOf(self::ROUND));
     }
 
+    public function testARoundsCostIsItsCallsPricedByTheirModel(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->recordCall('c2', self::ROUND, 'unsettled');
+
+        self::assertEqualsWithDelta(2 * (100 * 2.0 + 20 * 10.0) / 1_000_000, $this->reading()->costOf(self::ROUND)->usd, 1e-12);
+    }
+
+    public function testARoundWithACallOfAModelWithoutAPriceHasAnUnknownCostNamingTheModel(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::ROUND]);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'settled', 'usages' => [['model' => 'small'] + $this->usage()]]);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+    }
+
+    public function testARoundWithoutCallsCostsNothing(): void
+    {
+        $this->recordCall('c1', self::OTHER_ROUND, 'settled');
+
+        self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
+    }
+
     public function testTheActIdsOfAJudgeDoneRowInTodaysFormatAreRead(): void
     {
         $this->append(LedgerEventKind::JudgeDone, ['round' => self::OTHER_ROUND, 'act' => ['F9'], 'follow_ups' => [], 'findings' => []]);
@@ -149,7 +179,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     private function reading(): RoundLedgerReading
     {
-        return new RoundLedgerReading($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()));
+        return new RoundLedgerReading($this->ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices(['big' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
     }
 
     private function recordCall(string $call, ?string $round, string $ending): void
