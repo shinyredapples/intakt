@@ -26,6 +26,7 @@ final class StaticAnalysisGateTest extends TestCase
     {
         // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder, and a case still runs alone under --filter
         $sandbox = Sandbox::withFixturesInFolders(...array_keys(self::EXPECTED_FINDINGS));
+        $sandbox->borrowKernel();
 
         try {
             $run = $sandbox->check('--only=phpstan');

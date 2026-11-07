@@ -14,11 +14,11 @@ final readonly class ContainerDumpingGate implements Gate
     }
 
     // Because the kernel builds in APP_CACHE_DIR when it is set, as each test worker does, the dump is read from where it was written.
-    public static function containerXml(string $home): string
+    public static function containerXml(string $root): string
     {
         $cache = getenv('APP_CACHE_DIR');
 
-        return (is_string($cache) && '' !== $cache ? $cache : $home.'/var/cache').self::CONTAINER_XML;
+        return (is_string($cache) && '' !== $cache ? $cache : $root.'/var/cache').self::CONTAINER_XML;
     }
 
     public function name(): string
@@ -28,7 +28,14 @@ final readonly class ContainerDumpingGate implements Gate
 
     public function run(Workspace $workspace): GateResult
     {
-        $dump = $this->dumpTestContainer($workspace);
+        // Because the analysed tree's own services are the ones its callers must match, its console dumps the container, never this checkout's.
+        $console = $workspace->root.'/bin/console';
+
+        if (!is_file($console)) {
+            return GateResult::failedBecause($this->name(), 'bin/console not found, so the test container cannot be dumped');
+        }
+
+        $dump = $this->dumpTestContainer($workspace, $console);
 
         if (!$dump->succeeded()) {
             return GateResult::failedBecause($this->name(), 'the test container could not be dumped: '.$dump->firstErrorLine());
@@ -37,13 +44,13 @@ final readonly class ContainerDumpingGate implements Gate
         return $this->analysis->run($workspace);
     }
 
-    private function dumpTestContainer(Workspace $workspace): ProcessResult
+    private function dumpTestContainer(Workspace $workspace, string $console): ProcessResult
     {
         // Because a fresh cache is not compiled again, a dump that is gone comes back only when the cache is cleared.
-        $command = is_file(self::containerXml(dirname($workspace->console(), 2))) ? 'cache:warmup' : 'cache:clear';
+        $command = is_file(self::containerXml($workspace->root)) ? 'cache:warmup' : 'cache:clear';
         // Because the caller's debug or verbosity setting would skip the XML dump or silence the reason.
         $environment = ['APP_DEBUG' => '1', 'SHELL_VERBOSITY' => false];
 
-        return $workspace->command([PHP_BINARY, $workspace->console(), $command, '--env=test', '--no-optional-warmers', '--no-ansi', '--no-interaction'], $environment);
+        return $workspace->command([PHP_BINARY, $console, $command, '--env=test', '--no-optional-warmers', '--no-ansi', '--no-interaction'], $environment);
     }
 }

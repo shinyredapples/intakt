@@ -55,6 +55,21 @@ final readonly class Sandbox
         file_put_contents($target, $contents);
     }
 
+    // Because a fixture is a fragment without a kernel, the phpstan gate dumps this repository's test container through a link to its console and finds the dump through a link to its cache.
+    public function borrowKernel(): void
+    {
+        $home = dirname(__DIR__, 2);
+
+        foreach ([$home.'/var/cache', $this->root.'/bin', $this->root.'/var'] as $folder) {
+            if (!is_dir($folder)) {
+                mkdir($folder, 0o777, true);
+            }
+        }
+
+        $this->symlink('bin/console', $home.'/bin/console');
+        $this->symlink('var/cache', $home.'/var/cache');
+    }
+
     public function git(string ...$arguments): ProcessResult
     {
         $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
