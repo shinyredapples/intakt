@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
@@ -29,8 +30,18 @@ final class SampleProjectSeedTest extends KernelTestCase
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
 
+    private CompiledContainers $containers;
+
+    public static function tearDownAfterClass(): void
+    {
+        self::compiledContainers()->remove();
+        parent::tearDownAfterClass();
+    }
+
     protected function setUp(): void
     {
+        $this->containers = self::compiledContainers();
+
         foreach (self::VARIABLES as $name) {
             $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
             $this->unsetVariable($name);
@@ -41,7 +52,6 @@ final class SampleProjectSeedTest extends KernelTestCase
         // An empty file, so the seeding kernel has no projects of a shipped config/intakt.yaml.
         $_SERVER['INTAKT_CONFIG'] = $this->directory.'/none.yaml';
         new Filesystem()->dumpFile($_SERVER['INTAKT_CONFIG'], '');
-        $this->removeCache();
     }
 
     protected function tearDown(): void
@@ -60,8 +70,8 @@ final class SampleProjectSeedTest extends KernelTestCase
         }
 
         parent::tearDown();
+        $this->containers->restoreTheSharedCache();
         new Filesystem()->remove($this->directory);
-        $this->removeCache();
     }
 
     public function testWithOneKeyTheSeededPanelLoadsOnThatProvider(): void
@@ -98,6 +108,7 @@ final class SampleProjectSeedTest extends KernelTestCase
 
     private function seed(): void
     {
+        $this->containers->useFor($this->buildInputs());
         $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:sample:seed'));
 
         $tester->execute(['repository' => $this->directory.'/sample-repository', 'configuration' => $this->directory.'/intakt.yaml']);
@@ -121,16 +132,33 @@ final class SampleProjectSeedTest extends KernelTestCase
     private function bootSeeded(): ContainerInterface
     {
         self::ensureKernelShutdown();
-        // Removed because the container is built once per environment, and the seeded file must be read into a new one.
-        $this->removeCache();
         $_SERVER['INTAKT_CONFIG'] = $this->directory.'/intakt.yaml';
+        // A container of its own, because the seeding one was built before the file existed.
+        $this->containers->useFor($this->buildInputs());
 
         return self::getContainer();
     }
 
-    private function removeCache(): void
+    private static function compiledContainers(): CompiledContainers
     {
-        new Filesystem()->remove(self::createKernel()->getCacheDir());
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'sample-project-seed');
+    }
+
+    // The config's content rather than its path, because the path changes per test while the content is what the container is built from.
+    /** @return array<mixed> */
+    private function buildInputs(): array
+    {
+        $keys = array_map(static fn (string $name): array => [$_SERVER[$name] ?? null, $_ENV[$name] ?? null, getenv($name)], array_diff(self::VARIABLES, ['INTAKT_CONFIG']));
+
+        return [(string) file_get_contents($this->configuration()), $keys];
+    }
+
+    private function configuration(): string
+    {
+        $configuration = $_SERVER['INTAKT_CONFIG'];
+        self::assertIsString($configuration);
+
+        return $configuration;
     }
 
     private function unsetVariable(string $name): void

@@ -35,7 +35,7 @@ final readonly class InstallationReader
         try {
             $token = $this->tokens->current()->value;
         } catch (InstallationTokenNotMinted $failure) {
-            throw InstallationNotReadBack::becauseNoTokenWasMinted($failure->getMessage());
+            throw InstallationNotReadBack::becauseNoTokenWasMinted($failure);
         }
 
         $permissions = $this->permissions($this->jwt->sign());
