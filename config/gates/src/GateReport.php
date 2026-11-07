@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
+use JsonException;
+
 final readonly class GateReport
 {
     private const array FIELDS = ['gate', 'ok', 'findings', 'omitted', 'note', 'slowest'];
@@ -17,8 +19,8 @@ final readonly class GateReport
     // Because a child that crashes, times out or prints anything but its own gate's line must fail that gate, never pass it.
     public static function fromChild(string $gate, ProcessResult $child): self
     {
-        $line = trim($child->output);
-        $passing = self::verdictOf($gate, $line);
+        $line = str_ends_with($child->output, "\n") ? substr($child->output, 0, -1) : null;
+        $passing = null === $line ? null : self::verdictOf($gate, $line);
 
         if (null !== $passing && $child->exitCode === ($passing ? 0 : 1)) {
             return new self($gate, $line);
@@ -53,20 +55,28 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
-    // Because the report holds one line per gate, so a valid object spread over several lines is no result line.
+    // Because only the exact bytes a gate's own GateResult writes may pass: no stray byte, repeated key or object where a list belongs.
     private static function verdictOf(string $gate, string $line): ?bool
     {
-        if (false !== strpbrk($line, "\r\n")) {
-            return null;
-        }
-
         $report = json_decode($line, true);
 
-        if (!is_array($report) || [] !== array_diff(array_keys($report), self::FIELDS) || $gate !== ($report['gate'] ?? null)) {
+        if (!is_array($report) || !self::isEncodedAs($report, $line) || [] !== array_diff(array_keys($report), self::FIELDS) || $gate !== ($report['gate'] ?? null)) {
             return null;
         }
 
         return self::consistentVerdict($report);
+    }
+
+    /**
+     * @param array<array-key, mixed> $report
+     */
+    private static function isEncodedAs(array $report, string $line): bool
+    {
+        try {
+            return $line === json_encode($report, GateResult::JSON_FLAGS);
+        } catch (JsonException) {
+            return false;
+        }
     }
 
     /**
