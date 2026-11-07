@@ -114,6 +114,17 @@ jobs:
   # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
   # job that fails skips the engines and fails the run. Every engine runs to its end even when another fails, so the run
   # reports every engine, each in its own log group.
+  # The demo's first start on the real image and an empty volume; needs Docker on the runner, no provider key.
+  first-start:
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start the image on an empty volume and show the seeded panel
+        run: bash docker/verify-first-start.sh
   persistence:
     needs: changes
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
