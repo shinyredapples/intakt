@@ -35,6 +35,16 @@ final class ContainerUnknownGetIdRuleTest extends PhpStanRuleTestCase
         $this->assertAcceptedBy('phpstan', 'registered-get-service-ids-in-union');
     }
 
+    public function testGettingEitherAKnownOrAPrivateServiceIdFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'private-get-service-id-in-union', 'src/Lookup.php:20 symfonyContainer.privateService Service "Intakt\Core\Review\Infrastructure\ReviewerPrompt" is private');
+    }
+
+    public function testGettingEitherAKnownOrAPrivateServiceIdFromTheTestContainerPassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'test-container-get-private-service-id-in-union');
+    }
+
     public function testGettingASingleMisspelledServiceIdIsLeftToPhpstanSymfony(): void
     {
         $this->assertRuleAccepts('misspelled-service-id');
