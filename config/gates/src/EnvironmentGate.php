@@ -23,6 +23,7 @@ final readonly class EnvironmentGate implements Gate
         'date.timezone',
         'default_charset',
     ];
+    private const array BOOLEAN_SETTINGS = ['assert.active', 'assert.exception', 'display_errors', 'display_startup_errors'];
 
     public function __construct(private PhpRuntime $runtime)
     {
@@ -61,7 +62,7 @@ final readonly class EnvironmentGate implements Gate
     }
 
     /**
-     * @return ?array<string, string>
+     * @return ?array<string, array{written: string, loaded: string}>
      */
     private function settings(Workspace $workspace): ?array
     {
@@ -71,19 +72,27 @@ final readonly class EnvironmentGate implements Gate
             return null;
         }
 
-        $settings = parse_ini_file($path, false, INI_SCANNER_RAW);
+        $written = parse_ini_file($path, false, INI_SCANNER_RAW);
+        $loaded = parse_ini_file($path, false, INI_SCANNER_NORMAL);
 
-        if (false === $settings) {
+        if (false === $written || false === $loaded) {
             return null;
         }
 
-        $texts = [];
+        $settings = [];
 
-        foreach ($settings as $name => $value) {
-            $texts[(string) $name] = is_scalar($value) ? (string) $value : '';
+        foreach ($written as $name => $value) {
+            $text = is_scalar($value) ? (string) $value : '';
+            $settings[(string) $name] = ['written' => $text, 'loaded' => $this->loaded($text, $loaded[$name] ?? null)];
         }
 
-        return $texts;
+        return $settings;
+    }
+
+    // PHP loads On as 1 and E_ALL & ~E_DEPRECATED as a number; a ${VAR} would take its value from whoever runs the gate.
+    private function loaded(string $written, mixed $loaded): string
+    {
+        return str_contains($written, '${') || !is_scalar($loaded) ? $written : (string) $loaded;
     }
 
     /**
@@ -119,7 +128,7 @@ final readonly class EnvironmentGate implements Gate
     }
 
     /**
-     * @param array<string, string> $settings
+     * @param array<string, array{written: string, loaded: string}> $settings
      *
      * @return list<string>
      */
@@ -134,18 +143,32 @@ final readonly class EnvironmentGate implements Gate
 
             $actual = $this->runtime->setting($name);
 
-            if ($actual === $this->resolved($expected)) {
+            if (null !== $actual && $this->comparable($name, $actual) === $this->comparable($name, $expected['loaded'])) {
                 continue;
             }
 
-            $findings[] = 'PHP setting '.$name.' is '.($actual ?? 'unset').' but '.self::CHECK_INI.' says '.$expected;
+            $findings[] = 'PHP setting '.$name.' is '.($actual ?? 'unset').' but '.self::CHECK_INI.' says '.$expected['written'];
         }
 
         return $findings;
     }
 
+    // ini_set() keeps a word such as On as given, while the ini parser turns it into 1 or an empty string.
+    private function comparable(string $name, string $value): string
+    {
+        if (!in_array($name, self::BOOLEAN_SETTINGS, true)) {
+            return $value;
+        }
+
+        return match (strtolower($value)) {
+            '', '0', 'off', 'no', 'false', 'none' => '0',
+            '1', 'on', 'yes', 'true' => '1',
+            default => $value,
+        };
+    }
+
     /**
-     * @param array<string, string> $settings
+     * @param array<string, array{written: string, loaded: string}> $settings
      *
      * @return list<string>
      */
@@ -160,17 +183,5 @@ final readonly class EnvironmentGate implements Gate
         }
 
         return $findings;
-    }
-
-    // The raw text keeps E_ALL as written; the running PHP reports the number.
-    private function resolved(string $expected): string
-    {
-        if (1 !== preg_match('/^E_[A-Z_]+$/', $expected) || !defined($expected)) {
-            return $expected;
-        }
-
-        $value = constant($expected);
-
-        return is_int($value) ? (string) $value : $expected;
     }
 }

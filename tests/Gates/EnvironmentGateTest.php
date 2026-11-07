@@ -11,6 +11,7 @@ use Intakt\Gates\PhpRuntime;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(EnvironmentGate::class)]
 #[CoversClass(PhpRuntime::class)]
@@ -61,6 +62,51 @@ final class EnvironmentGateTest extends SandboxTestCase
         $result = $this->checked($this->runtime(settings: ['error_reporting' => '22527']));
 
         self::assertSame('PHP setting error_reporting is 22527 but config/gates/php/check.ini says E_ALL', $result->findings[0]);
+    }
+
+    public function testABooleanWordInTheCheckIniMatchesTheNumberPhpReports(): void
+    {
+        $result = $this->checked($this->runtime(settings: ['display_errors' => '1', 'assert.exception' => '0']), self::MANIFEST, "display_errors=On\nassert.exception=Off\n");
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testABooleanSettingThatDiffersFailsAndShowsTheValueAsWritten(): void
+    {
+        $result = $this->checked($this->runtime(settings: ['display_errors' => '']), self::MANIFEST, "display_errors=On\n");
+
+        self::assertSame('PHP setting display_errors is  but config/gates/php/check.ini says On', $result->findings[0]);
+    }
+
+    public function testAnErrorReportingExpressionIsComparedAsTheNumberItStandsFor(): void
+    {
+        $result = $this->checked($this->runtime(settings: ['error_reporting' => (string) (E_ALL & ~E_DEPRECATED)]), self::MANIFEST, "error_reporting=E_ALL & ~E_DEPRECATED\n");
+
+        self::assertSame([], $result->findings);
+    }
+
+    public function testTheRunningPhpPassesWhenItLoadsAProfileWithBooleanWordsAndExpressions(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('composer.json', '{"require":{}}');
+        $sandbox->write('config/gates/php/check.ini', "display_errors=On\nassert.exception=On\nerror_reporting=E_ALL & ~E_DEPRECATED\nmemory_limit=-1\n");
+        $process = new Process(
+            [PHP_BINARY, '-r', 'require $argv[1]; echo new Intakt\Gates\EnvironmentGate(Intakt\Gates\PhpRuntime::current())->run(new Intakt\Gates\Workspace($argv[2], $argv[2], Intakt\Gates\Mode::Full, null))->toJson();', dirname(__DIR__, 2).'/vendor/autoload.php', $sandbox->root],
+            env: ['PHP_INI_SCAN_DIR' => getenv('PHP_INI_SCAN_DIR').':'.$sandbox->root.'/config/gates/php'],
+        );
+        $process->mustRun();
+
+        self::assertSame('{"gate":"environment","ok":true,"findings":[],"omitted":0}', $process->getOutput());
+    }
+
+    public function testTheRepositoryProfileRequiresTheFilterExtension(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $runtime = $this->runtime(extensions: array_values(array_diff(array_map(strtolower(...), get_loaded_extensions()), ['filter'])));
+
+        $result = new EnvironmentGate($runtime)->run(new Workspace($root, $root, Mode::Full, null));
+
+        self::assertContains('PHP extension filter is required by composer.json but not loaded', $result->findings);
     }
 
     public function testASettingPhpDoesNotKnowIsReportedAsUnset(): void
