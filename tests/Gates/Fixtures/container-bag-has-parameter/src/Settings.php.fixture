@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Component\DependencyInjection\ParameterBag\ContainerBagInterface;
+
+final readonly class Settings
+{
+    public function __construct(private ContainerBagInterface $parameters)
+    {
+    }
+
+    public function knowsTheCacheDirectory(): bool
+    {
+        return $this->parameters->has('kernel.cache_dir');
+    }
+}

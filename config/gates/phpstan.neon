@@ -26,8 +26,11 @@ rules:
     - Intakt\Gates\PhpStan\ImportFormRule
     - Intakt\Gates\PhpStan\ContainerUnknownHasIdRule
     - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
+    - Intakt\Gates\PhpStan\ContainerUnknownGetIdRule
 
 services:
+    -
+        class: Intakt\Gates\PhpStan\AskedServiceIds
     -
         class: Intakt\Gates\PhpStan\ContainerRegistration
         arguments:

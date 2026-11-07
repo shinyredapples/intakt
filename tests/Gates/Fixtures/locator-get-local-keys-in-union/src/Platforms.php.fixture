@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Contracts\Service\ServiceProviderInterface;
+
+final readonly class Platforms
+{
+    /**
+     * @param ServiceProviderInterface<object> $platforms
+     */
+    public function __construct(private ServiceProviderInterface $platforms)
+    {
+    }
+
+    public function platform(int $choice): object
+    {
+        $key = 0 === $choice ? 'local' : 'remote';
+
+        return $this->platforms->get($key);
+    }
+}

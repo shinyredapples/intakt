@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\ContainerDumpingGate;
+use Intakt\Gates\PhpStan\AskedServiceIds;
 use Intakt\Gates\PhpStan\ContainerUnknownHasIdRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -14,13 +15,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
  * @extends PhpStanRuleTestCase<ContainerUnknownHasIdRule>
  */
 #[CoversClass(ContainerUnknownHasIdRule::class)]
+#[UsesClass(AskedServiceIds::class)]
 #[UsesClass(ContainerDumpingGate::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
 {
     protected function ruleFor(string $root): ContainerUnknownHasIdRule
     {
-        return new ContainerUnknownHasIdRule(new NoServices());
+        return new ContainerUnknownHasIdRule(new NoServices(), new AskedServiceIds());
     }
 
     public function testAskingTheContainerForAMisspelledServiceIdFailsStaticAnalysis(): void
@@ -46,5 +48,10 @@ final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
     public function testAskingAServiceLocatorForOneOfItsOwnKeysIsAllowed(): void
     {
         $this->assertRuleAccepts('locator-has-local-key');
+    }
+
+    public function testAskingTheContainerBagForAParameterIsAllowed(): void
+    {
+        $this->assertRuleAccepts('container-bag-has-parameter');
     }
 }
