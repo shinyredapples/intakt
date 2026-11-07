@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Reviewer;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
@@ -29,15 +30,20 @@ use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
 // Public because no service injects it before the panel (plan T8), and an unused private service is removed.
 #[Autoconfigure(public: true)]
 final readonly class SymfonyAiVendor implements Vendor
 {
+    private const int RETRY_ROOM = 2;
+
     public function __construct(
         private TierInvoker $tiers,
         private TierResolver $resolver,
@@ -45,6 +51,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private Judge $judge,
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -59,9 +66,30 @@ final readonly class SymfonyAiVendor implements Vendor
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->verdictOn($answering, $this->usage->reserve($project, $tier, $request->conversation->round), $request)),
+            $this->readOrRefused($answering->provider, $this->verdictWithinTheLimit($project, $tier, $answering, $request)),
             $substitute,
         ));
+    }
+
+    // Retried once with more room, because a call stopped by the output limit leaves no verdict and the same room would stop it again; a second stop fails the reviewer.
+    private function verdictWithinTheLimit(string $project, Tier $tier, ResolvedModel $answering, ReviewRequest $request): Verdict
+    {
+        try {
+            return $this->verdictOn($answering, $this->usage->reserve($project, $tier, $request->conversation->round), $request);
+        } catch (MaxOutputTokensException) {
+            $roomier = $answering->withMaxOutput(self::RETRY_ROOM * ($answering->maxOutput ?? $tier->defaultMaxOutput()));
+
+            return $this->verdictOn($roomier, $this->usage->reserve($project, $tier, $request->conversation->round), $this->inNewConversation($request));
+        }
+    }
+
+    // A new conversation, because the stopped one is stored under its id and the store refuses a second start under it.
+    private function inNewConversation(ReviewRequest $request): ReviewRequest
+    {
+        $stopped = $request->conversation;
+        $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId);
+
+        return new ReviewRequest($request->checkout, $request->brief, $conversation);
     }
 
     private function answering(string $project, Tier $tier): ResolvedModel
