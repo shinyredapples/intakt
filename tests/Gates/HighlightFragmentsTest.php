@@ -60,6 +60,43 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringContainsString("|---|---|---|\n|  Gates | done | T1 (#3) |\n| Clock | planned | T2 (#2) |\n\n", $this->assembled()->text);
     }
 
+    public function testALaterListItemWithTheSameTextBeforeItsStatusReplacesTheEarlierOneInPlace(): void
+    {
+        $this->sandbox->write('docs/highlights.d/0-before.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (in progress, T1).\n- Clone with: `b.php` (in progress, T8 (#13, part #222)).\n");
+        $this->sandbox->write('docs/highlights.d/5-done.md', "## PHP 8.5 in use\n- Clone with: `b.php` (done, T8 (#13, part #222)).\n- The pipe operator: `a.php` (done, T1).\n");
+
+        self::assertStringEndsWith(
+            "## PHP 8.5 in use\n\n- The pipe operator: `a.php` (done, T1).\n- Clone with: `b.php` (done, T8 (#13, part #222)).\n",
+            $this->assembled()->text,
+        );
+    }
+
+    public function testAListItemWithOtherTextBeforeItsStatusIsAddedNextToTheEarlierOne(): void
+    {
+        $this->sandbox->write('docs/highlights.d/0-before.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (done, T1).\n");
+        $this->sandbox->write('docs/highlights.d/5-more.md', "## PHP 8.5 in use\n- The pipe operator: `b.php` (done, T1).\n");
+
+        self::assertStringEndsWith("- The pipe operator: `a.php` (done, T1).\n- The pipe operator: `b.php` (done, T1).\n", $this->assembled()->text);
+    }
+
+    public function testAListItemWithoutATrailingStatusIsKeyedByItsWholeLine(): void
+    {
+        $this->sandbox->write('docs/highlights.d/0-before.md', "## PHP 8.5 in use\n- Planned: the pipe operator (T5).\n- `#[NoDiscard]` (done) on the status.\n");
+        $this->sandbox->write('docs/highlights.d/5-more.md', "## PHP 8.5 in use\n- Planned: the pipe operator (T6).\n- `#[NoDiscard]` (planned) on the status.\n");
+
+        self::assertStringEndsWith(
+            "- Planned: the pipe operator (T5).\n- `#[NoDiscard]` (done) on the status.\n- Planned: the pipe operator (T6).\n- `#[NoDiscard]` (planned) on the status.\n",
+            $this->assembled()->text,
+        );
+    }
+
+    public function testTheSameListItemTwiceInOneFragmentFailsWhateverItsStatus(): void
+    {
+        $this->sandbox->write('docs/highlights.d/1-pipe.md', "## PHP 8.5 in use\n- The pipe operator: `a.php` (planned).\n- The pipe operator: `a.php` (done, T1).\n");
+
+        self::assertSame(['docs/highlights.d/1-pipe.md:3: row "- The pipe operator: `a.php`" appears twice in this fragment'], $this->assembled()->findings);
+    }
+
     public function testASectionWithoutRowsKeepsItsHeader(): void
     {
         self::assertSame(

@@ -110,11 +110,20 @@ final readonly class HighlightFragment
     private function keyOf(string $line, HighlightRowKind $kind): string
     {
         if (HighlightRowKind::ListItem === $kind) {
-            return $line;
+            return $this->itemTextOf($line);
         }
 
         $cells = preg_split(self::CELL_BORDER, substr($line, 1));
 
         return trim(false === $cells ? $line : $cells[0]);
+    }
+
+    // A list item names its status last, so a later fragment can change the status of the same item.
+    private function itemTextOf(string $line): string
+    {
+        $statuses = implode('|', array_map(static fn (HighlightStatus $status): string => preg_quote($status->value, '/'), HighlightStatus::cases()));
+        $trailingStatus = '/^(.*?)\s+\((?:'.$statuses.')\b[^()]*(?:\([^()]*\)[^()]*)*\)\.?\s*$/';
+
+        return 1 === preg_match($trailingStatus, $line, $item) ? $item[1] : $line;
     }
 }
