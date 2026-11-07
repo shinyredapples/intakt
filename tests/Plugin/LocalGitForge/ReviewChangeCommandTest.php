@@ -159,7 +159,7 @@ final class ReviewChangeCommandTest extends TestCase
 
     public function testTheCostLineOfACostTooSmallForFourDecimalsIsNotPrintedAsZero(): void
     {
-        $reviews = $this->createStub(ChangeReviews::class);
+        $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.000038)));
 
         $tester = $this->whenTheCommandRuns($reviews);
@@ -169,7 +169,7 @@ final class ReviewChangeCommandTest extends TestCase
 
     public function testTheCostLineOfACostOfNothingIsPrintedAsZero(): void
     {
-        $reviews = $this->createStub(ChangeReviews::class);
+        $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.0)));
 
         $tester = $this->whenTheCommandRuns($reviews);
