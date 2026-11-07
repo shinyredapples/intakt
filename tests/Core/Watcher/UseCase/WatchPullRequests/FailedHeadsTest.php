@@ -279,8 +279,13 @@ final class FailedHeadsTest extends KernelTestCase
     public function testAnInstallWideRecordWhoseFlushFailsLeavesTheEntityManagerOpenForTheNextHead(): void
     {
         [$first, $next] = $this->twoQueuedHeads();
-        // A trigger, so the real flush fails as a locked Budget table would and closes the entity manager every holder shares.
-        $this->entities->getConnection()->executeStatement("CREATE TRIGGER refuse_item_failure BEFORE INSERT ON budget_item_failure BEGIN SELECT RAISE(ABORT, 'Budget write refused'); END");
+        // A unique item and an earlier row of each head under another error, because that refuses only the real flush, on every engine, as a locked Budget table would, and closes the entity manager every holder shares.
+        foreach ([$first, $next] as $head) {
+            $this->entities->persist(new ItemFailureRecord(json_encode(['watcher head', 'alpha', $head->id->value], JSON_THROW_ON_ERROR), 'earlier error', $this->clock->now()));
+        }
+        $this->entities->flush();
+        $this->entities->clear();
+        $this->entities->getConnection()->executeStatement('CREATE UNIQUE INDEX refuse_item_failure ON budget_item_failure (item)');
         $failed = $this->failedHeads(new DashboardLedger());
 
         $failed->backOff('alpha', $first, new RuntimeException('CI endpoint down'));
