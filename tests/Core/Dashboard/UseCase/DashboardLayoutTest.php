@@ -55,8 +55,7 @@ final class DashboardLayoutTest extends DashboardPageTestCase
     {
         preg_match("/localStorage\\.getItem\\('([^']+)'\\)/", $this->layout()->filter('head script')->text(), $key);
 
-        self::assertArrayHasKey(1, $key);
-        self::assertStringContainsString("'".$key[1]."'", (string) file_get_contents(self::THEME_CONTROLLER));
+        self::assertStringContainsString("'".($key[1] ?? 'no key in the head script')."'", (string) file_get_contents(self::THEME_CONTROLLER));
     }
 
     public function testTheTokenSheetHoldsEveryTokenOfTheDesignForBothThemes(): void
@@ -122,7 +121,7 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         $this->browser->request('GET', $address);
         self::assertResponseIsSuccessful();
 
-        // The asset server answers with a BinaryFileResponse, whose content only the internal response holds.
+        // Read from the internal response, because the asset server answers with a BinaryFileResponse, whose getContent() is empty.
         return $this->browser->getInternalResponse()->getContent();
     }
 
