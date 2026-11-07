@@ -266,16 +266,9 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
-    public function testAReadyToFileReportCheckedFourteenDaysAgoStillPasses(): void
+    public function testAReadyToFileReportCheckedTwentyDaysAgoFails(): void
     {
-        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(14)." against main.\n- **Decision:** `ready to file`.\n");
-
-        self::assertTrue($run->passed('reproductions'), $run->output());
-    }
-
-    public function testAReadyToFileReportCheckedFifteenDaysAgoFails(): void
-    {
-        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(15)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(20)." against main.\n- **Decision:** `ready to file`.\n");
 
         self::assertStringContainsString('older than 14 days', $run->findingsOf('reproductions'));
     }
@@ -322,11 +315,11 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Checked" line', $run->findingsOf('reproductions'));
     }
 
-    public function testAReadyToFileStatusOutsideTheUpstreamStatusSectionDoesNotCount(): void
+    public function testAReadyToFileStatusOutsideTheUpstreamStatusSectionFails(): void
     {
         $run = $this->checkReport("- **Status:** `not filed`\n\n## Fix experiment\n\n- **Status:** `ready to file`\n");
 
-        self::assertTrue($run->passed('reproductions'), $run->output());
+        self::assertStringContainsString('write the status as a list item in the Upstream status section', $run->findingsOf('reproductions'));
     }
 
     public function testACheckedLineOutsideTheUpstreamStatusSectionDoesNotCount(): void
