@@ -25,7 +25,7 @@ final class SmokeTestScriptTest extends TestCase
         esac
         BASH;
 
-    // A running container with the admin API unpublished; ADMIN_ON_ADDRESS makes it answer on the container's own address too.
+    // ADMIN_ON_ADDRESS models an admin API bound to every interface, because a Linux host reaches the container's address without a published port.
     private const string FAKE_RUNNING_DOCKER = <<<'BASH'
         #!/bin/bash
         case "$1" in
@@ -121,7 +121,7 @@ final class SmokeTestScriptTest extends TestCase
 
     private function smokeTest(string ...$arguments): Process
     {
-        return $this->script(['bash', 'docker/smoke-test.sh', ...$arguments], []);
+        return $this->script(['bash', 'docker/smoke-test.sh', ...array_values($arguments)], []);
     }
 
     /**
