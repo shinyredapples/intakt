@@ -50,6 +50,11 @@ final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('locator-has-local-key');
     }
 
+    public function testALocatorTypedAsThePsrContainerIsCheckedAsTheApplicationContainer(): void
+    {
+        $this->assertRejectedBy('phpstan', 'psr-typed-locator-has-local-key', 'src/Platforms.php:17 intakt.containerUnknownHasId Service "local" is not registered in the container');
+    }
+
     public function testAskingTheContainerBagForAParameterIsAllowed(): void
     {
         $this->assertRuleAccepts('container-bag-has-parameter');
