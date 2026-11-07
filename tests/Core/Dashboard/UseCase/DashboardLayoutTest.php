@@ -41,7 +41,7 @@ final class DashboardLayoutTest extends DashboardPageTestCase
 
     public function testTheThemeIsSetInTheHeadBeforeAnyStylesheet(): void
     {
-        $head = (string) $this->layout()->filter('head')->html();
+        $head = $this->layout()->filter('head')->html();
 
         $script = strpos($head, '<script>');
         self::assertNotFalse($script);
@@ -53,7 +53,7 @@ final class DashboardLayoutTest extends DashboardPageTestCase
 
     public function testTheThemeControllerStoresTheThemeUnderTheKeyTheHeadScriptReads(): void
     {
-        preg_match("/localStorage\\.getItem\\('([^']+)'\\)/", (string) $this->layout()->filter('head script')->text(), $key);
+        preg_match("/localStorage\\.getItem\\('([^']+)'\\)/", $this->layout()->filter('head script')->text(), $key);
 
         self::assertArrayHasKey(1, $key);
         self::assertStringContainsString("'".$key[1]."'", (string) file_get_contents(self::THEME_CONTROLLER));
