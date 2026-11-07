@@ -162,9 +162,9 @@ final readonly class ProcessQueue
             return [$this->notStarted(), ''];
         }
 
-        // Because the limits are whole seconds: a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it.
+        // Because the limits are whole seconds, the reason of a job timeout equal to the overall limit is the job's own, not a pass that started a moment before it; the process still stops at the time left.
         $ownTimeout = $this->seconds <= ceil($left);
-        $process = new Process($command, $directory, [...getenv(), ...$environment], null, $ownTimeout ? $this->seconds : $left);
+        $process = new Process($command, $directory, [...getenv(), ...$environment], null, min($this->seconds, $left));
 
         try {
             $process->start();

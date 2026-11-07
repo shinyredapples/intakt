@@ -90,6 +90,23 @@ final class ProcessQueueTest extends SandboxTestCase
         self::assertSame('timed out after 2 seconds, last output: waiting for the server', $results['sqlite']->firstErrorLine());
     }
 
+    public function testAJobStartedJustBeforeTheOverallLimitIsStoppedAtTheLimitEvenWhenItsOwnTimeoutIsNotLonger(): void
+    {
+        $late = static function (int $worker): array {
+            usleep(900_000);
+
+            return [['php', '-r', 'usleep(700000); echo "done";'], []];
+        };
+        $started = hrtime(true);
+
+        $results = new ProcessQueue(1, 1)->run(['late' => $late], 1, $this->emptySandbox()->root);
+        $elapsed = (hrtime(true) - $started) / 1_000_000_000;
+
+        self::assertLessThan(1.35, $elapsed);
+        self::assertSame(ProcessRunner::TIMED_OUT, $results['late']->exitCode);
+        self::assertSame('timed out after 1 seconds', $results['late']->firstErrorLine());
+    }
+
     public function testAJobBuiltPastTheOverallLimitDoesNotStartAndNoJobAfterItIsBuilt(): void
     {
         $sandbox = $this->emptySandbox();
