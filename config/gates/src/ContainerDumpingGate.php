@@ -51,8 +51,9 @@ final readonly class ContainerDumpingGate implements Gate
     {
         // Because a fresh cache is not compiled again, a dump that is gone comes back only when the cache is cleared.
         $command = is_file(self::containerXml($workspace->root)) ? 'cache:warmup' : 'cache:clear';
-        // Because the caller's debug or verbosity setting would skip the XML dump or silence the reason.
-        $environment = ['APP_CACHE_DIR' => self::cacheDirectory($workspace->root), 'APP_DEBUG' => '1', 'SHELL_VERBOSITY' => false];
+        // Because the kernel compiles the container and its XML dump into APP_BUILD_DIR when the caller sets one, away from the cache this gate reads, the build directory is pinned with the cache directory; the caller's debug or verbosity setting would skip the XML dump or silence the reason.
+        $cache = self::cacheDirectory($workspace->root);
+        $environment = ['APP_CACHE_DIR' => $cache, 'APP_BUILD_DIR' => $cache, 'APP_DEBUG' => '1', 'SHELL_VERBOSITY' => false];
 
         return $workspace->command([PHP_BINARY, $console, $command, '--env=test', '--no-optional-warmers', '--no-ansi', '--no-interaction'], $environment);
     }

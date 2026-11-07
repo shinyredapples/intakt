@@ -62,6 +62,28 @@ final class ContainerDumpingGateTest extends SandboxTestCase
         self::assertStringContainsString('src/Lookup.php:17 symfonyContainer.serviceNotFound Service "fixture.mailer" is not registered in the container.', $second->findingsOf('phpstan'));
     }
 
+    public function testARegisteredServiceIdPassesStaticAnalysisWhenTheCallerNamesAnotherBuildDirectory(): void
+    {
+        $sandbox = $this->sandboxWith('registered-service-id');
+        $sandbox->borrowKernel();
+
+        $run = $sandbox->checkWith(['APP_BUILD_DIR' => $this->emptySandbox()->root], '--only=phpstan');
+
+        self::assertTrue($run->passed('phpstan'), $run->output());
+    }
+
+    public function testATreeIsJudgedByItsFreshContainerWhenTheCallerNamesAnotherBuildDirectory(): void
+    {
+        $sandbox = $this->kernelSandbox();
+        $first = $sandbox->check('--only=phpstan');
+        self::assertTrue($first->passed('phpstan'), $first->output());
+        $sandbox->write('config/services.yaml', "services: {}\n");
+
+        $second = $sandbox->checkWith(['APP_BUILD_DIR' => $this->emptySandbox()->root], '--only=phpstan');
+
+        self::assertStringContainsString('src/Lookup.php:17 symfonyContainer.serviceNotFound Service "fixture.mailer" is not registered in the container.', $second->findingsOf('phpstan'));
+    }
+
     public function testAFailingConsoleInTheAnalysedTreeFailsStaticAnalysis(): void
     {
         $sandbox = $this->sandboxWith('registered-service-id');
