@@ -6,7 +6,9 @@ namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Process\Process;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Uri\Rfc3986\Uri;
 
 // Because a mock that loads a missing asset or a screenshot job for a missing page breaks the design documents.
@@ -48,7 +50,7 @@ final class DashboardMocksTest extends TestCase
                 foreach ($assets as $asset) {
                     // Resolved the way a browser does, because RFC 3986 drops the dot segments that climb above the root.
                     $status = $this->statusOf(new Uri($asset, $pageUrl)->toString());
-                    if (!str_contains($status, ' 200 ')) {
+                    if ('HTTP 200' !== $status) {
                         $failed[] = $page.': '.$asset.' -> '.$status;
                     }
                 }
@@ -127,7 +129,7 @@ final class DashboardMocksTest extends TestCase
     private function waitUntilServed(string $url): void
     {
         for ($attempt = 0; $attempt < 100; ++$attempt) {
-            if (str_contains($this->statusOf($url), ' 200 ')) {
+            if ('HTTP 200' === $this->statusOf($url)) {
                 return;
             }
             usleep(50_000);
@@ -138,9 +140,11 @@ final class DashboardMocksTest extends TestCase
 
     private function statusOf(string $url): string
     {
-        $context = stream_context_create(['http' => ['ignore_errors' => true, 'timeout' => 2]]);
-        file_get_contents($url, false, $context);
-
-        return http_get_last_response_headers()[0] ?? 'no response';
+        // Not file_get_contents(), because its warning on a refused connection fails the run while the server starts.
+        try {
+            return 'HTTP '.HttpClient::create()->request('GET', $url, ['timeout' => 2])->getStatusCode();
+        } catch (TransportExceptionInterface) {
+            return 'no response';
+        }
     }
 }
