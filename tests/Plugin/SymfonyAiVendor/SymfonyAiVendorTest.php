@@ -285,6 +285,26 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
     }
 
+    public function testTheLiveTextOfARetryIsReportedUnderTheReviewerTheLedgerRecords(): void
+    {
+        $calls = 0;
+        $answer = static function () use (&$calls): StreamResult {
+            return 1 === ++$calls ? throw new MaxOutputTokensException('Truncated at the output limit.') : new StreamResult((static function (): Generator {
+                yield new TextDelta(VerdictDocument::fromTheDesign()->json());
+            })());
+        };
+        $updates = new RecordedRoundUpdates();
+        $reviewerId = new UuidV7();
+        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
+
+        $verdict = $this->vendorWithOutputLimit($answer, 16000, new InMemoryLedger(), $updates)->review('alpha', Tier::Strong, $request)->verdict;
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(2, $calls);
+        self::assertNotSame([], $updates->seen);
+        self::assertSame([], array_filter($updates->seen, static fn (string $update): bool => !str_contains($update, $reviewerId->toRfc4122())));
+    }
+
     public function testARetryOnATierWithoutAnOutputLimitGetsTwiceTheTiersDefault(): void
     {
         /** @var list<mixed> $limits */
@@ -901,9 +921,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
         return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
-    private function reviewer(): ReviewerAgent
+    private function reviewer(RecordedRoundUpdates $updates = new RecordedRoundUpdates()): ReviewerAgent
     {
-        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        return new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($updates, new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
     }
 
     private static function withUsage(string $json, TokenUsageInterface $usage = new TokenUsage(
@@ -969,7 +989,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     /**
      * @param positive-int $maxOutput
      */
-    private function vendorWithOutputLimit(Closure $answer, int $maxOutput, InMemoryLedger $ledger): SymfonyAiVendor
+    private function vendorWithOutputLimit(Closure $answer, int $maxOutput, InMemoryLedger $ledger, RecordedRoundUpdates $updates = new RecordedRoundUpdates()): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => $maxOutput]]],
@@ -978,7 +998,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create());
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer($updates), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $this->limit, new MockClock(self::NOW));
     }
 
     // The tier's own provider is the subscription CLI, which cannot read the checkout, and its one substitute reads it.
