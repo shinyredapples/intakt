@@ -522,6 +522,8 @@ The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is se
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"
 ```
 
+Run it, then ask your agent to start a review with the values of the review command above: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository` (the default `.` is not the sample) and the text after `--task=` as the task. A start that cannot make or read the token file stops before the seed with `intakt: could not make or read the MCP owner token in /app/var/data/mcp-owner-token`; two starts at once on one volume get the same token.
+
 The token is a secret that sits in the log (`docker compose logs intakt`) and in the volume; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
 
 Later starts keep both as they are (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the first start stops with `Set ANTHROPIC_API_KEY or OPENAI_API_KEY to seed the sample project.`; without one of the secrets it stops naming the missing one.

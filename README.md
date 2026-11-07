@@ -33,7 +33,7 @@ Then start the review with the command the log prints at the end of the first st
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"
 ```
 
-Then ask the agent to start a review of `sample-change` in the project `sample` ([details](docs/user/mcp.md)); how a review runs inside is drawn in [the review flow](docs/architecture/review-flow.md). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+Then ask the agent to start a review with the values of the printed review command: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository`, and the text after `--task=` as the task ([details](docs/user/mcp.md)); how a review runs inside is drawn in [the review flow](docs/architecture/review-flow.md). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
 
 ### Timed run
 
