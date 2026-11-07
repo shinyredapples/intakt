@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Shadow;
 
-use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeReview;
