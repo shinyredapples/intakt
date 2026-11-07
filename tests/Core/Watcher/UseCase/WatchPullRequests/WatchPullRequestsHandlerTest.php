@@ -347,6 +347,58 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame('the lock store is down', $exception->getPrevious()?->getMessage());
     }
 
+    public function testAFailureOfTheTickIsRethrownWhenTheLockStoreStaysDownWhileItsHeadLockIsGivenBack(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->useLedger(new InMemoryLedger(0));
+        $this->locks->changeLocksStayDown = true;
+
+        $this->tickExpectingFailure();
+
+        self::assertSame([SharedHold::FailureBackOff], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+    }
+
+    public function testTheFirstFailedGiveBackIsRethrownWhenTheLockStoreStaysDown(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->changeLocksStayDown = true;
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException $failure) {
+            self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
+        }
+    }
+
+    public function testAFailureOfTheTickIsRethrownWhenReportingTheLockStoreFailureFailsToo(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('6', self::UNREADABLE, '2026-11-02T09:00:00Z'));
+        $this->useLedger(new InMemoryLedger(0));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+        $this->handler = $this->handler($this->installWideThatCannotRecordAHold());
+
+        $this->tickExpectingFailure();
+
+        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === (($line[1]['exception'] ?? null)?->getMessage())));
+    }
+
+    public function testAFailedGiveBackIsRethrownWhenReportingItFailsToo(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->locks->deleteFailure = new LockStorageException('the lock store is down');
+        $this->handler = $this->handler($this->installWideThatCannotRecordAHold());
+
+        try {
+            $this->tick();
+            self::fail('A lock store that fails must fail the tick.');
+        } catch (LockReleasingException $failure) {
+            self::assertSame('the lock store is down', $failure->getPrevious()?->getMessage());
+        }
+
+        self::assertNotNull(array_find($this->logger->logged, static fn (array $line): bool => 'the hold cannot be written' === (($line[1]['exception'] ?? null)?->getMessage())));
+    }
+
     public function testAFailedStartIsTriedAgainOnceItsBackOffHasPassedEvenWhenTheListingIsUnchanged(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
@@ -883,6 +935,14 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         }
     }
 
+    private function installWideThatCannotRecordAHold(): InstallWideFailures
+    {
+        $installWide = self::createStub(InstallWideFailures::class);
+        $installWide->method('lockStoreFailed')->willThrowException(new RuntimeException('the hold cannot be written'));
+
+        return $installWide;
+    }
+
     private function tickExpectingFailure(): void
     {
         try {
@@ -925,7 +985,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
-        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide), $decisions, $settle));
+        return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger),$decisions, $settle));
     }
 
     private function panel(): Panel

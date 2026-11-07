@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
 use Override;
+use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -16,6 +17,7 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
 {
     public ?Closure $beforeChangeLock = null;
     public ?Throwable $deleteFailure = null;
+    public bool $changeLocksStayDown = false;
     /** @var list<string> */
     public array $changeLocksGivenBack = [];
     private readonly InMemoryStore $inner;
@@ -41,6 +43,7 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     #[Override]
     public function delete(Key $key): void
     {
+        $this->failIfDown($key);
         $failure = $this->deleteFailure;
 
         // Thrown once, because the lock's destructor releases it again later, and a store that still failed then would throw outside any test.
@@ -60,6 +63,8 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     #[Override]
     public function exists(Key $key): bool
     {
+        $this->failIfDown($key);
+
         return $this->inner->exists($key);
     }
 
@@ -67,5 +72,13 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     public function putOffExpiration(Key $key, float $ttl): void
     {
         $this->inner->putOffExpiration($key, $ttl);
+    }
+
+    // Saving still works, because a real outage usually starts after the lock was taken and then lasts past the tick.
+    private function failIfDown(Key $key): void
+    {
+        if ($this->changeLocksStayDown && str_starts_with((string) $key, 'watcher-change-')) {
+            throw new LockStorageException('the lock store is down');
+        }
     }
 }
