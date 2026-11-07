@@ -6,6 +6,7 @@ namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\Encoder\JsonEncode;
@@ -53,9 +54,20 @@ final readonly class ReviewReport
         }
 
         $tokens = $review->tokens;
-        $lines[] = sprintf('tokens: %d calls, %d prompt, %d completion, %d total', $tokens->calls, $tokens->prompt, $tokens->completion, $tokens->total);
+        $lines[] = sprintf('tokens: %d calls, %d prompt%s, %d completion, %d total', $tokens->calls, $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total);
 
         return $lines;
+    }
+
+    // Only the parts a vendor reported, so a round without caching reads as before.
+    private function cacheParts(RoundTokens $tokens): string
+    {
+        $parts = array_filter(['cache read' => $tokens->cacheRead, 'cache write' => $tokens->cacheWrite, 'cached' => $tokens->cached], static fn (int $count): bool => 0 < $count);
+        if ([] === $parts) {
+            return '';
+        }
+
+        return ' ('.implode(', ', array_map(static fn (string $label, int $count): string => $count.' '.$label, array_keys($parts), $parts)).')';
     }
 
     private function place(Finding $finding): string

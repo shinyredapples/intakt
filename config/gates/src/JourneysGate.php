@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-final class JourneysGate implements Gate
+final class JourneysGate implements RunsTheChangesCode
 {
     private const string DIRECTORY = 'tests/Journeys';
     // Above bin/instance's default of a minute, because a journey walks several pages and commands.

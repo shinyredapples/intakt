@@ -25,6 +25,8 @@ final class ProjectsConfiguration implements ConfigurationInterface
         foreach (Tier::cases() as $tier) {
             $mapping = $tiers->arrayNode($tier->value)->children();
             $this->addMapping($mapping);
+            // One limit per tier, also for its substitutes, so a verdict has room whichever provider answers.
+            $mapping->integerNode('max_output')->min(1)->defaultValue($tier->defaultMaxOutput());
             // In the order they are tried, and none by default, so a tier never leaves its provider unless the owner named another.
             $this->addMapping($mapping->arrayNode('substitutes')->defaultValue([])->arrayPrototype()->children());
         }

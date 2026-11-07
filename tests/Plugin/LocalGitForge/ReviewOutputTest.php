@@ -48,7 +48,7 @@ final class ReviewOutputTest extends TestCase
         $output = $this->whenTheReviewIsWritten();
 
         self::assertSame(
-            ['round_id' => 'round-1', 'round' => 2, 'decision' => 'changes', 'tokens' => ['calls' => 2, 'prompt' => 100, 'completion' => 20, 'total' => 120], 'reasons' => ['a reason']],
+            ['round_id' => 'round-1', 'round' => 2, 'decision' => 'changes', 'tokens' => ['calls' => 2, 'prompt' => 100, 'cache_read' => 60, 'cache_write' => 30, 'cached' => 5, 'completion' => 20, 'total' => 120], 'reasons' => ['a reason']],
             array_diff_key($output, ['exit_code' => true, 'verdicts' => true, 'act_list' => true]),
         );
     }
@@ -63,7 +63,7 @@ final class ReviewOutputTest extends TestCase
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
         ];
-        $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 20, 120), ['a reason']);
+        $review = new ChangeReview('round-1', 2, Decision::Changes, $verdicts, [$finding], new RoundTokens(2, 100, 60, 30, 5, 20, 120), ['a reason']);
 
         $json = StoredSerializerFactory::create()->serialize(ReviewOutput::of($review), 'json', [AbstractNormalizer::ATTRIBUTES => ReviewOutput::FIELDS]);
         $output = json_decode($json, true, flags: JSON_THROW_ON_ERROR);

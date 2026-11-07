@@ -25,6 +25,14 @@ final readonly class Account
         return $this->provider->value.'.'.$this->name;
     }
 
+    // Null for a key in another shape, because a usage row may hold one written before accounts had keys.
+    public static function providerOfKey(string $key): ?Provider
+    {
+        $parts = explode('.', $key, 2);
+
+        return 2 === count($parts) ? Provider::tryFrom($parts[0]) : null;
+    }
+
     /**
      * @return list<string>
      */
