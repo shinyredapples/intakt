@@ -131,36 +131,32 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertSame(['cannot read docs/highlights.d/layout.md'], new HighlightFragments()->assembled($this->sandbox->root)->findings);
     }
 
-    public function testACurrentAssembledFileHasNoFindings(): void
+    public function testThePageIsTheAssemblyEvenWhenALocalCopyIsStale(): void
     {
-        $this->sandbox->write('docs/highlights.d/1-gates.md', "## Tooling\n| Gates | done | T1 (#5) |\n");
         $this->sandbox->write('docs/highlights.md', $this->assembled()->text);
+        $this->sandbox->write('docs/highlights.d/1045-new-feature.md', "## Tooling\n| New feature | done | #1045 |\n");
 
-        self::assertSame([], new HighlightFragments()->findingsOn($this->sandbox->root));
+        self::assertStringContainsString('| New feature | done | #1045 |', (string) new HighlightFragments()->pageOn($this->sandbox->root));
     }
 
-    public function testAHandEditedAssembledFileFails(): void
+    public function testBrokenFragmentsReadAsAnEmptyPage(): void
     {
-        $this->sandbox->write('docs/highlights.md', $this->assembled()->text."\n- Hand edit\n");
+        $this->sandbox->write('docs/highlights.d/1-gates.md', "## Tools\n| Gates | done | T1 (#5) |\n");
+        $this->assembled();
 
-        self::assertSame(
-            ['docs/highlights.md is not the assembly of docs/highlights.d/ (edited by hand or not rebuilt): add or change a fragment there and run bin/highlights'],
-            new HighlightFragments()->findingsOn($this->sandbox->root),
-        );
+        self::assertSame('', new HighlightFragments()->pageOn($this->sandbox->root));
     }
 
-    public function testAMissingAssembledFileFails(): void
-    {
-        $this->sandbox->write('docs/highlights.d/layout.md', self::LAYOUT);
-
-        self::assertCount(1, new HighlightFragments()->findingsOn($this->sandbox->root));
-    }
-
-    public function testATreeWithoutFragmentsHasNoFindings(): void
+    public function testWithoutFragmentsThePageIsTheFileItself(): void
     {
         $this->sandbox->write('docs/highlights.md', 'anything');
 
-        self::assertSame([], new HighlightFragments()->findingsOn($this->sandbox->root));
+        self::assertSame('anything', new HighlightFragments()->pageOn($this->sandbox->root));
+    }
+
+    public function testWithoutFragmentsOrAFileThePageIsEmpty(): void
+    {
+        self::assertSame('', new HighlightFragments()->pageOn($this->sandbox->root));
     }
 
     private function assembled(): HighlightAssembly

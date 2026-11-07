@@ -27,28 +27,64 @@ final class HighlightsAssemblyGateTest extends SandboxTestCase
 {
     private const string LAYOUT = "# Highlights\n\n## Tooling\n\n| Feature | Status | Where |\n|---|---|---|\n";
 
-    private const string ASSEMBLED = self::LAYOUT."| Gates | done | T1 (#5) |\n";
-
-    public function testAnAssembledFileThatMatchesItsFragmentsPasses(): void
+    public function testFragmentsWithoutAPagePass(): void
     {
-        $run = $this->checkWithAssembled(self::ASSEMBLED);
+        $run = $this->sandboxWithFragments()->check('--only=highlights');
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
 
-    public function testAHandEditOfTheAssembledFileFails(): void
+    public function testAFragmentOnlyChangePassesNextToAStaleLocalPage(): void
     {
-        $run = $this->checkWithAssembled(self::ASSEMBLED."| Clock | done | T2 (#6) |\n");
+        $sandbox = $this->sandboxWithFragments();
+        $sandbox->write('docs/highlights.md', self::LAYOUT."| Gates | done | T1 (#5) |\n");
+        $sandbox->write('docs/highlights.d/1045-new-feature.md', "## Tooling\n| New feature | done | T2 (#1045) |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testACommittedPageFails(): void
+    {
+        $sandbox = $this->sandboxWithFragments();
+        $sandbox->startRepository();
+        $sandbox->write('docs/highlights.md', self::LAYOUT."| Gates | done | T1 (#5) |\n| Hand edit | done | T3 (#7) |\n");
+        $sandbox->commitAll('docs: edit the highlights page by hand');
+
+        $run = $sandbox->check('--only=highlights');
 
         self::assertTrue($run->failed('highlights'), $run->output());
-        self::assertStringContainsString('docs/highlights.md is not the assembly of docs/highlights.d/', $run->findingsOf('highlights'));
+        self::assertStringContainsString('docs/highlights.md is committed, but bin/highlights generates it', $run->findingsOf('highlights'));
+    }
+
+    public function testAnUncommittedLocalPagePassesInARepository(): void
+    {
+        $sandbox = $this->sandboxWithFragments();
+        $sandbox->startRepository();
+        $sandbox->commitAll('docs: add the highlight fragments');
+        $sandbox->write('docs/highlights.md', 'a local copy, edited or not');
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->passed('highlights'), $run->output());
+    }
+
+    public function testTheTableRulesApplyToTheAssembledRows(): void
+    {
+        $sandbox = $this->sandboxWithFragments();
+        $sandbox->write('docs/highlights.d/7-clock.md', "## Tooling\n| Clock | finished | T2 (#6) |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md:8: status "finished"', $run->findingsOf('highlights'));
     }
 
     public function testABrokenFragmentFailsWithItsLine(): void
     {
         $sandbox = $this->sandboxWithFragments();
         $sandbox->write('docs/highlights.d/7-clock.md', "## Clocks\n| Clock | done | T2 (#6) |\n");
-        $sandbox->write('docs/highlights.md', self::ASSEMBLED);
 
         $run = $sandbox->check('--only=highlights');
 
@@ -56,20 +92,26 @@ final class HighlightsAssemblyGateTest extends SandboxTestCase
         self::assertStringContainsString('docs/highlights.d/7-clock.md:1: section "Clocks"', $run->findingsOf('highlights'));
     }
 
-    public function testFragmentsWithoutAnAssembledFileFail(): void
-    {
-        $run = $this->sandboxWithFragments()->check('--only=highlights');
-
-        self::assertTrue($run->failed('highlights'), $run->output());
-        self::assertStringContainsString('docs/highlights.md is not the assembly of docs/highlights.d/', $run->findingsOf('highlights'));
-    }
-
-    private function checkWithAssembled(string $assembled): CheckRun
+    public function testTwoChangesThatEachAddARowMergeWithoutAConflictAndPass(): void
     {
         $sandbox = $this->sandboxWithFragments();
-        $sandbox->write('docs/highlights.md', $assembled);
+        $sandbox->startRepository();
+        $sandbox->commitAll('docs: add the highlight fragments');
+        $sandbox->git('checkout', '--quiet', '-b', 'first');
+        $sandbox->write('docs/highlights.d/10-first.md', "## Tooling\n| First | done | T10 (#10) |\n");
+        $sandbox->commitAll('docs: add the first highlight');
+        $sandbox->git('checkout', '--quiet', 'main');
+        $sandbox->git('checkout', '--quiet', '-b', 'second');
+        $sandbox->write('docs/highlights.d/11-second.md', "## Tooling\n| Second | done | T11 (#11) |\n");
+        $sandbox->commitAll('docs: add the second highlight');
+        $sandbox->git('checkout', '--quiet', 'main');
+        $sandbox->git('merge', '--quiet', '--no-edit', 'first');
 
-        return $sandbox->check('--only=highlights');
+        $merge = $sandbox->git('merge', '--quiet', '--no-edit', 'second');
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($merge->succeeded(), $merge->output.$merge->errors);
+        self::assertTrue($run->passed('highlights'), $run->output());
     }
 
     private function sandboxWithFragments(): Sandbox

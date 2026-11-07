@@ -41,13 +41,13 @@ final readonly class HighlightsGate implements Gate
     public function run(Workspace $workspace): GateResult
     {
         $file = $workspace->root.'/'.self::FILE;
-        $assemblyFindings = $this->fragments->findingsOn($workspace->root);
+        $assembled = $this->fragments->areOn($workspace->root);
 
-        if (!is_file($file)) {
-            return GateResult::withFindings($this->name(), $assemblyFindings)->noted(self::FILE.' does not exist');
+        if (!$assembled && !is_file($file)) {
+            return GateResult::passedBecause($this->name(), self::FILE.' does not exist');
         }
 
-        $contents = file_get_contents($file);
+        $contents = $assembled ? $this->fragments->assembled($workspace->root) : file_get_contents($file);
 
         if (false === $contents) {
             return GateResult::failedBecause($this->name(), 'cannot read '.self::FILE);
@@ -59,9 +59,24 @@ final readonly class HighlightsGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $findings = [...$assemblyFindings, ...$this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked))];
+        $findings = $contents instanceof HighlightAssembly
+            ? [...$this->committedPageFindings($tracked), ...$contents->findings, ...$this->findingsOf($contents->text, $this->existenceOn($workspace->root, $tracked))]
+            : $this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked));
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function committedPageFindings(?ProcessResult $tracked): array
+    {
+        // Without git nothing is committed, and a page bin/highlights wrote locally is fine.
+        if (!$tracked instanceof ProcessResult || !in_array(self::FILE, explode("\0", $tracked->output), true)) {
+            return [];
+        }
+
+        return [$this->fragments->committedPageFinding()];
     }
 
     /**

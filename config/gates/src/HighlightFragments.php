@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-// One fragment per change, so two pull requests never edit the same lines of docs/highlights.md.
+// One fragment per change and no committed page, so two pull requests never touch the same file.
 final readonly class HighlightFragments
 {
     public const string ASSEMBLED = 'docs/highlights.md';
@@ -13,26 +13,27 @@ final readonly class HighlightFragments
 
     private const string FRAGMENT_NAME = '/^\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/';
 
-    /**
-     * @return list<string>
-     */
-    public function findingsOn(string $root): array
+    public function areOn(string $root): bool
     {
-        if (!is_dir($root.'/'.self::DIRECTORY)) {
-            return [];
+        return is_dir($root.'/'.self::DIRECTORY);
+    }
+
+    // The gates read the page as bin/highlights would write it, so a stale or hand-edited local copy never counts.
+    // Broken fragments read as an empty page, which the highlights gate explains; null means the page cannot be read.
+    public function pageOn(string $root): ?string
+    {
+        if ($this->areOn($root)) {
+            return $this->assembled($root)->text;
         }
 
-        $assembly = $this->assembled($root);
+        $file = $root.'/'.self::ASSEMBLED;
 
-        if ([] !== $assembly->findings) {
-            return $assembly->findings;
-        }
+        return is_file($file) ? $this->contentsOf($file) : '';
+    }
 
-        if ($assembly->text === $this->contentsOf($root.'/'.self::ASSEMBLED)) {
-            return [];
-        }
-
-        return [self::ASSEMBLED.' is not the assembly of '.self::DIRECTORY.'/ (edited by hand or not rebuilt): add or change a fragment there and run bin/highlights'];
+    public function committedPageFinding(): string
+    {
+        return self::ASSEMBLED.' is committed, but bin/highlights generates it from '.self::DIRECTORY.'/ and git ignores it: remove it from the index (git rm --cached '.self::ASSEMBLED.') and put the change in a fragment';
     }
 
     public function assembled(string $root): HighlightAssembly

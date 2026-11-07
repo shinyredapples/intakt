@@ -30,6 +30,7 @@ final readonly class ReproductionRowsGate implements Gate
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
         private CheckedReports $reports,
+        private HighlightFragments $highlights,
     ) {
     }
 
@@ -46,9 +47,9 @@ final readonly class ReproductionRowsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $contents = is_file($workspace->root.'/'.self::HIGHLIGHTS) ? file_get_contents($workspace->root.'/'.self::HIGHLIGHTS) : '';
+        $contents = $this->highlights->pageOn($workspace->root);
 
-        if (false === $contents) {
+        if (null === $contents) {
             return GateResult::failedBecause($this->name(), 'cannot read '.self::HIGHLIGHTS);
         }
 
