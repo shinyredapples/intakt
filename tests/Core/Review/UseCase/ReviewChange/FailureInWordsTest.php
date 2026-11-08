@@ -8,6 +8,8 @@ use Intakt\Core\Review\UseCase\ReviewChange\FailureInWords;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 
 #[CoversClass(FailureInWords::class)]
@@ -16,6 +18,16 @@ final class FailureInWordsTest extends TestCase
     public function testTheOutputLimitIsToldInPlainWords(): void
     {
         self::assertSame('stopped at its output limit', new FailureInWords()->of(MaxOutputTokensException::class));
+    }
+
+    public function testARejectedKeyIsToldInPlainWords(): void
+    {
+        self::assertSame('the provider rejected the key', new FailureInWords()->of(ProviderRejectedTheKey::class));
+    }
+
+    public function testATransientProviderFailureIsToldInPlainWords(): void
+    {
+        self::assertSame('the provider kept failing', new FailureInWords()->of(ProviderFailedTransiently::class));
     }
 
     public function testAnUnknownFailureClassIsToldInGenericWordsWithoutTheClassName(): void

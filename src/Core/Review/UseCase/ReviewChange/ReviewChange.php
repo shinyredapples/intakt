@@ -46,8 +46,8 @@ final readonly class ReviewChange implements ChangeReviews
         private ChangeDecision $decision,
         private StoredVerdicts $verdicts,
         private ClockInterface $clock,
+        private FailureInWords $failures,
         private int $waitCeilingSeconds = self::WAIT_CEILING_SECONDS,
-        private FailureInWords $failures = new FailureInWords(),
     ) {
     }
 

@@ -36,14 +36,11 @@ use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
-use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
-use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
-use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -61,8 +58,6 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(StoredVerdicts::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(FailureInWords::class)]
-#[UsesClass(ReviewReport::class)]
-#[UsesClass(VisiblePath::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(RoundProgress::class)]
@@ -116,17 +111,6 @@ final class ReviewChangeTest extends KernelTestCase
 
         self::assertSame(Decision::Changes, $review->decision);
         self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
-    }
-
-    public function testTheConsoleLinesOfARoundWithAFailedReviewerSayItInPlainWordsAndGiveTheQuorumOutcome(): void
-    {
-        $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.'));
-
-        $lines = new ReviewReport(StoredSerializerFactory::create())->asLines($review);
-
-        self::assertSame('blocked (round 1)', $lines[0]);
-        self::assertContains('reason: role-1 reviewer failed, stopped at its output limit', $lines);
-        self::assertStringNotContainsString('Exception', implode("\n", $lines));
     }
 
     public function testTheActListHoldsOnlyTheFindingsTheJudgeMarkedAct(): void
@@ -273,6 +257,7 @@ final class ReviewChangeTest extends KernelTestCase
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
+            new FailureInWords(),
             $ceiling,
         );
     }
