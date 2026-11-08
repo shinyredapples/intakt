@@ -18,12 +18,12 @@ final class PhpFloorCheckTest extends TestCase
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-floor-'.bin2hex(random_bytes(4));
-        (new Filesystem())->mkdir($this->directory);
+        new Filesystem()->mkdir($this->directory);
     }
 
     protected function tearDown(): void
     {
-        (new Filesystem())->remove($this->directory);
+        new Filesystem()->remove($this->directory);
     }
 
     public function testARunningPhp8511FailsTheFloorCheck(): void

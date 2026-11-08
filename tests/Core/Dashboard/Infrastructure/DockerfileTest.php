@@ -59,7 +59,7 @@ final class DockerfileTest extends TestCase
 
     public function testAFrankenPhpBumpWithANewPhpPatchStillPassesTheBaseImageCheck(): void
     {
-        $bumped = "FROM dunglas/frankenphp:1.14.0-php8.5-trixie@sha256:".str_repeat('a', 64)." AS base\n";
+        $bumped = 'FROM dunglas/frankenphp:1.14.0-php8.5-trixie@sha256:'.str_repeat('a', 64)." AS base\n";
 
         self::assertTrue($this->pinsFrankenPhpOnPhp85ByDigest($bumped));
     }
