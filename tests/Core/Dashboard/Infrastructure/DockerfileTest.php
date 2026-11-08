@@ -52,7 +52,7 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+REVIEW_MCP_BASE_URL=http:\/\/localhost:7781\b/m', $this->dockerfile());
     }
 
-    public function testTheBaseStagePinsFrankenPhpOnPhp85ByDigest(): void
+    public function testTheBaseStagePinsFrankenPhpOnPhp8512ByDigest(): void
     {
         self::assertMatchesRegularExpression('/^FROM dunglas\/frankenphp:[\d.]+-php8\.5-trixie@sha256:[0-9a-f]{64} AS base$/m', $this->dockerfile());
     }
