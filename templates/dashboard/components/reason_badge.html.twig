@@ -1,0 +1,14 @@
+{#- Why a card is parked: budget, overlap, dependency or ci; label replaces the word, as in "Needs #612". -#}
+{%- set reasons = {
+    budget: {icon: 'wallet', word: 'Budget'},
+    overlap: {icon: 'pr', word: 'Overlap'},
+    dependency: {icon: 'link', word: 'Dependency'},
+    ci: {icon: 'broken', word: 'CI broken'},
+} -%}
+{%- set badge = reasons[reason] -%}
+{{ include('dashboard/components/chip.html.twig', {
+    icon: badge.icon,
+    label: label|default(badge.word),
+    broken: reason == 'ci',
+    on_page: on_page|default(false),
+}) }}

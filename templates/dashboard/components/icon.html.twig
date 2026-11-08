@@ -1,0 +1,12 @@
+{#- The icons the shared components use, drawn as in docs/design/mocks/assets/intakt.js. -#}
+{%- set paths = {
+    broken: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5.5M12 16.3v.2"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    chevron: '<path d="m6 9 6 6 6-6"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    pause: '<rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/>',
+    pr: '<circle cx="6" cy="6" r="2.2"/><circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="18" r="2.2"/><path d="M6 8.2v7.6M18 15.8V10a3 3 0 0 0-3-3h-4"/><path d="m13 5-2 2 2 2"/>',
+    wallet: '<path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3"/><rect x="4" y="8" width="16" height="11" rx="2.5"/><circle cx="16" cy="13.5" r="1.2"/>',
+} -%}
+<svg class="i{% if small|default(false) %} s{% endif %}{% if extra is defined %} {{ extra }}{% endif %}" viewBox="0 0 24 24" aria-hidden="true">{{ paths[name]|raw }}</svg>

@@ -1,0 +1,6 @@
+{#- tabs: list of {label, href, current?}. -#}
+<nav class="subtabs" aria-label="{{ label }}">
+    {%- for tab in tabs %}
+    <a href="{{ tab.href }}"{% if tab.current|default(false) %} aria-current="page"{% endif %}>{{ tab.label }}</a>
+    {%- endfor %}
+</nav>

@@ -1,0 +1,6 @@
+{#- A state chip: dot (ok, needs, broken or idle) or icon, then the words; on_page for a chip on the page rather than on a card. -#}
+<span class="chip{% if on_page|default(false) %} on-page{% endif %}{% if broken|default(false) %} broken{% else %} strong{% endif %}">
+    {%- if dot is defined %}<span class="dot {{ dot }}"></span>{% endif %}
+    {%- if icon is defined %}{{ include('dashboard/components/icon.html.twig', {name: icon, small: true}) }}{% endif %}
+    {{- label -}}
+</span>
