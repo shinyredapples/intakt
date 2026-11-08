@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -17,11 +20,12 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 
 // Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded.
-final readonly class RoundLedgerReading
+final readonly class RoundLedgerReading implements RoundCosts
 {
     public function __construct(
         private Ledger $ledger,
         private LedgerPayloads $payloads,
+        private Prices $prices,
     ) {
     }
 
@@ -43,21 +47,37 @@ final readonly class RoundLedgerReading
 
     public function tokensOf(string $roundId): RoundTokens
     {
-        $recorded = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false);
-        $calls = $this->callsStartedFor($roundId, $recorded);
-        $usages = array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
+        $recorded = $this->usageRows();
+        $calls = array_keys($this->callsStartedFor($roundId, $recorded));
 
-        $figures = array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+        $figures = $this->figuresOf($this->usagesOf($calls, $recorded));
 
         return RoundTokens::of(count($calls), $figures);
+    }
+
+    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero.
+    public function costOf(string $roundId): Cost
+    {
+        $recorded = $this->usageRows();
+        $models = $this->callsStartedFor($roundId, $recorded);
+
+        return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+    }
+
+    /**
+     * @return list<RecordedEvent>
+     */
+    private function usageRows(): array
+    {
+        return iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false);
     }
 
     /**
      * @param list<RecordedEvent> $recorded
      *
-     * @return list<string>
+     * @return array<string, string|null>
      */
-    // Only the started row names the round, so the settled or unsettled row that carries the tokens is tied to it by its call id.
+    // Keyed by call id with the model as value, because only the started row names the round and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
     private function callsStartedFor(string $roundId, array $recorded): array
     {
         $calls = [];
@@ -66,11 +86,44 @@ final readonly class RoundLedgerReading
             $started = $this->payloads->of($row, UsageStarted::class);
 
             if ('started' === $started?->phase && $roundId === $started->round) {
-                $calls[] = $started->call;
+                $calls[$started->call] = $started->model;
             }
         }
 
-        return array_values(array_unique($calls));
+        return $calls;
+    }
+
+    /**
+     * @param array<string, string|null> $models
+     */
+    private function costOfEnding(RecordedEvent $row, array $models): Cost
+    {
+        $ended = $this->endingOf($row);
+
+        if (null === $ended || !array_key_exists($ended->call, $models)) {
+            return Cost::none();
+        }
+
+        return $this->prices->costOf($models[$ended->call], $this->figuresOf($ended->usages));
+    }
+
+    /**
+     * @param list<TokenUsageRow> $usages
+     */
+    private function figuresOf(array $usages): TokenFigures
+    {
+        return array_reduce($usages, static fn (TokenFigures $sum, TokenUsageRow $usage): TokenFigures => $sum->plus($usage->figures()), TokenFigures::none());
+    }
+
+    /**
+     * @param list<string>        $calls
+     * @param list<RecordedEvent> $recorded
+     *
+     * @return list<TokenUsageRow>
+     */
+    private function usagesOf(array $calls, array $recorded): array
+    {
+        return array_merge([], ...array_map(fn (RecordedEvent $row): array => $this->usagesEndingOneOf($calls, $row), $recorded));
     }
 
     /**

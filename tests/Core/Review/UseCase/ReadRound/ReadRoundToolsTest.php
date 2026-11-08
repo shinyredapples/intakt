@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReadRound;
 
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -209,7 +210,7 @@ final class ReadRoundToolsTest extends KernelTestCase
 
     private function actList(): RoundActListTool
     {
-        return new RoundActListTool($this->readable(), $this->fixture->findingStore(), new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads()));
+        return new RoundActListTool($this->readable(), $this->fixture->findingStore(), new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([])));
     }
 
     private function findingsResource(): RoundFindingsResource

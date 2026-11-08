@@ -111,6 +111,7 @@ final readonly class ReviewChange implements ChangeReviews
             $this->verdicts->of($round),
             $this->actListOf($round),
             $this->ledger->tokensOf($roundId),
+            $this->ledger->costOf($roundId),
             $this->reasonsOf($round),
         );
     }

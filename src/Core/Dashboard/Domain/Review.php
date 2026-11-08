@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
 final readonly class Review
@@ -37,5 +38,10 @@ final readonly class Review
     public function tokens(): TokenFigures
     {
         return array_reduce($this->rounds, static fn (TokenFigures $sum, ReviewedRound $round): TokenFigures => $sum->plus($round->tokens), TokenFigures::none());
+    }
+
+    public function cost(): Cost
+    {
+        return array_reduce($this->rounds, static fn (Cost $sum, ReviewedRound $round): Cost => $sum->plus($round->cost), Cost::none());
     }
 }

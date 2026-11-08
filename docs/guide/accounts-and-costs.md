@@ -72,7 +72,7 @@ Each project gets a **share** of the week, for example 70% and 30%. A project wi
 
 ## Where the money goes, and how to spend less
 
-The dashboard shows the cost of every job, every task and every project, and where it went: building, reviewing, checks, retries.
+The dashboard shows the cost of every job, every task and every project, and where it went: building, reviewing, checks, retries. You give Intakt the price of each model in its settings; a review from the command line and the dashboard's review page both show what a round's model calls cost, the same figure on both, and when a model has no price, the cost says unknown instead of a guess. The dashboard's cost views for a job, a task and a project are planned.
 
 What costs the most is **repeating work**: a task built three times because it was unclear, or reviewed again because it waited too long. Intakt avoids that on its own (short descriptions and reviews, no repeat reviews of unchanged work, holds instead of retries, pausing the builders when reviews fall behind). The biggest saving you control is [writing clear tasks](writing-a-good-task.md).
 
