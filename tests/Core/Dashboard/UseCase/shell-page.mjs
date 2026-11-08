@@ -41,13 +41,13 @@ class FakeElement {
     }
 }
 
-// The project filter as the layout renders it: All projects with the empty value, then one option per project.
+// The project filter as the layout renders it: All projects with the empty value, then one option per project, the linked project marked selected.
 class FakeSelect extends FakeElement {
-    value = '';
-
-    constructor(page, projects) {
+    constructor(page, projects, linked) {
         super(page);
-        this.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))];
+        this.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))]
+            .map((option) => ({ ...option, defaultSelected: option.value === linked }));
+        this.value = this.options.find((option) => option.defaultSelected)?.value ?? '';
     }
 
     get selectedOptions() {
@@ -73,12 +73,13 @@ class FakeKey {
 export class Browser {
     storage = new Map();
 
-    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'] } = {}) {
+    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews' } = {}) {
         this.systemTheme = systemTheme;
         this.storageRefused = storageRefused;
         this.platform = platform;
         this.projects = projects;
         this.rows = rows;
+        this.address = address;
     }
 
     open() {
@@ -89,7 +90,15 @@ export class Browser {
         const railToggle = new FakeElement(page);
         const themeToggles = [new FakeElement(page), new FakeElement(page)];
         const body = new FakeElement(page);
-        const projectFilter = new FakeSelect(page, this.projects);
+        // The server marks the project of the address selected when the install lists it.
+        const projectFilter = new FakeSelect(page, this.projects, new URL(this.address).searchParams.get('project'));
+        const history = {
+            state: { turbo: { restorationIdentifier: 'visit' } },
+            replaceState: (state, unused, address) => {
+                history.state = state;
+                this.address = String(address);
+            },
+        };
         const rows = this.rows.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
         const document = {
             documentElement: root,
@@ -102,6 +111,9 @@ export class Browser {
             localStorage: this.localStorage(),
             matchMedia: (query) => ({ matches: query === '(prefers-color-scheme: dark)' && this.systemTheme === 'dark' }),
             navigator: { platform: this.platform },
+            location: { href: this.address },
+            history,
+            URL,
         };
 
         runInNewContext(headScript, context);
@@ -126,6 +138,7 @@ export class Browser {
                 projectFilter.dispatch('change');
             },
             projectFilter,
+            history,
             shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
         };
     }

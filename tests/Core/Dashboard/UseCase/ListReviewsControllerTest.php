@@ -56,15 +56,35 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSame('in progress', $crawler->filter('tbody tr td:nth-child(5)')->text());
     }
 
-    public function testTheProjectParameterKeepsOnlyThatProjectsRounds(): void
+    public function testTheProjectParameterChoosesThatProjectInTheTopBarFilter(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->startRound('round-2', 'beta');
 
         $crawler = $this->browser->request('GET', '/reviews?project=alpha');
 
+        self::assertSame(['alpha'], $crawler->filter('#projfilter option[selected]')->each(static fn ($option): string => $option->attr('value')));
+    }
+
+    public function testTheTopBarFilterCanSwitchToAnotherProjectAfterFollowingAProjectLink(): void
+    {
+        $this->ledger->startRound('round-alpha', 'alpha');
+        $this->ledger->startRound('round-beta', 'beta');
+
+        $crawler = $this->browser->request('GET', '/reviews?project=alpha');
+
+        self::assertCount(1, $crawler->filter('#projfilter option[value="beta"]'));
+        self::assertCount(1, $crawler->filter('tr[data-project="beta"]'));
+    }
+
+    public function testAProjectParameterTheInstallDoesNotListLeavesTheFilterOnAllProjects(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/reviews?project=gone');
+
+        self::assertCount(0, $crawler->filter('#projfilter option[selected]'), 'Without a selected option the browser shows the first one, All projects.');
         self::assertSame(['round-1'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
-        self::assertSelectorTextContains('h1', 'Reviews of alpha');
     }
 
     public function testTheReviewListSaysSoWhenTheLedgerHasNoReviews(): void
@@ -87,13 +107,13 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSame('RuntimeException: commit <b> not fetched', $crawler->filter('.failing-heads .card .cause')->text());
     }
 
-    public function testTheProjectParameterKeepsOnlyThatProjectsFailedHeads(): void
+    public function testTheProjectParameterKeepsTheFailedHeadsOfEveryProjectForTheTopBarFilter(): void
     {
         $this->ledger->failHead('alpha', '7', 1);
         $this->ledger->failHead('beta', '8', 1);
 
         $crawler = $this->browser->request('GET', '/reviews?project=beta');
 
-        self::assertSame(['beta, pull request 8'], $crawler->filter('.failing-heads .card h3')->each(static fn ($title): string => $title->text()));
+        self::assertSame(['alpha', 'beta'], $crawler->filter('.failing-heads .card')->each(static fn ($card): string => $card->attr('data-project')));
     }
 }

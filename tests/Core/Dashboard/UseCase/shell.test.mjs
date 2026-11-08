@@ -170,6 +170,69 @@ test('the project filter names the chosen project in its tooltip', () => {
     assert.equal(page.projectFilter.title, 'a-project-with-a-name-too-long-for-the-top-bar');
 });
 
+test('a project link chooses its project over the stored one', () => {
+    const browser = new Browser('light', { address: 'http://localhost/reviews?project=beta' });
+    browser.storage.set('intakt-project', 'alpha');
+
+    const page = browser.open();
+
+    assert.equal(page.projectFilter.value, 'beta');
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+    assert.equal(browser.storage.get('intakt-project'), 'beta');
+});
+
+test('another project can be chosen after following a project link', () => {
+    const page = new Browser('light', { address: 'http://localhost/reviews?project=alpha' }).open();
+
+    page.chooseProject('beta');
+
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+});
+
+test('all projects can be chosen after following a project link', () => {
+    const page = new Browser('light', { address: 'http://localhost/reviews?project=alpha' }).open();
+
+    page.chooseProject('');
+
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
+test('choosing a project drops the project link from the address, so a reload keeps the choice', () => {
+    const browser = new Browser('light', { address: 'http://localhost/reviews?project=alpha&page=2' });
+    const page = browser.open();
+
+    page.chooseProject('beta');
+
+    assert.equal(browser.address, 'http://localhost/reviews?page=2');
+    assert.deepEqual(page.history.state, { turbo: { restorationIdentifier: 'visit' } });
+    assert.equal(browser.open().projectFilter.value, 'beta');
+});
+
+test('choosing a project leaves an address without a project link alone', () => {
+    const browser = new Browser('light');
+    const page = browser.open();
+    page.history.replaceState = () => assert.fail('the address was replaced');
+
+    page.chooseProject('beta');
+
+    assert.equal(browser.address, 'http://localhost/reviews');
+});
+
+test('a project link to a project the install does not list leaves the stored project chosen', () => {
+    const browser = new Browser('light', { address: 'http://localhost/reviews?project=gone' });
+    browser.storage.set('intakt-project', 'alpha');
+
+    const page = browser.open();
+
+    assert.equal(page.projectFilter.value, 'alpha');
+});
+
+test('a project link still chooses its project when storage refuses access', () => {
+    const page = new Browser('light', { storageRefused: true, address: 'http://localhost/reviews?project=alpha' }).open();
+
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
 test('the project filter still filters when storage refuses access', () => {
     const page = new Browser('light', { storageRefused: true }).open();
 

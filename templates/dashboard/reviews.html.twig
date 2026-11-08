@@ -3,7 +3,7 @@
 {% block title %}Reviews - Intakt{% endblock %}
 
 {% block body %}
-<h1>Reviews{% if project is not null %} of {{ project }}{% endif %}</h1>
+<h1>Reviews</h1>
 {% if failing is not empty %}
 <section class="failing-heads">
 <h2>Heads that failed</h2>
@@ -17,7 +17,7 @@
 </section>
 {% endif %}
 {% if reviews is empty %}
-<p>No review has started{% if project is not null %} for this project{% endif %} yet.</p>
+<p>No review has started yet.</p>
 {% else %}
 <table>
     <thead><tr><th>Round</th><th>Project</th><th>Reviewers</th><th>Started (UTC)</th><th>State</th></tr></thead>

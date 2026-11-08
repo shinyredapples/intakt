@@ -49,8 +49,8 @@
 <header class="topbar">
     <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>
-    {# The empty value is All projects, because no project name is empty, while a project may be named "all". #}
-    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
+    {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. #}
+    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
     <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
 </header>
 <main class="content">
@@ -108,15 +108,24 @@
         root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
         store('intakt-theme', root.dataset.theme);
     }));
-    // A stored project the install no longer lists falls back to All projects, so the select never hides rows under another name.
+    // A project link (the option the server marked selected) is a choice and is kept like one. A stored project the install no longer lists falls back to All projects, so the select never hides rows under another name.
+    const linkedProject = [...projectFilter.options].find((option) => option.defaultSelected && option.value !== '');
     const storedProject = read('intakt-project');
-    if ([...projectFilter.options].some((option) => option.value === storedProject)) {
+    if (linkedProject) {
+        store('intakt-project', linkedProject.value);
+    } else if ([...projectFilter.options].some((option) => option.value === storedProject)) {
         projectFilter.value = storedProject;
     }
     showProject();
     projectFilter.addEventListener('change', () => {
         store('intakt-project', projectFilter.value);
         showProject();
+        // Otherwise a reload would choose the linked project again; the state is kept because Turbo keeps its own there.
+        const address = new URL(location.href);
+        if (address.searchParams.has('project')) {
+            address.searchParams.delete('project');
+            history.replaceState(history.state, '', address);
+        }
     });
     if (/Mac|iPhone|iPad/.test(navigator.platform)) {
         search.querySelector('kbd').textContent = '⌘K';
