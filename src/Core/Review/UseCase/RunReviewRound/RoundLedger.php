@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
@@ -41,8 +42,8 @@ final readonly class RoundLedger
     ) {
     }
 
-    // The repository, base and task go with the start, because the dashboard starts the change's next round from the ledger alone and ledger rows are never back-filled.
-    public function reviewStarted(ReviewRound $round, ?ChangeSource $source): void
+    // The repository, base, task and quorum go with the start, because the dashboard starts the change's next round and shows its outcome from the ledger alone, and ledger rows are never back-filled.
+    public function reviewStarted(ReviewRound $round, QuorumPolicy $quorum, ?ChangeSource $source): void
     {
         $this->append(LedgerEventKind::ReviewStarted, new ReviewStarted(
             $round->id()->toRfc4122(),
@@ -53,6 +54,7 @@ final readonly class RoundLedger
             $round->task(),
             $source?->repository,
             $source?->base,
+            $quorum,
         ));
     }
 

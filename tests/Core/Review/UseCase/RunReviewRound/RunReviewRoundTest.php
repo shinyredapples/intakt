@@ -153,13 +153,13 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(RoundState::Complete, $stored->state());
     }
 
-    public function testTheStartOfARoundNamesItsChangeAndItsNumberInTheLedger(): void
+    public function testTheStartOfARoundNamesItsChangeItsNumberAndItsQuorumInTheLedger(): void
     {
         $round = $this->fixture->start(2);
 
         $started = json_decode(iterator_to_array($this->fixture->ledger()->readInOrder())[0]->event->payload, true, 8, JSON_THROW_ON_ERROR);
 
-        self::assertSame(['round' => $round->id()->toRfc4122(), 'project' => 'alpha', 'reviewers' => 2, 'change' => RoundFixture::CHANGE, 'number' => 1, 'task' => RoundFixture::TASK], $started);
+        self::assertSame(['round' => $round->id()->toRfc4122(), 'project' => 'alpha', 'reviewers' => 2, 'change' => RoundFixture::CHANGE, 'number' => 1, 'task' => RoundFixture::TASK, 'quorum' => 'all'], $started);
     }
 
     public function testTheLedgerHoldsTheStartAndTheEndOfEveryReviewer(): void
