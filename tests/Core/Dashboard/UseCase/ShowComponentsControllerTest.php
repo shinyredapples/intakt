@@ -64,12 +64,13 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
     {
         $page = $this->browser->request('GET', '/components');
 
-        $controls = $page->filter('input, select, textarea');
+        $controls = $page->filter('input, select, textarea, button');
         self::assertGreaterThan(0, $controls->count());
         $controls->each(static function (Crawler $control) use ($page): void {
             $id = (string) $control->attr('id');
             $labelled = '' !== $id && $page->filter('label[for="'.$id.'"]')->count() > 0;
-            self::assertTrue($labelled || '' !== (string) $control->attr('aria-label'), 'unnamed control '.$id);
+            $named = $labelled || '' !== (string) $control->attr('aria-label') || ('button' === $control->nodeName() && '' !== trim($control->text()));
+            self::assertTrue($named, 'unnamed control '.$id);
         });
     }
 

@@ -209,7 +209,7 @@ svg.i.s { width: 15px; height: 15px; }
   .switch span, .switch span::after, .banner-toggle .chev { transition: none; }
 }
 
-/* Components page: each section shown in both themes side by side, as docs/design/mocks/components.html does. */
+/* Both themes sit side by side so one screenshot compares them, as the mock does. */
 body:has(.comp-nav) { max-width: 80rem; }
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
