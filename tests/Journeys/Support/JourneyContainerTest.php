@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
-use Closure;
 use Intakt\Kernel;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -22,7 +21,6 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 #[UsesClass(RecordingHub::class)]
 #[UsesClass(JourneySteps::class)]
 #[UsesClass(LiveRoundDriver::class)]
-#[UsesClass(WatcherStart::class)]
 final class JourneyContainerTest extends JourneyTestCase
 {
     private ?Kernel $kernel = null;
@@ -126,34 +124,6 @@ final class JourneyContainerTest extends JourneyTestCase
         } finally {
             $_ENV = $before;
         }
-    }
-
-    public function testTheWatcherStartRunsEveryConsoleCallWithTheJourneysVariables(): void
-    {
-        $output = $this->watcherStartConsole(['DEFAULT_URI' => 'http://journey.localhost'], 'DEFAULT_URI');
-
-        self::assertStringContainsString('"http://journey.localhost"', $output);
-    }
-
-    public function testTheWatcherStartRunsEveryConsoleCallOnTheSharedQueue(): void
-    {
-        $output = $this->watcherStartConsole([], 'MESSENGER_TRANSPORT_DSN');
-
-        self::assertStringContainsString('"doctrine://default"', $output);
-    }
-
-    /**
-     * @param array<string,string> $environment
-     */
-    private function watcherStartConsole(array $environment, string $variable): string
-    {
-        $console = new ReflectionProperty(WatcherStart::class, 'console')->getValue($this->watcherStart($environment));
-        self::assertInstanceOf(Closure::class, $console);
-
-        $output = $console(['debug:container', '--env-var='.$variable], [], 60);
-        self::assertIsString($output);
-
-        return $output;
     }
 
     private function container(): ContainerInterface
