@@ -136,7 +136,7 @@ final readonly class WatcherStart
         try {
             $queued = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
-            throw new RuntimeException('A round_queued entry of the ledger is not JSON: '.$payload, previous: $invalid);
+            throw new RuntimeException('A round_queued entry of the ledger is not JSON: '.$payload, $invalid->getCode(), previous: $invalid);
         }
 
         if (!is_array($queued) || !is_string($queued['round'] ?? null) || '' === $queued['round']) {
