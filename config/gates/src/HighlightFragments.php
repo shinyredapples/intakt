@@ -156,25 +156,17 @@ final readonly class HighlightFragments
     private function additionsOn(string $root): array|string
     {
         // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
-        if (!file_exists($root.'/.git')) {
-            return [];
-        }
-
-        $head = $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root);
+        $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
 
         // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
-        if (self::UNBORN_HEAD === $head->exitCode) {
+        if (null === $head || self::UNBORN_HEAD === $head->exitCode) {
             return [];
         }
 
-        if (!$head->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
-        }
+        $unreadable = $this->unreadableHistoryFinding($root, $head);
 
-        $shallow = $this->shallowHistoryFinding($root);
-
-        if (null !== $shallow) {
-            return $shallow;
+        if (null !== $unreadable) {
+            return $unreadable;
         }
 
         $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
@@ -183,10 +175,18 @@ final readonly class HighlightFragments
             return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
         }
 
+        return $this->additionsIn($log->output);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function additionsIn(string $log): array
+    {
         $history = [];
         $commit = 0;
 
-        foreach (explode("\n", $log->output) as $line) {
+        foreach (explode("\n", $log) as $line) {
             if (1 === preg_match(self::COMMIT, $line)) {
                 ++$commit;
             } elseif ('' !== $line) {
@@ -195,6 +195,15 @@ final readonly class HighlightFragments
         }
 
         return $history;
+    }
+
+    private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
+    {
+        if (!$head->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
+        }
+
+        return $this->shallowHistoryFinding($root);
     }
 
     // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
