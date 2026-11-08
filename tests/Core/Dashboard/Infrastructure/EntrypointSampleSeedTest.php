@@ -78,6 +78,36 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertFileDoesNotExist($this->directory.'/mcp-owner-token');
     }
 
+    public function testAHuggingFaceTokenReachesTheSeedAsTheRoutersOpenAiCompatibleAccount(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'HF_TOKEN' => 'hf-test-value']);
+        $this->waitForTheServer();
+
+        self::assertSame('https://router.huggingface.co hf-test-value', trim(new Filesystem()->readFile($this->callsFile().'.compatible')));
+    }
+
+    public function testAnOpenAiCompatibleEndpointTheOwnerSetWinsOverTheHuggingFaceToken(): void
+    {
+        $this->startEntrypoint([
+            'INTAKT_SAMPLE_REPOSITORY' => '/data/sample',
+            'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
+            'HF_TOKEN' => 'hf-test-value',
+            'OPENAI_COMPATIBLE_BASE_URL' => 'https://llm.example.test',
+            'OPENAI_COMPATIBLE_API_KEY' => 'own-test-value',
+        ]);
+        $this->waitForTheServer();
+
+        self::assertSame('https://llm.example.test own-test-value', trim(new Filesystem()->readFile($this->callsFile().'.compatible')));
+    }
+
+    public function testWithoutAHuggingFaceTokenNoOpenAiCompatibleAccountIsSet(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        self::assertSame('', trim(new Filesystem()->readFile($this->callsFile().'.compatible')));
+    }
+
     public function testTwoFirstStartsAtOnceShareOneOwnerToken(): void
     {
         $first = $this->startHeldAtTheToken('1');
@@ -209,6 +239,9 @@ final class EntrypointSampleSeedTest extends TestCase
             'WORKER_MEMORY_CEILING_MB' => '256',
             'INTAKT_SAMPLE_REPOSITORY' => false,
             'INTAKT_CONFIG' => false,
+            'HF_TOKEN' => false,
+            'OPENAI_COMPATIBLE_BASE_URL' => false,
+            'OPENAI_COMPATIBLE_API_KEY' => false,
             ...$environment,
         ]);
         $process->setTimeout(self::SECONDS_TO_WAIT * 2);
@@ -221,7 +254,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);

@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Kernel;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnsweringTier;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -27,7 +30,7 @@ $answer->getMetadata()->add('token_usage', new TokenUsage(
     totalTokens: 1580,
 ));
 
-$reservation = $usageLedger->reserve('alpha', Tier::Strong);
+$reservation = $usageLedger->reserve('alpha', new AnsweringTier(Tier::Strong, new ResolvedModel(Provider::ClaudeCode, 'claude-opus-5-5')));
 $usageLedger->settle($reservation, MockPlatformFactory::createPlatform(['stub' => $answer])->invoke('stub', 'hello'));
 
 $kernel->shutdown();

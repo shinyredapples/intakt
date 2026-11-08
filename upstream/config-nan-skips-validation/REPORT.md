@@ -18,7 +18,7 @@ The placeholder check runs only for strings (`resolvePlaceholderValue()` resolve
 
 ## Effect in Intakt
 
-`src/Core/Budget/Infrastructure/CeilingsConfiguration.php` turns a NaN ceiling into a string in a `beforeNormalization()` closure, so the float type check refuses it; otherwise a `.NaN` ceiling would never be reached and a call would start at any measured use.
+`src/Core/Budget/Infrastructure/BudgetConfiguration.php` turns a NaN ceiling into a string in a `beforeNormalization()` closure, so the float type check refuses it; otherwise a `.NaN` ceiling would never be reached and a call would start at any measured use.
 
 ## Upstream status
 

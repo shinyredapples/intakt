@@ -64,7 +64,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $answering = $this->answering($project, $tier);
         $substitute = $this->substituteOf($project, $tier, $answering);
-        $attempt = fn (ResolvedModel $model, ReviewRequest $asked): Verdict => $this->verdictOn($model, $this->usage->reserve($project, $tier, $asked->conversation->round), $asked);
+        $attempt = fn (ResolvedModel $model, ReviewRequest $asked): Verdict => $this->verdictOn($model, $this->usage->reserve($project, new AnsweringTier($tier, $model), $asked->conversation->round), $asked);
         $first = fn (): Verdict => $attempt($answering, $request);
         $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
 
@@ -149,7 +149,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $answering = $this->answering($project, Tier::Light);
 
-        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, Tier::Light, $request->round), $request));
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(Tier::Light, $answering), $request->round), $request));
     }
 
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement

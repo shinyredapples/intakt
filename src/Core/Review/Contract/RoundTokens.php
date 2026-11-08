@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
-// Tokens, not money, because no price table exists yet; flat, because docs/user/review-output.schema.json documents these fields side by side.
+// Tokens only, because the money is the Budget module's Cost; flat, because docs/user/review-output.schema.json documents these fields side by side.
 final readonly class RoundTokens
 {
     public function __construct(

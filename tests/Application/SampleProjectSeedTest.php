@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -23,7 +24,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversNothing]
 final class SampleProjectSeedTest extends KernelTestCase
 {
-    private const array VARIABLES = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'INTAKT_CONFIG'];
+    private const array VARIABLES = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'INTAKT_CONFIG'];
 
     private string $directory = '';
 
@@ -93,6 +94,25 @@ final class SampleProjectSeedTest extends KernelTestCase
         self::assertSame([Provider::Anthropic, Provider::OpenAi], $this->seededPanelProviders());
     }
 
+    public function testWithTheHuggingFaceRouterAloneTheSeededPanelLoadsOnIt(): void
+    {
+        $this->setTheHuggingFaceRouter();
+
+        $this->seed();
+
+        self::assertSame([Provider::OpenAiCompatible, Provider::OpenAiCompatible], $this->seededPanelProviders());
+    }
+
+    public function testWithAnAnthropicKeyAndTheHuggingFaceRouterTheSeededPanelLoadsOnBoth(): void
+    {
+        $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
+        $this->setTheHuggingFaceRouter();
+
+        $this->seed();
+
+        self::assertSame([Provider::Anthropic, Provider::OpenAiCompatible], $this->seededPanelProviders());
+    }
+
     public function testEveryTierOfTheSeededProjectResolvesToAnEnabledProvider(): void
     {
         $_SERVER['OPENAI_API_KEY'] = 'test-value';
@@ -104,6 +124,13 @@ final class SampleProjectSeedTest extends KernelTestCase
         foreach (Tier::cases() as $tier) {
             self::assertSame(Provider::OpenAi, $resolver->resolve('sample', $tier)->provider);
         }
+    }
+
+    // Set directly, because HF_TOKEN becomes these two only in the image's entrypoint, which this test does not run.
+    private function setTheHuggingFaceRouter(): void
+    {
+        $_SERVER['OPENAI_COMPATIBLE_BASE_URL'] = SampleProject::HUGGING_FACE_ROUTER;
+        $_SERVER['OPENAI_COMPATIBLE_API_KEY'] = 'test-value';
     }
 
     private function seed(): void

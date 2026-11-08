@@ -10,7 +10,7 @@
 The aim: give it a spec, and AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI. The review loop works today; the rest is planned, and [Status](#status) says which is which.
 
 - **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review (planned; the review step works today).
-- **Why it is different:** a panel of reviewers from different providers returns structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
+- **Why it is different:** a panel of reviewers on models of different makers returns structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
 - **Why you will be able to trust it:** it will spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
 ![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round](docs/assets/dashboard-review.png)
@@ -23,9 +23,13 @@ The demo reviews a sample pull request with two reviewers (its [timed run](#time
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
-cp .env.dist .env.local   # add one or two provider API keys and the two secrets
+cp .env.dist .env.local   # add a provider API key or a Hugging Face token, and the two secrets
 docker compose up         # Intakt, its database and a sample repository
 ```
+
+No paid Anthropic or OpenAI key? Set `HF_TOKEN` instead: create a fine-grained Hugging Face token with only "Make calls to Inference Providers" (the hackathon's credits cover its calls). Alone it puts the two reviewers on models of two different makers, `moonshotai/Kimi-K3:deepinfra` and `openai/gpt-oss-120b:novita`; beside `ANTHROPIC_API_KEY`, `correctness` stays on Anthropic and `security` runs on Hugging Face. The base URL is `https://router.huggingface.co`, without `/v1`, and each model names its router provider, because some router providers refuse tools together with structured output ([details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+
+The panel's reviewers should run on models of different makers. Two makers through one Hugging Face token satisfy that; two separate providers (for example Anthropic and Hugging Face) are the stronger setup, because one token is one outage, one rate limit and one bill.
 
 Then start the review with the command the log prints at the end of the first start, and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, copy the line the first start prints after the review command (it holds the MCP address and a token made for you) and run it:
 
@@ -42,12 +46,12 @@ Then ask the agent to start a review with the values of the printed review comma
 | Step | Command | Time |
 | --- | --- | --- |
 | 1. Clone | `git clone https://github.com/shinyredapples/intakt.git && cd intakt` | |
-| 2. Configure | `cp .env.dist .env.local`, then set one provider key and the two secrets | |
+| 2. Configure | `cp .env.dist .env.local`, then set one provider key (or `HF_TOKEN`) and the two secrets | |
 | 3. Start | `docker compose up`, until the log prints the review command | |
 | 4. First verdict | the printed `docker compose exec intakt php bin/console intakt:review sample-change ...` | |
 | Total | | |
 
-Also record the date, the Intakt commit, the host (CPU, Docker version), the first verdict (decision, finding count with severities) and, with two keys set after `docker compose down -v`, that the seeded panel uses two providers.
+Also record the date, the Intakt commit, the host (CPU, Docker version), the first verdict (decision, finding count with severities) and, with two keys set after `docker compose down -v`, that the seeded panel uses two providers, and, with only `HF_TOKEN`, that both reviewers return a verdict on models of two makers.
 
 What works without Docker or a provider key:
 
@@ -68,7 +72,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - Findings keep their ids across rounds, so reviewers cannot move the goalposts. A judge step tells the builder what to act on.
 - Agents start reviews and read findings through an MCP server.
 - A small live dashboard shows each round as it streams.
-- `docker compose up` with a sample repository and your API keys runs it in five minutes.
+- `docker compose up` with a sample repository and your API keys (or a Hugging Face token) runs it in five minutes.
 
 ## Status
 
