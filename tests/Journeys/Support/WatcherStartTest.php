@@ -34,7 +34,7 @@ final class WatcherStartTest extends TestCase
 
     private string $head = '';
 
-    /** @var list<string> the ledger before the tick, then after it */
+    /** @var list<string> */
     private array $ledgers = [];
 
     /** @var list<array{arguments: list<string>, environment: array<string,string>, seconds: int}> */

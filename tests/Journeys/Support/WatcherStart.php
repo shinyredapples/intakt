@@ -51,6 +51,7 @@ final readonly class WatcherStart
         $recording = $this->recordPullRequest($configuration, $head);
         $this->watchSampleProject($configuration, $repository);
         $this->rebuildContainer($configuration);
+        // Only entries the tick appends count, so a round an earlier start queued for the same head never passes for this tick's round.
         $before = $this->eventIdsIn($this->ledgerLines($configuration));
         $this->tick($configuration, $recording);
 
@@ -117,7 +118,7 @@ final readonly class WatcherStart
 
     // From the ledger, because the watcher's handler returns nothing a console process could pass on, and the ledger is what a user's round leaves behind.
     /**
-     * @param array<string,true> $before the ledger's event ids before the tick, because only entries the tick appended count: a round an earlier start queued for the same head must never pass for this tick's round
+     * @param array<string,true> $before
      */
     private function queuedRound(string $configuration, string $head, array $before): ?string
     {
