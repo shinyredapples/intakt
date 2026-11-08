@@ -92,7 +92,11 @@ final class ComposerCooldownPolicyTest extends TestCase
 
         $lock = json_decode((string) file_get_contents($this->directory.'/composer.lock'), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($lock);
+        self::assertIsArray($lock['packages'] ?? null);
+        $package = array_first($lock['packages']);
+        self::assertIsArray($package, 'the update locked no package');
+        self::assertIsString($package['version'] ?? null);
 
-        return $lock['packages'][0]['version'] ?? self::fail('the update locked no package');
+        return $package['version'];
     }
 }
