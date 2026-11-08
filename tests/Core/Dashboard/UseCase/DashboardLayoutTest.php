@@ -5,17 +5,34 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\DomCrawler\Crawler;
 use Uri\Rfc3986\Uri;
 
+// Because the stand-in scripts are created and removed in assets/vendor/ of the checkout, which every test worker shares.
 #[CoversNothing]
+#[Group('serial')]
 final class DashboardLayoutTest extends DashboardPageTestCase
 {
+    use DownloadedScriptStandIns;
+
     private const string TOKENS_TABLE = __DIR__.'/../../../../docs/design/mocks/DESIGN.md';
 
-    public function testTheLayoutLoadsNoFontScriptOrStyleFromAnotherHost(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function pages(): iterable
     {
-        $page = $this->layout();
+        yield 'the review list' => ['/reviews'];
+        yield 'the components page' => ['/components'];
+    }
+
+    #[DataProvider('pages')]
+    public function testEveryPageLoadsNoFontScriptOrStyleFromAnotherHost(string $path): void
+    {
+        $page = $this->browser->request('GET', $path);
+        self::assertResponseIsSuccessful();
 
         foreach ($this->loadedAddressesOf($page) as $address) {
             self::assertMatchesRegularExpression('#^/(?!/)#', $address);
