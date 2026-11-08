@@ -38,6 +38,7 @@ final class DashboardLayoutTest extends DashboardPageTestCase
             self::assertMatchesRegularExpression('#^/(?!/)#', $address);
         }
         self::assertStringNotContainsString('@import', $page->html());
+        self::assertDoesNotMatchRegularExpression('#https?://#i', $page->html());
         self::assertDoesNotMatchRegularExpression('#url\(\s*["\']?(https?:)?//#i', $page->html());
     }
 
