@@ -7,9 +7,9 @@
 
 {% block body %}
 {% set themes = ['light', 'dark'] %}
-<div class="page-head" data-controller="theme">
+<div class="page-head">
     <div><h1>Components</h1><p class="lead">Every component in every state, light and dark side by side. Builders copy from here; DESIGN.md has the rules.</p></div>
-    <div class="actions"><button class="btn secondary sm" type="button" data-action="theme#flip">Switch theme</button></div>
+    <div class="actions"><button class="btn secondary sm" type="button" data-theme-toggle>Switch theme</button></div>
 </div>
 <nav class="comp-nav" aria-label="Sections">
     <a href="#c-buttons">Buttons</a><a href="#c-chips">Chips and badges</a><a href="#c-cards">Cards</a><a href="#c-rows">List rows</a><a href="#c-settings">Setting rows</a><a href="#c-inputs">Inputs</a><a href="#c-bars">Bars</a><a href="#c-banners">Banners</a><a href="#c-tabs">Tabs</a><a href="#c-toast">Toasts</a><a href="#c-empty">Empty, loading, error</a>
