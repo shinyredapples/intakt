@@ -22,5 +22,11 @@ if ([] !== $assembly->findings) {
     exit(1);
 }
 
-file_put_contents($root.'/'.HighlightFragments::ASSEMBLED, $assembly->text);
+if (false === @file_put_contents($root.'/'.HighlightFragments::ASSEMBLED, $assembly->text)) {
+    // PHP's message starts with the absolute path; only the reason after it is worth showing.
+    $reason = error_get_last()['message'] ?? '';
+    fwrite(STDERR, 'cannot write '.HighlightFragments::ASSEMBLED.': '.substr($reason, (int) strrpos($reason, '): ') + 3)."\n");
+    exit(1);
+}
+
 fwrite(STDOUT, HighlightFragments::ASSEMBLED." assembled from docs/highlights.d/\n");

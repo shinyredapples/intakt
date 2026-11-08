@@ -177,6 +177,7 @@ A container service id, a parameter name or a provider name is written once, so 
 - **docs/highlights.md is committed:** the page was added to git (for example after a hand edit); run `git rm --cached docs/highlights.md` and put the change in a fragment;
 - **docs/highlights.md is not the assembly of docs/highlights.d/:** your local copy was edited by hand or is older than the fragments; put any change in a fragment and run `bin/highlights`;
 - **the history of docs/highlights.d/ is shallow:** run `git fetch --unshallow`;
+- **cannot write docs/highlights.md** (from `bin/highlights`, which then exits with status 1): something else is in the way, such as a folder of that name or a read-only file; remove it or make it writable and run `bin/highlights` again;
 - **a fragment is named `<issue>-<slug>.md`:** rename the file to its issue number, a hyphen and a slug in lowercase letters, digits and hyphens;
 - **section is not a section of `layout.md`, or the line is outside a section:** put the rows under a `## ` heading spelled exactly as in `layout.md`; a new section is added to `layout.md` first;
 - **section holds table rows (or list items), or the table header is in `layout.md`:** write only the rows of the section's kind; the header and its `---` line stay in `layout.md`;

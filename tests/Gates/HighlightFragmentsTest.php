@@ -141,6 +141,19 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringStartsWith('cannot read the history of docs/highlights.d/: ', $assembly->findings[0] ?? '');
     }
 
+    public function testAHeadGitCannotReadFailsTheAssemblyInsteadOfChangingItsOrder(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1050-clock.md', "## Tooling\n| Clock | planned | T2 (#1050) |\n");
+        $this->commitFragment('900-clock-done.md', "## Tooling\n| Clock | done | T2 (#900) |\n");
+        $this->sandbox->write('.git/HEAD', str_repeat('1', 40)."\n");
+
+        $assembly = $this->assembled();
+
+        self::assertSame('', $assembly->text);
+        self::assertStringStartsWith('cannot read the history of docs/highlights.d/: ', $assembly->findings[0] ?? '');
+    }
+
     public function testAShallowHistoryFailsTheAssemblyInsteadOfChangingItsOrder(): void
     {
         $this->sandbox->startRepository();
