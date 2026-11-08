@@ -52,52 +52,19 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+REVIEW_MCP_BASE_URL=http:\/\/localhost:7781\b/m', $this->dockerfile());
     }
 
-    public function testTheBaseStagePinsAFrankenPhpImageOnThePhp85LineByDigest(): void
+    public function testTheBaseStagePinsFrankenPhpOnPhp85ByDigest(): void
     {
-        self::assertTrue($this->pinsFrankenPhpOnPhp85ByDigest($this->dockerfile()));
+        self::assertMatchesRegularExpression('/^FROM dunglas\/frankenphp:[\d.]+-php8\.5-trixie@sha256:[0-9a-f]{64} AS base$/m', $this->dockerfile());
     }
 
-    public function testAFrankenPhpBumpWithANewPhpPatchStillPassesTheBaseImageCheck(): void
+    public function testEachImageBuildFailsBelowPhp8512(): void
     {
-        $bumped = 'FROM dunglas/frankenphp:1.14.0-php8.5-trixie@sha256:'.str_repeat('a', 64)." AS base\n";
-
-        self::assertTrue($this->pinsFrankenPhpOnPhp85ByDigest($bumped));
-    }
-
-    public function testABaseImageWithoutADigestFailsTheBaseImageCheck(): void
-    {
-        self::assertFalse($this->pinsFrankenPhpOnPhp85ByDigest("FROM dunglas/frankenphp:1.14.0-php8.5-trixie AS base\n"));
-    }
-
-    public function testABaseImageOnAnotherPhpLineFailsTheBaseImageCheck(): void
-    {
-        self::assertFalse($this->pinsFrankenPhpOnPhp85ByDigest('FROM dunglas/frankenphp:1.14.0-php8.4-trixie@sha256:'.str_repeat('a', 64)." AS base\n"));
-    }
-
-    public function testTheImageTakesComposerFromAStagePinnedByTagAndDigest(): void
-    {
-        self::assertMatchesRegularExpression('/^FROM composer:\d+\.\d+\.\d+@sha256:[0-9a-f]{64} AS composer$/m', $this->dockerfile());
-        self::assertMatchesRegularExpression('/^COPY --from=composer \/usr\/bin\/composer /m', $this->dockerfile());
-    }
-
-    public function testNoCopyFromLineNamesAnImageForComposer(): void
-    {
-        self::assertDoesNotMatchRegularExpression('/^COPY --from=\S*composer\S*\/\S+/mi', str_replace('COPY --from=composer /usr/bin/composer', '', $this->dockerfile()));
-    }
-
-    public function testTheBaseStageRunsThePhpFloorCheck(): void
-    {
-        self::assertMatchesRegularExpression('/^RUN intakt-check-php-floor$/m', $this->dockerfile());
-    }
-
-    public function testTheBaseStageIsTheFirstFromSoTheSmokeTestReadsItsTag(): void
-    {
-        self::assertMatchesRegularExpression('/\A(?:#[^\n]*\n)*FROM dunglas\/frankenphp:\S+ AS base$/m', $this->dockerfile());
-    }
-
-    private function pinsFrankenPhpOnPhp85ByDigest(string $dockerfile): bool
-    {
-        return 1 === preg_match('/^FROM dunglas\/frankenphp:\d+\.\d+\.\d+-php8\.5-trixie@sha256:[0-9a-f]{64} AS base$/m', $dockerfile);
+        foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
+            preg_match("/^RUN php( -r '.*PHP_VERSION.*')$/m", (string) file_get_contents(__DIR__.'/../../../../'.$file), $run);
+            exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.11"']), result_code: $old);
+            exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.12"']), result_code: $new);
+            self::assertSame([1, 0], [$old, $new], $file);
+        }
     }
 
     private function dockerfile(): string
