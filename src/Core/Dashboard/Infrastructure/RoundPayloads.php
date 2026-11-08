@@ -111,6 +111,7 @@ final readonly class RoundPayloads
             new RoundStart($started->round, $started->project, $started->reviewers),
             new RoundPlace($started->change, $number, $this->sourceOf($started)),
             $recorded->recordedAt,
+            $started->quorum,
         );
     }
 

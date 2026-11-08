@@ -3,6 +3,8 @@ framework:
         paths:
             - assets/
         missing_import_mode: strict
+        # The default polyfill for browsers without import maps loads a script from another host; the dashboard makes no outside request.
+        importmap_polyfill: false
 
 when@prod:
     framework:

@@ -2,8 +2,15 @@
 FROM dunglas/frankenphp:1.13.4-php8.5-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e AS base
 RUN php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 
-# pcntl lets a consumer finish its message on SIGTERM instead of being cut off.
-RUN install-php-extensions intl pdo_sqlite opcache zip pcntl
+COPY composer.json /usr/local/share/intakt/
+
+# The extensions are composer.json's ext-* entries (pcntl among them lets a consumer finish its message on SIGTERM);
+# opcache is no profile entry, it is only for serving. No check.ini: the image keeps production settings.
+RUN set -eu; \
+    missing='foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
+    install-php-extensions $(php -r "$missing") opcache; \
+    test -z "$(php -r "$missing")"; \
+    php -r 'if (!extension_loaded("Zend OPcache")) { fwrite(STDERR, "missing PHP extension opcache\n"); exit(1); }'
 
 WORKDIR /app
 

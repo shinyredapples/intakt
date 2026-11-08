@@ -1,3 +1,5 @@
+{#- aria_label names a switch that has no visible label for it. -#}
 <span class="switch"><input type="checkbox" role="switch" id="{{ id }}" name="{{ name }}"
+    {%- if aria_label is defined %} aria-label="{{ aria_label }}"{% endif %}
     {%- if on|default(false) %} checked{% endif %}
     {%- if disabled|default(false) %} disabled{% endif %}><span></span></span>

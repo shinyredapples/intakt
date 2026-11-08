@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Process\Process;
 
 // A worker that is never replaced keeps what every request leaks, so the image must set both restarts and a health check.
 #[CoversNothing]
@@ -36,9 +37,49 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+MESSENGER_CONSUMERS=\d+/m', $this->dockerfile());
     }
 
-    public function testTheImageInstallsPcntlSoAConsumerFinishesItsMessageOnStop(): void
+    public function testTheProfileTheImageInstallsHasPcntlSoAConsumerFinishesItsMessageOnStop(): void
     {
-        self::assertMatchesRegularExpression('/^RUN install-php-extensions .*\bpcntl\b/m', $this->dockerfile());
+        $composer = json_decode((string) file_get_contents(__DIR__.'/../../../../composer.json'), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertIsArray($composer);
+        self::assertIsArray($composer['require']);
+        self::assertArrayHasKey('ext-pcntl', $composer['require']);
+    }
+
+    public function testTheImageInstallsTheProfileExtensionsAndOnlyOpcacheBeside(): void
+    {
+        self::assertMatchesRegularExpression('/^\s+install-php-extensions \$\(php -r "\$missing"\) opcache; \\\\$/m', $this->dockerfile());
+    }
+
+    public function testTheImageReadsTheProfileFromTheComposerJsonItCopies(): void
+    {
+        self::assertMatchesRegularExpression('/^COPY composer\.json \/usr\/local\/share\/intakt\/$/m', $this->dockerfile());
+    }
+
+    public function testTheProfileListNamesEveryRequiredExtensionThatIsNotLoaded(): void
+    {
+        $composer = '{"require": {"php": ">=8.5", "ext-json": "*", "ext-intakt_absent": "*", "symfony/console": "*"}}';
+        $process = new Process([PHP_BINARY, '-r', str_replace('/usr/local/share/intakt/composer.json', 'php://stdin', $this->missingScript())], input: $composer);
+
+        $process->mustRun();
+
+        self::assertSame('intakt_absent ', $process->getOutput());
+    }
+
+    public function testTheBuildFailsWhenAProfileExtensionIsStillMissingAfterTheInstall(): void
+    {
+        self::assertMatchesRegularExpression('/install-php-extensions \$\(php -r "\$missing"\).*\n\s+test -z "\$\(php -r "\$missing"\)"; \\\\$/m', $this->dockerfile());
+    }
+
+    public function testTheBuildFailsWhenOpcacheIsNotLoaded(): void
+    {
+        self::assertMatchesRegularExpression('/^\s+php -r \'if \(!extension_loaded\("Zend OPcache"\)\) \{ fwrite\(STDERR, "missing PHP extension opcache\\\\n"\); exit\(1\); \}\'$/m', $this->dockerfile());
+    }
+
+    public function testTheImageKeepsProductionSettingsWithoutTheCheckIni(): void
+    {
+        self::assertDoesNotMatchRegularExpression('/^COPY .*check\.ini/m', $this->dockerfile());
+        self::assertStringNotContainsString('PHP_INI_SCAN_DIR', $this->dockerfile());
     }
 
     public function testTheImageInstallsGitForTheForgeAndTheSampleRepository(): void
@@ -102,5 +143,14 @@ final class DockerfileTest extends TestCase
         self::assertIsString($contents);
 
         return $contents;
+    }
+
+    private function missingScript(): string
+    {
+        if (1 !== preg_match("/^\\s+missing='([^']+)'; \\\\$/m", $this->dockerfile(), $match)) {
+            self::fail('The Dockerfile names no script that lists the missing profile extensions.');
+        }
+
+        return $match[1];
     }
 }
