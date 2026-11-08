@@ -10,7 +10,7 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 ["self-hosted","linux","x64","intakt-ci"]
 ```
 
-Every job (`check`, `changes` and `persistence` from `ci.yml`, and `first-start` from `first-start.yml`) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
+Every job (`check`, `changes`, `persistence` and `image` from `ci.yml`, and `first-start` from `first-start.yml`) then runs on a runner with all of those labels. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
 ## The runner must be ephemeral
 
