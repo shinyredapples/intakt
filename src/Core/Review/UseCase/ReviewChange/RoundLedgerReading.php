@@ -54,7 +54,7 @@ final readonly class RoundLedgerReading
         return RoundTokens::of(count($calls), $figures);
     }
 
-    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot.
+    // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero.
     public function costOf(string $roundId): Cost
     {
         $recorded = $this->usageRows();
@@ -95,7 +95,6 @@ final readonly class RoundLedgerReading
     /**
      * @param array<string, string|null> $models
      */
-    // A call without usages is still priced, because its model's price may be unknown, and that must not read as zero.
     private function costOfEnding(RecordedEvent $row, array $models): Cost
     {
         $ended = $this->endingOf($row);
