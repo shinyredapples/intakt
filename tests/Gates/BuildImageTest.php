@@ -12,7 +12,7 @@ final class BuildImageTest extends SandboxTestCase
     private const string SCRIPT = __DIR__.'/../../.github/ci/build-image.sh';
 
     private const string FAKE_DOCKER = <<<'BASH'
-        #!/usr/bin/env bash
+        #!/bin/sh
         if [ "$1" = image ]; then [ -f present ]; exit; fi
         echo "$*" >> built
         BASH;
@@ -24,12 +24,12 @@ final class BuildImageTest extends SandboxTestCase
         $first = $this->tag($sandbox);
         $again = $this->tag($sandbox);
         $sandbox->write('composer.json', '{"require": {"ext-intl": "*"}}');
-        $afterComposer = $this->tag($sandbox);
-        $sandbox->write('config/gates/php/check.ini', 'zend.assertions = -1');
+        $second = $this->tag($sandbox);
+        $sandbox->write('config/gates/php/check.ini', '');
 
         self::assertSame($first, $again);
-        self::assertNotSame($first, $afterComposer);
-        self::assertNotSame($afterComposer, $this->tag($sandbox));
+        self::assertNotSame($first, $second);
+        self::assertNotSame($second, $this->tag($sandbox));
     }
 
     public function testAnExistingTagIsReusedWithoutABuild(): void
@@ -42,7 +42,7 @@ final class BuildImageTest extends SandboxTestCase
         self::assertFileDoesNotExist($sandbox->root.'/built');
     }
 
-    public function testAMissingTagIsBuiltFromTheCiDockerfileWithTheCheckoutAsContext(): void
+    public function testAMissingTagIsBuiltWithTheCheckoutAsContext(): void
     {
         $sandbox = $this->checkout();
 
@@ -67,9 +67,9 @@ final class BuildImageTest extends SandboxTestCase
     {
         $sandbox->write('env', '');
         $result = $sandbox->runScript('PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT), ['GITHUB_ENV' => $sandbox->root.'/env']);
-        self::assertTrue($result->succeeded(), $result->output.$result->errors);
-        self::assertMatchesRegularExpression('/^CI_IMAGE=(intakt-ci:[0-9a-f]{32})\n$/', (string) file_get_contents($sandbox->root.'/env'));
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame(1, preg_match('/^CI_IMAGE=(intakt-ci:[0-9a-f]{32})\n$/', (string) file_get_contents($sandbox->root.'/env'), $tag));
 
-        return substr(trim((string) file_get_contents($sandbox->root.'/env')), 9);
+        return $tag[1];
     }
 }
