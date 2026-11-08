@@ -42,12 +42,20 @@ final class EntrypointSampleSeedTest extends TestCase
 
         self::assertSame([
             'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
-            'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
             'bin/console intakt:sample:seed /data/sample '.$this->directory.'/intakt.yaml',
-            'bin/console cache:clear --no-warmup --no-interaction',
             'bin/console cache:warmup --no-interaction',
         ], $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testEveryOldContainerIsRemovedBeforeItsWarmup(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/var/cache/test/image-container', 'old');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+
+        $this->waitForTheServer();
+
+        self::assertDirectoryDoesNotExist($this->directory.'/var/cache/test', 'the image container or the one the seed left survived');
     }
 
     public function testTheDemoMakesOneOwnerTokenAndKeepsItOnTheDataVolume(): void
@@ -187,7 +195,9 @@ final class EntrypointSampleSeedTest extends TestCase
      */
     private function entrypointWith(array $environment): Process
     {
-        $process = new Process(['docker/entrypoint.sh'], dirname(__DIR__, 4), [
+        // In the test's directory, so removing the cache never touches this checkout.
+        $process = new Process([dirname(__DIR__, 4).'/docker/entrypoint.sh'], $this->directory, [
+            'APP_ENV' => 'test',
             'PATH' => $this->stubPrograms().':'.getenv('PATH'),
             'CALLS' => $this->callsFile(),
             'APP_SECRET' => self::SECRET,
@@ -211,7 +221,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
