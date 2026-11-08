@@ -25,7 +25,7 @@ final readonly class HighlightFragments
         return is_dir($root.'/'.self::DIRECTORY);
     }
 
-    // The gates read the page as bin/highlights would write it, so a stale or hand-edited local copy never counts.
+    // The gates read the page as bin/highlights would write it, so their rules never judge a stale or hand-edited local copy.
     public function pageOn(string $root): ?HighlightAssembly
     {
         if ($this->areOn($root)) {
@@ -54,6 +54,21 @@ final readonly class HighlightFragments
         }
 
         return [self::ASSEMBLED.' is committed, but bin/highlights generates it from '.self::DIRECTORY.'/ and git ignores it: remove it from the index (git rm --cached '.self::ASSEMBLED.') and put the change in a fragment'];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function localPageFindings(string $root, HighlightAssembly $page): array
+    {
+        $file = $root.'/'.self::ASSEMBLED;
+
+        // A broken assembly already fails with its own findings, so only a page next to a sound one is compared.
+        if (!$this->areOn($root) || [] !== $page->findings || !is_file($file) || $this->contentsOf($file) === $page->text) {
+            return [];
+        }
+
+        return [self::ASSEMBLED.' is not the assembly of '.self::DIRECTORY.'/: put a change in a fragment, never in the page, and run bin/highlights'];
     }
 
     public function assembled(string $root): HighlightAssembly
@@ -143,7 +158,18 @@ final readonly class HighlightFragments
             return [];
         }
 
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
+        // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
+        $shallow = $this->runner->git(['rev-parse', '--is-shallow-repository'], $root);
+
+        if (!$shallow->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$shallow->firstErrorLine();
+        }
+
+        if ('false' !== trim($shallow->output)) {
+            return 'the history of '.self::DIRECTORY.'/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)';
+        }
+
+        $log =$this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
 
         if (!$log->succeeded()) {
             return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();

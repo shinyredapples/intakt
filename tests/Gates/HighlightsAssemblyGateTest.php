@@ -34,11 +34,37 @@ final class HighlightsAssemblyGateTest extends SandboxTestCase
         self::assertTrue($run->passed('highlights'), $run->output());
     }
 
-    public function testAFragmentOnlyChangePassesNextToAStaleLocalPage(): void
+    public function testALocalPageThatIsNotTheAssemblyFails(): void
     {
         $sandbox = $this->sandboxWithFragments();
         $sandbox->write('docs/highlights.md', self::LAYOUT."| Gates | done | T1 (#5) |\n");
         $sandbox->write('docs/highlights.d/1045-new-feature.md', "## Tooling\n| New feature | done | T2 (#1045) |\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md is not the assembly of docs/highlights.d/', $run->findingsOf('highlights'));
+    }
+
+    public function testAHandEditedLocalPageFailsInARepository(): void
+    {
+        $sandbox = $this->sandboxWithFragments();
+        $sandbox->startRepository();
+        $sandbox->commitAll('docs: add the highlight fragments');
+        $sandbox->write('docs/highlights.md', new HighlightFragments()->assembled($sandbox->root)->text."HAND EDIT\n");
+
+        $run = $sandbox->check('--only=highlights');
+
+        self::assertTrue($run->failed('highlights'), $run->output());
+        self::assertStringContainsString('docs/highlights.md is not the assembly of docs/highlights.d/', $run->findingsOf('highlights'));
+    }
+
+    public function testALocalPageThatIsTheAssemblyPasses(): void
+    {
+        $sandbox = $this->sandboxWithFragments();
+        $sandbox->startRepository();
+        $sandbox->commitAll('docs: add the highlight fragments');
+        $sandbox->write('docs/highlights.md', new HighlightFragments()->assembled($sandbox->root)->text);
 
         $run = $sandbox->check('--only=highlights');
 
@@ -56,18 +82,6 @@ final class HighlightsAssemblyGateTest extends SandboxTestCase
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('docs/highlights.md is committed, but bin/highlights generates it', $run->findingsOf('highlights'));
-    }
-
-    public function testAnUncommittedLocalPagePassesInARepository(): void
-    {
-        $sandbox = $this->sandboxWithFragments();
-        $sandbox->startRepository();
-        $sandbox->commitAll('docs: add the highlight fragments');
-        $sandbox->write('docs/highlights.md', 'a local copy, edited or not');
-
-        $run = $sandbox->check('--only=highlights');
-
-        self::assertTrue($run->passed('highlights'), $run->output());
     }
 
     public function testTheTableRulesApplyToTheAssembledRows(): void

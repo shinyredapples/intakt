@@ -141,6 +141,19 @@ final class HighlightFragmentsTest extends SandboxTestCase
         self::assertStringStartsWith('cannot read the history of docs/highlights.d/: ', $assembly->findings[0] ?? '');
     }
 
+    public function testAShallowHistoryFailsTheAssemblyInsteadOfChangingItsOrder(): void
+    {
+        $this->sandbox->startRepository();
+        $this->commitFragment('1050-clock.md', "## Tooling\n| Clock | planned | T2 (#1050) |\n");
+        $this->commitFragment('900-clock-done.md', "## Tooling\n| Clock | done | T2 (#900) |\n");
+        $this->sandbox->write('.git/shallow', trim($this->sandbox->git('rev-parse', 'HEAD')->output)."\n");
+
+        $assembly = $this->assembled();
+
+        self::assertSame('', $assembly->text);
+        self::assertSame(['the history of docs/highlights.d/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)'], $assembly->findings);
+    }
+
     public function testFragmentsAddedInOneCommitApplyInTheNaturalOrderOfTheirNumbers(): void
     {
         $this->sandbox->startRepository();

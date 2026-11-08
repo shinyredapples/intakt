@@ -54,6 +54,7 @@ final readonly class HighlightsGate implements Gate
 
         $findings = [
             ...$this->fragments->committedPageFindings($workspace->root, $tracked),
+            ...$this->fragments->localPageFindings($workspace->root, $page),
             ...$page->findings,
             ...$this->findingsOf($page->text, $this->existenceOn($workspace->root, $tracked)),
         ];
