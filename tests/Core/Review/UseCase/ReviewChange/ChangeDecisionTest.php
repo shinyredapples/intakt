@@ -40,6 +40,11 @@ final class ChangeDecisionTest extends TestCase
         self::assertSame(Decision::Approve, new ChangeDecision()->of(QuorumPolicy::OneStrongPlusOne, [$this->vote(Decision::Approve, Tier::Strong), $this->vote(Decision::Approve), $this->vote(Decision::Changes)]));
     }
 
+    public function testAMissingVerdictCountedAsBlockedNeverHelpsAQuorum(): void
+    {
+        self::assertSame(Decision::Blocked, new ChangeDecision()->of(QuorumPolicy::OneStrongPlusOne, [$this->vote(Decision::Blocked, Tier::Strong), $this->vote(Decision::Approve)]));
+    }
+
     private function vote(Decision $decision, Tier $tier = Tier::Standard): PanelVerdict
     {
         return new PanelVerdict($tier, new Verdict($decision, [], [], []));

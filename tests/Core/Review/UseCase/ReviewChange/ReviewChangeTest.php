@@ -31,6 +31,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ChangeDecision;
+use Intakt\Core\Review\UseCase\ReviewChange\FailureInWords;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
@@ -56,6 +57,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(StoredVerdicts::class)]
 #[UsesClass(ChangeDecision::class)]
+#[UsesClass(FailureInWords::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(RoundProgress::class)]
@@ -91,6 +93,24 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole(['Look at part 2.' => new Verdict(Decision::Blocked, [], [], [])]));
 
         self::assertSame(Decision::Blocked, $review->decision);
+    }
+
+    public function testAFailedReviewerBesideAnApprovingOneBlocksTheRoundAndIsNamedInPlainWords(): void
+    {
+        $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.'));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
+    }
+
+    public function testAFailedReviewerBesideOneAskingForChangesGivesChangesAndStillNamesTheFailure(): void
+    {
+        $changes = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], []);
+
+        $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.', ['Look at part 2.' => $changes]));
+
+        self::assertSame(Decision::Changes, $review->decision);
+        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
     }
 
     public function testTheActListHoldsOnlyTheFindingsTheJudgeMarkedAct(): void
