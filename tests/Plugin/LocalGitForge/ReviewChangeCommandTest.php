@@ -127,6 +127,16 @@ final class ReviewChangeCommandTest extends TestCase
         );
     }
 
+    public function testAFailedReviewerIsPrintedAsFailedInPlainWordsWithoutAClassName(): void
+    {
+        $failed = $this->outcome(Decision::Approve)->blockedFor('correctness reviewer failed, stopped at its output limit');
+
+        $display = $this->whenTheCommandRuns($this->reviewing($failed))->getDisplay();
+
+        self::assertStringContainsString("reason: correctness reviewer failed, stopped at its output limit\n", $display);
+        self::assertStringNotContainsString('Exception', $display);
+    }
+
     public function testTheTokenLineShowsTheCacheReadsAndWritesThePromptIncludes(): void
     {
         $reviews = self::createStub(ChangeReviews::class);
@@ -450,10 +460,10 @@ final class ReviewChangeCommandTest extends TestCase
         return $reviews;
     }
 
-    private function reviewing(Decision $decision): ChangeReviews
+    private function reviewing(Decision|ChangeReview $outcome): ChangeReviews
     {
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome($decision));
+        $reviews->method('review')->willReturn($outcome instanceof ChangeReview ? $outcome : $this->outcome($outcome));
 
         return $reviews;
     }

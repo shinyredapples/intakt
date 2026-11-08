@@ -46,6 +46,7 @@ final readonly class ReviewChange implements ChangeReviews
         private ChangeDecision $decision,
         private StoredVerdicts $verdicts,
         private ClockInterface $clock,
+        private FailureInWords $failures,
         private int $waitCeilingSeconds = self::WAIT_CEILING_SECONDS,
     ) {
     }
@@ -148,7 +149,7 @@ final readonly class ReviewChange implements ChangeReviews
 
         foreach ($round->reviewers() as $reviewer) {
             if (null !== $reviewer->failure()) {
-                $reasons[] = $reviewer->roleName().': '.$reviewer->failure();
+                $reasons[] = $reviewer->roleName().' reviewer failed, '.$this->failures->of($reviewer->failure());
             }
         }
 

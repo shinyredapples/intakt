@@ -1,5 +1,7 @@
 ## Container image
 
+CI builds the image and runs its smoke test (below) on every pull request and on main: the `image` job ([CI](ci.md)).
+
 Plan task T22, part 1. `Dockerfile` (multi-stage) builds on `dunglas/frankenphp:1.13.4-php8.5-trixie` (ZTS), pinned by digest, fails to build below PHP 8.5.12, installs with `composer install --no-dev`, warms the `prod` cache and runs as user 10001. `docker/entrypoint.sh` requires `APP_SECRET` and `MERCURE_JWT_SECRET` from the environment (nothing secret is in an `ENV` line or a layer) and `MERCURE_JWT_ISSUER`, which the Dockerfile defaults to `http://localhost:7781` and the Caddyfile reads without a default, naming a missing one; it runs `doctrine:migrations:migrate`, `frankenphp validate --config Caddyfile --adapter caddyfile` (so a rejected Caddyfile prints its reason), then starts the processes below. `.dockerignore` keeps `.git`, `var/`, `vendor/`, `.env.local`, `.env.local.php`, every `.env.*.local` and `intakt.env` out of the context. SQLite and the hub's Bolt file are in the volume `/app/var/data`.
 
 - **Workers:** the Caddyfile's `php_server` declares `app` (`public/index.php`) and `mcp` (`public/mcp.php`, `match /mcp/*`, `max_threads`). Both set `FRANKENPHP_WORKER=1`, which makes Symfony Runtime pick `FrankenPhpWorkerRunner`. `public/mcp.php` only returns `public/index.php`, because FrankenPHP refuses two workers on one file.

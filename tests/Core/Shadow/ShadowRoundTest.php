@@ -24,6 +24,7 @@ use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\ReviewChange\ChangeDecision;
+use Intakt\Core\Review\UseCase\ReviewChange\FailureInWords;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
@@ -228,6 +229,7 @@ final class ShadowRoundTest extends KernelTestCase
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
+            new FailureInWords(),
         );
     }
 
