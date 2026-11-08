@@ -1,13 +1,4 @@
-# Highlights: Symfony and Symfony AI in Intakt
-
-Intakt runs on PHP 8.5, Symfony 8.1, Symfony AI 1.0.0-BETA1 and the PHP MCP SDK. This page lists every Symfony, Symfony AI and FrankenPHP feature Intakt uses or plans to use, and what it found in the beta. A change that starts or stops using a feature updates its row in the same change (see `AGENTS.md`).
-
-Status is `planned`, `in progress` (an open pull request) or `done` (on main). **Where** names the plan task and its issue, and once built the main file. A row cites the issue, not the pull request: the issue links its pull requests, and a build cannot know its pull request number before the pull request exists.
-
 ## Symfony AI Platform
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Several providers at once | Anthropic, OpenAI and an OpenAI-compatible endpoint in one install | in progress | T4 (#9, part #51), `config/packages/ai.php` |
 | Structured output into typed objects (`asObject()`, Validator subscriber) | verdicts and judge results as PHP objects with enums and nested lists | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Core/Review/Infrastructure/StrictVerdictSubscriber.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98), T12 (#17, part #445), `src/Core/Review/Contract/Judgement.php`, `src/Core/Review/Infrastructure/JudgeAgent.php` |
 | Token usage (`getTokenUsages()`, `TokenUsage`, cached tokens, `remaining*`) | per-call cost in the ledger, remaining tokens into the budget planner | in progress | T5 (#10, part #99), #1106 (cache reads and writes counted in a round's prompt), `src/Plugin/SymfonyAiVendor/Infrastructure/UsageLedger.php`, `src/Plugin/SymfonyAiVendor/Contract/TokenUsageRow.php` |
@@ -20,9 +11,6 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Claude Code and Codex platform bridges | a reviewer on a subscription account (its automation token where the vendor has one), `IncompleteStreamException` exercised | in progress | T33 (#61), `src/Core/Ai/Infrastructure/ClaudeCodePlatformFactory.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php` (Claude Code); T39 (#321, parts #500 and #501), `src/Core/Ai/Infrastructure/IsolatedCodexCli.php` (Codex: the login per account, its refresh and a probe call), `src/Core/Ai/Infrastructure/CodexPlatformFactory.php` (Codex: the reviewer, `IncompleteStreamException` for a stream whose turn never completed) |
 
 ## Symfony AI Agent
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Agent with tools and tool effect hints | one agent per reviewer role and for the judge, with read-only repository tools | in progress | T7 (#12), T12 (#17, part #445), `src/Core/Review/Infrastructure/ReviewerAgent.php`, `src/Core/Review/Infrastructure/JudgeAgent.php`, `src/Core/Review/Infrastructure/Repository/` |
 | `FaultTolerantToolbox` | a failing tool answers the model with an error instead of ending the run | in progress | T7 (#12), `src/Core/Review/Infrastructure/ReviewerAgent.php` |
 | `TraceableToolbox` | tests hand the reviewer a traced toolbox, so `assertToolCalled()` sees its tool calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
@@ -34,26 +22,17 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Streaming `Progress` and `Execution::cancel()` | live progress on the dashboard and a stop button. Built: `onProgress()` forwards each tool call and streamed text delta of a reviewer to the hub (the reviewer's call requests a stream where the provider supports it and falls back to an unstreamed call when it refuses, #707); `ReviewerStopping` registers `onProgress()` too and calls `cancel()` at the first progress update after a stop request from the dashboard, whose reviewer then ends `blocked` (`reviewer-stopped`, #798); the page shows it as `stopped` and publishes the stop live, #799 | in progress | T21 (#27, parts #583, #798 and #799), `src/Core/Review/Infrastructure/LiveProgress.php`, `src/Core/Review/Infrastructure/ReviewerStopping.php` |
 
 ## Symfony AI Store
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | `DocumentIndexer` and `Retriever` | index memory entries, retrieve those that describe the files under review | in progress | T17 (#22, #461), `src/Core/Memory/Infrastructure/StoreMemoryIndex.php`, `src/Core/Memory/Infrastructure/StoreProjectMemory.php`, `src/Core/Review/UseCase/IndexResolvedFindings/IndexResolvedFindingsHandler.php` (T17 #462: resolved findings are indexed after a completed review); T17 #463: `Retriever` feeds each reviewer's briefing through `src/Core/Review/Infrastructure/ReviewerMemory.php`, `config/packages/ai.php` |
 | `symfony/ai-sqlite-store` | embedded store on SQLite; it loads all vectors into PHP memory, which fits one install's memory | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/SqliteMemoryStoreTest.php`, `config/packages/ai.php` (store, vectorizer and indexer for production, T17 #462) |
 | In-memory store | retrieval tests | in progress | T17 (#22, #461), `tests/Core/Memory/Infrastructure/StoreProjectMemoryTest.php` |
 | Reranker | only when a configured provider supports reranking | planned | T17 (#22) |
 
 ## AI Bundle
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Platform configuration, keys from Symfony secrets or the environment | providers configured per install; a missing key disables its provider | in progress | T4 (#51), `config/packages/ai.php` |
 | `model_catalog` and a model router | capability tiers mapped to provider models per project | in progress | T4 (#52), `config/packages/ai.php`, `src/Core/Ai/Infrastructure/TierPlatform.php` |
 | `AiAssertionsTrait` (`assertToolCalled`, `assertPlatformCallCount`) | tests assert tool calls and the number of platform calls | in progress | T7 (#12), `tests/Core/Review/Infrastructure/Repository/ReviewerAgentTest.php`, `tests/Core/Review/Infrastructure/ReviewerVerdictTest.php` |
 
 ## MCP Bundle and MCP SDK
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | MCP Bundle server for the owner | agents list projects, read a round's status, verdicts, act list and findings, and start a review, with progress notifications | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`, `src/Core/Ai/UseCase/ListProjects/ListProjectsTool.php`; T15 (#20, part #509), `src/Core/Review/UseCase/ReadRound/`; T15 (#20, part #510), `src/Plugin/LocalGitForge/UseCase/ReviewChange/StartReviewTool.php` |
 | MCP Bundle server per review | serves the read-only repository tools of the head under review, from its own registry, path and session store beside the owner server; the round comes from the request's signed credential, never from a tool argument | in progress | T16 (#21, part #578), `config/packages/mcp.yaml`, `src/Core/Review/UseCase/ServeReviewTools/` |
 | `session.lock` | safe parallel calls on one session | in progress | T15 (#20, part #508), `config/packages/mcp.yaml`; T16 (#21, part #578), the same file |
@@ -63,15 +42,9 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | MCP SDK client | contract tests that call every tool, through `Mcp\Client` over a PSR-18 client into the kernel | in progress | T15 (#20, part #510), `tests/Core/Mcp/Contract/OwnerServerSdkClientTest.php` |
 
 ## Mate
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Mate as a dev dependency | development diagnostics against the running app (`vendor/bin/mate`, `mate/`) | in progress | T27 (#34), `mate/` |
 
 ## Symfony components
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Messenger | command and query buses; a rate-limited reviewer retries after `getRetryAfter()` through `RecoverableExceptionInterface::getRetryDelay()`; the failure transport means `blocked`. Built: the two buses `command.bus` and `query.bus`, the typed handler attributes `AsCommandHandler` and `AsQueryHandler`, the `async` Doctrine transport that carries one message per reviewer of a round (its table from the migrations, `auto_setup` off, `redeliver_timeout` above the reviewer hold), `RecoverableMessageHandlingException` with a retry delay for a message that finds its reviewer held by a live worker, `ReviewerRateLimited` (retry delay from `getRetryAfter()`), `JudgeLimited` (the same for the judge call of a round), and the `failed` failure transport with `BlockReviewerOfFailedMessage` and `LogFailedJudging` (logs a judging that failed for good); the retry strategy's `max_delay` caps the wait of a retry without its own delay at one minute; the first query handler, `VerdictsOfRoundHandler`, reads a round's verdicts with their standing; the image runs `messenger:consume` workers with `--memory-limit` and `--time-limit`, stopped on SIGTERM after the current message (`pcntl`) | in progress | T9 (#14, part #271), `config/packages/messenger.yaml`, `src/Core/Platform/Contract/AsCommandHandler.php`, `src/Core/Platform/Contract/AsQueryHandler.php`; T9 (#14, part #240), `src/Core/Review/UseCase/RunReviewRound/`; T9 (#14, part #241), `src/Core/Review/UseCase/RunReviewRound/ReviewerRateLimited.php`, `src/Core/Review/UseCase/RunReviewRound/BlockReviewerOfFailedMessage.php`; T11 (#16), `src/Core/Review/UseCase/ReadVerdicts/`; T12 (#17, part #446), `src/Core/Review/UseCase/JudgeRound/`; T12 (#17, part #460), `src/Core/Review/UseCase/JudgeRound/LogFailedJudging.php`; T22 (#28, part #690), `docker/entrypoint.sh` |
 | `ResetInterface` and `kernel.reset` | every stateful service resets between requests in worker mode and between messages in consumers; a PHPStan rule enforces it | in progress | T36 (#67), `config/gates/src/PhpStan/StatefulServiceResetRule.php`; T13 (#18), `src/Plugin/LocalGitForge/UseCase/ReviewChange/CleanupOnStop.php`; T29 (#29), `tests/Application/WorkerModeTest.php` and, for the Symfony AI services (part #771), `tests/Application/SymfonyAiResetTest.php` |
 | Scheduler | the watcher tick (`#[AsSchedule]`, one `RecurringMessage` per project, every minute), run in the image by its own `messenger:consume scheduler_watcher` process; usage probes, deadlines and the weekly branch cleanup are planned | in progress | T38 (#490), `src/Core/Watcher/UseCase/WatchPullRequests/WatcherSchedule.php`; T22 (#28, part #690), `docker/entrypoint.sh`; T14 (#19), T30 (#24) |
@@ -100,9 +73,6 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Runtime: worker mode in the image, no state leaks | the image runs worker mode; a test proves nothing leaks between requests | in progress | T22 (#28, part #703), `bin/instance` boots the `app` worker when `frankenphp` is on the `PATH`; T29 (#29), `tests/Application/WorkerModeTest.php`, `tests/Application/SymfonyAiResetTest.php` |
 
 ## FrankenPHP
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Worker mode | one booted kernel for the HTTP side through Symfony Runtime's `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
 | `dunglas/frankenphp` 1.13.4 or later, PHP 8.5 ZTS, pinned by digest | the base image `1.13.4-php8.5-trixie`, pinned by digest, with the 1.13.2 and 1.13.4 worker-mode leak fixes; `docker/check-php-floor.sh` fails the build below PHP 8.5.12 | done | T22 (#28, parts #688 and #925), `Dockerfile` |
 | Named workers with `match`, `num`, `max_threads` and `max_wait_time` | an `app` worker and a separate `mcp` worker, so streamed MCP responses can't starve the dashboard; `max_wait_time` is global in 1.13.4, not per worker | in progress | T22 (#28, part #688), T15 (#20), `Caddyfile` |
@@ -117,9 +87,6 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `watch` and hot reload | a development compose override | planned | T35 (#64) |
 
 ## Tooling
-
-| Feature | How Intakt uses it | Status | Where |
-|---|---|---|---|
 | Quality gates | `bin/check` runs every gate locally and in CI; the user journeys run separately with `bin/check --journeys` | done | `bin/check`, `config/gates/` |
 | FrameworkBundle `lint:container` | the `container` gate of `bin/check` lints the service wiring of the `dev`, `test` and `prod` containers | done | #982, `config/gates/src/ContainerLintGate.php` |
 | PHPUnit 13 | test runner, failing on warnings, deprecations and mocks without expectations | done | `phpunit.dist.xml`, `phpunit.gates.xml` |
@@ -130,11 +97,6 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | `bin/instance` and `bin/probe` | offline boot gate and reviewer probes | done | T31 (#6), `bin/instance`, `bin/probe` |
 
 ## Found in the beta
-
-Each entry is an isolated reproduction under `upstream/<slug>/` at pinned versions (PHPUnit tests or a `reproduce.php` script). The owner approves each report before it is filed. **Upstream issue** gives the decision from the folder's `REPORT.md` and where its text is: `ISSUE.md` (a new issue), `COMMENT.md` (a comment on an existing one) or a fix pull request.
-
-| Probe | Status | Where | Upstream issue |
-|---|---|---|---|
 | Claude Code bridge: tools the CLI already ran come back as tool calls for the caller, also when streaming | in progress | T26 (#636, part #653), `upstream/ai-claude-code-platform-cli-tool-calls/` | filed as pull request [symfony/ai#2875](https://github.com/symfony/ai/pull/2875) (open), together with the Codex tool calls |
 | Claude Code and Codex bridges: an agent with a toolbox passes `--tools Array` or `--allowedTools Array` to the CLI | done | T26 (#636, part #730), no reproduction folder: the pull request carries its tests | merged as pull request [symfony/ai#2876](https://github.com/symfony/ai/pull/2876) on 2026-11-03 |
 | Claude Code bridge: a cut-off run without streaming raises no `IncompleteStreamException` | in progress | T26 (#636, part #653), `upstream/ai-claude-code-platform-cut-off-stream/` | not filed: the exceptions are accurate, `IncompleteStreamException` is for streaming only |
@@ -160,7 +122,6 @@ Each entry is an isolated reproduction under `upstream/<slug>/` at pinned versio
 | Reset in worker mode: Symfony AI services with state a request leaves behind after the kernel's reset, found by running one kernel for two different requests, and every mutable Symfony AI state without a reset, listed and judged one by one (`tests/Application/SymfonyAiResetTest.php`); the Platform `Provider` keeps `$resolvedModel` and sends an earlier request's model options when `supports()` is skipped | in progress | T29 (#29, part #771), `upstream/ai-platform-provider-keeps-resolved-model/` | fixed upstream in symfony/ai#2851 (after v1.0.0-BETA1, not released yet), nothing to file |
 
 ## PHP 8.5 in use
-
 - `#[NoDiscard]` on the instance status: `bin/instance` (done); on `Forge::hasHeadMoved()`: `src/Plugin/Forge/Contract/Forge.php` (done, T6).
 - The pipe operator for turning `git diff` output into changed files: `src/Plugin/LocalGitForge/Infrastructure/NameStatusParser.php` (done, T6).
 - `#[NoDiscard]` on the parse result: `src/Core/Review/Contract/VerdictParser.php` (in progress, T1).

@@ -1,0 +1,32 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Intakt\Gates\HighlightFragments;
+
+$autoload = __DIR__.'/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDERR, "run composer install first\n");
+    exit(2);
+}
+
+require $autoload;
+
+$root = dirname(__DIR__);
+$assembly = new HighlightFragments()->assembled($root);
+
+if ([] !== $assembly->findings) {
+    fwrite(STDERR, implode("\n", $assembly->findings)."\n");
+    exit(1);
+}
+
+if (false === @file_put_contents($root.'/'.HighlightFragments::ASSEMBLED, $assembly->text)) {
+    // PHP's message starts with the absolute path; only the reason after it is worth showing.
+    $reason = error_get_last()['message'] ?? '';
+    fwrite(STDERR, 'cannot write '.HighlightFragments::ASSEMBLED.': '.substr($reason, (int) strrpos($reason, '): ') + 3)."\n");
+    exit(1);
+}
+
+fwrite(STDOUT, HighlightFragments::ASSEMBLED." assembled from docs/highlights.d/\n");
