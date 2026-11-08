@@ -18,6 +18,7 @@ use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -36,7 +37,10 @@ final class LedgerRounds
 
     private readonly LedgerTokens $tokens;
 
-    public function __construct(private readonly RoundPayloads $payloads)
+    public function __construct(
+        private readonly RoundPayloads $payloads,
+        private readonly RoundCosts $costs,
+    )
     {
         $this->tokens = new LedgerTokens();
     }
@@ -164,7 +168,7 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round));
+        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round));
 
         $judged = $this->judged[$round->round] ?? null;
 

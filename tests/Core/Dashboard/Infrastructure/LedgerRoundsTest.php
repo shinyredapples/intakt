@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -39,6 +40,7 @@ use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -76,6 +78,8 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ProjectMode::class)]
 final class LedgerRoundsTest extends TestCase
 {
+    private ?RoundCosts $costs = null;
+
     private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
 
     public function testAStartWithANumberThatIsNoIntegerIsSkipped(): void
@@ -414,9 +418,27 @@ final class LedgerRoundsTest extends TestCase
         self::assertEquals(TokenFigures::none(), $review?->rounds[0]->tokens);
     }
 
+    public function testARoundCarriesTheCostTheReviewModuleReadsForIt(): void
+    {
+        $this->costs = $this->createStub(RoundCosts::class);
+        $this->costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
+
+        self::assertSame(0.5, $review?->rounds[0]->cost->usd);
+    }
+
+    private function noCosts(): RoundCosts
+    {
+        $costs = $this->createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+
+        return $costs;
+    }
+
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review
     {
-        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())));
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts());
 
         foreach ($events as $event) {
             $rounds->add($event);
