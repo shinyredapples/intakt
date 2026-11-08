@@ -54,6 +54,7 @@
     <h2>Banners</h2>
     {% embed c ~ 'banner.html.twig' with {icon: 'broken', broken: true, short: 'CI image build failing since 09:12', title: 'CI image build failing since 09:12.', text: 'acme-shop checks cannot run.'} %}{% block action %}<a class="btn quiet sm" href="#">Open health</a>{% endblock %}{% endembed %}
     {% embed c ~ 'banner.html.twig' with {icon: 'pause', short: 'field-notes is paused', title: 'field-notes is paused.', text: 'Nothing new starts.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
+    {% embed c ~ 'banner.html.twig' with {icon: 'pause', compact: true, short: 'field-notes is paused', title: 'field-notes is paused.', text: 'You paused it on Monday.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
     {% embed c ~ 'banner.html.twig' with {icon: 'pause', compact: true, open: true, short: 'field-notes is paused', title: 'field-notes is paused.', text: 'You paused it on Monday.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
 
     <h2>Sub-tabs</h2>

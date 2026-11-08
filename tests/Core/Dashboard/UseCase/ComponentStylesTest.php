@@ -58,7 +58,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
     {
         $controllers = $this->gallery()->filter('#gallery [data-controller]')->each(static fn (Crawler $element): string => (string) $element->attr('data-controller'));
 
-        self::assertSame(['arm', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
+        self::assertSame(['arm', 'disclosure', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
     }
 
     public function testACompactBannerShowsOnlyItsToggleAtEveryWidth(): void
@@ -75,6 +75,15 @@ final class ComponentStylesTest extends DashboardPageTestCase
         $rules = $this->rulesOf($this->phoneBlock());
 
         self::assertMatchesRegularExpression('/width:\s*48px;\s*height:\s*46px/', $rules['.stepper button'] ?? '');
+    }
+
+    public function testOnPhonesTheCopyFieldWrapsTheCommandAboveAFullWidthButton48PxTall(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/flex-wrap:\s*wrap/', $rules['.copy'] ?? '');
+        self::assertMatchesRegularExpression('/white-space:\s*normal/', $rules['.copy code'] ?? '');
+        self::assertMatchesRegularExpression('/width:\s*100%;\s*height:\s*48px/', $rules['.copy .btn'] ?? '');
     }
 
     public function testASwitchInputFillsItsTrackWithExplicitDimensions(): void
