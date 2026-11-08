@@ -22,9 +22,7 @@ final readonly class ListReviewsController
     }
 
     #[Route('/reviews', name: DashboardRoutes::LIST_REVIEWS, methods: ['GET'])]
-    /**
-     * The project only chooses the top bar filter: every row stays on the page, so the filter can switch to any project it offers.
-     */
+    // The project only chooses the top bar filter: every row stays on the page, so the filter can switch to any project it offers.
     public function __invoke(#[MapQueryParameter] ?string $project = null): Response
     {
         return new Response($this->twig->render('dashboard/reviews.html.twig', [

@@ -63,7 +63,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews?project=alpha');
 
-        self::assertSame(['alpha'], $crawler->filter('#projfilter option[selected]')->each(static fn ($option): string => $option->attr('value')));
+        self::assertSame(['alpha'], $crawler->filter('#projfilter option[selected]')->each(static fn ($option): ?string => $option->attr('value')));
     }
 
     public function testTheTopBarFilterCanSwitchToAnotherProjectAfterFollowingAProjectLink(): void
@@ -114,6 +114,6 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews?project=beta');
 
-        self::assertSame(['alpha', 'beta'], $crawler->filter('.failing-heads .card')->each(static fn ($card): string => $card->attr('data-project')));
+        self::assertSame(['alpha', 'beta'], $crawler->filter('.failing-heads .card')->each(static fn ($card): ?string => $card->attr('data-project')));
     }
 }
