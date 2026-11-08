@@ -58,7 +58,7 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private string $ownerToken = '';
 
-    private ?string $compatibleBaseUrl = SampleProject::HUGGING_FACE_ROUTER;
+    private string $compatibleBaseUrl =SampleProject::HUGGING_FACE_ROUTER;
 
     protected function setUp(): void
     {

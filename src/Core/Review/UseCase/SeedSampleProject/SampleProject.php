@@ -23,7 +23,7 @@ final readonly class SampleProject
 
     public const string TASK = 'Add a shipping cost by weight and a report of a customer\'s orders; a cart of 100 or more keeps its discount.';
 
-    // The entrypoint hands this token to the openai_compatible provider with the router as its base URL.
+    // Named instead of the openai_compatible variables, because the entrypoint sets those from this token with the router as the base URL.
     public const string HUGGING_FACE_TOKEN = 'HF_TOKEN';
 
     // Without /v1, because the generic bridge appends /v1/chat/completions itself.

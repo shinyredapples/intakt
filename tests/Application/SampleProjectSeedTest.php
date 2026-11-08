@@ -126,7 +126,7 @@ final class SampleProjectSeedTest extends KernelTestCase
         }
     }
 
-    // What the entrypoint sets from HF_TOKEN.
+    // Set directly, because HF_TOKEN becomes these two only in the image's entrypoint, which this test does not run.
     private function setTheHuggingFaceRouter(): void
     {
         $_SERVER['OPENAI_COMPATIBLE_BASE_URL'] = SampleProject::HUGGING_FACE_ROUTER;
