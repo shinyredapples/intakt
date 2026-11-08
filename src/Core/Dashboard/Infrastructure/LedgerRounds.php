@@ -8,17 +8,24 @@ use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
+use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
@@ -40,6 +47,8 @@ final class LedgerRounds
     public function __construct(
         private readonly RoundPayloads $payloads,
         private readonly RoundCosts $costs,
+        private readonly ChangeDecision $decision,
+        private readonly FailureInWords $failures,
     ) {
         $this->tokens = new LedgerTokens();
     }
@@ -158,7 +167,7 @@ final class LedgerRounds
         return match (true) {
             $row instanceof ReviewerStarted => $outcome->restarted(),
             $row instanceof VerdictReceived => $outcome->answered($row->decision->value, $row->findings, $row->mode),
-            $row instanceof ReviewerFailed => $outcome->failed($row->failure),
+            $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
             $row instanceof ReviewerStopped => $outcome->stopped(),
             $row instanceof CatchUpOwed => $outcome->substitutedBy($row->substitute->value),
@@ -173,8 +182,31 @@ final class LedgerRounds
 
         return match (true) {
             null === $judged => $completed,
-            $judged['textRecorded'] => $completed->judgedWith($judged['findings']),
-            default => $completed->judgedFromMarksOnly($judged['findings']),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'])),
+            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'])),
         };
+    }
+
+    // Only a judged round with a recorded quorum gets an outcome, because the console decides once the judge is done and a policy must never be guessed.
+    private function decided(ReviewedRound $round): ReviewedRound
+    {
+        if (null === $round->quorum) {
+            return $round;
+        }
+
+        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome), [], [], [])), $round->outcomes);
+        $unstarted = array_fill(0, max(0, $round->reviewers - count($votes)), new PanelVerdict(Tier::Standard, new Verdict(Decision::Blocked, [], [], [])));
+
+        return $round->decidedAs($this->decision->of($round->quorum, [...$votes, ...$unstarted]));
+    }
+
+    // A reviewer without a verdict votes as blocked, as in the Review module, so a failed or unstarted reviewer never helps a quorum.
+    private static function voteOf(ReviewerOutcome $outcome): Decision
+    {
+        if (null === $outcome->decision || ReviewerProgress::Answered !== $outcome->progress) {
+            return Decision::Blocked;
+        }
+
+        return Decision::from($outcome->decision);
     }
 }
