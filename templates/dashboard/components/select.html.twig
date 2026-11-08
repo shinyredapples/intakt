@@ -1,0 +1,6 @@
+{#- options: list of {value, label}; the one whose value is selected is chosen. -#}
+<select class="select" id="{{ id }}" name="{{ name }}">
+    {%- for option in options %}
+    <option value="{{ option.value }}"{% if option.value == selected|default(null) %} selected{% endif %}>{{ option.label }}</option>
+    {%- endfor %}
+</select>

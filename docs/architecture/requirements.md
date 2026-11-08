@@ -29,7 +29,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `gh` | `docs/showcase/figures.sh` (the test puts a fake one first on `PATH`); `.github/workflows/release-labels.yml` on GitHub's runner | reading pull requests and comments from the GitHub API; labeling a pull request | only for the showcase figures | any | no |
 | `ip` (iproute2) | `bin/probe` | bringing loopback up inside a fresh network namespace | for probes | any | development only |
 | `rm` (coreutils) | the image's `docker/entrypoint.sh` | `rm -rf var/cache/$APP_ENV` before each rebuild of the container when the sample is seeded | in the image | any | yes (base image) |
-| `node` | `node --test tests/Core/Dashboard/UseCase/theme.test.mjs`, run by hand (`bin/check` does not call it) | executing the dashboard's theme script and Stimulus theme controller against a simulated browser | only to run that test | 22 or later | no (neither the CI image nor the `Dockerfile`'s image) |
+| `node` | `node --test tests/Core/Dashboard/UseCase/*.test.mjs`, run by hand (`bin/check` does not call it) | executing the dashboard's theme script and its Stimulus controllers (theme, arm, toast, disclosure) against a simulated browser | only to run those tests | 22 or later | no (neither the CI image nor the `Dockerfile`'s image) |
 | `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe`, `bin/check --journeys` (which runs PHPUnit under `bin/instance`) | tests, static analysis, code style; the tests gate also asks PHPUnit for the test files of each pass (`--list-test-files`, with its events log, `--log-events-text`, to catch the warnings of the listing), runs them one file per process, and asks for a JUnit report of each run (`--log-junit`) to record per-file test durations | yes | as locked in `composer.lock` | development only |
 
 `unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
@@ -44,7 +44,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `docker build` and what `docker/smoke-test.sh` calls ([below](#to-smoke-test-the-container-image)) | the `image` job | building the app image and smoke-testing it | yes |
 | `docker run` security options | the `check` job | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
 | `sudo sysctl` | the `check` job, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
-| `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from the Dockerfile's hash | yes |
+| `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from a hash of the Dockerfile, `composer.json` and the check ini | yes |
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |

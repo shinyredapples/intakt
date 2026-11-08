@@ -1,0 +1,62 @@
+{# Every shared component once, in the layout: ComponentStylesTest checks that each class it renders is styled. #}
+{% extends 'dashboard/base.html.twig' %}
+{% set c = 'dashboard/components/' %}
+{% block body %}
+<div id="gallery">
+    <h2>Buttons</h2>
+    {{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Save'}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Saving…', busy: true}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Test', small: true}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'quiet', label: 'Rename'}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'danger', label: 'Pause everything', confirm: 'Click again to pause'}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approve a3f9c21'}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Disabled', disabled: true}) }}
+
+    <h2>Chips and badges</h2>
+    {{ include(c ~ 'chip.html.twig', {label: 'In review, round 2', dot: 'ok', on_page: true}) }}
+    {{ include(c ~ 'chip.html.twig', {label: 'Login expired', dot: 'needs', on_page: true}) }}
+    {{ include(c ~ 'chip.html.twig', {label: 'Broken', dot: 'broken'}) }}
+    {{ include(c ~ 'chip.html.twig', {label: 'Idle', dot: 'idle'}) }}
+    {{ include(c ~ 'reason_badge.html.twig', {reason: 'budget'}) }}
+    {{ include(c ~ 'reason_badge.html.twig', {reason: 'overlap'}) }}
+    {{ include(c ~ 'reason_badge.html.twig', {reason: 'dependency', label: 'Needs #612'}) }}
+    {{ include(c ~ 'reason_badge.html.twig', {reason: 'ci', on_page: true}) }}
+    {{ include(c ~ 'count.html.twig', {n: 3}) }}
+    {{ include(c ~ 'count.html.twig', {n: 4, needs: true}) }}
+    <p>Approve this {{ include(c ~ 'term.html.twig', {term: 'version', words: 'version'}) }}.</p>
+
+    <h2>Cards</h2>
+    {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Command overlay for tasks and settings', meta: [{icon: 'clock', text: '42 min'}, {text: 'Slot 1, Model L'}, {text: '9b3e5aa', mono: true}]}) }}
+    {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: it touches secret handling', meta: [{icon: 'clock', text: '1 h 05 min'}]}) }}
+    {{ include(c ~ 'card.html.twig', {href: '#', number: 205, project: 'acme-shop', title: 'Refund emails include the order number', emphasis: {icon: 'broken', text: 'Waiting for CI: image build failing', broken: true}, meta: [{icon: 'clock', text: '1 h 50 min'}]}) }}
+    {{ include(c ~ 'skeleton.html.twig') }}
+    {{ include(c ~ 'column_empty.html.twig') }}
+
+    <h2>List rows</h2>
+    <div class="list">
+        {% embed c ~ 'list_row.html.twig' with {title: 'Phone (home)', explanation: 'Gets a push when something needs you.'} %}{% block actions %}<button class="btn quiet sm" type="button">Remove</button>{% endblock %}{% endembed %}
+    </div>
+
+    <h2>Setting rows and inputs</h2>
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Phone access', explanation: 'Lets phones on your home network open the dashboard.', control_id: 'lan', state: 'saved'} %}{% block control %}{{ include(c ~ 'switch.html.twig', {id: 'lan', name: 'lan', on: true}) }}{% endblock %}{% endembed %}
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Quiet hours', explanation: 'No pushes in these hours.', control_id: 'quiet', state: 'failed', still: '22:00 to 07:00'} %}{% block control %}{{ include(c ~ 'select.html.twig', {id: 'quiet', name: 'quiet', selected: 'b', options: [{value: 'a', label: '22:00 to 07:00'}, {value: 'b', label: '23:00 to 08:00'}]}) }}{% endblock %}{% endembed %}
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Port', explanation: 'Where the dashboard answers.', control_id: 'port', state: 'saving'} %}{% block control %}{{ include(c ~ 'input.html.twig', {id: 'port', name: 'port', value: '80', error: 'Use a port from 1024 to 65535.'}) }}{% endblock %}{% endembed %}
+
+    <h2>Bars</h2>
+    {{ include(c ~ 'bar.html.twig', {label: 'Used, reserved, forecast', note: 'Resets at 14:00', used: 46, reserved: 12, forecast: 18}) }}
+    {{ include(c ~ 'bar_legend.html.twig') }}
+
+    <h2>Banners</h2>
+    {% embed c ~ 'banner.html.twig' with {icon: 'broken', broken: true, short: 'CI image build failing since 09:12', title: 'CI image build failing since 09:12.', text: 'acme-shop checks cannot run.'} %}{% block action %}<a class="btn quiet sm" href="#">Open health</a>{% endblock %}{% endembed %}
+    {% embed c ~ 'banner.html.twig' with {icon: 'pause', short: 'field-notes is paused', title: 'field-notes is paused.', text: 'Nothing new starts.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
+
+    <h2>Sub-tabs</h2>
+    {{ include(c ~ 'subtabs.html.twig', {label: 'History', tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}]}) }}
+
+    <h2>Empty and error</h2>
+    {{ include(c ~ 'empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building. When it needs a decision, it shows up here and on your phone.'}) }}
+    {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
+
+    {{ include(c ~ 'toast.html.twig', {message: 'All projects paused', undo_url: '#', undo_token: 'token'}) }}
+</div>
+{% endblock %}

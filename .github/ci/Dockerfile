@@ -11,20 +11,25 @@ RUN php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
+COPY composer.json /usr/local/share/intakt/
+COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
+# The extensions are composer.json's ext-* entries; pdo_mysql and pdo_pgsql only serve the persistence group.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
-    docker-php-ext-install -j"$(nproc)" intl pcntl pdo_mysql pdo_pgsql zip; \
-    echo 'memory_limit=-1' > "$PHP_INI_DIR/conf.d/ci.ini"; \
+    missing='foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
+    docker-php-ext-install -j"$(nproc)" $(php -r "$missing") pdo_mysql pdo_pgsql; \
+    test -z "$(php -r "$missing")"; \
+    php --ini; \
     composer --version; \
     gitleaks version; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
-    php -r 'foreach (["intl", "pcntl", "zip", "pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
+    php -r 'foreach (["pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
     useradd --uid 1000 --user-group --create-home ci; \
     chown -R ci:ci /config/caddy /data/caddy
 
