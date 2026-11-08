@@ -206,6 +206,14 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame('Approve this version: it touches secret handling', $card->filter('.title + p.blocker')->text());
     }
 
+    public function testACardWithAnEmptyAskIsAPlainCard(): void
+    {
+        $card = $this->render('card', [...$this->card(), 'ask' => null])->filter('a.card');
+
+        self::assertSame('card', $card->attr('class'));
+        self::assertCount(0, $card->filter('.dot.needs, .blocker'));
+    }
+
     public function testAListRowShowsTitleExplanationAndActionsOnTheRight(): void
     {
         $row = $this->embed(

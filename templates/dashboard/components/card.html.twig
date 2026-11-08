@@ -1,5 +1,5 @@
 {#- ask makes it a needs-you card; emphasis {icon, text, broken?} is the blocker or next step under the title; meta as in meta.html.twig. -#}
-{%- set needs = ask is defined -%}
+{%- set needs = ask|default(null) is not empty -%}
 <a class="card{% if needs %} needs{% endif %}" href="{{ href }}">
     <div class="top">
         {%- if needs %}<span class="dot needs"></span>{% endif -%}

@@ -46,7 +46,7 @@ svg.i.s { width: 15px; height: 15px; }
 .dot.broken { background: var(--red); }
 .dot.idle { background: transparent; border: 1.5px solid var(--muted); }
 
-/* Cards, their emphasis line and the meta line */
+/* Cards, their emphasis line and the meta line. The mock pads a card 14 px high, which has no spacing step, so tokens only (D2) wins with --s12. */
 .card { display: block; padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); color: var(--ink); text-decoration: none; }
 .card:hover { background: var(--tint-2); }
 .card.needs, .card.needs:hover { background: var(--amber-tint); }
@@ -183,7 +183,9 @@ svg.i.s { width: 15px; height: 15px; }
   .switch input:checked + span::after { transform: translateX(20px); }
   .sstate { order: 9; width: 100%; min-width: 0; justify-content: flex-start; }
   .sstate:empty { display: none; }
-  .srow { flex-wrap: wrap; }
+  .srow { flex-wrap: wrap; gap: var(--s12); }
+  .srow .ctl { width: 100%; flex-wrap: wrap; }
+  .srow .ctl .select { flex: 1; }
   .banner { display: block; padding: 0; }
   .banner > :not(.banner-toggle) { display: none; }
   .banner-toggle {
@@ -194,9 +196,10 @@ svg.i.s { width: 15px; height: 15px; }
   .banner.broken .banner-toggle span { color: var(--red); }
   .banner-toggle .chev { transition: transform .15s; }
   .banner.open .banner-toggle .chev { transform: rotate(180deg); }
-  .banner.open > p { display: block; padding: 0 var(--s12) var(--s4) 42px; }
+  /* The text lines up with the toggle's words after its padding, small icon and gap. */
+  .banner.open > p { display: block; padding: 0 var(--s12) var(--s4) calc(var(--s12) + 15px + var(--s8)); }
   .banner.open > p strong { display: none; }
-  .banner.open > :is(.btn, form) { display: inline-flex; margin: var(--s4) 0 var(--s8) 32px; }
+  .banner.open > :is(.btn, form) { display: inline-flex; margin: var(--s4) 0 var(--s8) var(--s32); }
   .toast { right: var(--s16); bottom: var(--s16); left: var(--s16); justify-content: space-between; transform: none; animation-name: toast-in-phone; }
 }
 @keyframes toast-in-phone { from { opacity: 0; transform: translateY(8px); } }

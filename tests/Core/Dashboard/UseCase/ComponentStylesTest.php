@@ -79,6 +79,38 @@ final class ComponentStylesTest extends DashboardPageTestCase
         self::assertMatchesRegularExpression('/top:\s*-6px;\s*width:\s*100%;\s*height:\s*44px/', $rules['.switch input'] ?? '');
     }
 
+    public function testOnPhonesASettingRowWrapsItsControlsAcrossTheFullWidth(): void
+    {
+        $rules = $this->rulesOf($this->phoneBlock());
+
+        self::assertMatchesRegularExpression('/flex-wrap:\s*wrap;\s*gap:\s*var\(--s\d+\)/', $rules['.srow'] ?? '');
+        self::assertMatchesRegularExpression('/width:\s*100%;\s*flex-wrap:\s*wrap/', $rules['.srow .ctl'] ?? '');
+        self::assertMatchesRegularExpression('/flex:\s*1\b/', $rules['.srow .ctl .select'] ?? '');
+    }
+
+    public function testNoPaddingMarginOrGapHoldsARawLengthOf4PxOrMore(): void
+    {
+        preg_match_all('/(?:padding|margin|gap)(?:-[a-z]+)?:\s*([^;}]+)/', (string) preg_replace('~/\*.*?\*/~s', '', $this->componentSheet()), $declarations);
+
+        self::assertNotEmpty($declarations[1]);
+        foreach ($declarations[1] as $declaration) {
+            // A calc() may add the component's own sizes, but it builds on a spacing token.
+            preg_match_all('/calc\((?:[^()]|\([^()]*\))*\)/', $declaration, $calcs);
+            foreach ($calcs[0] as $calc) {
+                self::assertStringContainsString('var(--s', $calc, $declaration);
+            }
+            $outsideCalc = (string) preg_replace('/calc\((?:[^()]|\([^()]*\))*\)/', '', $declaration);
+            self::assertDoesNotMatchRegularExpression('/(?<![\w.])(?:[4-9]|\d{2,})(?:\.\d+)?(?:px|rem|em)\b/', $outsideCalc, $declaration);
+        }
+    }
+
+    private function phoneBlock(): string
+    {
+        preg_match('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->componentSheet(), $phone);
+
+        return $phone[1] ?? '';
+    }
+
     private function componentSheet(): string
     {
         return $this->sheets('components')[0];
