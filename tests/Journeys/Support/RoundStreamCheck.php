@@ -33,6 +33,7 @@ final readonly class RoundStreamCheck
 
             foreach ($this->streamsOf($update, $position) as $stream) {
                 $this->assertTargetIsOnThePage($stream, $ids, $position);
+                $ids = [...$ids, ...$this->idsPlacedBy($stream)];
                 $state = $this->stateOf($stream, $round);
                 $judgedAt = self::JUDGED === $state ? $position : $judgedAt;
                 $finished = $this->progressAfter($finished, $state, $position);
@@ -58,7 +59,9 @@ final readonly class RoundStreamCheck
         $elements = $document->filter('body > *');
         $streams = $document->filter('body > turbo-stream');
 
-        if (0 === count($elements) || count($elements) !== count($streams)) {
+        $strayText = $document->filterXPath('//body/text()[normalize-space()]');
+
+        if (0 === count($elements) || count($elements) !== count($streams) || 0 !== count($strayText)) {
             throw new AssertionFailedError(sprintf('update %d is not a <turbo-stream>: %s', $position, $update->getData()));
         }
 
@@ -95,14 +98,32 @@ final readonly class RoundStreamCheck
         }
     }
 
+    /**
+     * @return list<string>
+     */
+    private function idsPlacedBy(Crawler $stream): array
+    {
+        // Only a targets stream adds to the page here, because the one that places a reviewer appends the elements its later streams target.
+        if ('' === (string) $stream->attr('targets')) {
+            return [];
+        }
+
+        return $this->templateOf($stream)->filter('[id]')->each(static fn (Crawler $element): string => (string) $element->attr('id'));
+    }
+
     private function stateOf(Crawler $stream, string $round): ?string
     {
         if ($stream->attr('target') !== sprintf('round-%s-state', $round)) {
             return null;
         }
 
+        return $this->templateOf($stream)->text('');
+    }
+
+    private function templateOf(Crawler $stream): Crawler
+    {
         // Read from the template's markup, because a parser may keep a template's content out of the tree.
-        return new Crawler('<div>'.$stream->filter('template')->html('').'</div>')->filter('body > div')->text('');
+        return new Crawler('<div>'.$stream->filter('template')->html('').'</div>')->filter('body > div');
     }
 
     private function progressAfter(int $finished, ?string $state, int $position): int

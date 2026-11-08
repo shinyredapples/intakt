@@ -35,7 +35,7 @@ final class RoundStreamCheckTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         $this->check([
-            $this->placed().$this->update('append', 'reviewer-round-1-correctness-activity', '<li>read_file</li>'),
+            $this->placed('correctness')."\n".$this->update('append', 'reviewer-round-1-correctness-activity', '<li>read_file</li>'),
             $this->progress(1),
             $this->update('replace', 'round-round-1-reviewer-correctness-state', '<td>stopped</td>').$this->update('replace', 'round-round-1-reviewer-correctness-stop', '<td></td>'),
             $this->progress(2),
@@ -48,6 +48,17 @@ final class RoundStreamCheckTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         $this->check([$this->progress(1), $this->progress(1), $this->judged()]);
+    }
+
+    public function testAReviewerPlacedAfterThePageLoadedMayBeTargetedOnceItsPlaceIsAppended(): void
+    {
+        $this->expectNotToPerformAssertions();
+
+        $this->check([
+            $this->placed('security').$this->update('append', 'reviewer-round-1-security-text', 'Looking'),
+            $this->update('append', 'reviewer-round-1-security-activity', '<li>read_file</li>'),
+            $this->judged(),
+        ]);
     }
 
     public function testUpdatesOnAnotherRoundsTopicAreLeftOut(): void
@@ -79,6 +90,13 @@ final class RoundStreamCheckTest extends TestCase
         $this->expectFailure('update 1 is not a <turbo-stream>');
 
         $this->check([$this->judged().'<p>stray</p>']);
+    }
+
+    public function testAnUpdateWithAStreamBesidePlainTextFails(): void
+    {
+        $this->expectFailure('update 1 is not a <turbo-stream>');
+
+        $this->check([$this->judged().'plain text']);
     }
 
     public function testAStreamWithoutAnActionFails(): void
@@ -171,9 +189,12 @@ final class RoundStreamCheckTest extends TestCase
         return $this->update('replace', 'round-round-1-state', sprintf('<p id="round-round-1-state">%s</p>', $text));
     }
 
-    private function placed(): string
+    private function placed(string $reviewer): string
     {
-        return '<turbo-stream action="append" targets="#round-round-1-live:not(:has(#reviewer-round-1-correctness-text))"><template><section></section></template></turbo-stream>';
+        return sprintf(
+            '<turbo-stream action="append" targets="#round-round-1-live:not(:has(#reviewer-round-1-%1$s-text))"><template><section><pre id="reviewer-round-1-%1$s-text"></pre><ul id="reviewer-round-1-%1$s-activity"></ul></section></template></turbo-stream>',
+            $reviewer,
+        );
     }
 
     private function update(string $action, string $target, string $content): string
