@@ -4,7 +4,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 
 The path from a clone to a first verdict, in order:
 
-1. **Set up:** `cp .env.dist .env.local`, set a provider key and the two secrets, and run `docker compose up` ([the demo](#the-demo-with-docker-compose)). Without Docker: `composer install`, `php bin/console doctrine:migrations:migrate`, and the keys as described in [Configuring providers and API keys](#configuring-providers-and-api-keys).
+1. **Set up:** `cp .env.dist .env.local`, set a provider key (or a Hugging Face token, `HF_TOKEN`) and the two secrets, and run `docker compose up` ([the demo](#the-demo-with-docker-compose)). Without Docker: `composer install`, `php bin/console doctrine:migrations:migrate`, and the keys as described in [Configuring providers and API keys](#configuring-providers-and-api-keys).
 2. **Choose the panel:** copy `config/intakt.example.yaml` to `config/intakt.yaml` and set the project's tiers and its `review:` section ([Capability tiers per project](#capability-tiers-per-project)); `php bin/console intakt:review:panel <project>` shows the panel a change would get without calling a model.
 3. **Start the workers:** `php bin/console messenger:consume async` ([Background work](#background-work)); the container already runs them.
 4. **Review a branch:** `php bin/console intakt:review <branch> --project=<project> --task="..."` ([Reviewing a branch](#reviewing-a-branch)) and read the outcome ([Reading a verdict](#reading-a-verdict)).
@@ -504,7 +504,7 @@ The owner cuts each release: a signed tag on a green `main`, then a GitHub relea
 ## The demo with docker compose
 
 ```
-cp .env.dist .env.local   # fill in one or two provider keys and the two secrets
+cp .env.dist .env.local   # fill in one or two provider keys (or HF_TOKEN) and the two secrets
 docker compose up
 ```
 
