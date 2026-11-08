@@ -33,7 +33,7 @@ final readonly class RoundStreamCheck
 
             foreach ($this->streamsOf($update, $position) as $stream) {
                 $this->assertTargetIsOnThePage($stream, $ids, $position);
-                $ids = [...$ids, ...$this->idsPlacedBy($stream)];
+                $ids = [...$ids, ...$this->idsPlacedBy($stream, $page)];
                 $state = $this->stateOf($stream, $round);
                 $judgedAt = self::JUDGED === $state ? $position : $judgedAt;
                 $finished = $this->progressAfter($finished, $state, $position);
@@ -101,10 +101,13 @@ final readonly class RoundStreamCheck
     /**
      * @return list<string>
      */
-    private function idsPlacedBy(Crawler $stream): array
+    private function idsPlacedBy(Crawler $stream, Crawler $page): array
     {
+        $targets = (string) $stream->attr('targets');
+
         // Only a targets stream adds to the page here, because the one that places a reviewer appends the elements its later streams target.
-        if ('' === (string) $stream->attr('targets')) {
+        // It adds nothing when its selector matches no element, because Turbo drops such a stream and so leaves the page as it is.
+        if ('' === $targets || 0 === count($page->filter($targets))) {
             return [];
         }
 

@@ -120,6 +120,24 @@ final class RoundStreamCheckTest extends TestCase
         $this->check([$this->update('append', 'reviewer-round-1-security-activity', '<li>read_file</li>'), $this->judged()]);
     }
 
+    public function testATargetPlacedByATargetsStreamThatMatchesNothingOnThePageFails(): void
+    {
+        $this->expectFailure('update 2 targets "reviewer-round-1-security-text", which names no element on the page');
+
+        $this->check([
+            str_replace('#round-round-1-live', '#round-round-1-absent', $this->placed('security')),
+            $this->update('append', 'reviewer-round-1-security-text', 'Looking'),
+            $this->judged(),
+        ]);
+    }
+
+    public function testATargetsStreamThatMatchesNothingOnThePageIsNoFailureByItself(): void
+    {
+        $this->expectNotToPerformAssertions();
+
+        $this->check([$this->placed('correctness'), $this->judged()]);
+    }
+
     public function testProgressThatGoesBackwardsFails(): void
     {
         $this->expectFailure('update 2 shows 0 reviewers finished after 1: the progress went backwards');
