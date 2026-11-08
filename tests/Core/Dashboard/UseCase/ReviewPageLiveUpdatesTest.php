@@ -37,12 +37,9 @@ use Twig\Environment;
 #[Group('serial')]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
-    private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];
+    use DownloadedScriptStandIns;
 
     private ?string $secretBefore = null;
-
-    /** @var list<string> */
-    private array $placeholders = [];
 
     #[Override]
     protected function setUp(): void
@@ -60,26 +57,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $secret = $this->secretBefore ?? '';
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        array_map(unlink(...), $this->placeholders);
+        $this->removeTheStandIns();
         parent::tearDown();
-    }
-
-    // The scripts are downloaded by importmap:install, which needs the network; the page only maps their paths, so empty stand-ins make it listen.
-    private function givenTheDownloadedScriptsExist(): void
-    {
-        foreach (self::VENDOR_ASSETS as $asset) {
-            $path = dirname(__DIR__, 4).'/assets/vendor/'.$asset;
-            if (is_file($path)) {
-                continue;
-            }
-
-            if (!is_dir(dirname($path))) {
-                mkdir(dirname($path), 0o777, true);
-            }
-
-            file_put_contents($path, '');
-            $this->placeholders[] = $path;
-        }
     }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
