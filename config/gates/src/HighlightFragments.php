@@ -15,6 +15,8 @@ final readonly class HighlightFragments
 
     private const string COMMIT = '/^[0-9a-f]{40,64}$/';
 
+    private const int UNBORN_HEAD = 1;
+
     public function __construct(
         private ProcessRunner $runner = new ProcessRunner(),
     ) {
@@ -154,8 +156,19 @@ final readonly class HighlightFragments
     private function additionsOn(string $root): array|string
     {
         // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
-        if (!file_exists($root.'/.git') || !$this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root)->succeeded()) {
+        if (!file_exists($root.'/.git')) {
             return [];
+        }
+
+        $head = $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root);
+
+        // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
+        if (self::UNBORN_HEAD === $head->exitCode) {
+            return [];
+        }
+
+        if (!$head->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
         }
 
         $shallow = $this->shallowHistoryFinding($root);
