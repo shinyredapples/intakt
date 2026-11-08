@@ -32,7 +32,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `node` | `node --test tests/Core/Dashboard/UseCase/*.test.mjs`, run by hand (`bin/check` does not call it) | executing the dashboard's theme script and its Stimulus controllers (theme, arm, toast, disclosure) against a simulated browser | only to run those tests | 22 or later | no (neither the CI image nor the `Dockerfile`'s image) |
 | `vendor/bin/phpunit` and the other Composer tools | the gates, `bin/probe`, `bin/check --journeys` (which runs PHPUnit under `bin/instance`) | tests, static analysis, code style; the tests gate also asks PHPUnit for the test files of each pass (`--list-test-files`, with its events log, `--log-events-text`, to catch the warnings of the listing), runs them one file per process, and asks for a JUnit report of each run (`--log-junit`) to record per-file test durations | yes | as locked in `composer.lock` | development only |
 
-The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's `bin/console cache:warmup --env=test` to dump the test container that static analysis reads.
+The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's `bin/console cache:warmup --env=test` (`cache:clear` while it has no dump yet) to dump the test container that static analysis reads.
 
 `unshare`, `setsid` and `ip` are Linux tools, so the full `bin/check` runs on Linux (or in the development container, plan task T35). On another system, run it in that container.
 
