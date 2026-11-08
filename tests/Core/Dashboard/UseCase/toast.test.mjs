@@ -22,10 +22,41 @@ test('a toast hides itself after five seconds', (t) => {
     assert.equal(toast.element.hidden, true);
 });
 
-test('pointer or focus on a toast holds it', (t) => {
+test('the pointer on a toast holds it', (t) => {
     const toast = shownToast(t);
 
-    toast.hold();
+    toast.pointerEnter();
+    t.mock.timers.tick(60000);
+
+    assert.equal(toast.element.hidden, false);
+});
+
+test('focus on a toast holds it', (t) => {
+    const toast = shownToast(t);
+
+    toast.focusIn();
+    t.mock.timers.tick(60000);
+
+    assert.equal(toast.element.hidden, false);
+});
+
+test('the pointer leaving a toast whose undo has focus still holds it', (t) => {
+    const toast = shownToast(t);
+    toast.pointerEnter();
+    toast.focusIn();
+
+    toast.pointerLeave();
+    t.mock.timers.tick(60000);
+
+    assert.equal(toast.element.hidden, false);
+});
+
+test('focus leaving a toast under the pointer still holds it', (t) => {
+    const toast = shownToast(t);
+    toast.focusIn();
+    toast.pointerEnter();
+
+    toast.focusOut();
     t.mock.timers.tick(60000);
 
     assert.equal(toast.element.hidden, false);
@@ -34,9 +65,11 @@ test('pointer or focus on a toast holds it', (t) => {
 test('leaving a held toast gives it five more seconds', (t) => {
     const toast = shownToast(t);
     t.mock.timers.tick(4000);
-    toast.hold();
+    toast.pointerEnter();
+    toast.focusIn();
 
-    toast.release();
+    toast.pointerLeave();
+    toast.focusOut();
     t.mock.timers.tick(4999);
     assert.equal(toast.element.hidden, false);
     t.mock.timers.tick(1);

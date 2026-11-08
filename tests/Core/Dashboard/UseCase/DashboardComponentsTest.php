@@ -120,6 +120,24 @@ final class DashboardComponentsTest extends KernelTestCase
         $this->render('reason_badge', ['reason' => 'weather']);
     }
 
+    public function testAnUnknownReasonFailsTheRenderAlsoWithoutStrictVariables(): void
+    {
+        $this->twig()->disableStrictVariables();
+
+        $this->expectException(RuntimeError::class);
+
+        $this->render('reason_badge', ['reason' => 'weather']);
+    }
+
+    public function testAnUnknownIconFailsTheRenderAlsoWithoutStrictVariables(): void
+    {
+        $this->twig()->disableStrictVariables();
+
+        $this->expectException(RuntimeError::class);
+
+        $this->render('icon', ['name' => 'nope']);
+    }
+
     public function testACountIsNeutral(): void
     {
         $count = $this->render('count', ['n' => 3])->filter('span');

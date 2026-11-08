@@ -176,6 +176,10 @@ svg.i.s { width: 15px; height: 15px; }
 @media (max-width: 760px) {
   .btn, .btn.sm, .linkbtn, .toast button { min-height: 44px; }
   .input, .select { height: 48px; }
+  .switch { width: 52px; height: 32px; }
+  .switch input { inset: -6px 0; }
+  .switch span::after { width: 26px; height: 26px; }
+  .switch input:checked + span::after { transform: translateX(20px); }
   .sstate { order: 9; width: 100%; min-width: 0; justify-content: flex-start; }
   .sstate:empty { display: none; }
   .srow { flex-wrap: wrap; }

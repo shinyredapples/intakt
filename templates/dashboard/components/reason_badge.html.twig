@@ -5,7 +5,7 @@
     dependency: {icon: 'link', word: 'Dependency'},
     ci: {icon: 'broken', word: 'CI broken'},
 } -%}
-{%- set badge = reasons[reason] -%}
+{%- set badge = component_option(reasons, reason) -%}
 {{ include('dashboard/components/chip.html.twig', {
     icon: badge.icon,
     label: label|default(badge.word),

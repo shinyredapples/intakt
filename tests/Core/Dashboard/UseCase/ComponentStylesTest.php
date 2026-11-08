@@ -61,6 +61,15 @@ final class ComponentStylesTest extends DashboardPageTestCase
         self::assertSame(['arm', 'disclosure', 'disclosure', 'toast'], $controllers);
     }
 
+    public function testOnPhonesASwitchIs52By32WithAHitArea44PxTall(): void
+    {
+        preg_match('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->componentSheet(), $phone);
+        $rules = $this->rulesOf($phone[1] ?? '');
+
+        self::assertMatchesRegularExpression('/width:\s*52px;\s*height:\s*32px/', $rules['.switch'] ?? '');
+        self::assertMatchesRegularExpression('/inset:\s*-6px 0\b/', $rules['.switch input'] ?? '');
+    }
+
     private function componentSheet(): string
     {
         return $this->sheets('components')[0];
