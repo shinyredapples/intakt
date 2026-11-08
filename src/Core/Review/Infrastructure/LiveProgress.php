@@ -31,7 +31,8 @@ final readonly class LiveProgress
             return $execution;
         }
 
-        $name = $reviewer->id->toRfc4122();
+        // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.
+        $name = ($reviewer->reviewerId ?? $reviewer->id)->toRfc4122();
         $text = new StreamedTextBatch(fn (string $piece) => $this->updates->textStreamed($round, $name, $piece), $this->clock);
 
         return $execution->onProgress(function (Progress $progress) use ($round, $name, $text): void {

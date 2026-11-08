@@ -9,15 +9,42 @@ set -euo pipefail
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
-# Warmed up in a new process, because cache:clear warms up in the process that loaded the old container and can keep the old projects and keys.
+# The cache directory is removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    php bin/console cache:clear --no-warmup --no-interaction
+    rm -rf "var/cache/${APP_ENV:-prod}"
     php bin/console cache:warmup --no-interaction
+}
+
+# Each start writes its own draft (mode 0600 from mktemp) and links it into place; the link fails when another start linked first, so starts at once all read the one complete token.
+owner_token() {
+    local draft
+    if [[ ! -e $1 ]]; then
+        draft=$(mktemp "$1.XXXXXX") || return 1
+        od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$draft" || { rm -f "$draft"; return 1; }
+        ln "$draft" "$1" 2>/dev/null || true
+        rm -f "$draft"
+    fi
+    cat "$1"
+}
+
+# Assigned apart from the export, because export would hide a failed write, and a start without the token would leave the printed MCP setup unusable.
+export_owner_token() {
+    local file token
+    file="$(dirname "$INTAKT_CONFIG")/mcp-owner-token"
+    token=$(owner_token "$file") || token=
+    if [[ ! $token =~ ^[0-9a-f]{64}$ ]]; then
+        echo "intakt: could not make or read the MCP owner token in $file; set MCP_OWNER_TOKEN or make its folder writable" >&2
+        exit 1
+    fi
+    export MCP_OWNER_TOKEN=$token
 }
 
 # Set by compose.yaml for the demo. The image's container was built without the provider keys, which arrive only now, so it is built again before the seed reads them and again after it writes the project.
 if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     : "${INTAKT_CONFIG:?set INTAKT_CONFIG to the project file the sample project is written to}"
+    # A token the owner set wins; otherwise one is made once and kept on the data volume, so the printed token keeps working after a restart. Writes are allowed for the demo, because its point is to start a review from a client.
+    export MCP_OWNER_ACCESS="${MCP_OWNER_ACCESS:-mcp_tool_write}"
+    [[ -n ${MCP_OWNER_TOKEN:-} ]] || export_owner_token
     rebuild_container
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
     rebuild_container

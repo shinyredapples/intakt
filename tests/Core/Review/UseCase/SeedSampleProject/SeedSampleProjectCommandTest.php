@@ -56,6 +56,8 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private string $directory;
 
+    private string $ownerToken = '';
+
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
@@ -168,7 +170,7 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     public function testAFailedBuildLeavesNoRepositoryForALaterStartToKeep(): void
     {
-        $command = new SeedSampleProjectCommand(new SampleRepository($this->directory.'/no-fixtures'), $this->project(Provider::Anthropic), new LockFactory(new InMemoryStore()));
+        $command = new SeedSampleProjectCommand(new SampleRepository($this->directory.'/no-fixtures'), $this->project(Provider::Anthropic), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken);
 
         $failure = null;
         try {
@@ -187,9 +189,24 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertStringContainsString('intakt:review sample-change --project=sample --repository='.$this->repository().' --base=main --task=', $display);
     }
 
+    public function testItPrintsTheMcpAddressAndTheOwnerTokenNextToTheReviewCommand(): void
+    {
+        $this->ownerToken = 'demo-owner-token';
+        $display = $this->seed(Provider::Anthropic)->getDisplay();
+
+        self::assertStringContainsString('http://localhost:7781/mcp/owner --header "Authorization: Bearer demo-owner-token"', $display);
+    }
+
+    public function testItPrintsNoMcpSetupWhenNoOwnerTokenIsSet(): void
+    {
+        $display = $this->seed(Provider::Anthropic)->getDisplay();
+
+        self::assertStringNotContainsString('mcp/owner', $display);
+    }
+
     private function seed(Provider ...$keyed): CommandTester
     {
-        $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()));
+        $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken);
         $tester = $this->tester($command);
         $tester->execute(['repository' => $this->repository(), 'configuration' => $this->configuration()]);
 
