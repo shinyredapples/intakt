@@ -95,7 +95,46 @@ final class DockerfileTest extends TestCase
 
     public function testTheBaseStagePinsFrankenPhpOnPhp8512ByDigest(): void
     {
-        self::assertMatchesRegularExpression('/^FROM dunglas\/frankenphp:1\.13\.4-php8\.5\.12-trixie@sha256:[0-9a-f]{64} AS base$/m', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^FROM dunglas\/frankenphp:[\d.]+-php8\.5-trixie@sha256:[0-9a-f]{64} AS base$/m', $this->dockerfile());
+    }
+
+    // The floor is 1.13.4 because it is the first FrankenPHP release with the worker state-leak fixes.
+    public function testEachImageRunsFrankenPhp1134OrLater(): void
+    {
+        foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
+            self::assertTrue($this->runsFrankenPhp1134OrLater((string) file_get_contents(__DIR__.'/../../../../'.$file)), $file);
+        }
+    }
+
+    public function testAFrankenPhpBaseBelow1134IsRefused(): void
+    {
+        self::assertFalse($this->runsFrankenPhp1134OrLater($this->withFrankenPhp('1.13.3')));
+    }
+
+    public function testANewerFrankenPhpBaseIsAccepted(): void
+    {
+        self::assertTrue($this->runsFrankenPhp1134OrLater($this->withFrankenPhp('1.14.0')));
+    }
+
+    public function testEachImageBuildFailsBelowPhp8512(): void
+    {
+        foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
+            preg_match("/^RUN php( -r '.*PHP_VERSION.*')$/m", (string) file_get_contents(__DIR__.'/../../../../'.$file), $run);
+            exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.11"']), result_code: $old);
+            exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.12"']), result_code: $new);
+            self::assertSame([1, 0], [$old, $new], $file);
+        }
+    }
+
+    private function runsFrankenPhp1134OrLater(string $dockerfile): bool
+    {
+        return 1 === preg_match('/^FROM dunglas\/frankenphp:([\d.]+)-php8\.5-trixie@sha256:[0-9a-f]{64}\b/m', $dockerfile, $match)
+            && version_compare($match[1], '1.13.4', '>=');
+    }
+
+    private function withFrankenPhp(string $version): string
+    {
+        return 'FROM dunglas/frankenphp:'.$version.'-php8.5-trixie@sha256:'.str_repeat('0', 64)." AS base\n";
     }
 
     private function dockerfile(): string

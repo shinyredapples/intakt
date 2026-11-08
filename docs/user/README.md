@@ -51,6 +51,7 @@ The `Dockerfile` builds an image with Intakt on FrankenPHP in worker mode, with 
 
 ```
 docker build -t intakt .
+# fails if the base image's PHP is below 8.5.12
 docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data \
   --env-file intakt.env intakt
 ```
