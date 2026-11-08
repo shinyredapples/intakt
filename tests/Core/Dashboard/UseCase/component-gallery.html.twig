@@ -43,13 +43,18 @@
     {% embed c ~ 'setting_row.html.twig' with {label: 'Quiet hours', explanation: 'No pushes in these hours.', control_id: 'quiet', state: 'failed', still: '22:00 to 07:00'} %}{% block control %}{{ include(c ~ 'select.html.twig', {id: 'quiet', name: 'quiet', selected: 'b', options: [{value: 'a', label: '22:00 to 07:00'}, {value: 'b', label: '23:00 to 08:00'}]}) }}{% endblock %}{% endembed %}
     {% embed c ~ 'setting_row.html.twig' with {label: 'Port', explanation: 'Where the dashboard answers.', control_id: 'port', state: 'saving'} %}{% block control %}{{ include(c ~ 'input.html.twig', {id: 'port', name: 'port', value: '80', error: 'Use a port from 1024 to 65535.'}) }}{% endblock %}{% endembed %}
 
+    {{ include(c ~ 'stepper.html.twig', {label: 'Parallel builds', value: 2}) }}
+    {{ include(c ~ 'copy.html.twig', {text: 'intakt account login home'}) }}
+
     <h2>Bars</h2>
     {{ include(c ~ 'bar.html.twig', {label: 'Used, reserved, forecast', note: 'Resets at 14:00', used: 46, reserved: 12, forecast: 18}) }}
+    {{ include(c ~ 'bar.html.twig', {label: 'Last known', note: 'Unknown until logged in', used: 22, last_known: true}) }}
     {{ include(c ~ 'bar_legend.html.twig') }}
 
     <h2>Banners</h2>
     {% embed c ~ 'banner.html.twig' with {icon: 'broken', broken: true, short: 'CI image build failing since 09:12', title: 'CI image build failing since 09:12.', text: 'acme-shop checks cannot run.'} %}{% block action %}<a class="btn quiet sm" href="#">Open health</a>{% endblock %}{% endembed %}
     {% embed c ~ 'banner.html.twig' with {icon: 'pause', short: 'field-notes is paused', title: 'field-notes is paused.', text: 'Nothing new starts.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
+    {% embed c ~ 'banner.html.twig' with {icon: 'pause', compact: true, open: true, short: 'field-notes is paused', title: 'field-notes is paused.', text: 'You paused it on Monday.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
 
     <h2>Sub-tabs</h2>
     {{ include(c ~ 'subtabs.html.twig', {label: 'History', tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}]}) }}
