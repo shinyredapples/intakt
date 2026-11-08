@@ -145,6 +145,14 @@ final class WatcherStartTest extends TestCase
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample","head":"'.$this->head.'"}'));
     }
 
+    public function testARoundQueuedEntryThatIsNotJsonFailsInsteadOfBeingSkipped(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('is not JSON');
+
+        $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample",'));
+    }
+
     private function start(string $ledger): string
     {
         return new WatcherStart($this->console($ledger))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
