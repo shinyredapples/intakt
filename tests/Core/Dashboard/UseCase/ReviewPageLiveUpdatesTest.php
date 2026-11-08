@@ -89,7 +89,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $storage = self::getContainer()->get('asset_mapper.importmap.remote_package_storage');
         self::assertInstanceOf(RemotePackageStorage::class, $storage);
 
-        self::assertSame(self::getContainer()->getParameter('kernel.cache_dir').'/assets/vendor', $storage->getStorageDir());
+        $cache = self::getContainer()->getParameter('kernel.cache_dir');
+        self::assertIsString($cache);
+
+        self::assertSame($cache.'/assets/vendor', $storage->getStorageDir());
     }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
