@@ -39,11 +39,11 @@ use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\LocalGitForge\Infrastructure\VisiblePath;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
 use Intakt\Plugin\Vendor\Contract\Vendor;
-use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -122,7 +122,7 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.'));
 
-        $lines = (new ReviewReport(StoredSerializerFactory::create()))->asLines($review);
+        $lines = new ReviewReport(StoredSerializerFactory::create())->asLines($review);
 
         self::assertSame('blocked (round 1)', $lines[0]);
         self::assertContains('reason: role-1 reviewer failed, stopped at its output limit', $lines);
