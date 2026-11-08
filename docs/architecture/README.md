@@ -4,7 +4,7 @@ How Intakt works, for developers and agents. Each user-visible feature has a pag
 
 Code and conventions:
 - [Module layout](module-layout.md)
-- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy
+- [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
 - [Sample repository](sample-repository.md)
 - [Upstream reproductions](upstream-reproductions.md)
 - [Development diagnostics (Mate)](development-diagnostics.md)
