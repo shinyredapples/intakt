@@ -1,0 +1,8 @@
+{#- Shown at once and hidden by the toast controller after a while; undo_url, with its CSRF token undo_token, offers Undo. -#}
+<div class="toast" role="status" aria-live="polite" data-controller="toast"
+    data-action="mouseenter->toast#pointerEnter mouseleave->toast#pointerLeave focusin->toast#focusIn focusout->toast#focusOut">
+    <span>{{ message }}</span>
+    {%- if undo_url is defined %}
+    <form method="post" action="{{ undo_url }}" data-action="toast#dismiss"><input type="hidden" name="_token" value="{{ undo_token }}"><button type="submit">Undo</button></form>
+    {%- endif %}
+</div>

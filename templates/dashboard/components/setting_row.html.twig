@@ -1,0 +1,17 @@
+{#- Embed it and fill the control block with the control whose id is control_id; state is saving, saved or failed, and failed names the value still in force (still). The caller wraps the row in its form, because Retry is a submit button. -#}
+{%- set state = state|default(null) -%}
+<div class="srow">
+    <div class="txt">
+        <label class="l" for="{{ control_id }}">{{ label }}</label>
+        <p class="d">{{ explanation }}</p>
+    </div>
+    <div class="ctl">
+        <span class="sstate{% if state %} {{ state }}{% endif %}" aria-live="polite">
+            {%- if state == 'saving' %}Saving…
+            {%- elseif state == 'saved' %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true}, with_context = false) }}Saved
+            {%- elseif state == 'failed' %}Not saved, still {{ still }}. <button class="linkbtn" type="submit">Retry</button>
+            {%- endif -%}
+        </span>
+        {% block control %}{% endblock %}
+    </div>
+</div>

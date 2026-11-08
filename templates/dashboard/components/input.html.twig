@@ -1,0 +1,8 @@
+{#- error says what is wrong in plain words; the field is then marked invalid and described by it. -#}
+{%- set error_id = id ~ '-error' -%}
+<input class="input" id="{{ id }}" name="{{ name }}" value="{{ value|default('') }}"
+    {%- if error is defined %} aria-invalid="true" aria-describedby="{{ error_id }}"{% endif %}
+    {%- if disabled|default(false) %} disabled{% endif %}>
+{%- if error is defined %}
+<span class="field-error" id="{{ error_id }}">{{ error }}</span>
+{%- endif %}
