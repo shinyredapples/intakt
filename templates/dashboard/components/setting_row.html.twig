@@ -8,7 +8,7 @@
     <div class="ctl">
         <span class="sstate{% if state %} {{ state }}{% endif %}" aria-live="polite">
             {%- if state == 'saving' %}Saving…
-            {%- elseif state == 'saved' %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true}) }}Saved
+            {%- elseif state == 'saved' %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true}, with_context = false) }}Saved
             {%- elseif state == 'failed' %}Not saved, still {{ still }}. <button class="linkbtn" type="submit">Retry</button>
             {%- endif -%}
         </span>

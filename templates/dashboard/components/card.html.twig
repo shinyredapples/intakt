@@ -10,7 +10,7 @@
     <p class="blocker">{{ ask }}</p>
     {%- endif %}
     {%- if emphasis is defined %}
-    <p class="blocker{% if emphasis.broken|default(false) %} broken{% endif %}">{{ include('dashboard/components/icon.html.twig', {name: emphasis.icon, small: true}) }}{{ emphasis.text }}</p>
+    <p class="blocker{% if emphasis.broken|default(false) %} broken{% endif %}">{{ include('dashboard/components/icon.html.twig', {name: emphasis.icon, small: true}, with_context = false) }}{{ emphasis.text }}</p>
     {%- endif %}
-    {{ include('dashboard/components/meta.html.twig', {facts: meta}) }}
+    {{ include('dashboard/components/meta.html.twig', {facts: meta}, with_context = false) }}
 </a>

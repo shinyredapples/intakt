@@ -113,6 +113,20 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame('Needs #612', $badge->text());
     }
 
+    public function testAReasonBadgeStaysNeutralWhenItsCallerHasADot(): void
+    {
+        $badge = $this->embed("{{ include('dashboard/components/reason_badge.html.twig', {reason: 'budget'}) }}", ['dot' => 'needs']);
+
+        self::assertCount(0, $badge->filter('.dot'));
+    }
+
+    public function testAnIconInsideAComponentTakesNoClassFromItsCaller(): void
+    {
+        $chip = $this->embed("{{ include('dashboard/components/chip.html.twig', {icon: 'wallet', label: 'Budget'}) }}", ['extra' => 'needs']);
+
+        self::assertSame('i s', $chip->filter('svg')->attr('class'));
+    }
+
     public function testAnUnknownReasonFailsTheRender(): void
     {
         $this->expectException(RuntimeError::class);
