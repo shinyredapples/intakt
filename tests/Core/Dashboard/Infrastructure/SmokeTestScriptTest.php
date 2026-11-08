@@ -117,6 +117,41 @@ final class SmokeTestScriptTest extends TestCase
         self::assertStringContainsString('nothing answers on 192.0.2.2:2019', $process->getOutput());
     }
 
+    public function testTheImagesDashboardIsAskedAsLocalhost7781(): void
+    {
+        $this->dashboardCheck('image=i; web=w; volume=v; start_container; check_dashboard "$origin"');
+
+        self::assertStringContainsString('--header Host: localhost:7781 http://127.0.0.1:1/projects', $this->dockerCalls());
+    }
+
+    public function testALocalDashboardIsAskedAsItsOrigin(): void
+    {
+        $this->dashboardCheck('check_dashboard http://localhost:8000');
+
+        self::assertMatchesRegularExpression('#^curl (?!.*--header).* http://localhost:8000/projects$#m', $this->dockerCalls());
+    }
+
+    // The docker stub closes descriptor 3 because a container starts without it, which is why bin/instance failed in CI.
+    public function testTheInstanceStatusIsReadFromDescriptorThree(): void
+    {
+        foreach (['docker' => 'e=$6; shift 7; exec 3>&- "$e" "$@"', 'php' => "echo '{\"status\":\"ready\",\"mode\":\"worker\"}' >&3"] as $name => $body) {
+            new Filesystem()->dumpFile($this->directory.'/'.$name, "#!/bin/bash\n".$body);
+            chmod($this->directory.'/'.$name, 0o755);
+        }
+
+        $process = $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; smoke=s; check_instance'], []);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+    }
+
+    private function dashboardCheck(string $steps): Process
+    {
+        new Filesystem()->dumpFile($this->directory.'/curl', "#!/bin/bash\n".'echo "curl $*" >> "${0%/*}/calls"; printf "<title>Intakt</title>\n200"');
+        chmod($this->directory.'/curl', 0o755);
+
+        return $this->script(['bash', '-c', 'source docker/smoke-test.sh; '.$steps], []);
+    }
+
     /**
      * @param array<string, string> $environment
      */

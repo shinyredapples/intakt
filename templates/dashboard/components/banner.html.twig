@@ -1,0 +1,12 @@
+{#- Embed it and fill the action block with its one action. Below 761 px it collapses to its toggle (icon, short, chevron), which the disclosure controller opens. -#}
+{%- set broken = broken|default(false) -%}
+<div class="banner{% if broken %} broken{% endif %}" data-controller="disclosure">
+    <button class="banner-toggle" type="button" aria-expanded="false" data-action="disclosure#toggle">
+        {{- include('dashboard/components/icon.html.twig', {name: icon, small: true}, with_context = false) -}}
+        <span>{{ short }}</span>
+        {{- include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) -}}
+    </button>
+    {{ include('dashboard/components/icon.html.twig', {name: icon}, with_context = false) }}
+    <p><strong>{{ title }}</strong> {{ text }}</p>
+    {% block action %}{% endblock %}
+</div>

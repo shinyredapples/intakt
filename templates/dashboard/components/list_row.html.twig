@@ -1,0 +1,8 @@
+{#- Embed it inside a .list and fill the actions block. -#}
+<div class="row">
+    <div class="body">
+        <p class="t">{{ title }}</p>
+        <p class="d">{{ explanation }}</p>
+    </div>
+    <div class="side">{% block actions %}{% endblock %}</div>
+</div>

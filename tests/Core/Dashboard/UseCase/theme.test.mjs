@@ -2,18 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { loadController, root } from './stimulus-controller.mjs';
 
-const root = new URL('../../../../', import.meta.url);
 const layout = readFileSync(new URL('templates/dashboard/base.html.twig', root), 'utf8');
 const headScript = layout.match(/<head>[\s\S]*?<script>([\s\S]*?)<\/script>/)[1];
 
-const STIMULUS_IMPORT = "import { Controller } from '@hotwired/stimulus';";
-const controllerSource = readFileSync(new URL('assets/controllers/theme_controller.js', root), 'utf8');
-assert.ok(controllerSource.includes(STIMULUS_IMPORT));
-// Node cannot resolve the import map's bare specifier, and flip() uses nothing of Stimulus' base class.
-const { default: ThemeController } = await import(
-    'data:text/javascript,' + encodeURIComponent(controllerSource.replace(STIMULUS_IMPORT, 'class Controller {}'))
-);
+const ThemeController = await loadController('theme');
 
 class Browser {
     storage = new Map();

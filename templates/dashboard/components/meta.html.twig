@@ -1,0 +1,9 @@
+{#- facts: list of {text, icon?, mono?}, spaced by gaps, never by middle dots. -#}
+<p class="meta">
+    {%- for fact in facts -%}
+        <span{% if fact.mono|default(false) %} class="mono"{% endif %}>
+            {%- if fact.icon is defined %}{{ include('dashboard/components/icon.html.twig', {name: fact.icon, small: true}, with_context = false) }}{% endif %}
+            {{- fact.text -}}
+        </span>
+    {%- endfor -%}
+</p>
