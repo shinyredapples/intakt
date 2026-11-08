@@ -227,6 +227,16 @@ test('a project link to a project the install does not list leaves the stored pr
     assert.equal(page.projectFilter.value, 'alpha');
 });
 
+test('a page that marks two options selected shows, filters and stores one and the same project', () => {
+    const browser = new Browser('light', { projects: ['01', '1'], rows: ['01', '1'], address: 'http://localhost/reviews?project=1', linked: ['01', '1'] });
+
+    const page = browser.open();
+
+    assert.equal(page.projectFilter.value, browser.storage.get('intakt-project'));
+    assert.deepEqual(page.shownRows(), [page.projectFilter.value]);
+    assert.equal(page.projectFilter.title, page.projectFilter.value);
+});
+
 test('a project link still chooses its project when storage refuses access', () => {
     const page = new Browser('light', { storageRefused: true, address: 'http://localhost/reviews?project=alpha' }).open();
 

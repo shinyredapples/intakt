@@ -41,13 +41,13 @@ class FakeElement {
     }
 }
 
-// The project filter as the layout renders it: All projects with the empty value, then one option per project, the linked project marked selected.
+// The project filter as the layout renders it: All projects with the empty value, then one option per project, the linked projects marked selected. A browser shows the last marked option when several are.
 class FakeSelect extends FakeElement {
     constructor(page, projects, linked) {
         super(page);
         this.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))]
-            .map((option) => ({ ...option, defaultSelected: option.value === linked }));
-        this.value = this.options.find((option) => option.defaultSelected)?.value ?? '';
+            .map((option) => ({ ...option, defaultSelected: linked.includes(option.value) }));
+        this.value = this.options.findLast((option) => option.defaultSelected)?.value ?? '';
     }
 
     get selectedOptions() {
@@ -73,13 +73,14 @@ class FakeKey {
 export class Browser {
     storage = new Map();
 
-    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews' } = {}) {
+    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews', linked = null } = {}) {
         this.systemTheme = systemTheme;
         this.storageRefused = storageRefused;
         this.platform = platform;
         this.projects = projects;
         this.rows = rows;
         this.address = address;
+        this.linked = linked;
     }
 
     open() {
@@ -90,8 +91,8 @@ export class Browser {
         const railToggle = new FakeElement(page);
         const themeToggles = [new FakeElement(page), new FakeElement(page)];
         const body = new FakeElement(page);
-        // The server marks the project of the address selected when the install lists it.
-        const projectFilter = new FakeSelect(page, this.projects, new URL(this.address).searchParams.get('project'));
+        // The server marks the project of the address selected when the install lists it; a test may name the marked options itself.
+        const projectFilter = new FakeSelect(page, this.projects, this.linked ?? [new URL(this.address).searchParams.get('project')]);
         const history = {
             state: { turbo: { restorationIdentifier: 'visit' } },
             replaceState: (state, unused, address) => {

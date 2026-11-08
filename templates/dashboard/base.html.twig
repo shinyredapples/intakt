@@ -112,6 +112,8 @@
     const linkedProject = [...projectFilter.options].find((option) => option.defaultSelected && option.value !== '');
     const storedProject = read('intakt-project');
     if (linkedProject) {
+        // Set as well as stored, so the shown and the stored choice are one even if a page marked more than one option.
+        projectFilter.value = linkedProject.value;
         store('intakt-project', linkedProject.value);
     } else if ([...projectFilter.options].some((option) => option.value === storedProject)) {
         projectFilter.value = storedProject;

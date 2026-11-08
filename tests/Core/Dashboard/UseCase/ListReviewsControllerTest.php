@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ListReviewsController::class)]
 #[UsesClass(LedgerReviews::class)]
@@ -85,6 +86,52 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         self::assertCount(0, $crawler->filter('#projfilter option[selected]'), 'Without a selected option the browser shows the first one, All projects.');
         self::assertSame(['round-1'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
+    }
+
+    public function testAProjectLinkMarksOnlyTheProjectWithExactlyThatNameSelected(): void
+    {
+        $this->ledger->startRound('round-one', '1');
+        $this->ledger->startRound('round-zero-one', '01');
+
+        $crawler = $this->browser->request('GET', '/reviews?project=1');
+
+        self::assertSame(['1'], $crawler->filter('#projfilter option[selected]')->each(static fn ($option): ?string => $option->attr('value')));
+    }
+
+    public function testAProjectLinkToProjectTenLeavesAProjectNamedInExponentNotationUnselected(): void
+    {
+        $this->ledger->startRound('round-ten', '10');
+        $this->ledger->startRound('round-exponent', '1e1');
+
+        $crawler = $this->browser->request('GET', '/reviews?project=10');
+
+        self::assertSame(['10'], $crawler->filter('#projfilter option[selected]')->each(static fn ($option): ?string => $option->attr('value')));
+    }
+
+    public function testAProjectLinkWithADecimalSpellingOfAListedNameSelectsNoProject(): void
+    {
+        $this->ledger->startRound('round-one', '1');
+
+        $crawler = $this->browser->request('GET', '/reviews?project=1.0');
+
+        self::assertCount(0, $crawler->filter('#projfilter option[selected]'));
+    }
+
+    public function testAProjectLinkWithALeadingZeroSelectsNoProjectWhenOnlyTheNameWithoutItIsListed(): void
+    {
+        $this->ledger->startRound('round-one', '1');
+
+        $crawler = $this->browser->request('GET', '/reviews?project=01');
+
+        self::assertCount(0, $crawler->filter('#projfilter option[selected]'));
+    }
+
+    public function testAProjectParameterThatIsAnArrayIsRefusedWithoutRenderingThePage(): void
+    {
+        $this->browser->request('GET', '/reviews?project[]=alpha');
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
     }
 
     public function testTheReviewListSaysSoWhenTheLedgerHasNoReviews(): void
