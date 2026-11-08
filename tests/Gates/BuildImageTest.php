@@ -70,6 +70,6 @@ final class BuildImageTest extends SandboxTestCase
         self::assertTrue($result->succeeded(), $result->errors);
         self::assertSame(1, preg_match('/^CI_IMAGE=(intakt-ci:[0-9a-f]{32})\n$/', (string) file_get_contents($sandbox->root.'/env'), $tag));
 
-        return $tag[1];
+        return $tag[1] ?? self::fail();
     }
 }
