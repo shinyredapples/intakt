@@ -7,8 +7,8 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -34,13 +34,13 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
-use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -420,7 +420,7 @@ final class LedgerRoundsTest extends TestCase
 
     public function testARoundCarriesTheCostTheReviewModuleReadsForIt(): void
     {
-        $this->costs = $this->createStub(RoundCosts::class);
+        $this->costs = self::createStub(RoundCosts::class);
         $this->costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
@@ -430,7 +430,7 @@ final class LedgerRoundsTest extends TestCase
 
     private function noCosts(): RoundCosts
     {
-        $costs = $this->createStub(RoundCosts::class);
+        $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::none());
 
         return $costs;

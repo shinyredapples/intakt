@@ -40,8 +40,7 @@ final class LedgerRounds
     public function __construct(
         private readonly RoundPayloads $payloads,
         private readonly RoundCosts $costs,
-    )
-    {
+    ) {
         $this->tokens = new LedgerTokens();
     }
 
