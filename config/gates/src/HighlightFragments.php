@@ -159,7 +159,7 @@ final readonly class HighlightFragments
         $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
 
         // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
-        if (null === $head || self::UNBORN_HEAD === $head->exitCode) {
+        if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
             return [];
         }
 
