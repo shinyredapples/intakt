@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
-use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
@@ -190,7 +191,7 @@ final class LedgerRounds
     // Only a judged round with a recorded quorum gets an outcome, because the console decides once the judge is done and a policy must never be guessed.
     private function decided(ReviewedRound $round): ReviewedRound
     {
-        if (null === $round->quorum) {
+        if (!$round->quorum instanceof QuorumPolicy) {
             return $round;
         }
 
