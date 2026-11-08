@@ -4,18 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
-use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Ai\Contract\ResolvedModel;
-use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
@@ -24,7 +25,6 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnsweringTier;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Tests\Support\StoredSerializerFactory;
-use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
@@ -80,7 +80,11 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('feat/thing', self::ROUND, 1);
         $answer = new TextResult('{}');
-        $answer->getMetadata()->add('token_usage', new TokenUsage(promptTokens: 1000, completionTokens: 300, totalTokens: 1300));
+        $answer->getMetadata()->add('token_usage', new TokenUsage(
+            promptTokens: 1000,
+            completionTokens: 300,
+            totalTokens: 1300,
+        ));
         $converter = self::createStub(ResultConverterInterface::class);
         $converter->method('convert')->willReturn($answer);
         $usage = new UsageLedger($this->ledger, new MockClock('2026-10-28T12:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create());
@@ -89,7 +93,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $usage->settle($reservation, new DeferredResult($converter, new InMemoryRawResult()));
     }
 
-    // The line `intakt:review` prints: the report renders the round's cost value, as the command does.
+    // Rendered through ReviewReport because the command prints that report, and its VisiblePath filter is part of what the owner reads.
     private function consoleFigure(): string
     {
         $costs = self::getContainer()->get(RoundCosts::class);
