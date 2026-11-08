@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -21,6 +22,7 @@ final readonly class ReviewOutput
         'verdicts',
         'actList' => ['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by'],
         'tokens',
+        'cost',
         'reasons',
     ];
 
@@ -37,6 +39,7 @@ final readonly class ReviewOutput
         public array $verdicts,
         public array $actList,
         public RoundTokens $tokens,
+        public Cost $cost,
         public array $reasons,
     ) {
     }
@@ -51,6 +54,7 @@ final readonly class ReviewOutput
             array_map(ReviewOutputVerdict::of(...), $review->verdicts),
             $review->actList,
             $review->tokens,
+            $review->cost,
             $review->reasons,
         );
     }

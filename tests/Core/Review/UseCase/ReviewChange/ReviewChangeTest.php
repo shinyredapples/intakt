@@ -7,6 +7,8 @@ namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
 use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\ChangeReview;
@@ -54,6 +56,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(StoredVerdicts::class)]
 #[UsesClass(ChangeDecision::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(IgnoredProgress::class)]
 #[UsesClass(ChangeReviewRequest::class)]
@@ -154,6 +158,14 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame([1, 250, 50, 300], [$review->tokens->calls, $review->tokens->prompt, $review->tokens->completion, $review->tokens->total]);
     }
 
+    public function testTheCostOfTheCallsMadeForTheRoundComesWithTheReview(): void
+    {
+        $this->recordUsage('before', 1000);
+        $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, $this->openRoundId()));
+
+        self::assertEqualsWithDelta((100 * 1.0 + 20 * 2.0) / 1_000_000, $review->cost->usd, 1e-12);
+    }
+
     public function testTheTokensOfACallMadeForAnotherRoundAreLeftOut(): void
     {
         $review = $this->reviewWith(new VerdictPerRole([]), duringTheRound: fn () => $this->recordUsage('during', 120, '0192a000-0000-7000-8000-0000000000ff'));
@@ -221,7 +233,7 @@ final class ReviewChangeTest extends KernelTestCase
             $bus ?? $this->commandBus(),
             $this->fixture->transactions(),
             $findings,
-            new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads()),
+            new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices(['big' => ['input' => 1.0, 'output' => 2.0, 'cache_read' => 1.0, 'cache_write' => 1.0]])),
             new ChangeDecision(),
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
@@ -274,9 +286,9 @@ final class ReviewChangeTest extends KernelTestCase
     // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
     private function recordUsage(string $call, int $total, ?string $round = null): void
     {
-        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard'];
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
         $this->append(null === $round ? $started : $started + ['round' => $round]);
-        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
+        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
     }
 
     /**

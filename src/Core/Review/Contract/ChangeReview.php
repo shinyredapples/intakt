@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Intakt\Core\Budget\Contract\Cost;
+
 final readonly class ChangeReview
 {
     /**
@@ -18,6 +20,7 @@ final readonly class ChangeReview
         public array $verdicts,
         public array $actList,
         public RoundTokens $tokens,
+        public Cost $cost,
         // Why the round is blocked, in plain words, because a blocked round has no findings to show.
         public array $reasons = [],
     ) {

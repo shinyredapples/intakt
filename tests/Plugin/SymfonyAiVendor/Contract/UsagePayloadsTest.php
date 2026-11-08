@@ -25,25 +25,34 @@ final class UsagePayloadsTest extends KernelTestCase
 
     public function testAStartedRowOfARoundIsWrittenWithTodaysKeysAndTierValue(): void
     {
-        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Strong, self::ROUND), 'json');
+        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Strong, self::ROUND, 'big'), 'json');
 
-        self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"strong","round":"'.self::ROUND.'"}', $json);
+        self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"strong","round":"'.self::ROUND.'","model":"big"}', $json);
     }
 
     public function testAStartedRowOutsideARoundHasNoRoundKey(): void
     {
-        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Light), 'json');
+        $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Light, model: 'big'), 'json');
 
-        self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"light"}', $json);
+        self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"light","model":"big"}', $json);
     }
 
     public function testAStartedRowInTodaysFormatReadsBack(): void
+    {
+        $row = '{"call":"a call","phase":"started","project":"alpha","tier":"standard","round":"'.self::ROUND.'","model":"big"}';
+
+        $read = $this->serializer()->deserialize($row, UsageStarted::class, 'json');
+
+        self::assertEquals(new UsageStarted('a call', 'started', 'alpha', Tier::Standard, self::ROUND, 'big'), $read);
+    }
+
+    public function testAStartedRowWrittenBeforeTheModelWasKeptReadsBackWithoutOne(): void
     {
         $row = '{"call":"a call","phase":"started","project":"alpha","tier":"standard","round":"'.self::ROUND.'"}';
 
         $read = $this->serializer()->deserialize($row, UsageStarted::class, 'json');
 
-        self::assertEquals(new UsageStarted('a call', 'started', 'alpha', Tier::Standard, self::ROUND), $read);
+        self::assertNull($read->model);
     }
 
     public function testASettledRowKeepsCacheCreationAndTheNullTokenFields(): void

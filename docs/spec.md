@@ -13,7 +13,9 @@ Intakt reviews a pull request with a panel of AI reviewers and tells the builder
 5. **Judge.** One cheap call marks each finding act, defer or reject against the task's acceptance criteria and non-goals. The builder sees only what to act on.
 6. **Serve agents over MCP.** An MCP server lets an agent start a review, follow it and read verdicts and the findings to act on. Reviewers themselves reach their repository tools through an MCP client.
 7. **Show it live.** A small dashboard shows each round: reviewers, their progress as it streams, verdicts, findings with ids, the judge's call, tokens and cost.
-8. **Run in five minutes.** `docker compose up` starts Intakt, its SQLite database and a sample repository with a pull request waiting for review. The juror adds one or more provider API keys and starts a review.
+8. **Run in five minutes.** `docker compose up` starts Intakt, its SQLite database and a sample repository with a pull request waiting for review. The juror adds one or more provider API keys and starts a review. A juror without a paid Anthropic or OpenAI key sets `HF_TOKEN`, a fine-grained Hugging Face token with only "Make calls to Inference Providers" (the hackathon's credits cover it), which reaches Hugging Face's router through the existing `openai_compatible` provider: alone it puts `correctness` on `moonshotai/Kimi-K3:deepinfra` and `security` on `openai/gpt-oss-120b:novita`; beside an Anthropic key, `correctness` stays on Anthropic and `security` runs on `moonshotai/Kimi-K3:deepinfra`. Each seeded model names its router provider, because the router's default provider may refuse tools together with structured output, and the base URL is `https://router.huggingface.co` without `/v1`, because the bridge appends it.
+
+Reviewers from different vendors means models of different makers. Two makers through one Hugging Face token satisfy it; two separate providers (for example Anthropic and Hugging Face) are the stronger setup, because one token is one outage, one rate limit and one bill.
 
 ## For whom
 
@@ -41,7 +43,7 @@ Building changes, merging, the budget planner beyond recording cost, subscriptio
 ## Acceptance at the deadline
 
 1. On a clean machine with Docker, `git clone`, adding one API key to `.env.local` and `docker compose up` gives a running dashboard with the sample pull request in under five minutes, measured and recorded in the README.
-2. A review of the sample pull request with a two-reviewer panel from two providers produces schema-valid verdicts, a judge result and a cost line, visible live on the dashboard.
+2. A review of the sample pull request with a two-reviewer panel on models of two different makers produces schema-valid verdicts, a judge result and a cost line, visible live on the dashboard.
 3. A second round on a fixed head keeps the finding ids, marks fixed findings resolved and refuses unanchored new blocking findings.
 4. An MCP client (for example an agent CLI) connected to Intakt's MCP server can start that review and read the findings to act on.
 5. The same review works on a real GitHub pull request with a token in `.env.local`.

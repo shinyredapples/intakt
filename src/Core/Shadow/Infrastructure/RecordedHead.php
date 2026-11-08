@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Shadow\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -100,6 +101,8 @@ final readonly class RecordedHead
             verdicts: $verdicts,
             actList: [],
             tokens: RoundTokens::of($tokens['calls'], new TokenFigures($tokens['prompt'], 0, 0, 0, $tokens['completion'])),
+            // Unknown, because a recorded round keeps its tokens but not the models that spent them.
+            cost: Cost::unknown(),
         );
     }
 
