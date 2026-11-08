@@ -176,7 +176,10 @@ final class DashboardComponentsTest extends KernelTestCase
 
     public function testAListRowShowsTitleExplanationAndActionsOnTheRight(): void
     {
-        $row = $this->embed('list_row', ['title' => 'Phone (home)', 'explanation' => 'Gets a push when something needs you.'], 'actions', '<button class="btn quiet sm">Remove</button>')->filter('.row');
+        $row = $this->embed(
+            $this->filled('list_row', 'actions', '<button class="btn quiet sm">Remove</button>'),
+            ['title' => 'Phone (home)', 'explanation' => 'Gets a push when something needs you.'],
+        )->filter('.row');
 
         self::assertSame('Phone (home)', $row->filter('.body .t')->text());
         self::assertSame('Gets a push when something needs you.', $row->filter('.body .d')->text());
@@ -401,11 +404,14 @@ final class DashboardComponentsTest extends KernelTestCase
     /**
      * @param array<string, mixed> $context
      */
-    private function embed(string $component, array $context, string $block, string $content): Crawler
+    private function embed(string $source, array $context): Crawler
     {
-        $source = sprintf("{%% embed 'dashboard/components/%s.html.twig' %%}{%% block %s %%}%s{%% endblock %%}{%% endembed %%}", $component, $block, $content);
-
         return new Crawler($this->twig()->createTemplate($source)->render($context));
+    }
+
+    private function filled(string $component, string $block, string $content): string
+    {
+        return sprintf("{%% embed 'dashboard/components/%s.html.twig' %%}{%% block %s %%}%s{%% endblock %%}{%% endembed %%}", $component, $block, $content);
     }
 
     private function twig(): Environment
@@ -436,10 +442,8 @@ final class DashboardComponentsTest extends KernelTestCase
     private function settingRow(array $context): Crawler
     {
         return $this->embed(
-            'setting_row',
+            $this->filled('setting_row', 'control', '<input class="input" id="quiet-hours" name="quiet_hours">'),
             [...$context, 'label' => 'Quiet hours', 'explanation' => 'No pushes in these hours.', 'control_id' => 'quiet-hours'],
-            'control',
-            '<input class="input" id="quiet-hours" name="quiet_hours">',
         )->filter('.srow');
     }
 
@@ -449,10 +453,8 @@ final class DashboardComponentsTest extends KernelTestCase
     private function banner(array $context): Crawler
     {
         return $this->embed(
-            'banner',
+            $this->filled('banner', 'action', '<button class="btn secondary sm">Resume</button>'),
             [...$context, 'icon' => 'pause', 'short' => 'field-notes is paused', 'title' => 'field-notes is paused.', 'text' => 'Nothing new starts.'],
-            'action',
-            '<button class="btn secondary sm">Resume</button>',
         );
     }
 }

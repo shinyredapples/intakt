@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-/**
- * The terms the dashboard keeps, each with the one standard explanation of the Glossary in docs/design/mocks/DESIGN.md.
- */
+// One home for each standard explanation, so no page writes a different one (docs/design/mocks/DESIGN.md, Glossary).
 enum GlossaryTerm: string
 {
     case Version = 'version';

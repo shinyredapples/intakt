@@ -76,7 +76,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
 
-        return array_map($this->servedAsset(...), $addresses);
+        return array_values(array_map($this->servedAsset(...), $addresses));
     }
 
     private function servedAsset(string $address): string
@@ -89,7 +89,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
     }
 
     /**
-     * @return array<string, string> selector => declarations
+     * @return array<string, string>
      */
     private function rulesOf(string $sheet): array
     {
@@ -103,7 +103,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
      */
     private function renderedClasses(): array
     {
-        $classes = $this->gallery()->filter('#gallery [class]')->each(static fn (Crawler $element): array => preg_split('/\s+/', trim((string) $element->attr('class'))) ?: []);
+        $classes = $this->gallery()->filter('#gallery [class]')->each(static fn (Crawler $element): array => explode(' ', trim((string) $element->attr('class'))));
         $classes = array_values(array_unique(array_merge(...$classes)));
         self::assertNotEmpty($classes);
 

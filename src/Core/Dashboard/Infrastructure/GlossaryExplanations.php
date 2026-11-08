@@ -9,7 +9,7 @@ use Twig\Attribute\AsTwigFunction;
 
 final readonly class GlossaryExplanations
 {
-    // An unknown term fails the page rather than showing a term without its explanation.
+    // Throws on an unknown term, because a term shown without its standard explanation breaks the glossary rule.
     #[AsTwigFunction('glossary_explanation')]
     public function of(string $term): string
     {
