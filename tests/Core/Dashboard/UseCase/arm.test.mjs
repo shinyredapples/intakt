@@ -62,13 +62,20 @@ test('a click after the button disarmed itself is held back again', (t) => {
     assert.equal(button.element.textContent, 'Click again to pause');
 });
 
-test('a button that leaves the page stops its disarm timer', (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
+test('an armed button that leaves the page comes back unarmed', () => {
     const button = dangerButton();
     button.click(new FakeClick());
 
     button.disconnect();
-    t.mock.timers.tick(4000);
 
-    assert.equal(button.element.textContent, 'Click again to pause');
+    assert.equal(button.element.hasAttribute('data-armed'), false);
+    assert.equal(button.element.textContent, 'Pause everything');
+});
+
+test('an unarmed button that leaves the page keeps its label', () => {
+    const button = dangerButton();
+
+    button.disconnect();
+
+    assert.equal(button.element.textContent, 'Pause everything');
 });

@@ -7,7 +7,7 @@ export default class extends Controller {
     static values = { confirm: String };
 
     click(event) {
-        if (this.element.hasAttribute('data-armed')) {
+        if (this.armed()) {
             this.disarm();
             return;
         }
@@ -16,8 +16,15 @@ export default class extends Controller {
         this.arm();
     }
 
+    // A button that is moved or cached by the page comes back unarmed, so it never waits armed without its timer.
     disconnect() {
-        clearTimeout(this.timer);
+        if (this.armed()) {
+            this.disarm();
+        }
+    }
+
+    armed() {
+        return this.element.hasAttribute('data-armed');
     }
 
     arm() {
