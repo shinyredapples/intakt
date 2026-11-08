@@ -6,6 +6,8 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
 final readonly class ReviewedRound
@@ -27,11 +29,13 @@ final readonly class ReviewedRound
     public ReviewState $state;
     public TokenFigures $tokens;
     public Cost $cost;
+    public ?Decision $outcome;
 
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
         public DateTimeImmutable $startedAt,
+        public ?QuorumPolicy $quorum,
     ) {
         $this->round = $start->round;
         $this->project = $start->project;
@@ -45,6 +49,12 @@ final readonly class ReviewedRound
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
         $this->cost = Cost::none();
+        $this->outcome = null;
+    }
+
+    public function failedReviewers(): int
+    {
+        return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));
     }
 
     // A round without a change name has no siblings it could be told apart from, so it stands alone.
@@ -90,5 +100,10 @@ final readonly class ReviewedRound
     public function withCost(Cost $cost): self
     {
         return clone ($this, ['cost' => $cost]);
+    }
+
+    public function decidedAs(Decision $outcome): self
+    {
+        return clone ($this, ['outcome' => $outcome]);
     }
 }

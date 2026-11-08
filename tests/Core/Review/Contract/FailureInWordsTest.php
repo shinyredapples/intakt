@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Review\UseCase\ReviewChange;
+namespace Intakt\Tests\Core\Review\Contract;
 
-use Intakt\Core\Review\UseCase\ReviewChange\FailureInWords;
+use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use PHPUnit\Framework\Attributes\CoversClass;
