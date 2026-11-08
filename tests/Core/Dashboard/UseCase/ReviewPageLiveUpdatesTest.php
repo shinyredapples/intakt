@@ -17,9 +17,10 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\AssetMapper\ImportMap\RemotePackageStorage;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\Filesystem\Filesystem;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
@@ -33,16 +34,14 @@ use Twig\Environment;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
-// Because it creates and removes placeholder files in assets/vendor/ of the checkout, which every test worker shares.
-#[Group('serial')]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];
 
-    private ?string $secretBefore = null;
+    // The service of the asset mapper that names the folder importmap:install downloads into.
+    private const string REMOTE_PACKAGE_STORAGE = 'asset_mapper.importmap.remote_package_storage';
 
-    /** @var list<string> */
-    private array $placeholders = [];
+    private ?string $secretBefore = null;
 
     #[Override]
     protected function setUp(): void
@@ -51,8 +50,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->secretBefore = is_string($before) ? $before : null;
         // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        $this->givenTheDownloadedScriptsExist();
         parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
     }
 
     #[Override]
@@ -60,7 +59,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $secret = $this->secretBefore ?? '';
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        array_map(unlink(...), $this->placeholders);
+        new Filesystem()->remove(self::vendorFolder());
         parent::tearDown();
     }
 
@@ -68,18 +67,16 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     private function givenTheDownloadedScriptsExist(): void
     {
         foreach (self::VENDOR_ASSETS as $asset) {
-            $path = dirname(__DIR__, 4).'/assets/vendor/'.$asset;
-            if (is_file($path)) {
-                continue;
-            }
-
-            if (!is_dir(dirname($path))) {
-                mkdir(dirname($path), 0o777, true);
-            }
-
-            file_put_contents($path, '');
-            $this->placeholders[] = $path;
+            new Filesystem()->dumpFile(self::vendorFolder().'/'.$asset, '');
         }
+
+        self::getContainer()->set(self::REMOTE_PACKAGE_STORAGE, new RemotePackageStorage(self::vendorFolder()));
+    }
+
+    // Under assets/ so the asset mapper finds the stand-ins, and one folder per test worker, because each has a TMPDIR of its own, so none removes another's or a real download.
+    private static function vendorFolder(): string
+    {
+        return dirname(__DIR__, 4).'/assets/vendor/review_page_live_updates_test_'.hash('xxh128', sys_get_temp_dir());
     }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
