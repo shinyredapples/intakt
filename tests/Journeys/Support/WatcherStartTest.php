@@ -105,7 +105,7 @@ final class WatcherStartTest extends TestCase
         new Filesystem()->dumpFile($this->configuration(), Yaml::dump(['projects' => ['other' => []]]));
 
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage($this->configuration().' has no sample project');
+        $this->expectExceptionMessageMatches('/'.preg_quote($this->configuration(), '/').' has no sample project/');
 
         $this->start($this->ledgerWith());
     }
@@ -132,7 +132,7 @@ final class WatcherStartTest extends TestCase
     public function testATickThatQueuedNoRoundFailsNamingTheRecording(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage($this->recordingFile());
+        $this->expectExceptionMessageMatches('/recording '.preg_quote($this->recordingFile(), '/').' queued no round/');
 
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30ec-7ae5-ae69-65d774c10318 head_pending {"project":"sample","change":"1","head":"'.$this->head.'"}'));
     }
@@ -140,7 +140,7 @@ final class WatcherStartTest extends TestCase
     public function testARoundQueuedEntryWithoutARoundIdFailsInsteadOfReturningOne(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('round_queued');
+        $this->expectExceptionMessageMatches('/round_queued entry of the ledger names no round/');
 
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample","head":"'.$this->head.'"}'));
     }
@@ -148,7 +148,7 @@ final class WatcherStartTest extends TestCase
     public function testARoundQueuedEntryThatIsNotJsonFailsInsteadOfBeingSkipped(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('is not JSON');
+        $this->expectExceptionMessageMatches('/round_queued entry of the ledger is not JSON/');
 
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample",'));
     }
@@ -164,6 +164,8 @@ final class WatcherStartTest extends TestCase
     private function console(string $ledger): Closure
     {
         return function (array $arguments, array $environment, int $seconds) use ($ledger): string {
+            /* @var list<string> $arguments */
+            /* @var array<string,string> $environment */
             $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
 
             return 'intakt:ledger:events' === $arguments[0] ? $ledger : '';

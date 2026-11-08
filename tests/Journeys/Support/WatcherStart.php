@@ -23,7 +23,7 @@ final readonly class WatcherStart
 {
     private const string RECORDING = 'watcher-recording.json';
     private const string CONFIGURATION_VARIABLE = 'INTAKT_CONFIG';
-    // Read by tests/Core/Watcher/RecordedPullRequests.php, which the test environment binds to the forge's listing and CI reads.
+    // A recording instead of a forge, because the test environment binds the forge's listing and CI reads to tests/Core/Watcher/RecordedPullRequests.php, which reads this variable.
     private const string RECORDING_VARIABLE = 'WATCHER_RECORDING';
     private const int PULL_REQUEST = 1;
     // The sample commits' own moment, so the recording describes the same pull request on every install.
@@ -128,7 +128,7 @@ final readonly class WatcherStart
             }
         }
 
-        return array_last(array_filter($rounds));
+        return array_last(array_filter($rounds, static fn (?string $round): bool => null !== $round));
     }
 
     private function roundOf(string $payload, string $head): ?string
