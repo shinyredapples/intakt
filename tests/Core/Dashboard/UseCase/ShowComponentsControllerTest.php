@@ -34,7 +34,10 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'input' => ['input.input[aria-invalid="true"]'];
         yield 'bar' => ['.window .bar'];
         yield 'banner' => ['.banner.broken'];
+        yield 'icon button' => ['.icon-btn[aria-label]'];
         yield 'sub-tabs' => ['.subtabs'];
+        yield 'segmented tabs' => ['.seg[role="tablist"][aria-label] [role="tab"][aria-selected="true"]'];
+        yield 'filter chips' => ['.fchip[aria-pressed="true"] + .fchip[aria-pressed="false"]'];
         yield 'toast' => ['.toast'];
         yield 'skeleton' => ['.skel-card'];
         yield 'empty state' => ['.empty'];
@@ -52,11 +55,12 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         }
     }
 
-    public function testTheComponentsPageCarriesAThemeToggleWiredToTheThemeController(): void
+    public function testTheComponentsPageCarriesAThemeToggleBesideTheOneOfTheTopBar(): void
     {
         $page = $this->browser->request('GET', '/components');
 
-        self::assertSame('theme#flip', $page->filter('[data-controller="theme"] button')->attr('data-action'));
+        self::assertSame('Switch theme', $page->filter('.page-head button[data-theme-toggle]')->text());
+        self::assertCount(1, $page->filter('.topbar button[data-theme-toggle]'));
         self::assertGreaterThan(0, $page->filter('script[type="importmap"]')->count());
     }
 

@@ -1,47 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { runInNewContext } from 'node:vm';
-import { loadController, root } from './stimulus-controller.mjs';
-
-const layout = readFileSync(new URL('templates/dashboard/base.html.twig', root), 'utf8');
-const headScript = layout.match(/<head>[\s\S]*?<script>([\s\S]*?)<\/script>/)[1];
-
-const ThemeController = await loadController('theme');
-
-class Browser {
-    storage = new Map();
-
-    constructor(systemTheme, { storageRefused = false } = {}) {
-        this.systemTheme = systemTheme;
-        this.storageRefused = storageRefused;
-    }
-
-    open() {
-        const document = { documentElement: { dataset: {} } };
-        const localStorage = {
-            getItem: (key) => {
-                if (this.storageRefused) {
-                    throw new Error('SecurityError');
-                }
-
-                return this.storage.get(key) ?? null;
-            },
-            setItem: (key, value) => this.storage.set(key, String(value)),
-        };
-        const matchMedia = (query) => ({ matches: query === '(prefers-color-scheme: dark)' && this.systemTheme === 'dark' });
-
-        runInNewContext(headScript, { document, localStorage, matchMedia });
-
-        return {
-            theme: () => document.documentElement.dataset.theme,
-            flip: () => {
-                Object.assign(globalThis, { document, localStorage });
-                new ThemeController().flip();
-            },
-        };
-    }
-}
+import { Browser } from './shell-page.mjs';
 
 test('a first visit follows a dark system theme', () => {
     assert.equal(new Browser('dark').open().theme(), 'dark');
@@ -78,9 +37,25 @@ test('flipping turns a dark page light and a light page dark', () => {
     assert.equal(page.theme(), 'dark');
 });
 
+test('every theme toggle of the page flips the same theme', () => {
+    const page = new Browser('light').open();
+
+    page.flip(1);
+
+    assert.equal(page.theme(), 'dark');
+});
+
 test('a flipped theme survives a reload against the system theme', () => {
     const browser = new Browser('dark');
     browser.open().flip();
 
     assert.equal(browser.open().theme(), 'light');
+});
+
+test('flipping still works when storage refuses access', () => {
+    const page = new Browser('dark', { storageRefused: true }).open();
+
+    page.flip();
+
+    assert.equal(page.theme(), 'light');
 });

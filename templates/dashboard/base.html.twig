@@ -4,12 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Intakt{% endblock %}</title>
-    {# Runs before the first paint, so a stored or system dark theme never flashes light; assets/controllers/theme_controller.js stores the key it reads. #}
+    {# Runs before the first paint, so a stored or system dark theme never flashes light and a collapsed rail never flashes open; the shell script at the end of the body stores the keys it reads. #}
     <script>(() => {
-        let stored = null;
-        try { stored = localStorage.getItem('intakt-theme'); } catch {}
-        document.documentElement.dataset.theme = stored === 'light' || stored === 'dark' ? stored : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const root = document.documentElement;
+        let theme = null;
+        let rail = null;
+        try {
+            theme = localStorage.getItem('intakt-theme');
+            rail = localStorage.getItem('intakt-rail');
+        } catch {}
+        root.dataset.theme = theme === 'light' || theme === 'dark' ? theme : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        if (rail === 'collapsed') {
+            root.dataset.rail = 'collapsed';
+        }
     })();</script>
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon-32.png') }}">
     <link rel="stylesheet" href="{{ asset('styles/fonts.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
@@ -17,11 +26,32 @@
     {% block importmap %}{% endblock %}
 </head>
 <body>
-<nav>
-    <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')) }}">Projects</a>
-    <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Reviews</a>
+{# Only the rail items whose page is built; the others arrive with their page. #}
+{% set rail_items = [
+    {key: 'projects', label: 'Projects', icon: 'projects', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')},
+] %}
+<div class="shell">
+<nav class="rail" id="rail" aria-label="Main">
+    <div class="rail-in">
+        <a class="brand" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home">
+            <img class="logo-full logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt">
+            <img class="logo-full logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt">
+            <img class="mark" src="{{ asset('images/favicon-32.png') }}" alt="Intakt">
+        </a>
+        {% for item in rail_items %}
+        <a class="nav" data-k="{{ item.key }}" href="{{ path(item.route) }}" title="{{ item.label }}"{% if app.current_route == item.route %} aria-current="page"{% endif %}>{{ include('dashboard/components/icon.html.twig', {name: item.icon}, with_context = false) }}<span class="label">{{ item.label }}</span></a>
+        {% endfor %}
+        <div class="spacer"></div>
+        <button class="nav collapse" type="button" data-rail-toggle aria-controls="rail" aria-expanded="true" title="Collapse menu">{{ include('dashboard/components/icon.html.twig', {name: 'collapse'}, with_context = false) }}<span class="label">Collapse</span></button>
+    </div>
 </nav>
-<main>
+<div class="main">
+<header class="topbar">
+    <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><kbd>Ctrl K</kbd></button>
+    <div class="grow"></div>
+    <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
+</header>
+<main class="content">
 {% for line in app.flashes('success') %}
 <p class="flash flash-success">{{ line }}</p>
 {% endfor %}
@@ -30,5 +60,47 @@
 {% endfor %}
 {% block body %}{% endblock %}
 </main>
+</div>
+</div>
+{# Listens on the body, because Turbo replaces it on a visit and runs this script again, so no listener is left twice. #}
+<script>(() => {
+    const root = document.documentElement;
+    const store = (key, value) => {
+        try {
+            localStorage.setItem(key, value);
+        } catch {}
+    };
+    const railToggle = document.querySelector('[data-rail-toggle]');
+    const search = document.querySelector('.search-trigger');
+    const showRail = () => {
+        const collapsed = root.dataset.rail === 'collapsed';
+        railToggle.setAttribute('aria-expanded', String(!collapsed));
+        railToggle.title = collapsed ? 'Expand menu' : 'Collapse menu';
+    };
+
+    showRail();
+    railToggle.addEventListener('click', () => {
+        if (root.dataset.rail === 'collapsed') {
+            delete root.dataset.rail;
+        } else {
+            root.dataset.rail = 'collapsed';
+        }
+        store('intakt-rail', root.dataset.rail ?? 'open');
+        showRail();
+    });
+    document.querySelectorAll('[data-theme-toggle]').forEach((toggle) => toggle.addEventListener('click', () => {
+        root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        store('intakt-theme', root.dataset.theme);
+    }));
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) {
+        search.querySelector('kbd').textContent = '⌘K';
+    }
+    document.body.addEventListener('keydown', (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            search.focus();
+        }
+    });
+})();</script>
 </body>
 </html>

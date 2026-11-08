@@ -41,7 +41,7 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | Command | Called by | What for | Needed |
 |---|---|---|---|
 | `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the runner for the `persistence` service container | building the CI image, running `bin/check` and the persistence group in it, the database service | yes |
-| `docker build` and what `docker/smoke-test.sh` calls ([below](#to-smoke-test-the-container-image)) | the `image` job | building the app image and smoke-testing it | yes |
+| `docker build`, the `buildx` plugin, network access to Docker Hub, and what `docker/smoke-test.sh` calls on the host ([below](#to-smoke-test-the-container-image): `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `dirname`, `env`, `timeout`, `sleep`) | the `image` job | building the app image and smoke-testing it; `docker buildx imagetools inspect` asks the registry for the base image tag's digest | yes |
 | `docker run` security options | the `check` job | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
 | `sudo sysctl` | the `check` job, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from a hash of the Dockerfile, `composer.json` and the check ini | yes |
@@ -58,7 +58,7 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 | Command | What for | Needed |
 |---|---|---|
 | `docker` (CLI, a running daemon and the `buildx` plugin) | `volume create`, `run`, `port`, `inspect`, `exec`, `logs`, `rm -f`, `volume rm -f`, `image inspect` for the image digest, `buildx imagetools inspect` for the base image tag's digest | for a run against an image |
-| `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `env`, `timeout`, `sleep` | the HTTP and admin API checks from the host, reading the `FROM` tag, the run's random secrets, the time limits | yes |
+| `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `dirname`, `env`, `timeout`, `sleep` | the HTTP and admin API checks from the host, reading the `FROM` tag, the run's random secrets, the time limits | yes |
 | `php`, `curl` inside the image (or on the host with `--local`) | reading the `mcp.php` request count from the admin API's `/frankenphp/threads`, asking the admin API where the server runs | yes (both are in the image) |
 
 ## To check the demo's first start

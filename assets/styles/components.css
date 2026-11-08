@@ -22,6 +22,11 @@ svg.i.s { width: 15px; height: 15px; }
 .btn.needs:hover { filter: brightness(1.05); }
 .btn.is-loading { cursor: progress; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
+.icon-btn {
+  display: inline-grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--hairline); border-radius: var(--r-btn);
+  background: var(--raised); color: var(--ink); cursor: pointer;
+}
+.icon-btn:hover { background: var(--tint); }
 .linkbtn {
   min-height: 24px; padding: 0 2px; border: 0; background: none; color: var(--link); font: inherit;
   text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
@@ -136,6 +141,19 @@ svg.i.s { width: 15px; height: 15px; }
 .subtabs a:hover { color: var(--ink); }
 .subtabs a[aria-current="page"] { border-bottom-color: var(--primary); color: var(--ink); }
 
+/* Segmented tabs and filter chips. The mock spaces the tabs 20 px below and pads a tab 14 px, which have no step, so tokens only (D2) wins with --s16 and --s12. */
+.seg { display: inline-flex; margin-bottom: var(--s16); padding: 3px; border-radius: var(--r-btn); background: var(--tint); }
+.seg button {
+  height: 34px; padding: 0 var(--s12); border: 0; border-radius: var(--r-chip); background: none;
+  color: var(--muted); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
+}
+.seg button[aria-selected="true"] { background: var(--raised); color: var(--ink); }
+.fchip {
+  height: 32px; padding: 0 var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-chip); background: transparent;
+  color: var(--ink); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
+}
+.fchip[aria-pressed="true"] { border-color: transparent; background: var(--selected); }
+
 /* Toasts */
 .toast {
   position: fixed; bottom: var(--s32); left: 50%; z-index: 120; display: flex; align-items: center; gap: var(--s16);
@@ -176,6 +194,10 @@ svg.i.s { width: 15px; height: 15px; }
 
 @media (max-width: 760px) {
   .btn, .btn.sm, .linkbtn, .toast button { min-height: 44px; }
+  .icon-btn { width: 44px; height: 44px; }
+  .fchip { flex: none; height: 44px; }
+  .seg { display: flex; }
+  .seg button { flex: 1; height: 44px; }
   .input, .select { height: 48px; }
   .switch { width: 52px; height: 32px; }
   .switch input { top: -6px; width: 100%; height: 44px; }
@@ -209,8 +231,36 @@ svg.i.s { width: 15px; height: 15px; }
   .switch span, .switch span::after, .banner-toggle .chev { transition: none; }
 }
 
-/* Both themes sit side by side so one screenshot compares them, as the mock does. */
-body:has(.comp-nav) { max-width: 80rem; }
+.shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+[data-rail="collapsed"] .shell { grid-template-columns: var(--rail-c) minmax(0, 1fr); }
+.rail { background: var(--raised); border-right: 1px solid var(--hairline); }
+.rail-in { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: var(--s4); padding: var(--s16) var(--s12); font-family: var(--f-head); }
+.rail .brand { display: flex; align-items: center; height: 44px; margin-bottom: var(--s16); padding: 0 var(--s8); }
+.rail .brand img { width: auto; height: 34px; }
+.rail .brand .mark { display: none; height: 32px; }
+.rail .nav { display: flex; align-items: center; gap: var(--s12); width: 100%; height: 40px; padding: 0 var(--s12); border: 0; border-radius: var(--r-btn); background: none; color: var(--ink); font: 500 var(--t15)/1 var(--f-head); text-align: left; text-decoration: none; cursor: pointer; }
+.rail .nav:hover { background: var(--tint); }
+.rail .nav[aria-current="page"] { background: var(--selected); }
+.rail .spacer { flex: 1; }
+.logo-dark { display: none; }
+[data-theme="dark"] .logo-light { display: none; }
+[data-theme="dark"] .logo-dark { display: block; }
+[data-rail="collapsed"] .rail .label, [data-rail="collapsed"] .rail .logo-full { display: none; }
+[data-rail="collapsed"] .rail .brand { justify-content: center; padding: 0; }
+[data-rail="collapsed"] .rail .brand .mark { display: block; }
+[data-rail="collapsed"] .rail .nav { justify-content: center; padding: 0; }
+[data-rail="collapsed"] .rail .collapse svg { transform: scaleX(-1); }
+.main { display: flex; flex-direction: column; min-width: 0; }
+.topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--s12); height: var(--top); padding: 0 var(--s32); border-bottom: 1px solid var(--hairline); background: var(--page); }
+.topbar .grow { flex: 1; }
+.search-trigger { display: flex; flex: 1; align-items: center; gap: var(--s8); min-width: 0; max-width: 520px; height: 40px; padding: 0 var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--muted); font: inherit; text-align: left; cursor: text; }
+.search-trigger .ph { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); background: var(--tint); color: var(--muted); font: 400 var(--t13)/1.45 var(--f-body); white-space: nowrap; }
+.theme-toggle .sun { display: none; }
+[data-theme="dark"] .theme-toggle .sun { display: block; }
+[data-theme="dark"] .theme-toggle .moon { display: none; }
+.content { width: 100%; max-width: 1280px; padding: var(--s32); }
+
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
 .page-head .actions { margin-left: auto; }
