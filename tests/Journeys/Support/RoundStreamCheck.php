@@ -105,8 +105,7 @@ final readonly class RoundStreamCheck
     {
         $targets = (string) $stream->attr('targets');
 
-        // Only a targets stream adds to the page here, because the one that places a reviewer appends the elements its later streams target.
-        // It adds nothing when its selector matches no element, because Turbo drops such a stream and so leaves the page as it is.
+        // Only a targets stream whose selector matches the page adds to it, because Turbo drops one that matches nothing and the reviewer-placing one appends what its later streams target.
         if ('' === $targets || 0 === count($page->filter($targets))) {
             return [];
         }
