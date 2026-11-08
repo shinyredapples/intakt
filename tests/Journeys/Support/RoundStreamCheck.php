@@ -12,7 +12,7 @@ use Symfony\Component\Mercure\Update;
 // Checks what the hub was sent by its structure against the page a listener holds, because a text match passes updates Turbo would drop.
 final readonly class RoundStreamCheck
 {
-    // The texts the template of the round_changed stream prints; the update carries no other flag.
+    // Matched on these texts because the template of the round_changed stream prints them and the update carries no other flag.
     private const string JUDGED = 'Judged.';
     private const string PROGRESS = '/^(\d+) of (\d+) reviewers finished\.$/';
 
@@ -34,17 +34,7 @@ final readonly class RoundStreamCheck
             foreach ($this->streamsOf($update, $position) as $stream) {
                 $this->assertTargetIsOnThePage($stream, $ids, $position);
                 $state = $this->stateOf($stream, $round);
-
-                if (null === $state) {
-                    continue;
-                }
-
-                if (self::JUDGED === $state) {
-                    $judgedAt = $position;
-
-                    continue;
-                }
-
+                $judgedAt = self::JUDGED === $state ? $position : $judgedAt;
                 $finished = $this->progressAfter($finished, $state, $position);
             }
         }
@@ -99,7 +89,7 @@ final readonly class RoundStreamCheck
     {
         $target = (string) $stream->attr('target');
 
-        // A targets selector may rightly match nothing, as the one that places a reviewer only once.
+        // Only a single target is looked up, because a targets selector may rightly match nothing, as the one that places a reviewer does once it has its place.
         if ('' !== $target && !in_array($target, $ids, true)) {
             throw new AssertionFailedError(sprintf('update %d targets "%s", which names no element on the page', $position, $target));
         }
@@ -115,8 +105,12 @@ final readonly class RoundStreamCheck
         return new Crawler('<div>'.$stream->filter('template')->html('').'</div>')->filter('body > div')->text('');
     }
 
-    private function progressAfter(int $finished, string $state, int $position): int
+    private function progressAfter(int $finished, ?string $state, int $position): int
     {
+        if (null === $state || self::JUDGED === $state) {
+            return $finished;
+        }
+
         if (1 !== preg_match(self::PROGRESS, $state, $progress)) {
             throw new AssertionFailedError(sprintf('update %d shows the round state "%s", which is neither progress nor "%s"', $position, $state, self::JUDGED));
         }

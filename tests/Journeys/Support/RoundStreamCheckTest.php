@@ -18,7 +18,7 @@ final class RoundStreamCheckTest extends TestCase
 {
     private const string ROUND = 'round-1';
 
-    // The elements the review page of a running round holds for its streams.
+    // Only the elements the streams look up, because the check reads nothing else of the review page.
     private const string PAGE = <<<'HTML'
         <html><body>
         <p id="round-round-1-state">0 of 2 reviewers finished.</p>
@@ -148,7 +148,7 @@ final class RoundStreamCheckTest extends TestCase
     private function expectFailure(string $message): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage($message);
+        $this->expectExceptionMessageMatches('/'.preg_quote($message, '/').'/');
     }
 
     private function onTopic(string $data): Update
