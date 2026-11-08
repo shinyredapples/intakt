@@ -235,6 +235,13 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(['five-hour' => 80.0, 'weekly' => 90.0], $this->bootedContainer()->getParameter(BudgetServices::CEILINGS));
     }
 
+    public function testTheOwnersPricesBesideTheCeilingsReachTheBudgetWithTheInputPriceForACachePriceLeftOut(): void
+    {
+        file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\n    prices:\n        other: { input: 2, output: 8 }\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['other' => ['input' => 2.0, 'output' => 8.0, 'cache_read' => 2.0, 'cache_write' => 2.0]], $this->bootedContainer()->getParameter(BudgetServices::PRICES));
+    }
+
     public function testTheStartGuardOfTheContainerRefusesAStartAtTheOwnersCeiling(): void
     {
         file_put_contents($this->file, "budget:\n    ceilings:\n        five-hour: 80\n");

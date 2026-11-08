@@ -3,7 +3,7 @@
     "title": "Output of intakt:review --format=json",
     "type": "object",
     "additionalProperties": false,
-    "required": ["round_id", "round", "decision", "exit_code", "verdicts", "act_list", "tokens", "reasons"],
+    "required": ["round_id", "round", "decision", "exit_code", "verdicts", "act_list", "tokens", "cost", "reasons"],
     "properties": {
         "round_id": {"type": "string", "minLength": 1},
         "round": {"type": "integer", "minimum": 1},
@@ -51,6 +51,15 @@
                 "cached": {"type": "integer", "minimum": 0},
                 "completion": {"type": "integer", "minimum": 0},
                 "total": {"type": "integer", "minimum": 0}
+            }
+        },
+        "cost": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["usd", "unpriced"],
+            "properties": {
+                "usd": {"type": ["number", "null"], "minimum": 0},
+                "unpriced": {"type": "array", "items": {"type": "string"}}
             }
         },
         "reasons": {"type": "array", "items": {"type": "string"}}

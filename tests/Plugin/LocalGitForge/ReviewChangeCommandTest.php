@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 use Closure;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -69,6 +70,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(ReviewOutput::class)]
 #[UsesClass(ReviewOutputVerdict::class)]
 #[UsesClass(RoundTokens::class)]
+#[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
 final class ReviewChangeCommandTest extends TestCase
 {
@@ -120,7 +122,7 @@ final class ReviewChangeCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Changes));
 
         self::assertSame(
-            "changes (round 1)\nstrong reviewer: changes, 1 findings\nstandard reviewer: approve, 0 findings\nact list: 1 findings\nF1 P1 src/Feature.php:3: Missing check.\ntokens: 2 calls, 100 prompt, 20 completion, 120 total\n",
+            "changes (round 1)\nstrong reviewer: changes, 1 findings\nstandard reviewer: approve, 0 findings\nact list: 1 findings\nF1 P1 src/Feature.php:3: Missing check.\ntokens: 2 calls, 100 prompt, 20 completion, 120 total\ncost: 0.0001 USD\n",
             $tester->getDisplay(),
         );
     }
@@ -132,7 +134,7 @@ final class ReviewChangeCommandTest extends TestCase
 
         $tester = $this->whenTheCommandRuns($reviews);
 
-        self::assertStringEndsWith("tokens: 3 calls, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total\n", $tester->getDisplay());
+        self::assertStringContainsString("tokens: 3 calls, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total\n", $tester->getDisplay());
     }
 
     public function testTheTokenLineShowsCachedTokensAVendorDoesNotSplit(): void
@@ -142,7 +144,57 @@ final class ReviewChangeCommandTest extends TestCase
 
         $tester = $this->whenTheCommandRuns($reviews);
 
-        self::assertStringEndsWith("tokens: 1 calls, 39504 prompt (39500 cached), 700 completion, 40204 total\n", $tester->getDisplay());
+        self::assertStringContainsString("tokens: 1 calls, 39504 prompt (39500 cached), 700 completion, 40204 total\n", $tester->getDisplay());
+    }
+
+    public function testTheCostLineShowsTheRoundsCostInDollars(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.045895)));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("cost: 0.0459 USD\n", $tester->getDisplay());
+    }
+
+    public function testTheCostLineOfACostTooSmallForFourDecimalsIsNotPrintedAsZero(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.000038)));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("cost: less than 0.0001 USD\n", $tester->getDisplay());
+    }
+
+    public function testTheCostLineOfACostOfNothingIsPrintedAsZero(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.0)));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("cost: 0.0000 USD\n", $tester->getDisplay());
+    }
+
+    public function testTheCostLineSaysTheCostIsUnknownAndNamesTheModelsWithoutAPrice(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.01)->plus(Cost::unknown('local-small', 'gpt-5'))));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertStringEndsWith("cost: unknown, no price for local-small, gpt-5\n", $tester->getDisplay());
+    }
+
+    public function testTheJsonOutputOfARoundWithAnUnknownCostValidatesAgainstTheDocumentedSchema(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::unknown('local-small')));
+
+        $tester = $this->whenTheCommandRuns($reviews, ['--format' => 'json']);
+
+        self::assertSame([], $this->schemaErrors($tester->getDisplay()));
     }
 
     #[DataProvider('decisions')]
@@ -167,6 +219,15 @@ final class ReviewChangeCommandTest extends TestCase
         $document = json_decode($this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['--format' => 'json'])->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($document);
         unset($document['tokens']);
+
+        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
+    }
+
+    public function testTheSchemaRefusesAnOutputWithoutItsCost(): void
+    {
+        $document = json_decode($this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['--format' => 'json'])->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($document);
+        unset($document['cost']);
 
         self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }
@@ -397,7 +458,7 @@ final class ReviewChangeCommandTest extends TestCase
         return $reviews;
     }
 
-    private function outcome(Decision $decision, ?RoundTokens $tokens = null): ChangeReview
+    private function outcome(Decision $decision, ?RoundTokens $tokens = null, ?Cost $cost = null): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
         $verdicts = [
@@ -406,7 +467,7 @@ final class ReviewChangeCommandTest extends TestCase
         ];
         $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
 
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
     }
 
     /**
