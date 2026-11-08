@@ -63,9 +63,9 @@
 
 <section class="comp-sec" id="c-inputs"><h2>Inputs</h2>
 <div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
-    <div class="row-st">{{ include(c ~ 'input.html.twig', {id: 'in-default-' ~ theme, name: 'default', value: 'Default'}) }}{{ include(c ~ 'input.html.twig', {id: 'in-disabled-' ~ theme, name: 'disabled', value: 'Disabled', disabled: true}) }}</div>
-    <div class="row-st">{{ include(c ~ 'input.html.twig', {id: 'in-error-' ~ theme, name: 'error', value: '80', error: 'Use a port from 1024 to 65535.'}) }}</div>
-    <div class="row-st">{{ include(c ~ 'select.html.twig', {id: 'in-select-' ~ theme, name: 'select', selected: 'a', options: [{value: 'a', label: 'Europe/Berlin'}]}) }}{{ include(c ~ 'switch.html.twig', {id: 'in-on-' ~ theme, name: 'on', on: true}) }}{{ include(c ~ 'switch.html.twig', {id: 'in-off-' ~ theme, name: 'off'}) }}</div>
+    <div class="row-st">{{ include(c ~ 'input.html.twig', {id: 'in-default-' ~ theme, name: 'default', value: 'Default', aria_label: 'Default'}) }}{{ include(c ~ 'input.html.twig', {id: 'in-disabled-' ~ theme, name: 'disabled', value: 'Disabled', aria_label: 'Disabled', disabled: true}) }}</div>
+    <div class="row-st">{{ include(c ~ 'input.html.twig', {id: 'in-error-' ~ theme, name: 'error', value: '80', aria_label: 'Error', error: 'Use a port from 1024 to 65535.'}) }}</div>
+    <div class="row-st">{{ include(c ~ 'select.html.twig', {id: 'in-select-' ~ theme, name: 'select', aria_label: 'Select', selected: 'a', options: [{value: 'a', label: 'Europe/Berlin'}]}) }}{{ include(c ~ 'switch.html.twig', {id: 'in-on-' ~ theme, name: 'on', aria_label: 'On', on: true}) }}{{ include(c ~ 'switch.html.twig', {id: 'in-off-' ~ theme, name: 'off', aria_label: 'Off'}) }}</div>
 </div>{% endfor %}</div></section>
 
 <section class="comp-sec" id="c-bars"><h2>Bars</h2>

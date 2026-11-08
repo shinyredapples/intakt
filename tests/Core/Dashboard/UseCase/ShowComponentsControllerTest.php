@@ -59,6 +59,35 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         self::assertGreaterThan(0, $page->filter('script[type="importmap"]')->count());
     }
 
+    public function testEveryControlOfTheComponentsPageHasAnAccessibleName(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        $controls = $page->filter('input, select, textarea');
+        self::assertGreaterThan(0, $controls->count());
+        foreach ($controls as $control) {
+            $id = $control->getAttribute('id');
+            $labelled = '' !== $id && $page->filter('label[for="'.$id.'"]')->count() > 0;
+            self::assertTrue($labelled || '' !== $control->getAttribute('aria-label'), 'unnamed control '.$id);
+        }
+    }
+
+    public function testAnInputWithoutAVisibleLabelIsNamedByItsLabel(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertSame('Default', $page->filter('#in-default-light')->attr('aria-label'));
+        self::assertSame('On', $page->filter('#in-on-dark')->attr('aria-label'));
+    }
+
+    public function testAControlWithAVisibleLabelGetsNoSecondName(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertNull($page->filter('#set-default-light')->attr('aria-label'));
+        self::assertCount(1, $page->filter('label[for="set-default-light"]'));
+    }
+
     public function testNoIdOfTheComponentsPageIsUsedTwice(): void
     {
         $ids = $this->browser->request('GET', '/components')->filter('[id]')->each(static fn ($element): string => (string) $element->attr('id'));

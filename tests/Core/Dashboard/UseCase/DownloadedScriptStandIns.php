@@ -17,6 +17,19 @@ trait DownloadedScriptStandIns
     #[Override]
     protected function setUp(): void
     {
+        $this->givenTheDownloadedScriptsExist();
+        parent::setUp();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $this->removeTheStandIns();
+        parent::tearDown();
+    }
+
+    private function givenTheDownloadedScriptsExist(): void
+    {
         foreach (self::VENDOR_ASSETS as $asset) {
             $path = dirname(__DIR__, 4).'/assets/vendor/'.$asset;
             if (is_file($path)) {
@@ -30,14 +43,10 @@ trait DownloadedScriptStandIns
             file_put_contents($path, '');
             $this->placeholders[] = $path;
         }
-
-        parent::setUp();
     }
 
-    #[Override]
-    protected function tearDown(): void
+    private function removeTheStandIns(): void
     {
         array_map(unlink(...), $this->placeholders);
-        parent::tearDown();
     }
 }

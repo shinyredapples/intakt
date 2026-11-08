@@ -42,6 +42,15 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertDoesNotMatchRegularExpression('#url\(\s*["\']?(https?:)?//#i', $page->html());
     }
 
+    // Without it a phone lays the page out at a desktop width, so the 390 px rules of DESIGN.md never apply.
+    #[DataProvider('pages')]
+    public function testEveryPageSetsTheDeviceWidthViewport(string $path): void
+    {
+        $page = $this->browser->request('GET', $path);
+
+        self::assertSame('width=device-width, initial-scale=1', $page->filter('head meta[name="viewport"]')->attr('content'));
+    }
+
     public function testEveryFontOfTheLayoutIsServedByTheInstall(): void
     {
         $fonts = $this->fontAddressesOf($this->layout());
