@@ -59,7 +59,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $secret = $this->secretBefore ?? '';
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        new Filesystem()->remove(self::vendorFolder());
+        new Filesystem()->remove($this->vendorFolder());
         parent::tearDown();
     }
 
@@ -67,14 +67,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     private function givenTheDownloadedScriptsExist(): void
     {
         foreach (self::VENDOR_ASSETS as $asset) {
-            new Filesystem()->dumpFile(self::vendorFolder().'/'.$asset, '');
+            new Filesystem()->dumpFile($this->vendorFolder().'/'.$asset, '');
         }
 
-        self::getContainer()->set(self::REMOTE_PACKAGE_STORAGE, new RemotePackageStorage(self::vendorFolder()));
+        self::getContainer()->set(self::REMOTE_PACKAGE_STORAGE, new RemotePackageStorage($this->vendorFolder()));
     }
 
     // Under assets/ so the asset mapper finds the stand-ins, and one folder per test worker, because each has a TMPDIR of its own, so none removes another's or a real download.
-    private static function vendorFolder(): string
+    private function vendorFolder(): string
     {
         return dirname(__DIR__, 4).'/assets/vendor/review_page_live_updates_test_'.hash('xxh128', sys_get_temp_dir());
     }
