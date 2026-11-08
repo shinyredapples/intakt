@@ -64,13 +64,27 @@ final class WorkflowsGate implements Gate
 
         /** @var SplFileInfo $file */
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/.github', RecursiveDirectoryIterator::SKIP_DOTS)) as $file) {
-            $lines = in_array($file->getExtension(), ['yml', 'yaml'], true) ? file($file->getPathname()) : [];
-
-            foreach (preg_grep(self::BARE_IGNORE, $lines ?: []) ?: [] as $index => $line) {
-                $findings[] = substr($file->getPathname(), strlen($root) + 1).':'.($index + 1).': zizmor ignore without a reason';
+            if (in_array($file->getExtension(), ['yml', 'yaml'], true)) {
+                array_push($findings, ...$this->bareIgnoresIn($file->getPathname(), substr($file->getPathname(), strlen($root) + 1)));
             }
         }
 
         return $findings;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function bareIgnoresIn(string $path, string $name): array
+    {
+        $lines = is_readable($path) ? file($path) : false;
+
+        if (false === $lines) {
+            return [$name.' cannot be read'];
+        }
+
+        $bare = array_filter($lines, static fn (string $line): bool => 1 === preg_match(self::BARE_IGNORE, $line));
+
+        return array_map(static fn (int $index): string => $name.':'.($index + 1).': zizmor ignore without a reason', array_keys($bare));
     }
 }

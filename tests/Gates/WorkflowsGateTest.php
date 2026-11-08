@@ -36,6 +36,15 @@ final class WorkflowsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('workflows'), $run->output());
     }
 
+    public function testAnUnreadableWorkflowFails(): void
+    {
+        $this->skipWhenPermissionsAreIgnored();
+        $sandbox = $this->workflow('run: "true"');
+        chmod($sandbox->root.'/.github/workflows/ci.yml', 0o000);
+
+        self::assertSame('.github/workflows/ci.yml cannot be read', $sandbox->check('--only=workflows')->findingsOf('workflows'));
+    }
+
     public function testAConfigurationFileThatDisablesAnAuditIsNotRead(): void
     {
         $sandbox = $this->workflow('uses: docker/login-action@v3');
