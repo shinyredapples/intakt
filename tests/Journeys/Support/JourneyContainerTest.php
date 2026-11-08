@@ -150,7 +150,10 @@ final class JourneyContainerTest extends JourneyTestCase
         $console = new ReflectionProperty(WatcherStart::class, 'console')->getValue($this->watcherStart($environment));
         self::assertInstanceOf(Closure::class, $console);
 
-        return $console(['debug:container', '--env-var='.$variable], [], 60);
+        $output = $console(['debug:container', '--env-var='.$variable], [], 60);
+        self::assertIsString($output);
+
+        return $output;
     }
 
     private function container(): ContainerInterface
