@@ -146,7 +146,7 @@ Before it runs any gate, `bin/check` checks that the programs the selected gates
 
 ## The release cooldown for dependencies
 
-`composer.json` sets a release cooldown of 3 days: `composer update` leaves out a package version published less than 3 days ago and locks the newest older one. The `audit` gate of `bin/check` also fails when `composer.lock` holds a release inside that period. Wait until the release is 3 days old; do not shorten the period to make the gate pass. This needs Composer 2.11 or later (see above). Dependabot has its own cooldown, which only decides when its pull requests open.
+`composer.json` sets a release cooldown of 3 days: `composer update` leaves out a package version published less than 3 days ago and locks the newest older one. The `audit` gate of `bin/check` also fails when `composer.lock` holds a release inside that period. Wait until the release is 3 days old; do not shorten the period to make the gate pass. This needs Composer 2.11 or later (see above). Dependabot has its own cooldown, which only decides when its pull requests open. It holds for every image too, except gitleaks: its image comes from GitHub's container registry, where Dependabot cannot see when a version was published, so a gitleaks update can open with no wait.
 
 ## When `bin/check` reports a gate process that ended without a result line
 
