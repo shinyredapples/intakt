@@ -1,14 +1,20 @@
-# Pinned by digest to FrankenPHP 1.13.4 on PHP 8.5.12, the digest pin #705 asks for; 1.13.4 is the first release with every worker-mode state-leak fix.
-FROM dunglas/frankenphp:1.13.4-php8.5.12-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e AS base
+# The php8.5 tag form lets Dependabot offer every FrankenPHP release, whatever its PHP patch; the digest pins it, and the next step checks the PHP 8.5.12 floor. 1.13.4 is the first release with every worker-mode state-leak fix.
+FROM dunglas/frankenphp:1.13.4-php8.5-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e AS base
 
 # pcntl lets a consumer finish its message on SIGTERM instead of being cut off.
 RUN install-php-extensions intl pdo_sqlite opcache zip pcntl
 
+COPY docker/check-php-floor.sh /usr/local/bin/intakt-check-php-floor
+RUN intakt-check-php-floor
+
 WORKDIR /app
+
+# A stage, not COPY --from=<image>, because Dependabot's docker updater reads only FROM lines; it comes after base because the smoke test reads the first FROM.
+FROM composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 AS composer
 
 FROM base AS vendor
 
-COPY --from=composer/composer:2-bin /composer /usr/bin/composer
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 COPY composer.json composer.lock symfony.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --no-interaction
 

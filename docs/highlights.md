@@ -104,7 +104,7 @@ Status is `planned`, `in progress` (an open pull request) or `done` (on main). *
 | Feature | How Intakt uses it | Status | Where |
 |---|---|---|---|
 | Worker mode | one booted kernel for the HTTP side through Symfony Runtime's `FrankenPhpWorkerRunner` | done | decision 17 in `docs/design/06-decisions.md` |
-| `dunglas/frankenphp` 1.13.4 or later, PHP 8.5 ZTS, pinned by digest | the base image `1.13.4-php8.5.12-trixie`, pinned by digest, with the 1.13.2 and 1.13.4 worker-mode leak fixes | done | T22 (#28, parts #688 and #925), `Dockerfile` |
+| `dunglas/frankenphp` 1.13.4 or later, PHP 8.5 ZTS, pinned by digest | the base image `1.13.4-php8.5-trixie`, pinned by digest, with the 1.13.2 and 1.13.4 worker-mode leak fixes; `docker/check-php-floor.sh` fails the build below PHP 8.5.12 | done | T22 (#28, parts #688 and #925), `Dockerfile` |
 | Named workers with `match`, `num`, `max_threads` and `max_wait_time` | an `app` worker and a separate `mcp` worker, so streamed MCP responses can't starve the dashboard; `max_wait_time` is global in 1.13.4, not per worker | in progress | T22 (#28, part #688), T15 (#20), `Caddyfile` |
 | Worker loop limit (`FRANKENPHP_LOOP_MAX`) | workers restart after a set number of requests; a terminate-time memory check ends the loop cleanly | in progress | T22 (#28, part #689), `Dockerfile`, `src/Core/Server/Infrastructure/EndWorkerOnMemoryCeiling.php` |
 | Restart on crash with backoff (`max_consecutive_failures`), graceful shutdown | defaults kept, beside a Docker restart policy (`--restart unless-stopped`) and a `HEALTHCHECK` | in progress | T22 (#28, part #689), `Dockerfile`, `docs/user/README.md` |

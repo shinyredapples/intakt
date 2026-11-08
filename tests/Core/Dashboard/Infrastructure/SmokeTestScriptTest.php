@@ -82,7 +82,7 @@ final class SmokeTestScriptTest extends TestCase
         $output = $this->smokeTest('intakt:test')->getOutput();
 
         self::assertStringContainsString("Image digest: sha256:image\n", $output);
-        self::assertStringContainsString("Base image digest: sha256:base (dunglas/frankenphp:1.13.4-php8.5.12-trixie)\n", $output);
+        self::assertStringContainsString("Base image digest: sha256:base (dunglas/frankenphp:1.13.4-php8.5-trixie)\n", $output);
     }
 
     public function testTheSecretsReachTheContainerByNameOnly(): void
