@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
+use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\PanelVerdict;
