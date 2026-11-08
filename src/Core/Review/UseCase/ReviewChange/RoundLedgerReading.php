@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -19,7 +20,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 
 // Reads back, because the ledger is where the judge's act ids and the vendor's token usage are recorded.
-final readonly class RoundLedgerReading
+final readonly class RoundLedgerReading implements RoundCosts
 {
     public function __construct(
         private Ledger $ledger,
