@@ -231,7 +231,6 @@ svg.i.s { width: 15px; height: 15px; }
   .switch span, .switch span::after, .banner-toggle .chev { transition: none; }
 }
 
-/* The app shell of docs/design/mocks/index.html: the rail, the top bar and the content beside them. */
 .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
 [data-rail="collapsed"] .shell { grid-template-columns: var(--rail-c) minmax(0, 1fr); }
 .rail { background: var(--raised); border-right: 1px solid var(--hairline); }
