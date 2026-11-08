@@ -29,6 +29,7 @@ final readonly class HighlightsGate implements Gate
 
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
+        private HighlightFragments $fragments,
     ) {
     }
 
@@ -39,16 +40,10 @@ final readonly class HighlightsGate implements Gate
 
     public function run(Workspace $workspace): GateResult
     {
-        $file = $workspace->root.'/'.self::FILE;
+        $page = $this->fragments->pageOn($workspace->root);
 
-        if (!is_file($file)) {
+        if (!$page instanceof HighlightAssembly) {
             return GateResult::passedBecause($this->name(), self::FILE.' does not exist');
-        }
-
-        $contents = file_get_contents($file);
-
-        if (false === $contents) {
-            return GateResult::failedBecause($this->name(), 'cannot read '.self::FILE);
         }
 
         $tracked = $workspace->hasGit() ? $workspace->git(['ls-files', '-z', '--cached']) : null;
@@ -57,7 +52,12 @@ final readonly class HighlightsGate implements Gate
             return GateResult::failedBecause($this->name(), 'cannot list tracked files: '.$tracked->firstErrorLine());
         }
 
-        $findings = $this->findingsOf($contents, $this->existenceOn($workspace->root, $tracked));
+        $findings = [
+            ...$this->fragments->committedPageFindings($workspace->root, $tracked),
+            ...$this->fragments->localPageFindings($workspace->root, $page),
+            ...$page->findings,
+            ...$this->findingsOf($page->text, $this->existenceOn($workspace->root, $tracked)),
+        ];
 
         return [] === $findings ? GateResult::passed($this->name()) : GateResult::withFindings($this->name(), $findings);
     }

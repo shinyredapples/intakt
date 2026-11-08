@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
 final readonly class ReviewedRound
@@ -25,6 +26,7 @@ final readonly class ReviewedRound
     public bool $findingTextRecorded;
     public ReviewState $state;
     public TokenFigures $tokens;
+    public Cost $cost;
 
     public function __construct(
         RoundStart $start,
@@ -42,6 +44,7 @@ final readonly class ReviewedRound
         $this->findingTextRecorded = true;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
+        $this->cost = Cost::none();
     }
 
     // A round without a change name has no siblings it could be told apart from, so it stands alone.
@@ -82,5 +85,10 @@ final readonly class ReviewedRound
     public function withTokens(TokenFigures $tokens): self
     {
         return clone ($this, ['tokens' => $tokens]);
+    }
+
+    public function withCost(Cost $cost): self
+    {
+        return clone ($this, ['cost' => $cost]);
     }
 }

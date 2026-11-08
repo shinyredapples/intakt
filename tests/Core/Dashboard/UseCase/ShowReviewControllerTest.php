@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Contract\Prices;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -19,6 +22,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -36,6 +40,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ReviewerOutcome::class)]
 #[CoversClass(RoundFinding::class)]
 #[CoversClass(TokenFigures::class)]
+#[UsesClass(ConfiguredPrices::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(RoundLedgerReading::class)]
 #[UsesClass(TokenUsageRow::class)]
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(ProjectMode::class)]
@@ -170,15 +177,53 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('#round-round-1 .state-running', 'in progress');
     }
 
-    public function testEachRoundShowsItsTokensAndTheReviewTheirSumWithoutAPrice(): void
+    public function testEachRoundShowsItsTokensAndTheReviewTheirSumWithUnknownCostWhenTheModelHasNoPrice(): void
     {
         $this->givenACompletedTwoRoundReview();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['1500', '0', '0', '0', '500', '2000', 'no price']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
-        self::assertSame([['700', '0', '0', '0', '100', '800', 'no price']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSelectorTextContains('p.summary', '2 rounds, 2800 tokens in all. Cost: no price');
+        self::assertSame([['1500', '0', '0', '0', '500', '2000', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
+        self::assertSame([['700', '0', '0', '0', '100', '800', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
+        self::assertSelectorTextContains('p.summary', '2 rounds, 2800 tokens in all. Cost: unknown, no price for model-a.');
+    }
+
+    public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
+    {
+        $this->priceModelA();
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('0.0080 USD', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
+        self::assertSame('0.0024 USD', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
+        self::assertSelectorTextContains('p.summary', 'Cost: 0.0104 USD.');
+    }
+
+    public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->useRecordedTokens('round-1', ['prompt' => 10, 'completion' => 1, 'total' => 11], '<b>odd</b>');
+
+        $this->browser->request('GET', '/reviews/round-1');
+
+        $page = (string) $this->browser->getResponse()->getContent();
+        self::assertStringContainsString('unknown, no price for &lt;b&gt;odd&lt;/b&gt;', $page);
+        self::assertStringNotContainsString('0.0000 USD', $page);
+    }
+
+    public function testOneUnpricedRoundMakesTheReviewSummaryUnknownWhileThePricedRoundKeepsItsFigure(): void
+    {
+        $this->priceModelA();
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->useTokens('round-1', 1000, 300);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->useRecordedTokens('round-2', ['prompt' => 10, 'completion' => 1, 'total' => 11], 'model-b');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('0.0050 USD', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
+        self::assertSelectorTextContains('p.summary', 'Cost: unknown, no price for model-b.');
     }
 
     public function testAnAnthropicRoundShowsItsCacheReadsAndWritesWithinThePromptAndTheirSumAsTotal(): void
@@ -188,7 +233,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'no price']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testTokensOfACallStartedForAnotherRoundAreNotCounted(): void
@@ -198,7 +243,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['0', '0', '0', '0', '0', '0', 'no price']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['0', '0', '0', '0', '0', '0', '0.0000 USD']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testARoundStartedWithoutAChangeNameIsAReviewOfItsOwn(): void
@@ -250,6 +295,11 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews');
 
         self::assertSame('/reviews/round-1', $crawler->filter('tbody td:first-child a')->attr('href'));
+    }
+
+    private function priceModelA(): void
+    {
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
     }
 
     private function givenACompletedTwoRoundReview(): void

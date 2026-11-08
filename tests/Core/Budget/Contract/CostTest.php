@@ -43,4 +43,29 @@ final class CostTest extends TestCase
 
         self::assertSame(['local-small', 'gpt-5'], $sum->unpriced);
     }
+
+    public function testAKnownCostReadsInFourDecimalsOfDollars(): void
+    {
+        self::assertSame('0.0459 USD', Cost::inUsd(0.04591)->reading());
+    }
+
+    public function testAPositiveCostBelowOneTenThousandthReadsAsLessThanThat(): void
+    {
+        self::assertSame('less than 0.0001 USD', Cost::inUsd(0.00001)->reading());
+    }
+
+    public function testNothingSpentReadsAsZeroNotUnknown(): void
+    {
+        self::assertSame('0.0000 USD', Cost::none()->reading());
+    }
+
+    public function testAnUnknownCostNamesEachUnpricedModelOnceThroughTheGivenFilter(): void
+    {
+        self::assertSame('unknown, no price for <a>, <b>', Cost::unknown('a', 'b', 'a')->reading(static fn (string $model): string => '<'.$model.'>'));
+    }
+
+    public function testAnUnknownCostWithoutAModelNameReadsAsPlainUnknown(): void
+    {
+        self::assertSame('unknown', Cost::unknown()->reading());
+    }
 }
