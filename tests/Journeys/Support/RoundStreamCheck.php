@@ -15,6 +15,8 @@ final readonly class RoundStreamCheck
     // Matched on these texts because the template of the round_changed stream prints them and the update carries no other flag.
     private const string JUDGED = 'Judged.';
     private const string PROGRESS = '/^(\d+) of (\d+) reviewers finished\.$/';
+    // The actions Turbo inserts a stream's template for, because the template of any other action never reaches the page.
+    private const array INSERTING = ['append', 'prepend', 'before', 'after', 'replace', 'update'];
 
     /**
      * @param list<Update> $updates
@@ -106,7 +108,7 @@ final readonly class RoundStreamCheck
         $targets = (string) $stream->attr('targets');
 
         // Only a targets stream whose selector matches the page adds to it, because Turbo drops one that matches nothing and the reviewer-placing one appends what its later streams target.
-        if ('' === $targets || 0 === count($page->filter($targets))) {
+        if ('' === $targets || !in_array($stream->attr('action'), self::INSERTING, true) || 0 === count($page->filter($targets))) {
             return [];
         }
 

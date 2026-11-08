@@ -131,6 +131,17 @@ final class RoundStreamCheckTest extends TestCase
         ]);
     }
 
+    public function testATargetPlacedOnlyInTheTemplateOfARemoveStreamFails(): void
+    {
+        $this->expectFailure('update 2 targets "reviewer-round-1-security-text", which names no element on the page');
+
+        $this->check([
+            str_replace('action="append"', 'action="remove"', $this->placed('security')),
+            $this->update('append', 'reviewer-round-1-security-text', 'Looking'),
+            $this->judged(),
+        ]);
+    }
+
     public function testATargetsStreamThatMatchesNothingOnThePageIsNoFailureByItself(): void
     {
         $this->expectNotToPerformAssertions();
