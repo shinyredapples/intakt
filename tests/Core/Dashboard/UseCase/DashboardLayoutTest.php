@@ -21,13 +21,17 @@ final class DashboardLayoutTest extends DashboardPageTestCase
      */
     public static function pages(): iterable
     {
+        yield 'the project list' => ['/projects'];
         yield 'the review list' => ['/reviews'];
+        yield 'a running review' => ['/reviews/round-1'];
         yield 'the components page' => ['/components'];
     }
 
     #[DataProvider('pages')]
     public function testEveryPageLoadsNoFontScriptOrStyleFromAnotherHost(string $path): void
     {
+        $this->ledger->startRound('round-1', 'alpha');
+
         $page = $this->browser->request('GET', $path);
         self::assertResponseIsSuccessful();
 
@@ -43,6 +47,8 @@ final class DashboardLayoutTest extends DashboardPageTestCase
     #[DataProvider('pages')]
     public function testEveryPageSetsTheDeviceWidthViewport(string $path): void
     {
+        $this->ledger->startRound('round-1', 'alpha');
+
         $page = $this->browser->request('GET', $path);
 
         self::assertSame('width=device-width, initial-scale=1', $page->filter('head meta[name="viewport"]')->attr('content'));
