@@ -41,6 +41,8 @@ final class DockerfileTest extends TestCase
     {
         $composer = json_decode((string) file_get_contents(__DIR__.'/../../../../composer.json'), true, flags: JSON_THROW_ON_ERROR);
 
+        self::assertIsArray($composer);
+        self::assertIsArray($composer['require']);
         self::assertArrayHasKey('ext-pcntl', $composer['require']);
     }
 
@@ -106,7 +108,9 @@ final class DockerfileTest extends TestCase
 
     private function missingScript(): string
     {
-        self::assertSame(1, preg_match("/^\\s+missing='([^']+)'; \\\\$/m", $this->dockerfile(), $match));
+        if (1 !== preg_match("/^\\s+missing='([^']+)'; \\\\$/m", $this->dockerfile(), $match)) {
+            self::fail('The Dockerfile names no script that lists the missing profile extensions.');
+        }
 
         return $match[1];
     }
