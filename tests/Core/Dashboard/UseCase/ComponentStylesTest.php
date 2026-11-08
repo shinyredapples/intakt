@@ -94,7 +94,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
 
         self::assertNotEmpty($declarations[1]);
         foreach ($declarations[1] as $declaration) {
-            // A calc() may add the component's own sizes, but it builds on a spacing token.
+            // A calc() may add the component's own sizes, because an indent lines up with an icon, so only its spacing must come from a token.
             preg_match_all('/calc\((?:[^()]|\([^()]*\))*\)/', $declaration, $calcs);
             foreach ($calcs[0] as $calc) {
                 self::assertStringContainsString('var(--s', $calc, $declaration);
