@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
-use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
@@ -21,6 +20,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
