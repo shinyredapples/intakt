@@ -12,7 +12,7 @@ It starts a new copy for each journey and stops everything that journey started 
 
 Journeys never call an AI company or a forge and need no keys; they use the sample project only.
 
-A third helper, the round driver, starts a review on the sample project and moves it forward one small piece of work at a time, reading the live updates after each piece until the review ends; if the review has not ended after two and a half minutes, it stops and says which review got stuck and what it last showed, before the journey's own time runs out. Two stand-ins make that possible once a journey runs a review. In the copy a journey starts, every reviewer is a pretend one that approves at once, without asking an AI. And the live updates the review page would receive are written to a file instead of being sent, so the journey can read them afterwards and check what a person watching the page would have seen. No journey runs a review yet: the live progress journey below will be the first.
+A third helper, the round driver, starts a review on the sample project and moves it forward one small piece of work at a time, reading the live updates after each piece until the review ends; if the review has not ended after two and a half minutes, it stops and says which review got stuck and what it last showed, before the journey's own time runs out. Two stand-ins make that possible once a journey runs a review. In the copy a journey starts, every reviewer is a pretend one that approves at once, without asking an AI. And the live updates the review page would receive are written to a file instead of being sent, so the journey can read them afterwards and check what a person watching the page would have seen. The live progress journey below uses all of this.
 
 ## What is covered
 
@@ -20,7 +20,7 @@ A third helper, the round driver, starts a review on the sample project and move
 |---|---|---|
 | First install and setup | a new install gets its database, shows an empty projects page, is given the sample project (a second time changes nothing), and shows an empty reviews page | built |
 | A task picked, built, reviewed and merged on the demo repository | the whole life of a task | planned |
-| The dashboard showing live progress | watching a review as it happens | planned |
+| The dashboard showing live progress | a review of the sample project starts, the review page shows it in progress, and each step of the review is announced on the round's live channel until the judge has ruled and the page shows it judged (there is no forge to watch, so the review is started the way the dashboard starts one) | built |
 | An owner decision answered | a question that waits for you, and your answer | planned |
 
 A nightly run, and a run you start on demand in GitHub, that files an urgent task when a journey fails, are planned too.

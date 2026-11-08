@@ -38,4 +38,15 @@ final class JourneyStepsTest extends TestCase
 
         $steps->run('seed', static fn () => throw new RuntimeException('no disk'));
     }
+
+    public function testAForcedBreakInTheLiveProgressJourneyNamesThatJourneyAndStep(): void
+    {
+        $steps = new JourneySteps('live review progress on the dashboard');
+        $steps->run('open the running round and find its live listener', static fn (): null => null);
+
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessageMatches('/^journey "live review progress on the dashboard" failed at step "step the round until the judge has ruled": round did not end$/');
+
+        $steps->run('step the round until the judge has ruled', static fn () => self::fail('round did not end'));
+    }
 }
