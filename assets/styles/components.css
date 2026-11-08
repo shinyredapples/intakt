@@ -208,3 +208,24 @@ svg.i.s { width: 15px; height: 15px; }
   .toast { animation: none; }
   .switch span, .switch span::after, .banner-toggle .chev { transition: none; }
 }
+
+/* Both themes sit side by side so one screenshot compares them, as the mock does. */
+body:has(.comp-nav) { max-width: 80rem; }
+.page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
+.page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
+.page-head .actions { margin-left: auto; }
+.comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
+.comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }
+.comp-sec { margin-bottom: var(--s48); }
+.comp-sec > h2 { margin-bottom: var(--s4); }
+.comp-sec > p { margin-bottom: var(--s12); color: var(--muted); }
+.spec-cols { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--r-card); }
+.spec { min-width: 0; padding: var(--s24); background: var(--page); color: var(--ink); }
+.spec > h3 { margin-bottom: var(--s16); color: var(--muted); font: 500 var(--t13)/1 var(--f-head); }
+.spec .cgrp { margin-bottom: var(--s24); }
+.spec .cgrp > h4 { margin-bottom: var(--s8); font: 600 var(--t15)/1.3 var(--f-head); }
+.spec .row-st { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8) var(--s12); margin-bottom: var(--s8); }
+.spec .cards-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+.spec .toast { position: static; transform: none; animation: none; }
+@media (max-width: 1100px) { .spec-cols { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .spec { padding: var(--s16); } .spec .cards-row { grid-template-columns: 1fr; } }

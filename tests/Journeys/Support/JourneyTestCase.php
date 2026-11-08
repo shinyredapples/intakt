@@ -73,9 +73,9 @@ abstract class JourneyTestCase extends TestCase
      * @param list<string>         $arguments
      * @param array<string,string> $environment
      */
-    final protected function console(array $arguments, array $environment = []): string
+    final protected function console(array $arguments, array $environment = [], int $seconds = self::CONSOLE_SECONDS): string
     {
-        $process = new Process([PHP_BINARY, self::ROOT.'/bin/console', '--no-interaction', ...$arguments], self::ROOT, $environment, null, self::CONSOLE_SECONDS);
+        $process = new Process([PHP_BINARY, self::ROOT.'/bin/console', '--no-interaction', ...$arguments], self::ROOT, $environment, null, $seconds);
         $process->run();
 
         self::assertTrue($process->isSuccessful(), 'bin/console '.implode(' ', $arguments).' failed: '.trim($process->getErrorOutput().$process->getOutput()));
@@ -118,6 +118,15 @@ abstract class JourneyTestCase extends TestCase
             fn (): array => $this->publishedUpdates(),
             new MonotonicClock(),
         );
+    }
+
+    // On the shared queue, because the worker that runs the queued round is another console process than the tick that queued it.
+    /**
+     * @param array<string,string> $environment
+     */
+    final protected function watcherStart(array $environment): WatcherStart
+    {
+        return new WatcherStart(fn (array $arguments, array $variables, int $seconds): string => $this->console($arguments, [...$environment, ...$variables, self::QUEUE_VARIABLE => self::SHARED_QUEUE], $seconds));
     }
 
     #[After]
