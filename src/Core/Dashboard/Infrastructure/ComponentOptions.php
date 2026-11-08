@@ -16,8 +16,8 @@ final readonly class ComponentOptions
     #[AsTwigFunction('component_option')]
     public function of(array $options, string $name): mixed
     {
-        if (!\array_key_exists($name, $options)) {
-            throw new InvalidArgumentException(\sprintf('"%s" is none of %s.', $name, implode(', ', array_keys($options))));
+        if (!array_key_exists($name, $options)) {
+            throw new InvalidArgumentException(sprintf('"%s" is none of %s.', $name, implode(', ', array_keys($options))));
         }
 
         return $options[$name];
