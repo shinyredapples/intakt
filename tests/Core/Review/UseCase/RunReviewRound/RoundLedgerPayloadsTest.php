@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
@@ -49,6 +50,13 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $started = new ReviewStarted(self::ROUND, 'alpha', 2, 'feat/x', 3, 'T7', '/repos/alpha', 'main');
 
         self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":2,"change":"feat\/x","number":3,"task":"T7","repository":"\/repos\/alpha","base":"main"}', $this->written($started));
+    }
+
+    public function testAStartWithAQuorumIsWrittenWithTodaysPolicyValue(): void
+    {
+        $started = new ReviewStarted(self::ROUND, 'alpha', 2, 'feat/x', 3, 'T7', quorum: QuorumPolicy::OneStrongPlusOne);
+
+        self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":2,"change":"feat\/x","number":3,"task":"T7","quorum":"one-strong-plus-one"}', $this->written($started));
     }
 
     public function testAStartWithoutASourceHasNoRepositoryOrBaseKey(): void

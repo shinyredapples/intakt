@@ -21,7 +21,7 @@ final readonly class RoundOpening
     {
         return $this->rounds->inOneTransaction(function () use ($command): string {
             $round = $this->rounds->open($command);
-            $this->ledger->reviewStarted($round, $command->round->source);
+            $this->ledger->reviewStarted($round, $command->panel->quorum, $command->round->source);
             $this->dispatchOneMessagePerReviewer($round);
 
             return $round->id()->toRfc4122();
