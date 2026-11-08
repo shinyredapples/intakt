@@ -31,10 +31,13 @@ check_server() {
     check_admin_closed "$3"
 }
 
+# The dashboard answers only a loopback Host on its own port, which the image publishes elsewhere.
+dashboard_host=()
+
 check_dashboard() {
     local answer status
     begin dashboard
-    answer=$(curl --silent --show-error --max-time 10 --write-out '\n%{http_code}' "$1/projects") || fail "GET /projects did not answer"
+    answer=$(curl --silent --show-error --max-time 10 --write-out '\n%{http_code}' "${dashboard_host[@]}" "$1/projects") || fail "GET /projects did not answer"
     status=${answer##*$'\n'}
     [[ $status == 200 ]] || fail "GET /projects answered $status, not 200"
     grep -q '<title>[^<]*Intakt</title>' <<<"$answer" || fail "GET /projects has no Intakt title"
@@ -132,6 +135,7 @@ start_container() {
     containers+=("$web")
     docker run -d --name "$web" -e APP_SECRET -e MERCURE_JWT_SECRET --volume "$volume:/app/var/data" --publish 127.0.0.1::7781 "$image" >/dev/null || fail "docker cannot start $image"
     origin=http://$(docker port "$web" 7781/tcp | head -n 1)
+    dashboard_host=(--header "Host: localhost:7781")
     echo "started $web on $origin"
 }
 
@@ -191,7 +195,8 @@ check_instance() {
     local output
     begin instance
     containers+=("$smoke-instance")
-    output=$(timeout 180 docker run --rm --name "$smoke-instance" --entrypoint php "$image" bin/instance 2>&1) || fail "bin/instance failed: $output"
+    # bin/instance writes its status to descriptor 3, which a container does not open.
+    output=$(timeout 180 docker run --rm --name "$smoke-instance" --entrypoint sh "$image" -c 'exec php bin/instance 3>&1 >/dev/null' 2>&1) || fail "bin/instance failed: $output"
     grep -qFx '{"status":"ready","mode":"worker"}' <<<"$output" || fail "bin/instance did not report ready in worker mode: $output"
     echo "bin/instance reported ready in worker mode"
 }
