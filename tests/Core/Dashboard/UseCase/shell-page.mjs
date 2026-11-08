@@ -41,6 +41,20 @@ class FakeElement {
     }
 }
 
+// The project filter as the layout renders it: All projects with the empty value, then one option per project.
+class FakeSelect extends FakeElement {
+    value = '';
+
+    constructor(page, projects) {
+        super(page);
+        this.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))];
+    }
+
+    get selectedOptions() {
+        return this.options.filter((option) => option.value === this.value);
+    }
+}
+
 class FakeKey {
     defaultPrevented = false;
 
@@ -59,10 +73,12 @@ class FakeKey {
 export class Browser {
     storage = new Map();
 
-    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64' } = {}) {
+    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'] } = {}) {
         this.systemTheme = systemTheme;
         this.storageRefused = storageRefused;
         this.platform = platform;
+        this.projects = projects;
+        this.rows = rows;
     }
 
     open() {
@@ -73,11 +89,13 @@ export class Browser {
         const railToggle = new FakeElement(page);
         const themeToggles = [new FakeElement(page), new FakeElement(page)];
         const body = new FakeElement(page);
+        const projectFilter = new FakeSelect(page, this.projects);
+        const rows = this.rows.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
         const document = {
             documentElement: root,
             body,
-            querySelector: (selector) => ({ '[data-rail-toggle]': railToggle, '.search-trigger': search })[selector] ?? null,
-            querySelectorAll: (selector) => (selector === '[data-theme-toggle]' ? themeToggles : []),
+            querySelector: (selector) => ({ '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter })[selector] ?? null,
+            querySelectorAll: (selector) => ({ '[data-theme-toggle]': themeToggles, '[data-project]': rows })[selector] ?? [],
         };
         const context = {
             document,
@@ -103,6 +121,12 @@ export class Browser {
                 return event;
             },
             searchHasFocus: () => page.focused === search,
+            chooseProject: (value) => {
+                projectFilter.value = value;
+                projectFilter.dispatch('change');
+            },
+            projectFilter,
+            shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
         };
     }
 

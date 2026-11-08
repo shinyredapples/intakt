@@ -107,3 +107,73 @@ test('a mac shows the command key in the search hint', () => {
 test('other systems keep the ctrl hint', () => {
     assert.equal(new Browser('light').open().shortcutHint(), 'Ctrl K');
 });
+
+test('a first visit shows every project', () => {
+    const page = new Browser('light').open();
+
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
+test('choosing a project hides the rows of every other project', () => {
+    const page = new Browser('light').open();
+
+    page.chooseProject('beta');
+
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+});
+
+test('choosing all projects shows every row again', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+
+    page.chooseProject('');
+
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
+test('the chosen project stays chosen after a reload', () => {
+    const browser = new Browser('light');
+    browser.open().chooseProject('alpha');
+
+    const page = browser.open();
+
+    assert.equal(browser.storage.get('intakt-project'), 'alpha');
+    assert.equal(page.projectFilter.value, 'alpha');
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('a stored project the install no longer lists shows every project', () => {
+    const browser = new Browser('light', { projects: ['alpha'], rows: ['alpha'] });
+    browser.storage.set('intakt-project', 'gone');
+
+    const page = browser.open();
+
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('a project named all is filtered like any other project', () => {
+    const page = new Browser('light', { projects: ['all', 'beta'], rows: ['all', 'beta'] }).open();
+
+    page.chooseProject('all');
+
+    assert.deepEqual(page.shownRows(), ['all']);
+});
+
+test('the project filter names the chosen project in its tooltip', () => {
+    const page = new Browser('light', { projects: ['a-project-with-a-name-too-long-for-the-top-bar'], rows: [] }).open();
+
+    assert.equal(page.projectFilter.title, 'All projects');
+    page.chooseProject('a-project-with-a-name-too-long-for-the-top-bar');
+
+    assert.equal(page.projectFilter.title, 'a-project-with-a-name-too-long-for-the-top-bar');
+});
+
+test('the project filter still filters when storage refuses access', () => {
+    const page = new Browser('light', { storageRefused: true }).open();
+
+    page.chooseProject('alpha');
+
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
