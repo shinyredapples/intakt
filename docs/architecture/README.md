@@ -11,7 +11,7 @@ Code and conventions:
 
 Checks, CI and releases:
 - [Quality gates](quality-gates.md)
-- [Journeys](journeys.md): the harness, the test vendor, the recording hub and the live round driver the journeys use, and each journey
+- [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the watcher start and the round stream check the journeys use, and each journey (first install and setup, live review progress on the dashboard)
 - [CI](ci.md)
 - [Releases](releases.md)
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors

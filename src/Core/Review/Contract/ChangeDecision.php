@@ -2,13 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\UseCase\ReviewChange;
+namespace Intakt\Core\Review\Contract;
 
-use Intakt\Core\Review\Contract\Decision;
-use Intakt\Core\Review\Contract\PanelVerdict;
-use Intakt\Core\Review\Contract\QuorumPolicy;
-
-// Decided from the verdicts and the policy alone, because a model's prose must never decide an outcome.
+// Decided from the verdicts and the policy alone, because a model's prose must never decide an outcome; in the contract, because the dashboard shows the same outcome from the ledger.
 final readonly class ChangeDecision
 {
     /**

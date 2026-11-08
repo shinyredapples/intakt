@@ -11,6 +11,7 @@
     {{ include(c ~ 'button.html.twig', {kind: 'danger', label: 'Pause everything', confirm: 'Click again to pause'}) }}
     {{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approve a3f9c21'}) }}
     {{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Disabled', disabled: true}) }}
+    {{ include(c ~ 'icon_button.html.twig', {label: 'Theme', icon: 'moon'}) }}
 
     <h2>Chips and badges</h2>
     {{ include(c ~ 'chip.html.twig', {label: 'In review, round 2', dot: 'ok', on_page: true}) }}
@@ -52,6 +53,9 @@
 
     <h2>Sub-tabs</h2>
     {{ include(c ~ 'subtabs.html.twig', {label: 'History', tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}]}) }}
+    {{ include(c ~ 'segmented.html.twig', {label: 'Show', tabs: [{label: 'Timeline', selected: true}, {label: 'Live log'}]}) }}
+    {{ include(c ~ 'filter_chip.html.twig', {label: '14 days', pressed: true}) }}
+    {{ include(c ~ 'filter_chip.html.twig', {label: '8 weeks'}) }}
 
     <h2>Empty and error</h2>
     {{ include(c ~ 'empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building. When it needs a decision, it shows up here and on your phone.'}) }}
