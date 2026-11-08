@@ -158,18 +158,13 @@ final readonly class HighlightFragments
             return [];
         }
 
-        // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
-        $shallow = $this->runner->git(['rev-parse', '--is-shallow-repository'], $root);
+        $shallow = $this->shallowHistoryFinding($root);
 
-        if (!$shallow->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$shallow->firstErrorLine();
+        if (null !== $shallow) {
+            return $shallow;
         }
 
-        if ('false' !== trim($shallow->output)) {
-            return 'the history of '.self::DIRECTORY.'/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)';
-        }
-
-        $log =$this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
 
         if (!$log->succeeded()) {
             return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
@@ -187,6 +182,18 @@ final readonly class HighlightFragments
         }
 
         return $history;
+    }
+
+    // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
+    private function shallowHistoryFinding(string $root): ?string
+    {
+        $shallow = $this->runner->git(['rev-parse', '--is-shallow-repository'], $root);
+
+        if (!$shallow->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$shallow->firstErrorLine();
+        }
+
+        return 'false' === trim($shallow->output) ? null : 'the history of '.self::DIRECTORY.'/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)';
     }
 
     /**
