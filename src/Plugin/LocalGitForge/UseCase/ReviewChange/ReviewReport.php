@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
-use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -56,21 +55,9 @@ final readonly class ReviewReport
 
         $tokens = $review->tokens;
         $lines[] = sprintf('tokens: %d calls, %d prompt%s, %d completion, %d total', $tokens->calls, $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total);
-        $lines[] = 'cost: '.$this->costOf($review->cost);
+        $lines[] = 'cost: '.$review->cost->reading($this->text->of(...));
 
         return $lines;
-    }
-
-    // Unknown rather than 0, so a missing price is never read as a free round, and a priced cost too small to show is never read as free either.
-    private function costOf(Cost $cost): string
-    {
-        if (null !== $cost->usd) {
-            $dollars = sprintf('%.4f', $cost->usd);
-
-            return '0.0000' === $dollars && $cost->usd > 0.0 ? 'less than 0.0001 USD' : $dollars.' USD';
-        }
-
-        return [] === $cost->unpriced ? 'unknown' : 'unknown, no price for '.implode(', ', array_map($this->text->of(...), $cost->unpriced));
     }
 
     // Only the parts a vendor reported, so a round without caching reads as before.
