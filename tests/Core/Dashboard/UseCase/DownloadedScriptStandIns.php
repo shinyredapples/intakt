@@ -55,12 +55,15 @@ trait DownloadedScriptStandIns
         $repository = $container->get('asset_mapper.repository');
         $factory = $container->get('asset_mapper.mapped_asset_factory');
         $configReader = $container->get('asset_mapper.compiled_asset_mapper_config_reader');
+        $projectDir = $container->getParameter('kernel.project_dir');
         self::assertInstanceOf(AssetMapperRepository::class, $repository);
         self::assertInstanceOf(MappedAssetFactoryInterface::class, $factory);
         self::assertInstanceOf(CompiledAssetMapperConfigReader::class, $configReader);
+        self::assertIsString($projectDir);
+        /** @var array<string, string> $folders */
         $folders = [...$repository->allDirectories(), $this->standInFolder() => self::STAND_INS_NAMESPACE];
 
-        return new AssetMapper(new AssetMapperRepository($folders, $container->getParameter('kernel.project_dir')), $factory, $configReader);
+        return new AssetMapper(new AssetMapperRepository($folders, $projectDir), $factory, $configReader);
     }
 
     private function removeTheStandIns(): void
