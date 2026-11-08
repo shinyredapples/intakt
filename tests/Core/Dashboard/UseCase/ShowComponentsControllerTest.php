@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\UseCase\ShowComponents\ShowComponentsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\DomCrawler\Crawler;
 
 // Because the stand-in scripts are created and removed in assets/vendor/ of the checkout, which every test worker shares.
 #[CoversClass(ShowComponentsController::class)]
@@ -65,11 +66,11 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
 
         $controls = $page->filter('input, select, textarea');
         self::assertGreaterThan(0, $controls->count());
-        foreach ($controls as $control) {
-            $id = $control->getAttribute('id');
+        $controls->each(static function (Crawler $control) use ($page): void {
+            $id = (string) $control->attr('id');
             $labelled = '' !== $id && $page->filter('label[for="'.$id.'"]')->count() > 0;
-            self::assertTrue($labelled || '' !== $control->getAttribute('aria-label'), 'unnamed control '.$id);
-        }
+            self::assertTrue($labelled || '' !== (string) $control->attr('aria-label'), 'unnamed control '.$id);
+        });
     }
 
     public function testAnInputWithoutAVisibleLabelIsNamedByItsLabel(): void
