@@ -35,6 +35,8 @@ A builder hands back **a package of commits and a short description**, nothing e
 
 The project's own checks run again in a **separate, fresh container**, then again on GitHub's machines (CI). The builder saying "all tests pass" counts for nothing; the checks do.
 
+The `workflows` check runs zizmor over the CI setup in `.github/`: a step that runs a pull request's title as a command, or an action used by a movable tag, fails it. A deliberate exception sits on its line with a reason, `# zizmor: ignore[unpinned-uses] tags are immutable`; one without a reason fails.
+
 ## Layer 4: several independent reviewers
 
 - The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).

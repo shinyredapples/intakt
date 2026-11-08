@@ -93,6 +93,7 @@ Before it runs any gate, `bin/check` looks up the commands of the selected gates
 |---|---|
 | every gate | `git`, `sh`, `setsid` (each gate runs in a child process of its own session) |
 | `audit` | `composer` |
+| `workflows` | `zizmor` |
 | `journeys` | `sh`, `env`, `setsid` |
 | `tests` | `sh`, `unshare`, `setsid`, `true`, `bash`, `jq` |
 | `secrets`, `secrets-history` | `gitleaks`, `env` |

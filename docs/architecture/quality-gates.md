@@ -26,3 +26,7 @@ Each selected gate runs in a child process of its own (`GateChildren`, started t
 The gates start `git` only through `Workspace::git()` (and `HighlightFragments`, which `bin/highlights` also uses without a workspace, through `ProcessRunner::git()`, the same call), which runs the [hardened call](requirements.md#the-hardened-git-call) built by their own protected copy, `config/gates/src/HardenedGitCall.php`; the gitleaks gates start gitleaks with the hardened `git` environment. When the repository's `.git/info/attributes` exists, the call refuses it and `CheckCommand::runGate()` reports every gate that reads git as failed with that reason.
 
 Options: `--fast` (changed PHP files only), `--journeys` (see [Journeys](journeys.md)), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
+
+### The `workflows` gate
+
+The last gate, `workflows` (`WorkflowsGate`), runs zizmor 1.32.0 over `.github/` on every run: `--offline` without the token variables, `--no-config`, the default persona. A finding fails as `<file>:<line>: <audit>: <text>`; only `# zizmor: ignore[<audit>] <reason>` on its line silences it, and an ignore in a `.yml` or `.yaml` file under `.github/` with no letter after the `]` fails as `<file>:<line>: zizmor ignore without a reason`. Tests: `tests/Gates/WorkflowsGateTest.php`.

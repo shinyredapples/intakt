@@ -10,6 +10,8 @@ FROM dunglas/frankenphp:1.13.4-php8.5.12-trixie@sha256:6f86f003f1478bafa7befe6ec
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
+# Dependabot does not update this archive: move WorkflowsGate's VERSION with it.
+ADD --checksum=sha256:bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-x86_64-unknown-linux-gnu.tar.gz /usr/local/share/zizmor.tar.gz
 COPY composer.json /usr/local/share/intakt/
 COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
@@ -25,6 +27,9 @@ RUN set -eu; \
     php --ini; \
     composer --version; \
     gitleaks version; \
+    tar -xzf /usr/local/share/zizmor.tar.gz -C /usr/local/bin zizmor; \
+    rm /usr/local/share/zizmor.tar.gz; \
+    zizmor --version; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
