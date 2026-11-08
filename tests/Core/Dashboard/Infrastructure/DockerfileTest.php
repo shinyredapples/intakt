@@ -57,6 +57,24 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^FROM dunglas\/frankenphp:[\d.]+-php8\.5-trixie@sha256:[0-9a-f]{64} AS base$/m', $this->dockerfile());
     }
 
+    // 1.13.4 is the first FrankenPHP release with the worker state-leak fixes.
+    public function testEachImageRunsFrankenPhp1134OrLater(): void
+    {
+        foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
+            self::assertTrue(self::runsFrankenPhp1134OrLater((string) file_get_contents(__DIR__.'/../../../../'.$file)), $file);
+        }
+    }
+
+    public function testAFrankenPhpBaseBelow1134IsRefused(): void
+    {
+        self::assertFalse(self::runsFrankenPhp1134OrLater(self::withFrankenPhp('1.13.3')));
+    }
+
+    public function testANewerFrankenPhpBaseIsAccepted(): void
+    {
+        self::assertTrue(self::runsFrankenPhp1134OrLater(self::withFrankenPhp('1.14.0')));
+    }
+
     public function testEachImageBuildFailsBelowPhp8512(): void
     {
         foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
@@ -65,6 +83,17 @@ final class DockerfileTest extends TestCase
             exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.12"']), result_code: $new);
             self::assertSame([1, 0], [$old, $new], $file);
         }
+    }
+
+    private static function runsFrankenPhp1134OrLater(string $dockerfile): bool
+    {
+        return 1 === preg_match('/^FROM dunglas\/frankenphp:([\d.]+)-php8\.5-trixie@sha256:[0-9a-f]{64}\b/m', $dockerfile, $match)
+            && version_compare($match[1], '1.13.4', '>=');
+    }
+
+    private static function withFrankenPhp(string $version): string
+    {
+        return 'FROM dunglas/frankenphp:'.$version.'-php8.5-trixie@sha256:'.str_repeat('0', 64)." AS base\n";
     }
 
     private function dockerfile(): string
