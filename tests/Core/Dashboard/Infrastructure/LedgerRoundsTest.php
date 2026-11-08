@@ -26,9 +26,13 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
+use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
@@ -36,6 +40,7 @@ use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
@@ -47,6 +52,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerRounds::class)]
@@ -76,6 +82,11 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RecordedEvent::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(ProjectMode::class)]
+#[UsesClass(ChangeDecision::class)]
+#[UsesClass(FailureInWords::class)]
+#[UsesClass(PanelVerdict::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(QuorumPolicy::class)]
 final class LedgerRoundsTest extends TestCase
 {
     private ?RoundCosts $costs = null;
@@ -418,6 +429,78 @@ final class LedgerRoundsTest extends TestCase
         self::assertEquals(TokenFigures::none(), $review?->rounds[0]->tokens);
     }
 
+    public function testAFailedReviewerIsNotedInPlainWordsWithoutItsClassName(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->failed('x'));
+
+        self::assertSame([ReviewerProgress::Failed, 'stopped at its output limit'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testAJudgedRoundWithAFailedReviewerBesideAnApprovalIsBlockedUnderTheAllPolicy(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'), $this->failed('y'), $this->judged());
+
+        self::assertSame([Decision::Blocked, QuorumPolicy::All, 1], [$review?->rounds[0]->outcome, $review?->rounds[0]->quorum, $review?->rounds[0]->failedReviewers()]);
+    }
+
+    public function testAJudgedRoundWithAFailedReviewerBesideAChangesVerdictAsksForChanges(): void
+    {
+        $changes = $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 1, ProjectMode::Live));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $changes, $this->failed('y'), $this->judged());
+
+        self::assertSame(Decision::Changes, $review?->rounds[0]->outcome);
+    }
+
+    public function testAFailedReviewerOutvotedByTwoApprovalsStillLetsTheMajorityPolicyApprove(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(3, QuorumPolicy::Majority), $this->approved('x'), $this->approved('y'), $this->failed('z'), $this->judged());
+
+        self::assertSame(Decision::Approve, $review?->rounds[0]->outcome);
+    }
+
+    public function testAReviewerThatNeverStartedVotesAsBlocked(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'), $this->judged());
+
+        self::assertSame(Decision::Blocked, $review?->rounds[0]->outcome);
+    }
+
+    public function testAnAnswerFollowedByAFailureOfTheSameReviewerVotesAsBlocked(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(1, QuorumPolicy::All), $this->approved('x'), $this->failed('x'), $this->judged());
+
+        self::assertSame(Decision::Blocked, $review?->rounds[0]->outcome);
+    }
+
+    public function testEveryApprovalUnderTheAllPolicyApproves(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'), $this->approved('y'), $this->judged());
+
+        self::assertSame([Decision::Approve, 0], [$review?->rounds[0]->outcome, $review?->rounds[0]->failedReviewers()]);
+    }
+
+    public function testARoundTheJudgeHasNotJudgedHasNoOutcome(): void
+    {
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->approved('x'), $this->failed('y'));
+
+        self::assertNull($review?->rounds[0]->outcome);
+    }
+
+    public function testAJudgedRoundStartedBeforeTheQuorumWasRecordedHasNoOutcome(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->approved('x'), $this->failed('y'), $this->judged());
+
+        self::assertSame([null, null], [$review?->rounds[0]->quorum, $review?->rounds[0]->outcome]);
+    }
+
+    public function testAStartWithAQuorumOutsideTheKnownOnesIsSkipped(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1,"quorum":"anyone"}'));
+
+        self::assertNull($review);
+    }
+
     public function testARoundCarriesTheCostTheReviewModuleReadsForIt(): void
     {
         $this->costs = self::createStub(RoundCosts::class);
@@ -438,13 +521,33 @@ final class LedgerRoundsTest extends TestCase
 
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review
     {
-        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts());
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords());
 
         foreach ($events as $event) {
             $rounds->add($event);
         }
 
         return $rounds->reviewOf($round);
+    }
+
+    private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::ReviewStarted, new ReviewStarted('r1', 'alpha', $reviewers, 'feat/thing', 1, 'Add the thing.', quorum: $quorum));
+    }
+
+    private function approved(string $reviewer): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', $reviewer, 'correctness', Tier::Standard, Decision::Approve, 0, ProjectMode::Live));
+    }
+
+    private function failed(string $reviewer): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::ReviewerFailed, new ReviewerFailed('r1', $reviewer, 'security', Tier::Strong, MaxOutputTokensException::class));
+    }
+
+    private function judged(): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
     }
 
     private function event(LedgerEventKind $kind, string $payload): RecordedEvent
