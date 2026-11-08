@@ -30,6 +30,7 @@ final readonly class ReproductionRowsGate implements Gate
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
         private CheckedReports $reports,
+        private HighlightFragments $highlights,
     ) {
     }
 
@@ -46,12 +47,13 @@ final readonly class ReproductionRowsGate implements Gate
             return GateResult::failedBecause($this->name(), $failure->getMessage());
         }
 
-        $contents = is_file($workspace->root.'/'.self::HIGHLIGHTS) ? file_get_contents($workspace->root.'/'.self::HIGHLIGHTS) : '';
+        $page = $this->highlights->pageOn($workspace->root);
 
-        if (false === $contents) {
-            return GateResult::failedBecause($this->name(), 'cannot read '.self::HIGHLIGHTS);
+        if ($page instanceof HighlightAssembly && [] !== $page->findings) {
+            return GateResult::failedBecause($this->name(), 'cannot read '.self::HIGHLIGHTS.': '.$page->findings[0]);
         }
 
+        $contents = $page->text ?? '';
         $findings = array_map(
             static fn (string $folder): string => 'upstream/'.$folder.'/ has no row in "Found in the beta" of '.self::HIGHLIGHTS,
             array_values(array_diff($folders, $this->foldersWithARow($contents))),
