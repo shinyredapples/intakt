@@ -1,0 +1,102 @@
+{# Every shared component of docs/design/mocks/components.html, each section in both themes side by side. Static states only: the mock's forced hover and focus states have no component option. #}
+{% extends 'dashboard/base.html.twig' %}
+{% set c = 'dashboard/components/' %}
+
+{% block title %}Components - Intakt{% endblock %}
+{% block importmap %}{{ importmap('app') }}{% endblock %}
+
+{% block body %}
+{% set themes = ['light', 'dark'] %}
+<div class="page-head" data-controller="theme">
+    <div><h1>Components</h1><p class="lead">Every component in every state, light and dark side by side. Builders copy from here; DESIGN.md has the rules.</p></div>
+    <div class="actions"><button class="btn secondary sm" type="button" data-action="theme#flip">Switch theme</button></div>
+</div>
+<nav class="comp-nav" aria-label="Sections">
+    <a href="#c-buttons">Buttons</a><a href="#c-chips">Chips and badges</a><a href="#c-cards">Cards</a><a href="#c-rows">List rows</a><a href="#c-settings">Setting rows</a><a href="#c-inputs">Inputs</a><a href="#c-bars">Bars</a><a href="#c-banners">Banners</a><a href="#c-tabs">Tabs</a><a href="#c-toast">Toasts</a><a href="#c-empty">Empty, loading, error</a>
+</nav>
+
+<section class="comp-sec" id="c-buttons"><h2>Buttons</h2><p>Primary for the main action, secondary for others, quiet for links, danger arms on first click, needs (amber) only for the one action a waiting item asks for.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="cgrp"><h4>Primary</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Saving…', busy: true}) }}</div></div>
+    <div class="cgrp"><h4>Secondary</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Testing…', busy: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Small', small: true}) }}</div></div>
+    <div class="cgrp"><h4>Quiet</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'quiet', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'quiet', label: 'Disabled', disabled: true}) }}</div></div>
+    <div class="cgrp"><h4>Danger</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'danger', label: 'Pause everything', confirm: 'Click again to pause'}) }}{{ include(c ~ 'button.html.twig', {kind: 'danger', label: 'Disabled', confirm: 'Click again', disabled: true}) }}</div></div>
+    <div class="cgrp"><h4>Needs you</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approve a3f9c21'}) }}{{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approving…', busy: true}) }}</div></div>
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-chips"><h2>Chips and badges</h2><p>Chips only for states and reasons. Plain facts use the meta line.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="cgrp"><h4>State and reason</h4><div class="row-st">{{ include(c ~ 'chip.html.twig', {label: 'In review, round 2', dot: 'ok', on_page: true}) }}{{ include(c ~ 'chip.html.twig', {label: 'Paused', icon: 'pause', on_page: true}) }}{{ include(c ~ 'chip.html.twig', {label: 'CI broken', icon: 'broken', broken: true, on_page: true}) }}{{ include(c ~ 'chip.html.twig', {label: 'Login expired', dot: 'needs', on_page: true}) }}</div>
+    <div class="row-st">{{ include(c ~ 'reason_badge.html.twig', {reason: 'budget'}) }}{{ include(c ~ 'reason_badge.html.twig', {reason: 'overlap'}) }}{{ include(c ~ 'reason_badge.html.twig', {reason: 'dependency', label: 'Needs #612'}) }}{{ include(c ~ 'reason_badge.html.twig', {reason: 'ci', on_page: true}) }}</div></div>
+    <div class="cgrp"><h4>Counts and dots</h4><div class="row-st">{{ include(c ~ 'count.html.twig', {n: 3}) }}{{ include(c ~ 'count.html.twig', {n: 4, needs: true}) }}<span class="dot ok"></span><span class="dot needs"></span><span class="dot broken"></span><span class="dot idle"></span></div></div>
+    <div class="cgrp"><h4>Meta line</h4>{{ include(c ~ 'meta.html.twig', {facts: [{icon: 'clock', text: '42 min'}, {text: 'Slot 1, Model L'}, {text: 'Round 2'}, {text: '9b3e5aa', mono: true}, {text: 'Size M'}, {text: '$3.18'}]}) }}</div>
+    <div class="cgrp"><h4>Term with its standard explanation</h4><p>Approve this {{ include(c ~ 'term.html.twig', {term: 'version', words: 'version'}) }}, a {{ include(c ~ 'term.html.twig', {term: 'protected', words: 'protected file'}) }}, the {{ include(c ~ 'term.html.twig', {term: 'share', words: 'weekly share'}) }}.</p></div>
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-cards"><h2>Cards</h2><p>Flat tint, no border. Needs-you cards are the only amber ones. A blocker line sits right under the title.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="cards-row">
+        {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Command overlay for tasks and settings', meta: [{icon: 'clock', text: '42 min'}, {text: 'Slot 1, Model L'}, {text: 'Size M'}, {text: '$3.18'}]}) }}
+        {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: it touches secret handling', meta: [{icon: 'clock', text: '1 h 05 min'}, {text: 'Round 2'}]}) }}
+        {{ include(c ~ 'card.html.twig', {href: '#', number: 626, project: 'intakt', title: 'Search settings by their label', emphasis: {icon: 'link', text: 'Needs #612 merged first'}, meta: [{icon: 'clock', text: '9 h'}, {text: 'Size S'}]}) }}
+        {{ include(c ~ 'card.html.twig', {href: '#', number: 205, project: 'acme-shop', title: 'Refund emails include the order number', emphasis: {icon: 'broken', text: 'Waiting for CI: image build failing', broken: true}, meta: [{icon: 'clock', text: '1 h 50 min'}]}) }}
+        {{ include(c ~ 'card.html.twig', {href: '#', number: 74, project: 'field-notes', title: 'Strip photo location data before upload', emphasis: {icon: 'pause', text: 'Project paused'}, meta: [{icon: 'clock', text: '2 d'}]}) }}
+    </div>
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-rows"><h2>List rows</h2><p>Hairline between rows, no box.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="list">
+        {% embed c ~ 'list_row.html.twig' with {title: 'Phone (home)', explanation: 'Gets a push when something needs you.'} %}{% block actions %}<button class="btn quiet sm" type="button">Remove</button>{% endblock %}{% endembed %}
+        {% embed c ~ 'list_row.html.twig' with {title: 'Laptop', explanation: 'Gets a push only during working hours.'} %}{% block actions %}<button class="btn quiet sm" type="button">Remove</button>{% endblock %}{% endembed %}
+    </div>
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-settings"><h2>Setting rows</h2><p>Label, one-line explanation, control. State sits left of the control.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Default', explanation: 'Lets phones on your home network open the dashboard.', control_id: 'set-default-' ~ theme} %}{% block control %}{{ include(c ~ 'switch.html.twig', {id: control_id, name: 'default', on: true}) }}{% endblock %}{% endembed %}
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Saving', explanation: 'Shown while the change is on its way.', control_id: 'set-saving-' ~ theme, state: 'saving'} %}{% block control %}{{ include(c ~ 'switch.html.twig', {id: control_id, name: 'saving', on: true}) }}{% endblock %}{% endembed %}
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Saved', explanation: 'Stays until the next change.', control_id: 'set-saved-' ~ theme, state: 'saved'} %}{% block control %}{{ include(c ~ 'switch.html.twig', {id: control_id, name: 'saved'}) }}{% endblock %}{% endembed %}
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Failed', explanation: 'Names the value still in force.', control_id: 'set-failed-' ~ theme, state: 'failed', still: '22:00 to 07:00'} %}{% block control %}{{ include(c ~ 'select.html.twig', {id: control_id, name: 'failed', selected: 'b', options: [{value: 'a', label: '22:00 to 07:00'}, {value: 'b', label: '23:00 to 08:00'}]}) }}{% endblock %}{% endembed %}
+    {% embed c ~ 'setting_row.html.twig' with {label: 'Disabled', explanation: 'Explain why next to it: set by the project.', control_id: 'set-disabled-' ~ theme} %}{% block control %}{{ include(c ~ 'switch.html.twig', {id: control_id, name: 'disabled', disabled: true}) }}{% endblock %}{% endembed %}
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-inputs"><h2>Inputs</h2>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="row-st">{{ include(c ~ 'input.html.twig', {id: 'in-default-' ~ theme, name: 'default', value: 'Default', aria_label: 'Default'}) }}{{ include(c ~ 'input.html.twig', {id: 'in-disabled-' ~ theme, name: 'disabled', value: 'Disabled', aria_label: 'Disabled', disabled: true}) }}</div>
+    <div class="row-st">{{ include(c ~ 'input.html.twig', {id: 'in-error-' ~ theme, name: 'error', value: '80', aria_label: 'Error', error: 'Use a port from 1024 to 65535.'}) }}</div>
+    <div class="row-st">{{ include(c ~ 'select.html.twig', {id: 'in-select-' ~ theme, name: 'select', aria_label: 'Select', selected: 'a', options: [{value: 'a', label: 'Europe/Berlin'}]}) }}{{ include(c ~ 'switch.html.twig', {id: 'in-on-' ~ theme, name: 'on', aria_label: 'On', on: true}) }}{{ include(c ~ 'switch.html.twig', {id: 'in-off-' ~ theme, name: 'off', aria_label: 'Off'}) }}</div>
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-bars"><h2>Bars</h2>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    {{ include(c ~ 'bar.html.twig', {label: 'Used, reserved, forecast', note: 'Resets at 14:00', used: 46, reserved: 12, forecast: 18}) }}
+    {{ include(c ~ 'bar.html.twig', {label: 'Full', note: 'Share used up', used: 100}) }}
+    {{ include(c ~ 'bar_legend.html.twig') }}
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-banners"><h2>Banners</h2><p>Full on desktop; one line on phones that expands.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    {% embed c ~ 'banner.html.twig' with {icon: 'broken', broken: true, short: 'CI image build failing since 09:12', title: 'CI image build failing since 09:12.', text: 'acme-shop checks cannot run.'} %}{% block action %}<a class="btn quiet sm" href="#">Open health</a>{% endblock %}{% endembed %}
+    {% embed c ~ 'banner.html.twig' with {icon: 'pause', short: 'field-notes is paused', title: 'field-notes is paused.', text: 'Nothing new starts.'} %}{% block action %}<button class="btn secondary sm" type="button">Resume</button>{% endblock %}{% endembed %}
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-tabs"><h2>Tabs</h2>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    {{ include(c ~ 'subtabs.html.twig', {label: 'Example ' ~ theme, tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}]}) }}
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-toast"><h2>Toasts</h2><p>Shown in place here; on a page the toast hides itself after five seconds.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    {# Written out instead of included: the toast partial starts the controller that hides it, and this page must keep it on screen. #}
+    <div class="row-st"><div class="toast" role="status"><span>Saved</span><button type="button">Undo</button></div></div>
+    <div class="row-st"><div class="toast" role="status"><span>Test notification sent to Phone (home)</span></div></div>
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-empty"><h2>Empty, loading, error</h2><p>Empty states say what happens next. Loading uses static skeletons in place of content, never a whole-page spinner. Errors say what failed and what still holds.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    {{ include(c ~ 'empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building. When it needs a decision, it shows up here and on your phone.'}) }}
+    <div class="cards-row">{{ include(c ~ 'skeleton.html.twig') }}{{ include(c ~ 'column_empty.html.twig') }}</div>
+    {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
+</div>{% endfor %}</div></section>
+{% endblock %}
