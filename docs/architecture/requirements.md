@@ -40,14 +40,12 @@ Only **Docker or Podman**. The container image (`Dockerfile`, plan task T22) shi
 | `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the runner for the `persistence` service container | building the CI image, running `bin/check` and the persistence group in it, the database service | yes |
 | `docker run` security options | the `check` job | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
 | `sudo sysctl` | the `check` job, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
-| `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from the Dockerfile's hash | yes |
+| `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from the hash of the Dockerfile and the PHP profile it installs and loads (`composer.json`, `config/gates/php/check.ini`) | yes |
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
-
-The CI image is built from the PHP profile, with no list of its own: it installs the `ext-*` entries of `composer.json` its base lacks (plus `pdo_mysql` and `pdo_pgsql` for the persistence group) and loads `config/gates/php/check.ini` from its `conf.d`; its tag hashes the Dockerfile together with both files.
 
 ## To smoke-test the container image
 
