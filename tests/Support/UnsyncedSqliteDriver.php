@@ -12,9 +12,6 @@ use SensitiveParameter;
 
 final class UnsyncedSqliteDriver extends AbstractDriverMiddleware
 {
-    /**
-     * @param array<string, mixed> $params
-     */
     #[Override]
     public function connect(#[SensitiveParameter] array $params): Connection
     {

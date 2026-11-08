@@ -40,7 +40,7 @@ final class UnsyncedSqliteTest extends KernelTestCase
             new Configuration()->setMiddlewares([new UnsyncedSqlite()]),
         );
 
-        self::assertSame(self::SYNCHRONOUS_OFF, (int) $connection->fetchOne('PRAGMA synchronous'));
+        self::assertSame(self::SYNCHRONOUS_OFF, $connection->fetchOne('PRAGMA synchronous'));
     }
 
     public function testAConnectionToAnotherEngineIsLeftAsItIs(): void
@@ -59,6 +59,6 @@ final class UnsyncedSqliteTest extends KernelTestCase
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
         self::assertInstanceOf(Connection::class, $connection);
 
-        self::assertSame(self::SYNCHRONOUS_OFF, (int) $connection->fetchOne('PRAGMA synchronous'));
+        self::assertSame(self::SYNCHRONOUS_OFF, $connection->fetchOne('PRAGMA synchronous'));
     }
 }
