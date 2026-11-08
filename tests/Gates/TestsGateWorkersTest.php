@@ -102,6 +102,7 @@ final class TestsGateWorkersTest extends SandboxTestCase
         $range = getenv(TestWorker::PORTS_VARIABLE);
         $outerPorts = TestPorts::forWorkers(2, is_string($range) && '' !== $range ? $range : null);
         self::assertNotNull($outerPorts);
+        // Held to keep the first half busy like a real neighbor; the range assertion below is what detects a nested gate that ignores its range.
         $outerServer = stream_socket_server('tcp://127.0.0.1:'.explode('-', $outerPorts->block(0))[0]);
         self::assertNotFalse($outerServer);
         $sandbox = $this->sandboxWith('tests-worker-isolation');
