@@ -9,9 +9,9 @@ set -euo pipefail
 
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
-# Warmed up in a new process, because cache:clear warms up in the process that loaded the old container and can keep the old projects and keys.
+# The cache directory is removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
 rebuild_container() {
-    php bin/console cache:clear --no-warmup --no-interaction
+    rm -rf "var/cache/${APP_ENV:-prod}"
     php bin/console cache:warmup --no-interaction
 }
 

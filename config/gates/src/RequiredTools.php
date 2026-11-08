@@ -15,6 +15,8 @@ final readonly class RequiredTools
 
     private const string SCANNER = 'gitleaks';
 
+    private const string COMPOSER_MINIMUM = '2.11';
+
     // Every gate reads git, so git is not listed per gate, but a run that selects no gate reads nothing.
     private const array COMMON = ['git'];
 
@@ -108,7 +110,33 @@ final readonly class RequiredTools
             |> array_unique(...)
             |> (fn (array $names): array => array_filter($names, fn (string $name): bool => !$this->isAvailable($name, $entries)));
 
-        return array_map(self::notFound(...), array_values($missing));
+        $tooOld = in_array('composer', $commands, true) && !in_array('composer', $missing, true) ? $this->composerTooOld() : null;
+
+        return [...array_map(self::notFound(...), array_values($missing)), ...(null === $tooOld ? [] : [$tooOld])];
+    }
+
+    // Because an older Composer ignores config.policy.cooldown silently, it would lock and pass releases inside the period.
+    private function composerTooOld(): ?string
+    {
+        try {
+            $query = new Process(['composer', '--version', '--no-ansi', '--no-plugins', '--no-interaction'], $this->root);
+            $query->run();
+        } catch (ExceptionInterface) {
+            return $this->composerRefused('composer version could not be queried');
+        }
+
+        $found = 1 === preg_match('/^Composer version (\d+\.\d+\.\d+)/m', $query->getOutput(), $match) ? $match[1] : null;
+
+        if (null !== $found && version_compare($found, self::COMPOSER_MINIMUM, '>=')) {
+            return null;
+        }
+
+        return $this->composerRefused(null === $found ? 'composer reports no version' : 'composer '.$found.' found');
+    }
+
+    private function composerRefused(string $finding): string
+    {
+        return $finding.', '.self::COMPOSER_MINIMUM.' or later is required for policy.cooldown, see '.self::REQUIREMENTS;
     }
 
     private function searchPath(): string
