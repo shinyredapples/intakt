@@ -9,3 +9,6 @@ services:
     Intakt\Tests\Support\AssetsVendorDirectory:
         arguments: ['@asset_mapper.importmap.remote_package_storage']
         tags: ['kernel.cache_warmer']
+
+    Intakt\Tests\Support\UnsyncedSqlite:
+        tags: ['doctrine.middleware']
