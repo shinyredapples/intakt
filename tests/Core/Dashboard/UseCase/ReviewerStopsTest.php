@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\StopReview\ReviewerStops;
@@ -13,6 +14,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ReviewerStarted;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -23,6 +25,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]
 #[UsesClass(ReviewerStarted::class)]
+#[UsesClass(RoundLedgerReading::class)]
+#[UsesClass(ConfiguredPrices::class)]
 final class ReviewerStopsTest extends TestCase
 {
     public function testAFailedAppendGivesAnErrorLine(): void
@@ -55,6 +59,6 @@ final class ReviewerStopsTest extends TestCase
 
     private function stopsOn(Ledger $ledger): ReviewerStops
     {
-        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))), $ledger);
+        return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([]))), $ledger);
     }
 }
