@@ -17,7 +17,7 @@ final class LiveReviewProgressBreakJourneyTest extends JourneyTestCase
     private const string BROKEN_STEP = 'open the running round';
     private const string LATER_STEP = 'step the round until the judge has ruled';
     private const string MISSING_PREFIX = '/forced-break';
-    // The watcher tick alone takes about 90 seconds, so this stays under the gate's 240 seconds for a journey.
+    // The watcher tick can take up to 90 seconds, so this stays under the gate's 240 seconds for a journey.
     private const int CHILD_SECONDS = 200;
 
     protected function journey(): string
@@ -53,7 +53,7 @@ final class LiveReviewProgressBreakJourneyTest extends JourneyTestCase
     {
         self::assertStringContainsString('journey "'.self::JOURNEY.'" failed at step "'.self::BROKEN_STEP.'": GET /reviews/', $output);
         self::assertSame(1, substr_count($output, ' failed at step "'), 'more than one step failed');
-        self::assertStringNotContainsString('first install and setup', $output);
+        self::assertStringContainsString('Tests: 1,', $output, 'more than the one journey ran');
         self::assertStringNotContainsString(self::LATER_STEP, $output);
     }
 }
