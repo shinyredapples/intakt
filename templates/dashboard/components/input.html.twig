@@ -1,6 +1,7 @@
-{#- error says what is wrong in plain words; the field is then marked invalid and described by it. -#}
+{#- error says what is wrong in plain words; the field is then marked invalid and described by it. aria_label names a field that has no visible label for it. -#}
 {%- set error_id = id ~ '-error' -%}
 <input class="input" id="{{ id }}" name="{{ name }}" value="{{ value|default('') }}"
+    {%- if aria_label is defined %} aria-label="{{ aria_label }}"{% endif %}
     {%- if error is defined %} aria-invalid="true" aria-describedby="{{ error_id }}"{% endif %}
     {%- if disabled|default(false) %} disabled{% endif %}>
 {%- if error is defined %}

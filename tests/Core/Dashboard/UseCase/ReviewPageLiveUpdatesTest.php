@@ -18,9 +18,7 @@ use Intakt\Core\Shadow\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Component\AssetMapper\ImportMap\RemotePackageStorage;
 use Symfony\Component\DomCrawler\Crawler;
-use Symfony\Component\Filesystem\Filesystem;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
@@ -36,10 +34,7 @@ use Twig\Environment;
 #[UsesClass(RoundProgress::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
-    private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];
-
-    // Because the asset mapper finds the downloaded scripts through this service, replacing it moves them without changing the configuration of the test environment.
-    private const string REMOTE_PACKAGE_STORAGE = 'asset_mapper.importmap.remote_package_storage';
+    use DownloadedScriptStandIns;
 
     private ?string $secretBefore = null;
 
@@ -59,24 +54,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $secret = $this->secretBefore ?? '';
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        new Filesystem()->remove($this->vendorFolder());
+        $this->removeTheStandIns();
         parent::tearDown();
-    }
-
-    // The scripts are downloaded by importmap:install, which needs the network; the page only maps their paths, so empty stand-ins make it listen.
-    private function givenTheDownloadedScriptsExist(): void
-    {
-        foreach (self::VENDOR_ASSETS as $asset) {
-            new Filesystem()->dumpFile($this->vendorFolder().'/'.$asset, '');
-        }
-
-        self::getContainer()->set(self::REMOTE_PACKAGE_STORAGE, new RemotePackageStorage($this->vendorFolder()));
-    }
-
-    // Under assets/ so the asset mapper finds the stand-ins, and one folder per test worker, because each has a TMPDIR of its own, so none removes another's or a real download.
-    private function vendorFolder(): string
-    {
-        return dirname(__DIR__, 4).'/assets/vendor/review_page_live_updates_test_'.hash('xxh128', sys_get_temp_dir());
     }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
