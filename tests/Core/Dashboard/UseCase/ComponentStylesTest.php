@@ -61,13 +61,22 @@ final class ComponentStylesTest extends DashboardPageTestCase
         self::assertSame(['arm', 'disclosure', 'disclosure', 'toast'], $controllers);
     }
 
+    public function testASwitchInputFillsItsTrackWithExplicitDimensions(): void
+    {
+        // A checkbox is a replaced box with a natural size: inset alone leaves it about 13 px square, so the track needs explicit width and height.
+        $sheet = $this->componentSheet();
+        $rules = $this->rulesOf(substr($sheet, 0, (int) strpos($sheet, '@media (max-width: 760px)')));
+
+        self::assertMatchesRegularExpression('/width:\s*100%;\s*height:\s*100%/', $rules['.switch input'] ?? '');
+    }
+
     public function testOnPhonesASwitchIs52By32WithAHitArea44PxTall(): void
     {
         preg_match('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->componentSheet(), $phone);
         $rules = $this->rulesOf($phone[1] ?? '');
 
         self::assertMatchesRegularExpression('/width:\s*52px;\s*height:\s*32px/', $rules['.switch'] ?? '');
-        self::assertMatchesRegularExpression('/inset:\s*-6px 0\b/', $rules['.switch input'] ?? '');
+        self::assertMatchesRegularExpression('/top:\s*-6px;\s*width:\s*100%;\s*height:\s*44px/', $rules['.switch input'] ?? '');
     }
 
     private function componentSheet(): string
@@ -102,7 +111,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
      */
     private function rulesOf(string $sheet): array
     {
-        preg_match_all('/([^{}]+)\{([^{}]*)\}/', $sheet, $rules, PREG_SET_ORDER);
+        preg_match_all('/([^{}]+)\{([^{}]*)\}/', (string) preg_replace('~/\*.*?\*/~s', '', $sheet), $rules, PREG_SET_ORDER);
 
         return array_column(array_map(static fn (array $rule): array => [trim($rule[1]), $rule[2]], $rules), 1, 0);
     }
