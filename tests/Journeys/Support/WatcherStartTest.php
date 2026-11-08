@@ -28,12 +28,14 @@ final class WatcherStartTest extends TestCase
     private const string FIXTURES = __DIR__.'/../../../fixtures/sample-repository';
     private const string ROUND = '0198a1b2-0000-7000-8000-000000000001';
     private const string OTHER_ROUND = '0198a1b2-0000-7000-8000-000000000002';
+    private const string EARLIER_EVENT = '01a19b80-0000-7000-8000-000000000001';
 
     private string $directory = '';
 
     private string $head = '';
 
-    private string $ledger = '';
+    /** @var list<string> the ledger before the tick, then after it */
+    private array $ledgers = [];
 
     /** @var list<array{arguments: list<string>, environment: array<string,string>, seconds: int}> */
     private array $calls = [];
@@ -115,7 +117,7 @@ final class WatcherStartTest extends TestCase
     {
         $this->start($this->ledgerWith($this->queued(self::ROUND, $this->head)));
 
-        self::assertSame(['cache:clear', 'cache:warmup', 'messenger:consume', 'intakt:ledger:events'], array_map(static fn (array $call): string => $call['arguments'][0], $this->calls));
+        self::assertSame(['cache:clear', 'cache:warmup', 'intakt:ledger:events', 'messenger:consume', 'intakt:ledger:events'], array_map(static fn (array $call): string => $call['arguments'][0], $this->calls));
         self::assertSame([$this->configuration()], array_unique(array_map(static fn (array $call): string => $call['environment']['INTAKT_CONFIG'] ?? '', $this->calls)));
     }
 
@@ -138,6 +140,23 @@ final class WatcherStartTest extends TestCase
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30ec-7ae5-ae69-65d774c10318 head_pending {"project":"sample","change":"1","head":"'.$this->head.'"}'));
     }
 
+    public function testATickThatQueuedNoRoundFailsEvenWhenTheLedgerAlreadyHeldARoundForTheSampleHead(): void
+    {
+        $earlier = $this->queued(self::OTHER_ROUND, $this->head, self::EARLIER_EVENT);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessageMatches('/recording '.preg_quote($this->recordingFile(), '/').' queued no round/');
+
+        $this->start($this->ledgerWith($earlier), before: $this->ledgerWith($earlier));
+    }
+
+    public function testTheRoundIdIsTheOneTheTickQueuedNotARoundTheLedgerAlreadyHeldForTheSampleHead(): void
+    {
+        $earlier = $this->queued(self::OTHER_ROUND, $this->head, self::EARLIER_EVENT);
+
+        self::assertSame(self::ROUND, $this->start($this->ledgerWith($this->queued(self::ROUND, $this->head), $earlier), before: $this->ledgerWith($earlier)));
+    }
+
     public function testARoundQueuedEntryWithoutARoundIdFailsInsteadOfReturningOne(): void
     {
         $this->expectException(RuntimeException::class);
@@ -154,9 +173,9 @@ final class WatcherStartTest extends TestCase
         $this->start($this->ledgerWith('2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample",'));
     }
 
-    private function start(string $ledger): string
+    private function start(string $ledger, string $before = "0 events\n"): string
     {
-        $this->ledger = $ledger;
+        $this->ledgers = [$before, $ledger];
 
         return new WatcherStart($this->console(...))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
     }
@@ -169,7 +188,7 @@ final class WatcherStartTest extends TestCase
     {
         $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
 
-        return 'intakt:ledger:events' === $arguments[0] ? $this->ledger : '';
+        return 'intakt:ledger:events' === $arguments[0] ? array_shift($this->ledgers) ?? '' : '';
     }
 
     private function ledgerWith(string ...$lines): string
@@ -177,9 +196,9 @@ final class WatcherStartTest extends TestCase
         return implode(PHP_EOL, [...$lines, count($lines).' events']).PHP_EOL;
     }
 
-    private function queued(string $round, string $head): string
+    private function queued(string $round, string $head, string $event = '01a19b8a-30e4-7aa3-8780-141b1014c71a'): string
     {
-        return '2026-11-08T10:00:00Z 01a19b8a-30e4-7aa3-8780-141b1014c71a round_queued {"project":"sample","change":"1","head":"'.$head.'","round":"'.$round.'"}';
+        return '2026-11-08T10:00:00Z '.$event.' round_queued {"project":"sample","change":"1","head":"'.$head.'","round":"'.$round.'"}';
     }
 
     /**

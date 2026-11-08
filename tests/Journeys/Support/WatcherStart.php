@@ -51,9 +51,10 @@ final readonly class WatcherStart
         $recording = $this->recordPullRequest($configuration, $head);
         $this->watchSampleProject($configuration, $repository);
         $this->rebuildContainer($configuration);
+        $before = $this->eventIdsIn($this->ledgerLines($configuration));
         $this->tick($configuration, $recording);
 
-        return $this->queuedRound($configuration, $head) ?? throw new RuntimeException(sprintf('The watcher tick on the recording %s queued no round for the sample head %s.', $recording, $head));
+        return $this->queuedRound($configuration, $head, $before) ?? throw new RuntimeException(sprintf('The watcher tick on the recording %s queued no round for the sample head %s.', $recording, $head));
     }
 
     private function sampleHeadIn(string $repository): string
@@ -115,20 +116,49 @@ final readonly class WatcherStart
     }
 
     // From the ledger, because the watcher's handler returns nothing a console process could pass on, and the ledger is what a user's round leaves behind.
-    private function queuedRound(string $configuration, string $head): ?string
+    /**
+     * @param array<string,true> $before the ledger's event ids before the tick, because only entries the tick appended count: a round an earlier start queued for the same head must never pass for this tick's round
+     */
+    private function queuedRound(string $configuration, string $head, array $before): ?string
     {
-        $events = ($this->console)(['intakt:ledger:events'], [self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
         $rounds = [];
 
-        foreach (explode(PHP_EOL, $events) as $line) {
-            $fields = explode(' ', $line, 4);
-
-            if (4 === count($fields) && LedgerEventKind::RoundQueued->value === $fields[2]) {
+        foreach ($this->ledgerLines($configuration) as $fields) {
+            if (!isset($before[$fields[1]]) && LedgerEventKind::RoundQueued->value === $fields[2]) {
                 $rounds[] = $this->roundOf($fields[3], $head);
             }
         }
 
         return array_last(array_filter($rounds, static fn (?string $round): bool => null !== $round));
+    }
+
+    /**
+     * @return list<array{0: string, 1: string, 2: string, 3: string}>
+     */
+    private function ledgerLines(string $configuration): array
+    {
+        $events = ($this->console)(['intakt:ledger:events'], [self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
+        $lines = [];
+
+        foreach (explode(PHP_EOL, $events) as $line) {
+            $fields = explode(' ', $line, 4);
+
+            if (4 === count($fields)) {
+                $lines[] = $fields;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param list<array{0: string, 1: string, 2: string, 3: string}> $lines
+     *
+     * @return array<string,true>
+     */
+    private function eventIdsIn(array $lines): array
+    {
+        return array_fill_keys(array_column($lines, 1), true);
     }
 
     private function roundOf(string $payload, string $head): ?string
