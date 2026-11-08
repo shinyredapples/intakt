@@ -18,10 +18,11 @@
 <section class="comp-sec" id="c-buttons"><h2>Buttons</h2><p>Primary for the main action, secondary for others, quiet for links, danger arms on first click, needs (amber) only for the one action a waiting item asks for.</p>
 <div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
     <div class="cgrp"><h4>Primary</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Saving…', busy: true}) }}</div></div>
-    <div class="cgrp"><h4>Secondary</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Testing…', busy: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Small', small: true}) }}</div></div>
+    <div class="cgrp"><h4>Secondary</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Testing…', busy: true}) }}</div></div>
     <div class="cgrp"><h4>Quiet</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'quiet', label: 'Default'}) }}{{ include(c ~ 'button.html.twig', {kind: 'quiet', label: 'Disabled', disabled: true}) }}</div></div>
     <div class="cgrp"><h4>Danger</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'danger', label: 'Pause everything', confirm: 'Click again to pause'}) }}{{ include(c ~ 'button.html.twig', {kind: 'danger', label: 'Disabled', confirm: 'Click again', disabled: true}) }}</div></div>
     <div class="cgrp"><h4>Needs you</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approve a3f9c21'}) }}{{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Disabled', disabled: true}) }}{{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approving…', busy: true}) }}</div></div>
+    <div class="cgrp"><h4>Small and icon</h4><div class="row-st">{{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Small', small: true}) }}{{ include(c ~ 'icon_button.html.twig', {label: 'Theme', icon: 'moon'}) }}</div></div>
 </div>{% endfor %}</div></section>
 
 <section class="comp-sec" id="c-chips"><h2>Chips and badges</h2><p>Chips only for states and reasons. Plain facts use the meta line.</p>
@@ -84,6 +85,8 @@
 <section class="comp-sec" id="c-tabs"><h2>Tabs</h2>
 <div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
     {{ include(c ~ 'subtabs.html.twig', {label: 'Example ' ~ theme, tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}]}) }}
+    {{ include(c ~ 'segmented.html.twig', {label: 'Example view ' ~ theme, tabs: [{label: 'Timeline', selected: true}, {label: 'Live log'}]}) }}
+    <div class="row-st">{{ include(c ~ 'filter_chip.html.twig', {label: '14 days', pressed: true}) }}{{ include(c ~ 'filter_chip.html.twig', {label: '8 weeks'}) }}</div>
 </div>{% endfor %}</div></section>
 
 <section class="comp-sec" id="c-toast"><h2>Toasts</h2><p>Shown in place here; on a page the toast hides itself after five seconds.</p>
