@@ -367,6 +367,45 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame(['Ledger'], $tabs->filter('a[aria-current="page"]')->each(static fn (Crawler $tab): string => $tab->text()));
     }
 
+    public function testSegmentedTabsAreANamedTabListWithOnlyTheSelectedTabMarked(): void
+    {
+        $tabs = $this->render('segmented', ['label' => 'Show', 'tabs' => [
+            ['label' => 'Timeline', 'selected' => true],
+            ['label' => 'Live log'],
+        ]])->filter('.seg[role="tablist"]');
+
+        self::assertSame('Show', $tabs->attr('aria-label'));
+        self::assertSame(['true', 'false'], $tabs->filter('button[type="button"][role="tab"]')->each(static fn (Crawler $tab): string => (string) $tab->attr('aria-selected')));
+        self::assertSame(['Timeline'], $tabs->filter('[aria-selected="true"]')->each(static fn (Crawler $tab): string => $tab->text()));
+    }
+
+    public function testAFilterChipSaysWhetherItIsPressed(): void
+    {
+        $chips = $this->embed(
+            "{{ include('dashboard/components/filter_chip.html.twig', {label: '14 days', pressed: true}) }}{{ include('dashboard/components/filter_chip.html.twig', {label: '8 weeks'}) }}",
+            [],
+        )->filter('button.fchip[type="button"]');
+
+        self::assertSame(['true', 'false'], $chips->each(static fn (Crawler $chip): string => (string) $chip->attr('aria-pressed')));
+        self::assertSame(['14 days', '8 weeks'], $chips->each(static fn (Crawler $chip): string => $chip->text()));
+    }
+
+    public function testAnIconButtonIsNamedByItsLabelAndHidesItsIconFromScreenReaders(): void
+    {
+        $button = $this->render('icon_button', ['label' => 'Switch light or dark theme', 'icon' => 'moon'])->filter('button.icon-btn[type="button"]');
+
+        self::assertSame('Switch light or dark theme', $button->attr('aria-label'));
+        self::assertSame('', trim($button->text()));
+        self::assertCount(1, $button->filter('svg.i[aria-hidden="true"]:not(.s) path'));
+    }
+
+    public function testAnIconButtonWithAnUnknownIconFailsTheRender(): void
+    {
+        $this->expectException(RuntimeError::class);
+
+        $this->render('icon_button', ['label' => 'Nothing', 'icon' => 'nope']);
+    }
+
     public function testAToastIsAnnouncedAndOffersUndoThroughAForm(): void
     {
         $toast = $this->render('toast', ['message' => 'All projects paused', 'undo_url' => '/projects/resume', 'undo_token' => 'token'])->filter('.toast');

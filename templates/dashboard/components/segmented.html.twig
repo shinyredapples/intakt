@@ -1,0 +1,5 @@
+<div class="seg" role="tablist" aria-label="{{ label }}">
+    {%- for tab in tabs %}
+    <button type="button" role="tab" aria-selected="{{ tab.selected|default(false) ? 'true' : 'false' }}">{{ tab.label }}</button>
+    {%- endfor %}
+</div>
