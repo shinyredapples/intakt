@@ -109,7 +109,7 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertStringContainsString('Search tasks, pull requests, settings', $search->text());
     }
 
-    // Search arrives with part 3 of #910; until then the field says it does nothing yet instead of opening an empty dialog.
+    // Because search arrives with part 3 of #910, a field that promised a dialog would open nothing.
     public function testTheSearchFieldIsMarkedUnavailableUntilSearchIsBuilt(): void
     {
         $search = $this->browser->request('GET', '/reviews')->filter('.topbar button.search-trigger');
