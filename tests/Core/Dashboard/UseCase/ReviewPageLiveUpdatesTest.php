@@ -38,7 +38,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];
 
-    // The service of the asset mapper that names the folder importmap:install downloads into.
+    // Because the asset mapper finds the downloaded scripts through this service, replacing it moves them without changing the configuration of the test environment.
     private const string REMOTE_PACKAGE_STORAGE = 'asset_mapper.importmap.remote_package_storage';
 
     private ?string $secretBefore = null;
