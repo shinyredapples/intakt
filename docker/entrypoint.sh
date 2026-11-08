@@ -7,6 +7,12 @@ set -euo pipefail
 # The Caddyfile reads MERCURE_JWT_ISSUER without a default, so a missing one is named here instead of ending the web process silently.
 : "${MERCURE_JWT_ISSUER:?set MERCURE_JWT_ISSUER}"
 
+# The Hugging Face router speaks the OpenAI API, so its token stands in for the openai_compatible variables unless the owner set either; no /v1, because the bridge appends it.
+if [[ -n ${HF_TOKEN:-} && -z ${OPENAI_COMPATIBLE_BASE_URL:-} && -z ${OPENAI_COMPATIBLE_API_KEY:-} ]]; then
+    export OPENAI_COMPATIBLE_BASE_URL=https://router.huggingface.co
+    export OPENAI_COMPATIBLE_API_KEY=$HF_TOKEN
+fi
+
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
 # The cache directory is removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
-use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -46,10 +45,10 @@ final readonly class UsageLedger
      * @throws UsageNotRecorded
      */
     #[NoDiscard('a reservation must be settled or left unsettled')]
-    public function reserve(string $project, Tier $tier, ?Uuid $round = null): UsageReservation
+    public function reserve(string $project, AnsweringTier $tier, ?Uuid $round = null): UsageReservation
     {
         $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $this->record(new UsageStarted($reservation->call, 'started', $project, $tier, $round?->toString()));
+        $this->record(new UsageStarted($reservation->call, 'started', $project, $tier->tier, $round?->toString(), $tier->answering->model));
 
         return $reservation;
     }

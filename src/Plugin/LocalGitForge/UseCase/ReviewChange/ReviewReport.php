@@ -55,6 +55,7 @@ final readonly class ReviewReport
 
         $tokens = $review->tokens;
         $lines[] = sprintf('tokens: %d calls, %d prompt%s, %d completion, %d total', $tokens->calls, $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total);
+        $lines[] = 'cost: '.$review->cost->reading($this->text->of(...));
 
         return $lines;
     }

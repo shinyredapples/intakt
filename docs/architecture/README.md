@@ -32,6 +32,7 @@ Models and budget:
 - [Capability tiers per project](capability-tiers.md): shadow mode per project
 - [Vendor](vendor.md): the judge
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
+- [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
 
 Reviews:
 - [Review flow](review-flow.md)

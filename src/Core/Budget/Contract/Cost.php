@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Budget\Contract;
+
+use Closure;
+
+// Unknown as soon as one call has no price, because a partial sum would read as the whole cost and the design never shows an estimate.
+final readonly class Cost
+{
+    /**
+     * @param list<string> $unpriced
+     */
+    private function __construct(
+        public ?float $usd,
+        public array $unpriced,
+    ) {
+    }
+
+    public static function none(): self
+    {
+        return new self(0.0, []);
+    }
+
+    public static function inUsd(float $usd): self
+    {
+        return new self($usd, []);
+    }
+
+    public static function unknown(string ...$unpriced): self
+    {
+        return new self(null, array_values(array_unique($unpriced)));
+    }
+
+    public function plus(self $other): self
+    {
+        if (null === $this->usd || null === $other->usd) {
+            return self::unknown(...$this->unpriced, ...$other->unpriced);
+        }
+
+        return self::inUsd($this->usd + $other->usd);
+    }
+
+    // The one wording of a cost, for the console and the dashboard. Unknown rather than 0, so a missing price is never read as a free round, and a priced cost too small to show is never read as free either. A model name comes from the ledger, so each surface passes how it makes a name safe to show.
+    /**
+     * @param Closure(string): string|null $visible
+     */
+    public function reading(?Closure $visible = null): string
+    {
+        if (null !== $this->usd) {
+            $dollars = sprintf('%.4f', $this->usd);
+
+            return '0.0000' === $dollars && $this->usd > 0.0 ? 'less than 0.0001 USD' : $dollars.' USD';
+        }
+
+        if ([] === $this->unpriced) {
+            return 'unknown';
+        }
+
+        return 'unknown, no price for '.implode(', ', array_map($visible ?? static fn (string $model): string => $model, $this->unpriced));
+    }
+}
