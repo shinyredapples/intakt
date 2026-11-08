@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
-use Closure;
 use DateInterval;
 use DateTimeImmutable;
 use Intakt\Core\Git\Contract\GitCall;
@@ -33,6 +32,8 @@ final class WatcherStartTest extends TestCase
     private string $directory = '';
 
     private string $head = '';
+
+    private string $ledger = '';
 
     /** @var list<array{arguments: list<string>, environment: array<string,string>, seconds: int}> */
     private array $calls = [];
@@ -155,21 +156,20 @@ final class WatcherStartTest extends TestCase
 
     private function start(string $ledger): string
     {
-        return new WatcherStart($this->console($ledger))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
+        $this->ledger = $ledger;
+
+        return new WatcherStart($this->console(...))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
     }
 
     /**
-     * @return Closure(list<string>, array<string,string>, int): string
+     * @param list<string>         $arguments
+     * @param array<string,string> $environment
      */
-    private function console(string $ledger): Closure
+    private function console(array $arguments, array $environment, int $seconds): string
     {
-        return function (array $arguments, array $environment, int $seconds) use ($ledger): string {
-            /* @var list<string> $arguments */
-            /* @var array<string,string> $environment */
-            $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
+        $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
 
-            return 'intakt:ledger:events' === $arguments[0] ? $ledger : '';
-        };
+        return 'intakt:ledger:events' === $arguments[0] ? $this->ledger : '';
     }
 
     private function ledgerWith(string ...$lines): string
