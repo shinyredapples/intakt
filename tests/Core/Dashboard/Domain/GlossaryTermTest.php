@@ -26,7 +26,7 @@ final class GlossaryTermTest extends TestCase
     private function designExplanations(): array
     {
         $design = (string) file_get_contents(self::DESIGN);
-        if (preg_match('/^## Glossary\n(.*?)^## /ms', $design, $section) !== 1) {
+        if (1 !== preg_match('/^## Glossary\n(.*?)^## /ms', $design, $section)) {
             self::fail('DESIGN.md has no Glossary section.');
         }
         preg_match_all('/^\| (?!Term|---)[^|]+\|[^|]+\| (.+) \|$/m', $section[1], $rows);
