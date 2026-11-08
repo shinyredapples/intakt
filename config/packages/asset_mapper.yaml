@@ -4,6 +4,14 @@ framework:
             - assets/
         missing_import_mode: strict
 
+# Because every test worker has a cache directory of its own, a test that puts stand-in scripts there shares them with no other worker; tests/Support/AssetsVendorDirectory creates the folder.
+when@test:
+    framework:
+        asset_mapper:
+            paths:
+                '%kernel.cache_dir%/assets/vendor': vendor
+            vendor_dir: '%kernel.cache_dir%/assets/vendor'
+
 when@prod:
     framework:
         asset_mapper:

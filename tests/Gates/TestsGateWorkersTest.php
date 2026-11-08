@@ -12,7 +12,6 @@ use Intakt\Gates\TestsGate;
 use Intakt\Gates\TestWorker;
 use Intakt\Gates\TestWorkers;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(TestsGate::class)]
@@ -64,6 +63,26 @@ final class TestsGateWorkersTest extends SandboxTestCase
     }
     PHP_WRAP;
 
+    private const string PORTS_RECORDING_TEST = <<<'PHP_WRAP'
+    <?php
+
+    declare(strict_types=1);
+
+    use PHPUnit\Framework\Attributes\CoversNothing;
+    use PHPUnit\Framework\TestCase;
+
+    #[CoversNothing]
+    final class PortsTest extends TestCase
+    {
+        public function testRecordsTheRangeOfItsWorker(): void
+        {
+            @mkdir(dirname(__DIR__).'/rendezvous');
+
+            self::assertNotFalse(file_put_contents(dirname(__DIR__).'/rendezvous/ports', (string) getenv('INTAKT_TEST_PORTS')));
+        }
+    }
+    PHP_WRAP;
+
     public function testTwoWorkersHoldingTheSameNamesAtTheSameMomentDoNotCollide(): void
     {
         $sandbox = $this->sandboxWith('tests-worker-isolation');
@@ -97,22 +116,39 @@ final class TestsGateWorkersTest extends SandboxTestCase
         self::assertStringNotContainsString('sqlite: SerialTest', $run->findingsOf('tests'));
     }
 
-    // Because it holds the first port of the first worker's block, which is free only while no worker runs.
-    #[Group('serial')]
+    // Both outer blocks come from this worker's own range, so the port it holds is one no other worker of the gate that runs it takes.
     public function testAGateRunInsideATestWorkerTakesItsPortsFromTheRangeItInherits(): void
     {
-        $outerPorts = TestPorts::forWorkers(2, null);
+        $outerPorts = TestPorts::forWorkers(2, $this->rangeOfThisWorker());
         self::assertNotNull($outerPorts);
         $outerServer = stream_socket_server('tcp://127.0.0.1:'.explode('-', $outerPorts->block(0))[0]);
         self::assertNotFalse($outerServer);
+        $sandbox = $this->sandboxWith('tests-worker-isolation');
+        $sandbox->write('tests/PortsTest.php', self::PORTS_RECORDING_TEST);
 
         try {
-            $run = $this->sandboxWith('tests-worker-isolation')->checkWith([TestWorker::PORTS_VARIABLE => $outerPorts->block(1)], '--only=tests');
+            $run = $sandbox->checkWith([TestWorker::PORTS_VARIABLE => $outerPorts->block(1)], '--only=tests');
         } finally {
             fclose($outerServer);
         }
 
         self::assertTrue($run->passed('tests'), $run->output());
+        self::assertTrue($this->liesWithin((string) file_get_contents($sandbox->root.'/rendezvous/ports'), $outerPorts->block(1)));
+    }
+
+    private function rangeOfThisWorker(): ?string
+    {
+        $range = getenv(TestWorker::PORTS_VARIABLE);
+
+        return is_string($range) && '' !== $range ? $range : null;
+    }
+
+    private function liesWithin(string $range, string $outer): bool
+    {
+        [$first, $last] = array_map(intval(...), explode('-', $range));
+        [$outerFirst, $outerLast] = array_map(intval(...), explode('-', $outer));
+
+        return $first >= $outerFirst && $last <= $outerLast && $first <= $last;
     }
 
     public function testAnInheritedPortRangeThatIsNotARangeFailsTheGate(): void

@@ -5,3 +5,7 @@ services:
         decorates: logger
         factory: ['Intakt\Tests\Support\Log\RecordingLoggerFactory', 'create']
         arguments: ['@.inner']
+
+    Intakt\Tests\Support\AssetsVendorDirectory:
+        arguments: ['@asset_mapper.importmap.remote_package_storage']
+        tags: ['kernel.cache_warmer']

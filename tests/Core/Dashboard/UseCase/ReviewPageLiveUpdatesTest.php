@@ -17,8 +17,8 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\AssetMapper\ImportMap\RemotePackageStorage;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
@@ -33,8 +33,6 @@ use Twig\Environment;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
-// Because it creates and removes placeholder files in assets/vendor/ of the checkout, which every test worker shares.
-#[Group('serial')]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     private const array VENDOR_ASSETS = ['@hotwired/stimulus/stimulus.index.js', '@hotwired/turbo/turbo.index.js'];
@@ -51,8 +49,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->secretBefore = is_string($before) ? $before : null;
         // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        $this->givenTheDownloadedScriptsExist();
         parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
     }
 
     #[Override]
@@ -64,11 +62,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         parent::tearDown();
     }
 
-    // The scripts are downloaded by importmap:install, which needs the network; the page only maps their paths, so empty stand-ins make it listen.
+    // The scripts are downloaded by importmap:install, which needs the network; the page only maps their paths, so empty stand-ins in the test environment's vendor folder make it listen.
     private function givenTheDownloadedScriptsExist(): void
     {
+        $vendor = self::getContainer()->getParameter('kernel.cache_dir');
+        self::assertIsString($vendor);
+
         foreach (self::VENDOR_ASSETS as $asset) {
-            $path = dirname(__DIR__, 4).'/assets/vendor/'.$asset;
+            $path = $vendor.'/assets/vendor/'.$asset;
             if (is_file($path)) {
                 continue;
             }
@@ -80,6 +81,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             file_put_contents($path, '');
             $this->placeholders[] = $path;
         }
+    }
+
+    // Because the test workers share the checkout, stand-ins in its assets/vendor/ would be created and removed under another worker's page.
+    public function testTheDownloadedScriptsOfTheTestEnvironmentLieInItsOwnCacheDirectory(): void
+    {
+        $storage = self::getContainer()->get('asset_mapper.importmap.remote_package_storage');
+        self::assertInstanceOf(RemotePackageStorage::class, $storage);
+
+        self::assertSame(self::getContainer()->getParameter('kernel.cache_dir').'/assets/vendor', $storage->getStorageDir());
     }
 
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
