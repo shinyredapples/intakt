@@ -159,6 +159,40 @@ final class RequiredToolsTest extends TestCase
         self::assertSame([], $this->tools()->missingFor(['cs']));
     }
 
+    public function testAComposerOlderThanTheCooldownPolicyIsRefusedNamingTheVersionFound(): void
+    {
+        $this->installComposerReporting('2.10.4');
+
+        self::assertSame(['composer 2.10.4 found, 2.11 or later is required for policy.cooldown, see '.RequiredTools::REQUIREMENTS], $this->tools()->missingFor(['audit']));
+    }
+
+    public function testAComposerWithTheCooldownPolicyIsAccepted(): void
+    {
+        $this->installComposerReporting('2.11.0');
+
+        self::assertSame([], $this->tools()->missingFor(['audit']));
+    }
+
+    public function testAComposerThatReportsNoVersionIsRefused(): void
+    {
+        $this->install($this->caller.'/bin/composer');
+        $this->prependToPath($this->caller.'/bin');
+
+        self::assertSame(['composer reports no version, 2.11 or later is required for policy.cooldown, see '.RequiredTools::REQUIREMENTS], $this->tools()->missingFor(['audit']));
+    }
+
+    public function testAComposerWhoseVersionCannotBeQueriedIsRefused(): void
+    {
+        $this->installComposerReporting('2.11.0');
+        $code = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).';'
+            .'echo json_encode((new '.RequiredTools::class.'('.var_export($this->root, true).'))->missingFor(["audit"]));';
+        $child = new Process([PHP_BINARY, '-d', 'disable_functions=proc_open', '-r', $code]);
+
+        $child->run();
+
+        self::assertSame(json_encode(['composer version could not be queried, 2.11 or later is required for policy.cooldown, see '.RequiredTools::REQUIREMENTS]), $child->getOutput(), $child->getErrorOutput());
+    }
+
     public function testWithoutAPathAToolOnTheDefaultPathIsFound(): void
     {
         putenv('PATH');
@@ -217,6 +251,13 @@ final class RequiredToolsTest extends TestCase
 
         file_put_contents($file, "#!/bin/sh\n");
         chmod($file, 0o700);
+    }
+
+    private function installComposerReporting(string $version): void
+    {
+        $this->install($this->caller.'/bin/composer');
+        file_put_contents($this->caller.'/bin/composer', "#!/bin/sh\necho 'Composer version ".$version." 2026-01-01 00:00:00'\n");
+        $this->prependToPath($this->caller.'/bin');
     }
 
     private function prependToPath(string $entry): void
