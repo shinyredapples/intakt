@@ -30,6 +30,9 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         yield 'the components page' => ['/components'];
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function pagesOtherThanTheComponentsPage(): iterable
     {
         yield 'the project list' => ['/projects'];
