@@ -27,7 +27,7 @@ final class AnthropicTextBlocks implements RawResultInterface
     }
 
     /**
-     * @return Generator<mixed>
+     * @return Generator<array<string, mixed>>
      */
     #[Override]
     public function getDataStream(): Generator
@@ -52,10 +52,12 @@ final class AnthropicTextBlocks implements RawResultInterface
         return $this->opened;
     }
 
-    private function opensATextBlock(mixed $event): bool
+    /**
+     * @param array<string, mixed> $event
+     */
+    private function opensATextBlock(array $event): bool
     {
-        return is_array($event)
-            && 'content_block_start' === ($event['type'] ?? null)
+        return 'content_block_start' === ($event['type'] ?? null)
             && is_array($event['content_block'] ?? null)
             && 'text' === ($event['content_block']['type'] ?? null);
     }

@@ -86,11 +86,14 @@ final class StreamedAnswerTest extends TestCase
     private function deltasOf(AnthropicTextBlocks $blocks): Generator
     {
         foreach ($blocks->getDataStream() as $event) {
-            if ('content_block_delta' === $event['type']) {
-                yield new TextDelta($event['delta']['text']);
+            $delta = $event['delta'] ?? null;
+            $block = $event['content_block'] ?? null;
+
+            if (is_array($delta) && is_string($delta['text'] ?? null)) {
+                yield new TextDelta($delta['text']);
             }
 
-            if ('tool_use' === ($event['content_block']['type'] ?? null)) {
+            if (is_array($block) && 'tool_use' === ($block['type'] ?? null)) {
                 yield new ToolCallStart('toolu_01', 'read_file');
             }
         }
