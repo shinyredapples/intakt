@@ -29,8 +29,8 @@ foreach (array_slice($argv, 1) as $argument) {
     if (str_starts_with($argument, '--run=')) {
         $link = Uri::parse(substr($argument, 6));
 
-        if (!$link instanceof Uri || 'https' !== $link->getScheme() || null === $link->getHost()) {
-            fwrite(STDERR, "--run must be an https link\n".USAGE);
+        if (!$link instanceof Uri || 'https' !== $link->getScheme() || null === $link->getHost() || null !== $link->getUserInfo()) {
+            fwrite(STDERR, "--run must be an https link without credentials\n".USAGE);
             exit(2);
         }
 

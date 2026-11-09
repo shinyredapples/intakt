@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 // `gh` takes its token from GH_TOKEN or GITHUB_TOKEN in the environment, so no credential passes through this class.
@@ -120,7 +121,12 @@ final readonly class GitHubIssues
         }
 
         $process = new Process(['gh', ...$arguments], null, null, $input, self::SECONDS);
-        $process->run();
+
+        try {
+            $process->run();
+        } catch (ProcessTimedOutException) {
+            throw new GitHubCallFailed('gh '.$arguments[0].' '.$arguments[1].' timed out after '.self::SECONDS.' seconds');
+        }
 
         if (!$process->isSuccessful()) {
             throw new GitHubCallFailed('gh '.$arguments[0].' '.$arguments[1].' failed: '.trim($process->getErrorOutput()));
