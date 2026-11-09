@@ -156,13 +156,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     public function testTheConnectionControllerHoldsBackTheStopButtonAndNoButtonOfTheShell(): void
     {
         $this->givenARunningRound();
-        preg_match("/const ACTIONS = '([^']+)';/", (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js'), $actions);
+        $actions = $this->actionsTheConnectionControllerHolds();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertArrayHasKey(1, $actions);
-        $held = $crawler->filter('.shell[data-controller="connection"]')->filter($actions[1])->each(static fn (Crawler $button): string => $button->text());
+        $held = $crawler->filter('.shell[data-controller="connection"]')->filter($actions)->each(static fn (Crawler $button): string => $button->text());
         self::assertSame(['Stop this reviewer'], $held);
+    }
+
+    private function actionsTheConnectionControllerHolds(): string
+    {
+        $script = (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js');
+        self::assertSame(1, preg_match("/const ACTIONS = '(?<selector>[^']+)';/", $script, $found));
+
+        return $found['selector'] ?? '';
     }
 
     /**
