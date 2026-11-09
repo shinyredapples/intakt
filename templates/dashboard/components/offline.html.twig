@@ -1,0 +1,2 @@
+{#- The Offline marker of the top bar. `live` is the shell's copy: hidden until the connection controller shows it with the reconnecting line. -#}
+<span class="offline-marker"{% if live|default(false) %} data-connection-target="marker" hidden{% endif %}>Offline</span>

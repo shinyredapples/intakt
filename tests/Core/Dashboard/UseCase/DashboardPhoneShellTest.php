@@ -142,6 +142,14 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('display: flex', $rules['.topbar .brand-m'] ?? '');
     }
 
+    public function testOnPhonesTheTopBarLeavesOutTheOfflineMarkerAndTheReconnectingLineWraps(): void
+    {
+        $rules = $this->phoneRules();
+
+        self::assertStringContainsString('display: none', $rules['.topbar .offline-marker'] ?? '');
+        self::assertStringContainsString('flex-wrap: wrap', $rules['.conn'] ?? '');
+    }
+
     public function testOnPhonesThePageEndsAboveTheBar(): void
     {
         $rules = $this->phoneRules();

@@ -488,6 +488,69 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertCount(0, $this->render('toast', ['message' => 'Test notification sent'])->filter('.toast button'));
     }
 
+    public function testTheReconnectingLineSaysSinceWhenThePageShowsWhatIntaktKnewAndOffersTryNow(): void
+    {
+        $line = $this->render('connection', ['since' => '11:12:04'])->filter('.conn');
+
+        self::assertSame('status', $line->attr('role'));
+        self::assertNull($line->attr('hidden'));
+        self::assertSame('true', $line->filter('.conn-dot')->attr('aria-hidden'));
+        self::assertSame('Reconnecting.', $line->filter('strong')->text());
+        self::assertSame('Reconnecting. The dashboard lost its connection to Intakt at 11:12:04. You are seeing what it knew then. Next try in 5 s.', $line->filter('p')->text());
+        self::assertSame('Try now', $line->filter('button.btn.secondary.sm[type="button"]')->text());
+    }
+
+    public function testTheReconnectingLineDoesNotAnnounceItsCountdown(): void
+    {
+        $countdown = $this->render('connection', ['since' => '11:12:04', 'next' => '3 s'])->filter('.conn [aria-live="off"]');
+
+        self::assertSame('Next try in 3 s.', $countdown->text());
+    }
+
+    public function testAnUnreachableLineIsRedAndSaysIntaktCannotBeReached(): void
+    {
+        $line = $this->render('connection', ['since' => '11:12:04', 'unreachable' => true])->filter('.conn');
+
+        self::assertSame('conn unreachable', $line->attr('class'));
+        self::assertSame("Can't reach Intakt.", $line->filter('strong')->text());
+    }
+
+    public function testTheShellsReconnectingLineIsHiddenAndDrivenByTheConnectionController(): void
+    {
+        $line = $this->render('connection', ['live' => true])->filter('.conn');
+
+        self::assertSame('', $line->attr('hidden'));
+        self::assertSame('line', $line->attr('data-connection-target'));
+        self::assertCount(1, $line->filter('strong[data-connection-target="title"]'));
+        self::assertCount(1, $line->filter('[data-connection-target="since"]'));
+        self::assertCount(1, $line->filter('[aria-live="off"] [data-connection-target="countdown"]'));
+        self::assertSame('connection#tryNow', $line->filter('button')->attr('data-action'));
+    }
+
+    public function testAShownReconnectingLineIsLeftAloneByTheConnectionController(): void
+    {
+        $line = $this->render('connection', ['since' => '11:12:04']);
+
+        self::assertCount(0, $line->filter('[data-connection-target], [data-action]'));
+    }
+
+    public function testTheOfflineMarkerSaysOffline(): void
+    {
+        $marker = $this->render('offline', [])->filter('.offline-marker');
+
+        self::assertSame('Offline', $marker->text());
+        self::assertNull($marker->attr('hidden'));
+        self::assertNull($marker->attr('data-connection-target'));
+    }
+
+    public function testTheShellsOfflineMarkerIsHiddenAndDrivenByTheConnectionController(): void
+    {
+        $marker = $this->render('offline', ['live' => true])->filter('.offline-marker');
+
+        self::assertSame('', $marker->attr('hidden'));
+        self::assertSame('marker', $marker->attr('data-connection-target'));
+    }
+
     public function testATermShowsItsOneStandardExplanation(): void
     {
         $term = $this->render('term', ['term' => 'version', 'words' => 'version'])->filter('.term');

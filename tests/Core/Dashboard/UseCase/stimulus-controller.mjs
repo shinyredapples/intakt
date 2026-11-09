@@ -25,7 +25,15 @@ export class FakeElement {
         this.textContent = textContent;
         this.classList = {
             contains: (name) => this.classes.has(name),
-            toggle: (name) => (this.classes.delete(name) ? false : Boolean(this.classes.add(name))),
+            toggle: (name, force = !this.classes.has(name)) => {
+                if (force) {
+                    this.classes.add(name);
+                } else {
+                    this.classes.delete(name);
+                }
+
+                return force;
+            },
         };
     }
 

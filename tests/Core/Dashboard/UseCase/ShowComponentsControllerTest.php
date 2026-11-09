@@ -39,6 +39,9 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'banner' => ['.banner.broken'];
         yield 'compact banner, collapsed' => ['.banner.compact:not(.open) .banner-toggle[aria-expanded="false"]'];
         yield 'compact banner, open' => ['.banner.compact.open .banner-toggle[aria-expanded="true"]'];
+        yield 'reconnecting line' => ['.conn:not(.unreachable):not([hidden]) button.btn'];
+        yield 'unreachable line' => ['.conn.unreachable:not([hidden])'];
+        yield 'offline marker' => ['.offline-marker:not([hidden])'];
         yield 'icon button' => ['.icon-btn[aria-label]'];
         yield 'sub-tabs' => ['.subtabs'];
         yield 'segmented tabs' => ['.seg[role="tablist"][aria-label] [role="tab"][aria-selected="true"]'];

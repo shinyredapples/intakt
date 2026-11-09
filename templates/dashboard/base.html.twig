@@ -26,7 +26,8 @@
     {% block importmap %}{% endblock %}
 </head>
 <body>
-<div class="shell">
+{# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
+<div class="shell" data-controller="connection">
 {# Only the items whose page is built; the others arrive with their page. History and Settings, once built, go under More, which a phone shows instead of them. #}
 {{ include('dashboard/_rail.html.twig', {
     rail_items: [
@@ -43,8 +44,10 @@
     {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. #}
     {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
     <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
+    {{ include('dashboard/components/offline.html.twig', {live: true}, with_context = false) }}
 </header>
 <main class="content">
+{{ include('dashboard/components/connection.html.twig', {live: true}, with_context = false) }}
 {% for line in app.flashes('success') %}
 <p class="flash flash-success">{{ line }}</p>
 {% endfor %}
