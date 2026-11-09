@@ -32,7 +32,6 @@ final readonly class RequiredTools
         'tests' => ['sh', 'unshare', 'setsid', 'true', 'bash', 'jq'],
         'secrets' => [self::SCANNER, 'env'],
         'secrets-history' => [self::SCANNER, 'env'],
-        'workflows' => ['zizmor'],
     ];
 
     public function __construct(
