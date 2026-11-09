@@ -33,7 +33,7 @@ final class AnthropicTextBlocks implements RawResultInterface
     public function getDataStream(): Generator
     {
         foreach ($this->raw->getDataStream() as $key => $event) {
-            if (self::opensATextBlock($event)) {
+            if ($this->opensATextBlock($event)) {
                 ++$this->opened;
             }
 
@@ -52,7 +52,7 @@ final class AnthropicTextBlocks implements RawResultInterface
         return $this->opened;
     }
 
-    private static function opensATextBlock(mixed $event): bool
+    private function opensATextBlock(mixed $event): bool
     {
         return is_array($event)
             && 'content_block_start' === ($event['type'] ?? null)

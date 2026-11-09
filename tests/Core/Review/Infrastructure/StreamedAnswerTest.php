@@ -29,21 +29,21 @@ final class StreamedAnswerTest extends TestCase
 
     public function testTheTextStillStreamsPieceByPieceAndOnlyOnce(): void
     {
-        $emitted = $this->streamed([self::textBlock(), self::text('{"verdict":'), self::text('"approve"}')]);
+        $emitted = $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->text('"approve"}')]);
 
         self::assertSame(['{"verdict":', '"approve"}'], $emitted);
     }
 
     public function testTheListenersAfterItSeeTheWholeAnswerOnceWhenTheRoundEnds(): void
     {
-        $this->streamed([self::textBlock(), self::text('{"verdict":'), self::text('"approve"}')]);
+        $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->text('"approve"}')]);
 
         self::assertSame(['{"verdict":"approve"}'], $this->seenAfter);
     }
 
     public function testTheListenersAfterItSeeNoTextOfARoundThatAsksForTools(): void
     {
-        $emitted = $this->streamed([self::textBlock(), self::text('I will read the cart.'), self::toolUse()]);
+        $emitted = $this->streamed([$this->textBlock(), $this->text('I will read the cart.'), $this->toolUse()]);
 
         self::assertSame([], $this->seenAfter);
         self::assertSame(['I will read the cart.'], $emitted);
@@ -53,7 +53,7 @@ final class StreamedAnswerTest extends TestCase
     {
         $this->expectException(UnexpectedResultTypeException::class);
 
-        $this->streamed([self::textBlock(), self::text('{"verdict":'), self::textBlock(), self::text('"approve"}')]);
+        $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->textBlock(), $this->text('"approve"}')]);
     }
 
     /**
@@ -65,7 +65,7 @@ final class StreamedAnswerTest extends TestCase
     {
         $blocks = new AnthropicTextBlocks(new InMemoryRawResult(dataStream: $events));
         $answer = new StreamedAnswer($blocks);
-        $stream = new StreamResult($answer->of(new StreamResult(self::deltasOf($blocks))));
+        $stream = new StreamResult($answer->of(new StreamResult($this->deltasOf($blocks))));
         $stream->addListener($answer);
         $stream->addListener($this->recorder());
 
@@ -106,7 +106,7 @@ final class StreamedAnswerTest extends TestCase
     /**
      * @return Generator<DeltaInterface>
      */
-    private static function deltasOf(AnthropicTextBlocks $blocks): Generator
+    private function deltasOf(AnthropicTextBlocks $blocks): Generator
     {
         foreach ($blocks->getDataStream() as $event) {
             if ('content_block_delta' === $event['type']) {
@@ -122,7 +122,7 @@ final class StreamedAnswerTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private static function textBlock(): array
+    private function textBlock(): array
     {
         return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
     }
@@ -130,7 +130,7 @@ final class StreamedAnswerTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private static function text(string $text): array
+    private function text(string $text): array
     {
         return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
     }
@@ -138,7 +138,7 @@ final class StreamedAnswerTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private static function toolUse(): array
+    private function toolUse(): array
     {
         return ['type' => 'content_block_start', 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'read_file', 'input' => []]];
     }

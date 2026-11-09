@@ -74,14 +74,14 @@ final class StreamedAnswer extends AbstractStreamListener
         }
 
         if ($delta instanceof TextDelta) {
-            $event->setDelta(self::passedOn($delta));
+            $event->setDelta($this->passedOn($delta));
         }
     }
 
     /**
      * @return Generator<TextDelta>
      */
-    private static function passedOn(TextDelta $delta): Generator
+    private function passedOn(TextDelta $delta): Generator
     {
         yield $delta;
     }
