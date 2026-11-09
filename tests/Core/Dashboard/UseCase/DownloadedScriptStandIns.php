@@ -59,7 +59,6 @@ trait DownloadedScriptStandIns
         self::assertInstanceOf(AssetMapperRepository::class, $repository);
         self::assertInstanceOf(MappedAssetFactoryInterface::class, $factory);
         self::assertInstanceOf(CompiledAssetMapperConfigReader::class, $configReader);
-        self::assertIsString($projectDir);
         /** @var array<string, string> $folders */
         $folders = [...$repository->allDirectories(), $this->standInFolder() => self::STAND_INS_NAMESPACE];
 
