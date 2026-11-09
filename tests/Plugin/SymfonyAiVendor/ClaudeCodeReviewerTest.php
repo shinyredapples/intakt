@@ -6,6 +6,8 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewServerAccesses;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
@@ -61,6 +63,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Platform\Bridge\ClaudeCode\ModelClient;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\PlatformInterface;
@@ -83,6 +86,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(ProjectModelCatalog::class)]
 #[UsesClass(Provider::class)]
+#[UsesClass(ReviewServerAccess::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(AppendResult::class)]
@@ -161,6 +165,37 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertStringContainsString('could not read', $verdict->findings[0]->text);
+    }
+
+    public function testTheCliIsStartedWithTheRoundsReviewServerWhenThereIsOne(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $this->vendor($cli, servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request());
+
+        $command = new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options);
+        self::assertContains('--mcp-config', $command);
+        self::assertContains('--strict-mcp-config', $command);
+        self::assertContains('mcp__intakt-review__read_file', explode(',', $command[array_search('--allowedTools', $command, true) + 1]));
+    }
+
+    public function testAnApprovalFromAReviewerThatHadTheReviewToolsCounts(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAnApprovalFromAReviewerStartedWithoutTheReviewServerIsStillRefused(): void
+    {
+        $servers = self::createStub(ReviewServerAccesses::class);
+        $servers->method('forRound')->willReturn(null);
+        $cli = RecordedClaudeCodeCli::replaying('tool-use');
+
+        $verdict = $this->vendor($cli, servers: $servers)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertArrayNotHasKey('mcp_config', $cli->options);
     }
 
     public function testACliThatExitsMidStreamEndsTheReviewerAsBlocked(): void
@@ -256,6 +291,14 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
+    private function serverOfTheRound(): ReviewServerAccesses
+    {
+        $servers = self::createStub(ReviewServerAccesses::class);
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
+
+        return $servers;
+    }
+
     private function claudeCodePlatform(RecordedClaudeCodeCli $cli): PlatformInterface
     {
         $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
@@ -263,7 +306,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
     }
 
-    private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
+    private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
         $platform = $this->claudeCodePlatform($cli);
@@ -272,6 +315,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers);
     }
 }

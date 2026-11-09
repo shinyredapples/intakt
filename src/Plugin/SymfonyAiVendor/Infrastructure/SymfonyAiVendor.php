@@ -10,6 +10,8 @@ use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewServerAccesses;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -53,6 +55,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
+        private ?ReviewServerAccesses $servers = null,
     ) {
     }
 
@@ -70,7 +73,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->retriedOnceAtTheLimit($first, $retry)),
+            $this->readOrRefused($answering->provider, $this->serverFor($answering->provider, $request), $this->retriedOnceAtTheLimit($first, $retry)),
             $substitute,
         ));
     }
@@ -121,7 +124,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        $platform = new TierRoutedPlatform($this->tiers, $answering);
+        $platform = new TierRoutedPlatform($this->tiers, $answering, $this->serverFor($answering->provider, $request));
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $answering->model);
@@ -174,10 +177,16 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
-    private function readOrRefused(Provider $answeredBy, Verdict $verdict): Verdict
+    // Asked again after the call for the same round and so answered the same, because the call carried exactly this access or none.
+    private function serverFor(Provider $answeredBy, ReviewRequest $request): ?ReviewServerAccess
     {
-        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout()) {
+        return Provider::ClaudeCode === $answeredBy ? $this->servers?->forRound($request->conversation->round) : null;
+    }
+
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
+    private function readOrRefused(Provider $answeredBy, ?ReviewServerAccess $server, Verdict $verdict): Verdict
+    {
+        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckoutThrough($server)) {
             return $verdict;
         }
 

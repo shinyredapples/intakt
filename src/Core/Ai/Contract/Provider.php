@@ -27,10 +27,16 @@ enum Provider: string
         };
     }
 
-    // The subscription CLIs get no tool until the per-review MCP server serves them the fenced ones (plan T15), so they never see the change.
+    // False for the subscription CLIs, which read the change only when a call carries the per-review server's access (readsTheCheckoutThrough), so a call without it never sees the change.
     public function readsTheCheckout(): bool
     {
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
+    }
+
+    // Codex stays out until its reviewer connects to the server (#321).
+    public function readsTheCheckoutThrough(?ReviewServerAccess $access): bool
+    {
+        return $this->readsTheCheckout() || (self::ClaudeCode === $this && null !== $access);
     }
 
     // Not the subscription CLIs, because their bridges answer in a final-result form and a streamed run ends differently: a killed process raises instead of giving an incomplete answer, and an answer after the CLI's own tools has no text.

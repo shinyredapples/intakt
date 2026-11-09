@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Ai\Contract;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -14,11 +15,24 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Provider::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(AiServices::class)]
+#[UsesClass(ReviewServerAccess::class)]
 final class ProviderTest extends TestCase
 {
     public function testNeitherSubscriptionCliReadsTheCheckout(): void
     {
         self::assertSame([false, false], [Provider::ClaudeCode->readsTheCheckout(), Provider::Codex->readsTheCheckout()]);
+    }
+
+    public function testClaudeCodeReadsTheCheckoutOnlyThroughTheReviewServer(): void
+    {
+        $access = new ReviewServerAccess('http://localhost:7780/mcp/review', 'credential', ['read_file']);
+
+        self::assertSame([true, false], [Provider::ClaudeCode->readsTheCheckoutThrough($access), Provider::ClaudeCode->readsTheCheckoutThrough(null)]);
+    }
+
+    public function testCodexStillReadsNothingEvenWithTheReviewServerAccess(): void
+    {
+        self::assertFalse(Provider::Codex->readsTheCheckoutThrough(new ReviewServerAccess('http://localhost:7780/mcp/review', 'credential', ['read_file'])));
     }
 
     public function testAnApiProviderReadsTheCheckout(): void

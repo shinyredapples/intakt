@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Override;
@@ -27,6 +28,7 @@ final class TierRoutedPlatform implements PlatformInterface
     public function __construct(
         private readonly TierInvoker $tiers,
         private readonly ResolvedModel $answering,
+        private readonly ?ReviewServerAccess $server = null,
     ) {
     }
 
@@ -41,7 +43,7 @@ final class TierRoutedPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        $round = $this->tiers->invoke($this->answering, new TierRequest($input, $options));
+        $round = $this->tiers->invoke($this->answering, new TierRequest($input, null === $this->server ? $options : [...$options, ReviewServerAccess::OPTION => $this->server]));
         $this->rounds[] = $round;
 
         return $round;
