@@ -20,23 +20,41 @@ final class JourneyAlarmTest extends TestCase
     private const string COMMAND = __DIR__.'/../../../bin/journey-alarm';
     private const string REPOSITORY = 'example/repo';
     // Records each call with what it read on stdin, and answers from the issues file it keeps, so a later run sees an earlier run's issue.
+    // With `listing-waits`, a listing waits up to 2 seconds for a second one, so two runs without serialization both list before either creates.
+    // With `rival.json`, a create also opens that issue, as a run on another machine would at the same moment.
     private const string FAKE_GH = <<<'PHP'
         #!/usr/bin/env php
         <?php
         $arguments = array_slice($argv, 1);
+        $action = 'api' === $arguments[0] ? 'api' : $arguments[1];
         $input = in_array('--body-file', $arguments, true) ? stream_get_contents(STDIN) : '';
-        file_put_contents(__DIR__.'/calls.jsonl', json_encode(['arguments' => $arguments, 'input' => $input])."\n", FILE_APPEND);
+        file_put_contents(__DIR__.'/calls.jsonl', json_encode(['arguments' => $arguments, 'input' => $input])."\n", FILE_APPEND | LOCK_EX);
+        if ('api' === $action && is_file(__DIR__.'/listing-waits')) {
+            touch(__DIR__.'/listed-'.getmypid());
+            $end = microtime(true) + 2;
+            while (count(glob(__DIR__.'/listed-*')) < 2 && microtime(true) < $end) {
+                usleep(10000);
+            }
+        }
         $issues = json_decode(file_get_contents(__DIR__.'/issues.json'), true);
-        if ('list' === $arguments[1]) {
-            echo file_get_contents(__DIR__.'/issues.json');
+        if ('api' === $action) {
+            echo is_array($issues) && array_is_list($issues) ? json_encode(array_chunk($issues, 100)) : json_encode($issues);
         }
-        if ('create' === $arguments[1]) {
-            $issues[] = ['number' => count($issues) + 7, 'body' => $input];
-            echo 'https://github.com/example/repo/issues/'.(count($issues) + 6)."\n";
+        if ('create' === $action) {
+            $number = count($issues) + 7;
+            $issues[] = ['number' => $number, 'body' => $input];
+            if (is_file(__DIR__.'/rival.json')) {
+                $issues[] = json_decode(file_get_contents(__DIR__.'/rival.json'), true);
+                unlink(__DIR__.'/rival.json');
+            }
+            echo 'https://github.com/example/repo/issues/'.$number."\n";
         }
-        if ('edit' === $arguments[1]) {
+        if ('edit' === $action) {
             $issues = array_map(fn (array $issue): array => $issue['number'] === (int) $arguments[2] ? ['number' => $issue['number'], 'body' => $input] : $issue, $issues);
             echo 'https://github.com/example/repo/issues/'.$arguments[2]."\n";
+        }
+        if ('close' === $action) {
+            $issues = array_values(array_filter($issues, fn (array $issue): bool => $issue['number'] !== (int) $arguments[2]));
         }
         file_put_contents(__DIR__.'/issues.json', json_encode($issues));
         PHP;
@@ -156,7 +174,92 @@ final class JourneyAlarmTest extends TestCase
         $alarm = $this->alarm([$this->fixture()]);
 
         self::assertSame(1, $alarm->getExitCode());
-        self::assertStringContainsString('gh issue list failed: HTTP 401', $alarm->getErrorOutput());
+        self::assertStringContainsString('gh api repos/example/repo/issues?state=open&per_page=100 failed: HTTP 401', $alarm->getErrorOutput());
+    }
+
+    public function testTwoRedRunsAtTheSameTimeFileOneTaskAndTheLaterUpdatesIt(): void
+    {
+        new Filesystem()->touch($this->directory.'/listing-waits');
+        $runs = [$this->started([$this->fixture()]), $this->started([$this->fixture()])];
+        array_walk($runs, static fn (Process $run): int => $run->wait());
+
+        $outputs = array_map(static fn (Process $run): string => $run->getOutput(), $runs);
+        sort($outputs);
+        self::assertSame(["filed https://github.com/example/repo/issues/7\n", "updated #7\n"], $outputs, $runs[0]->getErrorOutput().$runs[1]->getErrorOutput());
+        self::assertCount(1, $this->callsOf('create'));
+    }
+
+    public function testARunThatMeetsAnOlderTaskFiledMeanwhileClosesItsOwnAndUpdatesTheOlder(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/rival.json', json_encode(['number' => 2, 'body' => JourneyAlarmTask::MARKER."\nrival"], JSON_THROW_ON_ERROR));
+
+        $alarm = $this->alarm([$this->fixture()]);
+
+        self::assertSame("updated #2, closed #7 as its duplicate\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame([['issue', 'close', '7', '--comment', 'Duplicate of #2', '--repo', self::REPOSITORY]], array_column($this->callsOf('close'), 'arguments'));
+        self::assertSame(['issue', 'edit', '2', '--body-file', '-', '--repo', self::REPOSITORY], $this->callsOf('edit')[0]['arguments']);
+    }
+
+    public function testARunWhoseTaskIsOlderThanOneFiledMeanwhileKeepsIt(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/rival.json', json_encode(['number' => 9, 'body' => JourneyAlarmTask::MARKER."\nrival"], JSON_THROW_ON_ERROR));
+
+        $alarm = $this->alarm([$this->fixture()]);
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame([], $this->callsOf('close'));
+        self::assertSame([], $this->callsOf('edit'));
+    }
+
+    public function testAMarkedTaskBehindAThousandNewerOpenIssuesIsUpdated(): void
+    {
+        $newer = array_map(static fn (int $number): array => [$number, 'ordinary'], range(1002, 2));
+        $this->openIssues($this->issues(...[...$newer, [1, JourneyAlarmTask::MARKER]]));
+
+        $alarm = $this->alarm([$this->fixture()]);
+
+        self::assertSame("updated #1\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame([], $this->callsOf('create'));
+    }
+
+    public function testAPullRequestWhoseBodyHoldsTheMarkerIsNotTheTask(): void
+    {
+        $this->openIssues(json_encode([['number' => 4, 'body' => JourneyAlarmTask::MARKER, 'pull_request' => ['url' => 'https://api.github.com/repos/example/repo/pulls/4']]], JSON_THROW_ON_ERROR));
+
+        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([$this->fixture()])->getOutput());
+    }
+
+    public function testAnOpenIssueWithAnEmptyBodyIsNotTheTask(): void
+    {
+        $this->openIssues('[{"number":3,"body":null}]');
+
+        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([$this->fixture()])->getOutput());
+    }
+
+    public function testARedRunWithoutATokenInTheEnvironmentFailsBeforeCallingGh(): void
+    {
+        $alarm = $this->alarm([$this->fixture()], environment: ['GH_TOKEN' => false]);
+
+        self::assertSame(1, $alarm->getExitCode());
+        self::assertStringContainsString('GH_TOKEN or GITHUB_TOKEN must hold the token', $alarm->getErrorOutput());
+        self::assertSame([], $this->calls());
+    }
+
+    public function testATokenInGithubTokenAloneIsEnough(): void
+    {
+        $alarm = $this->alarm([$this->fixture()], environment: ['GH_TOKEN' => false, 'GITHUB_TOKEN' => bin2hex(random_bytes(8))]);
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+    }
+
+    public function testACreateAnswerThatIsNoIssueLinkFailsTheCommand(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/gh', "#!/usr/bin/env sh\nif [ \"\$1\" = api ]; then echo '[[]]'; else echo 'new issue'; fi\n");
+
+        $alarm = $this->alarm([$this->fixture()]);
+
+        self::assertSame(1, $alarm->getExitCode());
+        self::assertStringContainsString('not a link to an issue', $alarm->getErrorOutput());
     }
 
     public function testAFileItCannotReadIsAUsageError(): void
@@ -181,18 +284,38 @@ final class JourneyAlarmTest extends TestCase
     }
 
     /**
-     * @param list<string> $arguments
+     * @param list<string>              $arguments
+     * @param array<string, string|false> $environment
      */
-    private function alarm(array $arguments, string $input = '', string $repository = self::REPOSITORY): Process
+    private function alarm(array $arguments, string $input = '', string $repository = self::REPOSITORY, array $environment = []): Process
+    {
+        $process = $this->started($arguments, $input, $repository, $environment);
+        $process->wait();
+
+        return $process;
+    }
+
+    /**
+     * @param list<string>              $arguments
+     * @param array<string, string|false> $environment
+     */
+    private function started(array $arguments, string $input = '', string $repository = self::REPOSITORY, array $environment = []): Process
     {
         $process = new Process(
             [PHP_BINARY, self::COMMAND, ...$arguments],
             null,
-            ['PATH' => $this->directory.':'.getenv('PATH'), 'GITHUB_REPOSITORY' => $repository],
+            [
+                'PATH' => $this->directory.':'.getenv('PATH'),
+                'GITHUB_REPOSITORY' => $repository,
+                'GH_TOKEN' => bin2hex(random_bytes(8)),
+                'GITHUB_TOKEN' => false,
+                'TMPDIR' => $this->directory,
+                ...$environment,
+            ],
             $input,
             60,
         );
-        $process->run();
+        $process->start();
 
         return $process;
     }
@@ -215,7 +338,7 @@ final class JourneyAlarmTest extends TestCase
      */
     private function callsOf(string $action): array
     {
-        return array_values(array_filter($this->calls(), static fn (array $call): bool => $action === ($call['arguments'][1] ?? null)));
+        return array_values(array_filter($this->calls(), static fn (array $call): bool => $action === ('api' === $call['arguments'][0] ? 'api' : $call['arguments'][1] ?? null)));
     }
 
     /**

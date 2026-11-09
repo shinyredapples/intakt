@@ -7,6 +7,8 @@ use Intakt\Tests\Journeys\Support\GitHubCallFailed;
 use Intakt\Tests\Journeys\Support\GitHubIssues;
 use Intakt\Tests\Journeys\Support\JourneyAlarm;
 use Intakt\Tests\Journeys\Support\UnreadableJourneyRun;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\FlockStore;
 use Uri\Rfc3986\Uri;
 
 const USAGE = "usage: bin/journey-alarm [--run=<https link to the run>] [<file with the output of bin/check --journeys>]\n";
@@ -57,7 +59,8 @@ if (false === $output) {
 }
 
 try {
-    fwrite(STDOUT, new JourneyAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')))->raise($output, $link)."\n");
+    $alarm = new JourneyAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')), new LockFactory(new FlockStore()));
+    fwrite(STDOUT, $alarm->raise($output, $link)."\n");
 } catch (UnreadableJourneyRun|GitHubCallFailed $failure) {
     fwrite(STDERR, $failure->getMessage()."\n");
     exit(1);

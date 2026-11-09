@@ -6,12 +6,13 @@ namespace Intakt\Tests\Journeys\Support;
 
 use Symfony\Component\Process\Process;
 
-// `gh` takes its token from GH_TOKEN in the environment, so no credential passes through this class.
+// `gh` takes its token from GH_TOKEN or GITHUB_TOKEN in the environment, so no credential passes through this class.
 final readonly class GitHubIssues
 {
     private const string REPOSITORY = '/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/';
+    private const string ISSUE_LINK = '/\/issues\/(?<number>[1-9][0-9]*)$/';
+    private const array TOKENS = ['GH_TOKEN', 'GITHUB_TOKEN'];
     private const int SECONDS = 60;
-    private const int OPEN_ISSUES_READ = 1000;
 
     public function __construct(private string $repository)
     {
@@ -29,17 +30,29 @@ final readonly class GitHubIssues
 
     /**
      * @param list<string> $labels
+     *
+     * @return array{number: int, link: string}
      */
-    public function create(string $title, string $body, array $labels): string
+    public function create(string $title, string $body, array $labels): array
     {
         $labelArguments = array_merge(...array_map(static fn (string $label): array => ['--label', $label], $labels));
+        $link = $this->issueCommand(['create', '--title', $title, ...$labelArguments, '--body-file', '-'], $body);
 
-        return $this->gh(['issue', 'create', '--title', $title, ...$labelArguments, '--body-file', '-'], $body);
+        if (1 !== preg_match(self::ISSUE_LINK, $link, $match)) {
+            throw new GitHubCallFailed('gh issue create answered something that is not a link to an issue');
+        }
+
+        return ['number' => (int) $match['number'], 'link' => $link];
     }
 
-    public function replaceBody(int $number, string $body): string
+    public function replaceBody(int $number, string $body): void
     {
-        return $this->gh(['issue', 'edit', (string) $number, '--body-file', '-'], $body);
+        $this->issueCommand(['edit', (string) $number, '--body-file', '-'], $body);
+    }
+
+    public function closeAsDuplicateOf(int $number, int $original): void
+    {
+        $this->issueCommand(['close', (string) $number, '--comment', 'Duplicate of #'.$original], '');
     }
 
     /**
@@ -47,14 +60,18 @@ final readonly class GitHubIssues
      */
     private function openIssues(): array
     {
-        $answer = $this->gh(['issue', 'list', '--state', 'open', '--limit', (string) self::OPEN_ISSUES_READ, '--json', 'number,body'], '');
-        $issues = json_validate($answer) ? json_decode($answer, true) : null;
+        // Every page is read, so a marked task behind any number of newer issues is still found.
+        $answer = $this->gh(['api', 'repos/'.$this->repository.'/issues?state=open&per_page=100', '--paginate', '--slurp'], '');
+        $pages = json_validate($answer) ? json_decode($answer, true) : null;
 
-        if (!is_array($issues) || !array_is_list($issues)) {
+        if (!is_array($pages) || !array_is_list($pages) || !array_all($pages, static fn (mixed $page): bool => is_array($page) && array_is_list($page))) {
             throw $this->notAnIssueList();
         }
 
-        return array_map($this->issueFrom(...), $issues);
+        $items = array_merge([], ...$pages);
+        $issues = array_filter($items, static fn (mixed $item): bool => !is_array($item) || !array_key_exists('pull_request', $item));
+
+        return array_values(array_map($this->issueFrom(...), $issues));
     }
 
     /**
@@ -63,18 +80,27 @@ final readonly class GitHubIssues
     private function issueFrom(mixed $issue): array
     {
         $number = is_array($issue) ? $issue['number'] ?? null : null;
-        $body = is_array($issue) ? $issue['body'] ?? null : null;
+        $hasBody = is_array($issue) && array_key_exists('body', $issue);
+        $body = $hasBody ? $issue['body'] : null;
 
-        if (!is_int($number) || !is_string($body)) {
+        if (!is_int($number) || !$hasBody || (null !== $body && !is_string($body))) {
             throw $this->notAnIssueList();
         }
 
-        return ['number' => $number, 'body' => $body];
+        return ['number' => $number, 'body' => $body ?? ''];
     }
 
     private function notAnIssueList(): GitHubCallFailed
     {
-        return new GitHubCallFailed('gh issue list answered something that is not a list of issues with a number and a body');
+        return new GitHubCallFailed('gh api answered something that is not a list of issues with a number and a body');
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function issueCommand(array $arguments, string $input): string
+    {
+        return $this->gh(['issue', ...$arguments, '--repo', $this->repository], $input);
     }
 
     /**
@@ -86,7 +112,11 @@ final readonly class GitHubIssues
             throw new GitHubCallFailed('GITHUB_REPOSITORY must name the repository as <owner>/<name>');
         }
 
-        $process = new Process(['gh', ...$arguments, '--repo', $this->repository], null, null, $input, self::SECONDS);
+        if (array_all(self::TOKENS, static fn (string $name): bool => '' === (string) getenv($name))) {
+            throw new GitHubCallFailed('GH_TOKEN or GITHUB_TOKEN must hold the token, so gh never falls back to a stored login');
+        }
+
+        $process = new Process(['gh', ...$arguments], null, null, $input, self::SECONDS);
         $process->run();
 
         if (!$process->isSuccessful()) {
