@@ -9,6 +9,7 @@ use Intakt\Core\Job\Infrastructure\JobLocks;
 use Intakt\Core\Job\Infrastructure\LabeledResource;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Messenger\Event\WorkerStartedEvent;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
@@ -59,7 +60,7 @@ final readonly class SweepOrphanedJobs
     {
         $lock = $this->locks->claim($jobId);
 
-        if (null === $lock) {
+        if (!$lock instanceof LockInterface) {
             return false;
         }
 

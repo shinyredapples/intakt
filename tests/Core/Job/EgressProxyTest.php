@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job;
 
+use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Job\Infrastructure\EgressProxy;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Intakt\Core\Job\Contract\JobSpec;
 
 #[CoversClass(EgressProxy::class)]
 #[UsesClass(JobSpec::class)]

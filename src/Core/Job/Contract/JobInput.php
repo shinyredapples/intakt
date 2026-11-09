@@ -28,12 +28,6 @@ final readonly class JobInput
             return true;
         }
 
-        foreach (JobPaths::reserved() as $reserved) {
-            if (str_starts_with($target.'/', $reserved.'/')) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any(JobPaths::reserved(), fn ($reserved) => str_starts_with($target.'/', $reserved.'/'));
     }
 }

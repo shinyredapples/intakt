@@ -46,7 +46,7 @@ final class FakeDockerEngine
             'POST /networks/create' === $method.' '.$path => $this->networkCreated($body),
             'GET /containers/json' === $method.' '.$path => $this->listed($this->containers, static fn (array $c): array => $c['body']['Labels'] ?? []),
             'GET /networks' === $method.' '.$path => $this->listed($this->networks, static fn (array $n): array => $n['labels']),
-            1 === preg_match('#^/containers/([^/]+)/(\w+)$#', $path, $m) => $this->containerCall($method, $m[1], $m[2]),
+            1 === preg_match('#^/containers/([^/]+)/(\w+)$#', $path, $m) => $this->containerCall($m[1], $m[2]),
             1 === preg_match('#^/containers/([^/]+)$#', $path, $m) && 'DELETE' === $method => $this->removed($this->containers, $m[1]),
             1 === preg_match('#^/networks/([^/]+)$#', $path, $m) && 'DELETE' === $method => $this->removed($this->networks, $m[1]),
             1 === preg_match('#^/networks/([^/]+)/connect$#', $path) => new MockResponse('{}'),
@@ -116,7 +116,7 @@ final class FakeDockerEngine
         return new MockResponse(json_encode(['Id' => $id], JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }
 
-    private function containerCall(string $method, string $id, string $action): MockResponse
+    private function containerCall(string $id, string $action): MockResponse
     {
         $isProxy = str_ends_with($this->containers[$id]['name'] ?? '', '-proxy');
 
@@ -135,7 +135,7 @@ final class FakeDockerEngine
             return new MockResponse('{"message":"cannot start"}', ['http_code' => 500]);
         }
 
-        if (!$isProxy && null !== $this->onJobStart) {
+        if (!$isProxy && $this->onJobStart instanceof Closure) {
             ($this->onJobStart)($this->containers[$id]['body']);
         }
 
@@ -157,7 +157,7 @@ final class FakeDockerEngine
     }
 
     /**
-     * @param array<string, mixed>                $resources
+     * @param array<string, mixed>                                 $resources
      * @param Closure(array<string, mixed>): array<string, string> $labels
      */
     private function listed(array $resources, Closure $labels): MockResponse

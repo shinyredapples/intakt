@@ -18,7 +18,7 @@ final class DockerEngineApiTest extends TestCase
 {
     public function testLogsOfSeveralFramesAreJoinedWithoutTheirHeaders(): void
     {
-        $framed = "\x01\x00\x00\x00".pack('N', 3).'ab'."\n"."\x02\x00\x00\x00".pack('N', 2).'c'."\n";
+        $framed = "\x01\x00\x00\x00".pack('N', 3).'ab'."\n\x02\x00\x00\x00".pack('N', 2).'c'."\n";
 
         $api = $this->apiAnswering(new MockResponse($framed));
 
