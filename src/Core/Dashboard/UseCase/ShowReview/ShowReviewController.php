@@ -33,7 +33,7 @@ final readonly class ShowReviewController
             throw new NotFoundHttpException('The ledger holds no review with this round.');
         }
 
-        return new Response($this->pages->render($request, 'dashboard/review.html.twig', ['review' => $review, 'round' => $round], $this->unfinishedTopicsOf($review)));
+        return new Response($this->pages->render($request, 'dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'topics' => $this->unfinishedTopicsOf($review)]));
     }
 
     /**

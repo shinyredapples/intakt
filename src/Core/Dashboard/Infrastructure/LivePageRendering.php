@@ -21,16 +21,15 @@ final readonly class LivePageRendering
     }
 
     /**
-     * @param array<string, mixed> $context
-     * @param list<string>         $topics  the page's own topics, listened to besides the shell's
+     * @param array<string, mixed> $context a page's own topics go in `topics`, listened to besides the shell's
      */
-    public function render(Request $request, string $template, array $context, array $topics = []): string
+    public function render(Request $request, string $template, array $context): string
     {
         $flashBag = $this->flashBagOf($request);
         $flashes = $flashBag->peekAll();
 
         try {
-            return $this->twig->render($template, [...$context, 'live' => true, 'topics' => $topics]);
+            return $this->twig->render($template, [...$context, 'live' => true]);
         } catch (Throwable $failure) {
             // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; flashes put back, because the failed attempt read them.
             $flashBag->setAll($flashes);
