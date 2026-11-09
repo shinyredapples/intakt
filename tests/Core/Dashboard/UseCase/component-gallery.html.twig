@@ -12,6 +12,10 @@
     {{ include(c ~ 'button.html.twig', {kind: 'needs', label: 'Approve a3f9c21'}) }}
     {{ include(c ~ 'button.html.twig', {kind: 'secondary', label: 'Disabled', disabled: true}) }}
     {{ include(c ~ 'icon_button.html.twig', {label: 'Theme', icon: 'moon'}) }}
+    {% for kind in ['primary', 'secondary', 'quiet', 'needs'] %}{{ include(c ~ 'button.html.twig', {kind: kind, label: 'Hover', confirm: 'Click again', forced: 'hover'}) }}{% endfor %}
+    {{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Active', forced: 'active'}) }}
+    {{ include(c ~ 'button.html.twig', {kind: 'primary', label: 'Focus', forced: 'focus'}) }}
+    {{ include(c ~ 'icon_button.html.twig', {label: 'Theme, focus', icon: 'moon', forced: 'focus'}) }}
 
     <h2>Chips and badges</h2>
     {{ include(c ~ 'chip.html.twig', {label: 'In review, round 2', dot: 'ok', on_page: true}) }}
@@ -28,6 +32,9 @@
 
     <h2>Cards</h2>
     {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Command overlay for tasks and settings', meta: [{icon: 'clock', text: '42 min'}, {text: 'Slot 1, Model L'}, {text: '9b3e5aa', mono: true}]}) }}
+    {{ include(c ~ 'card.html.twig', {href: '#', number: 612, project: 'intakt', title: 'Hover', forced: 'hover', meta: [{text: 'Size M'}]}) }}
+    {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Hover', ask: 'Approve', forced: 'hover', meta: [{text: 'Size M'}]}) }}
+    {{ include(c ~ 'input.html.twig', {id: 'forced-focus', name: 'focus', value: 'Focus', aria_label: 'Focus', forced: 'focus'}) }}
     {{ include(c ~ 'card.html.twig', {href: '#', number: 589, project: 'intakt', title: 'Rotate the forge token without a restart', ask: 'Approve this version: it touches secret handling', meta: [{icon: 'clock', text: '1 h 05 min'}]}) }}
     {{ include(c ~ 'card.html.twig', {href: '#', number: 205, project: 'acme-shop', title: 'Refund emails include the order number', emphasis: {icon: 'broken', text: 'Waiting for CI: image build failing', broken: true}, meta: [{icon: 'clock', text: '1 h 50 min'}]}) }}
     {{ include(c ~ 'skeleton.html.twig') }}
@@ -61,7 +68,7 @@
     {{ include(c ~ 'offline.html.twig') }}
 
     <h2>Sub-tabs</h2>
-    {{ include(c ~ 'subtabs.html.twig', {label: 'History', tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}]}) }}
+    {{ include(c ~ 'subtabs.html.twig', {label: 'History', tabs: [{label: 'Ledger', href: '#', current: true}, {label: 'Trends', href: '#'}, {label: 'Focus', href: '#', forced: 'focus'}]}) }}
     {{ include(c ~ 'segmented.html.twig', {label: 'Show', tabs: [{label: 'Timeline', selected: true}, {label: 'Live log'}]}) }}
     {{ include(c ~ 'filter_chip.html.twig', {label: '14 days', pressed: true}) }}
     {{ include(c ~ 'filter_chip.html.twig', {label: '8 weeks'}) }}

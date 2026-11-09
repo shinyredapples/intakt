@@ -20,6 +20,13 @@ svg.i.s { width: 15px; height: 15px; }
 .btn.quiet:hover { background: var(--tint); }
 .btn.needs { background: var(--amber); color: var(--ink-fixed); }
 .btn.needs:hover { filter: brightness(1.05); }
+/* Forced states: only the components page passes them, so no other page shows one. */
+.btn.is-active { transform: translateY(1px); filter: brightness(.94); }
+.btn.primary.is-hover { filter: brightness(1.08); }
+.btn.secondary.is-hover, .btn.danger.is-hover { background: var(--tint-2); }
+.btn.quiet.is-hover { background: var(--tint); }
+.btn.needs.is-hover { filter: brightness(1.05); }
+.btn.is-focus, .icon-btn.is-focus, .card.is-focus, .subtabs a.is-focus { outline: 2px solid var(--primary); outline-offset: 2px; }
 .btn.is-loading { cursor: progress; }
 .btn[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
 .icon-btn {
@@ -55,7 +62,9 @@ svg.i.s { width: 15px; height: 15px; }
 .card { display: block; padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); color: var(--ink); text-decoration: none; }
 .card:hover { background: var(--tint-2); }
 .card.needs, .card.needs:hover { background: var(--amber-tint); }
-.card.needs:hover { filter: brightness(.98); }
+.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
+.card.is-hover { background: var(--tint-2); }
+.card.needs.is-hover { background: var(--amber-tint); }
 .card .top { display: flex; align-items: center; gap: var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
 .card .top .pname { margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .title {
@@ -93,7 +102,7 @@ svg.i.s { width: 15px; height: 15px; }
   height: 40px; padding: 0 var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-btn);
   background: var(--raised); color: var(--ink); font: inherit;
 }
-.input:focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: transparent; }
+.input:focus, .input.is-focus { outline: 2px solid var(--primary); outline-offset: 0; border-color: transparent; }
 .input[aria-invalid="true"] { border-color: var(--red); }
 .input:disabled, .select:disabled { opacity: .55; cursor: not-allowed; }
 .field-error { margin-left: var(--s8); color: var(--red); font-size: var(--t13); }

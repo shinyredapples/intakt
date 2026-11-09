@@ -37,6 +37,38 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertNull($button->attr('data-controller'));
     }
 
+    public function testAButtonWithoutAForcedStateRendersNoForcedStateClass(): void
+    {
+        $button = $this->render('button', ['kind' => 'primary', 'label' => 'Save'])->filter('button');
+
+        self::assertSame('btn primary', $button->attr('class'));
+    }
+
+    public function testAButtonWithAForcedStateCarriesItsClass(): void
+    {
+        $button = $this->render('button', ['kind' => 'primary', 'label' => 'Save', 'forced' => 'hover'])->filter('button');
+
+        self::assertSame('btn primary is-hover', $button->attr('class'));
+    }
+
+    public function testTheOtherComponentsCarryAForcedStateOnlyWhenGivenOne(): void
+    {
+        $plain = ['label' => 'Theme', 'icon' => 'moon', 'href' => '#', 'number' => 1, 'project' => 'p', 'title' => 'T', 'meta' => [], 'id' => 'x', 'name' => 'x'];
+
+        foreach (['icon_button' => '.icon-btn', 'card' => '.card', 'input' => '.input'] as $component => $selector) {
+            self::assertStringNotContainsString('is-', (string) $this->render($component, $plain)->filter($selector)->attr('class'), $component);
+            self::assertStringContainsString('is-focus', (string) $this->render($component, $plain + ['forced' => 'focus'])->filter($selector)->attr('class'), $component);
+        }
+    }
+
+    public function testASubTabWithAForcedStateCarriesItsClassAndTheOthersDoNot(): void
+    {
+        $tabs = $this->render('subtabs', ['label' => 'Example', 'tabs' => [['label' => 'Ledger', 'href' => '#'], ['label' => 'Focus', 'href' => '#', 'forced' => 'focus']]])->filter('a');
+
+        self::assertNull($tabs->eq(0)->attr('class'));
+        self::assertSame('is-focus', $tabs->eq(1)->attr('class'));
+    }
+
     public function testADangerButtonIsArmedByItsFirstClickAndAsksToClickAgain(): void
     {
         $button = $this->render('button', [
