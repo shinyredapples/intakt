@@ -1,10 +1,10 @@
 name: journeys
-# The journeys on main, nightly and on demand; a red run files or updates one urgent task and still ends red.
+# A red run files or updates one urgent task and still ends red.
 on:
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
-# A new run waits for the running one instead of cancelling it.
+# A new run waits for the running one.
 concurrency:
   group: journeys
   cancel-in-progress: false
@@ -32,7 +32,7 @@ jobs:
       - name: Run the journeys
         id: journeys
         run: |
-          set -eu -o pipefail
+          set -o pipefail
           apparmor=
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
           docker run --rm --user 1000:1000 \
