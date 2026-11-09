@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Infrastructure\AnthropicTextBlocks;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
@@ -25,6 +26,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamAcceptance;
+use Intakt\Core\Review\Infrastructure\StreamedAnswer;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
@@ -51,6 +53,8 @@ use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
+#[CoversClass(StreamedAnswer::class)]
+#[CoversClass(AnthropicTextBlocks::class)]
 #[UsesClass(StrictVerdictStreamListener::class)]
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewerPrompt::class)]
@@ -150,6 +154,34 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
 
         self::assertSame(Decision::Approve, $verdict->verdict, json_encode($verdict->findings, JSON_THROW_ON_ERROR));
         self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
+    }
+
+    public function testTheTextAStreamedModelNarratesBeforeAToolCallIsNotTakenForTheAnswer(): void
+    {
+        $tool = RecordedAnthropicTurns::askingForATool()->thinking('Read first.')->saying('I will read the cart.')->callingATool('toolu_01', 'read_file', ['path' => 'src/Cart.php']);
+        $answer = RecordedAnthropicTurns::answering()->thinking('Done.')->saying(self::APPROVE);
+
+        $verdict = $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
+
+        self::assertSame(Decision::Approve, $verdict->verdict, json_encode($verdict->findings, JSON_THROW_ON_ERROR));
+        self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
+    }
+
+    public function testAnAnswerInTwoTextBlocksBesideItsThinkingEndsAsChanges(): void
+    {
+        $verdict = $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->thinking('Done.')->saying(self::APPROVE)->saying(self::APPROVE)));
+
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    public function testAStreamedAnswerSplitAcrossTwoTextBlocksEndsAsChanges(): void
+    {
+        $tool = RecordedAnthropicTurns::askingForATool()->callingATool('toolu_01', 'read_file', ['path' => 'src/Cart.php']);
+        $answer = RecordedAnthropicTurns::answering()->thinking('Done.')->saying('{"verdict":"approve",')->saying('"findings":[],"resolved":[],"follow_ups":[]}');
+
+        $verdict = $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
+
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id, json_encode($verdict, JSON_THROW_ON_ERROR));
     }
 
     /**
