@@ -33,7 +33,9 @@ final class JourneysWorkflowTest extends TestCase
      */
     private function workflow(): array
     {
-        /** @var array{on: array<string, mixed>, permissions: array<string, string>, jobs: array{journeys: array{permissions?: array<string, string>}, alarm: array{runs-on: string}}} */
-        return Yaml::parseFile(__DIR__.'/../../.github/workflows/journeys.yml');
+        /** @var array{on: array<string, mixed>, permissions: array<string, string>, jobs: array{journeys: array{permissions?: array<string, string>}, alarm: array{runs-on: string}}} $workflow */
+        $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/journeys.yml');
+
+        return $workflow;
     }
 }
