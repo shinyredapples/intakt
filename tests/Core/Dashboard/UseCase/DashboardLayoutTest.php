@@ -24,13 +24,27 @@ final class DashboardLayoutTest extends DashboardPageTestCase
      */
     public static function pages(): iterable
     {
+        yield 'the project list' => ['/projects'];
         yield 'the review list' => ['/reviews'];
+        yield 'a running review' => ['/reviews/round-1'];
         yield 'the components page' => ['/components'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function pagesOtherThanTheComponentsPage(): iterable
+    {
+        yield 'the project list' => ['/projects'];
+        yield 'the review list' => ['/reviews'];
+        yield 'a running review' => ['/reviews/round-1'];
     }
 
     #[DataProvider('pages')]
     public function testEveryPageLoadsNoFontScriptOrStyleFromAnotherHost(string $path): void
     {
+        $this->ledger->startRound('round-1', 'alpha');
+
         $page = $this->browser->request('GET', $path);
         self::assertResponseIsSuccessful();
 
@@ -42,10 +56,31 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertDoesNotMatchRegularExpression('#url\(\s*["\']?(https?:)?//#i', $page->html());
     }
 
+    #[DataProvider('pagesOtherThanTheComponentsPage')]
+    public function testNoPageOtherThanTheComponentsPageRendersAForcedState(string $path): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', $path);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame(0, $page->filter('.is-hover, .is-focus, .is-active')->count());
+    }
+
+    public function testTheComponentsPageRendersForcedStates(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertResponseIsSuccessful();
+        self::assertGreaterThan(0, $page->filter('.is-hover, .is-focus, .is-active')->count());
+    }
+
     // Without it a phone lays the page out at a desktop width, so the 390 px rules of DESIGN.md never apply.
     #[DataProvider('pages')]
     public function testEveryPageSetsTheDeviceWidthViewport(string $path): void
     {
+        $this->ledger->startRound('round-1', 'alpha');
+
         $page = $this->browser->request('GET', $path);
 
         self::assertSame('width=device-width, initial-scale=1', $page->filter('head meta[name="viewport"]')->attr('content'));

@@ -18,7 +18,7 @@ final class TestServicesScopeTest extends KernelTestCase
     {
         self::bootKernel();
 
-        self::assertNotInstanceOf(OnePanel::class, self::getContainer()->get(Panels::class));
+        self::assertNotSame(self::getContainer()->get(OnePanel::class), self::getContainer()->get(Panels::class));
     }
 
     public function testAKernelTestOutsideTheSdkClientTestGetsTheConfiguredChangeReviews(): void

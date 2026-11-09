@@ -38,7 +38,6 @@ use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Serializer\SerializerInterface;
 
 // The round runs through the console's own use case with a vendor that stops at the limit, so the page is compared with the outcome the console reports and nothing is seeded by hand.
 #[Group('persistence')]
@@ -91,7 +90,6 @@ final class FailedReviewerPageTest extends WebTestCase
             }
         };
         $serializer = self::getContainer()->get('serializer.stored');
-        assert($serializer instanceof SerializerInterface);
         $handler = $fixture->startHandlerOn($fixture->bus);
         $reviewChange = new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),

@@ -1,6 +1,6 @@
-{#- kind: primary, secondary, quiet, danger (arms on the first click, says `confirm`, never red) or needs (the one action a needs-you item asks for). -#}
+{#- forced shows a hover, focus or active look for the components page and renders nothing else. kind: primary, secondary, quiet, danger (arms on the first click, says `confirm`, never red) or needs (the one action a needs-you item asks for). -#}
 {%- set busy = busy|default(false) -%}
-<button type="{{ type|default('button') }}" class="btn {{ kind }}{% if small|default(false) %} sm{% endif %}{% if busy %} is-loading{% endif %}"
+<button type="{{ type|default('button') }}" class="btn {{ kind }}{% if small|default(false) %} sm{% endif %}{% if busy %} is-loading{% endif %}{% if forced|default(null) %} is-{{ forced }}{% endif %}"
     {%- if kind == 'danger' %} data-controller="arm" data-action="arm#click" data-arm-confirm-value="{{ confirm }}"{% endif %}
     {%- if busy %} aria-busy="true"{% endif %}
     {%- if disabled|default(false) %} disabled{% endif %}>{{ label }}</button>

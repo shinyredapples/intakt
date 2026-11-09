@@ -9,10 +9,10 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
@@ -289,7 +289,7 @@ final class AiProvidersTest extends KernelTestCase
      * @param array<string, string> $values
      * @param list<string>          $keep
      */
-    private function bootWith(array $values, array $keep = []): ContainerInterface
+    private function bootWith(array $values, array $keep = []): RebuiltContainer
     {
         foreach (self::VARIABLES as $name) {
             if (in_array($name, $keep, true)) {
@@ -307,7 +307,7 @@ final class AiProvidersTest extends KernelTestCase
         $this->containers->useFor($this->buildInputs());
         self::bootKernel();
 
-        return self::getContainer();
+        return new RebuiltContainer(self::getContainer());
     }
 
     private static function compiledContainers(): CompiledContainers

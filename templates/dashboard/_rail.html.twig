@@ -1,0 +1,27 @@
+{# The rail of every page, below 761 px the bottom bar. On a phone the pages under More leave the bar to the More item, whose sheet lists them, so the item and its sheet come with the first of those pages. #}
+<nav class="rail" id="rail" aria-label="Main">
+    <div class="rail-in">
+        <a class="brand" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home">
+            <img class="logo-full logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt">
+            <img class="logo-full logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt">
+            <img class="mark" src="{{ asset('images/favicon-32.png') }}" alt="Intakt">
+        </a>
+        {% for item in rail_items|merge(more_items) %}
+        <a class="nav{% if item in more_items %} in-more{% endif %}" data-k="{{ item.key }}" href="{{ path(item.route) }}" title="{{ item.label }}"{% if current_route == item.route %} aria-current="page"{% endif %}>{{ include('dashboard/components/icon.html.twig', {name: item.icon}, with_context = false) }}<span class="label">{{ item.label }}</span></a>
+        {% endfor %}
+        {% if more_items is not empty %}
+        <button class="nav more" type="button" data-k="more" title="More" data-more-toggle aria-controls="more" aria-expanded="false"{% if more_items|filter(item => item.route == current_route) is not empty %} aria-current="page"{% endif %}>{{ include('dashboard/components/icon.html.twig', {name: 'more'}, with_context = false) }}<span class="label">More</span></button>
+        {% endif %}
+        <div class="spacer"></div>
+        <button class="nav collapse" type="button" data-rail-toggle aria-controls="rail" aria-expanded="true" title="Collapse menu">{{ include('dashboard/components/icon.html.twig', {name: 'collapse'}, with_context = false) }}<span class="label">Collapse</span></button>
+    </div>
+    {% if more_items is not empty %}
+    <div class="menu" id="more" data-more-sheet hidden>
+        <nav aria-label="More pages">
+            {% for item in more_items %}
+            <a href="{{ path(item.route) }}"{% if current_route == item.route %} aria-current="page"{% endif %}>{{ include('dashboard/components/icon.html.twig', {name: item.icon}, with_context = false) }}{{ item.label }}</a>
+            {% endfor %}
+        </nav>
+    </div>
+    {% endif %}
+</nav>

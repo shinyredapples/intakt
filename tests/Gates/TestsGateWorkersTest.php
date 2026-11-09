@@ -12,7 +12,6 @@ use Intakt\Gates\TestsGate;
 use Intakt\Gates\TestWorker;
 use Intakt\Gates\TestWorkers;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(TestsGate::class)]
@@ -97,22 +96,29 @@ final class TestsGateWorkersTest extends SandboxTestCase
         self::assertStringNotContainsString('sqlite: SerialTest', $run->findingsOf('tests'));
     }
 
-    // Because it holds the first port of the first worker's block, which is free only while no worker runs.
-    #[Group('serial')]
+    // Split from the range of this test's own worker, so the port it holds and the range it hands on are its own while other workers run.
     public function testAGateRunInsideATestWorkerTakesItsPortsFromTheRangeItInherits(): void
     {
-        $outerPorts = TestPorts::forWorkers(2, null);
+        $range = getenv(TestWorker::PORTS_VARIABLE);
+        $outerPorts = TestPorts::forWorkers(2, is_string($range) && '' !== $range ? $range : null);
         self::assertNotNull($outerPorts);
+        // Held to keep the first half busy like a real neighbor; the range assertion below is what detects a nested gate that ignores its range.
         $outerServer = stream_socket_server('tcp://127.0.0.1:'.explode('-', $outerPorts->block(0))[0]);
         self::assertNotFalse($outerServer);
+        $sandbox = $this->sandboxWith('tests-worker-isolation');
 
         try {
-            $run = $this->sandboxWith('tests-worker-isolation')->checkWith([TestWorker::PORTS_VARIABLE => $outerPorts->block(1)], '--only=tests');
+            $run = $sandbox->checkWith([TestWorker::PORTS_VARIABLE => $outerPorts->block(1)], '--only=tests');
         } finally {
             fclose($outerServer);
         }
 
         self::assertTrue($run->passed('tests'), $run->output());
+        [$first, $last] = array_map(intval(...), explode('-', $outerPorts->block(1)));
+        foreach (['sqlite', 'gates'] as $worker) {
+            $port = (int) file_get_contents($sandbox->root.'/rendezvous/done-'.$worker);
+            self::assertTrue($port >= $first && $port <= $last, sprintf('The %s worker took port %d, outside %s.', $worker, $port, $outerPorts->block(1)));
+        }
     }
 
     public function testAnInheritedPortRangeThatIsNotARangeFailsTheGate(): void

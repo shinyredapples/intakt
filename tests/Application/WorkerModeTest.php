@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use Closure;
-use Doctrine\DBAL\Connection;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -30,10 +29,8 @@ use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Console\Tester\ApplicationTester;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\DependencyInjection\ServicesResetterInterface;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Uid\Uuid;
@@ -280,7 +277,6 @@ final class WorkerModeTest extends TestCase
     {
         $kernel->boot();
         $resetter = $kernel->getContainer()->get('services_resetter');
-        assert($resetter instanceof ServicesResetterInterface);
         $resetter->reset();
 
         return WorkerState::in($kernel);
@@ -305,7 +301,6 @@ final class WorkerModeTest extends TestCase
         $kernel = $browser->getKernel();
         $kernel->boot();
         $dispatcher = $this->container($kernel)->get('event_dispatcher');
-        assert($dispatcher instanceof EventDispatcherInterface);
         $dispatcher->addListener(KernelEvents::REQUEST, $step, 4096);
 
         $browser->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
@@ -370,12 +365,9 @@ final class WorkerModeTest extends TestCase
         return array_map(static fn (MessageInterface $message): string => $message instanceof UserMessage || $message instanceof AssistantMessage ? (string) $message->asText() : '', $store->load($conversation)->getMessages());
     }
 
-    private function container(KernelInterface $kernel): ContainerInterface
+    private function container(KernelInterface $kernel): TestContainer
     {
-        $container = $kernel->getContainer()->get('test.service_container');
-        assert($container instanceof ContainerInterface);
-
-        return $container;
+        return $kernel->getContainer()->get('test.service_container');
     }
 
     private function emptyDatabase(KernelInterface $kernel): void
@@ -388,7 +380,6 @@ final class WorkerModeTest extends TestCase
         $console->assertCommandIsSuccessful($console->getDisplay());
 
         $connection = $this->container($kernel)->get('doctrine.dbal.default_connection');
-        assert($connection instanceof Connection);
         // MySQL and MariaDB commit implicitly at every DDL statement, which leaves the migrations' transactions counted as open; the next flush would then ask for a savepoint that does not exist.
         $connection->close();
     }

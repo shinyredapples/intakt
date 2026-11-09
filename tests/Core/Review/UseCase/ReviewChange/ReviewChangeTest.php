@@ -272,10 +272,7 @@ final class ReviewChangeTest extends KernelTestCase
 
     private function serializer(): SerializerInterface
     {
-        $serializer = self::getContainer()->get('serializer.stored');
-        assert($serializer instanceof SerializerInterface);
-
-        return $serializer;
+        return self::getContainer()->get('serializer.stored');
     }
 
     private function request(?int $round = null): ChangeReviewRequest

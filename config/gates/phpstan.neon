@@ -2,7 +2,10 @@ includes:
     - ../../vendor/phpstan/phpstan-strict-rules/rules.neon
     - ../../vendor/phpstan/phpstan-deprecation-rules/rules.neon
     - ../../vendor/tomasvotruba/cognitive-complexity/config/extension.neon
+    - ../../vendor/phpstan/phpstan-symfony/extension.neon
+    - ../../vendor/phpstan/phpstan-symfony/rules.neon
     - phpstan-cache.php
+    - phpstan-symfony.php
 
 parameters:
     level: max
@@ -21,8 +24,13 @@ rules:
     - Intakt\Gates\PhpStan\ClockOnlyRule
     - Intakt\Gates\PhpStan\NoMockOptOutRule
     - Intakt\Gates\PhpStan\ImportFormRule
+    - Intakt\Gates\PhpStan\ContainerUnknownHasIdRule
+    - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
+    - Intakt\Gates\PhpStan\ContainerUnknownGetIdRule
 
 services:
+    -
+        class: Intakt\Gates\PhpStan\AskedServiceIds
     -
         class: Intakt\Gates\PhpStan\ContainerRegistration
         arguments:

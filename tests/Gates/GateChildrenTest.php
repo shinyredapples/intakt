@@ -40,24 +40,24 @@ final class GateChildrenTest extends SandboxTestCase
 
     public function testASlowPassingGateAndAFastFailingGateAreReportedInGateOrder(): void
     {
-        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=phpstan,cs');
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '1'], '--only=secrets,cs');
 
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
-            '{"gate":"phpstan","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
-            '{"result":"fail","failed":["phpstan"]}',
+            '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
+            '{"result":"fail","failed":["secrets"]}',
         ], $run->lines());
         self::assertSame(1, $run->exitCode());
     }
 
     public function testASlowPassingGateAndAFastFailingGateRunningAtOnceAreReportedInGateOrder(): void
     {
-        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '2'], '--only=phpstan,cs');
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '2'], '--only=secrets,cs');
 
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
-            '{"gate":"phpstan","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
-            '{"result":"fail","failed":["phpstan"]}',
+            '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
+            '{"result":"fail","failed":["secrets"]}',
         ], $run->lines());
         self::assertSame(1, $run->exitCode());
     }
@@ -133,6 +133,19 @@ final class GateChildrenTest extends SandboxTestCase
         $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '4'], '--only=container,audit');
 
         self::assertSame(0, $run->exitCode(), $run->output());
+    }
+
+    // Because the phpstan gate boots the change's kernel to dump the test container, which runs the change's code.
+    public function testThePhpstanGateStartsOnlyAfterTheLastStaticGateHasEnded(): void
+    {
+        $run = $this->checkWithFakeGatesIn([GateSlots::VARIABLE => '4'], '--only=phpstan,audit,comments');
+
+        self::assertSame([
+            '{"gate":"phpstan","ok":true,"findings":[],"omitted":0}',
+            '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
+            '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
+            '{"result":"pass","failed":[]}',
+        ], $run->lines());
     }
 
     public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void

@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Component\DependencyInjection\ParameterBag\ContainerBagInterface;
+
+final readonly class Settings
+{
+    public function __construct(private ContainerBagInterface $parameters)
+    {
+    }
+
+    public function directory(int $choice): mixed
+    {
+        $name = 0 === $choice ? 'kernel.cache_dir' : 'kernel.logs_dir';
+
+        return $this->parameters->get($name);
+    }
+}

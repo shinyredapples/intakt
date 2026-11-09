@@ -4,12 +4,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Intakt{% endblock %}</title>
-    {# Runs before the first paint, so a stored or system dark theme never flashes light; assets/controllers/theme_controller.js stores the key it reads. #}
+    {# Runs before the first paint, so a stored or system dark theme never flashes light and a collapsed rail never flashes open; the shell script at the end of the body stores the keys it reads. #}
     <script>(() => {
-        let stored = null;
-        try { stored = localStorage.getItem('intakt-theme'); } catch {}
-        document.documentElement.dataset.theme = stored === 'light' || stored === 'dark' ? stored : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        const root = document.documentElement;
+        let theme = null;
+        let rail = null;
+        try {
+            theme = localStorage.getItem('intakt-theme');
+            rail = localStorage.getItem('intakt-rail');
+        } catch {}
+        root.dataset.theme = theme === 'light' || theme === 'dark' ? theme : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        if (rail === 'collapsed') {
+            root.dataset.rail = 'collapsed';
+        }
     })();</script>
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon-32.png') }}">
     <link rel="stylesheet" href="{{ asset('styles/fonts.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
@@ -17,11 +26,28 @@
     {% block importmap %}{% endblock %}
 </head>
 <body>
-<nav>
-    <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')) }}">Projects</a>
-    <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Reviews</a>
-</nav>
-<main>
+{# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
+<div class="shell" data-controller="connection">
+{# Only the items whose page is built; the others arrive with their page. History and Settings, once built, go under More, which a phone shows instead of them. #}
+{{ include('dashboard/_rail.html.twig', {
+    rail_items: [
+        {key: 'projects', label: 'Projects', icon: 'projects', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')},
+    ],
+    more_items: [],
+    current_route: app.current_route,
+}, with_context = false) }}
+<div class="main">
+<header class="topbar">
+    <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
+    <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
+    <div class="grow"></div>
+    {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. #}
+    {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
+    <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
+    {{ include('dashboard/components/offline.html.twig', {live: true}, with_context = false) }}
+</header>
+<main class="content">
+{{ include('dashboard/components/connection.html.twig', {live: true}, with_context = false) }}
 {% for line in app.flashes('success') %}
 <p class="flash flash-success">{{ line }}</p>
 {% endfor %}
@@ -30,5 +56,110 @@
 {% endfor %}
 {% block body %}{% endblock %}
 </main>
+</div>
+</div>
+{# Listens on the body, because Turbo replaces it on a visit and runs this script again, so no listener is left twice. #}
+<script>(() => {
+    const root = document.documentElement;
+    const store = (key, value) => {
+        try {
+            localStorage.setItem(key, value);
+        } catch {}
+    };
+    const railToggle = document.querySelector('[data-rail-toggle]');
+    const search = document.querySelector('.search-trigger');
+    const projectFilter = document.querySelector('#projfilter');
+    const more = document.querySelector('[data-more-toggle]');
+    const moreSheet = document.querySelector('[data-more-sheet]');
+    // A phone's top bar has no project filter, so a choice it cannot show would hide rows with nothing to undo it.
+    const phone = matchMedia('(max-width: 760px)');
+    const read = (key) => {
+        try {
+            return localStorage.getItem(key);
+        } catch {
+            return null;
+        }
+    };
+    const showProject = () => {
+        const chosen = phone.matches ? '' : projectFilter.value;
+        document.querySelectorAll('[data-project]').forEach((item) => {
+            item.hidden = chosen !== '' && item.dataset.project !== chosen;
+        });
+        projectFilter.title = projectFilter.selectedOptions[0].textContent;
+    };
+    const showMore = (open) => {
+        moreSheet.hidden = !open;
+        more.setAttribute('aria-expanded', String(open));
+    };
+    const showRail = () => {
+        const collapsed = root.dataset.rail === 'collapsed';
+        railToggle.setAttribute('aria-expanded', String(!collapsed));
+        railToggle.title = collapsed ? 'Expand menu' : 'Collapse menu';
+    };
+
+    showRail();
+    railToggle.addEventListener('click', () => {
+        if (root.dataset.rail === 'collapsed') {
+            delete root.dataset.rail;
+        } else {
+            root.dataset.rail = 'collapsed';
+        }
+        store('intakt-rail', root.dataset.rail ?? 'open');
+        showRail();
+    });
+    document.querySelectorAll('[data-theme-toggle]').forEach((toggle) => toggle.addEventListener('click', () => {
+        root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        store('intakt-theme', root.dataset.theme);
+    }));
+    // A project link (the option the server marked selected) is a choice and is kept like one. A stored project the install no longer lists falls back to All projects, so the select never hides rows under another name.
+    const linkedProject = [...projectFilter.options].find((option) => option.defaultSelected && option.value !== '');
+    const storedProject = read('intakt-project');
+    if (linkedProject) {
+        // Set as well as stored, so the shown and the stored choice are one even if a page marked more than one option.
+        projectFilter.value = linkedProject.value;
+        store('intakt-project', linkedProject.value);
+    } else if ([...projectFilter.options].some((option) => option.value === storedProject)) {
+        projectFilter.value = storedProject;
+    }
+    showProject();
+    // The width outlives the body Turbo replaces, so the listener of a page left behind does nothing.
+    phone.addEventListener('change', () => {
+        if (projectFilter.isConnected) {
+            showProject();
+        }
+    });
+    if (more) {
+        more.addEventListener('click', () => showMore(moreSheet.hidden));
+        // A tap beside the sheet's pages lands on its backdrop.
+        moreSheet.addEventListener('click', (event) => {
+            if (event.target === moreSheet) {
+                showMore(false);
+            }
+        });
+    }
+    projectFilter.addEventListener('change', () => {
+        store('intakt-project', projectFilter.value);
+        showProject();
+        // Otherwise a reload would choose the linked project again; the state is kept because Turbo keeps its own there.
+        const address = new URL(location.href);
+        if (address.searchParams.has('project')) {
+            address.searchParams.delete('project');
+            history.replaceState(history.state, '', address);
+        }
+    });
+    if (/Mac|iPhone|iPad/.test(navigator.platform)) {
+        search.querySelector('kbd').textContent = '⌘K';
+    }
+    document.body.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && more && !moreSheet.hidden) {
+            showMore(false);
+            more.focus();
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            search.focus();
+        }
+    });
+})();</script>
 </body>
 </html>

@@ -197,17 +197,11 @@ final class ReviewWorkflowsTest extends KernelTestCase
 
     private function reviewerMachine(): WorkflowInterface
     {
-        $machine = self::getContainer()->get('state_machine.reviewer');
-        assert($machine instanceof WorkflowInterface);
-
-        return $machine;
+        return self::getContainer()->get('state_machine.reviewer');
     }
 
     private function roundMachine(): WorkflowInterface
     {
-        $machine = self::getContainer()->get('state_machine.review_round');
-        assert($machine instanceof WorkflowInterface);
-
-        return $machine;
+        return self::getContainer()->get('state_machine.review_round');
     }
 }

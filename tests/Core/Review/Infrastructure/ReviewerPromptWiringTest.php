@@ -43,7 +43,6 @@ final class ReviewerPromptWiringTest extends KernelTestCase
         $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Cart totals were rounded twice.', ['src/Cart.php'])], 1_000));
         self::getContainer()->set(ProjectMemory::class, $memory);
         $prompt = self::getContainer()->get(ReviewerPrompt::class);
-        assert($prompt instanceof ReviewerPrompt);
         $diff = "diff --git a/src/Cart.php b/src/Cart.php\n--- a/src/Cart.php\n+++ b/src/Cart.php\n";
 
         $messages = $prompt->messagesFor(new ReviewerConversation('You review.', new UuidV7()), new ReviewBrief(new ChangeUnderReview('alpha', 'Task.', $diff), []))->getMessages();
