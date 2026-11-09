@@ -239,6 +239,16 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertArrayNotHasKey('mcp_config', $cli->options);
     }
 
+    public function testAFailedReviewLeavesNoCredentialBehind(): void
+    {
+        try {
+            $this->vendor(RecordedClaudeCodeCli::exitingAfter('failed', 1), servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request());
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], glob($this->home.'/mcp-*'));
+    }
+
     public function testACliThatExitsMidStreamEndsTheReviewerAsBlocked(): void
     {
         $verdict = $this->vendor(RecordedClaudeCodeCli::exitingAfter('truncated', 143))->review('alpha', Tier::Strong, $this->request())->verdict;

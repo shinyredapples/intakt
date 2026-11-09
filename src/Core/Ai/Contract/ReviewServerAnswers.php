@@ -12,4 +12,7 @@ interface ReviewServerAnswers
      * @return list<string>
      */
     public function reviewServerAnswers(): array;
+
+    // Called by whoever started the call once the review is over, also when it failed or never read the result, because the call holds the round's credential on disk.
+    public function forgetTheCredential(): void;
 }

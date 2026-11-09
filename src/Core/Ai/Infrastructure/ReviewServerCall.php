@@ -9,7 +9,7 @@ use Override;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\Component\Process\Process;
 
-// Wraps a CLI call that reached the per-review server, because its configuration file must go once the CLI has finished with it, and the server's answers exist only in the CLI's own stream.
+// Wraps a CLI call that reached the per-review server, because its configuration file must go once the CLI has finished with it (or the review ended without reading it), and the server's answers exist only in the CLI's own stream.
 final readonly class ReviewServerCall implements RawResultInterface, ReviewServerAnswers
 {
     /**
@@ -22,8 +22,8 @@ final readonly class ReviewServerCall implements RawResultInterface, ReviewServe
     ) {
     }
 
-    // Also when the result is dropped unread, so a failed review never leaves the credential behind.
-    public function __destruct()
+    #[Override]
+    public function forgetTheCredential(): void
     {
         $this->configuration->remove();
     }

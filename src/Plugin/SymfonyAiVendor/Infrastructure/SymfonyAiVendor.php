@@ -138,6 +138,8 @@ final readonly class SymfonyAiVendor implements Vendor
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 
             throw $this->typed($failure);
+        } finally {
+            $platform->forgetTheReviewCredential();
         }
 
         $this->usage->settle($reservation, ...$platform->rounds());

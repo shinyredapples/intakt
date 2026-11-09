@@ -54,13 +54,12 @@ final class ReviewServerCallTest extends TestCase
         self::assertSame([''], $this->callReplaying('server-read-unanswered')->reviewServerAnswers());
     }
 
-    public function testTheConfigurationIsRemovedWhenTheResultIsDroppedUnread(): void
+    public function testForgettingTheCredentialRemovesTheConfigurationOfACallNeverRead(): void
     {
         $call = $this->callReplaying('complete');
-        $configuration = glob($this->home.'/mcp-*');
-        self::assertCount(1, (array) $configuration);
+        self::assertCount(1, (array) glob($this->home.'/mcp-*'));
 
-        unset($call);
+        $call->forgetTheCredential();
 
         self::assertSame([], glob($this->home.'/mcp-*'));
     }

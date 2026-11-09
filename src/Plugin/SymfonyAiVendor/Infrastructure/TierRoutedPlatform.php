@@ -53,9 +53,22 @@ final class TierRoutedPlatform implements PlatformInterface
      */
     public function reviewServerAnswers(): array
     {
-        $calls = array_filter(array_map(static fn (DeferredResult $round): object => $round->getRawResult(), $this->rounds), static fn (object $call): bool => $call instanceof ReviewServerAnswers);
+        return array_merge([], ...array_map(static fn (ReviewServerAnswers $call): array => $call->reviewServerAnswers(), $this->reviewServerCalls()));
+    }
 
-        return array_merge([], ...array_map(static fn (ReviewServerAnswers $call): array => $call->reviewServerAnswers(), array_values($calls)));
+    public function forgetTheReviewCredential(): void
+    {
+        foreach ($this->reviewServerCalls() as $call) {
+            $call->forgetTheCredential();
+        }
+    }
+
+    /**
+     * @return list<ReviewServerAnswers>
+     */
+    private function reviewServerCalls(): array
+    {
+        return array_values(array_filter(array_map(static fn (DeferredResult $round): object => $round->getRawResult(), $this->rounds), static fn (object $call): bool => $call instanceof ReviewServerAnswers));
     }
 
     #[Override]
