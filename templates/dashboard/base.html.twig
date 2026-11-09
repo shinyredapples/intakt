@@ -23,11 +23,14 @@
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
-    {% block importmap %}{% endblock %}
+    {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
+    {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
 <div class="shell" data-controller="connection">
+{# One listener for the shell topic and the page's own, because the hub's subscriber cookie can be set only once per response. #}
+{% if live|default(false) %}{{ turbo_stream_from([constant('Intakt\\Core\\Dashboard\\Contract\\DashboardTopics::SHELL')]|merge(topics|default([])), true) }}{% endif %}
 {# Only the items whose page is built; the others arrive with their page. History and Settings, once built, go under More, which a phone shows instead of them. #}
 {{ include('dashboard/_rail.html.twig', {
     rail_items: [
