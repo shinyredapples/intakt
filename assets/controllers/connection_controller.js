@@ -12,11 +12,17 @@ export default class extends Controller {
     async connect() {
         this.dropped = new Set();
         this.lastEventIds = new Map();
+        const visit = (this.visit = {});
         await customElements.whenDefined(SOURCE);
+        // Turbo may have left the page meanwhile, and its elements no longer hold an EventSource.
+        if (this.visit !== visit) {
+            return;
+        }
         this.element.querySelectorAll(SOURCE).forEach((source) => this.watch(source));
     }
 
     disconnect() {
+        this.visit = null;
         clearInterval(this.ticker);
     }
 
@@ -74,9 +80,14 @@ export default class extends Controller {
         this.show();
     }
 
+    // Only a failed try is replaced: a slow hub still answering would otherwise never get to open.
     retryDropped() {
         this.countdown = RETRY_EVERY_S;
-        this.dropped.forEach((source) => this.reconnect(source));
+        this.dropped.forEach((source) => {
+            if (source.es.readyState === EventSource.CLOSED) {
+                this.reconnect(source);
+            }
+        });
     }
 
     // A new EventSource sends no Last-Event-ID header, so the hub is asked in the address for what the page missed.

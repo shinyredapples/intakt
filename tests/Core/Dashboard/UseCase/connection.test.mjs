@@ -23,7 +23,11 @@ class FakeEventSource {
         this.readyState = FakeEventSource.CLOSED;
     }
 
+    // As a browser's EventSource: a closed one never fires again.
     emit(type, event = {}) {
+        if (this.readyState === FakeEventSource.CLOSED) {
+            return;
+        }
         (this.listeners.get(type) ?? []).forEach((listener) => listener(event));
     }
 }
@@ -257,6 +261,58 @@ test('a shell that leaves the page stops its countdown', async (t) => {
     t.mock.timers.tick(5000);
 
     assert.equal(source.es, dropped);
+});
+
+test('a try still under way at the next countdown is left to finish', async (t) => {
+    const { source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+
+    t.mock.timers.tick(5000);
+
+    assert.equal(source.es, slow);
+    assert.notEqual(slow.readyState, FakeEventSource.CLOSED);
+});
+
+test('a hub whose handshake takes longer than the countdown is reached', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+    t.mock.timers.tick(6000);
+
+    slow.emit('open');
+
+    assert.equal(shell.lineTarget.hidden, true);
+    assert.equal(shell.markerTarget.hidden, true);
+});
+
+test('Try now leaves a try still under way to finish', async (t) => {
+    const { shell, source } = await connectedShell(t);
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    const slow = source.es;
+
+    shell.tryNow(new FakeClick());
+
+    assert.equal(source.es, slow);
+});
+
+test('a shell that leaves the page before Turbo is ready watches nothing', async (t) => {
+    t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
+    let ready;
+    globalThis.customElements = { whenDefined: () => new Promise((resolve) => { ready = resolve; }) };
+    const source = new FakeStreamSource();
+    const shell = new ConnectionController();
+    shell.element = { baseURI: 'http://localhost:7780/reviews/round-1', querySelectorAll: () => [source] };
+    const connecting = shell.connect();
+
+    shell.disconnect();
+    source.es = undefined;
+    ready();
+
+    await assert.doesNotReject(connecting);
 });
 
 test('a page without a live connection never shows the line', async (t) => {
