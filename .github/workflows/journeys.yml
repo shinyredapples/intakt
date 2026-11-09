@@ -13,14 +13,14 @@ permissions:
 jobs:
   journeys:
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
-    # Per job only: just the alarm step gets the token.
-    permissions:
-      contents: read
-      issues: write
-    # Three journeys at 300 seconds each, the image build and the alarm.
+    # Each journey at the gate's 300 seconds, the image build and the dependency install.
     timeout-minutes: 40
+    outputs:
+      commit: ${{ steps.checkout.outputs.commit }}
+      outcome: ${{ steps.journeys.outcome }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           persist-credentials: false
@@ -43,9 +43,32 @@ jobs:
             --tmpfs /tmp:rw,exec,size=1g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check --journeys 2>&1 | tee "$RUNNER_TEMP/journeys.out"
-      # The CI image has no gh, so the runner's gh is mounted.
+      - if: failure() && steps.journeys.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: journeys-output
+          path: ${{ runner.temp }}/journeys.out
+  alarm:
+    needs: journeys
+    if: failure() && needs.journeys.outputs.outcome == 'failure'
+    # GitHub's image has gh, which the CI image lacks, so the alarm needs no gh on a self-hosted runner.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.journeys.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: journeys-output
+          path: ${{ runner.temp }}
+      - name: Build the CI image
+        run: .github/ci/build-image.sh
       - name: File or update the urgent task
-        if: failure() && steps.journeys.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
