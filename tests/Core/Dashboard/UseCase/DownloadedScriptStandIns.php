@@ -46,10 +46,8 @@ trait DownloadedScriptStandIns
 
         self::getContainer()->set(self::REMOTE_PACKAGE_STORAGE, new RemotePackageStorage($this->standInFolder()));
         self::getContainer()->set(self::ASSET_MAPPER, $this->assetMapperThatAlsoMapsTheStandIns());
-        // The services set above live only until the kernel reboots, which the browser does by default before every request but the first.
-        if ($this instanceof DashboardPageTestCase) {
-            $this->browser->disableReboot();
-        }
+        // Because the browser reboots the kernel before every request but the first by default, which drops the services set above.
+        $this->browser->disableReboot();
     }
 
     // The repository is the asset mapper's own, so only its folders change; its service cannot be replaced once read, so the mapper that holds it is.

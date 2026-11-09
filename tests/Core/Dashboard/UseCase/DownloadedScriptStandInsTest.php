@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use Symfony\Component\AssetMapper\AssetMapperInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversNothing]
-final class DownloadedScriptStandInsTest extends KernelTestCase
+final class DownloadedScriptStandInsTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
