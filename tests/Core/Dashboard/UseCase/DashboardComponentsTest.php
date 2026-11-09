@@ -213,6 +213,28 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertCount(0, $card->filter('.blocker'));
     }
 
+    public function testAnElapsedTimeHoldsTheHiddenTimeOfADropForTheConnectionController(): void
+    {
+        $meta = $this->render('meta', ['facts' => [['icon' => 'clock', 'text' => '42 min', 'elapsed' => true], ['text' => 'Size M']]])->filter('.meta');
+
+        $at = $meta->filter('span > .frozen-at');
+        self::assertCount(1, $at);
+        self::assertSame('frozen', $at->attr('data-connection-target'));
+        self::assertNotNull($at->attr('hidden'));
+        self::assertSame('', $at->text());
+        self::assertSame(['42 min', 'Size M'], $meta->filter('.meta > span')->each(static fn (Crawler $fact): string => $fact->text()));
+    }
+
+    public function testAFrozenElapsedTimeShowsTheTimeOfTheDropAndIsLeftAloneByTheConnectionController(): void
+    {
+        $meta = $this->render('meta', ['facts' => [['icon' => 'clock', 'text' => '42 min', 'frozen_at' => '11:12']]])->filter('.meta');
+
+        $at = $meta->filter('span > .frozen-at');
+        self::assertSame('at 11:12', $at->text());
+        self::assertNull($at->attr('hidden'));
+        self::assertNull($at->attr('data-connection-target'));
+    }
+
     public function testACardsEmphasisLineSitsRightUnderTheTitle(): void
     {
         $card = $this->render('card', [...$this->card(), 'emphasis' => ['icon' => 'link', 'text' => 'Needs #612 merged first']])->filter('a.card');
@@ -528,7 +550,7 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertNull($line->attr('hidden'));
         self::assertSame('true', $line->filter('.conn-dot')->attr('aria-hidden'));
         self::assertSame('Reconnecting.', $line->filter('strong')->text());
-        self::assertSame('Reconnecting. The dashboard lost its connection to Intakt at 11:12:04. You are seeing what it knew then. Next try in 5 s.', $line->filter('p')->text());
+        self::assertSame('Reconnecting. The dashboard lost its connection to Intakt at 11:12:04. You are seeing what it knew then; actions wait until it is back. Next try in 5 s.', $line->filter('p')->text());
         self::assertSame('Try now', $line->filter('button.btn.secondary.sm[type="button"]')->text());
     }
 

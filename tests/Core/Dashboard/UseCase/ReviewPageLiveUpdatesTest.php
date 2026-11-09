@@ -153,6 +153,18 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['correctness'], $crawler->filter('table.reviewers tbody td:first-child')->each(static fn (Crawler $td): string => $td->text()));
     }
 
+    public function testTheConnectionControllerHoldsBackTheStopButtonAndNoButtonOfTheShell(): void
+    {
+        $this->givenARunningRound();
+        preg_match("/const ACTIONS = '([^']+)';/", (string) file_get_contents(dirname(__DIR__, 4).'/assets/controllers/connection_controller.js'), $actions);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertArrayHasKey(1, $actions);
+        $held = $crawler->filter('.shell[data-controller="connection"]')->filter($actions[1])->each(static fn (Crawler $button): string => $button->text());
+        self::assertSame(['Stop this reviewer'], $held);
+    }
+
     /**
      * @param array<string, mixed> $context
      */
