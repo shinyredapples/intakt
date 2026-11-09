@@ -1,0 +1,3 @@
+## Symfony components
+
+| Twig (`symfony/twig-bundle`) | server-rendered dashboard pages, auto-escaped, with an inline theme script on every page and one more script, the import map of Turbo and Stimulus, on every page the live-update hub can authorize a listener for (and on the components page); the shared components as templates for `include()` and `embed`, and the glossary explanations as a Twig function declared with `#[AsTwigFunction]` | in progress | T20 (#26, parts #511, #512 and #513), `src/Core/Dashboard/`, `templates/dashboard/`; #1101 (part #1108), `templates/dashboard/base.html.twig`; #1260, `templates/dashboard/base.html.twig`, `src/Core/Dashboard/Infrastructure/LivePageRendering.php` |
