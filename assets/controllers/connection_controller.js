@@ -6,6 +6,8 @@ const RETRY_EVERY_S = 5;
 const UNREACHABLE_AFTER_MS = 120000;
 // Everything that changes Intakt's state is a POST form, so its submit button is what waits while offline.
 const ACTIONS = 'form[method="post"] button[type="submit"]';
+// Marked in the page rather than remembered by the controller, because Turbo caches the page with the marks and a new controller restores it.
+const HELD = 'data-connection-held';
 
 export default class extends Controller {
     static targets = ['line', 'title', 'since', 'countdown', 'marker', 'frozen'];
@@ -13,8 +15,8 @@ export default class extends Controller {
     // Waits for Turbo's element, because its EventSource exists only once the element is defined.
     async connect() {
         this.dropped = new Set();
-        this.disabledActions = new Set();
         this.lastEventIds = new Map();
+        this.settle();
         const visit = (this.visit = {});
         await customElements.whenDefined(SOURCE);
         // Turbo may have left the page meanwhile, and its elements no longer hold an EventSource.
@@ -27,6 +29,13 @@ export default class extends Controller {
     disconnect() {
         this.visit = null;
         clearInterval(this.ticker);
+        this.settle();
+    }
+
+    // A page restored from Turbo's cache may carry the held actions and frozen times of a drop no controller watches any more.
+    settle() {
+        this.releaseActions();
+        this.frozenTargets.forEach((at) => (at.hidden = true));
     }
 
     tryNow() {
@@ -69,8 +78,7 @@ export default class extends Controller {
         clearInterval(this.ticker);
         this.lineTarget.hidden = true;
         this.markerTarget.hidden = true;
-        this.releaseActions();
-        this.frozenTargets.forEach((at) => (at.hidden = true));
+        this.settle();
     }
 
     // Only the buttons it disabled are enabled again, so one the page showed disabled stays so.
@@ -78,14 +86,18 @@ export default class extends Controller {
         this.element.querySelectorAll(ACTIONS).forEach((action) => {
             if (!action.disabled) {
                 action.disabled = true;
-                this.disabledActions.add(action);
+                action.setAttribute(HELD, '');
             }
         });
     }
 
     releaseActions() {
-        this.disabledActions.forEach((action) => (action.disabled = false));
-        this.disabledActions.clear();
+        this.element.querySelectorAll(ACTIONS).forEach((action) => {
+            if (action.hasAttribute(HELD)) {
+                action.disabled = false;
+                action.removeAttribute(HELD);
+            }
+        });
     }
 
     // The server renders elapsed times and nothing counts them on, so the time of the drop tells how old they are.
