@@ -56,7 +56,7 @@ final class DockerJobRunnerTest extends TestCase
     {
         $harness = new JobHarness();
 
-        $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withInput('/srv/checkout', '/checkout')->build());
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withInput('/srv/checkout', '/checkout')->build());
 
         $host = $harness->engine->hostConfig();
         self::assertTrue($host['ReadonlyRootfs']);
@@ -70,7 +70,7 @@ final class DockerJobRunnerTest extends TestCase
         $harness = new JobHarness();
         $spec = JobSpecBuilder::in($this->folder.'/out')->withInput('/srv/checkout', '/checkout')->build();
 
-        $harness->runner()->run($spec);
+        (void) $harness->runner()->run($spec);
 
         $writable = array_values(array_filter($harness->engine->hostConfig()['Mounts'], static fn (array $mount): bool => false === $mount['ReadOnly']));
         self::assertSame([['Type' => 'bind', 'Source' => $this->folder.'/out', 'Target' => '/output', 'ReadOnly' => false]], $writable);
@@ -80,7 +80,7 @@ final class DockerJobRunnerTest extends TestCase
     {
         $harness = new JobHarness();
 
-        $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
         $host = $harness->engine->hostConfig();
         self::assertSame(512 * 1024 * 1024, $host['Memory']);
@@ -94,7 +94,7 @@ final class DockerJobRunnerTest extends TestCase
     {
         $harness = new JobHarness();
 
-        $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withoutEgress()->build());
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withoutEgress()->build());
 
         self::assertSame('none', $harness->engine->hostConfig()['NetworkMode']);
         self::assertSame([], $harness->engine->networks);
@@ -110,7 +110,7 @@ final class DockerJobRunnerTest extends TestCase
             $seen = ['networks' => $harness->engine->networks, 'names' => $harness->engine->namesOfContainers()];
         };
 
-        $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
         self::assertSame(['intakt-job-build-1'], array_column($seen['networks'], 'name'));
         self::assertContains('intakt-job-build-1-proxy', $seen['names']);
@@ -121,7 +121,7 @@ final class DockerJobRunnerTest extends TestCase
     {
         $harness = new JobHarness();
 
-        $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
         $environment = $harness->engine->environment();
         self::assertContains('HTTPS_PROXY=http://proxy:8888', $environment);
@@ -136,7 +136,7 @@ final class DockerJobRunnerTest extends TestCase
         $harness = new JobHarness();
 
         try {
-            $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+            (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
         } finally {
             putenv('GITHUB_APP_PRIVATE_KEY');
             putenv('ANTHROPIC_API_KEY');
@@ -187,7 +187,7 @@ final class DockerJobRunnerTest extends TestCase
     {
         $harness = new JobHarness();
 
-        $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
         self::assertSame([], $harness->engine->containers);
         self::assertSame([], $harness->engine->networks);
@@ -199,7 +199,7 @@ final class DockerJobRunnerTest extends TestCase
         $harness->engine->refusesToStartTheJob = true;
 
         try {
-            $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+            (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
             self::fail('The failed start should have thrown.');
         } catch (RuntimeException) {
             // The failed start is expected here, because the cleanup after it is what this test asserts.
@@ -216,7 +216,7 @@ final class DockerJobRunnerTest extends TestCase
         $this->expectException(InvalidJobSpec::class);
 
         try {
-            $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+            (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
         } finally {
             self::assertNotNull($held);
             self::assertSame([], $harness->engine->containers);
@@ -228,7 +228,7 @@ final class DockerJobRunnerTest extends TestCase
         $harness = new JobHarness(0);
 
         try {
-            $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
+            (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
             self::fail('The refused append should have thrown.');
         } catch (RuntimeException $failure) {
             self::assertStringContainsString('was not recorded', $failure->getMessage());
@@ -242,11 +242,44 @@ final class DockerJobRunnerTest extends TestCase
         $harness = new JobHarness();
 
         try {
-            $harness->runner()->run(JobSpecBuilder::in($this->folder.'/absent')->build());
+            (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/absent')->build());
             self::fail('The missing directory should have been refused.');
         } catch (InvalidJobSpec) {
             self::assertSame([], $harness->engine->calls);
         }
+    }
+
+    public function testAJobRunsAsTheWorkersEffectiveUserAndGroup(): void
+    {
+        $harness = new JobHarness();
+
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withoutEgress()->build());
+
+        self::assertSame(posix_geteuid().':'.posix_getegid(), $harness->engine->jobBody()['User']);
+    }
+
+    public function testAnInputLinkedToAFolderThatHoldsTheOutputIsRefusedBeforeAnythingIsCreated(): void
+    {
+        $harness = new JobHarness();
+        symlink($this->folder, $this->folder.'/alias');
+
+        try {
+            (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withInput($this->folder.'/alias', '/inputs')->build());
+            self::fail('The input that leads to the output should have been refused.');
+        } catch (InvalidJobSpec) {
+            self::assertSame([], $harness->engine->calls);
+        }
+    }
+
+    public function testALinkedInputIsMountedFromTheFolderItLeadsTo(): void
+    {
+        $harness = new JobHarness();
+        new Filesystem()->mkdir($this->folder.'/checkout');
+        symlink($this->folder.'/checkout', $this->folder.'/link');
+
+        (void) $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withInput($this->folder.'/link', '/checkout')->build());
+
+        self::assertContains(['Type' => 'bind', 'Source' => realpath($this->folder.'/checkout'), 'Target' => '/checkout', 'ReadOnly' => true], $harness->engine->hostConfig()['Mounts']);
     }
 
     public function testABrokenInputMountIsReportedByTheStartCheckAndTheJobRunsInReducedMode(): void

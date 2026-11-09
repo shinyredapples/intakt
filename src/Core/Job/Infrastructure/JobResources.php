@@ -14,12 +14,12 @@ final class JobResources
     private array $containers = [];
     private ?string $network = null;
 
-    public function addContainer(string $id): void
+    public function recordContainer(string $id): void
     {
         $this->containers[] = $id;
     }
 
-    public function setNetwork(string $id): void
+    public function recordNetwork(string $id): void
     {
         $this->network = $id;
     }

@@ -11,8 +11,8 @@ final readonly class JobInput
         public string $hostPath,
         public string $containerPath,
     ) {
-        if (!str_starts_with($hostPath, '/') || !str_starts_with($containerPath, '/')) {
-            throw new InvalidJobSpec('An input is mounted from an absolute path to an absolute path.');
+        if (!JobPaths::isPlainAbsolute($hostPath) || !JobPaths::isPlainAbsolute($containerPath)) {
+            throw new InvalidJobSpec('An input is mounted from an absolute path to an absolute path, without . or .. segments or control characters.');
         }
 
         if ($this->shadowsAReservedPath()) {

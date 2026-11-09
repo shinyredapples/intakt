@@ -80,6 +80,59 @@ final class JobSpecTest extends TestCase
         self::assertSame('/outputs', new JobInput('/srv/data', '/outputs')->containerPath);
     }
 
+    #[DataProvider('pathsThatHideWhereTheyLead')]
+    public function testAnInputPathWithADotSegmentOrAControlCharacterIsRefused(string $hostPath, string $containerPath): void
+    {
+        $this->expectException(InvalidJobSpec::class);
+
+        new JobInput($hostPath, $containerPath);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function pathsThatHideWhereTheyLead(): iterable
+    {
+        yield 'a container path that climbs into the output' => ['/srv/data', '/x/../output'];
+        yield 'a container path with a dot segment' => ['/srv/data', '/./output'];
+        yield 'a container path with a newline' => ['/srv/data', "/in\nput"];
+        yield 'a container path with a tab' => ['/srv/data', "/in\tput"];
+        yield 'a host path that climbs' => ['/jobs/a/..', '/in'];
+        yield 'a host path with a NUL byte' => ["/srv/da\0ta", '/in'];
+    }
+
+    public function testDotsInsideANameAreNotASegmentAndAreAccepted(): void
+    {
+        $input = new JobInput('/srv/.cache/a..b', '/in/.config');
+
+        self::assertSame('/srv/.cache/a..b', $input->hostPath);
+    }
+
+    public function testAHostPathThatClimbsBackIntoTheOutputDirectoryIsRefused(): void
+    {
+        $this->expectException(InvalidJobSpec::class);
+
+        new JobSpec('a', 'img', ['x'], [new JobInput('/jobs/other/../a/out', '/in')], '/jobs/a/out', 1, 1.0, 1, EgressPolicy::None);
+    }
+
+    public function testAnOutputDirectoryWithADotSegmentIsRefused(): void
+    {
+        $this->expectException(InvalidJobSpec::class);
+
+        JobSpecBuilder::in('/jobs/a/../b')->build();
+    }
+
+    public function testAJobOnOtherPathsKeepsEverythingElseAndIsCheckedAgain(): void
+    {
+        $spec = JobSpecBuilder::in('/work/out')->build();
+
+        $moved = $spec->withPaths([new JobInput('/srv/in', '/in')], '/real/out');
+
+        self::assertSame(['/real/out', '/srv/in', $spec->allowedHosts()], [$moved->outputDir, $moved->inputs[0]->hostPath, $moved->allowedHosts()]);
+        $this->expectException(InvalidJobSpec::class);
+        $spec->withPaths([new JobInput('/real', '/in')], '/real/out');
+    }
+
     public function testAnInputThatHoldsTheOutputDirectoryIsRefused(): void
     {
         $this->expectException(InvalidJobSpec::class);

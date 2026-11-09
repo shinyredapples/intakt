@@ -45,6 +45,14 @@ final readonly class JobSpec
         return [$this->vendorHost, ...$this->registryHosts];
     }
 
+    /**
+     * @param list<JobInput> $inputs
+     */
+    public function withPaths(array $inputs, string $outputDir): self
+    {
+        return new self($this->id, $this->image, $this->command, $inputs, $outputDir, $this->memoryBytes, $this->cpus, $this->timeoutSeconds, $this->egress, $this->vendorHost, $this->registryHosts);
+    }
+
     private function mustBeNamedSafely(): void
     {
         // The id ends up in container, network and label names, so it must not carry anything a name cannot.
@@ -56,8 +64,8 @@ final readonly class JobSpec
             throw new InvalidJobSpec('A job names its image and its command.');
         }
 
-        if (!str_starts_with($this->outputDir, '/')) {
-            throw new InvalidJobSpec('A job output directory is an absolute path.');
+        if (!JobPaths::isPlainAbsolute($this->outputDir)) {
+            throw new InvalidJobSpec('A job output directory is an absolute path, without . or .. segments or control characters.');
         }
     }
 

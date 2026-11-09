@@ -16,9 +16,9 @@ final class EgressProxyTest extends TestCase
 {
     public function testAHostOutsideTheAllowlistIsReportedFromTheProxysLog(): void
     {
-        $log = "INFO Connect (file descriptor 7): 10.0.0.2\nNOTICE Proxying refused on filtered domain \"evil.example\"\nINFO Closed connection\n";
+        $log = "CONNECT   Nov 09 22:59:47.316 [1]: Connect (file descriptor 4): 192.0.2.2\nNOTICE    Nov 09 22:59:47.323 [1]: Proxying refused on filtered domain \"evil.example\"\nINFO      Nov 09 22:59:47.330 [1]: Closed connection\n";
 
-        self::assertSame(['NOTICE Proxying refused on filtered domain "evil.example"'], new EgressProxy('p')->refusalsIn($log));
+        self::assertSame(['NOTICE    Nov 09 22:59:47.323 [1]: Proxying refused on filtered domain "evil.example"'], new EgressProxy('p')->refusalsIn($log));
     }
 
     public function testALogWithoutARefusalReportsNone(): void

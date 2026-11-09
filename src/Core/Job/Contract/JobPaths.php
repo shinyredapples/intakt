@@ -19,4 +19,14 @@ final readonly class JobPaths
     {
         return [self::OUTPUT, self::WORK, self::HOME, self::TMP];
     }
+
+    // The mount rules compare paths as strings, so a `.` or `..` segment would let a path name a place the rules never saw; a control character would split the start check's input list and its report lines.
+    public static function isPlainAbsolute(string $path): bool
+    {
+        if (!str_starts_with($path, '/') || 1 === preg_match('/[\x00-\x1f\x7f]/', $path)) {
+            return false;
+        }
+
+        return !array_any(explode('/', $path), static fn (string $segment): bool => '.' === $segment || '..' === $segment);
+    }
 }

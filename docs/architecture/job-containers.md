@@ -8,17 +8,18 @@ Plan task T44. The `Core/Job` module runs one job (a build, a check, a probe) in
 
 - a read-only root, and fresh tmpfs areas for `/work`, `/home/job` (the job's `HOME`) and `/tmp`, so no session inherits another's home or caches; they go with the container;
 - each input mounted read-only at its own path; the job's own output directory, mounted at `/output`, is the only writable mount, so a job cannot write outside it or read another job's output (nothing of another job is mounted);
+- the worker's effective user and group (`posix_geteuid()`, `posix_getegid()`), so the job can write the worker's output directory and nothing the image's root owns;
 - a memory limit with no swap, a CPU limit, a process limit, all capabilities dropped and `no-new-privileges`;
 - an environment built from a fixed list (`HOME`, `INTAKT_JOB_ID`, `INTAKT_OUTPUT_DIR`, `INTAKT_INPUTS`, and with egress `INTAKT_VENDOR_HOST` and the proxy variables) and never inherited, so a forge token, a signing key or a vendor API key of the orchestrator never reaches a job.
 
-`JobSpec` refuses an unsafe job id (it becomes a container, network and label name), an input mounted over a place the container uses itself (`JobPaths`), an input that holds or sits inside the output directory, a limit of zero, and hosts that are not plain names.
+`JobSpec` refuses an unsafe job id (it becomes a container, network and label name), a path (input source, input target or output directory) that is not absolute or has a `.` or `..` segment or a control character (`JobPaths::isPlainAbsolute()`), an input mounted over a place the container uses itself (`JobPaths`), an input that holds or sits inside the output directory, a limit of zero, and hosts that are not plain names. Because the engine follows symbolic links when it binds a path, the runner resolves each existing input and the output directory with `realpath()`, checks the spec again on the resolved paths (`JobSpec::withPaths()`) and mounts those; a link that leads to a folder holding the output is refused before anything is created.
 
 ## Egress
 
 - `EgressPolicy::None` (check and probe jobs): network mode `none`, no proxy.
 - `EgressPolicy::Allowlist`: the runner creates an internal network for the job and a proxy sidecar (`Infrastructure/EgressProxy.php`, image from `docker/job-proxy/`, a tinyproxy configured from `INTAKT_PROXY_ALLOW`). The sidecar is the only member with a way out; the job reaches it as `proxy` on port 8888 through `HTTPS_PROXY`. The allowlist is the vendor host first, then the registry hosts. A request for any other host is refused and logged by the proxy; after the job ends the runner reads the proxy's log and returns the refusal lines in `JobOutcome::$egressRefusals` (at most 100, each cut to 300 characters).
 
-The proxy image is built from `docker/job-proxy/` and named by the parameter `JobServices::PROXY_IMAGE` (`config/services.yaml`). The tinyproxy settings in that image have not been run against a daemon in the build sandbox, which has none; only the runner's use of it is tested, against a fake Engine.
+The proxy image is built from `docker/job-proxy/` and named by the parameter `JobServices::PROXY_IMAGE` (`config/services.yaml`). Its entrypoint sets no `LogFile`, because tinyproxy refuses `/dev/stdout` as one; in the foreground it then logs to stdout, which the engine keeps as the container's log. `tests/Core/Job/ProxyEntrypointTest.php` runs the entrypoint with the real tinyproxy outside a container (skipped where tinyproxy is not installed; `INTAKT_PROXY_PORT` and `TMPDIR` let it pick a free port and a scratch folder, and default to 8888 and `/tmp`): a host outside the allowlist gets `403` and its refusal line is what `EgressProxy::refusalsIn()` returns. The image and the runner's use of it have not been run against a daemon in the build sandbox, which has none; the runner is tested against a fake Engine.
 
 ## Start check and reduced mode
 

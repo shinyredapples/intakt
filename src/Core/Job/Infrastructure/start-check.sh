@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs before a job's command: proves what the job was told it can do, writes the report the orchestrator reads, then hands over to the command.
+# No set -e: a failed item must be recorded and the command must still run, in reduced mode.
 report="$INTAKT_OUTPUT_DIR/.start-check"
 probe="$INTAKT_OUTPUT_DIR/.start-check-probe"
 failures=0

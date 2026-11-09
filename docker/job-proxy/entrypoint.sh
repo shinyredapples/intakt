@@ -1,9 +1,10 @@
 #!/bin/sh
-# Forwards only the hosts in INTAKT_PROXY_ALLOW (comma separated) and logs "refused on filtered domain" for any other; a job runs behind it on a network with no other way out.
+# tinyproxy has no allowlist of plain host names, so each allowed host becomes an anchored pattern under FilterDefaultDeny.
+# No LogFile: tinyproxy refuses /dev/stdout as one, and without it a foreground tinyproxy logs to stdout, where the engine keeps the refusals the runner reads.
 set -eu
 
-allow=/tmp/allow
-config=/tmp/tinyproxy.conf
+allow="${TMPDIR:-/tmp}/allow"
+config="${TMPDIR:-/tmp}/tinyproxy.conf"
 
 : > "$allow"
 old_ifs=$IFS
@@ -14,16 +15,15 @@ done
 IFS=$old_ifs
 
 cat > "$config" <<CONF
-Port 8888
+Port ${INTAKT_PROXY_PORT:-8888}
 Listen 0.0.0.0
 Timeout 600
-LogFile "/dev/stdout"
 LogLevel Info
 ConnectPort 443
 ConnectPort 80
 Filter "$allow"
 FilterDefaultDeny Yes
-FilterExtended Yes
+FilterType ERE
 CONF
 
 exec tinyproxy -d -c "$config"

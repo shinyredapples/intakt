@@ -37,7 +37,8 @@ final readonly class JobContainerBody
             'Image' => $spec->image,
             'Entrypoint' => ['sh', '-c', $script, 'intakt-job'],
             'Cmd' => $spec->command,
-            'User' => getmyuid().':'.getmygid(),
+            // The worker's effective identity, not the script owner's, because the output directory belongs to the worker and the image's code to root.
+            'User' => posix_geteuid().':'.posix_getegid(),
             'WorkingDir' => JobPaths::WORK,
             'Env' => $this->environment($spec),
             'Labels' => [JobServices::JOB_LABEL => $spec->id],

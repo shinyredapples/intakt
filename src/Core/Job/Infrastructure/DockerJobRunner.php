@@ -7,10 +7,12 @@ namespace Intakt\Core\Job\Infrastructure;
 use Intakt\Core\Job\Contract\EgressPolicy;
 use Intakt\Core\Job\Contract\InvalidJobSpec;
 use Intakt\Core\Job\Contract\JobEndCause;
+use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobOutcome;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobServices;
 use Intakt\Core\Job\Contract\JobSpec;
+use NoDiscard;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -31,9 +33,11 @@ final readonly class DockerJobRunner implements JobRunner
     ) {
     }
 
+    #[NoDiscard]
     public function run(JobSpec $spec): JobOutcome
     {
         $this->outputDirectoryMustExist($spec);
+        $spec = $this->onResolvedPaths($spec);
         $lock = $this->claimed($spec);
         $resources = new JobResources();
 
@@ -52,6 +56,25 @@ final readonly class DockerJobRunner implements JobRunner
         }
     }
 
+    // The engine follows symbolic links when it binds a path, so the spec's rules are checked again on the paths the engine will really mount, and those are what it is given.
+    private function onResolvedPaths(JobSpec $spec): JobSpec
+    {
+        $inputs = array_map(
+            static fn (JobInput $input): JobInput => new JobInput(self::resolved($input->hostPath), $input->containerPath),
+            $spec->inputs,
+        );
+
+        return $spec->withPaths($inputs, self::resolved($spec->outputDir));
+    }
+
+    // A path that does not exist yet stays as it is: the engine refuses to bind it, or the start check reports the mount as missing.
+    private static function resolved(string $path): string
+    {
+        $real = realpath($path);
+
+        return false === $real ? $path : $real;
+    }
+
     private function claimed(JobSpec $spec): LockInterface
     {
         return $this->locks->claim($spec->id) ?? throw new InvalidJobSpec(sprintf('Job %s is already running.', $spec->id));
@@ -61,7 +84,7 @@ final readonly class DockerJobRunner implements JobRunner
     {
         $proxyId = EgressPolicy::Allowlist === $spec->egress ? $this->proxyStarted($spec, $resources) : null;
         $jobId = $this->api->createContainer('intakt-job-'.$spec->id, $this->containers->of($spec, $resources->network() ?? 'none'));
-        $resources->addContainer($jobId);
+        $resources->recordContainer($jobId);
         $this->api->start($jobId);
 
         [$exitCode, $cause] = $this->ended($spec, $jobId);
@@ -75,10 +98,10 @@ final readonly class DockerJobRunner implements JobRunner
     private function proxyStarted(JobSpec $spec, JobResources $resources): string
     {
         $network = $this->api->createInternalNetwork('intakt-job-'.$spec->id, [JobServices::JOB_LABEL => $spec->id]);
-        $resources->setNetwork($network);
+        $resources->recordNetwork($network);
 
         $proxy = $this->api->createContainer('intakt-job-'.$spec->id.'-proxy', $this->proxy->containerBody($spec));
-        $resources->addContainer($proxy);
+        $resources->recordContainer($proxy);
         $this->api->connect($network, $proxy, EgressProxy::ALIAS);
         $this->api->start($proxy);
 
