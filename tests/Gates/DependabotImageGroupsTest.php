@@ -22,28 +22,26 @@ final class DependabotImageGroupsTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{patterns?: list<string>, exclude-patterns?: list<string>}
      */
     private function dockerGroupOfEveryImage(): array
     {
-        /** @var array{updates: list<array{'package-ecosystem': string, groups?: array<string, array<string, mixed>>}>} $configuration */
+        /** @var array{updates: list<array{'package-ecosystem': string, groups?: array<string, array{patterns?: list<string>, exclude-patterns?: list<string>}>}>} $configuration */
         $configuration = Yaml::parseFile(self::CONFIGURATION);
+        $docker = array_find($configuration['updates'], static fn (array $update): bool => 'docker' === $update['package-ecosystem']);
+        $group = array_find($docker['groups'] ?? [], static fn (array $group): bool => ['*'] === ($group['patterns'] ?? null));
 
-        foreach ($configuration['updates'] as $update) {
-            foreach ('docker' === $update['package-ecosystem'] ? $update['groups'] ?? [] : [] as $group) {
-                if (['*'] === ($group['patterns'] ?? null)) {
-                    return $group;
-                }
-            }
-        }
+        self::assertNotNull($group, 'The docker entry of .github/dependabot.yml has no group with patterns [\'*\'].');
 
-        self::fail('The docker entry of .github/dependabot.yml has no group with patterns [\'*\'].');
+        return $group;
     }
 
     private function gitleaksImage(): string
     {
+        $from = [];
+
         self::assertSame(1, preg_match('#^FROM ([^\s:]+):\S+ AS gitleaks$#m', Workflow::ciImageDefinition(), $from), 'The CI image has no gitleaks stage.');
 
-        return $from[1];
+        return $from[1] ?? '';
     }
 }
