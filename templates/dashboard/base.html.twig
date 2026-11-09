@@ -37,7 +37,6 @@
 }, with_context = false) }}
 <div class="main">
 <header class="topbar">
-    {# Shown below 761 px only, where the rail with its logo becomes the bottom bar. #}
     <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
     <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>

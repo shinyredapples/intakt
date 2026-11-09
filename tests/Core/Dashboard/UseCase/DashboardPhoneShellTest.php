@@ -100,6 +100,14 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('--bar: 68px;', $tokens);
     }
 
+    public function testOnPhonesTheRailTakesNoRowOfTheShellAboveTheTopBar(): void
+    {
+        $rule = $this->phoneRules()['.rail'] ?? '';
+
+        self::assertMatchesRegularExpression('/position:\s*absolute/', $rule);
+        self::assertMatchesRegularExpression('/height:\s*0/', $rule);
+    }
+
     public function testOnPhonesTheBarShowsTheMoreItemInsteadOfThePagesUnderIt(): void
     {
         $rules = $this->phoneRules();
