@@ -52,6 +52,7 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'forced needs focus' => ['.btn.needs.is-focus'];
         yield 'forced icon button focus' => ['.icon-btn.is-focus[aria-label]'];
         yield 'forced card hover' => ['a.card.is-hover'];
+        yield 'forced card focus' => ['a.card.is-focus'];
         yield 'forced input focus' => ['input.input.is-focus[aria-label]'];
         yield 'forced sub-tab focus' => ['.subtabs a.is-focus'];
         yield 'toast' => ['.toast'];
@@ -68,6 +69,17 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         foreach (['light', 'dark'] as $theme) {
             self::assertGreaterThan(0, $page->filter('.spec[data-theme="'.$theme.'"] '.$selector)->count(), $theme.' '.$selector);
+        }
+    }
+
+    public function testTheComponentsPageFocusesTheBlockedCardOfTheMockInEachTheme(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        foreach (['light', 'dark'] as $theme) {
+            $focused = $page->filter('#c-cards .spec[data-theme="'.$theme.'"] a.card.is-focus');
+            self::assertCount(1, $focused, $theme);
+            self::assertStringContainsString('#626', $focused->text(), $theme);
         }
     }
 
