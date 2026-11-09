@@ -9,7 +9,7 @@ abstract class GitleaksGate implements Gate
     protected const string INLINE_ALLOW = "gitleaks\x3aallow";
     protected const array UNSCANNED_FOLDERS = [':(glob)**/vendor/**', ':(glob)**/node_modules/**'];
     private const string IGNORE_FILE = '.gitleaksignore';
-    private const string PINNED_VERSION = '8.30.1';
+    public const string PINNED_VERSION = '8.30.1';
 
     final protected function scan(Workspace $workspace, ScanTarget $target, string $configPath): GateResult
     {
