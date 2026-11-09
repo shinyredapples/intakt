@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","model":"sonnet","tools":["mcp__intakt-review__read_file","mcp__intakt-review__list_directory","mcp__intakt-review__search_files"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"mcp__intakt-review__read_file","input":{"path":"large.txt"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":"<<<UNTRUSTED tool result fence-2481a63c85a62cf8>>>\nxxxx\n<<<END fence-2481a63c85a62cf8>>>\n\nIntakt cut this text: 100000 of 100012 bytes are shown and the rest is left out. Read what you need with your tools; an approval of a review with a cut text is refused."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"findings\":[],\"verdict\":\"approve\",\"resolved\":[],\"follow_ups\":[]}","usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

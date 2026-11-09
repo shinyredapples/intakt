@@ -26,11 +26,11 @@ final readonly class ClaudeCodePlatformFactory
     /**
      * @param array<non-empty-string, array{class: string, capabilities: list<Capability>}> $models
      */
-    public function create(ModelClientInterface $cli, array $models): PlatformInterface
+    public function create(ModelClientInterface $cli, array $models, string $directory): PlatformInterface
     {
         $provider = new Provider(
             IntaktProvider::ClaudeCode->value,
-            [new ConfinedClaudeCodeClient($cli)],
+            [new ConfinedClaudeCodeClient($cli, $directory)],
             [new ResultConverter()],
             new ModelCatalog($models),
             ClaudeCodeContract::create(),

@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\ReviewServerAccesses;
+use Intakt\Core\Ai\Contract\ReviewServerAnswers;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -36,6 +37,7 @@ use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
+use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Uid\UuidV7;
@@ -56,6 +58,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
         private ?ReviewServerAccesses $servers = null,
+        private ReviewServerReads $reads = new ReviewServerReads(),
     ) {
     }
 
@@ -73,7 +76,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->serverFor($answering->provider, $request), $this->retriedOnceAtTheLimit($first, $retry)),
+            $this->retriedOnceAtTheLimit($first, $retry),
             $substitute,
         ));
     }
@@ -124,10 +127,11 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        $platform = new TierRoutedPlatform($this->tiers, $answering, $this->serverFor($answering->provider, $request));
+        $server = $this->serverFor($answering->provider, $request);
+        $platform = new TierRoutedPlatform($this->tiers, $answering, $server);
 
         try {
-            $verdict = $this->reviewer->review($request, $platform, $answering->model);
+            $verdict = $this->readOrRefused($answering->provider, $server, $this->reviewer->review($request, $platform, $answering->model), $platform->rounds());
         } catch (IncompleteStreamException $incomplete) {
             // Left unsettled, never settled as well, so the call's usage is counted once.
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
@@ -177,20 +181,28 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Asked again after the call for the same round and so answered the same, because the call carried exactly this access or none.
     private function serverFor(Provider $answeredBy, ReviewRequest $request): ?ReviewServerAccess
     {
         return Provider::ClaudeCode === $answeredBy ? $this->servers?->forRound($request->conversation->round) : null;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
-    private function readOrRefused(Provider $answeredBy, ?ReviewServerAccess $server, Verdict $verdict): Verdict
+    // Decided here in plain code, because a reviewer that never saw the change, or saw only part of what it read, can still answer approve.
+    /**
+     * @param list<DeferredResult> $rounds
+     */
+    private function readOrRefused(Provider $answeredBy, ?ReviewServerAccess $server, Verdict $verdict, array $rounds): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckoutThrough($server)) {
+        if (Decision::Approve !== $verdict->verdict) {
             return $verdict;
         }
 
-        return Verdict::unreadApproval();
+        if (!$answeredBy->readsTheCheckoutThrough($server)) {
+            return Verdict::unreadApproval();
+        }
+
+        $calls = array_filter(array_map(static fn (DeferredResult $round): object => $round->getRawResult(), $rounds), static fn (object $call): bool => $call instanceof ReviewServerAnswers);
+
+        return $this->reads->approval($verdict, ...array_merge([], ...array_map(static fn (ReviewServerAnswers $call): array => $call->reviewServerAnswers(), $calls)));
     }
 
     // Matched on the exception type because the provider's text can change and carries anything (plan T5).

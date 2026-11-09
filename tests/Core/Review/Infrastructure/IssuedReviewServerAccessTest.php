@@ -17,7 +17,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ReviewServerAccess::class)]
 final class IssuedReviewServerAccessTest extends TestCase
 {
-    public function testTheAccessNamesTheServerTheRoundsCredentialAndTheReadOnlyTools(): void
+    public function testTheAccessNamesTheServerTheRoundsFencedCredentialAndTheReadOnlyTools(): void
     {
         $round = Uuid::v7();
 
@@ -25,7 +25,7 @@ final class IssuedReviewServerAccessTest extends TestCase
 
         self::assertInstanceOf(ReviewServerAccess::class, $access);
         self::assertSame('http://localhost:7780/mcp/review', $access->url);
-        self::assertSame(new ReviewCredential('secret')->issueFor($round->toRfc4122()), $access->credential);
+        self::assertSame(new ReviewCredential('secret')->issueFencedFor($round->toRfc4122()), $access->credential);
         self::assertSame(['read_file', 'list_directory', 'search_files'], $access->tools);
     }
 

@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","model":"sonnet","tools":["mcp__intakt-review__read_file","mcp__intakt-review__list_directory","mcp__intakt-review__search_files"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"mcp__intakt-review__list_directory","input":{"path":""}}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"findings\":[],\"verdict\":\"approve\",\"resolved\":[],\"follow_ups\":[]}","usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

@@ -98,7 +98,7 @@ final readonly class Verdict
             file: null,
             line: null,
             symbol: null,
-            text: 'The reviewer approved a change it could not read: its provider gives it no access to the checkout, so the approval is refused and the review is blocked.',
+            text: 'The reviewer approved a change it could not read: its provider gives it no access to the checkout, or a read of the checkout failed on its way to the reviewer, so the approval is refused and the review is blocked.',
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that could read the change.',

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -22,6 +24,7 @@ use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\Uid\Uuid;
@@ -59,8 +62,7 @@ final class ReviewServerContractTest extends KernelTestCase
     protected function tearDown(): void
     {
         if (null !== $this->otherRoot) {
-            unlink($this->otherRoot.'/marker.txt');
-            rmdir($this->otherRoot);
+            new Filesystem()->remove($this->otherRoot);
         }
 
         parent::tearDown();
@@ -121,6 +123,51 @@ final class ReviewServerContractTest extends KernelTestCase
             self::assertTrue(McpServerClient::at($result, 'isError'), $path);
             self::assertStringContainsString('outside the repository under review', json_encode($result, JSON_THROW_ON_ERROR), $path);
         }
+    }
+
+    public function testAFencedCredentialGetsEachAnswerAsOneFence(): void
+    {
+        $this->client = $this->fencedClientOf($this->roundId);
+
+        $text = McpServerClient::at($this->call('read_file', ['path' => 'RoundFixture.php']), 'content', '0', 'text');
+
+        self::assertIsString($text);
+        self::assertTrue(new Fence()->wraps(UntrustedSource::ToolResult, $text));
+        self::assertStringContainsString('final readonly class RoundFixture', $text);
+    }
+
+    public function testAFencedCredentialGetsARefusalAsOneFenceToo(): void
+    {
+        $this->client = $this->fencedClientOf($this->roundId);
+
+        $result = $this->call('read_file', ['path' => '/etc/passwd']);
+        $text = McpServerClient::at($result, 'content', '0', 'text');
+
+        self::assertTrue(McpServerClient::at($result, 'isError'));
+        self::assertIsString($text);
+        self::assertTrue(new Fence()->wraps(UntrustedSource::ToolResult, $text));
+    }
+
+    public function testAFencedCredentialGetsACutAnswerWithIntaktsNoteAfterTheFence(): void
+    {
+        $other = $this->otherRound();
+        file_put_contents($this->otherRoot.'/large.txt', str_repeat('x', 100_001));
+        $this->client = $this->fencedClientOf($other);
+
+        $text = McpServerClient::at($this->call('read_file', ['path' => 'large.txt']), 'content', '0', 'text');
+
+        self::assertIsString($text);
+        [$fenced, $note] = explode("\n\nIntakt cut this text:", $text, 2) + ['', ''];
+        self::assertTrue(new Fence()->wraps(UntrustedSource::ToolResult, $fenced));
+        self::assertStringContainsString('an approval of a review with a cut text is refused', $note);
+    }
+
+    public function testAPlainCredentialGetsTheAnswerUnfencedForTheToolboxThatFencesIt(): void
+    {
+        $text = McpServerClient::at($this->call('read_file', ['path' => 'RoundFixture.php']), 'content', '0', 'text');
+
+        self::assertIsString($text);
+        self::assertStringStartsNotWith('<<<UNTRUSTED', $text);
     }
 
     public function testOneSessionReadsOnlyTheRoundOfItsCredentialWhateverTheArgumentsName(): void
@@ -252,6 +299,14 @@ final class ReviewServerContractTest extends KernelTestCase
     private function clientOf(string $roundId): McpServerClient
     {
         $client = new McpServerClient($this->app, '/mcp/review', $this->credential->issueFor($roundId));
+        $client->initialize('2025-11-25');
+
+        return $client;
+    }
+
+    private function fencedClientOf(string $roundId): McpServerClient
+    {
+        $client = new McpServerClient($this->app, '/mcp/review', $this->credential->issueFencedFor($roundId));
         $client->initialize('2025-11-25');
 
         return $client;

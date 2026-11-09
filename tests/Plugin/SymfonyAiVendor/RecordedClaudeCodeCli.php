@@ -22,6 +22,11 @@ final class RecordedClaudeCodeCli implements ModelClientInterface
      */
     public array $options = [];
 
+    // Read while the call runs, because the client removes the file once the call has finished.
+    public ?string $mcpConfiguration = null;
+
+    public ?int $mcpConfigurationMode = null;
+
     private function __construct(
         private readonly string $recording,
         private readonly string $ending,
@@ -59,6 +64,13 @@ final class RecordedClaudeCodeCli implements ModelClientInterface
     public function request(Model $model, array|string $payload, array $options = []): RawResultInterface
     {
         $this->options = $options;
+        $configuration = $options['mcp_config'] ?? null;
+
+        if (is_string($configuration) && is_file($configuration)) {
+            $this->mcpConfiguration = (string) file_get_contents($configuration);
+            $this->mcpConfigurationMode = fileperms($configuration) & 0o777;
+        }
+
         $replay = new Process(['sh', '-c', 'cat "$0"; '.$this->ending, __DIR__.'/Fixtures/claude-code/'.$this->recording.'.jsonl'], timeout: $this->timeout);
         $replay->start();
 

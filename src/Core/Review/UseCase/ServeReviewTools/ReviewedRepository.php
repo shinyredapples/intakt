@@ -7,7 +7,9 @@ namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 use Closure;
 use DomainException;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\PromptCut;
 use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
@@ -24,7 +26,7 @@ final readonly class ReviewedRepository
     /**
      * @param (Closure(int): void)|null $fileSearched
      */
-    public function __construct(private ReadableRounds $rounds, private Security $security, private ?Closure $fileSearched = null)
+    public function __construct(private ReadableRounds $rounds, private Security $security, private PromptCut $cut, private ?Closure $fileSearched = null)
     {
     }
 
@@ -84,9 +86,15 @@ final readonly class ReviewedRepository
     private function answer(Closure $read): string
     {
         try {
-            return $read();
+            return $this->asTheClientReadsIt($read());
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
-            throw new ToolCallException($refused->getMessage(), $refused->getCode(), previous: $refused);
+            throw new ToolCallException($this->asTheClientReadsIt($refused->getMessage()), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // A refusal is fenced too, because it repeats the path the model sent, and only a fenced answer tells the client that the server, not the transport, answered.
+    private function asTheClientReadsIt(string $answer): string
+    {
+        return $this->security->isGranted(ReviewCredential::FENCED_ROLE) ? $this->cut->fenced(UntrustedSource::ToolResult, $answer) : $answer;
     }
 }

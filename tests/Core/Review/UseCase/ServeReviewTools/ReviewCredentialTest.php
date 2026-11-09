@@ -74,4 +74,45 @@ final class ReviewCredentialTest extends TestCase
             }
         }
     }
+
+    public function testAFencedCredentialNamesItsRoundAsAReviewerWhoseAnswersAreFenced(): void
+    {
+        $credential = new ReviewCredential('secret');
+
+        self::assertSame([ReviewCredential::REVIEWER_ROLE, ReviewCredential::FENCED_ROLE], $this->rolesOf($credential, $credential->issueFencedFor(self::ROUND)));
+    }
+
+    public function testAFencedCredentialIsSignedApartFromAPlainOne(): void
+    {
+        $credential = new ReviewCredential('secret');
+
+        self::assertNotSame($credential->issueFor(self::ROUND), $credential->issueFencedFor(self::ROUND));
+    }
+
+    public function testAFencedCredentialSignedWithAnotherSecretIsRefused(): void
+    {
+        $this->expectException(BadCredentialsException::class);
+
+        new ReviewCredential('secret')->getUserBadgeFrom(new ReviewCredential('another secret')->issueFencedFor(self::ROUND));
+    }
+
+    public function testNoFencedCredentialIsIssuedWhileTheSecretIsEmpty(): void
+    {
+        $this->expectException(LogicException::class);
+
+        new ReviewCredential('')->issueFencedFor(self::ROUND);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function rolesOf(ReviewCredential $credential, string $token): array
+    {
+        $loader = $credential->getUserBadgeFrom($token)->getUserLoader();
+        self::assertIsCallable($loader);
+        $user = $loader(self::ROUND);
+        self::assertInstanceOf(UserInterface::class, $user);
+
+        return array_values($user->getRoles());
+    }
 }

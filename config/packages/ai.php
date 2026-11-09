@@ -148,11 +148,12 @@ return static function (ContainerConfigurator $container): void {
     // The bundle has no configuration for this bridge, so each account gets its own CLI with its own configuration directory and token.
     $claudeCodePlatform = static function (Account $account, string $token) use ($container, $catalog): array {
         $default = Account::DEFAULT === $account->name;
+        $directory = '%kernel.project_dir%/var/claude-code'.($default ? '' : '-'.$account->name);
         $container->services()->set(Provider::ClaudeCode->cliId($account), IsolatedClaudeCodeCli::class)
-            ->args(['%kernel.project_dir%/var/claude-code'.($default ? '' : '-'.$account->name), $token]);
+            ->args([$directory, $token]);
         $container->services()->set(Provider::ClaudeCode->platformId($account), PlatformInterface::class)
             ->factory([new ReferenceConfigurator(ClaudeCodePlatformFactory::class), 'create'])
-            ->args([new ReferenceConfigurator(Provider::ClaudeCode->cliId($account)), $catalog->models(Provider::ClaudeCode)]);
+            ->args([new ReferenceConfigurator(Provider::ClaudeCode->cliId($account)), $catalog->models(Provider::ClaudeCode), $directory]);
 
         return [[], new Reference(Provider::ClaudeCode->platformId($account))];
     };

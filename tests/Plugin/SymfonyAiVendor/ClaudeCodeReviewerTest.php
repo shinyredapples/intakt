@@ -14,6 +14,8 @@ use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
+use Intakt\Core\Ai\Infrastructure\McpConfigFile;
+use Intakt\Core\Ai\Infrastructure\ReviewServerCall;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -48,6 +50,7 @@ use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\ReviewServerReads;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
@@ -71,6 +74,7 @@ use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
@@ -87,6 +91,9 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ProjectModelCatalog::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(ReviewServerAccess::class)]
+#[UsesClass(ReviewServerCall::class)]
+#[UsesClass(McpConfigFile::class)]
+#[UsesClass(ReviewServerReads::class)]
 #[UsesClass(LedgerEvent::class)]
 #[UsesClass(LedgerEventKind::class)]
 #[UsesClass(AppendResult::class)]
@@ -118,6 +125,20 @@ use Symfony\Component\Uid\UuidV7;
 final class ClaudeCodeReviewerTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
+
+    private string $home;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->home = sys_get_temp_dir().'/intakt-claude-code-reviewer-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->home);
+        parent::tearDown();
+    }
 
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
@@ -175,17 +196,32 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $command = array_values(new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options));
         $allowed = array_search('--allowedTools', $command, true);
-        self::assertContains('--mcp-config', $command);
+        self::assertSame(['intakt-review'], array_keys((array) json_decode((string) $cli->mcpConfiguration, true)['mcpServers']));
         self::assertContains('--strict-mcp-config', $command);
+        self::assertStringNotContainsString('round-credential', implode(' ', $command));
         self::assertIsInt($allowed);
         self::assertContains('mcp__intakt-review__read_file', explode(',', $command[$allowed + 1]));
     }
 
     public function testAnApprovalFromAReviewerThatHadTheReviewToolsCounts(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('server-read'), servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAnApprovalAfterAReviewServerReadFailedIsRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('server-read-failed'), servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Blocked, Verdict::UNREAD_APPROVAL], [$verdict->verdict, $verdict->findings[0]->id]);
+    }
+
+    public function testAnApprovalAfterACutReviewServerAnswerIsRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('server-read-cut'), servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Blocked, Verdict::CUT_APPROVAL], [$verdict->verdict, $verdict->findings[0]->id]);
     }
 
     public function testAnApprovalFromAReviewerStartedWithoutTheReviewServerIsStillRefused(): void
@@ -305,7 +341,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
 
-        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
+        return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models, $this->home);
     }
 
     private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor

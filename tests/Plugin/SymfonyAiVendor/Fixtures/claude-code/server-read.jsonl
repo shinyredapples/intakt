@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","model":"sonnet","tools":["mcp__intakt-review__read_file","mcp__intakt-review__list_directory","mcp__intakt-review__search_files"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"mcp__intakt-review__read_file","input":{"path":"src/Sample.php"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"type":"text","text":"<<<UNTRUSTED tool result fence-764b20a27f459215>>>\nfinal class Sample\n{\n}\n\n<<<END fence-764b20a27f459215>>>"}]}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"mcp__intakt-review__read_file","input":{"path":"missing.php"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_02","is_error":true,"content":"<<<UNTRUSTED tool result fence-ba2aa86defc6af73>>>\n\"missing.php\" is not a file.\n<<<END fence-ba2aa86defc6af73>>>"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_03","name":"Read","input":{"file_path":"README.md"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_03","is_error":true,"content":"No such tool available: Read"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"findings\":[],\"verdict\":\"approve\",\"resolved\":[],\"follow_ups\":[]}","usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

@@ -37,7 +37,7 @@ final readonly class IssuedReviewServerAccess implements ReviewServerAccesses
         }
 
         try {
-            $credential = $this->credential->issueFor($round->toRfc4122());
+            $credential = $this->credential->issueFencedFor($round->toRfc4122());
         } catch (LogicException) {
             // An empty APP_SECRET issues none, and the server would refuse every request anyway.
             return null;
