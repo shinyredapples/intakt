@@ -13,7 +13,7 @@ permissions:
 jobs:
   journeys:
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
-    # Permissions are per job: only the alarm step puts the token in its environment.
+    # Per job only: just the alarm step gets the token.
     permissions:
       contents: read
       issues: write
