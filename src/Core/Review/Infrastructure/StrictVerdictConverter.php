@@ -110,6 +110,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     // Dropped here because Symfony AI's structured output would read the narration before a tool call as the answer and fail on it.
     private function withoutNarration(MultiPartResult $parts, RawResultInterface $result): MultiPartResult
     {
+        /** @var non-empty-list<ResultInterface> $kept */
         $kept = array_values(array_filter($parts->getContent(), static fn (ResultInterface $part): bool => !$part instanceof TextResult));
         $rebuilt = new MultiPartResult($kept);
         $rebuilt->setRawResult($result);

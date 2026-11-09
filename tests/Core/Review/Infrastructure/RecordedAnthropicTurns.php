@@ -63,6 +63,7 @@ final readonly class RecordedAnthropicTurns
         $body = '';
 
         foreach ($events as $event) {
+            assert(is_string($event['type']));
             $body .= sprintf("event: %s\ndata: %s\n\n", $event['type'], json_encode($event, JSON_THROW_ON_ERROR));
         }
 

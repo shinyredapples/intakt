@@ -14,10 +14,10 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
-use Symfony\AI\Platform\Result\MultiPartResult;
-use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Result\MultiPartResult;
+use Symfony\AI\Platform\Result\ObjectResult;
 
 final readonly class ReviewerPrompt
 {
