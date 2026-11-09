@@ -186,7 +186,7 @@ abstract class JourneyTestCase extends TestCase
         return is_string($port) && '' !== $port ? $port : self::fail('DASHBOARD_PORT is not set in '.self::TEST_SETTINGS);
     }
 
-    private function address(): string
+    final protected function address(): string
     {
         $address = getenv(self::ADDRESS_VARIABLE);
 

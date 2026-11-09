@@ -296,12 +296,59 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame(['Europe/Berlin'], $select->filter('option[selected]')->each(static fn (Crawler $option): string => $option->text()));
     }
 
+    public function testASelectDoesNotChooseAnOptionWhoseValueOnlyEqualsTheSelectedOneAsANumber(): void
+    {
+        $select = $this->render('select', [
+            'id' => 'project',
+            'name' => 'project',
+            'selected' => '1',
+            'options' => [['value' => '01', 'label' => '01'], ['value' => '1', 'label' => '1'], ['value' => '1.0', 'label' => '1.0']],
+        ])->filter('select.select');
+
+        self::assertSame(['1'], $select->filter('option[selected]')->each(static fn (Crawler $option): string => $option->text()));
+    }
+
     public function testASwitchIsACheckboxWithTheSwitchRole(): void
     {
         $input = $this->render('switch', ['id' => 'lan', 'name' => 'lan', 'on' => true])->filter('.switch input');
 
         self::assertSame('switch', $input->attr('role'));
         self::assertNotNull($input->attr('checked'));
+    }
+
+    public function testAStepperIsANamedGroupWithItsValueBetweenTwoNamedButtons(): void
+    {
+        $stepper = $this->render('stepper', ['label' => 'Parallel builds', 'value' => 2])->filter('.stepper');
+
+        self::assertSame('group', $stepper->attr('role'));
+        self::assertSame('Parallel builds', $stepper->attr('aria-label'));
+        self::assertSame('2', $stepper->filter('button + output')->text());
+        self::assertCount(1, $stepper->filter('output + button'));
+        self::assertSame(['Decrease', 'Increase'], $stepper->filter('button[type="button"]')->each(static fn (Crawler $button): string => (string) $button->attr('aria-label')));
+    }
+
+    public function testACopyFieldShowsTheWholeCommandBesideACopyButton(): void
+    {
+        $copy = $this->render('copy', ['text' => 'intakt account login home'])->filter('.copy');
+
+        self::assertSame('intakt account login home', $copy->filter('code')->text());
+        self::assertSame('Copy', $copy->filter('code + button.btn.sm[type="button"]')->text());
+    }
+
+    public function testALastKnownBarIsDimmedAndSaysItIsTheLastKnownValue(): void
+    {
+        $bar = $this->render('bar', ['label' => 'Last known', 'note' => 'Unknown until logged in', 'used' => 22, 'last_known' => true])->filter('.bar');
+
+        self::assertSame('bar last-known', $bar->attr('class'));
+        self::assertSame('Last known: used 22%, reserved 0%, forecast 0%', $bar->attr('aria-label'));
+    }
+
+    public function testABarOfTheCurrentValueIsNotDimmed(): void
+    {
+        $bar = $this->render('bar', ['label' => 'This week', 'note' => 'Resets at 14:00', 'used' => 22])->filter('.bar');
+
+        self::assertSame('bar', $bar->attr('class'));
+        self::assertSame('Used 22%, reserved 0%, forecast 0%', $bar->attr('aria-label'));
     }
 
     public function testABarLaysUsedReservedAndForecastEndToEnd(): void
@@ -354,6 +401,23 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame('false', $toggle->attr('aria-expanded'));
         self::assertSame('field-notes is paused', $toggle->text());
         self::assertCount(1, $toggle->filter('svg.chev'));
+    }
+
+    public function testACompactBannerIsOneLineAtEveryWidthUntilItsToggleOpensIt(): void
+    {
+        $banner = $this->banner(['broken' => true, 'compact' => true])->filter('.banner');
+
+        self::assertSame('banner broken compact', $banner->attr('class'));
+        self::assertSame('false', $banner->filter('button.banner-toggle')->attr('aria-expanded'));
+    }
+
+    public function testAnOpenCompactBannerSaysItIsExpanded(): void
+    {
+        $banner = $this->banner(['broken' => false, 'compact' => true, 'open' => true])->filter('.banner');
+
+        self::assertSame('banner compact open', $banner->attr('class'));
+        self::assertSame('true', $banner->filter('button.banner-toggle')->attr('aria-expanded'));
+        self::assertSame('disclosure', $banner->attr('data-controller'));
     }
 
     public function testOnlyTheCurrentSubTabIsMarked(): void
@@ -527,7 +591,7 @@ final class DashboardComponentsTest extends KernelTestCase
     }
 
     /**
-     * @param array{broken: bool} $context
+     * @param array{broken: bool, compact?: bool, open?: bool} $context
      */
     private function banner(array $context): Crawler
     {
