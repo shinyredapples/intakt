@@ -250,3 +250,115 @@ test('the project filter still filters when storage refuses access', () => {
 
     assert.deepEqual(page.shownRows(), ['alpha']);
 });
+
+test('a phone shows every project, because its top bar has no project filter', () => {
+    const browser = new Browser('light', { phone: true });
+    browser.storage.set('intakt-project', 'alpha');
+
+    const page = browser.open();
+
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
+test('a phone shows every project after following a project link', () => {
+    const page = new Browser('light', { phone: true, address: 'http://localhost/reviews?project=alpha' }).open();
+
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
+test('a window that narrows to a phone shows every project again', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('alpha');
+
+    page.resize(true);
+
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
+test('a phone that widens to a desktop shows the chosen project only', () => {
+    const browser = new Browser('light', { phone: true });
+    browser.storage.set('intakt-project', 'alpha');
+    const page = browser.open();
+
+    page.resize(false);
+
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('a page left behind by a visit leaves its rows alone when the width changes', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('alpha');
+    page.leave();
+
+    page.resize(true);
+
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('a page without pages under more runs the shell without a more item', () => {
+    const page = new Browser('light').open();
+
+    page.toggleRail();
+
+    assert.equal(page.more, null);
+    assert.equal(page.rail(), 'collapsed');
+    assert.equal(page.press('Escape').defaultPrevented, false);
+});
+
+test('more opens its sheet and marks itself expanded', () => {
+    const page = new Browser('light', { more: true }).open();
+
+    page.tapMore();
+
+    assert.equal(page.sheetOpen(), true);
+    assert.equal(page.more.getAttribute('aria-expanded'), 'true');
+});
+
+test('more closes its open sheet again', () => {
+    const page = new Browser('light', { more: true }).open();
+
+    page.tapMore();
+    page.tapMore();
+
+    assert.equal(page.sheetOpen(), false);
+    assert.equal(page.more.getAttribute('aria-expanded'), 'false');
+});
+
+test('a tap beside the sheet closes it', () => {
+    const page = new Browser('light', { more: true }).open();
+    page.tapMore();
+
+    page.tapBackdrop();
+
+    assert.equal(page.sheetOpen(), false);
+    assert.equal(page.more.getAttribute('aria-expanded'), 'false');
+});
+
+test('a tap on a page in the sheet is left to its link', () => {
+    const page = new Browser('light', { more: true }).open();
+    page.tapMore();
+
+    page.tapSheetLink();
+
+    assert.equal(page.sheetOpen(), true);
+});
+
+test('escape closes the sheet and returns the focus to more', () => {
+    const page = new Browser('light', { more: true }).open();
+    page.tapMore();
+
+    page.press('Escape');
+
+    assert.equal(page.sheetOpen(), false);
+    assert.equal(page.more.getAttribute('aria-expanded'), 'false');
+    assert.equal(page.moreHasFocus(), true);
+});
+
+test('escape with the sheet closed leaves the focus where it is', () => {
+    const page = new Browser('light', { more: true }).open();
+
+    page.press('Escape');
+
+    assert.equal(page.sheetOpen(), false);
+    assert.equal(page.moreHasFocus(), false);
+});

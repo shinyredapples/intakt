@@ -26,28 +26,20 @@
     {% block importmap %}{% endblock %}
 </head>
 <body>
-{# Only the rail items whose page is built; the others arrive with their page. #}
-{% set rail_items = [
-    {key: 'projects', label: 'Projects', icon: 'projects', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')},
-] %}
 <div class="shell">
-<nav class="rail" id="rail" aria-label="Main">
-    <div class="rail-in">
-        <a class="brand" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home">
-            <img class="logo-full logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt">
-            <img class="logo-full logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt">
-            <img class="mark" src="{{ asset('images/favicon-32.png') }}" alt="Intakt">
-        </a>
-        {% for item in rail_items %}
-        <a class="nav" data-k="{{ item.key }}" href="{{ path(item.route) }}" title="{{ item.label }}"{% if app.current_route == item.route %} aria-current="page"{% endif %}>{{ include('dashboard/components/icon.html.twig', {name: item.icon}, with_context = false) }}<span class="label">{{ item.label }}</span></a>
-        {% endfor %}
-        <div class="spacer"></div>
-        <button class="nav collapse" type="button" data-rail-toggle aria-controls="rail" aria-expanded="true" title="Collapse menu">{{ include('dashboard/components/icon.html.twig', {name: 'collapse'}, with_context = false) }}<span class="label">Collapse</span></button>
-    </div>
-</nav>
+{# Only the items whose page is built; the others arrive with their page. History and Settings, once built, go under More, which a phone shows instead of them. #}
+{{ include('dashboard/_rail.html.twig', {
+    rail_items: [
+        {key: 'projects', label: 'Projects', icon: 'projects', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')},
+    ],
+    more_items: [],
+    current_route: app.current_route,
+}, with_context = false) }}
 <div class="main">
 <header class="topbar">
-    <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><kbd>Ctrl K</kbd></button>
+    {# Shown below 761 px only, where the rail with its logo becomes the bottom bar. #}
+    <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
+    <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>
     {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. #}
     {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
@@ -75,6 +67,10 @@
     const railToggle = document.querySelector('[data-rail-toggle]');
     const search = document.querySelector('.search-trigger');
     const projectFilter = document.querySelector('#projfilter');
+    const more = document.querySelector('[data-more-toggle]');
+    const moreSheet = document.querySelector('[data-more-sheet]');
+    // A phone's top bar has no project filter, so a choice it cannot show would hide rows with nothing to undo it.
+    const phone = matchMedia('(max-width: 760px)');
     const read = (key) => {
         try {
             return localStorage.getItem(key);
@@ -83,10 +79,15 @@
         }
     };
     const showProject = () => {
+        const chosen = phone.matches ? '' : projectFilter.value;
         document.querySelectorAll('[data-project]').forEach((item) => {
-            item.hidden = projectFilter.value !== '' && item.dataset.project !== projectFilter.value;
+            item.hidden = chosen !== '' && item.dataset.project !== chosen;
         });
         projectFilter.title = projectFilter.selectedOptions[0].textContent;
+    };
+    const showMore = (open) => {
+        moreSheet.hidden = !open;
+        more.setAttribute('aria-expanded', String(open));
     };
     const showRail = () => {
         const collapsed = root.dataset.rail === 'collapsed';
@@ -119,6 +120,21 @@
         projectFilter.value = storedProject;
     }
     showProject();
+    // The width outlives the body Turbo replaces, so the listener of a page left behind does nothing.
+    phone.addEventListener('change', () => {
+        if (projectFilter.isConnected) {
+            showProject();
+        }
+    });
+    if (more) {
+        more.addEventListener('click', () => showMore(moreSheet.hidden));
+        // A tap beside the sheet's pages lands on its backdrop.
+        moreSheet.addEventListener('click', (event) => {
+            if (event.target === moreSheet) {
+                showMore(false);
+            }
+        });
+    }
     projectFilter.addEventListener('change', () => {
         store('intakt-project', projectFilter.value);
         showProject();
@@ -133,6 +149,10 @@
         search.querySelector('kbd').textContent = '⌘K';
     }
     document.body.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && more && !moreSheet.hidden) {
+            showMore(false);
+            more.focus();
+        }
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             event.preventDefault();
             search.focus();

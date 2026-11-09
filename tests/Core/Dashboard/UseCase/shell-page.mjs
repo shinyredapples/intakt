@@ -9,6 +9,7 @@ class FakeElement {
     attributes = new Map();
     listeners = new Map();
     title = '';
+    isConnected = true;
 
     constructor(page, textContent = '', children = {}) {
         this.page = page;
@@ -73,8 +74,10 @@ class FakeKey {
 export class Browser {
     storage = new Map();
 
-    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews', linked = null } = {}) {
+    constructor(systemTheme, { storageRefused = false, platform = 'Linux x86_64', projects = ['alpha', 'beta'], rows = ['beta', 'alpha', 'beta'], address = 'http://localhost/reviews', linked = null, more = false, phone = false } = {}) {
         this.systemTheme = systemTheme;
+        this.more = more;
+        this.phone = phone;
         this.storageRefused = storageRefused;
         this.platform = platform;
         this.projects = projects;
@@ -101,16 +104,21 @@ export class Browser {
             },
         };
         const rows = this.rows.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
+        // The layout renders the More item and its sheet only for a page that has pages under More.
+        const more = this.more ? new FakeElement(page) : null;
+        const sheet = this.more ? Object.assign(new FakeElement(page), { hidden: true }) : null;
+        const sheetLink = new FakeElement(page);
+        const phoneWidth = Object.assign(new FakeElement(page), { matches: this.phone });
         const document = {
             documentElement: root,
             body,
-            querySelector: (selector) => ({ '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter })[selector] ?? null,
+            querySelector: (selector) => ({ '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet })[selector] ?? null,
             querySelectorAll: (selector) => ({ '[data-theme-toggle]': themeToggles, '[data-project]': rows })[selector] ?? [],
         };
         const context = {
             document,
             localStorage: this.localStorage(),
-            matchMedia: (query) => ({ matches: query === '(prefers-color-scheme: dark)' && this.systemTheme === 'dark' }),
+            matchMedia: (query) => (query === '(max-width: 760px)' ? phoneWidth : { matches: query === '(prefers-color-scheme: dark)' && this.systemTheme === 'dark' }),
             navigator: { platform: this.platform },
             location: { href: this.address },
             history,
@@ -141,6 +149,19 @@ export class Browser {
             projectFilter,
             history,
             shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
+            more,
+            tapMore: () => more.dispatch('click'),
+            tapBackdrop: () => sheet.dispatch('click', { target: sheet }),
+            tapSheetLink: () => sheet.dispatch('click', { target: sheetLink }),
+            sheetOpen: () => !sheet.hidden,
+            moreHasFocus: () => page.focused === more,
+            leave: () => {
+                projectFilter.isConnected = false;
+            },
+            resize: (phone) => {
+                phoneWidth.matches = phone;
+                phoneWidth.dispatch('change', phoneWidth);
+            },
         };
     }
 

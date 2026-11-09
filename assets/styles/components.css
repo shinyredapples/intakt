@@ -222,7 +222,7 @@ svg.i.s { width: 15px; height: 15px; }
   .banner.open > p { display: block; padding: 0 var(--s12) var(--s4) calc(var(--s12) + 15px + var(--s8)); }
   .banner.open > p strong { display: none; }
   .banner.open > :is(.btn, form) { display: inline-flex; margin: var(--s4) 0 var(--s8) var(--s32); }
-  .toast { right: var(--s16); bottom: var(--s16); left: var(--s16); justify-content: space-between; transform: none; animation-name: toast-in-phone; }
+  .toast { right: var(--s16); bottom: calc(var(--bar) + var(--s16) + env(safe-area-inset-bottom)); left: var(--s16); justify-content: space-between; transform: none; animation-name: toast-in-phone; }
 }
 @keyframes toast-in-phone { from { opacity: 0; transform: translateY(8px); } }
 
@@ -263,6 +263,40 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 [data-theme="dark"] .theme-toggle .sun { display: block; }
 [data-theme="dark"] .theme-toggle .moon { display: none; }
 .content { width: 100%; max-width: 1280px; padding: var(--s32); }
+.topbar .brand-m, .search-trigger .ph-short, .rail .nav.more, .menu { display: none; }
+
+/* Below 761 px the phone shell: the rail is the bottom bar, the top bar holds the logo, Search and the theme toggle. */
+@media (max-width: 760px) {
+  .shell, [data-rail="collapsed"] .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { border-right: 0; }
+  .rail-in {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; z-index: 50; height: calc(var(--bar) + env(safe-area-inset-bottom));
+    flex-direction: row; justify-content: space-around; gap: 0; padding: var(--s4) var(--s4) env(safe-area-inset-bottom);
+    border-top: 1px solid var(--hairline); background: var(--raised);
+  }
+  .rail .brand, .rail .spacer, .rail .collapse, .rail .nav.in-more { display: none; }
+  .rail .nav, [data-rail="collapsed"] .rail .nav { flex: 1; flex-direction: column; justify-content: center; gap: var(--s4); min-width: 0; height: 56px; padding: var(--s4) 2px; }
+  .rail .nav.more { display: flex; }
+  .rail .nav .label, [data-rail="collapsed"] .rail .nav .label { display: block; white-space: nowrap; }
+  .topbar { gap: var(--s8); padding: 0 var(--s12); }
+  .topbar .brand-m { display: flex; align-items: center; min-height: 44px; }
+  .topbar .brand-m img { width: auto; height: 26px; }
+  .search-trigger { flex: 0 1 auto; height: 44px; margin-left: auto; }
+  .search-trigger .ph, .search-trigger kbd, .topbar .grow, .topbar .select { display: none; }
+  .search-trigger .ph-short { display: inline; }
+  .content { padding: var(--s16) var(--s16) calc(var(--bar) + var(--s32) + env(safe-area-inset-bottom)); }
+  .menu:not([hidden]) { position: fixed; inset: 0; z-index: 90; display: block; background: var(--backdrop); }
+  .menu nav {
+    position: absolute; right: var(--s8); bottom: calc(var(--bar) + var(--s8) + env(safe-area-inset-bottom)); left: var(--s8);
+    display: grid; padding: var(--s4); border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--raised);
+  }
+  .menu a {
+    display: flex; align-items: center; gap: var(--s12); min-height: 48px; padding: var(--s8) var(--s12); border-radius: var(--r-btn);
+    color: var(--ink); font: 500 var(--t17)/1.2 var(--f-head); text-decoration: none;
+  }
+  .menu a:hover { background: var(--tint); }
+  .menu a[aria-current="page"] { background: var(--selected); }
+}
 
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }

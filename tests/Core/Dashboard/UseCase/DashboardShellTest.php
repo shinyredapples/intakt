@@ -131,7 +131,7 @@ final class DashboardShellTest extends DashboardPageTestCase
     {
         $controls = $this->browser->request('GET', '/reviews')->filter('.topbar > *')->each(static fn (Crawler $control): string => (string) $control->attr('class'));
 
-        self::assertSame(['search-trigger', 'grow', 'select', 'icon-btn theme-toggle'], $controls);
+        self::assertSame(['brand-m', 'search-trigger', 'grow', 'select', 'icon-btn theme-toggle'], $controls);
     }
 
     public function testTheProjectFilterIsASelectNamedProject(): void
