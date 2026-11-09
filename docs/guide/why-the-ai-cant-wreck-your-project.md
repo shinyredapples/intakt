@@ -33,7 +33,7 @@ A builder hands back **a package of commits and a short description**, nothing e
 
 ## Layer 3: checks that don't take the builder's word
 
-The project's own checks run again in a **separate, fresh container**, then again on GitHub's machines (CI). The builder saying "all tests pass" counts for nothing; the checks do.
+The project's own checks run again in a **separate, fresh container**, then again on GitHub's machines (CI). The builder saying "all tests pass" counts for nothing; the checks do. One of them reads the CI setup offline with zizmor and fails on any security problem it finds there.
 
 ## Layer 4: several independent reviewers
 
