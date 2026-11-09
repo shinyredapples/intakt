@@ -25,7 +25,7 @@ A third helper, the round driver, starts a review on the sample project and move
 
 ## When a journey fails on main
 
-A red journey run on main files one urgent task (labels `priority:urgent` and `ready`) that names each failing journey, the step that broke and the last 40 lines of what the run printed. While the journeys stay red, a later red run rewrites that same task instead of opening another; its title and labels stay as they are. A green run files nothing. If the output holds neither a failing journey nor a pass, the command stops with a message instead of treating the run as green.
+A red journey run on main files one urgent task (labels `priority:urgent` and `ready`) that names each failing journey, the step that broke and the last 40 lines of what the run printed. While the journeys stay red, a later red run rewrites that same task instead of opening another; its title and labels stay as they are. A green run files nothing. If two red runs file at the same moment, the later one closes its task as a duplicate and rewrites the older one. If the output holds neither a failing journey nor a pass, or the journeys check failed without naming a journey, the command stops with a message instead of treating the run as green.
 
 `bin/journey-alarm` does this. You can run it by hand against saved output:
 
@@ -34,7 +34,7 @@ bin/check --journeys > journeys.out
 GITHUB_REPOSITORY=owner/name bin/journey-alarm --run=https://github.com/owner/name/actions/runs/1 journeys.out
 ```
 
-It reads stdin when you give no file, and `--run` is optional. It talks to GitHub through `gh`, which needs to be signed in or to have `GH_TOKEN` set; the command itself never reads a key.
+It reads stdin when you give no file, and `--run` is optional. It talks to GitHub through `gh` and needs a token in `GH_TOKEN` (or `GITHUB_TOKEN`) in the environment: without one it stops before calling GitHub, even when `gh` is signed in, and the command itself never reads a key.
 
 The nightly run, and a run you start on demand in GitHub, that call it are planned.
 
