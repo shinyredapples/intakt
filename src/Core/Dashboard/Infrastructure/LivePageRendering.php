@@ -21,8 +21,9 @@ final readonly class LivePageRendering
     }
 
     /**
-     * @param array<string, mixed> $context a page's own topics go in `topics`, listened to besides the shell's
+     * @param array<string, mixed> $context
      */
+    // A page's own topics go in the context under `topics`, because the shell's one stream source listens to them besides its own.
     public function render(Request $request, string $template, array $context): string
     {
         $flashBag = $this->flashBagOf($request);
