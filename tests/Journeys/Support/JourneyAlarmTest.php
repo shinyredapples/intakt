@@ -129,6 +129,17 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame([], $this->callsOf('create'));
     }
 
+    public function testAnIssueOfGhWithoutABodyFailsAndFilesNothing(): void
+    {
+        $this->openIssues('[{"number":3}]');
+
+        $alarm = $this->alarm([$this->fixture()]);
+
+        self::assertSame(1, $alarm->getExitCode());
+        self::assertStringContainsString('not a list of issues', $alarm->getErrorOutput());
+        self::assertSame([], $this->callsOf('create'));
+    }
+
     public function testARedRunWithoutARepositoryFailsBeforeCallingGh(): void
     {
         $alarm = $this->alarm([$this->fixture()], '', '');
@@ -218,7 +229,22 @@ final class JourneyAlarmTest extends TestCase
             return [];
         }
 
-        /* @var list<array{arguments: list<string>, input: string}> */
-        return array_map(static fn (string $line): array => (array) json_decode($line, true), file($file, FILE_IGNORE_NEW_LINES));
+        return array_map($this->callFrom(...), (array) file($file, FILE_IGNORE_NEW_LINES));
+    }
+
+    /**
+     * @return array{arguments: list<string>, input: string}
+     */
+    private function callFrom(mixed $line): array
+    {
+        self::assertIsString($line);
+        $call = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($call);
+        $arguments = $call['arguments'] ?? null;
+        $input = $call['input'] ?? null;
+        self::assertIsArray($arguments);
+        self::assertIsString($input);
+
+        return ['arguments' => array_values(array_map(static fn (mixed $argument): string => is_string($argument) ? $argument : self::fail('a recorded argument is no string'), $arguments)), 'input' => $input];
     }
 }

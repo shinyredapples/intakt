@@ -11,7 +11,7 @@ final readonly class JourneyAlarmTask
     public const string MARKER = '<!-- intakt:journey-alarm -->';
     public const array LABELS = ['priority:urgent', 'ready'];
     public const int TAIL_LINES = 40;
-    // GitHub refuses an issue body of more than 65536 characters.
+    // The body stays below this because GitHub refuses an issue body of more than 65536 characters.
     public const int BODY_LIMIT = 65536;
     private const int NAME_WIDTH = 60;
 

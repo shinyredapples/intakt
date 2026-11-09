@@ -67,17 +67,21 @@ final readonly class JourneyRun
      */
     private static function failuresIn(array $lines): array
     {
+        $gateLines = array_filter($lines, static fn (array $line): bool => self::GATE === ($line['gate'] ?? null));
+
+        return array_merge([], ...array_map(static fn (array $line): array => self::failuresAmong($line['findings'] ?? null), array_values($gateLines)));
+    }
+
+    /**
+     * @return list<JourneyFailure>
+     */
+    private static function failuresAmong(mixed $findings): array
+    {
         $failures = [];
 
-        foreach ($lines as $line) {
-            if (self::GATE !== ($line['gate'] ?? null) || !is_array($line['findings'] ?? null)) {
-                continue;
-            }
-
-            foreach ($line['findings'] as $finding) {
-                if (is_string($finding) && 1 === preg_match(self::FINDING, $finding, $match)) {
-                    $failures[] = new JourneyFailure($match['file'], $match['journey'], $match['step'], $match['reason']);
-                }
+        foreach (is_array($findings) ? $findings : [] as $finding) {
+            if (is_string($finding) && 1 === preg_match(self::FINDING, $finding, $match)) {
+                $failures[] = new JourneyFailure($match['file'], $match['journey'], $match['step'], $match['reason']);
             }
         }
 

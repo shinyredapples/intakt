@@ -50,17 +50,31 @@ final readonly class GitHubIssues
         $answer = $this->gh(['issue', 'list', '--state', 'open', '--limit', (string) self::OPEN_ISSUES_READ, '--json', 'number,body'], '');
         $issues = json_validate($answer) ? json_decode($answer, true) : null;
 
-        if (!is_array($issues) || !array_is_list($issues) || !array_all($issues, $this->isIssue(...))) {
-            throw new GitHubCallFailed('gh issue list answered something that is not a list of issues with a number and a body');
+        if (!is_array($issues) || !array_is_list($issues)) {
+            throw $this->notAnIssueList();
         }
 
-        /* @var list<array{number: int, body: string}> $issues */
-        return $issues;
+        return array_map($this->issueFrom(...), $issues);
     }
 
-    private function isIssue(mixed $issue): bool
+    /**
+     * @return array{number: int, body: string}
+     */
+    private function issueFrom(mixed $issue): array
     {
-        return is_array($issue) && is_int($issue['number'] ?? null) && is_string($issue['body'] ?? null);
+        $number = is_array($issue) ? $issue['number'] ?? null : null;
+        $body = is_array($issue) ? $issue['body'] ?? null : null;
+
+        if (!is_int($number) || !is_string($body)) {
+            throw $this->notAnIssueList();
+        }
+
+        return ['number' => $number, 'body' => $body];
+    }
+
+    private function notAnIssueList(): GitHubCallFailed
+    {
+        return new GitHubCallFailed('gh issue list answered something that is not a list of issues with a number and a body');
     }
 
     /**
