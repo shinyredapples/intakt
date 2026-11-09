@@ -30,6 +30,3 @@ Options: `--fast` (changed PHP files only; every PHP file when the change touche
 ### The `workflows` gate
 
 The last gate, `workflows` (`WorkflowsGate`), runs zizmor 1.32.0 over `.github/` on every run: `--offline` without the token variables, `--no-config`, the default persona. A finding fails as `<file>:<line>: <audit>: <text>`; only `# zizmor: ignore[<audit>] <reason>` on its line silences it, and an ignore in a `.yml` or `.yaml` file under `.github/` with no letter after the `]` fails as `<file>:<line>: zizmor ignore without a reason`, an unreadable one as `<file> cannot be read`. Tests: `tests/Gates/WorkflowsGateTest.php`.
-=======
-Options: `--fast` (changed PHP files only; every PHP file when the change touches the gate definitions or what builds the container: `config/`, `src/Kernel.php` or a `services.yaml` under `tests/`, since a service removed in configuration alone leaves its callers unchanged), `--journeys` (see [Journeys](journeys.md)), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
->>>>>>> origin/main
