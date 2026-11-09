@@ -6,9 +6,10 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
-use Intakt\Core\Ai\Contract\ReviewServerAnswers;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
+use Intakt\Core\Ai\Infrastructure\McpConfigFile;
+use Intakt\Core\Ai\Infrastructure\ReviewServerCall;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UnstreamedModelCatalog;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,11 +19,14 @@ use Symfony\AI\Platform\Capability;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\ResultConverterInterface;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(TierRoutedPlatform::class)]
 #[CoversClass(UnstreamedModelCatalog::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierRequest::class)]
+#[UsesClass(ReviewServerCall::class)]
+#[UsesClass(McpConfigFile::class)]
 final class TierRoutedPlatformTest extends TestCase
 {
     public function testAnApiProviderModelCanStream(): void
@@ -44,15 +48,18 @@ final class TierRoutedPlatformTest extends TestCase
 
     public function testForgettingTheReviewCredentialReachesEveryRoundThatCalledTheReviewServer(): void
     {
-        $call = $this->createMockForIntersectionOfInterfaces([RawResultInterface::class, ReviewServerAnswers::class]);
-        $call->expects(self::exactly(2))->method('forgetTheCredential');
+        $home = sys_get_temp_dir().'/intakt-tier-routed-'.bin2hex(random_bytes(6));
         $tiers = self::createStub(TierInvoker::class);
-        $tiers->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult(self::createStub(ResultConverterInterface::class), $call));
+        $tiers->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult(self::createStub(ResultConverterInterface::class), new ReviewServerCall(self::createStub(RawResultInterface::class), McpConfigFile::in($home, ['mcpServers' => []]), [])));
         $platform = new TierRoutedPlatform($tiers, new ResolvedModel(Provider::ClaudeCode, 'big'));
         $platform->invoke('big', 'First round.');
         $platform->invoke('big', 'Second round.');
+        self::assertCount(2, (array) glob($home.'/mcp-*'));
 
         $platform->forgetTheReviewCredential();
+
+        self::assertSame([], glob($home.'/mcp-*'));
+        new Filesystem()->remove($home);
     }
 
     public function testARoundWithoutTheReviewServerHasNoCredentialToForget(): void
