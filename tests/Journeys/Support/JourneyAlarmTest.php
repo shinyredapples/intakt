@@ -58,20 +58,20 @@ final class JourneyAlarmTest extends TestCase
 
     public function testAFirstRedRunCreatesExactlyOneUrgentReadyTaskNamingTheJourneyStepAndTail(): void
     {
-        $alarm = $this->alarm([self::fixture()]);
+        $alarm = $this->alarm([$this->fixture()]);
 
         self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
         $create = $this->callsOf('create');
         self::assertCount(1, $create);
         self::assertSame(['issue', 'create', '--title', 'fix(journeys): journey "broken" fails on main', '--label', 'priority:urgent', '--label', 'ready', '--body-file', '-', '--repo', self::REPOSITORY], $create[0]['arguments']);
         self::assertStringContainsString('journey "broken" failed at step "read the second page": Failed asserting that two strings are identical.', $create[0]['input']);
-        self::assertStringContainsString("```\n".trim((string) file_get_contents(self::fixture()))."\n```", $create[0]['input']);
+        self::assertStringContainsString("```\n".trim((string) file_get_contents($this->fixture()))."\n```", $create[0]['input']);
     }
 
     public function testASecondRedRunEditsTheOpenTaskAndCreatesNone(): void
     {
-        $this->alarm([self::fixture()]);
-        $second = (string) file_get_contents(self::fixture());
+        $this->alarm([$this->fixture()]);
+        $second = (string) file_get_contents($this->fixture());
         $second = str_replace('read the second page', 'read the third page', $second);
 
         $alarm = $this->alarm(['--run=https://github.com/example/repo/actions/runs/2'], $second);
@@ -90,14 +90,14 @@ final class JourneyAlarmTest extends TestCase
     {
         $this->openIssues($this->issues([12, JourneyAlarmTask::MARKER."\nold"], [5, "first\r\n".JourneyAlarmTask::MARKER."\r\nold"]));
 
-        self::assertSame("updated #5\n", $this->alarm([self::fixture()])->getOutput());
+        self::assertSame("updated #5\n", $this->alarm([$this->fixture()])->getOutput());
     }
 
     public function testAnOpenIssueThatOnlyQuotesTheMarkerInsideALineIsNotTheTask(): void
     {
         $this->openIssues($this->issues([3, 'see '.JourneyAlarmTask::MARKER.' in the alarm']));
 
-        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([self::fixture()])->getOutput());
+        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([$this->fixture()])->getOutput());
     }
 
     public function testAGreenRunFilesNothingAndCallsNoGh(): void
@@ -122,7 +122,7 @@ final class JourneyAlarmTest extends TestCase
     {
         $this->openIssues('{"message":"Bad credentials"}');
 
-        $alarm = $this->alarm([self::fixture()]);
+        $alarm = $this->alarm([$this->fixture()]);
 
         self::assertSame(1, $alarm->getExitCode());
         self::assertStringContainsString('not a list of issues', $alarm->getErrorOutput());
@@ -131,7 +131,7 @@ final class JourneyAlarmTest extends TestCase
 
     public function testARedRunWithoutARepositoryFailsBeforeCallingGh(): void
     {
-        $alarm = $this->alarm([self::fixture()], '', '');
+        $alarm = $this->alarm([$this->fixture()], '', '');
 
         self::assertSame(1, $alarm->getExitCode());
         self::assertStringContainsString('GITHUB_REPOSITORY must name the repository', $alarm->getErrorOutput());
@@ -142,7 +142,7 @@ final class JourneyAlarmTest extends TestCase
     {
         new Filesystem()->dumpFile($this->directory.'/gh', "#!/usr/bin/env sh\necho 'HTTP 401' >&2\nexit 1\n");
 
-        $alarm = $this->alarm([self::fixture()]);
+        $alarm = $this->alarm([$this->fixture()]);
 
         self::assertSame(1, $alarm->getExitCode());
         self::assertStringContainsString('gh issue list failed: HTTP 401', $alarm->getErrorOutput());
@@ -158,13 +158,13 @@ final class JourneyAlarmTest extends TestCase
 
     public function testARunLinkThatIsNotHttpsIsAUsageError(): void
     {
-        $alarm = $this->alarm(['--run=http://github.com/example/repo/actions/runs/2', self::fixture()]);
+        $alarm = $this->alarm(['--run=http://github.com/example/repo/actions/runs/2', $this->fixture()]);
 
         self::assertSame(2, $alarm->getExitCode());
         self::assertSame([], $this->calls());
     }
 
-    private static function fixture(): string
+    private function fixture(): string
     {
         return JourneyRunTest::ONE_BROKEN;
     }
@@ -218,7 +218,7 @@ final class JourneyAlarmTest extends TestCase
             return [];
         }
 
-        /** @var list<array{arguments: list<string>, input: string}> */
+        /* @var list<array{arguments: list<string>, input: string}> */
         return array_map(static fn (string $line): array => (array) json_decode($line, true), file($file, FILE_IGNORE_NEW_LINES));
     }
 }

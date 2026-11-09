@@ -26,7 +26,7 @@ final readonly class JourneyAlarmTask
         $journeys = array_unique(array_map(static fn (JourneyFailure $failure): string => $failure->journey, $this->run->failures));
 
         if (1 === count($journeys)) {
-            return 'fix(journeys): journey "'.mb_strimwidth((string) array_first($journeys), 0, self::NAME_WIDTH, '...').'" fails on main';
+            return 'fix(journeys): journey "'.mb_strimwidth(array_first($journeys), 0, self::NAME_WIDTH, '...').'" fails on main';
         }
 
         return 'fix(journeys): '.count($journeys).' journeys fail on main';
