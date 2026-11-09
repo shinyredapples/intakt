@@ -1,0 +1,61 @@
+name: journeys
+# The journeys on main, nightly and on demand, never on a pull request or push: each boots whole installs and takes minutes.
+# A red run files or updates one priority:urgent task through bin/journey-alarm and still ends red.
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+# One run at a time; a run started while another is going waits instead of cancelling it, so every red run is reported.
+concurrency:
+  group: journeys
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  journeys:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    # GitHub grants permissions per job, not per step: only the alarm step puts the token in its environment.
+    permissions:
+      contents: read
+      issues: write
+    # Three journeys at the gate's 300-second limit each, the image build, two dependency installs and the alarm.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Allow unprivileged user namespaces
+        if: runner.environment == 'github-hosted'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Build the CI image
+        run: .github/ci/build-image.sh
+      # Run the way ci.yml runs bin/check (see the flags there); the output is saved for the alarm.
+      - name: Run the journeys
+        id: journeys
+        run: |
+          set -eu -o pipefail
+          apparmor=
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          docker run --rm --user 1000:1000 \
+            --security-opt seccomp=.github/ci/seccomp-userns.json \
+            --security-opt systempaths=unconfined \
+            $apparmor \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check --journeys 2>&1 | tee "$RUNNER_TEMP/journeys.out"
+      # The CI image has PHP 8.5 but no gh, so the runner's gh binary is mounted read-only. Only this step holds a write token.
+      - name: File or update the urgent task
+        if: failure() && steps.journeys.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/journeys.out:/journeys.out:ro" \
+            --volume "$(command -v gh):/usr/local/bin/gh:ro" \
+            --env GH_TOKEN --env GITHUB_REPOSITORY \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/journey-alarm --run="$RUN_LINK" /journeys.out
