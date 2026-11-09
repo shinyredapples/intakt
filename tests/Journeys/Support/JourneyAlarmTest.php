@@ -20,8 +20,6 @@ final class JourneyAlarmTest extends TestCase
     private const string COMMAND = __DIR__.'/../../../bin/journey-alarm';
     private const string REPOSITORY = 'example/repo';
     // Records each call with what it read on stdin, and answers from the issues file it keeps, so a later run sees an earlier run's issue.
-    // With `listing-waits`, a listing waits up to 2 seconds for a second one, so two runs without serialization both list before either creates.
-    // With `rival.json`, a create also opens that issue, as a run on another machine would at the same moment.
     private const string FAKE_GH = <<<'PHP'
         #!/usr/bin/env php
         <?php
@@ -29,6 +27,7 @@ final class JourneyAlarmTest extends TestCase
         $action = 'api' === $arguments[0] ? 'api' : $arguments[1];
         $input = in_array('--body-file', $arguments, true) ? stream_get_contents(STDIN) : '';
         file_put_contents(__DIR__.'/calls.jsonl', json_encode(['arguments' => $arguments, 'input' => $input])."\n", FILE_APPEND | LOCK_EX);
+        // A listing waits up to 2 seconds for a second one, so two runs without serialization both list before either creates.
         if ('api' === $action && is_file(__DIR__.'/listing-waits')) {
             touch(__DIR__.'/listed-'.getmypid());
             $end = microtime(true) + 2;
@@ -43,6 +42,7 @@ final class JourneyAlarmTest extends TestCase
         if ('create' === $action) {
             $number = count($issues) + 7;
             $issues[] = ['number' => $number, 'body' => $input];
+            // A rival opens its issue at the same moment, as a run on another machine would.
             if (is_file(__DIR__.'/rival.json')) {
                 $issues[] = json_decode(file_get_contents(__DIR__.'/rival.json'), true);
                 unlink(__DIR__.'/rival.json');
@@ -160,7 +160,7 @@ final class JourneyAlarmTest extends TestCase
 
     public function testARedRunWithoutARepositoryFailsBeforeCallingGh(): void
     {
-        $alarm = $this->alarm([$this->fixture()], '', '');
+        $alarm = $this->alarm([$this->fixture()], environment: ['GITHUB_REPOSITORY' => '']);
 
         self::assertSame(1, $alarm->getExitCode());
         self::assertStringContainsString('GITHUB_REPOSITORY must name the repository', $alarm->getErrorOutput());
@@ -287,9 +287,9 @@ final class JourneyAlarmTest extends TestCase
      * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
-    private function alarm(array $arguments, string $input = '', string $repository = self::REPOSITORY, array $environment = []): Process
+    private function alarm(array $arguments, string $input = '', array $environment = []): Process
     {
-        $process = $this->started($arguments, $input, $repository, $environment);
+        $process = $this->started($arguments, $input, $environment);
         $process->wait();
 
         return $process;
@@ -299,14 +299,14 @@ final class JourneyAlarmTest extends TestCase
      * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
-    private function started(array $arguments, string $input = '', string $repository = self::REPOSITORY, array $environment = []): Process
+    private function started(array $arguments, string $input = '', array $environment = []): Process
     {
         $process = new Process(
             [PHP_BINARY, self::COMMAND, ...$arguments],
             null,
             [
                 'PATH' => $this->directory.':'.getenv('PATH'),
-                'GITHUB_REPOSITORY' => $repository,
+                'GITHUB_REPOSITORY' => self::REPOSITORY,
                 'GH_TOKEN' => bin2hex(random_bytes(8)),
                 'GITHUB_TOKEN' => false,
                 'TMPDIR' => $this->directory,

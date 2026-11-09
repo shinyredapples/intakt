@@ -63,15 +63,18 @@ final readonly class GitHubIssues
         // Every page is read, so a marked task behind any number of newer issues is still found.
         $answer = $this->gh(['api', 'repos/'.$this->repository.'/issues?state=open&per_page=100', '--paginate', '--slurp'], '');
         $pages = json_validate($answer) ? json_decode($answer, true) : null;
-
-        if (!is_array($pages) || !array_is_list($pages) || !array_all($pages, static fn (mixed $page): bool => is_array($page) && array_is_list($page))) {
-            throw $this->notAnIssueList();
-        }
-
-        $items = array_merge([], ...$pages);
+        $items = array_merge([], ...array_map($this->pageFrom(...), is_array($pages) && array_is_list($pages) ? $pages : throw $this->notAnIssueList()));
         $issues = array_filter($items, static fn (mixed $item): bool => !is_array($item) || !array_key_exists('pull_request', $item));
 
         return array_values(array_map($this->issueFrom(...), $issues));
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function pageFrom(mixed $page): array
+    {
+        return is_array($page) && array_is_list($page) ? $page : throw $this->notAnIssueList();
     }
 
     /**
