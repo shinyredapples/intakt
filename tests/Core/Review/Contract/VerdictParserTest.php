@@ -177,9 +177,9 @@ final class VerdictParserTest extends KernelTestCase
 
     public function testAReplyInSeveralPartsYieldsChanges(): void
     {
-        $parts = new MultiPartResult([new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json())]);
+        $answer = VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json();
 
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($parts));
+        $verdict = new VerdictParser()->parse($this->reviewer()->answering(new MultiPartResult([new TextResult($answer), new TextResult($answer)])));
 
         self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
     }

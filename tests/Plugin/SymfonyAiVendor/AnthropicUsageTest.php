@@ -25,6 +25,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\EventSourceHttpClient;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[CoversClass(UsageLedger::class)]
 #[CoversClass(FinalStreamedUsage::class)]
@@ -131,7 +132,7 @@ final class AnthropicUsageTest extends TestCase
      */
     private function roundOf(RawHttpResult $raw, array $options): DeferredResult
     {
-        return new DeferredResult(new StrictVerdictConverter(new ResultConverter(), StoredSerializerFactory::create()), $raw, $options);
+        return new DeferredResult(new StrictVerdictConverter(new ResultConverter(), StoredSerializerFactory::create(), self::createStub(ValidatorInterface::class)), $raw, $options);
     }
 
     private function recorded(string $fixture): string
