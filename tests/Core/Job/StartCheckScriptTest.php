@@ -15,6 +15,8 @@ use Symfony\Component\Process\Process;
 final class StartCheckScriptTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../src/Core/Job/Infrastructure/start-check.sh';
+    // Not under the temporary directory, because that is /tmp on CI and a job input cannot be mounted where the container keeps its own /tmp.
+    private const string ABSENT_INPUT = '/intakt-start-check-absent-input';
 
     private string $folder = '';
 
@@ -72,12 +74,12 @@ final class StartCheckScriptTest extends TestCase
     public function testTheReportTheScriptWritesIsTheOneTheReaderParses(): void
     {
         $this->curlExits(56);
-        $this->started('exit 0', $this->environment($this->folder.'/missing'));
+        $this->started('exit 0', $this->environment(self::ABSENT_INPUT));
 
-        $spec = JobSpecBuilder::in($this->folder.'/out')->withInput($this->folder.'/missing', $this->folder.'/missing')->build();
+        $spec = JobSpecBuilder::in($this->folder.'/out')->withInput('/srv/absent', self::ABSENT_INPUT)->build();
         $failed = array_map(static fn ($item): string => $item->name, new StartCheckReader()->read($spec)->failed());
 
-        self::assertSame(['input:'.$this->folder.'/missing', 'vendor'], $failed);
+        self::assertSame(['input:'.self::ABSENT_INPUT, 'vendor'], $failed);
     }
 
     private function curlExits(int $code): void
