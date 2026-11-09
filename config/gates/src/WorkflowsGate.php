@@ -8,8 +8,9 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
 
-final class WorkflowsGate implements Gate
+final readonly class WorkflowsGate implements Gate
 {
+    private const string REASON = '/(?:failed to parse input|^error): (.+)$/m';
     private const string VERSION = 'zizmor 1.32.0';
     private const string BARE_IGNORE = '/#.*zizmor:\s*ignore\[[^\]]*\][^\pL]*$/u';
     private const string FINDING = '/^::\w+ file=([^,]+),line=(\d+),title=([^:]+)::(?:\S+:\d+: )?(.*)$/m';
@@ -52,7 +53,13 @@ final class WorkflowsGate implements Gate
             return GateResult::withFindings($this->name(), array_map(static fn (array $match): string => vsprintf('%s:%s: %s: %s', array_slice($match, 1)), $matches));
         }
 
-        return $result->succeeded() ? GateResult::passed($this->name()) : GateResult::failedBecause($this->name(), 'zizmor failed: '.$result->firstErrorLine());
+        return $result->succeeded() ? GateResult::passed($this->name()) : GateResult::failedBecause($this->name(), 'zizmor failed: '.$this->reasonOf($result));
+    }
+
+    // Because zizmor prints its version banner before the reason it failed.
+    private function reasonOf(ProcessResult $result): string
+    {
+        return 1 === preg_match(self::REASON, $result->errors."\n".$result->output, $reason) ? $reason[1] : $result->firstErrorLine();
     }
 
     /**
