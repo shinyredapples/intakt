@@ -26,4 +26,5 @@ enum LedgerEventKind: string
     case HeadHandedOver = 'head_handed_over';
     case ReviewerStopped = 'reviewer_stopped';
     case HeadForgotten = 'head_forgotten';
+    case JobEnded = 'job_ended';
 }

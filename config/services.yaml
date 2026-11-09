@@ -10,6 +10,9 @@ parameters:
     !php/const Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices::ACCOUNT_PARALLEL_CALLS: 3
     # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::GITLEAKS: gitleaks
+    # The Docker Engine's socket and the image built from docker/job-proxy, which job containers reach the outside through.
+    !php/const Intakt\Core\Job\Contract\JobServices::DOCKER_SOCKET: /var/run/docker.sock
+    !php/const Intakt\Core\Job\Contract\JobServices::PROXY_IMAGE: intakt-job-proxy:latest
 
 services:
     # default configuration for services in *this* file
@@ -46,6 +49,11 @@ services:
     Symfony\Component\Semaphore\Store\LockStore: ~
     Symfony\Component\Semaphore\SemaphoreFactory:
         arguments: ['@Symfony\Component\Semaphore\Store\LockStore']
+
+    # No client of its own is given, so the API builds one bound to the socket instead of the default one that has no socket.
+    Intakt\Core\Job\Infrastructure\DockerEngineApi:
+        arguments:
+            $client: null
 
     # Only the App's identity, because Intakt acts as itself, never with the owner's token (docs/guide/setting-up-intakt.md).
     Intakt\Plugin\GitHubForge\Infrastructure\AppJwt:
