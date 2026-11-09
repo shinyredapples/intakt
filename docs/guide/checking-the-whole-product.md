@@ -36,6 +36,6 @@ GITHUB_REPOSITORY=owner/name bin/journey-alarm --run=https://github.com/owner/na
 
 It reads stdin when you give no file, and `--run` is optional. It talks to GitHub through `gh` and needs a token in `GH_TOKEN` (or `GITHUB_TOKEN`) in the environment: without one it stops before calling GitHub, even when `gh` is signed in, and the command itself never reads a key.
 
-In GitHub, the `journeys` workflow runs the journeys on main every night (02:17 UTC), never on a pull request. To start a run yourself, use its "Run workflow" button on the Actions tab, or `gh workflow run journeys.yml`; it always runs main. A red run calls `bin/journey-alarm`, so it files or updates the one urgent task, and still ends red.
+In GitHub, the `journeys` workflow runs them on main every night, never on a pull request. Start a run with its "Run workflow" button or `gh workflow run journeys.yml`. A red run files or updates the urgent task.
 
 The technical side is in [Journeys](../architecture/journeys.md).
