@@ -10,7 +10,7 @@ use SplFileInfo;
 
 final readonly class WorkflowsGate implements Gate
 {
-    private const string REASON = '/(?:failed to parse input|^error): (.+)$/m';
+    private const string REASON = '/^(?:\s*1|error): (.+)$/m';
     private const string VERSION = 'zizmor 1.32.0';
     private const string BARE_IGNORE = '/#.*zizmor:\s*ignore\[[^\]]*\][^\pL]*$/u';
     private const string FINDING = '/^::\w+ file=([^,]+),line=(\d+),title=([^:]+)::(?:\S+:\d+: )?(.*)$/m';
@@ -39,11 +39,11 @@ final readonly class WorkflowsGate implements Gate
         return $this->audit($workspace);
     }
 
-    // Because the gate must give the same answer without network, without a token and without a file that disables audits.
+    // Because the gate must give the same answer without network, without a token and without a file that disables audits, and fail on a file it cannot load.
     private function audit(Workspace $workspace): GateResult
     {
         $result = $workspace->command(
-            ['zizmor', '--offline', '--no-config', '--no-progress', '--format=github', '.github'],
+            ['zizmor', '--offline', '--no-config', '--no-progress', '--strict-collection', '--format=github', '.github'],
             ['GH_TOKEN' => false, 'GITHUB_TOKEN' => false, 'ZIZMOR_GITHUB_TOKEN' => false],
         );
 

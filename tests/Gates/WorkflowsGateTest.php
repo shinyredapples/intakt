@@ -45,10 +45,10 @@ final class WorkflowsGateTest extends SandboxTestCase
         self::assertSame('.github/workflows/ci.yml cannot be read', $sandbox->check('--only=workflows')->findingsOf('workflows'));
     }
 
-    public function testAWorkflowZizmorCannotParseFailsWithItsReason(): void
+    public function testAWorkflowZizmorCannotParseBesideAValidOneFailsWithItsReason(): void
     {
         $sandbox = $this->workflow('run: "true"');
-        $sandbox->write('.github/workflows/ci.yml', "jobs: [unclosed\n");
+        $sandbox->write('.github/workflows/bad.yml', "jobs: [unclosed\n");
 
         self::assertStringStartsWith('zizmor failed: did not find expected', $sandbox->check('--only=workflows')->findingsOf('workflows'));
     }
