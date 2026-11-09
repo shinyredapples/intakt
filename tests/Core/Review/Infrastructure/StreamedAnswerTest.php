@@ -11,21 +11,21 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
-use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\Delta\DeltaInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallStart;
-use Symfony\AI\Platform\Result\Stream\DeltaEvent;
 use Symfony\AI\Platform\Result\StreamResult;
 
 #[CoversClass(StreamedAnswer::class)]
 #[CoversClass(AnthropicTextBlocks::class)]
 final class StreamedAnswerTest extends TestCase
 {
-    /**
-     * @var list<string>
-     */
-    private array $seenAfter = [];
+    private TextSeenByLaterListeners $later;
+
+    protected function setUp(): void
+    {
+        $this->later = new TextSeenByLaterListeners();
+    }
 
     public function testTheTextStillStreamsPieceByPieceAndOnlyOnce(): void
     {
@@ -38,14 +38,14 @@ final class StreamedAnswerTest extends TestCase
     {
         $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->text('"approve"}')]);
 
-        self::assertSame(['{"verdict":"approve"}'], $this->seenAfter);
+        self::assertSame(['{"verdict":"approve"}'], $this->later->seen());
     }
 
     public function testTheListenersAfterItSeeNoTextOfARoundThatAsksForTools(): void
     {
         $emitted = $this->streamed([$this->textBlock(), $this->text('I will read the cart.'), $this->toolUse()]);
 
-        self::assertSame([], $this->seenAfter);
+        self::assertSame([], $this->later->seen());
         self::assertSame(['I will read the cart.'], $emitted);
     }
 
@@ -67,7 +67,7 @@ final class StreamedAnswerTest extends TestCase
         $answer = new StreamedAnswer($blocks);
         $stream = new StreamResult($answer->of(new StreamResult($this->deltasOf($blocks))));
         $stream->addListener($answer);
-        $stream->addListener($this->recorder());
+        $stream->addListener($this->later);
 
         $emitted = [];
 
@@ -78,29 +78,6 @@ final class StreamedAnswerTest extends TestCase
         }
 
         return $emitted;
-    }
-
-    private function recorder(): AbstractStreamListener
-    {
-        $seen = &$this->seenAfter;
-
-        return new class($seen) extends AbstractStreamListener {
-            /**
-             * @param list<string> $seen
-             */
-            public function __construct(private array &$seen)
-            {
-            }
-
-            public function onDelta(DeltaEvent $event): void
-            {
-                $delta = $event->getDelta();
-
-                if ($delta instanceof TextDelta) {
-                    $this->seen[] = $delta->getText();
-                }
-            }
-        };
     }
 
     /**
