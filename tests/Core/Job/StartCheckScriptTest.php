@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Runs the script a job container starts with, against a real directory, with a stand-in curl that plays the proxy.
+// Runs the script a job container starts with against a real directory, because only a real shell shows what it does; a stand-in curl plays the proxy.
 #[CoversNothing]
 final class StartCheckScriptTest extends TestCase
 {

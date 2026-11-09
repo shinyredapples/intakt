@@ -24,7 +24,7 @@ final class FakeDockerEngine
     /** @var array<string, array{name: string, labels: array<string, string>}> */
     public array $networks = [];
 
-    /** @var array<string, array<string, mixed>> the body of every container ever created, by name */
+    /** @var array<string, array<string, mixed>> */
     public array $created = [];
 
     /** @var list<string> */
@@ -41,7 +41,7 @@ final class FakeDockerEngine
         $route = $method.' '.$path;
         $this->calls[] = $route;
         $body = is_string($options['body'] ?? null) ? json_decode($options['body'], true) : [];
-        $body = is_array($body) ? $body : [];
+        $body = is_array($body) ? array_filter($body, is_string(...), ARRAY_FILTER_USE_KEY) : [];
 
         return match (true) {
             'POST /containers/create' === $route => $this->created($url, $body),
@@ -117,34 +117,47 @@ final class FakeDockerEngine
     }
 
     /**
-     * @param array<mixed> $body
+     * @param array<string, mixed> $body
      */
     private function created(string $url, array $body): MockResponse
     {
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
         $id = 'c'.++$this->counter;
         $name = is_string($query['name'] ?? null) ? $query['name'] : '';
-        /** @var array<string, string> $labels */
-        $labels = $body['Labels'] ?? [];
-        $this->containers[$id] = ['name' => $name, 'labels' => $labels];
-        /** @var array<string, mixed> $body */
+        $this->containers[$id] = ['name' => $name, 'labels' => $this->labelsOf($body)];
         $this->created[$name] = $body;
 
         return new MockResponse(json_encode(['Id' => $id], JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }
 
     /**
-     * @param array<mixed> $body
+     * @param array<string, mixed> $body
      */
     private function networkCreated(array $body): MockResponse
     {
         $id = 'n'.++$this->counter;
-        /** @var array<string, string> $labels */
-        $labels = $body['Labels'] ?? [];
         $name = is_string($body['Name'] ?? null) ? $body['Name'] : '';
-        $this->networks[$id] = ['name' => $name, 'labels' => $labels];
+        $this->networks[$id] = ['name' => $name, 'labels' => $this->labelsOf($body)];
 
         return new MockResponse(json_encode(['Id' => $id], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     *
+     * @return array<string, string>
+     */
+    private function labelsOf(array $body): array
+    {
+        $labels = $body['Labels'] ?? [];
+
+        $strings = [];
+
+        foreach (is_array($labels) ? $labels : [] as $key => $value) {
+            $strings[(string) $key] = is_string($value) ? $value : '';
+        }
+
+        return $strings;
     }
 
     private function containerCall(string $id, string $action): MockResponse
@@ -166,7 +179,7 @@ final class FakeDockerEngine
             return new MockResponse('{"message":"cannot start"}', ['http_code' => 500]);
         }
 
-        if (!$isProxy && null !== $this->onJobStart) {
+        if (!$isProxy && $this->onJobStart instanceof Closure) {
             ($this->onJobStart)($this->containers[$id]['name']);
         }
 

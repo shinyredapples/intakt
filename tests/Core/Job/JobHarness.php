@@ -17,7 +17,7 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
-// Wires the runner over a fake engine and an in-memory lock store, the two doors a job leaves the process through.
+// Wires the runner over a fake engine and an in-memory lock store, because those are the two doors a job leaves the process through and neither may be real in a test.
 final readonly class JobHarness
 {
     public FakeDockerEngine $engine;
