@@ -234,7 +234,7 @@ svg.i.s { width: 15px; height: 15px; }
 .conn.unreachable strong { color: var(--red); }
 .conn.unreachable .conn-dot { border-color: var(--red); border-top-color: transparent; }
 .offline-marker { padding: calc(var(--s4) + 2px) calc(var(--s8) + 2px); border: 1px solid var(--hairline); border-radius: var(--r-chip); color: var(--muted); font: 500 var(--t13)/1 var(--f-head); white-space: nowrap; }
-.conn[hidden], .offline-marker[hidden] { display: none; }
+.conn[hidden], .offline-marker[hidden], .meta .frozen-at[hidden] { display: none; }
 
 @media (max-width: 760px) {
   .btn, .btn.sm, .linkbtn, .toast button { min-height: 44px; }
