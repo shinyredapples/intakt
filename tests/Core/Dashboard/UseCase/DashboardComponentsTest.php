@@ -296,6 +296,18 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame(['Europe/Berlin'], $select->filter('option[selected]')->each(static fn (Crawler $option): string => $option->text()));
     }
 
+    public function testASelectDoesNotChooseAnOptionWhoseValueOnlyEqualsTheSelectedOneAsANumber(): void
+    {
+        $select = $this->render('select', [
+            'id' => 'project',
+            'name' => 'project',
+            'selected' => '1',
+            'options' => [['value' => '01', 'label' => '01'], ['value' => '1', 'label' => '1'], ['value' => '1.0', 'label' => '1.0']],
+        ])->filter('select.select');
+
+        self::assertSame(['1'], $select->filter('option[selected]')->each(static fn (Crawler $option): string => $option->text()));
+    }
+
     public function testASwitchIsACheckboxWithTheSwitchRole(): void
     {
         $input = $this->render('switch', ['id' => 'lan', 'name' => 'lan', 'on' => true])->filter('.switch input');
