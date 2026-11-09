@@ -6,12 +6,9 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\DomCrawler\Crawler;
 
-// Because the stand-in scripts are created and removed in assets/vendor/ of the checkout, which every test worker shares.
 #[CoversNothing]
-#[Group('serial')]
 final class DashboardShellTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;

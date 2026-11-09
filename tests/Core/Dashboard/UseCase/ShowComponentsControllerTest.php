@@ -7,12 +7,9 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Dashboard\UseCase\ShowComponents\ShowComponentsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\DomCrawler\Crawler;
 
-// Because the stand-in scripts are created and removed in assets/vendor/ of the checkout, which every test worker shares.
 #[CoversClass(ShowComponentsController::class)]
-#[Group('serial')]
 final class ShowComponentsControllerTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -84,6 +81,16 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
             self::assertCount(1, $focused, $theme);
             self::assertStringContainsString('#626', $focused->text(), $theme);
         }
+    }
+
+    public function testTheComponentsPageAnswersASecondRequestOfTheSameTest(): void
+    {
+        $this->browser->request('GET', '/components');
+        self::assertResponseIsSuccessful();
+
+        $this->browser->request('GET', '/components');
+
+        self::assertResponseIsSuccessful();
     }
 
     public function testTheComponentsPageCarriesAThemeToggleBesideTheOneOfTheTopBar(): void
