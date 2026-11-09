@@ -69,7 +69,23 @@ final readonly class JourneyRun
     {
         $gateLines = array_filter($lines, static fn (array $line): bool => self::GATE === ($line['gate'] ?? null));
 
-        return array_merge([], ...array_map(static fn (array $line): array => self::failuresAmong($line['findings'] ?? null), array_values($gateLines)));
+        return array_merge([], ...array_map(self::failuresOfGateLine(...), array_values($gateLines)));
+    }
+
+    /**
+     * @param array<mixed> $line
+     *
+     * @return list<JourneyFailure>
+     */
+    private static function failuresOfGateLine(array $line): array
+    {
+        $failures = self::failuresAmong($line['findings'] ?? null);
+
+        if ([] === $failures && false === ($line['ok'] ?? null)) {
+            throw new UnreadableJourneyRun('the journeys gate failed without a finding that names a journey and its step, so the run is not known to be green');
+        }
+
+        return $failures;
     }
 
     /**

@@ -58,6 +58,20 @@ final class JourneyRunTest extends TestCase
         JourneyRun::fromOutput($this->failingWith('tests/Journeys: no journey found'));
     }
 
+    public function testAFailedGateWithoutAJourneyFindingIsRefusedEvenBesideAPass(): void
+    {
+        $this->expectException(UnreadableJourneyRun::class);
+
+        JourneyRun::fromOutput('{"gate":"journeys","ok":false,"findings":["X: crashed"]}'."\n".self::PASS);
+    }
+
+    public function testAFailedGateWithAJourneyFindingBesideAPassIsRed(): void
+    {
+        $run = JourneyRun::fromOutput($this->failingWith('A.php: journey "a" failed at step "one": x').self::PASS);
+
+        self::assertTrue($run->isRed());
+    }
+
     public function testEmptyOutputIsRefused(): void
     {
         $this->expectException(UnreadableJourneyRun::class);
