@@ -29,7 +29,6 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Build the CI image
         run: .github/ci/build-image.sh
-      # The flags of ci.yml's check job.
       - name: Run the journeys
         id: journeys
         run: |
