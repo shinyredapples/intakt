@@ -55,9 +55,9 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(StrictVerdictConverter::class)]
 #[CoversClass(StreamedAnswer::class)]
 #[CoversClass(AnthropicTextBlocks::class)]
+#[CoversClass(ReviewerPrompt::class)]
 #[UsesClass(StrictVerdictStreamListener::class)]
 #[UsesClass(ReviewerAgent::class)]
-#[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(PromptCut::class)]
 #[UsesClass(ReviewerRuns::class)]
@@ -143,6 +143,20 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $verdict = $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->saying(self::APPROVE), $tool));
 
         self::assertSame(Decision::Approve, $verdict->verdict, json_encode($verdict->findings, JSON_THROW_ON_ERROR));
+    }
+
+    public function testTheRequestAfterAToolCallReplaysTheThinkingWithItsSignatureAndLeavesOutTheNarration(): void
+    {
+        $tool = RecordedAnthropicTurns::askingForATool()->thinking('I need the file.')->saying('I will read the cart first.')->callingATool('toolu_01', 'read_file', ['path' => 'src/Cart.php']);
+        $responses = $this->unstreamed(RecordedAnthropicTurns::answering()->saying(self::APPROVE), $tool);
+
+        $this->review($responses);
+
+        $request = $responses[1]->getRequestOptions()['body'];
+        self::assertIsString($request);
+        self::assertStringContainsString('"signature":"signature-0"', $request);
+        self::assertStringContainsString('I need the file.', $request);
+        self::assertStringNotContainsString('I will read the cart first.', $request);
     }
 
     public function testAStreamedReviewerOnAnthropicThatReadsAFileBeforeAnsweringHasItsFinalAnswerRecordedAsTheTypedVerdict(): void
