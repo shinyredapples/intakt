@@ -93,7 +93,7 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+REVIEW_MCP_BASE_URL=http:\/\/localhost:7781\b/m', $this->dockerfile());
     }
 
-    public function testTheBaseStagePinsFrankenPhpOnPhp8512ByDigest(): void
+    public function testTheBaseStagePinsFrankenPhpOnThePhp85LineByDigest(): void
     {
         self::assertMatchesRegularExpression('/^FROM dunglas\/frankenphp:[\d.]+-php8\.5-trixie@sha256:[0-9a-f]{64} AS base$/m', $this->dockerfile());
     }
@@ -119,9 +119,12 @@ final class DockerfileTest extends TestCase
     public function testEachImageBuildFailsBelowPhp8512(): void
     {
         foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
-            preg_match("/^RUN php( -r '.*PHP_VERSION.*')$/m", (string) file_get_contents(__DIR__.'/../../../../'.$file), $run);
-            exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.11"']), result_code: $old);
-            exec(PHP_BINARY.strtr($run[1] ?? ' -v', ['PHP_VERSION' => '"8.5.12"']), result_code: $new);
+            if (1 !== preg_match("/^RUN php( -r '.*PHP_VERSION.*')$/m", (string) file_get_contents(__DIR__.'/../../../../'.$file), $run)) {
+                self::fail($file.' has no RUN php -r line that checks PHP_VERSION.');
+            }
+
+            exec(PHP_BINARY.strtr($run[1], ['PHP_VERSION' => '"8.5.11"']), result_code: $old);
+            exec(PHP_BINARY.strtr($run[1], ['PHP_VERSION' => '"8.5.12"']), result_code: $new);
             self::assertSame([1, 0], [$old, $new], $file);
         }
     }
