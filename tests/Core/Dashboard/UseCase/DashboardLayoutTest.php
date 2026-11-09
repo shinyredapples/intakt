@@ -30,6 +30,13 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         yield 'the components page' => ['/components'];
     }
 
+    public static function pagesOtherThanTheComponentsPage(): iterable
+    {
+        yield 'the project list' => ['/projects'];
+        yield 'the review list' => ['/reviews'];
+        yield 'a running review' => ['/reviews/round-1'];
+    }
+
     #[DataProvider('pages')]
     public function testEveryPageLoadsNoFontScriptOrStyleFromAnotherHost(string $path): void
     {
@@ -46,7 +53,7 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertDoesNotMatchRegularExpression('#url\(\s*["\']?(https?:)?//#i', $page->html());
     }
 
-    #[DataProvider('pages')]
+    #[DataProvider('pagesOtherThanTheComponentsPage')]
     public function testNoPageOtherThanTheComponentsPageRendersAForcedState(string $path): void
     {
         $this->ledger->startRound('round-1', 'alpha');
@@ -54,8 +61,15 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', $path);
 
         self::assertResponseIsSuccessful();
-        $forced = $page->filter('.is-hover, .is-focus, .is-active')->count();
-        '/components' === $path ? self::assertGreaterThan(0, $forced) : self::assertSame(0, $forced);
+        self::assertSame(0, $page->filter('.is-hover, .is-focus, .is-active')->count());
+    }
+
+    public function testTheComponentsPageRendersForcedStates(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertResponseIsSuccessful();
+        self::assertGreaterThan(0, $page->filter('.is-hover, .is-focus, .is-active')->count());
     }
 
     // Without it a phone lays the page out at a desktop width, so the 390 px rules of DESIGN.md never apply.
