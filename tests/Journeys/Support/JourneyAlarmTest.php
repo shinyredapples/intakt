@@ -284,7 +284,7 @@ final class JourneyAlarmTest extends TestCase
     }
 
     /**
-     * @param list<string>              $arguments
+     * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
     private function alarm(array $arguments, string $input = '', string $repository = self::REPOSITORY, array $environment = []): Process
@@ -296,7 +296,7 @@ final class JourneyAlarmTest extends TestCase
     }
 
     /**
-     * @param list<string>              $arguments
+     * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
     private function started(array $arguments, string $input = '', string $repository = self::REPOSITORY, array $environment = []): Process
