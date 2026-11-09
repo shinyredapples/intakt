@@ -147,7 +147,7 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
 
-        // The review list stands in for History, the first page under More, which is not built yet.
+        // Because History, the first page under More, is not built yet, the review list stands in for it.
         return new Crawler($twig->render('dashboard/_rail.html.twig', [
             'rail_items' => [['key' => 'projects', 'label' => 'Projects', 'icon' => 'projects', 'route' => DashboardRoutes::LIST_PROJECTS]],
             'more_items' => [['key' => 'history', 'label' => 'History', 'icon' => 'clock', 'route' => DashboardRoutes::LIST_REVIEWS]],
