@@ -1,0 +1,67 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Intakt\Tests\Journeys\Support\GitHubCallFailed;
+use Intakt\Tests\Journeys\Support\GitHubIssues;
+use Intakt\Tests\Journeys\Support\JourneyAlarm;
+use Intakt\Tests\Journeys\Support\UnreadableJourneyRun;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\FlockStore;
+use Uri\Rfc3986\Uri;
+
+const USAGE = "usage: bin/journey-alarm [--run=<https link to the run>] [<file with the output of bin/check --journeys>]\n";
+
+$autoload = __DIR__.'/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDERR, "run composer install first\n");
+    exit(2);
+}
+
+require $autoload;
+
+$link = null;
+$files = [];
+
+foreach (array_slice($argv, 1) as $argument) {
+    if (str_starts_with($argument, '--run=')) {
+        $link = Uri::parse(substr($argument, 6));
+
+        if (!$link instanceof Uri || 'https' !== $link->getScheme() || null === $link->getHost() || null !== $link->getUserInfo()) {
+            fwrite(STDERR, "--run must be an https link without credentials\n".USAGE);
+            exit(2);
+        }
+
+        continue;
+    }
+
+    if (str_starts_with($argument, '-')) {
+        fwrite(STDERR, 'unknown option '.$argument."\n".USAGE);
+        exit(2);
+    }
+
+    $files[] = $argument;
+}
+
+if (count($files) > 1) {
+    fwrite(STDERR, USAGE);
+    exit(2);
+}
+
+$source = $files[0] ?? 'php://stdin';
+$output = is_file($source) || 'php://stdin' === $source ? @file_get_contents($source) : false;
+
+if (false === $output) {
+    fwrite(STDERR, 'cannot read '.$source."\n");
+    exit(2);
+}
+
+try {
+    $alarm = new JourneyAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')), new LockFactory(new FlockStore()));
+    fwrite(STDOUT, $alarm->raise($output, $link)."\n");
+} catch (UnreadableJourneyRun|GitHubCallFailed $failure) {
+    fwrite(STDERR, $failure->getMessage()."\n");
+    exit(1);
+}
