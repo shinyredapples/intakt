@@ -178,7 +178,7 @@ final readonly class CheckCommand
     {
         return [
             new CodingStandardsGate(),
-            new StaticAnalysisGate(),
+            new ContainerDumpingGate(new StaticAnalysisGate()),
             new RectorGate(),
             new ArchitectureGate(),
             new CommentsGate(),

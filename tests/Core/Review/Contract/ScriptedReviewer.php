@@ -21,10 +21,7 @@ final readonly class ScriptedReviewer
     // The application's dispatcher, because then the subscribers and their order are the ones a real reviewer call gets.
     public static function in(ContainerInterface $container): self
     {
-        /** @var EventDispatcherInterface $dispatcher */
-        $dispatcher = $container->get('event_dispatcher');
-
-        return new self($dispatcher);
+        return new self($container->get('event_dispatcher'));
     }
 
     public function answering(string|ResultInterface $output): DeferredResult

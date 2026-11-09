@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
-use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 final class EmptyDatabase
@@ -16,13 +14,11 @@ final class EmptyDatabase
     public static function in(ContainerInterface $container): void
     {
         $registry = $container->get('doctrine');
-        assert($registry instanceof ManagerRegistry);
         $manager = $registry->getManager();
         assert($manager instanceof EntityManagerInterface);
         new SchemaTool($manager)->dropDatabase();
 
         $connection = $container->get('doctrine.dbal.default_connection');
-        assert($connection instanceof Connection);
         $connection->executeStatement('DROP TABLE IF EXISTS reviewer_conversation');
         $connection->executeStatement('DROP TABLE IF EXISTS messenger_messages');
     }

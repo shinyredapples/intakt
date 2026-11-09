@@ -10,6 +10,9 @@ final readonly class Workspace
     private const array GATE_DEFINITIONS = ['config/gates/', 'bin/check', 'composer.json', 'composer.lock', 'phpunit.dist.xml', 'phpunit.gates.xml'];
     // Because the gate tests also read these: the CI image and workflows, the showcase script, the executables and the forge's copy of the hardened git call.
     private const array GATE_TEST_INPUTS = ['tests/Gates/', '.github/', 'docs/showcase/', 'bin/', 'src/Core/Git/'];
+    // Because a service removed in configuration alone leaves its callers unchanged, a change to what builds the container analyses every PHP file: the kernel, `config/` and the `services.yaml` files it imports from `tests/`.
+    private const array CONTAINER_CONFIGURATION = ['config/', 'src/Kernel.php'];
+    private const string IMPORTED_SERVICES = '/services.yaml';
 
     private Scope $scope;
 
@@ -177,7 +180,7 @@ final readonly class Workspace
             throw new ScopeFailure('no base branch found, pass --base=<ref>');
         }
 
-        if ($this->changesAnyOf($mergeBase, self::GATE_DEFINITIONS)) {
+        if ($this->changesAnyOf($mergeBase, [...self::GATE_DEFINITIONS, ...self::CONTAINER_CONFIGURATION]) || $this->changesImportedServices($mergeBase)) {
             return $this->allPhpFilesOrFail();
         }
 
@@ -212,6 +215,11 @@ final readonly class Workspace
         }
 
         return false;
+    }
+
+    private function changesImportedServices(string $mergeBase): bool
+    {
+        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
     }
 
     private function isHead(string $commit): bool

@@ -42,7 +42,6 @@ final class DoctrineQueueTest extends KernelTestCase
         $container = self::getContainer();
         $this->fixture = new RoundFixture($container);
         $commands = $container->get('command.bus');
-        assert($commands instanceof MessageBusInterface);
         $this->commands = $commands;
         $queue = $container->get('messenger.transport.async');
         assert($queue instanceof DoctrineTransport);

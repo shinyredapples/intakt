@@ -9,7 +9,6 @@ use NoDiscard;
 use ReflectionObject;
 use ReflectionProperty;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\VarExporter\LazyObjectInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -88,7 +87,6 @@ final class AiServiceState
     private static function services(KernelInterface $kernel): array
     {
         $container = $kernel->getContainer()->get('test.service_container');
-        assert($container instanceof ContainerInterface);
         $services = [];
 
         foreach (self::serviceIds($kernel) as $id) {
@@ -109,7 +107,6 @@ final class AiServiceState
     {
         // The definitions of the compiled container, which the framework keeps beside its debug dump for debug:container.
         $dump = $kernel->getContainer()->getParameter('debug.container.dump');
-        assert(is_string($dump));
         $built = unserialize((string) file_get_contents(substr_replace($dump, '.ser', -4)), ['allowed_classes' => true]);
         assert($built instanceof ContainerBuilder);
         $ids = [];

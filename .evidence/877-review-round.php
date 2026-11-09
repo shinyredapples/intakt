@@ -16,7 +16,6 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Dotenv\Dotenv;
 
 require __DIR__.'/../vendor/autoload.php';
@@ -29,7 +28,6 @@ new Dotenv()->bootEnv(__DIR__.'/../.env');
 $kernel = new Kernel('test', true);
 $kernel->boot();
 $container = $kernel->getContainer()->get('test.service_container');
-assert($container instanceof ContainerInterface);
 
 $fixture = new RoundFixture($container);
 $roundId = $fixture->startFromSource(new ChangeSource('/repos/alpha', 'main'));

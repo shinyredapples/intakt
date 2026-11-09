@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\HttpKernel\Kernel as BaseKernel;
+
+final class Kernel extends BaseKernel
+{
+    use MicroKernelTrait;
+
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__);
+    }
+
+    // Because the gate reads the dump under the name this repository's test kernel gives it.
+    protected function getContainerClass(): string
+    {
+        return 'Intakt_Kernel'.ucfirst($this->environment).'DebugContainer';
+    }
+
+    protected function configureContainer(ContainerConfigurator $container): void
+    {
+        $container->extension('framework', ['secret' => 'fixture', 'http_method_override' => false]);
+        $container->import($this->getProjectDir().'/config/services.yaml');
+    }
+}

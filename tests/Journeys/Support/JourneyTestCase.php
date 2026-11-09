@@ -9,7 +9,6 @@ use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\BrowserKit\HttpBrowser;
 use Symfony\Component\Clock\MonotonicClock;
-use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpClient\HttpClient;
@@ -109,11 +108,11 @@ abstract class JourneyTestCase extends TestCase
         // A kernel of the journey's own, on the instance's database and share directory, because a round is queued through the command bus the dashboard uses and the console has no door for it.
         $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
         $this->driverKernel->boot();
-        $container = $this->driverKernel->getContainer()->get('test.service_container');
-        $bus = $container instanceof ContainerInterface ? $container->get(MessageBusInterface::class) : null;
+        // Typed by the container's own dump, which the phpstan gate reads, so the bus needs no instanceof guard.
+        $bus = $this->driverKernel->getContainer()->get('test.service_container')->get(MessageBusInterface::class);
 
         return new LiveRoundDriver(
-            $bus instanceof MessageBusInterface ? $bus : self::fail('the test container has no message bus'),
+            $bus,
             fn (array $arguments): string => $this->console($arguments, [self::QUEUE_VARIABLE => self::SHARED_QUEUE]),
             fn (): array => $this->publishedUpdates(),
             new MonotonicClock(),

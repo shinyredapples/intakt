@@ -18,6 +18,7 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\KernelHttpClient;
 use Intakt\Tests\Core\Review\Infrastructure\RecordingHttpClient;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
+use Intakt\Tests\Support\RebuiltContainer;
 use NoDiscard;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
@@ -25,7 +26,6 @@ use PHPUnit\Framework\TestCase;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestInterface;
 use Symfony\AI\Agent\Agent;
-use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Agent\Toolbox\Toolbox;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -33,8 +33,7 @@ use Symfony\AI\Agent\Toolbox\ToolFactory\MemoryToolFactory;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\DependencyInjection\ServicesResetterInterface;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Uid\UuidV7;
 
@@ -325,7 +324,8 @@ final class SymfonyAiResetTest extends TestCase
 
     private function reviewer(KernelInterface $kernel, ToolboxInterface $tools, string $model): Agent
     {
-        $platform = $this->container($kernel)->get(AiPlatformKernel::PLATFORM);
+        $container = new RebuiltContainer($this->container($kernel));
+        $platform = $container->get(AiPlatformKernel::PLATFORM);
         assert($platform instanceof PlatformInterface && '' !== $model);
 
         return $this->runsOf($kernel)->agent($tools, $platform, $model);
@@ -333,10 +333,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private function runsOf(KernelInterface $kernel): ReviewerRuns
     {
-        $runs = $this->container($kernel)->get(ReviewerRuns::class);
-        assert($runs instanceof ReviewerRuns);
-
-        return $runs;
+        return $this->container($kernel)->get(ReviewerRuns::class);
     }
 
     private function reviewRound(KernelInterface $kernel, ReviewRound $round, string $model): void
@@ -367,7 +364,6 @@ final class SymfonyAiResetTest extends TestCase
     private function nextRequest(KernelInterface $kernel): void
     {
         $resetter = $kernel->getContainer()->get('services_resetter');
-        assert($resetter instanceof ServicesResetterInterface);
         $resetter->reset();
     }
 
@@ -401,7 +397,8 @@ final class SymfonyAiResetTest extends TestCase
      */
     private function providerRequests(KernelInterface $kernel): array
     {
-        $answers = $this->container($kernel)->get(ProviderAnswers::class);
+        $container = new RebuiltContainer($this->container($kernel));
+        $answers = $container->get(ProviderAnswers::class);
         assert($answers instanceof ProviderAnswers);
 
         return $answers->requests();
@@ -414,10 +411,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private function toolboxesOf(KernelInterface $kernel): ReviewerMcpToolboxFactory
     {
-        $factory = $this->container($kernel)->get(ReviewerMcpToolboxFactory::class);
-        assert($factory instanceof ReviewerMcpToolboxFactory);
-
-        return $factory;
+        return $this->container($kernel)->get(ReviewerMcpToolboxFactory::class);
     }
 
     // A kernel of its own, because the web server runs in a process of its own.
@@ -433,7 +427,6 @@ final class SymfonyAiResetTest extends TestCase
     private function serveReviewToolsFor(KernelInterface $kernel, ClientInterface $http): void
     {
         $credential = $this->container($kernel)->get(ReviewCredential::class);
-        assert($credential instanceof ReviewCredential);
         $this->container($kernel)->set(ReviewServerHttpClient::class, new ReviewServerHttpClient($credential, $http));
     }
 
@@ -446,7 +439,6 @@ final class SymfonyAiResetTest extends TestCase
     private function setUpConversations(KernelInterface $kernel): void
     {
         $conversations = $this->container($kernel)->get(MessageStoreInterface::class);
-        assert($conversations instanceof ManagedMessageStoreInterface);
         $conversations->setup();
     }
 
@@ -458,11 +450,8 @@ final class SymfonyAiResetTest extends TestCase
         return $kernel;
     }
 
-    private function container(KernelInterface $kernel): ContainerInterface
+    private function container(KernelInterface $kernel): TestContainer
     {
-        $container = $kernel->getContainer()->get('test.service_container');
-        assert($container instanceof ContainerInterface);
-
-        return $container;
+        return $kernel->getContainer()->get('test.service_container');
     }
 }

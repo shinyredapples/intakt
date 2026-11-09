@@ -36,7 +36,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[Group('persistence')]
 #[CoversClass(ReviewReport::class)]
@@ -61,7 +60,6 @@ final class FailedReviewerReportTest extends KernelTestCase
             }
         };
         $serializer = self::getContainer()->get('serializer.stored');
-        assert($serializer instanceof SerializerInterface);
         $handler = $fixture->startHandlerOn($fixture->bus);
         $reviewChange = new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))]),

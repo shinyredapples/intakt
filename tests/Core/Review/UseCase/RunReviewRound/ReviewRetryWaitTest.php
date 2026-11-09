@@ -7,7 +7,6 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerRateLimited;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
-use Psr\Container\ContainerInterface;
 use stdClass;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Retry\RetryStrategyInterface;
@@ -31,7 +30,7 @@ final class ReviewRetryWaitTest extends KernelTestCase
     private function waitBeforeRetry(int $retries): int
     {
         $strategies = self::getContainer()->get('messenger.retry_strategy_locator');
-        assert($strategies instanceof ContainerInterface);
+        assert($strategies->has('async'));
         $strategy = $strategies->get('async');
         assert($strategy instanceof RetryStrategyInterface);
 
