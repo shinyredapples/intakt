@@ -40,6 +40,30 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertCount(1, $page->filter('.shell > .main > main.content h1'));
     }
 
+    #[DataProvider('pages')]
+    public function testEveryPageStartsItsContentWithTheHiddenReconnectingLine(string $path): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', $path);
+
+        $line = $page->filter('.shell[data-controller="connection"] main.content > .conn:first-child');
+        self::assertSame('line', $line->attr('data-connection-target'));
+        self::assertSame('', $line->attr('hidden'));
+    }
+
+    #[DataProvider('pages')]
+    public function testEveryPageEndsItsTopBarWithTheHiddenOfflineMarker(string $path): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', $path);
+
+        $marker = $page->filter('.shell[data-controller="connection"] header.topbar > .offline-marker:last-child');
+        self::assertSame('marker', $marker->attr('data-connection-target'));
+        self::assertSame('', $marker->attr('hidden'));
+    }
+
     public function testTheRailHoldsOnlyTheItemsWhosePageIsBuilt(): void
     {
         $rail = $this->browser->request('GET', '/reviews')->filter('.rail a.nav');
@@ -131,7 +155,7 @@ final class DashboardShellTest extends DashboardPageTestCase
     {
         $controls = $this->browser->request('GET', '/reviews')->filter('.topbar > *')->each(static fn (Crawler $control): string => (string) $control->attr('class'));
 
-        self::assertSame(['brand-m', 'search-trigger', 'grow', 'select', 'icon-btn theme-toggle'], $controls);
+        self::assertSame(['brand-m', 'search-trigger', 'grow', 'select', 'icon-btn theme-toggle', 'offline-marker'], $controls);
     }
 
     public function testTheProjectFilterIsASelectNamedProject(): void

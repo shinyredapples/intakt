@@ -35,5 +35,5 @@ function holdTheNamesOfThisWorkerTogetherWith(string $worker, string $other): vo
         usleep(20_000);
     }
 
-    touch($rendezvous.'/done-'.$worker);
+    file_put_contents($rendezvous.'/done-'.$worker, (string) $port);
 }
