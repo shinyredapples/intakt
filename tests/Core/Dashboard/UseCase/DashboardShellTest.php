@@ -127,6 +127,89 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertCount(1, $toggle->filter('svg.sun'));
     }
 
+    public function testTheTopBarHoldsTheProjectFilterBetweenTheSearchFieldAndTheThemeToggle(): void
+    {
+        $controls = $this->browser->request('GET', '/reviews')->filter('.topbar > *')->each(static fn (Crawler $control): string => (string) $control->attr('class'));
+
+        self::assertSame(['search-trigger', 'grow', 'select', 'icon-btn theme-toggle'], $controls);
+    }
+
+    public function testTheProjectFilterIsASelectNamedProject(): void
+    {
+        $filter = $this->browser->request('GET', '/reviews')->filter('.topbar select#projfilter');
+
+        self::assertCount(1, $filter);
+        self::assertSame('Project', $filter->attr('aria-label'));
+    }
+
+    public function testTheProjectFilterOffersAllProjectsAndEveryProjectOnceInNameOrder(): void
+    {
+        $this->ledger->startRound('round-1', 'beta');
+        $this->ledger->startRound('round-2', 'alpha');
+        $this->ledger->startRound('round-3', 'beta');
+        $this->ledger->startRound('round-4', 'Gamma');
+
+        $options = $this->browser->request('GET', '/reviews')->filter('#projfilter option');
+
+        self::assertSame(['All projects', 'alpha', 'beta', 'Gamma'], $options->each(static fn (Crawler $option): string => $option->text()));
+        self::assertSame(['', 'alpha', 'beta', 'Gamma'], $options->each(static fn (Crawler $option): string => (string) $option->attr('value')));
+    }
+
+    public function testTheProjectFilterStartsAtAllProjects(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $chosen = $this->browser->request('GET', '/reviews')->filter('#projfilter option[selected]');
+
+        self::assertSame(['All projects'], $chosen->each(static fn (Crawler $option): string => $option->text()));
+    }
+
+    // Because a project may be named "all", the choice of every project needs a value no project name can take.
+    public function testAProjectNamedAllStaysApartFromAllProjects(): void
+    {
+        $this->ledger->startRound('round-1', 'all');
+
+        $values = $this->browser->request('GET', '/reviews')->filter('#projfilter option')->each(static fn (Crawler $option): string => (string) $option->attr('value'));
+
+        self::assertSame(['', 'all'], $values);
+    }
+
+    public function testTheProjectFilterOfAnInstallWithoutReviewsOffersOnlyAllProjects(): void
+    {
+        $options = $this->browser->request('GET', '/projects')->filter('#projfilter option');
+
+        self::assertSame(['All projects'], $options->each(static fn (Crawler $option): string => $option->text()));
+    }
+
+    public function testEveryReviewRowNamesItsProjectForTheFilter(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->startRound('round-2', 'beta');
+
+        $rows = $this->browser->request('GET', '/reviews')->filter('main.content tbody tr');
+
+        self::assertSame(['beta', 'alpha'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-project')));
+    }
+
+    public function testEveryProjectRowNamesItsProjectForTheFilter(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->startRound('round-2', 'beta');
+
+        $rows = $this->browser->request('GET', '/projects')->filter('main.content tbody tr');
+
+        self::assertEqualsCanonicalizing(['alpha', 'beta'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-project')));
+    }
+
+    public function testEveryFailingHeadNamesItsProjectForTheFilter(): void
+    {
+        $this->ledger->failHead('alpha', '7', 2);
+
+        $heads = $this->browser->request('GET', '/reviews')->filter('.failing-heads article');
+
+        self::assertSame(['alpha'], $heads->each(static fn (Crawler $head): string => (string) $head->attr('data-project')));
+    }
+
     public function testTheShellScriptComesAfterTheShell(): void
     {
         $body = $this->browser->request('GET', '/reviews')->filter('body')->html();

@@ -3,12 +3,12 @@
 {% block title %}Reviews - Intakt{% endblock %}
 
 {% block body %}
-<h1>Reviews{% if project is not null %} of {{ project }}{% endif %}</h1>
+<h1>Reviews</h1>
 {% if failing is not empty %}
 <section class="failing-heads">
 <h2>Heads that failed</h2>
 {% for head in failing %}
-    <article class="card">
+    <article class="card" data-project="{{ head.project }}">
         <h3>{{ head.project }}, pull request {{ head.change }}</h3>
         <p class="state">{{ head.handedOver ? 'handed over to the maintainer agent' : 'backing off' }}, {{ head.fault.failures }} failures in a row, next try {{ head.fault.retryAt|date('Y-m-d H:i:s', 'UTC') }} UTC</p>
         <p class="cause">{{ head.fault.cause }}</p>
@@ -17,13 +17,13 @@
 </section>
 {% endif %}
 {% if reviews is empty %}
-<p>No review has started{% if project is not null %} for this project{% endif %} yet.</p>
+<p>No review has started yet.</p>
 {% else %}
 <table>
     <thead><tr><th>Round</th><th>Project</th><th>Reviewers</th><th>Started (UTC)</th><th>State</th></tr></thead>
     <tbody>
     {% for review in reviews %}
-        <tr>
+        <tr data-project="{{ review.project }}">
             <td><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'),{round: review.round}) }}">{{ review.round }}</a></td>
             <td>{{ review.project }}</td>
             <td>{{ review.reviewers }}</td>
