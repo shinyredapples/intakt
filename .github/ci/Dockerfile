@@ -11,6 +11,9 @@ RUN php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
+# zizmor's release archive, pinned by version and checksum; Dependabot does not update it. x86_64 only, as the runners.
+ADD --checksum=sha256:bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b \
+    https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-x86_64-unknown-linux-gnu.tar.gz /tmp/zizmor.tar.gz
 COPY composer.json /usr/local/share/intakt/
 COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
@@ -26,6 +29,9 @@ RUN set -eu; \
     php --ini; \
     composer --version; \
     gitleaks version; \
+    tar --no-same-owner -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor; \
+    rm /tmp/zizmor.tar.gz; \
+    zizmor --version; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
