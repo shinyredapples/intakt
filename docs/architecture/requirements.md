@@ -85,7 +85,9 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 |---|---|---|
 | `git` | every job image | builders and reviewers work in a git checkout |
 | the AI companies' command-line tools (Claude Code, Codex) | every job image | running builders and reviewers on a subscription |
-| the Docker or Podman API | the orchestrator | starting job containers and sidecars, through the socket (an API, not a command) |
+| the Docker API | the orchestrator | starting job containers and their proxy sidecars, through the socket named by `intakt.job.docker_socket` (an API, not a command; `Core/Job` is built, the flows that call it are planned); the Docker Engine must accept API version 1.43 |
+| `sh` and `curl` | every job image | the start check of a job (`src/Core/Job/Infrastructure/start-check.sh`); without `curl` a job with egress runs in reduced mode |
+| the proxy image | the orchestrator host | built from `docker/job-proxy/` (Alpine with tinyproxy), named by `intakt.job.proxy_image` |
 
 ## When a tool is missing
 

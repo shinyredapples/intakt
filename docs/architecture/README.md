@@ -6,6 +6,8 @@ Code and conventions:
 - [Module layout](module-layout.md)
 - [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
 - [Sample repository](sample-repository.md)
+- [Job containers](job-containers.md): how a job runs in a container, its egress proxy, start check and cleanup
+- [Differences from the existing loop](differences-from-the-existing-loop.md): the deliberate differences
 - [Upstream reproductions](upstream-reproductions.md)
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
