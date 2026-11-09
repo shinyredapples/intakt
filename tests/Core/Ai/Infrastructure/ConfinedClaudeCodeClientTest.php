@@ -79,7 +79,7 @@ final class ConfinedClaudeCodeClientTest extends TestCase
 
         new ConfinedClaudeCodeClient($cli)->request(new ClaudeCode('sonnet'), 'Review.', $options);
 
-        return new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options);
+        return array_values(new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options));
     }
 
     /**

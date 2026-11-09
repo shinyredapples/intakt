@@ -32,7 +32,7 @@ final readonly class IssuedReviewServerAccess implements ReviewServerAccesses
     #[Override]
     public function forRound(?Uuid $round): ?ReviewServerAccess
     {
-        if (null === $round || '' === $this->baseUrl) {
+        if (!$round instanceof Uuid || '' === $this->baseUrl) {
             return null;
         }
 

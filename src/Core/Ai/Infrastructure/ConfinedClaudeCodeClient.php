@@ -14,7 +14,7 @@ use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 // The CLI is a full agent whose own file tools bypass the checkout's path checks and the fence, so it gets no built-in tool and no project settings, and at most the read-only tools of the round's review server; every option the agent passes is dropped because the bridge turns each into a CLI flag.
 final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
 {
-    // The name the CLI gives the server, which prefixes its tools as mcp__<name>__<tool>.
+    // Fixed because the CLI prefixes the server's tools with it as mcp__<name>__<tool>, and the allow-list must spell them the same.
     private const string SERVER = 'intakt-review';
 
     // Named although `tools => []` already turns every built-in off, so a CLI that stops honoring that still has each one denied.

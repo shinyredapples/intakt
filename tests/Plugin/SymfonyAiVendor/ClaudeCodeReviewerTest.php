@@ -173,10 +173,12 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $this->vendor($cli, servers: $this->serverOfTheRound())->review('alpha', Tier::Strong, $this->request());
 
-        $command = new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options);
+        $command = array_values(new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options));
+        $allowed = array_search('--allowedTools', $command, true);
         self::assertContains('--mcp-config', $command);
         self::assertContains('--strict-mcp-config', $command);
-        self::assertContains('mcp__intakt-review__read_file', explode(',', $command[array_search('--allowedTools', $command, true) + 1]));
+        self::assertIsInt($allowed);
+        self::assertContains('mcp__intakt-review__read_file', explode(',', $command[$allowed + 1]));
     }
 
     public function testAnApprovalFromAReviewerThatHadTheReviewToolsCounts(): void

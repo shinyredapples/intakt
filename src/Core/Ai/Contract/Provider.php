@@ -33,10 +33,10 @@ enum Provider: string
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
     }
 
-    // Codex stays out until its reviewer connects to the server (#321).
+    // Codex stays out because its reviewer does not connect to the server until #321.
     public function readsTheCheckoutThrough(?ReviewServerAccess $access): bool
     {
-        return $this->readsTheCheckout() || (self::ClaudeCode === $this && null !== $access);
+        return $this->readsTheCheckout() || (self::ClaudeCode === $this && $access instanceof ReviewServerAccess);
     }
 
     // Not the subscription CLIs, because their bridges answer in a final-result form and a streamed run ends differently: a killed process raises instead of giving an incomplete answer, and an answer after the CLI's own tools has no text.
