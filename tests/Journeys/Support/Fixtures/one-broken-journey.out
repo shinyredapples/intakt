@@ -1,0 +1,2 @@
+{"gate":"journeys","ok":false,"findings":["BrokenJourneyTest.php: journey \"broken\" failed at step \"read the second page\": Failed asserting that two strings are identical."],"omitted":0}
+{"result":"fail","failed":["journeys"]}
