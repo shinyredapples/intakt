@@ -35,4 +35,6 @@ After exit `StartCheckReader` reads that file into a `StartCheckReport`. The fil
 
 ## Not built here
 
+The proxy image and its entrypoint (`docker/job-proxy/`) have not yet run against a real engine; they are first checked live when jobs run on a host with a Docker daemon.
+
 The job image (T45), the vendor login mount and its read-only protection, hand-back of a bundle, and reading the output directory safely (a job controls what it writes there, links included) belong to later tasks. Differences from the existing loop: [differences-from-the-existing-loop.md](differences-from-the-existing-loop.md). Tests: `tests/Core/Job/`.
