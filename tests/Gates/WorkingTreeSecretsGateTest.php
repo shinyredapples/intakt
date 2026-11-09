@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\GitleaksGate;
 use Intakt\Gates\WorkingTreeSecretsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 // A sandbox and a scan per test, because a shared sandbox would let one planted secret fail the next test's clean scan, and most of a scan's second is the gate starting gitleaks twice (version check, then scan), which is the code under test.
 #[CoversClass(WorkingTreeSecretsGate::class)]
+#[UsesClass(GitleaksGate::class)]
 final class WorkingTreeSecretsGateTest extends SandboxTestCase
 {
     /**
@@ -170,7 +173,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         }
 
         self::assertTrue($run->failed('secrets'), $run->output());
-        self::assertStringContainsString('gitleaks 8.30.1 is required', $run->findingsOf('secrets'));
+        self::assertStringContainsString('gitleaks '.GitleaksGate::PINNED_VERSION.' is required', $run->findingsOf('secrets'));
     }
 
     public function testAFileTheScanCannotCopyFailsTheScan(): void
@@ -205,17 +208,19 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $run = $this->checkWithScannerReporting('1.0.0');
 
         self::assertTrue($run->failed('secrets'), $run->output());
-        self::assertStringContainsString('gitleaks 8.30.1 is required', $run->findingsOf('secrets'));
+        self::assertStringContainsString('gitleaks '.GitleaksGate::PINNED_VERSION.' is required', $run->findingsOf('secrets'));
     }
 
     public function testTheScannerAtThePinnedVersionIsAccepted(): void
     {
-        self::assertTrue($this->checkWithScannerReporting('8.30.1')->passed('secrets'));
+        self::assertTrue($this->checkWithScannerReporting(GitleaksGate::PINNED_VERSION)->passed('secrets'));
     }
 
     public function testThePinnedVersionMatchesTheOneTheCiImageInstalls(): void
     {
-        self::assertMatchesRegularExpression('#^FROM ghcr\.io/gitleaks/gitleaks:v8\.30\.1@sha256:[0-9a-f]{64} AS gitleaks$#m', Workflow::ciImageDefinition());
+        $image = '#^FROM ghcr\.io/gitleaks/gitleaks:v'.preg_quote(GitleaksGate::PINNED_VERSION, '#').'@sha256:[0-9a-f]{64} AS gitleaks$#m';
+
+        self::assertMatchesRegularExpression($image, Workflow::ciImageDefinition());
     }
 
     public function testAPlantedSecretInTheWorkingTreeFailsTheScan(): void
