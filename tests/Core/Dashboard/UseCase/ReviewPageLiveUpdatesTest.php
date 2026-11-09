@@ -17,7 +17,6 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
@@ -33,8 +32,6 @@ use Twig\Environment;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
-// Because it creates and removes placeholder files in assets/vendor/ of the checkout, which every test worker shares.
-#[Group('serial')]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -48,8 +45,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->secretBefore = is_string($before) ? $before : null;
         // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
         $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        $this->givenTheDownloadedScriptsExist();
         parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
     }
 
     #[Override]
