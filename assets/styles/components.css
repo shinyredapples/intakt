@@ -109,6 +109,17 @@ svg.i.s { width: 15px; height: 15px; }
 .switch input:checked + span::after { background: var(--on-btn); transform: translateX(18px); }
 .switch input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
 .switch input:disabled + span { opacity: .45; }
+/* The mock sets the stepper's signs at 18 px, which has no type size, so tokens only (D2) wins with --t17. */
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); }
+.stepper button { width: 36px; height: 38px; border: 0; border-radius: var(--r-btn); background: none; color: var(--ink); font-size: var(--t17); cursor: pointer; }
+.stepper button:hover { background: var(--tint); }
+.stepper output { min-width: 32px; font-weight: 600; text-align: center; }
+.copy {
+  display: flex; align-items: center; gap: var(--s8); max-width: 100%; padding: var(--s4) var(--s4) var(--s4) var(--s12);
+  border-radius: var(--r-btn); background: var(--tint); font-family: var(--f-mono); font-size: var(--t13);
+}
+.copy code { flex: 1; overflow-x: auto; padding: calc(var(--s4) + 2px) 0; font-size: inherit; white-space: nowrap; }
+.copy .btn { flex: none; background: var(--raised); color: var(--ink); }
 
 /* Bars: used, reserved, forecast */
 .window { display: grid; gap: var(--s4); margin-bottom: var(--s16); }
@@ -121,16 +132,31 @@ svg.i.s { width: 15px; height: 15px; }
 .bar .reserved, .legend .reserved { background: repeating-linear-gradient(135deg, var(--primary) 0 3px, transparent 3px 6px); }
 .bar .reserved { opacity: .7; }
 .bar .forecast { border: 1.5px solid var(--primary); border-left: 0; border-radius: 0 var(--r-round) var(--r-round) 0; }
+.bar.last-known > i { opacity: .5; }
 .legend { display: flex; flex-wrap: wrap; gap: var(--s16); color: var(--muted); font-size: var(--t13); }
 .legend span { display: inline-flex; align-items: center; gap: var(--s8); }
 .legend i { display: inline-block; width: 14px; height: 8px; border-radius: 3px; }
 .legend .forecast { border: 1.5px solid var(--primary); }
 
-/* Banners; below 761 px the phone banner (one line that opens) */
+/* Banners; a compact one, and below 761 px every one, is the phone banner (one line that opens). A media query cannot add the class, so the phone rules repeat the compact ones. */
 .banner { display: flex; align-items: center; gap: var(--s12); margin-bottom: var(--s12); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .banner p { flex: 1; margin: 0; }
 .banner.broken .i, .banner.broken strong { color: var(--red); }
-.banner-toggle { display: none; }
+.banner-toggle {
+  display: none; align-items: center; gap: var(--s8); width: 100%; min-height: 44px; padding: 0 var(--s12);
+  border: 0; border-radius: var(--r-card); background: none; color: var(--ink); font: 600 var(--t15)/1.3 var(--f-head); text-align: left; cursor: pointer;
+}
+.banner-toggle span { flex: 1; }
+.banner.broken .banner-toggle span { color: var(--red); }
+.banner-toggle .chev { transition: transform .15s; }
+.banner.open .banner-toggle .chev { transform: rotate(180deg); }
+.banner.compact { display: block; padding: 0; }
+.banner.compact > :not(.banner-toggle) { display: none; }
+.banner.compact > .banner-toggle { display: flex; }
+/* The text lines up with the toggle's words after its padding, small icon and gap. */
+.banner.compact.open > p { display: block; padding: 0 var(--s12) var(--s4) calc(var(--s12) + 15px + var(--s8)); }
+.banner.compact.open > p strong { display: none; }
+.banner.compact.open > :is(.btn, form) { display: inline-flex; margin: var(--s4) 0 var(--s8) var(--s32); }
 
 /* Sub-tabs */
 .subtabs { display: flex; gap: var(--s4); margin-bottom: var(--s24); border-bottom: 1px solid var(--hairline); }
@@ -199,6 +225,10 @@ svg.i.s { width: 15px; height: 15px; }
   .seg { display: flex; }
   .seg button { flex: 1; height: 44px; }
   .input, .select { height: 48px; }
+  .stepper button { width: 48px; height: 46px; }
+  .copy { flex-wrap: wrap; padding: calc(var(--s8) + 2px); }
+  .copy code { flex: 1 1 100%; padding: var(--s4); white-space: normal; overflow-wrap: anywhere; }
+  .copy .btn { flex: 1 1 100%; width: 100%; height: 48px; }
   .switch { width: 52px; height: 32px; }
   .switch input { top: -6px; width: 100%; height: 44px; }
   .switch span::after { width: 26px; height: 26px; }
@@ -210,15 +240,7 @@ svg.i.s { width: 15px; height: 15px; }
   .srow .ctl .select { flex: 1; }
   .banner { display: block; padding: 0; }
   .banner > :not(.banner-toggle) { display: none; }
-  .banner-toggle {
-    display: flex; align-items: center; gap: var(--s8); width: 100%; min-height: 48px; padding: 0 var(--s12);
-    border: 0; border-radius: var(--r-card); background: none; color: var(--ink); font: 600 var(--t15)/1.3 var(--f-head); text-align: left; cursor: pointer;
-  }
-  .banner-toggle span { flex: 1; }
-  .banner.broken .banner-toggle span { color: var(--red); }
-  .banner-toggle .chev { transition: transform .15s; }
-  .banner.open .banner-toggle .chev { transform: rotate(180deg); }
-  /* The text lines up with the toggle's words after its padding, small icon and gap. */
+  .banner > .banner-toggle { display: flex; min-height: 48px; }
   .banner.open > p { display: block; padding: 0 var(--s12) var(--s4) calc(var(--s12) + 15px + var(--s8)); }
   .banner.open > p strong { display: none; }
   .banner.open > :is(.btn, form) { display: inline-flex; margin: var(--s4) 0 var(--s8) var(--s32); }
@@ -313,6 +335,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .spec .cgrp > h4 { margin-bottom: var(--s8); font: 600 var(--t15)/1.3 var(--f-head); }
 .spec .row-st { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8) var(--s12); margin-bottom: var(--s8); }
 .spec .cards-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s8); }
+.spec .copy { max-width: 420px; }
 .spec .toast { position: static; transform: none; animation: none; }
 @media (max-width: 1100px) { .spec-cols { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .spec { padding: var(--s16); } .spec .cards-row { grid-template-columns: 1fr; } }
