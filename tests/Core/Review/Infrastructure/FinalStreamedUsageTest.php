@@ -34,7 +34,15 @@ final class FinalStreamedUsageTest extends TestCase
 
     public function testALaterUsageEventReplacesTheFiguresItReports(): void
     {
-        $stream = $this->streamOf(new TokenUsage(promptTokens: 90, completionTokens: 1), new TokenUsage(promptTokens: 100, completionTokens: 20));
+        $earlier = new TokenUsage(
+            promptTokens: 90,
+            completionTokens: 1,
+        );
+        $later = new TokenUsage(
+            promptTokens: 100,
+            completionTokens: 20,
+        );
+        $stream = $this->streamOf($earlier, $later);
 
         iterator_to_array($stream->getContent());
 
@@ -49,7 +57,11 @@ final class FinalStreamedUsageTest extends TestCase
             cacheReadTokens: 3000,
             model: 'claude-opus-5-5',
         );
-        $stream = $this->streamOf($first, new TextDelta('{}'), new TokenUsage(completionTokens: 908, model: 'claude-opus-5-5'));
+        $last = new TokenUsage(
+            completionTokens: 908,
+            model: 'claude-opus-5-5',
+        );
+        $stream = $this->streamOf($first, new TextDelta('{}'), $last);
 
         iterator_to_array($stream->getContent());
 

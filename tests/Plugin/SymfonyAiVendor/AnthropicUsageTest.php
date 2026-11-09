@@ -103,7 +103,7 @@ final class AnthropicUsageTest extends TestCase
     private function streamedRoundOf(string $events): DeferredResult
     {
         // Wrapped like the platform's own client, because Symfony AI reads a stream's events through an event source.
-        $response = new EventSourceHttpClient(new MockHttpClient(new MockResponse($events,['response_headers' => ['content-type: text/event-stream']])))->request('POST', 'https://api.anthropic.com/v1/messages');
+        $response = new EventSourceHttpClient(new MockHttpClient(new MockResponse($events, ['response_headers' => ['content-type: text/event-stream']])))->request('POST', 'https://api.anthropic.com/v1/messages');
         $round = $this->roundOf(new RawHttpResult($response), ['stream' => true]);
         $stream = $round->getResult();
         self::assertInstanceOf(StreamResult::class, $stream);
