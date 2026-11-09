@@ -16,6 +16,8 @@ use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Result\MultiPartResult;
+use Symfony\AI\Platform\Result\ObjectResult;
 
 final readonly class ReviewerPrompt
 {
@@ -112,9 +114,22 @@ final readonly class ReviewerPrompt
     public function verdictIn(ExecutionInterface $execution): Verdict
     {
         return $this->parser->parseWith(static function () use ($execution): Verdict {
-            $answer = $execution->getResult()->getContent();
+            $result = $execution->getResult();
+            $answer = $result instanceof MultiPartResult ? self::verdictPartOf($result) : $result->getContent();
 
             return $answer instanceof Verdict ? $answer : throw new UnexpectedResultTypeException(Verdict::class, get_debug_type($answer));
         });
+    }
+
+    // Looked up among the parts, because a multi-part result's own content is the list of its parts, never the verdict one of them holds.
+    private static function verdictPartOf(MultiPartResult $result): mixed
+    {
+        foreach ($result->getContent() as $part) {
+            if ($part instanceof ObjectResult) {
+                return $part->getContent();
+            }
+        }
+
+        return $result->getContent();
     }
 }
