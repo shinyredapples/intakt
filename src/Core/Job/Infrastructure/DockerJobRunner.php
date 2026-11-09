@@ -17,7 +17,7 @@ use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 final readonly class DockerJobRunner implements JobRunner
 {
-    // A job stopped for its time limit is killed, which is exit 137 by convention.
+    // A job stopped for its time limit is killed, and 137 is the exit code of a killed process by convention, because the engine's own code may not exist yet.
     private const int KILLED_EXIT_CODE = 137;
 
     public function __construct(
@@ -101,7 +101,7 @@ final readonly class DockerJobRunner implements JobRunner
         return [$exitCode, $this->api->memoryKilled($jobId) ? JobEndCause::MemoryKilled : JobEndCause::Exited];
     }
 
-    // One failed removal never stops the others; what stays is found by the sweep at the next start.
+    // One failed removal never stops the others, because what stays is found by the sweep at the next start.
     private function removed(JobResources $resources): void
     {
         foreach ($resources->containers() as $container) {

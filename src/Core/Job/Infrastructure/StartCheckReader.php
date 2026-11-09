@@ -45,7 +45,7 @@ final readonly class StartCheckReader
      */
     private function reported(string $file): array
     {
-        // A link could point the read at a host file through the job's own directory.
+        // A link is refused because it could point the read at a host file through the job's own directory.
         if (is_link($file) || !is_file($file) || filesize($file) > self::MAX_BYTES) {
             return [];
         }

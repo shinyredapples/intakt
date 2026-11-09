@@ -31,7 +31,8 @@ final class StartCheckScriptTest extends TestCase
 
     public function testAJobWhoseMountsAndVendorWorkReportsEveryItemPassedAndRunsItsCommand(): void
     {
-        $process = $this->started('exit 0', $this->folder.'/in');
+        $this->curlExits(0);
+        $process = $this->started('exit 0', $this->environment($this->folder.'/in'));
 
         self::assertSame(0, $process->getExitCode());
         self::assertSame("output\tok\t\ninput:{$this->folder}/in\tok\t\nvendor\tok\t\n", file_get_contents($this->folder.'/out/.start-check'));
@@ -42,7 +43,8 @@ final class StartCheckScriptTest extends TestCase
 
     public function testABrokenInputMountIsReportedAndTheJobSaysItRunsInReducedMode(): void
     {
-        $process = $this->started('echo "reduced=$INTAKT_REDUCED_MODE"', $this->folder.'/missing');
+        $this->curlExits(0);
+        $process = $this->started('echo "reduced=$INTAKT_REDUCED_MODE"', $this->environment($this->folder.'/missing'));
 
         self::assertStringContainsString("input:{$this->folder}/missing\tfail\tthe mount is missing or unreadable", (string) file_get_contents($this->folder.'/out/.start-check'));
         self::assertStringContainsString('REDUCED MODE: 1 start check item(s) failed', $process->getOutput());
@@ -51,7 +53,8 @@ final class StartCheckScriptTest extends TestCase
 
     public function testAVendorTheProxyDoesNotReachIsReportedAndTheJobRunsInReducedMode(): void
     {
-        $process = $this->started('exit 0', $this->folder.'/in', 'exit 56');
+        $this->curlExits(56);
+        $process = $this->started('exit 0', $this->environment($this->folder.'/in'));
 
         self::assertStringContainsString("vendor\tfail\tthe vendor is not reachable through the proxy", (string) file_get_contents($this->folder.'/out/.start-check'));
         self::assertStringContainsString('REDUCED MODE', $process->getOutput());
@@ -59,7 +62,8 @@ final class StartCheckScriptTest extends TestCase
 
     public function testAnOutputDirectoryThatCannotBeWrittenIsReportedInTheLogAndTheJobRunsInReducedMode(): void
     {
-        $process = $this->started('exit 0', $this->folder.'/in', 'exit 0', $this->folder.'/not-there');
+        $this->curlExits(0);
+        $process = $this->started('exit 0', $this->environment($this->folder.'/in', $this->folder.'/not-there'));
 
         self::assertStringContainsString('start check: output failed', $process->getOutput());
         self::assertStringContainsString('REDUCED MODE', $process->getOutput());
@@ -67,7 +71,8 @@ final class StartCheckScriptTest extends TestCase
 
     public function testTheReportTheScriptWritesIsTheOneTheReaderParses(): void
     {
-        $this->started('exit 0', $this->folder.'/missing', 'exit 56');
+        $this->curlExits(56);
+        $this->started('exit 0', $this->environment($this->folder.'/missing'));
 
         $spec = JobSpecBuilder::in($this->folder.'/out')->withInput($this->folder.'/missing', $this->folder.'/missing')->build();
         $failed = array_map(static fn ($item): string => $item->name, new StartCheckReader()->read($spec)->failed());
@@ -75,18 +80,32 @@ final class StartCheckScriptTest extends TestCase
         self::assertSame(['input:'.$this->folder.'/missing', 'vendor'], $failed);
     }
 
-    private function started(string $command, string $input, string $curl = 'exit 0', ?string $output = null): Process
+    private function curlExits(int $code): void
     {
-        file_put_contents($this->folder.'/bin/curl', "#!/bin/sh\n{$curl}\n");
+        file_put_contents($this->folder.'/bin/curl', "#!/bin/sh\nexit {$code}\n");
         chmod($this->folder.'/bin/curl', 0o755);
+    }
 
-        $process = new Process(['sh', self::SCRIPT, 'sh', '-c', $command], null, [
+    /**
+     * @return array<string, string>
+     */
+    private function environment(string $input, ?string $output = null): array
+    {
+        return [
             'PATH' => $this->folder.'/bin:/usr/bin:/bin',
             'INTAKT_JOB_ID' => 'build-1',
             'INTAKT_OUTPUT_DIR' => $output ?? $this->folder.'/out',
             'INTAKT_INPUTS' => $input,
             'INTAKT_VENDOR_HOST' => 'api.vendor.example',
-        ]);
+        ];
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private function started(string $command, array $environment): Process
+    {
+        $process = new Process(['sh', self::SCRIPT, 'sh', '-c', $command], null, $environment);
         $process->run();
 
         return $process;

@@ -58,7 +58,7 @@ final class DockerJobRunnerTest extends TestCase
 
         $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withInput('/srv/checkout', '/checkout')->build());
 
-        $host = $harness->engine->jobBody()['HostConfig'];
+        $host = $harness->engine->hostConfig();
         self::assertTrue($host['ReadonlyRootfs']);
         self::assertArrayHasKey('/home/job', $host['Tmpfs']);
         self::assertArrayHasKey('/work', $host['Tmpfs']);
@@ -72,7 +72,7 @@ final class DockerJobRunnerTest extends TestCase
 
         $harness->runner()->run($spec);
 
-        $writable = array_values(array_filter($harness->engine->jobBody()['HostConfig']['Mounts'], static fn (array $mount): bool => !$mount['ReadOnly']));
+        $writable = array_values(array_filter($harness->engine->hostConfig()['Mounts'], static fn (array $mount): bool => false === $mount['ReadOnly']));
         self::assertSame([['Type' => 'bind', 'Source' => $this->folder.'/out', 'Target' => '/output', 'ReadOnly' => false]], $writable);
     }
 
@@ -82,7 +82,7 @@ final class DockerJobRunnerTest extends TestCase
 
         $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
-        $host = $harness->engine->jobBody()['HostConfig'];
+        $host = $harness->engine->hostConfig();
         self::assertSame(512 * 1024 * 1024, $host['Memory']);
         self::assertSame($host['Memory'], $host['MemorySwap']);
         self::assertSame(1_500_000_000, $host['NanoCpus']);
@@ -96,23 +96,24 @@ final class DockerJobRunnerTest extends TestCase
 
         $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->withoutEgress()->build());
 
-        self::assertSame('none', $harness->engine->jobBody()['HostConfig']['NetworkMode']);
+        self::assertSame('none', $harness->engine->hostConfig()['NetworkMode']);
         self::assertSame([], $harness->engine->networks);
         self::assertSame(['intakt-job-build-1'], array_keys($harness->engine->created));
-        self::assertEmpty(preg_grep('/PROXY/i', $harness->engine->jobBody()['Env']));
+        self::assertEmpty(preg_grep('/PROXY/i', $harness->engine->environment()));
     }
 
     public function testABuildJobsNetworkIsInternalAndItReachesOutOnlyThroughItsProxy(): void
     {
         $harness = new JobHarness();
-        $seen = [];
+        $seen = ['networks' => [], 'names' => []];
         $harness->engine->onJobStart = function () use ($harness, &$seen): void {
             $seen = ['networks' => $harness->engine->networks, 'names' => $harness->engine->namesOfContainers()];
         };
 
         $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
-        self::assertSame(['intakt-job-build-1', 'intakt-job-build-1-proxy'], [...array_column($seen['networks'], 'name'), ...array_filter($seen['names'], static fn (string $n): bool => str_ends_with($n, '-proxy'))]);
+        self::assertSame(['intakt-job-build-1'], array_column($seen['networks'], 'name'));
+        self::assertContains('intakt-job-build-1-proxy', $seen['names']);
         self::assertContains('POST /networks/n1/connect', $harness->engine->calls);
     }
 
@@ -122,10 +123,10 @@ final class DockerJobRunnerTest extends TestCase
 
         $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
 
-        $environment = $harness->engine->jobBody()['Env'];
+        $environment = $harness->engine->environment();
         self::assertContains('HTTPS_PROXY=http://proxy:8888', $environment);
         self::assertContains('INTAKT_VENDOR_HOST=api.vendor.example', $environment);
-        self::assertSame('n1', $harness->engine->jobBody()['HostConfig']['NetworkMode']);
+        self::assertSame('n1', $harness->engine->hostConfig()['NetworkMode']);
     }
 
     public function testAJobsEnvironmentCarriesNoForgeTokenSigningKeyOrVendorKeyEvenWhenTheOrchestratorHoldsThem(): void
@@ -141,7 +142,7 @@ final class DockerJobRunnerTest extends TestCase
             putenv('ANTHROPIC_API_KEY');
         }
 
-        $names = array_map(static fn (string $line): string => explode('=', $line)[0], $harness->engine->jobBody()['Env']);
+        $names = array_map(static fn (string $line): string => explode('=', $line)[0], $harness->engine->environment());
         self::assertSame(['HOME', 'INTAKT_JOB_ID', 'INTAKT_OUTPUT_DIR', 'INTAKT_INPUTS', 'INTAKT_VENDOR_HOST', 'HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy'], $names);
     }
 
@@ -201,7 +202,7 @@ final class DockerJobRunnerTest extends TestCase
             $harness->runner()->run(JobSpecBuilder::in($this->folder.'/out')->build());
             self::fail('The failed start should have thrown.');
         } catch (RuntimeException) {
-            // the cleanup is what this test asserts
+            // The failed start is expected here, because the cleanup after it is what this test asserts.
         }
 
         self::assertSame([], $harness->engine->containers);

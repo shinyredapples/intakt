@@ -87,7 +87,7 @@ final readonly class JobContainerBody
             static fn (JobInput $input): array => ['Type' => 'bind', 'Source' => $input->hostPath, 'Target' => $input->containerPath, 'ReadOnly' => true],
             $spec->inputs,
         );
-        // The one writable bind: the job's own output directory, never another job's.
+        // The one writable bind is the job's own output directory, because mounting any other would let it write where it should not.
         $mounts[] = ['Type' => 'bind', 'Source' => $spec->outputDir, 'Target' => JobPaths::OUTPUT, 'ReadOnly' => false];
 
         return $mounts;
@@ -100,7 +100,7 @@ final readonly class JobContainerBody
     {
         $options = 'rw,exec,nosuid,nodev,size='.self::WORK_AREA_BYTES;
 
-        // A fresh home and work area per job, gone with the container.
+        // A fresh home and work area per job, because a session must not inherit another's home or caches.
         return [JobPaths::WORK => $options, JobPaths::HOME => $options, JobPaths::TMP => $options];
     }
 }

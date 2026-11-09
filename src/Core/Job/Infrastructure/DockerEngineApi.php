@@ -11,7 +11,7 @@ use Symfony\Contracts\HttpClient\Exception\TimeoutExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
-// The only class that knows the Engine API's paths and JSON shapes; it never shells out to a docker command.
+// The only class that knows the Engine API's paths and JSON shapes, so a change of the API touches one file; it never shells out to a docker command.
 final readonly class DockerEngineApi
 {
     private const string BASE = 'http://localhost/v1.43';
@@ -50,10 +50,10 @@ final readonly class DockerEngineApi
 
     public function start(string $containerId): void
     {
-        $this->call('POST', '/containers/'.$containerId.'/start', [], [304]);
+        $this->checked($this->request('POST', '/containers/'.$containerId.'/start'), 304);
     }
 
-    // Null when the container is still running after the time limit.
+    // Null when the container is still running after the time limit, because the caller must then kill it.
     public function wait(string $containerId, int $timeoutSeconds): ?int
     {
         try {
@@ -67,14 +67,14 @@ final readonly class DockerEngineApi
 
     public function kill(string $containerId): void
     {
-        $this->call('POST', '/containers/'.$containerId.'/kill', [], [409]);
+        $this->checked($this->request('POST', '/containers/'.$containerId.'/kill'), 409);
     }
 
     public function memoryKilled(string $containerId): bool
     {
         $state = $this->call('GET', '/containers/'.$containerId.'/json')->toArray()['State'] ?? null;
 
-        // Only the engine's own flag tells a memory kill from any other exit 137.
+        // Only the engine's own flag tells a memory kill from any other exit 137, because a process can end with 137 for another reason.
         return is_array($state) && true === ($state['OOMKilled'] ?? false);
     }
 
@@ -87,12 +87,12 @@ final readonly class DockerEngineApi
 
     public function removeContainer(string $containerId): void
     {
-        $this->call('DELETE', '/containers/'.$containerId, ['query' => ['force' => 1, 'v' => 1]], [404]);
+        $this->checked($this->request('DELETE', '/containers/'.$containerId, ['query' => ['force' => 1, 'v' => 1]]), 404);
     }
 
     public function removeNetwork(string $networkId): void
     {
-        $this->call('DELETE', '/networks/'.$networkId, [], [404]);
+        $this->checked($this->request('DELETE', '/networks/'.$networkId), 404);
     }
 
     /**
@@ -119,30 +119,40 @@ final readonly class DockerEngineApi
     private function labeled(string $path, array $query): array
     {
         $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
-        $found = [];
+        $items = $this->call('GET', $path, ['query' => $query + ['filters' => $filters]])->toArray();
 
-        foreach ($this->call('GET', $path, ['query' => $query + ['filters' => $filters]])->toArray() as $item) {
-            $id = is_array($item) ? ($item['Id'] ?? null) : null;
-            $job = is_array($item) && is_array($item['Labels'] ?? null) ? ($item['Labels'][JobServices::JOB_LABEL] ?? null) : null;
+        return array_values(array_filter(array_map($this->labeledResource(...), $items)));
+    }
 
-            if (is_string($id) && is_string($job)) {
-                $found[] = new LabeledResource($id, $job);
-            }
-        }
+    private function labeledResource(mixed $item): ?LabeledResource
+    {
+        $id = is_array($item) ? ($item['Id'] ?? null) : null;
+        $labels = is_array($item) ? ($item['Labels'] ?? null) : null;
+        $job = is_array($labels) ? ($labels[JobServices::JOB_LABEL] ?? null) : null;
 
-        return $found;
+        return is_string($id) && is_string($job) ? new LabeledResource($id, $job) : null;
     }
 
     /**
      * @param array<string, mixed> $options
-     * @param list<int>            $alsoAccepted
      */
-    private function call(string $method, string $path, array $options = [], array $alsoAccepted = []): ResponseInterface
+    private function call(string $method, string $path, array $options = []): ResponseInterface
     {
-        $response = $this->client->request($method, self::BASE.$path, $options);
+        return $this->checked($this->request($method, $path, $options));
+    }
 
-        if (!in_array($response->getStatusCode(), $alsoAccepted, true)) {
-            // Throws for any 3xx, 4xx or 5xx answer, so a refused call never passes as done.
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function request(string $method, string $path, array $options = []): ResponseInterface
+    {
+        return $this->client->request($method, self::BASE.$path, $options);
+    }
+
+    // One extra status passes (a container already started, a resource already gone); any other 3xx, 4xx or 5xx throws, because a refused call must never pass as done.
+    private function checked(ResponseInterface $response, int $alsoAccepted = 0): ResponseInterface
+    {
+        if ($alsoAccepted !== $response->getStatusCode()) {
             $response->getContent();
         }
 
@@ -156,14 +166,15 @@ final readonly class DockerEngineApi
         return is_string($id) && '' !== $id ? $id : throw new DockerEngineError('The Docker Engine did not answer a create with an id.');
     }
 
-    // A container without a terminal logs in frames of an 8-byte header and the text.
+    // A container without a terminal logs in frames, because the engine puts an 8-byte header before each piece of text.
     private function unframed(string $raw): string
     {
         $text = '';
         $offset = 0;
 
         while ($offset + 8 <= strlen($raw)) {
-            $size = unpack('N', substr($raw, $offset + 4, 4))[1];
+            $header = unpack('x4/Nsize', $raw, $offset);
+            $size = is_array($header) && is_int($header['size']) ? $header['size'] : 0;
             $text .= substr($raw, $offset + 8, $size);
             $offset += 8 + $size;
         }

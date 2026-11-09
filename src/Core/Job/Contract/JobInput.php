@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Contract;
 
-// Always mounted read-only; the job's only writable place outside its tmpfs areas is its output directory.
+// Always mounted read-only, because the job's only writable place outside its tmpfs areas is its output directory.
 final readonly class JobInput
 {
     public function __construct(

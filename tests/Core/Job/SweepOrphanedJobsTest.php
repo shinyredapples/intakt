@@ -12,6 +12,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\Exception\TransportException;
+use Symfony\Component\HttpClient\MockHttpClient;
 
 #[CoversClass(SweepOrphanedJobs::class)]
 #[UsesClass(DockerEngineApi::class)]
@@ -50,7 +52,7 @@ final class SweepOrphanedJobsTest extends TestCase
     public function testAContainerWithoutTheJobLabelIsNeverRemoved(): void
     {
         $harness = new JobHarness();
-        $harness->engine->containers['c9'] = ['name' => 'someone-elses', 'body' => ['Labels' => []]];
+        $harness->engine->containers['c9'] = ['name' => 'someone-elses', 'labels' => []];
 
         self::assertSame([], $this->sweep($harness));
         self::assertSame(['someone-elses'], $harness->engine->namesOfContainers());
@@ -72,6 +74,15 @@ final class SweepOrphanedJobsTest extends TestCase
         $lock->release();
 
         self::assertSame(['old'], $this->sweep($harness));
+    }
+
+    public function testAnEngineThatCannotBeReachedSweepsNothingAndDoesNotStopTheWorker(): void
+    {
+        $api = new DockerEngineApi('/unused.sock', new MockHttpClient(static fn (): never => throw new TransportException('no socket')));
+
+        $swept = new SweepOrphanedJobs($api, new JobHarness()->locks, new NullLogger())->sweep();
+
+        self::assertSame([], $swept);
     }
 
     /**

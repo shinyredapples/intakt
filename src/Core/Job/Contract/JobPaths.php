@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Contract;
 
-// The fixed places inside a job container; an input may not be mounted over any of them.
+// The fixed places inside a job container; an input may not be mounted over any of them, because the job's work, home and output would be hidden.
 final readonly class JobPaths
 {
     public const string OUTPUT = '/output';

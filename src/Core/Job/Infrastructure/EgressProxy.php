@@ -8,7 +8,7 @@ use Intakt\Core\Job\Contract\JobServices;
 use Intakt\Core\Job\Contract\JobSpec;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// The sidecar is the only member of a job's network with a way out; it forwards the allowlisted hosts and logs a refusal for any other (docker/job-proxy).
+// The sidecar is the only member of a job's network with a way out, so a job reaches only the hosts it forwards and every other request is refused and logged (docker/job-proxy).
 final readonly class EgressProxy
 {
     public const string ALIAS = 'proxy';
@@ -31,7 +31,7 @@ final readonly class EgressProxy
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{Image: string, User: string, Env: list<string>, Labels: array<string, string>, HostConfig: array{NetworkMode: string, ReadonlyRootfs: bool, Tmpfs: array<string, string>, CapDrop: list<string>, SecurityOpt: list<string>, Memory: int, MemorySwap: int, PidsLimit: int}}
      */
     public function containerBody(JobSpec $spec): array
     {

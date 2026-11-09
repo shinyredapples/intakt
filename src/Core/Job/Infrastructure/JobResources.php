@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
 // What one run created, recorded at the moment of creation so a failure halfway still removes it.
+#[Exclude]
 final class JobResources
 {
     /** @var list<string> */

@@ -7,7 +7,7 @@ namespace Intakt\Core\Job\Contract;
 final readonly class JobOutcome
 {
     /**
-     * @param list<string> $egressRefusals lines the job's proxy logged for hosts off the allowlist
+     * @param list<string> $egressRefusals
      */
     public function __construct(
         public string $jobId,

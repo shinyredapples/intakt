@@ -14,7 +14,7 @@ final readonly class StartCheckReport
     ) {
     }
 
-    // A job with a failed item ran with less than it was told it can do.
+    // A failed item means the job ran with less than it was told it can do, so the caller must treat the job's result with that in mind.
     public function reduced(): bool
     {
         return [] !== $this->failed();

@@ -24,13 +24,12 @@ final readonly class SweepOrphanedJobs
     }
 
     /**
-     * @return list<string> the ids of the jobs whose leftovers were removed
+     * @return list<string>
      */
     #[AsEventListener(event: WorkerStartedEvent::class)]
     public function sweep(): array
     {
-        $containers = $this->api->jobContainers();
-        $networks = $this->api->jobNetworks();
+        [$containers, $networks] = $this->found();
         $swept = [];
 
         foreach ($this->jobIds([...$containers, ...$networks]) as $jobId) {
@@ -40,6 +39,21 @@ final readonly class SweepOrphanedJobs
         }
 
         return $swept;
+    }
+
+    // A host without a reachable engine must still start its worker, because most workers never run a job.
+    /**
+     * @return array{list<LabeledResource>, list<LabeledResource>}
+     */
+    private function found(): array
+    {
+        try {
+            return [$this->api->jobContainers(), $this->api->jobNetworks()];
+        } catch (ExceptionInterface $failure) {
+            $this->logger->warning('The sweep could not list job containers, so nothing was swept.', ['exception' => $failure]);
+
+            return [[], []];
+        }
     }
 
     /**
