@@ -3,6 +3,6 @@
 {%- set unreachable = unreachable|default(false) -%}
 <div class="conn{% if unreachable %} unreachable{% endif %}" role="status"{% if live %} data-connection-target="line" hidden{% endif %}>
     <span class="conn-dot" aria-hidden="true"></span>
-    <p><strong{% if live %} data-connection-target="title"{% endif %}>{{ unreachable ? "Can't reach Intakt." : 'Reconnecting.' }}</strong> The dashboard lost its connection to Intakt at <span{% if live %} data-connection-target="since"{% endif %}>{{ since|default('') }}</span>. You are seeing what it knew then. <span aria-live="off">Next try in <span{% if live %} data-connection-target="countdown"{% endif %}>{{ next|default('5 s') }}</span>.</span></p>
+    <p><strong{% if live %} data-connection-target="title"{% endif %}>{{ unreachable ? "Can't reach Intakt." : 'Reconnecting.' }}</strong> The dashboard lost its connection to Intakt at <span{% if live %} data-connection-target="since"{% endif %}>{{ since|default('') }}</span>. You are seeing what it knew then; actions wait until it is back. <span aria-live="off">Next try in <span{% if live %} data-connection-target="countdown"{% endif %}>{{ next|default('5 s') }}</span>.</span></p>
     <button class="btn secondary sm" type="button"{% if live %} data-action="connection#tryNow"{% endif %}>Try now</button>
 </div>

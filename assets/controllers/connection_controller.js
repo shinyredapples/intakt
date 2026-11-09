@@ -4,14 +4,19 @@ const SOURCE = 'turbo-mercure-stream-source';
 // As in DESIGN.md ("Awkward data and states"): a fixed wait the line can count down, and red after two minutes.
 const RETRY_EVERY_S = 5;
 const UNREACHABLE_AFTER_MS = 120000;
+// Everything that changes Intakt's state is a POST form, so its submit button is what waits while offline.
+const ACTIONS = 'form[method="post"] button[type="submit"]';
+// Marked in the page rather than remembered by the controller, because Turbo caches the page with the marks and a new controller restores it.
+const HELD = 'data-connection-held';
 
 export default class extends Controller {
-    static targets = ['line', 'title', 'since', 'countdown', 'marker'];
+    static targets = ['line', 'title', 'since', 'countdown', 'marker', 'frozen'];
 
     // Waits for Turbo's element, because its EventSource exists only once the element is defined.
     async connect() {
         this.dropped = new Set();
         this.lastEventIds = new Map();
+        this.settle();
         const visit = (this.visit = {});
         await customElements.whenDefined(SOURCE);
         // Turbo may have left the page meanwhile, and its elements no longer hold an EventSource.
@@ -24,6 +29,13 @@ export default class extends Controller {
     disconnect() {
         this.visit = null;
         clearInterval(this.ticker);
+        this.settle();
+    }
+
+    // A page restored from Turbo's cache may carry the held actions and frozen times of a drop no controller watches any more.
+    settle() {
+        this.releaseActions();
+        this.frozenTargets.forEach((at) => (at.hidden = true));
     }
 
     tryNow() {
@@ -51,6 +63,8 @@ export default class extends Controller {
             this.since = Date.now();
             this.countdown = RETRY_EVERY_S;
             this.ticker = setInterval(() => this.tick(), 1000);
+            this.holdActions();
+            this.freezeElapsedTimes();
         }
         this.dropped.add(source);
         this.show();
@@ -64,6 +78,34 @@ export default class extends Controller {
         clearInterval(this.ticker);
         this.lineTarget.hidden = true;
         this.markerTarget.hidden = true;
+        this.settle();
+    }
+
+    // Only the buttons it disabled are enabled again, so one the page showed disabled stays so.
+    holdActions() {
+        this.element.querySelectorAll(ACTIONS).forEach((action) => {
+            if (!action.disabled) {
+                action.disabled = true;
+                action.setAttribute(HELD, '');
+            }
+        });
+    }
+
+    releaseActions() {
+        this.element.querySelectorAll(ACTIONS).forEach((action) => {
+            if (action.hasAttribute(HELD)) {
+                action.disabled = false;
+                action.removeAttribute(HELD);
+            }
+        });
+    }
+
+    // The server renders elapsed times and nothing counts them on, so the time of the drop tells how old they are.
+    freezeElapsedTimes() {
+        this.frozenTargets.forEach((at) => {
+            at.textContent = `at ${clockTime(this.since).slice(0, 5)}`;
+            at.hidden = false;
+        });
     }
 
     received(source, event) {

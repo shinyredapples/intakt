@@ -49,12 +49,34 @@ class FakeStreamSource extends FakeElement {
     }
 }
 
-async function connectedShell(t, sources = [new FakeStreamSource()]) {
+class FakeButton extends FakeElement {
+    constructor(disabled = false) {
+        super();
+        this.disabled = disabled;
+    }
+}
+
+function hiddenElapsedTime() {
+    const at = new FakeElement();
+    at.hidden = true;
+
+    return at;
+}
+
+async function connectedShell(t, sources = [new FakeStreamSource()], page = {}) {
     t.mock.timers.enable({ apis: ['setInterval', 'Date'], now: DROPPED_AT });
+
+    return shellOn(sources, page);
+}
+
+// A shell that Stimulus connects to a page, as when Turbo renders it or restores it from its cache.
+async function shellOn(sources, { actions = [], elapsed = [] } = {}) {
     globalThis.EventSource = FakeEventSource;
     globalThis.customElements = { whenDefined: async () => undefined };
     const shell = new ConnectionController();
-    shell.element = { baseURI: 'http://localhost:7780/reviews/round-1', querySelectorAll: () => sources };
+    const found = { 'turbo-mercure-stream-source': sources, 'form[method="post"] button[type="submit"]': actions };
+    shell.element = { baseURI: 'http://localhost:7780/reviews/round-1', querySelectorAll: (selector) => found[selector] };
+    shell.frozenTargets = elapsed;
     shell.lineTarget = new FakeElement();
     shell.lineTarget.hidden = true;
     shell.titleTarget = new FakeElement('Reconnecting.');
@@ -306,6 +328,7 @@ test('a shell that leaves the page before Turbo is ready watches nothing', async
     const source = new FakeStreamSource();
     const shell = new ConnectionController();
     shell.element = { baseURI: 'http://localhost:7780/reviews/round-1', querySelectorAll: () => [source] };
+    shell.frozenTargets = [];
     const connecting = shell.connect();
 
     shell.disconnect();
@@ -313,6 +336,141 @@ test('a shell that leaves the page before Turbo is ready watches nothing', async
     ready();
 
     await assert.doesNotReject(connecting);
+});
+
+test('a drop disables every action of the page', async (t) => {
+    const actions = [new FakeButton(), new FakeButton()];
+    const { source } = await connectedShell(t, undefined, { actions });
+
+    source.es.emit('error');
+
+    assert.deepEqual(actions.map((action) => action.disabled), [true, true]);
+});
+
+test('a connection that opens again enables the actions it disabled', async (t) => {
+    const actions = [new FakeButton(), new FakeButton()];
+    const { source } = await connectedShell(t, undefined, { actions });
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+
+    source.es.emit('open');
+
+    assert.deepEqual(actions.map((action) => action.disabled), [false, false]);
+});
+
+test('an action the page showed disabled stays disabled when the connection is back', async (t) => {
+    const unavailable = new FakeButton(true);
+    const { source } = await connectedShell(t, undefined, { actions: [unavailable] });
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+
+    source.es.emit('open');
+
+    assert.equal(unavailable.disabled, true);
+});
+
+test('the actions stay disabled while another live connection of the page is still down', async (t) => {
+    const action = new FakeButton();
+    const other = new FakeStreamSource();
+    const { source } = await connectedShell(t, [new FakeStreamSource(), other], { actions: [action] });
+    source.es.emit('error');
+    other.es.emit('error');
+
+    source.es.emit('open');
+
+    assert.equal(action.disabled, true);
+});
+
+test('a shell that leaves the page while offline enables the actions it disabled', async (t) => {
+    const action = new FakeButton();
+    const { shell, source } = await connectedShell(t, undefined, { actions: [action] });
+    source.es.emit('error');
+
+    shell.disconnect();
+
+    assert.equal(action.disabled, false);
+});
+
+test('a shell that leaves the page while offline hides the time of the drop beside the elapsed times', async (t) => {
+    const at = hiddenElapsedTime();
+    const { shell, source } = await connectedShell(t, undefined, { elapsed: [at] });
+    source.es.emit('error');
+
+    shell.disconnect();
+
+    assert.equal(at.hidden, true);
+});
+
+// Turbo caches its copy of the page before Stimulus disconnects the shell, so the copy keeps what the drop did.
+test('a page restored from a copy cached while offline gets its actions back when the connection opens', async (t) => {
+    const action = new FakeButton();
+    const { source } = await connectedShell(t, undefined, { actions: [action] });
+    source.es.emit('error');
+    const cached = new FakeButton(action.disabled);
+    action.attributes.forEach((value, name) => cached.setAttribute(name, value));
+    const restored = new FakeStreamSource();
+
+    await shellOn([restored], { actions: [cached] });
+    restored.es.emit('open');
+
+    assert.equal(cached.disabled, false);
+});
+
+test('a page restored from a copy cached while offline keeps an action the page showed disabled disabled', async (t) => {
+    const unavailable = new FakeButton(true);
+    const { source } = await connectedShell(t, undefined, { actions: [unavailable] });
+    source.es.emit('error');
+    const cached = new FakeButton(unavailable.disabled);
+    unavailable.attributes.forEach((value, name) => cached.setAttribute(name, value));
+    const restored = new FakeStreamSource();
+
+    await shellOn([restored], { actions: [cached] });
+    restored.es.emit('open');
+
+    assert.equal(cached.disabled, true);
+});
+
+test('a page restored from a copy cached while offline hides the time of the drop beside the elapsed times', async (t) => {
+    const at = hiddenElapsedTime();
+    const { source } = await connectedShell(t, undefined, { elapsed: [at] });
+    source.es.emit('error');
+    const cached = new FakeElement(at.textContent);
+    cached.hidden = at.hidden;
+
+    await shellOn([new FakeStreamSource()], { elapsed: [cached] });
+
+    assert.equal(cached.hidden, true);
+});
+
+test('a drop shows every elapsed time with the time of the drop', async (t) => {
+    const elapsed = [hiddenElapsedTime(), hiddenElapsedTime()];
+    const { source } = await connectedShell(t, undefined, { elapsed });
+
+    source.es.emit('error');
+
+    assert.deepEqual(elapsed.map((at) => [at.hidden, at.textContent]), [[false, 'at 11:12'], [false, 'at 11:12']]);
+});
+
+test('the elapsed times keep the time of the first drop while the tries fail', async (t) => {
+    const at = hiddenElapsedTime();
+    const { source } = await connectedShell(t, undefined, { elapsed: [at] });
+    source.es.emit('error');
+    t.mock.timers.tick(120000);
+
+    source.es.emit('error');
+
+    assert.equal(at.textContent, 'at 11:12');
+});
+
+test('a connection that opens again hides the time of the drop beside the elapsed times', async (t) => {
+    const at = hiddenElapsedTime();
+    const { source } = await connectedShell(t, undefined, { elapsed: [at] });
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+
+    source.es.emit('open');
+
+    assert.equal(at.hidden, true);
 });
 
 test('a page without a live connection never shows the line', async (t) => {
