@@ -1,10 +1,8 @@
 name: journeys
-# A red run files or updates one urgent task and still ends red.
 on:
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
-# A new run waits for the running one.
 concurrency:
   group: journeys
   cancel-in-progress: false
@@ -13,7 +11,7 @@ permissions:
 jobs:
   journeys:
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
-    # Each journey at the gate's 300 seconds, the image build and the dependency install.
+    # Every journey at 300 seconds plus the image build.
     timeout-minutes: 40
     outputs:
       commit: ${{ steps.checkout.outputs.commit }}
@@ -51,7 +49,7 @@ jobs:
   alarm:
     needs: journeys
     if: failure() && needs.journeys.outputs.outcome == 'failure'
-    # GitHub's image has gh, which the CI image lacks, so the alarm needs no gh on a self-hosted runner.
+    # GitHub's image has gh; the CI image lacks it.
     runs-on: ubuntu-24.04
     permissions:
       contents: read
