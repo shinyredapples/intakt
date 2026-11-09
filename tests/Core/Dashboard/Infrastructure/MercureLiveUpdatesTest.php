@@ -31,8 +31,10 @@ final class MercureLiveUpdatesTest extends TestCase
 
     private const string STREAM = '<turbo-stream action="replace" target="project-filter"><template><nav id="project-filter"></nav></template></turbo-stream>';
 
+    private const string WARNING = 'A live dashboard update was not published.';
+
     /**
-     * @var list<array{method: string, url: string, options: array<string, mixed>}>
+     * @var list<array{request: string, form: array<array-key, mixed>, authorization: mixed}>
      */
     private array $posted = [];
 
@@ -47,8 +49,8 @@ final class MercureLiveUpdatesTest extends TestCase
     {
         $this->updates($this->hubThatAccepts())->publish(new LiveEvent(self::TOPIC, self::STREAM));
 
-        self::assertSame(['POST', self::HUB], [$this->posted[0]['method'], $this->posted[0]['url']]);
-        self::assertSame(['topic' => self::TOPIC, 'data' => self::STREAM, 'private' => 'on'], $this->formOf($this->posted[0]['options']));
+        self::assertSame('POST '.self::HUB, $this->posted[0]['request']);
+        self::assertSame(['topic' => self::TOPIC, 'data' => self::STREAM, 'private' => 'on'], $this->posted[0]['form']);
         self::assertSame([], $this->log->cleanLogs());
     }
 
@@ -56,7 +58,7 @@ final class MercureLiveUpdatesTest extends TestCase
     {
         $this->updates($this->hubThatAccepts())->publish(new LiveEvent(self::TOPIC, self::STREAM));
 
-        self::assertSame(['Authorization: Bearer '.self::TOKEN],$this->posted[0]['options']['normalized_headers']['authorization'] ?? null);
+        self::assertSame(['Authorization: Bearer '.self::TOKEN], $this->posted[0]['authorization']);
     }
 
     public function testEventsReachTheHubInTheOrderTheyArePublished(): void
@@ -66,21 +68,21 @@ final class MercureLiveUpdatesTest extends TestCase
         $updates->publish(new LiveEvent('dashboard/projects', self::STREAM));
         $updates->publish(new LiveEvent('dashboard/waiting', self::STREAM));
 
-        self::assertSame(['dashboard/projects', 'dashboard/waiting'], array_map(fn (array $post): string => $this->formOf($post['options'])['topic'] ?? '', $this->posted));
+        self::assertSame(['dashboard/projects', 'dashboard/waiting'], array_column(array_column($this->posted, 'form'), 'topic'));
     }
 
     public function testAHubThatAnswersWithAnErrorDoesNotFailTheCallerAndIsLoggedWithTheTopic(): void
     {
         $this->updates(new MockHttpClient(new MockResponse('down', ['http_code' => 503])))->publish(new LiveEvent(self::TOPIC, self::STREAM));
 
-        $this->assertLoggedOneWarningFor(self::TOPIC);
+        self::assertSame([['warning', self::WARNING, self::TOPIC, RuntimeException::class]], $this->loggedWarnings());
     }
 
     public function testADroppedConnectionToTheHubDoesNotFailTheCallerAndIsLoggedWithTheTopic(): void
     {
         $this->updates(new MockHttpClient(new MockResponse(info: ['error' => 'Connection reset by peer'])))->publish(new LiveEvent(self::TOPIC, self::STREAM));
 
-        $this->assertLoggedOneWarningFor(self::TOPIC);
+        self::assertSame([['warning', self::WARNING, self::TOPIC, RuntimeException::class]], $this->loggedWarnings());
     }
 
     public function testAnUnreachableHubDoesNotFailTheCallerAndIsLoggedWithTheTopic(): void
@@ -89,7 +91,7 @@ final class MercureLiveUpdatesTest extends TestCase
 
         $this->updates($unreachable)->publish(new LiveEvent(self::TOPIC, self::STREAM));
 
-        $this->assertLoggedOneWarningFor(self::TOPIC);
+        self::assertSame([['warning', self::WARNING, self::TOPIC, RuntimeException::class]], $this->loggedWarnings());
     }
 
     public function testAPublisherTokenTheHubCannotUseDoesNotFailTheCallerAndIsLoggedWithTheTopic(): void
@@ -98,16 +100,16 @@ final class MercureLiveUpdatesTest extends TestCase
 
         $updates->publish(new LiveEvent(self::TOPIC, self::STREAM));
 
-        $logs = $this->log->cleanLogs();
-        self::assertSame(['warning', 'A live dashboard update was not published.', self::TOPIC], [$logs[0][0], $logs[0][1], $logs[0][2]['topic'] ?? null]);
-        self::assertInstanceOf(InvalidArgumentException::class, $logs[0][2]['exception'] ?? null);
+        self::assertSame([['warning', self::WARNING, self::TOPIC, InvalidArgumentException::class]], $this->loggedWarnings());
         self::assertSame([], $this->posted);
     }
 
     private function hubThatAccepts(): MockHttpClient
     {
         return new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
-            $this->posted[] = ['method' => $method, 'url' => $url, 'options' => $options];
+            parse_str(is_string($options['body'] ?? null) ? $options['body'] : '', $form);
+            $headers = $options['normalized_headers'] ?? [];
+            $this->posted[] = ['request' => $method.' '.$url, 'form' => $form, 'authorization' => is_array($headers) ? $headers['authorization'] ?? null : null];
 
             return new MockResponse('urn:uuid:'.count($this->posted));
         });
@@ -119,24 +121,16 @@ final class MercureLiveUpdatesTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $options
-     *
-     * @return array<array-key, mixed>
+     * @return list<array{mixed, mixed, mixed, class-string|null}>
      */
-    private function formOf(array $options): array
+    private function loggedWarnings(): array
     {
-        parse_str(is_string($options['body'] ?? null) ? $options['body'] : '', $form);
+        return array_values(array_map(static function (mixed $record): array {
+            $record = is_array($record) ? $record : [];
+            $context = is_array($record[2] ?? null) ? $record[2] : [];
+            $exception = $context['exception'] ?? null;
 
-        return $form;
-    }
-
-    private function assertLoggedOneWarningFor(string $topic): void
-    {
-        $logs = $this->log->cleanLogs();
-
-        self::assertCount(1, $logs);
-        self::assertSame(['warning', 'A live dashboard update was not published.'], [$logs[0][0], $logs[0][1]]);
-        self::assertSame($topic, $logs[0][2]['topic'] ?? null);
-        self::assertInstanceOf(RuntimeException::class, $logs[0][2]['exception'] ?? null);
+            return [$record[0] ?? null, $record[1] ?? null, $context['topic'] ?? null, is_object($exception) ? $exception::class : null];
+        }, $this->log->cleanLogs()));
     }
 }
