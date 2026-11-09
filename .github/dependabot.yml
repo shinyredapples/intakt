@@ -7,7 +7,7 @@ updates:
     commit-message:
       prefix: ci
     cooldown:
-      default-days: 3
+      default-days: 3 # zizmor: ignore[dependabot-cooldown] 3 days on purpose, as Composer's policy.cooldown, see docs/architecture/conventions.md
     groups:
       actions:
         patterns: ['*']
@@ -19,7 +19,7 @@ updates:
       prefix: build
       include: scope
     cooldown:
-      default-days: 3
+      default-days: 3 # zizmor: ignore[dependabot-cooldown] 3 days on purpose, as Composer's policy.cooldown, see docs/architecture/conventions.md
     groups:
       images:
         patterns: ['*']
@@ -33,7 +33,7 @@ updates:
       include: scope
     versioning-strategy: increase
     cooldown:
-      default-days: 3
+      default-days: 3 # zizmor: ignore[dependabot-cooldown] 3 days on purpose, as Composer's policy.cooldown, see docs/architecture/conventions.md
       semver-major-days: 7
     groups:
       symfony-ai:
