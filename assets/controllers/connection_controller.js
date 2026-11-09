@@ -83,7 +83,7 @@ export default class extends Controller {
     reconnect(source) {
         const address = new URL(source.getAttribute('src'), this.element.baseURI);
         if (this.lastEventIds.has(source)) {
-            address.searchParams.set('lastEventID', this.lastEventIds.get(source));
+            address.searchParams.set('last_event_id', this.lastEventIds.get(source));
         }
         source.setAttribute('src', address.toString());
         this.watch(source);

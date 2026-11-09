@@ -8,7 +8,7 @@ process.env.TZ = 'UTC';
 const ConnectionController = await loadController('connection');
 
 const DROPPED_AT = Date.UTC(2026, 10, 9, 11, 12, 4);
-const HUB = 'http://localhost:7781/.well-known/mercure?topic=review%2Frounds%2Fround-1';
+const HUB = 'http://localhost:7781/.well-known/mercure?match=review%2Frounds%2Fround-1';
 
 class FakeEventSource {
     static CLOSED = 2;
@@ -64,7 +64,7 @@ async function connectedShell(t, sources = [new FakeStreamSource()]) {
 }
 
 function lastEventIdAskedBy(source) {
-    return new URL(source.getAttribute('src')).searchParams.get('lastEventID');
+    return new URL(source.getAttribute('src')).searchParams.get('last_event_id');
 }
 
 test('a page whose live connection opens shows neither the line nor the Offline marker', async (t) => {
@@ -130,14 +130,28 @@ test('the next try opens a new connection five seconds after the drop', async (t
 
 test('the next try asks the hub for the events after the last one the page received', async (t) => {
     const { source } = await connectedShell(t);
-    source.es.emit('message', { lastEventId: 'urn:uuid:7c1f&topic=other' });
+    source.es.emit('message', { lastEventId: 'urn:uuid:7c1f&match=other' });
     source.es.emit('message', { lastEventId: '' });
     source.es.emit('error');
 
     t.mock.timers.tick(5000);
 
-    assert.equal(lastEventIdAskedBy(source), 'urn:uuid:7c1f&topic=other');
-    assert.deepEqual(new URL(source.getAttribute('src')).searchParams.getAll('topic'), ['review/rounds/round-1']);
+    assert.equal(lastEventIdAskedBy(source), 'urn:uuid:7c1f&match=other');
+    assert.deepEqual(new URL(source.getAttribute('src')).searchParams.getAll('match'), ['review/rounds/round-1']);
+});
+
+test('a later next try asks only for the events after the newest one received', async (t) => {
+    const { source } = await connectedShell(t);
+    source.es.emit('message', { lastEventId: 'urn:uuid:first' });
+    source.es.emit('error');
+    t.mock.timers.tick(5000);
+    source.es.emit('open');
+    source.es.emit('message', { lastEventId: 'urn:uuid:second' });
+    source.es.emit('error');
+
+    t.mock.timers.tick(5000);
+
+    assert.deepEqual(new URL(source.getAttribute('src')).searchParams.getAll('last_event_id'), ['urn:uuid:second']);
 });
 
 test('a next try before any event was received asks for no earlier events', async (t) => {

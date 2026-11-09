@@ -122,6 +122,26 @@ final class MercureHubTest extends TestCase
         self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
     }
 
+    // The dashboard's connection controller reconnects with a new EventSource, which cannot set the Last-Event-ID header.
+    public function testAClientThatAsksInTheAddressForTheEventsAfterTheLastOneItReceivedGetsTheEventsItMissed(): void
+    {
+        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+        $first = $this->subscribe(self::FROM_THE_START);
+        $seen = $this->read($first, 1);
+        $first->cancel();
+
+        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, false));
+        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $topic = MercureRoundUpdates::topicOf(self::ROUND);
+        $second = $this->client->request('GET', $this->url, [
+            'query' => ['match' => $topic, 'last_event_id' => $seen[0]['id']],
+            'headers' => ['Authorization' => 'Bearer '.$this->token(new Grant([Grant::ACTION_SUBSCRIBE], [$topic]))],
+            'timeout' => self::SECONDS_TO_WAIT,
+        ]);
+
+        self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
+    }
+
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void
     {
         $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(self::ROUND)]]);
