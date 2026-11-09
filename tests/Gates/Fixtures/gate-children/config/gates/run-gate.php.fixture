@@ -34,12 +34,17 @@ $staticGatesStillRunning = static fn (): array => array_values(array_filter(
 if ('cs' === $gate) {
     $beside = (int) getenv('INTAKT_GATE_SLOTS') > 1;
     fwrite(STDERR, "Warning: the cs child warned\n");
-    $reported('cs', !$beside || $awaited('phpstan-ended') ? '' : 'phpstan never ended beside cs');
+    $reported('cs', !$beside || $awaited('secrets-ended') ? '' : 'secrets never ended beside cs');
+}
+
+if ('secrets' === $gate) {
+    touch('secrets-ended');
+    $reported('secrets', 'src/Report.php:3 broken');
 }
 
 if ('phpstan' === $gate) {
-    touch('phpstan-ended');
-    $reported('phpstan', 'src/Report.php:3 broken');
+    $early = $staticGatesStillRunning();
+    $reported('phpstan', [] === $early ? '' : 'phpstan started before '.implode(',', $early).' ended');
 }
 
 if ('comments' === $gate) {

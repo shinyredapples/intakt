@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Schema\Schema;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -46,7 +45,6 @@ final class QueueTableMigrationTest extends KernelTestCase
         $console->assertCommandIsSuccessful($console->getDisplay());
 
         $connection = $container->get('doctrine.dbal.default_connection');
-        assert($connection instanceof Connection);
         $transport = $container->get('messenger.transport.async');
         assert($transport instanceof DoctrineTransport);
 

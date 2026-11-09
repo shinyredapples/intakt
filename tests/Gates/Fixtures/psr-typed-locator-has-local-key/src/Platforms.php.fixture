@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Psr\Container\ContainerInterface;
+
+final readonly class Platforms
+{
+    public function __construct(private ContainerInterface $platforms)
+    {
+    }
+
+    public function hasLocal(): bool
+    {
+        return $this->platforms->has('local');
+    }
+}

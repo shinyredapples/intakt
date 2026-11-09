@@ -64,6 +64,7 @@ final class ClockOnlyRuleTest extends PhpStanRuleTestCase
     public function testAClassBesideTheClockAdapterMayNot(): void
     {
         $sandbox = $this->emptySandbox();
+        $sandbox->borrowKernel();
         $sandbox->write('src/Core/Platform/Infrastructure/Clock/OtherClock.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Core\\Platform\\Infrastructure\\Clock;\n\nfinal readonly class OtherClock\n{\n    public function now(): int\n    {\n        return time();\n    }\n}\n");
 
         self::assertTrue($sandbox->check('--only=phpstan')->failed('phpstan'));

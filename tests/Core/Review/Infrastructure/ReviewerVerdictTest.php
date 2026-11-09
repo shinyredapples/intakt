@@ -770,6 +770,7 @@ final class ReviewerVerdictTest extends WebTestCase
     // Because the toolbox is built per review and the platform per test, the collector is built from this run's platform instead of a profiled request.
     protected static function getAiDataCollector(): DataCollector
     {
+        self::assertTrue(self::getContainer()->has(self::COLLECTOR), 'No scripted review was made.');
         $collector = self::getContainer()->get(self::COLLECTOR);
         self::assertInstanceOf(DataCollector::class, $collector);
 

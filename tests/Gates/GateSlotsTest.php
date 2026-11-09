@@ -96,8 +96,8 @@ final class GateSlotsTest extends TestCase
         $slots = GateSlots::chosen(null, 4, 1);
 
         self::assertInstanceOf(GateSlots::class, $slots);
-        self::assertSame(['cs', 'phpstan', 'secrets', 'tests'], $slots->launchOrder(['cs', 'phpstan', 'tests', 'secrets'], ['tests']));
-        self::assertSame(['cs', 'phpstan'], $slots->launchOrder(['cs', 'phpstan'], []));
+        self::assertSame(['cs', 'rector', 'secrets', 'tests'], $slots->launchOrder(['cs', 'rector', 'tests', 'secrets'], ['tests']));
+        self::assertSame(['cs', 'rector'], $slots->launchOrder(['cs', 'rector'], []));
     }
 
     public function testTheTestsGateStartsFirstOfTheGatesThatRunTheChangesCode(): void

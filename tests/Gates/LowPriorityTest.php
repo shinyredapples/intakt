@@ -42,7 +42,7 @@ final class LowPriorityTest extends TestCase
 
     public function testAStaticGateThatEndsBeforeTheTestsGateStartsIsNotAskedToRunAtLowPriority(): void
     {
-        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('phpstan', ['container', 'tests'], $this->slots('2')));
+        self::assertSame([LowPriority::VARIABLE => false], LowPriority::environmentFor('rector', ['container', 'tests'], $this->slots('2')));
     }
 
     public function testWithoutTheTestsGateNoGateIsAskedToRunAtLowPriority(): void

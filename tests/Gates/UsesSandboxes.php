@@ -23,7 +23,7 @@ trait UsesSandboxes
 
     final protected function assertRejectedBy(string $gate, string $fixture, string $expectedFinding): void
     {
-        $run = $this->sandboxWith($fixture)->check('--only='.$gate);
+        $run = $this->sandboxFor($gate, $fixture)->check('--only='.$gate);
 
         Assert::assertSame(1, $run->exitCode(), $run->output());
         Assert::assertTrue($run->failed($gate), $run->output());
@@ -32,10 +32,21 @@ trait UsesSandboxes
 
     final protected function assertAcceptedBy(string $gate, string $fixture): void
     {
-        $run = $this->sandboxWith($fixture)->check('--only='.$gate);
+        $run = $this->sandboxFor($gate, $fixture)->check('--only='.$gate);
 
         Assert::assertSame(0, $run->exitCode(), $run->output());
         Assert::assertTrue($run->passed($gate), $run->output());
+    }
+
+    private function sandboxFor(string $gate, string $fixture): Sandbox
+    {
+        $sandbox = $this->sandboxWith($fixture);
+
+        if ('phpstan' === $gate) {
+            $sandbox->borrowKernel();
+        }
+
+        return $sandbox;
     }
 
     private function removeSandboxes(): void

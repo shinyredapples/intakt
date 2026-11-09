@@ -9,6 +9,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionProperty;
+use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Mercure\HubInterface;
@@ -126,12 +127,12 @@ final class JourneyContainerTest extends JourneyTestCase
         }
     }
 
-    private function container(): ContainerInterface
+    private function container(): TestContainer
     {
         $this->kernel = new Kernel('test', false);
         $this->kernel->boot();
         $container = $this->kernel->getContainer()->get('test.service_container');
-        self::assertInstanceOf(ContainerInterface::class, $container);
+        self::assertInstanceOf(TestContainer::class, $container);
 
         return $container;
     }

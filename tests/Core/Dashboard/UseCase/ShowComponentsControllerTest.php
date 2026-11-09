@@ -29,8 +29,13 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'setting row' => ['.srow'];
         yield 'switch' => ['.switch'];
         yield 'input' => ['input.input[aria-invalid="true"]'];
+        yield 'stepper' => ['.stepper[role="group"][aria-label] button + output + button'];
+        yield 'copy field' => ['.copy code + button.btn'];
         yield 'bar' => ['.window .bar'];
+        yield 'last-known bar' => ['.window .bar.last-known'];
         yield 'banner' => ['.banner.broken'];
+        yield 'compact banner, collapsed' => ['.banner.compact:not(.open) .banner-toggle[aria-expanded="false"]'];
+        yield 'compact banner, open' => ['.banner.compact.open .banner-toggle[aria-expanded="true"]'];
         yield 'icon button' => ['.icon-btn[aria-label]'];
         yield 'sub-tabs' => ['.subtabs'];
         yield 'segmented tabs' => ['.seg[role="tablist"][aria-label] [role="tab"][aria-selected="true"]'];

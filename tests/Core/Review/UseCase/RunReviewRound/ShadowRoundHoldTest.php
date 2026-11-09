@@ -36,7 +36,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[Group('persistence')]
 #[CoversClass(ShadowRoundHold::class)]
@@ -207,7 +206,6 @@ final class ShadowRoundHoldTest extends KernelTestCase
     private function reviewChange(RoundFixture $fixture, MessageBus $bus): ReviewChange
     {
         $serializer = self::getContainer()->get('serializer.stored');
-        assert($serializer instanceof SerializerInterface);
 
         return new ReviewChange(
             $bus,

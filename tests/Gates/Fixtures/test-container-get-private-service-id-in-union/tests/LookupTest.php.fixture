@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture\Tests;
+
+use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
+use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+
+final class LookupTest extends KernelTestCase
+{
+    public function testTheKernelAndThePromptAreDifferentServices(): void
+    {
+        self::assertNotSame($this->service(0), $this->service(1));
+    }
+
+    private function service(int $choice): object
+    {
+        $id = 0 === $choice ? 'kernel' : ReviewerPrompt::class;
+
+        return static::getContainer()->get($id);
+    }
+}

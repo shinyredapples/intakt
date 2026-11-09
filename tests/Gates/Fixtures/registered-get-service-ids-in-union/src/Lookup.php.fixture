@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+final readonly class Lookup
+{
+    public function __construct(private ContainerInterface $container)
+    {
+    }
+
+    public function service(int $choice): object
+    {
+        $id = 0 === $choice ? 'kernel' : 'service_container';
+
+        return $this->container->get($id);
+    }
+}

@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Fixture;
+
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
+final readonly class Lookup
+{
+    public function __construct(private ContainerInterface $container)
+    {
+    }
+
+    public function hasKernel(int $choice): bool
+    {
+        $id = 0 === $choice ? 'kernel' : 'kernal';
+
+        return $this->container->has($id);
+    }
+}
