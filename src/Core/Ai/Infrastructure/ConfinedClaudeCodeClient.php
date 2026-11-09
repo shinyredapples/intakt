@@ -31,9 +31,7 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
     // Because the reviewer's instructions offer Intakt's tools, which this call cannot use without the review server.
     private const string NO_TOOLS = 'In this session no tool is available: judge the change from the fenced text you were given, and cite only what it shows.';
 
-    /**
-     * @param string $directory the CLI's own folder, where the MCP configuration of a call is kept while the call runs
-     */
+    // The directory is the CLI's own folder, because the MCP configuration of a call holds the credential and must stay where only the CLI runs.
     public function __construct(
         private ModelClientInterface $inner,
         private string $directory,

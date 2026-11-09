@@ -4,17 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
-use Generator;
 use Intakt\Core\Ai\Contract\ReviewServerAnswers;
 use Override;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\Component\Process\Process;
 
-// A CLI call that reached the per-review server: its configuration file goes once the CLI has finished with it, and the answers of the server's tools are read back from the CLI's own stream.
+// Wraps a CLI call that reached the per-review server, because its configuration file must go once the CLI has finished with it, and the server's answers exist only in the CLI's own stream.
 final readonly class ReviewServerCall implements RawResultInterface, ReviewServerAnswers
 {
     /**
-     * @param list<string> $serverTools the names the CLI gives the server's tools
+     * @param list<string> $serverTools
      */
     public function __construct(
         private RawResultInterface $inner,
@@ -40,7 +39,7 @@ final readonly class ReviewServerCall implements RawResultInterface, ReviewServe
     }
 
     #[Override]
-    public function getDataStream(): Generator
+    public function getDataStream(): iterable
     {
         try {
             yield from $this->inner->getDataStream();
@@ -60,10 +59,10 @@ final readonly class ReviewServerCall implements RawResultInterface, ReviewServe
     {
         $process = $this->inner->getObject();
         $blocks = $process instanceof Process ? $this->contentBlocks($process->getOutput()) : [];
-        $calls = array_column(array_filter($blocks, fn (array $block): bool => 'tool_use' === ($block['type'] ?? null) && in_array($block['name'] ?? null, $this->serverTools, true)), 'id');
+        $calls = array_filter(array_column(array_filter($blocks, fn (array $block): bool => 'tool_use' === ($block['type'] ?? null) && in_array($block['name'] ?? null, $this->serverTools, true)), 'id'), is_string(...));
         $answers = array_column(array_filter($blocks, static fn (array $block): bool => 'tool_result' === ($block['type'] ?? null)), 'content', 'tool_use_id');
 
-        return array_values(array_map(fn (mixed $id): string => $this->textOf($answers[$id] ?? null), $calls));
+        return array_values(array_map(fn (string $id): string => $this->textOf($answers[$id] ?? null), $calls));
     }
 
     /**

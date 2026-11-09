@@ -6,6 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewServerAnswers;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Override;
@@ -38,6 +39,23 @@ final class TierRoutedPlatform implements PlatformInterface
     public function rounds(): array
     {
         return $this->rounds;
+    }
+
+    // From the provider and the access this platform carries, never from the answer, because a reviewer that could not read the change can still claim it did.
+    public function readsTheCheckout(): bool
+    {
+        return $this->answering->provider->readsTheCheckoutThrough($this->server);
+    }
+
+    // Collected over every round, because a subscription CLI read these answers itself and only its stream holds them.
+    /**
+     * @return list<string>
+     */
+    public function reviewServerAnswers(): array
+    {
+        $calls = array_filter(array_map(static fn (DeferredResult $round): object => $round->getRawResult(), $this->rounds), static fn (object $call): bool => $call instanceof ReviewServerAnswers);
+
+        return array_merge([], ...array_map(static fn (ReviewServerAnswers $call): array => $call->reviewServerAnswers(), array_values($calls)));
     }
 
     #[Override]

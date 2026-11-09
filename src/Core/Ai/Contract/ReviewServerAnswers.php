@@ -7,7 +7,7 @@ namespace Intakt\Core\Ai\Contract;
 // Implemented by the raw result of a subscription CLI call that reached the per-review server, because the CLI read those answers itself and Intakt's toolbox never saw them.
 interface ReviewServerAnswers
 {
-    // One text per call of a server tool, in the CLI's order; an empty one when the CLI reported no answer for a call.
+    // A call the CLI reported no answer for gives an empty text, so it can never pass as a whole read.
     /**
      * @return list<string>
      */

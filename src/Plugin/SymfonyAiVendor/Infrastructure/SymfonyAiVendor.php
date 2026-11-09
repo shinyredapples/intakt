@@ -12,7 +12,6 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\ReviewServerAccesses;
-use Intakt\Core\Ai\Contract\ReviewServerAnswers;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -37,7 +36,6 @@ use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
-use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Uid\UuidV7;
@@ -127,11 +125,10 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        $server = $this->serverFor($answering->provider, $request);
-        $platform = new TierRoutedPlatform($this->tiers, $answering, $server);
+        $platform = new TierRoutedPlatform($this->tiers, $answering, $this->serverFor($answering->provider, $request));
 
         try {
-            $verdict = $this->readOrRefused($answering->provider, $server, $this->reviewer->review($request, $platform, $answering->model), $platform->rounds());
+            $verdict = $this->readOrRefused($platform, $this->reviewer->review($request, $platform, $answering->model));
         } catch (IncompleteStreamException $incomplete) {
             // Left unsettled, never settled as well, so the call's usage is counted once.
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
@@ -187,22 +184,13 @@ final readonly class SymfonyAiVendor implements Vendor
     }
 
     // Decided here in plain code, because a reviewer that never saw the change, or saw only part of what it read, can still answer approve.
-    /**
-     * @param list<DeferredResult> $rounds
-     */
-    private function readOrRefused(Provider $answeredBy, ?ReviewServerAccess $server, Verdict $verdict, array $rounds): Verdict
+    private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
     {
         if (Decision::Approve !== $verdict->verdict) {
             return $verdict;
         }
 
-        if (!$answeredBy->readsTheCheckoutThrough($server)) {
-            return Verdict::unreadApproval();
-        }
-
-        $calls = array_filter(array_map(static fn (DeferredResult $round): object => $round->getRawResult(), $rounds), static fn (object $call): bool => $call instanceof ReviewServerAnswers);
-
-        return $this->reads->approval($verdict, ...array_merge([], ...array_map(static fn (ReviewServerAnswers $call): array => $call->reviewServerAnswers(), $calls)));
+        return $platform->readsTheCheckout() ? $this->reads->approval($verdict, ...$platform->reviewServerAnswers()) : Verdict::unreadApproval();
     }
 
     // Matched on the exception type because the provider's text can change and carries anything (plan T5).

@@ -196,7 +196,10 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $command = array_values(new ModelClient('/bin/sh')->buildCommand('Review.', $cli->options));
         $allowed = array_search('--allowedTools', $command, true);
-        self::assertSame(['intakt-review'], array_keys((array) json_decode((string) $cli->mcpConfiguration, true)['mcpServers']));
+        $configuration = json_decode((string) $cli->mcpConfiguration, true);
+        self::assertIsArray($configuration);
+        self::assertIsArray($configuration['mcpServers'] ?? null);
+        self::assertSame(['intakt-review'], array_keys($configuration['mcpServers']));
         self::assertContains('--strict-mcp-config', $command);
         self::assertStringNotContainsString('round-credential', implode(' ', $command));
         self::assertIsInt($allowed);
