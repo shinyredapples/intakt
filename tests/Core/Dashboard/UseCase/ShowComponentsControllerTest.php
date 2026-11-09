@@ -43,6 +43,17 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'sub-tabs' => ['.subtabs'];
         yield 'segmented tabs' => ['.seg[role="tablist"][aria-label] [role="tab"][aria-selected="true"]'];
         yield 'filter chips' => ['.fchip[aria-pressed="true"] + .fchip[aria-pressed="false"]'];
+        yield 'forced primary hover' => ['.btn.primary.is-hover'];
+        yield 'forced primary focus' => ['.btn.primary.is-focus'];
+        yield 'forced primary active' => ['.btn.primary.is-active'];
+        yield 'forced secondary active' => ['.btn.secondary.is-active'];
+        yield 'forced quiet hover' => ['.btn.quiet.is-hover'];
+        yield 'forced danger hover' => ['.btn.danger.is-hover'];
+        yield 'forced needs focus' => ['.btn.needs.is-focus'];
+        yield 'forced icon button focus' => ['.icon-btn.is-focus[aria-label]'];
+        yield 'forced card hover' => ['a.card.is-hover'];
+        yield 'forced input focus' => ['input.input.is-focus[aria-label]'];
+        yield 'forced sub-tab focus' => ['.subtabs a.is-focus'];
         yield 'toast' => ['.toast'];
         yield 'skeleton' => ['.skel-card'];
         yield 'empty state' => ['.empty'];
