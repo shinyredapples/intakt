@@ -62,7 +62,7 @@ This is built: the server and its credentials (task #578), and Intakt's reviewer
 
 ### A reviewer on a Claude or Codex subscription
 
-A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). The `claude` tool gets none of its own tools and reads the change only through Intakt's three read-only tools (read a file, list a folder, search), so its approval counts like any other reviewer's. The `codex` tool is not connected to them yet: it gets no tools, no shell, no web search and no browser, and judges from the task text alone. A reviewer that did not read the change cannot vouch for it:
+A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). The `claude` tool gets none of its own tools and reads the change only through Intakt's three read-only tools (read a file, list a folder, search), whose answers come marked as repository text, so its approval counts like any other reviewer's, unless one of its reads failed or was cut at the size limit: then its approval is turned into blocked. The `codex` tool is not connected to them yet: it gets no tools, no shell, no web search and no browser, and judges from the task text alone. A reviewer that did not read the change cannot vouch for it:
 
 - if it answers **approve**, Intakt turns that into **blocked** (held for a person, not passed);
 - if it answers **changes**, that stays **changes**.
