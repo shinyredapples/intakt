@@ -24,6 +24,7 @@ updates:
     groups:
       images:
         patterns: ['*']
+        exclude-patterns: ['ghcr.io/gitleaks/gitleaks']
   - package-ecosystem: composer
     directory: /
     schedule:
