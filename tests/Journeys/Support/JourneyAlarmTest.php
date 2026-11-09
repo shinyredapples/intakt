@@ -30,8 +30,8 @@ final class JourneyAlarmTest extends TestCase
         // A listing waits up to 2 seconds for a second one, so two runs without serialization both list before either creates.
         if ('api' === $action && is_file(__DIR__.'/listing-waits')) {
             touch(__DIR__.'/listed-'.getmypid());
-            $end = microtime(true) + 2;
-            while (count(glob(__DIR__.'/listed-*')) < 2 && microtime(true) < $end) {
+            $end = hrtime(true) + 2_000_000_000;
+            while (count(glob(__DIR__.'/listed-*')) < 2 && hrtime(true) < $end) {
                 usleep(10000);
             }
         }
