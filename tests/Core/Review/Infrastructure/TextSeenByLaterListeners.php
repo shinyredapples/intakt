@@ -9,7 +9,7 @@ use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\DeltaEvent;
 
-// Stands where Symfony AI's partial object listener sits, after StreamedAnswer, to show which text it gets.
+// Needed because Symfony AI's partial object listener, which sits after StreamedAnswer, keeps what it reads private.
 final class TextSeenByLaterListeners extends AbstractStreamListener
 {
     /**
