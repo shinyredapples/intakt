@@ -67,7 +67,7 @@ final readonly class DockerJobRunner implements JobRunner
         return $spec->withPaths($inputs, self::resolved($spec->outputDir));
     }
 
-    // A path that does not exist yet stays as it is: the engine refuses to bind it, or the start check reports the mount as missing.
+    // A missing path is kept as given, because the engine then refuses to bind it or the start check reports the mount as missing.
     private static function resolved(string $path): string
     {
         $real = realpath($path);

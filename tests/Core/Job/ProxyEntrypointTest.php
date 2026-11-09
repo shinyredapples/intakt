@@ -77,7 +77,12 @@ final class ProxyEntrypointTest extends TestCase
 
     private function freePort(): int
     {
-        $server = stream_socket_server('tcp://127.0.0.1:0') ?: throw new RuntimeException('No free port.');
+        $server = stream_socket_server('tcp://127.0.0.1:0');
+
+        if (false === $server) {
+            throw new RuntimeException('No free port.');
+        }
+
         $name = (string) stream_socket_get_name($server, false);
         fclose($server);
 
