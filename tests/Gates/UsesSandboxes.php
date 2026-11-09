@@ -11,6 +11,16 @@ trait UsesSandboxes
     /** @var list<Sandbox> */
     private array $sandboxes = [];
 
+    // Shared by the phpstan runs of a class, because dumping this repository's test container takes seconds, no fixture changes it, and the container is baked into the folder it was dumped in.
+    private static ?Sandbox $kernelBorrowing = null;
+
+    public static function tearDownAfterClass(): void
+    {
+        self::$kernelBorrowing?->remove();
+        self::$kernelBorrowing = null;
+        parent::tearDownAfterClass();
+    }
+
     final protected function sandboxWith(string $fixture): Sandbox
     {
         return $this->keep(Sandbox::withFixture($fixture));
@@ -40,13 +50,15 @@ trait UsesSandboxes
 
     private function sandboxFor(string $gate, string $fixture): Sandbox
     {
-        $sandbox = $this->sandboxWith($fixture);
-
-        if ('phpstan' === $gate) {
-            $sandbox->borrowKernel();
+        if ('phpstan' !== $gate) {
+            return $this->sandboxWith($fixture);
         }
 
-        return $sandbox;
+        self::$kernelBorrowing ??= Sandbox::empty();
+        self::$kernelBorrowing->replaceFixtureWith($fixture);
+        self::$kernelBorrowing->borrowKernel();
+
+        return self::$kernelBorrowing;
     }
 
     private function removeSandboxes(): void

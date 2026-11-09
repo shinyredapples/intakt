@@ -10,6 +10,7 @@ use Intakt\Gates\ProcessRunner;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Symfony\Component\Filesystem\Filesystem;
 
 final readonly class Sandbox
 {
@@ -44,6 +45,18 @@ final readonly class Sandbox
         }
 
         return $sandbox;
+    }
+
+    // Keeps var/, so the container an earlier run dumped there serves this fixture too.
+    public function replaceFixtureWith(string $name): void
+    {
+        foreach (new FilesystemIterator($this->root) as $entry) {
+            if ($entry instanceof SplFileInfo && 'var' !== $entry->getFilename()) {
+                new Filesystem()->remove($entry->getPathname());
+            }
+        }
+
+        $this->copyFixture(self::FIXTURES.'/'.$name);
     }
 
     public function write(string $path, string $contents): void
