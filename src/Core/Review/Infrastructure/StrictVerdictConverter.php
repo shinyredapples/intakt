@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Model;
+use Symfony\AI\Platform\Result\MultiPartResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
@@ -59,6 +60,11 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
             return $text;
         }
 
+        // Before the text check, because a provider that thinks before it answers sends the answer beside its thinking.
+        if ($text instanceof MultiPartResult) {
+            return $this->convertedMultiPart($text, $result);
+        }
+
         if (!$text instanceof TextResult) {
             throw new UnexpectedResultTypeException(TextResult::class, $text::class);
         }
@@ -73,6 +79,43 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     public function getTokenUsageExtractor(): ?TokenUsageExtractorInterface
     {
         return $this->inner->getTokenUsageExtractor();
+    }
+
+    // Kept as parts, because the thinking blocks and their signatures must go back to the provider with the next request.
+    private function convertedMultiPart(MultiPartResult $parts, RawResultInterface $result): ResultInterface
+    {
+        if ($parts->asToolCallResult() instanceof ToolCallResult) {
+            return $this->withoutNarration($parts, $result);
+        }
+
+        $texts = array_values(array_filter($parts->getContent(), static fn (ResultInterface $part): bool => $part instanceof TextResult));
+
+        // Refused when it is split, because which text is the verdict would be a guess.
+        if (1 !== count($texts)) {
+            throw new UnexpectedResultTypeException(TextResult::class, MultiPartResult::class);
+        }
+
+        $answer = $texts[0]->getContent();
+
+        $verdict = new ObjectResult($this->verdictFrom($answer), $answer);
+        $converted = array_map(static fn (ResultInterface $part): ResultInterface => $part instanceof TextResult ? $verdict : $part, $parts->getContent());
+
+        $rebuilt = new MultiPartResult($converted);
+        $rebuilt->setRawResult($result);
+        $rebuilt->getMetadata()->set($parts->getMetadata()->all());
+
+        return $rebuilt;
+    }
+
+    // Dropped here because Symfony AI's structured output would read the narration before a tool call as the answer and fail on it.
+    private function withoutNarration(MultiPartResult $parts, RawResultInterface $result): MultiPartResult
+    {
+        $kept = array_values(array_filter($parts->getContent(), static fn (ResultInterface $part): bool => !$part instanceof TextResult));
+        $rebuilt = new MultiPartResult($kept);
+        $rebuilt->setRawResult($result);
+        $rebuilt->getMetadata()->set($parts->getMetadata()->all());
+
+        return $rebuilt;
     }
 
     private function verdictFrom(string $content): Verdict
