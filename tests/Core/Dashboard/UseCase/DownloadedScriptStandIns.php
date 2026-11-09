@@ -75,6 +75,6 @@ trait DownloadedScriptStandIns
     // Outside the folders every worker's asset mapper lists, since one worker removing its stand-ins between another's listing and loading fails that request; in TMPDIR, which each worker has of its own.
     private function standInFolder(): string
     {
-        return sys_get_temp_dir().'/downloaded_script_stand_ins';
+        return sys_get_temp_dir().'/'.self::STAND_INS_NAMESPACE;
     }
 }
