@@ -16,7 +16,7 @@ final class OnePhpstanRunFindingsTest extends TestCase
 
     public function testAnAcceptedFixtureFailsWhenTheGateOmittedSomeFindings(): void
     {
-        $run = self::runReporting('{"gate":"phpstan","ok":false,"findings":["rejected/src/Lookup.php:9 intakt.containerUnknownGetId"],"omitted":1}');
+        $run = $this->runReporting('{"gate":"phpstan","ok":false,"findings":["rejected/src/Lookup.php:9 intakt.containerUnknownGetId"],"omitted":1}');
 
         $this->expectException(AssertionFailedError::class);
 
@@ -25,13 +25,13 @@ final class OnePhpstanRunFindingsTest extends TestCase
 
     public function testAnAcceptedFixturePassesWhenTheGateReportedEveryFinding(): void
     {
-        $run = self::runReporting('{"gate":"phpstan","ok":false,"findings":["rejected/src/Lookup.php:9 intakt.containerUnknownGetId"],"omitted":0}');
+        $run = $this->runReporting('{"gate":"phpstan","ok":false,"findings":["rejected/src/Lookup.php:9 intakt.containerUnknownGetId"],"omitted":0}');
 
         $this->assertFindingsUnderItsFolder($run, 'accepted');
         $this->assertFindingsUnderItsFolder($run, 'rejected', 'src/Lookup.php:9 intakt.containerUnknownGetId');
     }
 
-    private static function runReporting(string $gateLine): CheckRun
+    private function runReporting(string $gateLine): CheckRun
     {
         return new CheckRun(new ProcessResult(1, $gateLine, ''));
     }
