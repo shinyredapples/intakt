@@ -13,6 +13,7 @@ use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
 
 // The CLI runs in a directory of its own, so it never sees Intakt's install, its env files and secrets, or a checkout's settings and instructions.
 final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
@@ -46,7 +47,16 @@ final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
 
         $configuration = $this->configurationFileFor($access);
 
-        return new RemovedAfterRun($this->client()->request($model, $payload, [...$options, 'mcp_config' => $configuration]), $configuration);
+        try {
+            $run = $this->client()->request($model, $payload, [...$options, 'mcp_config' => $configuration]);
+        } catch (Throwable $notStarted) {
+            // No run will read the file, so nothing else would remove the bearer it holds.
+            new Filesystem()->remove($configuration);
+
+            throw $notStarted;
+        }
+
+        return new RemovedAfterRun($run, $configuration);
     }
 
     // A file and never the flag's inline JSON, because Process puts the command line into its timeout message, which is logged; one file per run, so runs of other rounds never share one.

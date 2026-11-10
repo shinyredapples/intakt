@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
+use Symfony\AI\Platform\Bridge\ClaudeCode\Exception\CliNotFoundException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(IsolatedClaudeCodeCli::class)]
@@ -118,6 +119,19 @@ final class IsolatedClaudeCodeCliTest extends TestCase
         $result = new IsolatedClaudeCodeCli($this->root.'/home', 'login')->request(new ClaudeCode('sonnet'), 'Review.', [ReviewServerAccess::OPTION => $this->access()]);
 
         iterator_to_array($result->getDataStream());
+
+        self::assertSame([], glob($this->root.'/home/review-server-*'));
+    }
+
+    public function testTheConfigurationFileIsRemovedWhenTheCliCannotStart(): void
+    {
+        putenv('PATH='.$this->root.'/empty');
+
+        try {
+            new IsolatedClaudeCodeCli($this->root.'/home', 'login')->request(new ClaudeCode('sonnet'), 'Review.', [ReviewServerAccess::OPTION => $this->access()]);
+            self::fail('The CLI started although it is not on the PATH.');
+        } catch (CliNotFoundException) {
+        }
 
         self::assertSame([], glob($this->root.'/home/review-server-*'));
     }

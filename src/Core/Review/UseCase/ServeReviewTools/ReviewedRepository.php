@@ -7,6 +7,8 @@ namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 use Closure;
 use DomainException;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
@@ -24,7 +26,7 @@ final readonly class ReviewedRepository
     /**
      * @param (Closure(int): void)|null $fileSearched
      */
-    public function __construct(private ReadableRounds $rounds, private Security $security, private ?Closure $fileSearched = null)
+    public function __construct(private ReadableRounds $rounds, private Security $security, private Fence $fence, private ?Closure $fileSearched = null)
     {
     }
 
@@ -78,13 +80,14 @@ final readonly class ReviewedRepository
         return $reviewer->getUserIdentifier();
     }
 
+    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes.
     /**
      * @param Closure(): string $read
      */
     private function answer(Closure $read): string
     {
         try {
-            return $read();
+            return $this->fence->wrap(UntrustedSource::ToolResult, $read());
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
             throw new ToolCallException($refused->getMessage(), $refused->getCode(), previous: $refused);
         }

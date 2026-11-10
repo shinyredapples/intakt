@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -103,6 +104,22 @@ final class ReviewServerContractTest extends KernelTestCase
 
         self::assertFalse(McpServerClient::at($result, 'isError'));
         self::assertStringContainsString('final readonly class RoundFixture', json_encode($result, JSON_THROW_ON_ERROR));
+    }
+
+    public function testEveryAnswerReachesTheClientFencedBecauseTheSubscriptionCliPutsItIntoThePromptAsItIs(): void
+    {
+        $answers = [
+            $this->call('read_file', ['path' => 'RoundFixture.php']),
+            $this->call('list_directory', []),
+            $this->call('search_files', ['text' => 'final readonly class', 'path' => 'RoundFixture.php']),
+        ];
+
+        foreach ($answers as $answer) {
+            self::assertFalse(McpServerClient::at($answer, 'isError'));
+            $text = McpServerClient::at($answer, 'content', '0', 'text');
+            self::assertIsString($text);
+            self::assertStringStartsWith('<<<UNTRUSTED '.UntrustedSource::ToolResult->value.' fence-', $text);
+        }
     }
 
     public function testAToolListsADirectoryAtTheHead(): void
