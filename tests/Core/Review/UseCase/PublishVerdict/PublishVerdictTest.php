@@ -345,10 +345,7 @@ final class PublishVerdictTest extends KernelTestCase
     // The application's listener, so the test sees it wired to the bus that queues on the application's transport.
     private function unjudgedPublications(): QueuePublicationOfUnjudgedRound
     {
-        $listener = self::getContainer()->get(QueuePublicationOfUnjudgedRound::class);
-        assert($listener instanceof QueuePublicationOfUnjudgedRound);
-
-        return $listener;
+        return self::getContainer()->get(QueuePublicationOfUnjudgedRound::class);
     }
 
     // The application's queue, because the judge transition of the application's workflow queues the publication.

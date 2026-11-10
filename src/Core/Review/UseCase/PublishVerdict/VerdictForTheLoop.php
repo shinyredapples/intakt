@@ -33,7 +33,7 @@ final readonly class VerdictForTheLoop
 
     public function of(ReviewRound $round): PublishedVerdict
     {
-        // Only a judging that failed for good publishes a round before its judge transition, and that round has no act list to publish.
+        // Not reviewed, because only a judging that failed for good publishes a round before its judge transition, so the round has no act list.
         if (RoundState::Judged !== $round->state()) {
             return $this->unreviewed($round);
         }
