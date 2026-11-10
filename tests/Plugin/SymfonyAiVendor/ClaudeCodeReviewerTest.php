@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
@@ -28,6 +29,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
@@ -79,6 +81,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(ClaudeCodePlatformFactory::class)]
 #[CoversClass(SymfonyAiVendor::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(ReviewServerAccess::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(ProjectModelCatalog::class)]
@@ -146,6 +149,53 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $instruction = $cli->options['append_system_prompt'];
         self::assertIsString($instruction);
         self::assertStringContainsString('"json_schema"', $instruction);
+    }
+
+    public function testTheCliIsStartedWithOnlyTheRoundsReviewServerAndItsBearer(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
+
+        $config = json_decode((string) $cli->options['mcp_config'], true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame(['mcpServers' => ['intakt-review' => ['type' => 'http', 'url' => 'http://localhost:7780/mcp/review', 'headers' => ['Authorization' => 'Bearer round-credential']]]], $config);
+        self::assertTrue($cli->options['strict_mcp_config']);
+    }
+
+    public function testTheCliIsAllowedExactlyTheReviewServersReadOnlyTools(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['mcp__intakt-review__read_file', 'mcp__intakt-review__list_directory', 'mcp__intakt-review__search_files'], $cli->options['allowed_tools']);
+    }
+
+    public function testTheCliKeepsEveryBuiltInToolDeniedWhenItIsGivenTheReviewServer(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame([], $cli->options['tools']);
+        self::assertSame(['Bash', 'Read', 'Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'], $cli->options['disallowed_tools']);
+    }
+
+    public function testTheCliIsToldItsToolsAreAvailableWhenItIsGivenTheReviewServer(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertStringNotContainsString('no tool is available', (string) $cli->options['append_system_prompt']);
+        self::assertStringContainsString('"json_schema"', (string) $cli->options['append_system_prompt']);
+    }
+
+    public function testAnApprovalWithTheReviewServerStillCountsAsUnreadUntilTheVerdictRuleChanges(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
     }
 
     public function testAStreamInWhichTheCliUsedOneOfItsOwnToolsStillYieldsItsVerdict(): void
@@ -248,7 +298,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     private function request(): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
     }
 
     private function openFinding(string $id): Finding
@@ -263,7 +313,15 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
     }
 
-    private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
+    private function servers(): ReviewServerAccesses
+    {
+        $servers = $this->createStub(ReviewServerAccesses::class);
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
+
+        return $servers;
+    }
+
+    private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
         $platform = $this->claudeCodePlatform($cli);
@@ -272,6 +330,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW));
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers);
     }
 }

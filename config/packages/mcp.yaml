@@ -1,3 +1,7 @@
+parameters:
+    # Spelled once, for the reviewers' configured connection below and for the subscription CLI's configuration.
+    intakt.review_mcp_url: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
+
 mcp:
     servers:
         owner:
@@ -31,6 +35,6 @@ mcp:
             servers:
                 review:
                     transport: http
-                    url: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
+                    url: '%intakt.review_mcp_url%'
                     # Adds the bearer credential of the round under review to every request, because headers here are fixed.
                     http_client: Intakt\Core\Review\Infrastructure\ReviewServerHttpClient
