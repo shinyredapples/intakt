@@ -22,6 +22,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
+use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\RoundStale;
@@ -37,6 +38,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
 {
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
+    private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
     private const string RAW = 'application/vnd.github.raw+json';
@@ -120,6 +122,27 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             'commit_id' => $change->commits->head->hash,
             'event' => 'COMMENT',
             'body' => $body."\n\n".sprintf(self::TOKEN_MARKER, $comment->token->value),
+        ]);
+    }
+
+    // No stale check, because the status and the comment name the head they judge, so a head that moved on keeps its own verdict.
+    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
+    {
+        $address = PullRequestAddress::of($change);
+        $comment = $verdict->redactedComment();
+        if (null !== $comment && $this->secrets->findsSecretIn($comment)) {
+            throw ReviewTextHoldsSecret::afterRedaction();
+        }
+
+        // The comment before the status, so a head never shows Intakt's status without the comment that explains it.
+        if (null !== $comment) {
+            $this->post($address->issuePath().'/comments', ['body' => $comment]);
+        }
+
+        $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
+            'state' => $verdict->status->value,
+            'context' => self::STATUS_CONTEXT,
+            'description' => $verdict->description,
         ]);
     }
 
