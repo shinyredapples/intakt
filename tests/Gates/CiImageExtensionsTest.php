@@ -8,8 +8,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
-// The CI image installs a fixed list of extensions before it copies composer.json, so a composer.json edit reuses that
-// layer; a check after the copy keeps the list in step with composer.json's ext-* entries.
+// A fixed list before the copy lets a composer.json edit reuse the expensive layer; the check after it keeps the list.
 #[CoversNothing]
 final class CiImageExtensionsTest extends TestCase
 {
