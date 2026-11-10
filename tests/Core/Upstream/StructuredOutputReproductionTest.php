@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Upstream;
 
-use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
-#[CoversClass(ReproductionRunner::class)]
+#[CoversNothing]
 final class StructuredOutputReproductionTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';
