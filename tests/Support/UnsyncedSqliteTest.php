@@ -23,7 +23,8 @@ final class UnsyncedSqliteTest extends KernelTestCase
 
     protected function setUp(): void
     {
-        $this->directory = sys_get_temp_dir().'/unsynced-sqlite-'.bin2hex(random_bytes(4));
+        parent::setUp();
+        $this->directory =sys_get_temp_dir().'/unsynced-sqlite-'.bin2hex(random_bytes(4));
         new Filesystem()->mkdir($this->directory);
     }
 

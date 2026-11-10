@@ -35,7 +35,11 @@ final class SandboxTest extends TestCase
 
     public function testAnotherOwnerGetsAnotherFolder(): void
     {
-        self::assertNotSame($this->sandbox->root, Sandbox::ownedBy(TestCase::class)->root);
+        $other = Sandbox::ownedBy(TestCase::class);
+
+        self::assertNotSame($this->sandbox->root, $other->root);
+
+        $other->remove();
     }
 
     public function testReplacingTheFixtureRemovesTheFilesOfTheEarlierOne(): void
