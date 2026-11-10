@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
-use FilesystemIterator;
+use DirectoryIterator;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobOutputRefused;
@@ -42,7 +42,7 @@ final readonly class JobOutputDirectories
     public function read(string $directory): JobOutput
     {
         try {
-            $entries = new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS);
+            $entries = new DirectoryIterator($directory);
         } catch (UnexpectedValueException) {
             throw JobOutputRefused::unlisted();
         }
@@ -51,6 +51,10 @@ final readonly class JobOutputDirectories
         $bytes = 0;
 
         foreach ($entries as $entry) {
+            if ($entry->isDot()) {
+                continue;
+            }
+
             if (self::MAX_FILES === count($files)) {
                 throw JobOutputRefused::tooMany(self::MAX_FILES);
             }
@@ -125,8 +129,10 @@ final readonly class JobOutputDirectories
             return;
         }
 
-        foreach (new FilesystemIterator($path, FilesystemIterator::SKIP_DOTS) as $child) {
-            $this->makeRemovable($child->getPathname());
+        foreach (new DirectoryIterator($path) as $child) {
+            if (!$child->isDot()) {
+                $this->makeRemovable($child->getPathname());
+            }
         }
     }
 }

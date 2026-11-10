@@ -79,7 +79,7 @@ final class FakeDockerEngine
         $this->cutOff[$job] = $times;
     }
 
-    // Answered 200 with an Error in the body at once while the job still runs, as the engine does for a wait that failed on its side.
+    // Answers 200 with an Error in the body while the job still runs, because that is how the engine reports a wait that failed on its side.
     public function answerWaitsWithError(string $job): void
     {
         $this->waitErrors[] = $job;
@@ -273,7 +273,7 @@ final class FakeDockerEngine
         return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => $container->memoryKilled, 'ExitCode' => $container->exitCode]]);
     }
 
-    // Volumes come back as a JSON object of paths, or null, as the engine inspects an image.
+    // A JSON object keyed by path, or null, because that is the shape the engine's image inspection answers with.
     private function image(string $name): MockResponse
     {
         $paths = $this->volumes[$name] ?? [];

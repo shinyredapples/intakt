@@ -97,6 +97,7 @@ final class DockerEngineTest extends TestCase
 
     public function testRemovalAlsoRemovesTheContainersAnonymousVolumes(): void
     {
+        $url = '';
         $engine = $this->engineRecording($url, '', 204);
 
         $engine->remove('abc123');
@@ -125,6 +126,7 @@ final class DockerEngineTest extends TestCase
 
     public function testTheImageNameIsEncodedIntoTheApiPath(): void
     {
+        $url = '';
         $engine = $this->engineRecording($url, '{"Config":{"Volumes":null}}');
 
         $engine->imageVolumes('localhost:5000/sample:latest');
@@ -146,7 +148,7 @@ final class DockerEngineTest extends TestCase
         return new DockerEngine(new MockHttpClient(new MockResponse($body, ['http_code' => $status])), FakeDockerEngine::SOCKET);
     }
 
-    private function engineRecording(?string &$url, string $body, int $status = 200): DockerEngine
+    private function engineRecording(string &$url, string $body, int $status = 200): DockerEngine
     {
         $client = new MockHttpClient(static function (string $method, string $requested) use (&$url, $body, $status): MockResponse {
             $url = $requested;
