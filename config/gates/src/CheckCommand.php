@@ -18,6 +18,13 @@ final readonly class CheckCommand
      */
     public function run(array $arguments): int
     {
+        // Because CI runs these gates and the rest in two containers, each on its own copy, and takes the split from here.
+        if (['--static-gates'] === $arguments) {
+            $this->print(['static' => array_values(array_map(static fn (Gate $gate): string => $gate->name(), array_filter($this->gates(null), static fn (Gate $gate): bool => !$gate instanceof RunsTheChangesCode)))]);
+
+            return 0;
+        }
+
         try {
             $options = Options::fromArguments($arguments);
         } catch (InvalidArgumentException $exception) {
