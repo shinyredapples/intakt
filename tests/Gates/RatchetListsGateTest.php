@@ -35,8 +35,8 @@ final class RatchetListsGateTest extends SandboxTestCase
     /**
      * @param list<string> $expected
      */
-    #[DataProvider('listChanges')]
-    public function testEachListChangeIsJudgedAgainstItsTargetBranchVersion(string $list, string $before, string $after, array $expected): void
+    #[DataProvider('listOutcomes')]
+    public function testEachListChangeIsJudgedAgainstItsTargetBranchVersion(string $list, array $expected): void
     {
         self::$listChanges ??= $this->changeLists(self::listChanges());
 
@@ -51,9 +51,17 @@ final class RatchetListsGateTest extends SandboxTestCase
     }
 
     /**
+     * @return array<string, array{string, list<string>}>
+     */
+    public static function listOutcomes(): array
+    {
+        return array_map(static fn (array $change): array => [$change[0], $change[3]], self::listChanges());
+    }
+
+    /**
      * @return array<string, array{string, string, string, list<string>}>
      */
-    public static function listChanges(): array
+    private static function listChanges(): array
     {
         $entry = self::entry('#^Only booleans$#', 2, '../src/A.php');
 
