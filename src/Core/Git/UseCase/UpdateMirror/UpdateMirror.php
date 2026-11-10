@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
-use InvalidArgumentException;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use InvalidArgumentException;
 use Symfony\Component\Filesystem\Filesystem;
 
 final readonly class UpdateMirror
@@ -23,8 +23,6 @@ final readonly class UpdateMirror
     }
 
     /**
-     * @return string the path of the project's bare mirror
-     *
      * @throws InvalidArgumentException
      * @throws NetworkGitFailed
      */

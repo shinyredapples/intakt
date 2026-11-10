@@ -8,8 +8,9 @@ use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Clock\MockClock;
 
-// A clock that never waits: it records each sleep and runs what the test wants to happen meanwhile.
+// Because a test must never wait: it records each sleep and runs what should happen meanwhile.
 final class RecordingClock implements ClockInterface
 {
     /** @var list<float|int> */
@@ -22,14 +23,14 @@ final class RecordingClock implements ClockInterface
 
     public function now(): DateTimeImmutable
     {
-        return new DateTimeImmutable('2026-11-10 12:00:00 UTC');
+        return new MockClock('2026-11-10 12:00:00 UTC')->now();
     }
 
     public function sleep(float|int $seconds): void
     {
         $this->sleeps[] = $seconds;
 
-        if (null !== $this->meanwhile) {
+        if ($this->meanwhile instanceof Closure) {
             ($this->meanwhile)(count($this->sleeps));
         }
     }

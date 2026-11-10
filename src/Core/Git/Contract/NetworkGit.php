@@ -8,10 +8,9 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Process\Process;
 
-// Only for calls that read from a remote: a retried write could happen twice.
+// Only for calls that read from a remote, because a retried write could happen twice.
 final readonly class NetworkGit
 {
-    /** Seconds to wait before the second and the third attempt. */
     public const array RETRY_DELAYS = [10, 30];
 
     private const int TIMEOUT_SECONDS = 600;

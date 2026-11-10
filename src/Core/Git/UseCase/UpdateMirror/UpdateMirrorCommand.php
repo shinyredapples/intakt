@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
-use InvalidArgumentException;
 use Intakt\Core\Platform\Contract\ReportableFailure;
+use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
