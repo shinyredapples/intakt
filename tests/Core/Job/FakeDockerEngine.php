@@ -64,7 +64,7 @@ final class FakeDockerEngine
         $this->hanging[] = $job;
     }
 
-    // The first waits for the job break off at once while the job still runs, as a dropped connection to the engine does.
+    // Broken off at once while the job still runs, so a test plays a dropped connection to the engine.
     public function cutOffWaits(string $job, int $times): void
     {
         $this->cutOff[$job] = $times;
