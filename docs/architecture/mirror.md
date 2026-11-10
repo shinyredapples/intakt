@@ -8,7 +8,7 @@ Intakt keeps one bare mirror per project at `var/mirrors/<project>.git` (the con
 
 - A mirror exists when the path holds `HEAD`, `objects/` and `refs/` and `git rev-parse --is-bare-repository` says `true`. It is fetched in place, so a branch the remote deleted disappears and a bare repository left without refs is filled.
 - Anything else (no folder, an empty folder, a folder that is not a bare repository) gets a new mirror: `git init --bare` in a staging folder `var/mirrors/.<project>.git.<random>`, filled as above, then renamed to `<project>.git`. A clone that fails or dies half-way stays in its staging folder, which is removed, so an incomplete mirror is never published.
-- The rename runs under the Symfony lock `git-mirror-<project>`, which checks the path again first: when another update published the mirror meanwhile, that mirror is kept and the staging folder is dropped. The fetches run outside the lock; git's own ref locks guard them.
+- The rename runs under the Symfony lock `git-mirror-<project>`, which checks the path again first: when another update published the mirror meanwhile, that mirror is kept, the staging folder is dropped, and the overtaken update then fetches into the published mirror once more (outside the lock, like every fetch), because the update that won may have fetched earlier and the mirror must be at least as fresh as the overtaken fetch. The fetches run outside the lock; git's own ref locks guard them.
 
 A local git step that fails (`init`, `symbolic-ref`) or a rename that fails throws `MirrorNotUpdated`; the console command prints it and exits with 1.
 

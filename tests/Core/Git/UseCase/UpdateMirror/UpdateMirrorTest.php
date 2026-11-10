@@ -194,6 +194,28 @@ final class UpdateMirrorTest extends TestCase
         }
     }
 
+    public function testAnOvertakenUpdateLeavesThePublishedMirrorAtLeastAsFreshAsItsOwnFetch(): void
+    {
+        $remote = $this->mirrors.'-late-remote';
+        $newer = '';
+        // The remote appears during the first wait, another update publishes its older state, then the remote gains a commit the retry fetches.
+        $overtaken = new RecordingClock(function () use ($remote, &$newer): void {
+            $this->git(sys_get_temp_dir(), 'clone', '--quiet', '--bare', $this->remote->path, $remote);
+            $this->update('alpha', $remote);
+            $newer = $this->remote->commitFile('b.txt', 'two');
+            $this->git($remote, 'fetch', '--quiet', $this->remote->path, '+refs/heads/main:refs/heads/main');
+        });
+
+        try {
+            $path = $this->update('alpha', $remote, $overtaken);
+
+            self::assertSame([10], $overtaken->sleeps);
+            self::assertSame($newer, $this->git($path, 'rev-parse', 'refs/heads/main'));
+        } finally {
+            new Filesystem()->remove($remote);
+        }
+    }
+
     private function update(string $project, string $remote, ?RecordingClock $clock = null): string
     {
         $network = new NetworkGit($clock ?? new RecordingClock(), new NullLogger());

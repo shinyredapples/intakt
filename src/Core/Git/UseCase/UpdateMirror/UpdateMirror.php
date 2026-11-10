@@ -83,9 +83,14 @@ final readonly class UpdateMirror
         try {
             $this->mustRun(['init', '--bare', '--quiet', '--', $staging], $this->mirrorsDirectory);
             $this->fill($staging, $remote);
-            $this->publish($project, $staging, $path);
+            $published = $this->publish($project, $staging, $path);
         } finally {
             $this->filesystem->remove($staging);
+        }
+
+        // Because the update that won fetched at its own moment, possibly before this one: the published mirror is fetched again so it is at least as fresh as this fetch.
+        if (!$published) {
+            $this->fill($path, $remote);
         }
     }
 
@@ -101,19 +106,21 @@ final readonly class UpdateMirror
         }
     }
 
-    private function publish(string $project, string $staging, string $path): void
+    private function publish(string $project, string $staging, string $path): bool
     {
         $lock = $this->locks->createLock('git-mirror-'.$project);
         $lock->acquire(true);
 
         try {
-            // Read again under the lock, because another update may have published this mirror while this one fetched; its mirror is as fresh as this one.
+            // Read again under the lock, because another update may have published this mirror while this one fetched; it is kept, since an in-place fetch may already be writing into it.
             if ($this->isMirror($path)) {
-                return;
+                return false;
             }
 
             $this->filesystem->remove($path);
             $this->filesystem->rename($staging, $path);
+
+            return true;
         } catch (IOException $failed) {
             throw MirrorNotUpdated::at($path, $failed->getMessage());
         } finally {
