@@ -4,11 +4,27 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Domain\ProjectSummary;
+use Intakt\Core\Dashboard\Domain\ReviewSummary;
+use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Dashboard\Infrastructure\PublishProjectFilter;
+use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Core\Review\Contract\RoundOpened;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -26,6 +42,9 @@ use Symfony\Component\Process\Process;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
+use Symfony\Component\Uid\Uuid;
+use Twig\Environment;
+use Twig\Loader\FilesystemLoader;
 
 // Against the real built-in hub: delivery to a subscriber of the shell topic and the connection dropping are the hub's behavior, which a double would only assume.
 #[Group('hub')]
@@ -34,6 +53,18 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(MercureRoundUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(DashboardTopics::class)]
+#[UsesClass(PublishProjectFilter::class)]
+#[UsesClass(FilterProjects::class)]
+#[UsesClass(LedgerReviews::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(LedgerPayloads::class)]
+#[UsesClass(ProjectSummary::class)]
+#[UsesClass(ReviewSummary::class)]
+#[UsesClass(RoundStart::class)]
+#[UsesClass(RoundOpened::class)]
+#[UsesClass(RecordedEvent::class)]
+#[UsesClass(RecordedEvents::class)]
+#[UsesClass(LedgerEvent::class)]
 final class ShellHubTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
@@ -106,6 +137,32 @@ final class ShellHubTest extends TestCase
         }
 
         self::assertStringContainsString('data: <turbo-stream action="refresh"></turbo-stream>', $received);
+    }
+
+    public function testTheProjectFilterPublishedWhenARoundOpensReachesASubscriberOfTheShellTopic(): void
+    {
+        $stream = $this->subscribeToTheShell();
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn(new RecordedEvents([
+            new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":1}'), new DateTimeImmutable('2026-11-10T12:00:00+00:00')),
+        ]));
+        $projects = new FilterProjects(new LedgerReviews($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))));
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
+
+        new PublishProjectFilter($projects, $twig, $this->updates(), $this->logger)(new RoundOpened('r1', 'alpha'));
+
+        $received = '';
+
+        foreach ($this->client->stream($stream, self::SECONDS_TO_WAIT) as $chunk) {
+            $received .= $chunk->getContent();
+
+            if (str_contains($received, '</turbo-stream>')) {
+                break;
+            }
+        }
+
+        self::assertStringContainsString('data: <turbo-stream action="update" target="projfilter"><template><option value="">All projects</option><option value="alpha">alpha</option></template></turbo-stream>', $received);
+        self::assertSame([], $this->logger->cleanLogs());
     }
 
     public function testASubscriberSeesItsConnectionEndWhenTheHubStopsAndPublishingToAStoppedHubOnlyLogsAWarning(): void
