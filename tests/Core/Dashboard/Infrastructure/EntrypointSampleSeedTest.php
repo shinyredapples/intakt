@@ -20,6 +20,10 @@ final class EntrypointSampleSeedTest extends TestCase
 
     private string $directory;
 
+    // One default-env start serves four tests, because they read different results of the same run and none changes it.
+    /** @var array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}|null */
+    private static ?array $defaultDemo = null;
+
     private ?Process $entrypoint = null;
 
     protected function setUp(): void
@@ -36,37 +40,25 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testTheDemoBuildsTheContainerAgainBeforeAndAfterTheSeed(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-
-        $this->waitForTheServer();
-
         self::assertSame([
             'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
             'bin/console cache:warmup --no-interaction',
-            'bin/console intakt:sample:seed /data/sample '.$this->directory.'/intakt.yaml',
+            'bin/console intakt:sample:seed /data/sample <directory>/intakt.yaml',
             'bin/console cache:warmup --no-interaction',
-        ], $this->consoleCallsBeforeTheConsumers());
+        ], $this->theDefaultDemo()['consoleCalls']);
     }
 
     public function testEveryOldContainerIsRemovedBeforeItsWarmup(): void
     {
-        new Filesystem()->dumpFile($this->directory.'/var/cache/test/image-container', 'old');
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-
-        $this->waitForTheServer();
-
-        self::assertDirectoryDoesNotExist($this->directory.'/var/cache/test', 'the image container or the one the seed left survived');
+        self::assertFalse($this->theDefaultDemo()['cacheDirectoryExists'], 'the image container or the one the seed left survived');
     }
 
     public function testTheDemoMakesOneOwnerTokenAndKeepsItOnTheDataVolume(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-        $this->waitForTheServer();
+        $demo = $this->theDefaultDemo();
 
-        $kept = trim(new Filesystem()->readFile($this->directory.'/mcp-owner-token'));
-
-        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $kept);
-        self::assertSame($kept.' mcp_tool_write', trim($this->seen()));
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $demo['keptToken']);
+        self::assertSame($demo['keptToken'].' mcp_tool_write', $demo['seen']);
     }
 
     public function testATokenTheOwnerSetWinsAndIsNotWrittenToTheVolume(): void
@@ -102,10 +94,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testWithoutAHuggingFaceTokenNoOpenAiCompatibleAccountIsSet(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-        $this->waitForTheServer();
-
-        self::assertSame('', trim(new Filesystem()->readFile($this->callsFile().'.compatible')));
+        self::assertSame('', $this->theDefaultDemo()['compatible']);
     }
 
     public function testTwoFirstStartsAtOnceShareOneOwnerToken(): void
@@ -247,6 +236,33 @@ final class EntrypointSampleSeedTest extends TestCase
         $process->setTimeout(self::SECONDS_TO_WAIT * 2);
 
         return $process;
+    }
+
+    /**
+     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
+     */
+    private function theDefaultDemo(): array
+    {
+        return self::$defaultDemo ??= $this->runTheDefaultDemo();
+    }
+
+    /**
+     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
+     */
+    private function runTheDefaultDemo(): array
+    {
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($this->directory.'/var/cache/test/image-container', 'old');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        return [
+            'consoleCalls' => array_map(fn (string $call): string => str_replace($this->directory, '<directory>', $call), $this->consoleCallsBeforeTheConsumers()),
+            'cacheDirectoryExists' => is_dir($this->directory.'/var/cache/test'),
+            'keptToken' => trim($filesystem->readFile($this->directory.'/mcp-owner-token')),
+            'seen' => trim($this->seen()),
+            'compatible' => trim($filesystem->readFile($this->callsFile().'.compatible')),
+        ];
     }
 
     // Stand-ins that note each call; the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
