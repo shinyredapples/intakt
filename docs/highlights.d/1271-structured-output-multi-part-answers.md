@@ -1,0 +1,2 @@
+## Found in the beta
+| Structured output: the typed answer of a model that thinks or calls tools is missed (the narration before a tool call is decoded, the object stays among the parts, a streamed narration is decoded) | in progress | T7 (#1264, part #1271), `upstream/ai-structured-output-multi-part-answers/` | recheck needed before filing in symfony/ai: not yet run against `main` or searched for duplicates |
