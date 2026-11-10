@@ -10,6 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 #[CoversNothing]
 final class NoPollingTest extends DashboardPageTestCase
 {
+    // The list pages listen to the shell topic only when the hub can authorize a listener, which the test environment cannot (no key), so they hold just the inline scripts here; the stream source and its import map are asserted in ShellLiveUpdatesTest.
     /**
      * @return iterable<string, array{string}>
      */
