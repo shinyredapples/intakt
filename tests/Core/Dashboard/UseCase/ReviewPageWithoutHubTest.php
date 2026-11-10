@@ -60,7 +60,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         $this->browser->request('GET', $packages->getUrl('arm.js'));
 
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('export function holdBackDangerButtons(page)', (string) $this->browser->getInternalResponse()->getContent());
+        self::assertStringContainsString('export function holdBackDangerButtons(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void
