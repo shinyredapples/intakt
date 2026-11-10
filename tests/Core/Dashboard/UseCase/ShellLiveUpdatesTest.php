@@ -86,6 +86,20 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
         self::assertGreaterThan(0, $crawler->filter('table tbody tr')->count());
     }
 
+    #[DataProvider('pages')]
+    public function testAListPageOpenedAfterAReviewPageStillGrantsEveryRoundTopicSoTheReviewTabKeepsItsUpdates(string $path): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->browser->request('GET', '/reviews/round-1');
+        $reviewGrants = $this->grantedTopics();
+
+        $this->browser->request('GET', $path);
+
+        $expected = [['match' => DashboardTopics::SHELL],['match' => 'review/rounds/:round', 'match_type' => 'urlpattern']];
+        self::assertSame($expected, $this->grantedTopics());
+        self::assertContains(['match' => 'review/rounds/:round', 'match_type' => 'urlpattern'], $reviewGrants);
+    }
+
     public function testAnEventPublishedForTheShellTopicIsAddressedToWhatThePageListensTo(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
@@ -103,5 +117,33 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([DashboardTopics::SHELL], $published[0]->getTopics());
         self::assertTrue($published[0]->isPrivate());
         self::assertStringContainsString('match='.rawurlencode($published[0]->getTopics()[0]), (string) $page->filter('turbo-mercure-stream-source')->attr('src'));
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function grantedTopics(): array
+    {
+        foreach ($this->browser->getResponse()->headers->getCookies() as $cookie) {
+            if ('mercure_access_token' !== $cookie->getName()) {
+                continue;
+            }
+
+            $payload = explode('.', (string) $cookie->getValue())[1] ?? '';
+            $claims = json_decode((string) base64_decode(strtr($payload, '-_', '+/'), true), true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($claims);
+            self::assertIsArray($claims['authorization_details'] ?? null);
+            $topics = [];
+
+            foreach ($claims['authorization_details'] as $detail) {
+                self::assertIsArray($detail);
+                self::assertIsArray($detail['topics'] ?? null);
+                $topics = [...$topics, ...array_values($detail['topics'])];
+            }
+
+            return $topics;
+        }
+
+        self::fail('The page set no subscriber cookie.');
     }
 }

@@ -29,8 +29,8 @@
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
 <div class="shell" data-controller="connection">
-{# One listener for the shell topic and the page's own, because the hub's subscriber cookie can be set only once per response. #}
-{% if live|default(false) %}{{ turbo_stream_from([constant('Intakt\\Core\\Dashboard\\Contract\\DashboardTopics::SHELL')]|merge(topics|default([])), true) }}{% endif %}
+{# One listener for the shell topic and the page's own. The cookie it sets also carries listener_grants, the same on every page, because every tab shares it. #}
+{% if live|default(false) %}{% do mercure(null, {subscribe: listener_grants}) %}{{ turbo_stream_from([constant('Intakt\\Core\\Dashboard\\Contract\\DashboardTopics::SHELL')]|merge(topics|default([])), true) }}{% endif %}
 {# Only the items whose page is built; the others arrive with their page. History and Settings, once built, go under More, which a phone shows instead of them. #}
 {{ include('dashboard/_rail.html.twig', {
     rail_items: [

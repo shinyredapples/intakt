@@ -6,7 +6,9 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -28,6 +30,8 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 // Against the real built-in hub: delivery to a subscriber of the shell topic and the connection dropping are the hub's behavior, which a double would only assume.
 #[Group('hub')]
 #[CoversClass(MercureLiveUpdates::class)]
+#[CoversClass(LivePageRendering::class)]
+#[UsesClass(MercureRoundUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(DashboardTopics::class)]
 final class ShellHubTest extends TestCase
@@ -125,6 +129,24 @@ final class ShellHubTest extends TestCase
         self::assertCount(1, $this->logger->cleanLogs());
     }
 
+    public function testAReviewTabReconnectingWithTheCookieAListPageSetStillReceivesItsRoundUpdates(): void
+    {
+        $stream = $this->subscribe(MercureRoundUpdates::topicOf('round-1'), LivePageRendering::listenerGrants());
+
+        $this->updates()->publish(new LiveEvent(MercureRoundUpdates::topicOf('round-1'), '<p>round progress</p>'));
+
+        self::assertStringContainsString('round progress', $this->receivedWithin($stream, 'round progress', self::SECONDS_TO_WAIT));
+    }
+
+    public function testACookieGrantingOnlyTheShellTopicGetsNoRoundUpdateBecauseTheRoundsArePrivate(): void
+    {
+        $stream = $this->subscribe(MercureRoundUpdates::topicOf('round-1'), [DashboardTopics::SHELL]);
+
+        $this->updates()->publish(new LiveEvent(MercureRoundUpdates::topicOf('round-1'), '<p>round progress</p>'));
+
+        self::assertStringNotContainsString('round progress', $this->receivedWithin($stream, 'round progress', 2));
+    }
+
     private function updates(): MercureLiveUpdates
     {
         $hub = new Hub($this->url, new StaticTokenProvider($this->token(Grant::ACTION_PUBLISH, '*')), httpClient: $this->client);
@@ -142,6 +164,43 @@ final class ShellHubTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
 
         return $response;
+    }
+
+    /**
+     * @param array<string, list<string>>|list<string> $granted
+     */
+    private function subscribe(string $topic, array $granted): ResponseInterface
+    {
+        $token = new LcobucciFactory(self::SECRET)->create([new Grant([Grant::ACTION_SUBSCRIBE], $granted)], ['iss' => $this->issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => $this->url]);
+        $response = $this->client->request('GET', $this->url, [
+            'query' => ['match' => $topic],
+            'headers' => ['Authorization' => 'Bearer '.$token],
+            'timeout' => self::SECONDS_TO_WAIT,
+        ]);
+        self::assertSame(200, $response->getStatusCode());
+
+        return $response;
+    }
+
+    private function receivedWithin(ResponseInterface $stream, string $awaited, int $seconds): string
+    {
+        $received = '';
+
+        foreach ($this->client->stream($stream, $seconds) as $chunk) {
+            if ($chunk->isTimeout()) {
+                break;
+            }
+
+            $received .= $chunk->getContent();
+
+            if (str_contains($received, $awaited)) {
+                break;
+            }
+        }
+
+        $stream->cancel();
+
+        return $received;
     }
 
     private function token(string $action, string $topic): string
