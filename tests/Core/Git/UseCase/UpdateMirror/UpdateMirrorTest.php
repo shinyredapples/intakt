@@ -198,7 +198,7 @@ final class UpdateMirrorTest extends TestCase
     {
         $remote = $this->mirrors.'-late-remote';
         $newer = '';
-        // The remote appears during the first wait, another update publishes its older state, then the remote gains a commit the retry fetches.
+        // Because the update that wins can have fetched an older state than the overtaken one: the remote gains a commit between the inner update and the retry.
         $overtaken = new RecordingClock(function () use ($remote, &$newer): void {
             $this->git(sys_get_temp_dir(), 'clone', '--quiet', '--bare', $this->remote->path, $remote);
             $this->update('alpha', $remote);
