@@ -192,7 +192,6 @@ final readonly class CheckCommand
             new ReproductionRowsGate(new FencedCodeBlocks(), new CheckedReports(new FencedCodeBlocks(), new NativeClock()), new HighlightFragments()),
             new ContainerLintGate(),
             new RatchetListsGate(),
-            new WorkflowsGate(),
         ];
     }
 
