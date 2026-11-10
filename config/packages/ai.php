@@ -128,7 +128,7 @@ return static function (ContainerConfigurator $container): void {
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
-    /** @var array<string, array{repository: string, base: string, task: string}> $projectWatches */
+    /** @var array<string, array{repository: string, base: string, task: string, github?: string}> $projectWatches */
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];

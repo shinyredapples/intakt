@@ -1,0 +1,10 @@
+[
+ {
+  "html_url": "https://example.invalid/acme/widgets/pull/7",
+  "number": 7,
+  "updated_at": "2026-11-02T09:00:00Z",
+  "head": {
+   "sha": "1111111111111111111111111111111111111111"
+  }
+ }
+]
