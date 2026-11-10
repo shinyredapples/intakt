@@ -19,6 +19,7 @@ What the guide covers today, feature by feature; the parts marked planned arrive
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, as does the code that reads a head's CI state and decides to wait (CI running, or a run cancelled and not run again), skip (CI red) or review (CI green), and a `watch` section makes a tick run them every minute (see [Capability tiers per project](#capability-tiers-per-project)); the GitHub App identity reads the pull requests and CI from GitHub for a project whose `watch` section names its `github` repository
 - Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; a shadow round starts only below a lower usage ceiling (see [below](#shadow-mode)); the steps to run an install with every project in shadow mode are on [Setting up a shadow install](shadow-setup.md)
 - Reviewer-for-loop mode per project: a project set to `mode: reviewer-for-loop` has Intakt's panel review the existing loop's heads in place of the loop's Claude reviewer; its verdicts count, the shadow ceilings never hold it, and it writes nothing to the forge yet (see [below](#reviewer-for-loop-mode))
+- Running a job in a fresh container of its own, with its own memory limit, and cleaning up after a crash with `intakt:job:sweep`; no build, check or review runs in one yet (see [Job containers](#job-containers))
 - Taking tasks from GitHub issues, with `Waits for #n` holding a task until the named issues are closed, is planned. Intakt will learn whether a waited-for issue is closed only from the one list of open issues it reads each round (a list that comes back incomplete releases no wait), never by reading each waited-for issue on its own, and a worker with no room for new work will ask GitHub nothing, so routine reads do not use up GitHub's hourly allowance (see the [design](../design/05-architecture/03-choosing-work.md)).
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
@@ -359,6 +360,20 @@ php bin/console intakt:ledger:events
 ```
 
 It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
+
+## Job containers
+
+Intakt has the part that will run each build, check and review in a container of its own; no build, check or review uses it yet. Each job gets a fresh container that is thrown away afterwards: its system files cannot be changed, it works in a scratch area that is gone when it ends (its home folder and caches live there too, so every job starts clean), the inputs it is given are read-only, and the only thing it can hand back is what it leaves in its own output folder, which no other job can see. It gets none of Intakt's keys or tokens, has no network for now (a filtered connection to the AI company and the package registries comes later), and has its own memory and CPU limit, so a job that runs out of memory is stopped alone. The ledger records how each job ended (`job_ended`): `exited` with its exit code, `oom` when its memory limit stopped it, or `timed_out` when it ran past its time and was stopped.
+
+Intakt needs the Docker Engine's socket at `/var/run/docker.sock` for this. Without it a job fails with `The Docker Engine is not reachable: there is no socket at /var/run/docker.sock.`
+
+Containers are removed when their job ends. If Intakt itself crashed while jobs ran, their containers are removed before the next job starts (`job_container_removed` in the ledger). To clean up at once, run:
+
+```
+php bin/console intakt:job:sweep
+```
+
+It prints one line per container it removed and a count, for example `1 orphaned job containers removed.`, and leaves the containers of jobs that are still running alone. When the engine cannot be reached it prints the reason and exits with 1.
 
 ## Measured use of subscription windows
 
