@@ -228,7 +228,9 @@ final class EntrypointProcessesTest extends TestCase
 
         $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\n".$loop);
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) exit 0;; esac\n".$loop);
-        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
+        // The entrypoint's one second poll runs a tenth as long, so a restart takes tenths of a second; the 0.1 second steps of its stop and every other sleep keep their length, so the grace period stays 8 seconds.
+        $filesystem->dumpFile($programs.'/sleep', "#!/bin/bash\n[[ \"\$*\" == 1 ]] && set -- 0.1\nexec \"\$(PATH=\${PATH#*:} command -v sleep)\" \"\$@\"\n");
+        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/sleep'], 0755);
 
         return $programs;
     }
