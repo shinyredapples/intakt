@@ -24,9 +24,13 @@ final class TierRoutedPlatform implements PlatformInterface
      */
     private array $rounds = [];
 
+    /**
+     * @param array<string, mixed> $options
+     */
     public function __construct(
         private readonly TierInvoker $tiers,
         private readonly ResolvedModel $answering,
+        private readonly array $options = [],
     ) {
     }
 
@@ -41,7 +45,7 @@ final class TierRoutedPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        $round = $this->tiers->invoke($this->answering, new TierRequest($input, $options));
+        $round = $this->tiers->invoke($this->answering, new TierRequest($input, $options + $this->options));
         $this->rounds[] = $round;
 
         return $round;

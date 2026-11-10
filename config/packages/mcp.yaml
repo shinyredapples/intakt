@@ -1,3 +1,7 @@
+parameters:
+    # Spelled once, for the reviewers' connection below (its url is set in ai.php) and for the subscription CLI's configuration.
+    !php/const Intakt\Core\Review\Contract\ReviewServices::MCP_URL: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
+
 mcp:
     servers:
         owner:
@@ -31,6 +35,5 @@ mcp:
             servers:
                 review:
                     transport: http
-                    url: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
                     # Adds the bearer credential of the round under review to every request, because headers here are fixed.
                     http_client: Intakt\Core\Review\Infrastructure\ReviewServerHttpClient
