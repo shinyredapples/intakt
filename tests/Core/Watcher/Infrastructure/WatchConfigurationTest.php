@@ -25,7 +25,7 @@ final class WatchConfigurationTest extends TestCase
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']);
 
-        self::assertSame('acme/widgets', $projects['alpha']['github']);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']], $projects);
     }
 
     #[DataProvider('misspelledRepositories')]

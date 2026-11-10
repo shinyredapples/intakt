@@ -22,6 +22,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -45,6 +46,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[CoversClass(GitHubWatchReads::class)]
 #[CoversClass(GitHubCiRuns::class)]
 #[CoversClass(RepositoryAddress::class)]
+#[CoversClass(GitHubMoments::class)]
 #[CoversClass(WatchedRepositories::class)]
 #[UsesClass(PullRequestAddress::class)]
 #[UsesClass(ChangeId::class)]
@@ -358,6 +360,15 @@ final class GitHubWatchReadsTest extends TestCase
         $this->reads()->listOpen('alpha', null);
     }
 
+    public function testAListedPullRequestWithAMomentItCannotReadRaisesAReadFailure(): void
+    {
+        $this->listing = 'pulls_bad_moment.json';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->reads()->listOpen('alpha', null);
+    }
+
     public function testAProjectWithoutAGitHubRepositoryRaisesAReadFailureBeforeAnyRequest(): void
     {
         try {
@@ -405,7 +416,7 @@ final class GitHubWatchReadsTest extends TestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns());
+        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments());
     }
 
     private function answer(string $url): ResponseInterface
@@ -420,8 +431,8 @@ final class GitHubWatchReadsTest extends TestCase
 
         return match (true) {
             str_contains($url, '/pulls') => $this->listingPage($url),
-            str_contains($url, '/actions/runs') => new MockResponse(self::fixture($this->runs)),
-            default => new MockResponse(self::fixture($this->suites)),
+            str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs)),
+            default => new MockResponse($this->fixture($this->suites)),
         };
     }
 
@@ -435,10 +446,10 @@ final class GitHubWatchReadsTest extends TestCase
         $headers = ['response_headers' => ['ETag' => $this->listingEtag]];
 
         return match ($this->listing) {
-            'pulls_page_full.json' => new MockResponse(self::fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_last.json'), $headers),
-            'pulls_page_full_only.json' => new MockResponse(1 === $page ? self::fixture('pulls_page_full.json') : '[]', $headers),
-            'pulls_endless.json' => new MockResponse(self::fixture('pulls_page_full.json'), $headers),
-            default => new MockResponse(self::fixture($this->listing), $headers),
+            'pulls_page_full.json' => new MockResponse($this->fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_last.json'), $headers),
+            'pulls_page_full_only.json' => new MockResponse(1 === $page ? $this->fixture('pulls_page_full.json') : '[]', $headers),
+            'pulls_endless.json' => new MockResponse($this->fixture('pulls_page_full.json'), $headers),
+            default => new MockResponse($this->fixture($this->listing), $headers),
         };
     }
 
@@ -453,7 +464,7 @@ final class GitHubWatchReadsTest extends TestCase
         return is_array($values) && is_string($values[0] ?? null) ? preg_replace('/^[^:]+: /', '', $values[0]) ?? '' : '';
     }
 
-    private static function fixture(string $name): string
+    private function fixture(string $name): string
     {
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 

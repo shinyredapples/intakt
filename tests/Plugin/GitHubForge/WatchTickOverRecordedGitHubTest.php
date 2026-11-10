@@ -49,6 +49,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -73,12 +74,11 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
-// One tick of the watcher over recorded GitHub answers for two pull requests: #7 with CI still running, #8 with CI finished and green.
+// One tick over recorded GitHub answers for two pull requests, because the ledger of a real tick is the evidence: #7 with CI still running, #8 with CI finished and green.
 #[CoversNothing]
 #[Group('persistence')]
 final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 {
-    private const string RUNNING = '1111111111111111111111111111111111111111';
     private const string GREEN = '2222222222222222222222222222222222222222';
 
     private EntityManagerInterface $entities;
@@ -151,16 +151,16 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]), new GitHubCiRuns());
+        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments());
     }
 
     private function answer(string $url): MockResponse
     {
         return match (true) {
-            str_contains($url, '/pulls') => new MockResponse(self::fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
-            str_contains($url, 'head_sha='.self::GREEN) => new MockResponse(self::fixture('runs_green_head_2.json')),
-            str_contains($url, '/actions/runs') => new MockResponse(self::fixture('runs_in_progress.json')),
-            default => new MockResponse(self::fixture('suites_none.json')),
+            str_contains($url, '/pulls') => new MockResponse($this->fixture('pulls_open.json'), ['response_headers' => ['ETag' => 'W/"recorded"']]),
+            str_contains($url, 'head_sha='.self::GREEN) => new MockResponse($this->fixture('runs_green_head_2.json')),
+            str_contains($url, '/actions/runs') => new MockResponse($this->fixture('runs_in_progress.json')),
+            default => new MockResponse($this->fixture('suites_none.json')),
         };
     }
 
@@ -169,7 +169,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
     }
 
-    private static function fixture(string $name): string
+    private function fixture(string $name): string
     {
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 

@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use DateTimeImmutable;
-use DateTimeZone;
-use Exception;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CiRun;
 use Intakt\Plugin\Forge\Contract\CiRunOrigin;
@@ -14,10 +11,14 @@ use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
-// Maps what GitHub answered to runs and nothing else: folding them into pending, red or green is the caller's rule.
+// Maps what GitHub answered to runs and nothing else, because folding them into pending, red or green is the caller's rule.
 final readonly class GitHubCiRuns
 {
     private const string CHECK_SUITE_EVENT = 'check_suite';
+
+    public function __construct(private GitHubMoments $moments)
+    {
+    }
 
     /**
      * @param array<mixed> $answer
@@ -26,7 +27,7 @@ final readonly class GitHubCiRuns
      */
     public function ofWorkflowRuns(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
-        return $this->runsOf($repository, $head, $this->entries($answer, 'workflow_runs'), static fn (array $entry): array => [self::text($entry, 'name'), self::text($entry, 'event')]);
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event')]);
     }
 
     /**
@@ -39,7 +40,7 @@ final readonly class GitHubCiRuns
         // A suite with no check run never starts, so it would keep a head pending for good.
         $suites = array_filter($this->entries($answer, 'check_suites'), static fn (array $suite): bool => 0 !== ($suite['latest_check_runs_count'] ?? null));
 
-        return $this->runsOf($repository, $head, array_values($suites), static fn (array $suite): array => [self::text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
+        return $this->runsOf($repository, $this->ofHead($head, array_values($suites)), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
     }
 
     /**
@@ -63,25 +64,29 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>                         $entries
+     * @param list<array<mixed>> $entries
+     *
+     * @return list<array<mixed>>
+     */
+    private function ofHead(CommitId $head, array $entries): array
+    {
+        // A rerun or a newer push leaves other heads in the same answer, and they must not decide for this one.
+        return array_values(array_filter($entries, fn (array $entry): bool => strtolower($this->text($entry, 'head_sha')) === $head->hash));
+    }
+
+    /**
+     * @param list<array<mixed>>                            $entries
      * @param callable(array<mixed>): array{string, string} $originOf
      *
      * @return list<CiRun>
      */
-    private function runsOf(RepositoryAddress $repository, CommitId $head, array $entries, callable $originOf): array
+    private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf): array
     {
-        $runs = [];
-        foreach ($entries as $entry) {
-            // A rerun or a newer push leaves other heads in the same answer, and they must not decide for this one.
-            if (strtolower(self::text($entry, 'head_sha')) !== $head->hash) {
-                continue;
-            }
-
+        return array_map(function (array $entry) use ($repository, $originOf): CiRun {
             [$name, $event] = $originOf($entry);
-            $runs[] = new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $this->stateOf($entry), $this->momentOf(self::text($entry, 'created_at')));
-        }
 
-        return $runs;
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $this->stateOf($entry), $this->moments->parse($this->text($entry, 'created_at')));
+        }, $entries);
     }
 
     /**
@@ -105,30 +110,21 @@ final readonly class GitHubCiRuns
      */
     private function stateOf(array $entry): CiRunState
     {
-        if ('completed' !== self::text($entry, 'status')) {
+        if ('completed' !== $this->text($entry, 'status')) {
             return CiRunState::Unfinished;
         }
 
-        return match (self::text($entry, 'conclusion')) {
+        return match ($this->text($entry, 'conclusion')) {
             'success', 'neutral', 'skipped' => CiRunState::Succeeded,
             'cancelled' => CiRunState::Cancelled,
             default => CiRunState::Failed,
         };
     }
 
-    private function momentOf(string $text): DateTimeImmutable
-    {
-        try {
-            return new DateTimeImmutable($text)->setTimezone(new DateTimeZone('UTC'));
-        } catch (Exception $invalid) {
-            throw new ForgeReadFailed('GitHub answered a moment this forge cannot read.', $invalid->getCode(), previous: $invalid);
-        }
-    }
-
     /**
      * @param array<mixed> $data
      */
-    private static function text(array $data, string ...$keys): string
+    private function text(array $data, string ...$keys): string
     {
         $value = $data;
         foreach ($keys as $key) {

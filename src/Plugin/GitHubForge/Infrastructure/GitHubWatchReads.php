@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use DateTimeImmutable;
-use DateTimeZone;
 use Exception;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
@@ -24,11 +22,11 @@ use InvalidArgumentException;
 use JsonException;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
-// What the pull request watcher reads, apart from GitHubForge's reads of one change, through the same installation-token client.
+// Apart from GitHubForge's reads of one change, because the watcher reads whole listings and heads, through the same installation-token client.
 final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
 {
     public const int PAGE_SIZE = 100;
-    // A listing of more pages than this fails instead of reading on for ever.
+    // A listing of more pages than this fails, because reading on has no end a tick could wait for.
     private const int MAX_PAGES = 10;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
@@ -38,6 +36,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         private CheckedInstallationTokens $tokens,
         private WatchedRepositories $repositories,
         private GitHubCiRuns $runs,
+        private GitHubMoments $moments,
     ) {
     }
 
@@ -53,7 +52,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         $later = count($pulls) < self::PAGE_SIZE ? [] : $this->laterPulls($repository);
 
         // The validator belongs to the first page only, so a longer list has none and the next listing is full.
-        return OpenChangeListing::listed(array_map(self::openChange(...), [...$pulls, ...$later]), [] === $later ? $first['etag'] : null);
+        return OpenChangeListing::listed(array_map($this->openChange(...), [...$pulls, ...$later]), [] === $later ? $first['etag'] : null);
     }
 
     public function ciStateOf(string $project, CommitId $head): CiState
@@ -96,15 +95,15 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
     /**
      * @param array<mixed> $pull
      */
-    private static function openChange(array $pull): OpenChange
+    private function openChange(array $pull): OpenChange
     {
-        $id = new ChangeId(self::text($pull, 'html_url'));
+        $id = new ChangeId($this->text($pull, 'html_url'));
 
         try {
             // Only an address the forge's other reads accept, so a listed change can be read by them.
             PullRequestAddress::of($id);
 
-            return new OpenChange($id, new CommitId(self::text($pull, 'head', 'sha')), new DateTimeImmutable(self::text($pull, 'updated_at'))->setTimezone(new DateTimeZone('UTC')));
+            return new OpenChange($id, new CommitId($this->text($pull, 'head', 'sha')), $this->moments->parse($this->text($pull, 'updated_at')));
         } catch (ChangeNotFound|InvalidArgumentException|Exception $invalid) {
             throw new ForgeReadFailed('GitHub listed a pull request this forge cannot read.', $invalid->getCode(), previous: $invalid);
         }
@@ -113,7 +112,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
     /**
      * @param array<mixed> $data
      */
-    private static function text(array $data, string ...$keys): string
+    private function text(array $data, string ...$keys): string
     {
         $value = $data;
         foreach ($keys as $key) {
@@ -155,8 +154,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
             $body = $response->getContent(false);
             $etag = $response->getHeaders(false)['etag'][0] ?? null;
         } catch (ExceptionInterface $failure) {
-            // Not chained, because the client's trace holds the request options with the bearer token.
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if (self::NOT_MODIFIED === $status && null !== $validator) {
@@ -168,6 +166,12 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         }
 
         return ['status' => $status, 'body' => $body, 'etag' => $etag];
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 
     private function bearer(): string

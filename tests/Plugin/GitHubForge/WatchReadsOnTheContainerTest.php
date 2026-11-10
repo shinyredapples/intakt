@@ -44,8 +44,8 @@ final class WatchReadsOnTheContainerTest extends TestCase
         $console = new Process([PHP_BINARY, 'bin/console', 'debug:container', $contract, '--format=json'], $root, ['APP_ENV' => $environment, 'APP_DEBUG' => '0', 'APP_CACHE_DIR' => $root.'/var/cache/watch-reads-'.$environment]);
         $console->mustRun();
 
-        self::assertSame(1, preg_match('/"class": "([^"]+)"/', $console->getOutput(), $service), $console->getOutput());
+        preg_match('/"class": "([^"]+)"/', $console->getOutput(), $service);
 
-        return stripslashes($service[1]);
+        return stripslashes($service[1] ?? $console->getOutput());
     }
 }
