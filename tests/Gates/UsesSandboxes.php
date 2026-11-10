@@ -51,13 +51,13 @@ trait UsesSandboxes
         $findings = array_values(array_filter(explode("\n", $run->findingsOf('phpstan')), static fn (string $finding): bool => '' !== $finding));
         // Because a fixture that must pass reports nothing, a run that judged no file at all would otherwise pass it too.
         Assert::assertTrue($run->passed('phpstan') || $run->failed('phpstan'), $run->output());
-        Assert::assertSame([], array_values(preg_grep('~^\S+:\d+ ~', $findings, PREG_GREP_INVERT) ?: []), $run->output());
+        Assert::assertSame([], array_values(array_filter($findings, static fn (string $finding): bool => 1 !== preg_match('~^\S+:\d+ ~', $finding))), $run->output());
 
         $inItsFolder = array_values(array_filter($findings, static fn (string $finding): bool => str_starts_with($finding, $fixture.'/')));
         Assert::assertCount(count($expectedFindings), $inItsFolder, $run->output());
 
-        foreach ($expectedFindings as $index => $expectedFinding) {
-            Assert::assertStringContainsString($fixture.'/'.$expectedFinding, $inItsFolder[$index]);
+        foreach (array_values($expectedFindings) as $index => $expectedFinding) {
+            Assert::assertStringContainsString($fixture.'/'.$expectedFinding, $inItsFolder[$index] ?? '');
         }
     }
 
