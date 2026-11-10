@@ -52,7 +52,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-// From the recorded Messages API answers of a reviewer that reads a file before it answers, through the real agent, toolbox and verdict conversion, the worker and the round's stored findings, to what the judge is asked.
+// Replays recorded answers through the real agent, toolbox and worker up to the judge, because a stubbed verdict hid that a tool-using reviewer's findings never reached it.
 #[Group('persistence')]
 #[CoversClass(JudgeRoundHandler::class)]
 #[CoversClass(JudgedRounds::class)]
@@ -136,12 +136,12 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
     }
 
     /**
-     * @return list<Decision>
+     * @return list<?Decision>
      */
     private function recordedDecisions(): array
     {
         $payloads = $this->fixture->ledgerPayloads();
 
-        return array_values(array_map(static fn (RecordedEvent $recorded): Decision => $payloads->of($recorded, VerdictReceived::class)->decision, iterator_to_array($this->fixture->ledger()->readOfKind(LedgerEventKind::VerdictReceived))));
+        return array_values(array_map(static fn (RecordedEvent $recorded): ?Decision => $payloads->of($recorded, VerdictReceived::class)?->decision, iterator_to_array($this->fixture->ledger()->readOfKind(LedgerEventKind::VerdictReceived))));
     }
 }
