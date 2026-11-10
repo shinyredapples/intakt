@@ -19,13 +19,16 @@ COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
 # The extensions are composer.json's ext-* entries; pdo_mysql and pdo_pgsql only serve the persistence group.
+# The list is assigned before use because set -e ignores a failing command substitution inside a command's arguments.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
-    missing='foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
-    docker-php-ext-install -j"$(nproc)" $(php -r "$missing") pdo_mysql pdo_pgsql; \
-    test -z "$(php -r "$missing")"; \
+    missing='$c = json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true, 512, JSON_THROW_ON_ERROR); if (!is_array($c["require"] ?? null)) { throw new UnexpectedValueException("composer.json has no require object"); } foreach ($c["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
+    exts="$(php -r "$missing")"; \
+    docker-php-ext-install -j"$(nproc)" $exts pdo_mysql pdo_pgsql; \
+    left="$(php -r "$missing")"; \
+    test -z "$left"; \
     php --ini; \
     composer --version; \
     gitleaks version; \
