@@ -353,12 +353,7 @@ final class EntrypointProcessesTest extends TestCase
                 continue;
             }
 
-            $parts = explode("\0", rtrim($commandLine, "\0"));
-
-            // A stand-in is a script, so the kernel starts it as its interpreter followed by its path.
-            if (str_starts_with($parts[1] ?? '', $this->directory)) {
-                array_shift($parts);
-            }
+            $parts = $this->withoutTheInterpreter(explode("\0", rtrim($commandLine, "\0")));
 
             // Left out because the entrypoint's poll sleeps in a child of its own, which it does not supervise.
             if ('sleep' !== basename($parts[0])) {
@@ -367,5 +362,16 @@ final class EntrypointProcessesTest extends TestCase
         }
 
         return $arguments;
+    }
+
+    /**
+     * @param list<string> $parts
+     *
+     * @return list<string>
+     */
+    private function withoutTheInterpreter(array $parts): array
+    {
+        // A stand-in is a script, so the kernel starts it as its interpreter followed by its path.
+        return str_starts_with($parts[1] ?? '', $this->directory) ? array_slice($parts, 1) : $parts;
     }
 }
