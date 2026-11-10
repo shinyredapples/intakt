@@ -17,9 +17,11 @@ final class ComponentStylesTest extends WebTestCase
 {
     private const string GALLERY = __DIR__.'/component-gallery.html.twig';
 
+    private const string STYLES = __DIR__.'/../../../../assets/styles/';
+
     public function testTheLayoutServesTheComponentSheet(): void
     {
-        self::assertStringContainsString('.btn.danger[data-armed]', $this->componentSheet());
+        self::assertStringContainsString('.btn.danger[data-armed]', $this->servedComponentSheet());
     }
 
     public function testTheComponentSheetUsesNoRawColor(): void
@@ -150,13 +152,22 @@ final class ComponentStylesTest extends WebTestCase
      */
     private function sheets(string ...$names): array
     {
+        return array_values(array_map(static function (string $name): string {
+            $sheet = file_get_contents(self::STYLES.$name.'.css');
+            self::assertIsString($sheet, $name);
+
+            return $sheet;
+        }, $names));
+    }
+
+    private function servedComponentSheet(): string
+    {
         $browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         self::getContainer()->set(Ledger::class, new DashboardLedger());
         $page = $browser->request('GET', '/reviews');
         self::assertResponseIsSuccessful();
-        $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
 
-        return array_values(array_map(fn (string $address): string => $this->servedAsset($browser, $address), $addresses));
+        return $this->servedAsset($browser, (string) $page->filter('link[rel="stylesheet"][href*="/components-"]')->attr('href'));
     }
 
     private function servedAsset(KernelBrowser $browser, string $address): string

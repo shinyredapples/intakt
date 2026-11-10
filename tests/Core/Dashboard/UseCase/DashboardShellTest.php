@@ -91,6 +91,9 @@ final class DashboardShellTest extends DashboardPageTestCase
 
         self::assertCount(3, $rail);
         self::assertCount(2, $phone);
+        foreach ($phone as $logo) {
+            self::assertMatchesRegularExpression('#^/assets/images/intakt-lockup#', $logo);
+        }
         foreach ([...$rail, ...$phone] as $logo) {
             self::assertMatchesRegularExpression('#^/assets/images/#', $logo);
             $this->browser->request('GET', $logo);
