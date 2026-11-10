@@ -8,13 +8,17 @@ use Symfony\AI\Agent\Toolbox\Toolbox;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
+use Symfony\AI\Platform\StructuredOutput\Validator\ValidatorSubscriber;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Validator\Constraints\NotBlank;
 
 final class Answer
 {
+    #[NotBlank]
     public string $decision = '';
 }
 
@@ -69,6 +73,7 @@ function decisionOf(array $responses, array $options): string
 {
     $dispatcher = new EventDispatcher();
     $dispatcher->addSubscriber(new PlatformSubscriber());
+    $dispatcher->addSubscriber(new ValidatorSubscriber());
     $platform = Factory::createPlatform('not-a-key', new MockHttpClient($responses), eventDispatcher: $dispatcher);
     $agent = new Agent($platform, 'claude-haiku-4-5', toolbox: new Toolbox([new ReadFile()]));
 
@@ -83,6 +88,8 @@ function decisionOf(array $responses, array $options): string
         $answer = $execution->getResult()->getContent();
 
         return $answer instanceof Answer ? $answer->decision : 'a '.get_debug_type($answer).' instead of an Answer';
+    } catch (ValidationException) {
+        return 'refused by the Validator';
     } catch (Throwable $failure) {
         return $failure::class.': '.$failure->getMessage();
     }
@@ -92,21 +99,24 @@ $thought = ['type' => 'thinking', 'thinking' => 'The change looks fine.', 'signa
 $narration = ['type' => 'text', 'text' => 'Let me read the file first.'];
 $toolCall = ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'read_file', 'input' => ['path' => 'src/Example.php']];
 $verdict = ['type' => 'text', 'text' => '{"decision":"approve"}'];
+$invalid = ['type' => 'text', 'text' => '{"decision":""}'];
 
-// The two controls show the setup returns the typed answer when the model sends nothing but it.
+// Each case holds what the structured output returns and what it should return.
 $cases = [
-    'control: the answer alone' => decisionOf([message('end_turn', $verdict)], []),
-    'control: the answer alone, streamed' => decisionOf([events('end_turn', $verdict)], ['stream' => true]),
-    'A: narration before a tool call' => decisionOf([message('tool_use', $narration, $toolCall), message('end_turn', $verdict)], []),
-    'B: the answer beside thinking' => decisionOf([message('end_turn', $thought, $verdict)], []),
-    'C: streamed narration before a tool call' => decisionOf([events('tool_use', $narration, $toolCall), events('end_turn', $verdict)], ['stream' => true]),
+    'control: the answer alone' => [decisionOf([message('end_turn', $verdict)], []), 'approve'],
+    'control: the answer alone, streamed' => [decisionOf([events('end_turn', $verdict)], ['stream' => true]), 'approve'],
+    'control: an invalid answer alone' => [decisionOf([message('end_turn', $invalid)], []), 'refused by the Validator'],
+    'A: narration before a tool call' => [decisionOf([message('tool_use', $narration, $toolCall), message('end_turn', $verdict)], []), 'approve'],
+    'B: the answer beside thinking' => [decisionOf([message('end_turn', $thought, $verdict)], []), 'approve'],
+    'B: an invalid answer beside thinking' => [decisionOf([message('end_turn', $thought, $invalid)], []), 'refused by the Validator'],
+    'C: streamed narration before a tool call' => [decisionOf([events('tool_use', $narration, $toolCall), events('end_turn', $verdict)], ['stream' => true]), 'approve'],
 ];
 
 $failed = false;
 
-foreach ($cases as $case => $decision) {
-    echo $case, ': ', $decision, PHP_EOL;
-    $failed = $failed || 'approve' !== $decision;
+foreach ($cases as $case => [$actual, $expected]) {
+    echo $case, ': ', $actual, PHP_EOL;
+    $failed = $failed || $expected !== $actual;
 }
 
 if ($failed) {

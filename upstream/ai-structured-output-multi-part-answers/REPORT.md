@@ -7,7 +7,7 @@ Draft, not filed. Versions: `symfony/ai-platform`, `symfony/ai-agent` and `symfo
 An `Agent` with a toolbox calls an Anthropic model with `response_format` set to a class; the structured-output `PlatformSubscriber` converts every round of the agent's loop. Anthropic answers in several content blocks when the model thinks or says something before a tool call, and the bridge's `ResultConverter` returns them as a `MultiPartResult` (non-streamed) or one run of deltas (streamed). Three shapes of a real conversation then fail:
 
 - **A, narration before a tool call (non-streamed):** the round is `[TextResult "Let me read the file first.", ToolCallResult]`. `StructuredOutput\ResultConverter::convertMultiPart()` converts the first `TextResult` it finds, here the narration, and throws, so the agent never runs the tool.
-- **B, the answer beside thinking (non-streamed):** the final round is `[ThinkingResult, TextResult "{...}"]`. The conversion makes it `[ThinkingResult, ObjectResult]`, but the result stays a `MultiPartResult`, whose content is the list of parts: the agent's result content is an `array`, and `DeferredResult::asObject()` on the same platform call throws `UnexpectedResultTypeException`, since it accepts only an `ObjectResult`. `ValidatorResultConverter` also checks only an `ObjectResult`, so the object among the parts is never validated.
+- **B, the answer beside thinking (non-streamed):** the final round is `[ThinkingResult, TextResult "{...}"]`. The conversion makes it `[ThinkingResult, ObjectResult]`, but the result stays a `MultiPartResult`, whose content is the list of parts: the agent's result content is an `array`, not the object. `ValidatorResultConverter` checks only an `ObjectResult`, so the object among the parts is never validated: an answer with an empty `decision` that the `#[NotBlank]` constraint refuses when it comes alone passes when it comes beside thinking. (A plain platform call returns the same `MultiPartResult`, and `DeferredResult::asObject()` finds the object among its parts, but without validation.)
 - **C, streamed narration before a tool call:** `PartialObjectStreamListener` buffers every `TextDelta` of the round, also the narration of a round that ends in a tool call, and its `onComplete()` throws while decoding the narration.
 
 `reproduce.php` replays recorded Messages API answers through `MockHttpClient` (no network, no key) and prints:
@@ -15,8 +15,10 @@ An `Agent` with a toolbox calls an Anthropic model with `response_format` set to
 ```
 control: the answer alone: approve
 control: the answer alone, streamed: approve
+control: an invalid answer alone: refused by the Validator
 A: narration before a tool call: Symfony\AI\Platform\Exception\RuntimeException: Cannot deserialize the content into the "Answer" class.
 B: the answer beside thinking: a array instead of an Answer
+B: an invalid answer beside thinking: a array instead of an Answer
 C: streamed narration before a tool call: Symfony\AI\Platform\Exception\RuntimeException: Cannot json decode the streamed content.
 Structured output does not return the typed answer of a model that thinks or calls tools
 ```
@@ -24,14 +26,14 @@ Structured output does not return the typed answer of a model that thinks or cal
 ## Expected
 
 - A: a round that asks for tools is not the answer: the structured output leaves its text alone, and the agent runs the tool and converts the next round.
-- B: the typed object is reachable as the answer (the agent's result content and `asObject()` return it, with the thinking still kept for the replay), and the Validator subscriber checks it.
+- B: the typed object is reachable as the answer (the agent's result content returns it, with the thinking still kept for the replay), and the Validator subscriber checks it, so the invalid answer is refused as it is when alone.
 - C: the narration of a streamed round that ends in a tool call is not decoded as the answer.
 
 The controls show the same setup returns the typed object when the model sends nothing but the answer.
 
 ## Possible fix
 
-In `StructuredOutput\ResultConverter`, return a `MultiPartResult` that holds a `ToolCallResult` unconverted, and let `DeferredResult::asObject()` (and `ValidatorResultConverter`) find the one `ObjectResult` among the parts. In `PartialObjectStreamListener`, skip the final decoding when the stream yielded a `ToolCallComplete`. Which text is the answer when a final round holds two text blocks is a design question for upstream; the Anthropic bridge streams two text blocks as one run of `TextDelta`s, so a streamed listener cannot tell them apart.
+In `StructuredOutput\ResultConverter`, return a `MultiPartResult` that holds a `ToolCallResult` unconverted, and let `ValidatorResultConverter` validate the one `ObjectResult` among the parts (and the agent's result content return it). In `PartialObjectStreamListener`, skip the final decoding when the stream yielded a `ToolCallComplete`. Which text is the answer when a final round holds two text blocks is a design question for upstream; the Anthropic bridge streams two text blocks as one run of `TextDelta`s, so a streamed listener cannot tell them apart.
 
 ## Effect in Intakt
 
