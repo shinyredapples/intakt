@@ -51,6 +51,7 @@ A reviewer reads the change through its own **read-only review server**, not thr
 - A **review credential**, made for one round, decides which round the reviewer sees. What the reviewer asks for does not: a request that names another round still gets only its own.
 - A request **without a valid credential is refused**, the owner's token included.
 - The credential **stops working once the round is judged**, and the files of that round are removed.
+- Every answer the server gives is **marked as untrusted data**, so text in your files that tries to give the reviewer orders reads as material to examine, also for a reviewer whose tool reads the server directly.
 
 ```mermaid
 flowchart LR
