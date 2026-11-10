@@ -581,3 +581,8 @@ Two things to know when you set up Hugging Face yourself, for example as `openai
 - Name the router provider after the model, as the seeded models do (`:deepinfra`, `:novita`). Every reviewer call uses tools together with structured output, and some router providers refuse that combination: Groq and Cerebras did. DeepInfra and Baseten (for `moonshotai/Kimi-K3`), Novita (for `openai/gpt-oss-120b`) and DeepInfra (for `deepseek-ai/DeepSeek-V4.1-Flash`) accepted it. The router's default provider may be one that refuses, and the error then says only "Bad Request".
 
 Project memory still needs an OpenAI key: a Hugging Face token alone gives no embeddings.
+
+## Keeping a copy of a project's repository
+
+`php bin/console intakt:mirror:update <project> <remote>` keeps one bare copy (a mirror) of a project's repository in `var/mirrors/<project>.git`. The first run copies the whole repository from `<remote>` (a path, a `file://` or an `https://` address); later runs fetch what is new and drop branches the remote deleted. The project name must start with a letter or digit and may hold letters, digits, `.`, `_` and `-`. If git cannot reach the remote, Intakt waits 10 seconds and tries again, waits 30 more seconds and tries a last time, logging each wait; then it prints git's message and exits with 1. The mirror holds nothing that is not on the remote: delete it and the next run copies it again.
+
