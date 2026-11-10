@@ -33,6 +33,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Hub;
 use Symfony\Component\Mercure\Jwt\Grant;
 use Symfony\Component\Mercure\Jwt\LcobucciFactory;
@@ -149,7 +151,7 @@ final class ShellHubTest extends TestCase
         $projects = new FilterProjects(new LedgerReviews($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))));
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
 
-        new PublishProjectFilter($projects, $twig, $this->updates(), $this->logger)(new RoundOpened('r1', 'alpha'));
+        new PublishProjectFilter($projects, $twig, $this->updates(), new LockFactory(new InMemoryStore()), $this->logger)(new RoundOpened('r1', 'alpha'));
 
         $received = '';
 

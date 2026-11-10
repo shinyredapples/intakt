@@ -31,6 +31,8 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Hub;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Uid\Uuid;
@@ -138,15 +140,65 @@ final class PublishProjectFilterTest extends TestCase
         self::assertSame([['warning', 'The project filter was not published.', 'r1', 'alpha', RuntimeException::class]], $this->loggedWarnings());
     }
 
-    private function publisher(MockHttpClient $hub, Ledger $ledger): PublishProjectFilter
+    // Forced order: the second round's worker runs while the first one holds a read from before the second round committed.
+    public function testAFilterReadBeforeAnotherRoundOpenedIsNeverTheLastOnePublished(): void
+    {
+        $publisher = null;
+        $reads = 0;
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturnCallback(function () use (&$publisher, &$reads): RecordedEvents {
+            if (1 === ++$reads) {
+                assert($publisher instanceof PublishProjectFilter);
+                $publisher(new RoundOpened('r2', 'beta'));
+
+                return $this->eventsOf('alpha');
+            }
+
+            return $this->eventsOf('alpha', 'beta');
+        });
+        $publisher = $this->publisher($this->hubThatAccepts(), $ledger);
+
+        $publisher(new RoundOpened('r1', 'alpha'));
+
+        self::assertSame([['', 'All projects'], ['alpha', 'alpha'], ['beta', 'beta']], $this->optionsOf($this->postedStream(count($this->posted) - 1)));
+    }
+
+    public function testAWorkerThatFindsThePublicationTakenLeavesItToTheWorkerHoldingIt(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $held = $locks->createLock('dashboard-project-filter');
+        $held->acquire();
+
+        $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha'), $locks)(new RoundOpened('r1', 'alpha'));
+
+        self::assertSame([], $this->posted);
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
+    public function testAWorkerWhoseFilterIsStillCurrentAfterItLetsGoPublishesItOnce(): void
+    {
+        $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha', 'beta'))(new RoundOpened('r2', 'beta'));
+
+        self::assertCount(1, $this->posted);
+    }
+
+    private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
     {
         $projects = new FilterProjects(new LedgerReviews($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))));
         $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
 
-        return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $this->log);
+        return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);
     }
 
     private function ledgerOf(string ...$projects): Ledger
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn($this->eventsOf(...$projects));
+
+        return $ledger;
+    }
+
+    private function eventsOf(string ...$projects): RecordedEvents
     {
         $events = [];
 
@@ -155,10 +207,7 @@ final class PublishProjectFilterTest extends TestCase
             $events[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, $payload), new DateTimeImmutable('2026-11-10T12:00:00+00:00'));
         }
 
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willReturn(new RecordedEvents($events));
-
-        return $ledger;
+        return new RecordedEvents($events);
     }
 
     private function hubThatAccepts(): MockHttpClient
@@ -185,9 +234,9 @@ final class PublishProjectFilterTest extends TestCase
         }, $this->log->cleanLogs()));
     }
 
-    private function postedStream(): string
+    private function postedStream(int $post = 0): string
     {
-        $data = $this->posted[0]['data'] ?? null;
+        $data = $this->posted[$post]['data'] ?? null;
 
         return is_string($data) ? $data : '';
     }

@@ -13,11 +13,17 @@ use Intakt\Core\Review\Contract\RoundOpened;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DomCrawler\Crawler;
-use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Twig\Environment;
 
 #[CoversClass(PublishProjectFilter::class)]
@@ -32,14 +38,26 @@ final class ProjectFilterLiveUpdatesTest extends DashboardPageTestCase
      */
     private array $published = [];
 
+    public function testTheApplicationQueuesAnOpenedRoundForTheWorkers(): void
+    {
+        $commands = self::getContainer()->get('command.bus');
+        $queue = self::getContainer()->get('messenger.transport.async');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+        self::assertInstanceOf(InMemoryTransport::class, $queue);
+
+        $commands->dispatch(new RoundOpened('round-1', 'alpha'));
+
+        self::assertEquals([new RoundOpened('round-1', 'alpha')], array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()));
+    }
+
     public function testTheApplicationPublishesTheProjectFilterOnEveryOpenedRound(): void
     {
-        $events = self::getContainer()->get('event_dispatcher');
-        self::assertInstanceOf(EventDispatcherInterface::class, $events);
+        self::assertNotNull(self::$kernel);
+        $tester = new CommandTester(new Application(self::$kernel)->find('debug:messenger'));
 
-        $listeners = array_map(static fn (callable $listener): string => is_array($listener) && is_object($listener[0]) ? $listener[0]::class : get_debug_type($listener), $events->getListeners(RoundOpened::class));
+        $tester->execute(['bus' => 'command.bus']);
 
-        self::assertContains(PublishProjectFilter::class, $listeners);
+        self::assertMatchesRegularExpression('#'.preg_quote(RoundOpened::class, '#').'\s+handled by '.preg_quote(PublishProjectFilter::class, '#').'\b#', $tester->getDisplay());
     }
 
     public function testThePublishedFilterIsAPrivateUpdateOnTheShellTopic(): void
@@ -83,7 +101,7 @@ final class ProjectFilterLiveUpdatesTest extends DashboardPageTestCase
             return 'id';
         });
 
-        return new PublishProjectFilter($projects, $twig, new MercureLiveUpdates($hub, new NullLogger()), new NullLogger());
+        return new PublishProjectFilter($projects, $twig, new MercureLiveUpdates($hub, new NullLogger()), new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     /**
