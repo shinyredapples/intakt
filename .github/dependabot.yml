@@ -21,6 +21,8 @@ updates:
     cooldown:
       default-days: 3
     groups:
+      gitleaks:
+        patterns: ['ghcr.io/gitleaks/gitleaks']
       images:
         patterns: ['*']
         exclude-patterns: ['ghcr.io/gitleaks/gitleaks']
