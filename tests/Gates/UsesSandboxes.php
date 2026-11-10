@@ -11,6 +11,19 @@ trait UsesSandboxes
     /** @var list<Sandbox> */
     private array $sandboxes = [];
 
+    // The class owns one sandbox for its phpstan runs, because dumping this repository's test container takes seconds, no fixture changes it, and the container is baked into the folder it was dumped in. Created fresh before the class, removed after it.
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        Sandbox::ownedBy(static::class)->remove();
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        Sandbox::ownedBy(static::class)->remove();
+        parent::tearDownAfterClass();
+    }
+
     final protected function sandboxWith(string $fixture): Sandbox
     {
         return $this->keep(Sandbox::withFixture($fixture));
@@ -40,11 +53,13 @@ trait UsesSandboxes
 
     private function sandboxFor(string $gate, string $fixture): Sandbox
     {
-        $sandbox = $this->sandboxWith($fixture);
-
-        if ('phpstan' === $gate) {
-            $sandbox->borrowKernel();
+        if ('phpstan' !== $gate) {
+            return $this->sandboxWith($fixture);
         }
+
+        $sandbox = Sandbox::ownedBy(static::class);
+        $sandbox->replaceFixtureWith($fixture);
+        $sandbox->borrowKernel();
 
         return $sandbox;
     }

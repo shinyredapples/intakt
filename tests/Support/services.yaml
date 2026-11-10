@@ -16,3 +16,6 @@ services:
         class: Symfony\AI\AiBundle\Profiler\DataCollector
         synthetic: true
         public: true
+
+    Intakt\Tests\Support\UnsyncedSqlite:
+        tags: ['doctrine.middleware']
