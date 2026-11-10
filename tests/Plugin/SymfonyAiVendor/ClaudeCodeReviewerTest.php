@@ -13,6 +13,8 @@ use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
+use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
+use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -65,11 +67,13 @@ use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RuntimeException;
+use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
@@ -82,6 +86,8 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(SymfonyAiVendor::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewServerAccess::class)]
+#[UsesClass(IsolatedClaudeCodeCli::class)]
+#[UsesClass(RemovedAfterRun::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(ProjectModelCatalog::class)]
@@ -118,6 +124,16 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
 
+    // Stands in for the claude binary: records its arguments and the configuration file they name, then replays a recorded stream.
+    private const string SCRIPTED_CLI = <<<'PHP_WRAP'
+    #!/usr/bin/env php
+    <?php
+    $at = array_search('--mcp-config', $argv, true);
+    file_put_contents(%s, json_encode(['arguments' => array_slice($argv, 1), 'file' => $argv[$at + 1], 'configuration' => file_get_contents($argv[$at + 1])]));
+    readfile(%s);
+
+    PHP_WRAP;
+
     public function testACompleteRecordedStreamYieldsATypedVerdict(): void
     {
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('complete'))->review('alpha', Tier::Strong, $this->request())->verdict;
@@ -151,34 +167,38 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertStringContainsString('"json_schema"', $instruction);
     }
 
-    public function testTheCliIsStartedWithOnlyTheRoundsReviewServerAndItsBearer(): void
+    public function testTheScriptedCliIsStartedWithOnlyTheReviewServerItsReadOnlyToolsAndEveryBuiltInDenied(): void
     {
-        $cli = RecordedClaudeCodeCli::replaying('complete');
+        $run = $this->scriptedRun();
 
-        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
-
-        $config = json_decode($this->stringOption($cli, 'mcp_config'), true, flags: JSON_THROW_ON_ERROR);
-        self::assertSame(['mcpServers' => ['intakt-review' => ['type' => 'http', 'url' => 'http://localhost:7780/mcp/review', 'headers' => ['Authorization' => 'Bearer round-credential']]]], $config);
-        self::assertTrue($cli->options['strict_mcp_config']);
+        // The prompts are long texts of their own tests; only their flags' places are left out here.
+        $arguments = $run['arguments'];
+        foreach (['--system-prompt', '--append-system-prompt'] as $prompt) {
+            $at = array_search($prompt, $arguments, true);
+            self::assertIsInt($at);
+            array_splice($arguments, $at, 2);
+        }
+        self::assertSame([
+            '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
+            '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence',
+            '--allowedTools', 'mcp__intakt-review__read_file', '--allowedTools', 'mcp__intakt-review__list_directory', '--allowedTools', 'mcp__intakt-review__search_files',
+            '--disallowed-tools', 'Bash', '--disallowed-tools', 'Read', '--disallowed-tools', 'Edit', '--disallowed-tools', 'MultiEdit', '--disallowed-tools', 'Write', '--disallowed-tools', 'NotebookEdit', '--disallowed-tools', 'Glob', '--disallowed-tools', 'Grep', '--disallowed-tools', 'LS', '--disallowed-tools', 'WebFetch', '--disallowed-tools', 'WebSearch', '--disallowed-tools', 'Task', '--disallowed-tools', 'TodoWrite',
+            '--mcp-config', $run['file'], '--model', 'sonnet', '-p', $arguments[array_key_last($arguments)],
+        ], $arguments);
     }
 
-    public function testTheCliIsAllowedExactlyTheReviewServersReadOnlyTools(): void
+    public function testTheScriptedCliReadsOnlyTheRoundsReviewServerAndItsBearerFromItsConfigurationFile(): void
     {
-        $cli = RecordedClaudeCodeCli::replaying('complete');
+        $run = $this->scriptedRun();
 
-        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
-
-        self::assertSame(['mcp__intakt-review__read_file', 'mcp__intakt-review__list_directory', 'mcp__intakt-review__search_files'], $cli->options['allowed_tools']);
+        self::assertSame(['mcpServers' => ['intakt-review' => ['type' => 'http', 'url' => 'http://localhost:7780/mcp/review', 'headers' => ['Authorization' => 'Bearer round-credential']]]], json_decode($run['configuration'], true, flags: JSON_THROW_ON_ERROR));
     }
 
-    public function testTheCliKeepsEveryBuiltInToolDeniedWhenItIsGivenTheReviewServer(): void
+    public function testTheRoundsBearerIsNeverOnTheScriptedCliCommandLine(): void
     {
-        $cli = RecordedClaudeCodeCli::replaying('complete');
+        $run = $this->scriptedRun();
 
-        $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
-
-        self::assertSame([], $cli->options['tools']);
-        self::assertSame(['Bash', 'Read', 'Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'], $cli->options['disallowed_tools']);
+        self::assertStringNotContainsString('round-credential', implode(' ', $run['arguments']));
     }
 
     public function testTheCliIsToldItsToolsAreAvailableWhenItIsGivenTheReviewServer(): void
@@ -306,7 +326,32 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
-    private function claudeCodePlatform(RecordedClaudeCodeCli $cli): PlatformInterface
+    /**
+     * @return array{arguments: list<string>, file: string, configuration: string}
+     */
+    private function scriptedRun(): array
+    {
+        $root = sys_get_temp_dir().'/intakt-claude-code-'.bin2hex(random_bytes(6));
+        $files = new Filesystem();
+        $files->dumpFile($root.'/bin/claude', sprintf(self::SCRIPTED_CLI, var_export($root.'/run.json', true), var_export(__DIR__.'/Fixtures/claude-code/complete.jsonl', true)));
+        $files->chmod($root.'/bin/claude', 0o700);
+        $path = (string) getenv('PATH');
+        putenv('PATH='.$root.'/bin:'.$path);
+
+        try {
+            $this->vendor(new IsolatedClaudeCodeCli($root.'/home', 'login'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
+
+            /** @var array{arguments: list<string>, file: string, configuration: string} $run */
+            $run = json_decode($files->readFile($root.'/run.json'), true, flags: JSON_THROW_ON_ERROR);
+
+            return $run;
+        } finally {
+            putenv('PATH='.$path);
+            $files->remove($root);
+        }
+    }
+
+    private function claudeCodePlatform(ModelClientInterface $cli): PlatformInterface
     {
         $models = new ProjectModelCatalog(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]])->models(Provider::ClaudeCode);
 
@@ -329,7 +374,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return $servers;
     }
 
-    private function vendor(RecordedClaudeCodeCli $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
+    private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
         $platform = $this->claudeCodePlatform($cli);

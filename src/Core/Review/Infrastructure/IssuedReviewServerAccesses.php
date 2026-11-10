@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
+use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ListDirectoryTool;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReadFileTool;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
@@ -27,7 +28,7 @@ final readonly class IssuedReviewServerAccesses implements ReviewServerAccesses
      */
     public function __construct(
         private ReviewCredential $credential,
-        #[Autowire('%intakt.review_mcp_url%')]
+        #[Autowire(param: ReviewServices::MCP_URL)]
         private string $url,
     ) {
     }

@@ -1,6 +1,6 @@
 parameters:
-    # Spelled once, for the reviewers' configured connection below and for the subscription CLI's configuration.
-    intakt.review_mcp_url: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
+    # Spelled once, for the reviewers' configured connection below and for the subscription CLI's configuration; YAML cannot put a constant inside the reference below.
+    !php/const Intakt\Core\Review\Contract\ReviewServices::MCP_URL: '%env(REVIEW_MCP_BASE_URL)%/mcp/review'
 
 mcp:
     servers:
@@ -35,6 +35,6 @@ mcp:
             servers:
                 review:
                     transport: http
-                    url: '%intakt.review_mcp_url%'
+                    url: '%intakt.review.mcp_url%'
                     # Adds the bearer credential of the round under review to every request, because headers here are fixed.
                     http_client: Intakt\Core\Review\Infrastructure\ReviewServerHttpClient

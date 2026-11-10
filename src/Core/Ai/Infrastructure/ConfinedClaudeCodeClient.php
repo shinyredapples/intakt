@@ -64,9 +64,10 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
             return [...self::CONFINEMENT, 'append_system_prompt' => self::NO_TOOLS.$schema];
         }
 
+        // Passed on whole, because the CLI's folder, where its configuration file is written, belongs to the client inside.
         return [
             ...self::CONFINEMENT,
-            'mcp_config' => json_encode(['mcpServers' => [$access->name => ['type' => 'http', 'url' => $access->url, 'headers' => ['Authorization' => 'Bearer '.$access->bearer]]]], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES),
+            ReviewServerAccess::OPTION => $access,
             'allowed_tools' => array_map(static fn (string $tool): string => sprintf('mcp__%s__%s', $access->name, $tool), $access->tools),
             'disallowed_tools' => self::BUILT_IN_TOOLS,
             'append_system_prompt' => sprintf(self::WITH_TOOLS, $access->name).$schema,
