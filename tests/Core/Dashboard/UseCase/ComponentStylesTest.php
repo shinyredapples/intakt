@@ -11,8 +11,8 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
-#[CoversNothing]
 // Booting a kernel only where Twig renders or the asset server answers, because the CSS rules read as text need no ledger or page of their own.
+#[CoversNothing]
 final class ComponentStylesTest extends WebTestCase
 {
     private const string GALLERY = __DIR__.'/component-gallery.html.twig';
