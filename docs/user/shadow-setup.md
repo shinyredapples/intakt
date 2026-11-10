@@ -21,7 +21,7 @@ Put the secrets in the `intakt.env` file you pass with `--env-file`. Never commi
 
 - **Claude subscription.** Create a token with `claude setup-token` and set `CLAUDE_CODE_OAUTH_TOKEN` (and `CLAUDE_CODE_OAUTH_TOKEN_<ACCOUNT>` for each further account listed under `accounts:`). Map the tiers that use it to `provider: claude_code` ([A reviewer on a Claude subscription](README.md#a-reviewer-on-a-claude-subscription)). The `claude` tool must be installed where Intakt runs.
 - **GitHub App.** Set `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PRIVATE_KEY` so the watcher can read pull requests and CI ([Intakt's GitHub App](README.md#intakts-github-app)). Shadow mode reads from GitHub but never writes to it.
-- **Codex subscription.** Log in with `codex` once, copy its `auth.json` to `var/codex/logins/<account>/auth.json` in the data volume, make it readable by Intakt's user only, and pin `codex: { model: ..., effort: ... }` ([A Codex subscription login](README.md#a-codex-subscription-login)).
+- **Codex subscription.** Intakt reads Codex logins from `/app/var/codex`, which is outside the data volume `/app/var/data`, so give it a mount of its own that survives a new container. Log in with `codex` once on the host, copy its `auth.json` to `intakt-codex/logins/<account>/auth.json` in a folder of your choice, and hand the folder to the container's user (id 10001), which also writes each call's copy there: `chown -R 10001:10001 intakt-codex`, `chmod 700 intakt-codex` and `chmod 600 intakt-codex/logins/<account>/auth.json`. Add `-v "$PWD/intakt-codex:/app/var/codex"` to the `docker run` command, and pin `codex: { model: ..., effort: ... }` ([A Codex subscription login](README.md#a-codex-subscription-login)).
 
 ## 4. Set the shadow ceiling
 
@@ -40,7 +40,7 @@ Nothing records readings of the windows yet, so until it does the shadow ceiling
 
 1. **The install answers.** `docker exec intakt php bin/console intakt:server:status` prints the worker threads and `hub: healthy`, and `docker inspect --format '{{.State.Health.Status}}' intakt` prints `healthy`. Open `http://localhost:7781/projects` on the host.
 2. **Both projects list their panels.** For each project, `docker exec intakt php bin/console intakt:review:panel <project>` prints the quorum and one line per reviewer, and `intakt:ai:tiers` shows the provider and model of every tier. Neither calls a model.
-3. **A tick runs.** `docker exec intakt php bin/console messenger:consume scheduler_watcher --limit=1` runs one tick of the watcher. The scheduler ticks once a minute, so the command waits for the next minute's tick before it runs it and exits. The tick completes without an error: it reads each project's open pull requests and CI from GitHub, and `docker exec intakt php bin/console intakt:ledger:events` then shows `head_pending` for a head whose CI is still running, `head_red` for a head whose CI failed, or `round_queued` for a head with green CI whose round started.
+3. **A tick runs.** `docker exec intakt php bin/console messenger:consume scheduler_watcher --time-limit=90 -vv` runs the watcher for 90 seconds. The schedule holds one message per project, each due once a minute, so the command waits for the next minute's tick and handles both projects' messages before it stops (`--limit=1` would stop after the first project). Each message is logged as handled, without an error: it reads that project's open pull requests and CI from GitHub, and `docker exec intakt php bin/console intakt:ledger:events` then shows `head_pending` for a head whose CI is still running, `head_red` for a head whose CI failed, or `round_queued` for a head with green CI whose round started.
 
 ## 6. Read the shadow report
 
@@ -49,4 +49,3 @@ Nothing records readings of the windows yet, so until it does the shadow ceiling
 ## Not built yet
 
 - **Home Assistant notices.** The notice contract exists but no notifier is built, so the install sends no notice to Home Assistant. The Home Assistant notifier, pushing notices for owner actions only, arrives with #349. You will configure it alongside the project settings of step 2 and the secrets of step 3; no setting for it exists yet.
-- **Running the panel on every new head** of a shadow project is planned.
