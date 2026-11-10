@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
@@ -40,6 +41,7 @@ use RuntimeException;
 #[UsesClass(RoundState::class)]
 #[UsesClass(ReviewerState::class)]
 #[UsesClass(ReviewerTransition::class)]
+#[UsesClass(RoundOpened::class)]
 final class RunReviewRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -69,6 +71,39 @@ final class RunReviewRoundTest extends KernelTestCase
 
         self::assertSame([], $this->fixture->storedRounds());
         self::assertSame([], $this->fixture->ledgerKinds());
+    }
+
+    public function testAnOpenedRoundIsAnnouncedWithItsProjectAfterItsStartIsCommittedToTheLedger(): void
+    {
+        $connection = self::getContainer()->get('doctrine.dbal.default_connection');
+        $announced = [];
+        $this->fixture->events->addListener(RoundOpened::class, function (RoundOpened $opened) use (&$announced, $connection): void {
+            $announced[] = [$opened, $this->fixture->ledgerKinds(), $connection->isTransactionActive()];
+        });
+
+        $round = $this->fixture->start(2);
+
+        self::assertCount(1, $announced);
+        [$opened, $kinds, $inTransaction] = $announced[0];
+        self::assertSame([$round->id()->toRfc4122(), $round->project()], [$opened->round, $opened->project]);
+        self::assertSame([LedgerEventKind::ReviewStarted], $kinds);
+        self::assertFalse($inTransaction);
+    }
+
+    public function testARoundWhoseMessagesCannotAllBeQueuedIsNotAnnounced(): void
+    {
+        $announced = [];
+        $this->fixture->events->addListener(RoundOpened::class, static function (RoundOpened $opened) use (&$announced): void {
+            $announced[] = $opened;
+        });
+
+        try {
+            $this->fixture->startOn(new RefusingQueue(new RecordingBus()), 3);
+            self::fail('The refused dispatch was swallowed.');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], $announced);
     }
 
     /**
