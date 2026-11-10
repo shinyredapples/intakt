@@ -14,18 +14,15 @@ COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 # zizmor's release archive, pinned by version and checksum; Dependabot does not update it. x86_64 only, as the runners.
 ADD --checksum=sha256:bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b \
     https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-x86_64-unknown-linux-gnu.tar.gz /tmp/zizmor.tar.gz
-COPY composer.json /usr/local/share/intakt/
-COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
-# The extensions are composer.json's ext-* entries; pdo_mysql and pdo_pgsql only serve the persistence group.
+# A fixed list, before composer.json is copied, so a composer.json edit reuses this layer: the ext-* entries of
+# composer.json the base lacks, plus pdo_mysql and pdo_pgsql for the persistence group. The last RUN checks the list.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
-    missing='foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
-    docker-php-ext-install -j"$(nproc)" $(php -r "$missing") pdo_mysql pdo_pgsql; \
-    test -z "$(php -r "$missing")"; \
+    docker-php-ext-install -j"$(nproc)" intl pcntl zip pdo_mysql pdo_pgsql; \
     php --ini; \
     composer --version; \
     gitleaks version; \
@@ -38,6 +35,10 @@ RUN set -eu; \
     php -r 'foreach (["pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
     useradd --uid 1000 --user-group --create-home ci; \
     chown -R ci:ci /config/caddy /data/caddy
+
+COPY composer.json /usr/local/share/intakt/
+COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
+RUN php -r 'foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { if (str_starts_with($p, "ext-") && !extension_loaded(substr($p, 4))) { fwrite(STDERR, "composer.json requires $p, which .github/ci/Dockerfile does not install\n"); $f = 1; } } exit($f ?? 0);'
 
 USER 1000:1000
 WORKDIR /home/ci
