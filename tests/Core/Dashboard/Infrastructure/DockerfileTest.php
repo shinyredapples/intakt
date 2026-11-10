@@ -51,7 +51,7 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+install-php-extensions \$exts opcache; \\\\$/m', $this->dockerfile());
     }
 
-    // A command substitution inside a command's arguments hides its exit status from set -e; an assignment does not.
+    // An assignment, because set -e ignores a failing command substitution inside a command's arguments.
     public function testEachImageListsTheMissingExtensionsInAnAssignmentSoAFailingScriptAbortsTheBuild(): void
     {
         foreach (['Dockerfile' => 'install-php-extensions', '.github/ci/Dockerfile' => 'docker-php-ext-install -j"$(nproc)"'] as $file => $install) {
@@ -188,7 +188,7 @@ final class DockerfileTest extends TestCase
         return $contents;
     }
 
-    private function runMissingScript(string $composer): ?int
+    private function runMissingScript(string $composer): int
     {
         return $this->missingScriptProcess($composer)->run();
     }
