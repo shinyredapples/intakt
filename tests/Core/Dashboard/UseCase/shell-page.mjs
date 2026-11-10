@@ -109,9 +109,11 @@ export class Browser {
         const sheet = this.more ? Object.assign(new FakeElement(page), { hidden: true }) : null;
         const sheetLink = new FakeElement(page);
         const phoneWidth = Object.assign(new FakeElement(page), { matches: this.phone });
+        const documentListeners = new Map();
         const document = {
             documentElement: root,
             body,
+            addEventListener: (type, listener) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]),
             querySelector: (selector) => ({ '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet })[selector] ?? null,
             querySelectorAll: (selector) => ({ '[data-theme-toggle]': themeToggles, '[data-project]': rows })[selector] ?? [],
         };
@@ -157,6 +159,22 @@ export class Browser {
             moreHasFocus: () => page.focused === more,
             leave: () => {
                 projectFilter.isConnected = false;
+            },
+            // What Turbo does with a stream: tell the document, then run the render, which for an update replaces the select's options and leaves the value at the first one.
+            pushStream: (target, projects) => {
+                const stream = new FakeElement(page);
+                stream.setAttribute('target', target);
+                const event = {
+                    target: stream,
+                    detail: {
+                        render: () => {
+                            projectFilter.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))];
+                            projectFilter.value = '';
+                        },
+                    },
+                };
+                (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
+                event.detail.render(stream);
             },
             resize: (phone) => {
                 phoneWidth.matches = phone;

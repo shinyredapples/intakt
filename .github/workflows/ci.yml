@@ -16,6 +16,9 @@ permissions:
 # A self-hosted runner must be ephemeral (a clean machine state for every job, registered --ephemeral) with no network
 # path to the owner's other machines: a same-repository pull request runs its own workflow and scripts there with Docker
 # access, and only a clean state keeps that from reaching a later job. A persistent self-hosted runner is not supported.
+# Set the repository variable CI_DISPOSABLE_RUNNER to true when CI_RUNS_ON names a service that runs every job on a new VM
+# it discards afterwards (a hosted runner service): the jobs then prepare the host as on GitHub's runners. The optional
+# secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (read-only) log Docker in to Docker Hub before the jobs pull from it.
 jobs:
   # bin/check runs in the CI image (.github/ci/Dockerfile: the PHP image pinned by digest plus the tools bin/check needs),
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
@@ -28,17 +31,23 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Ubuntu 24.04 restricts user namespaces for unprivileged users by default. Only for GitHub-hosted runners, which
-      # are discarded after the job: never on a self-hosted runner.
+      # Ubuntu 24.04 restricts user namespaces for unprivileged users by default. Only on runners discarded after the job
+      # (GitHub-hosted, or CI_DISPOSABLE_RUNNER): never on another self-hosted runner.
       - name: Allow unprivileged user namespaces
-        if: runner.environment == 'github-hosted'
+        if: runner.environment == 'github-hosted' || vars.CI_DISPOSABLE_RUNNER == 'true'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: Build the CI image
-        run: .github/ci/build-image.sh
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
+      - name: Build or restore the CI image
+        uses: ./.github/actions/ci-image
       # The gate tests run processes in a new user namespace and mount a fresh /proc there. The seccomp profile is
       # Docker's default plus unshare (only together with a new user namespace) and mount. systempaths=unconfined is
       # needed because the kernel refuses a new /proc in a user namespace while Docker's masks cover parts of the old
-      # one. Docker's AppArmor profile forbids mount, so it is lifted where the host has AppArmor (GitHub-hosted).
+      # one. Docker's AppArmor profile forbids mount, so it is lifted on the discarded runners (GitHub-hosted, or
+      # CI_DISPOSABLE_RUNNER), whose hosts have AppArmor.
       # On a pull request the change is read against the target branch, and GitHub's synthetic test merge commit is
       # exempt from the commit-subject gate.
       - name: Run the gates
@@ -47,6 +56,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           MERGE_SHA: ${{ github.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DISPOSABLE_RUNNER: ${{ vars.CI_DISPOSABLE_RUNNER }}
         run: |
           set -eu
           if [ "$EVENT" = pull_request ]; then
@@ -55,7 +65,7 @@ jobs:
             set -- --base=origin/main
           fi
           apparmor=
-          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ] || [ "$DISPOSABLE_RUNNER" = true ]; then apparmor='--security-opt apparmor=unconfined'; fi
           # The home directory (the working copy, vendor/) and /tmp are tmpfs: the copy and the tests' files never touch the
           # runner's disk. Composer's cache (COMPOSER_CACHE_DIR) is the runner's intakt-composer-cache volume, mounted read-only
           # (COMPOSER_CACHE_READ_ONLY) so main's own jobs never write to it by accident; a pull request runs its own ci.yml and
@@ -130,7 +140,9 @@ jobs:
   # network the runner creates for the job's services, and reach each database by its service name; no port is published
   # and there is no job container, so no Docker socket inside. The databases take no password (throwaway, never published).
   # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database services instead:
-  # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
+  # when the change does not touch persistence, no service starts (an empty image) and every step is skipped.
+  # The services take no Docker Hub credentials: an empty secret there is a template error that fails the job, so
+  # their images pull anonymously; the steps log in like the other jobs. A changes
   # job that fails skips the engines and fails the run. Every engine runs to its end even when another fails, so the run
   # reports every engine, each in its own log group.
   persistence:
@@ -179,10 +191,16 @@ jobs:
         if: env.ENGINES == 'true'
         with:
           persist-credentials: false
-      - name: Build the CI image
+      - name: Log in to Docker Hub
+        if: env.ENGINES == 'true'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
+      - name: Build or restore the CI image
         id: image
         if: env.ENGINES == 'true'
-        run: .github/ci/build-image.sh
+        uses: ./.github/actions/ci-image
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
       # The three engines run at once (.github/ci/persistence-engines.sh); the step fails when any fails.
       - name: Run the persistence group on each database image
@@ -208,6 +226,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       - name: Build the app image
         run: docker build --tag intakt:ci .
       - name: Smoke-test the app image
