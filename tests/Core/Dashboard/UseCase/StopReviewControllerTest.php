@@ -54,6 +54,18 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         self::assertNotSame('', $crawler->filter('form.stop-reviewer input[name=_token]')->attr('value'));
     }
 
+    // Stopping ends the reviewer as blocked, so the button asks for a second click first (DESIGN.md, Buttons: danger).
+    public function testTheStopButtonIsADangerButtonThatAsksToBeClickedAgain(): void
+    {
+        $this->runningReviewer();
+
+        $button = $this->browser->request('GET', '/reviews/round-1')->filter('form.stop-reviewer button[type=submit]');
+
+        self::assertSame('btn danger sm', $button->attr('class'));
+        self::assertSame('arm', $button->attr('data-controller'));
+        self::assertSame('Click again to stop', $button->attr('data-arm-confirm-value'));
+    }
+
     public function testAReviewerThatAnsweredOrFailedShowsNoStopForm(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);

@@ -44,7 +44,7 @@ final class NoPollingTest extends DashboardPageTestCase
 
         $page = strtolower((string) $this->browser->getResponse()->getContent());
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('<table', $page);
+        self::assertStringContainsString('data-project="alpha"', $page);
 
         self::assertSame(2, substr_count($page, '<script'));
         self::assertSame(2, substr_count($page, '<script>(() => {'));

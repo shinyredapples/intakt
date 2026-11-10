@@ -1,6 +1,7 @@
-{#- ask makes it a needs-you card; emphasis {icon, text, broken?} is the blocker or next step under the title; meta as in meta.html.twig. -#}
+{#- ask makes it a needs-you card; emphasis {icon, text, broken?} is the blocker or next step under the title; meta as in meta.html.twig. Without href it is no link, so it takes no hover. -#}
 {%- set needs = ask|default(null) is not empty -%}
-<a class="card{% if needs %} needs{% endif %}{% if forced|default(null) %} is-{{ forced }}{% endif %}" href="{{ href }}">
+{%- set tag = href is defined ? 'a' : 'div' -%}
+<{{ tag }} class="card{% if needs %} needs{% endif %}{% if forced|default(null) %} is-{{ forced }}{% endif %}"{% if href is defined %} href="{{ href }}"{% endif %}>
     <div class="top">
         {%- if needs %}<span class="dot needs"></span>{% endif -%}
         <span>#{{ number }}</span><span class="pname" title="{{ project }}">{{ project }}</span>
@@ -13,4 +14,4 @@
     <p class="blocker{% if emphasis.broken|default(false) %} broken{% endif %}">{{ include('dashboard/components/icon.html.twig', {name: emphasis.icon, small: true}, with_context = false) }}{{ emphasis.text }}</p>
     {%- endif %}
     {{ include('dashboard/components/meta.html.twig', {facts: meta}, with_context = false) }}
-</a>
+</{{ tag }}>
