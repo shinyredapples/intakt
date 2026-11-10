@@ -17,6 +17,7 @@ use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[UsesClass(Evidence::class)]
@@ -28,7 +29,7 @@ final class StrictVerdictSubscriberTest extends TestCase
         $options = [PlatformSubscriber::RESPONSE_FORMAT => new ResponseFormatFactory()->create(Evidence::class)];
         $event = new ResultEvent(new Model('reviewer'), $deferred, $options, 'Review the change.');
 
-        new StrictVerdictSubscriber(new ResponseFormatFactory(), self::createStub(SerializerInterface::class))->processResult($event);
+        new StrictVerdictSubscriber(new ResponseFormatFactory(), self::createStub(SerializerInterface::class), self::createStub(ValidatorInterface::class))->processResult($event);
 
         self::assertSame($deferred, $event->getDeferredResult());
     }

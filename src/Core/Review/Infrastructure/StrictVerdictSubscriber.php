@@ -11,12 +11,14 @@ use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactoryInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
 {
     public function __construct(
         private ResponseFormatFactoryInterface $responseFormats,
         private SerializerInterface $serializer,
+        private ValidatorInterface $validator,
     ) {
     }
 
@@ -33,7 +35,7 @@ final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
         }
 
         $deferred = $event->getDeferredResult();
-        $converter = new StrictVerdictConverter($deferred->getResultConverter(), $this->serializer);
+        $converter = new StrictVerdictConverter($deferred->getResultConverter(), $this->serializer, $this->validator);
         $event->setDeferredResult(new DeferredResult($converter, $deferred->getRawResult(), $event->getOptions()));
     }
 
