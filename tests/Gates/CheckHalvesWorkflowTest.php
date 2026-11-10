@@ -14,7 +14,7 @@ use Symfony\Component\Yaml\Yaml;
 #[CoversNothing]
 final class CheckHalvesWorkflowTest extends TestCase
 {
-    // docker runs the real half script; bin/check ends the static half only once the code half started, else with 9.
+    // Because the halves must run at once, the static half's bin/check ends only once the code half started, else with 9.
     private const array BIN = [
         'docker' => 'while [ "$1" != .github/ci/check-half.sh ]; do shift; done; shift; exec sh "$REPO/.github/ci/check-half.sh" "$@"',
         'check' => <<<'SH'
