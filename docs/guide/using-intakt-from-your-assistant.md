@@ -40,7 +40,7 @@ The review command runs one review and prints the outcome:
 bin/console intakt:review <branch> --project=intakt --task="<what the branch builds>" --format=json
 ```
 
-- It prints the verdict, the list of things to fix, and the tokens used with their cost (unknown when a model has no price in your settings), or JSON for scripts. It needs the review workers running on the same machine. The reviewers read a copy of the branch's last commit that Intakt makes for the round and removes afterwards, not the files you have checked out, so you can keep working while they read; reviewing a pull request instead of a branch is planned.
+- It prints the verdict, the list of things to fix, and the tokens used with their cost (unknown when a model has no price in your settings or a provider did not report a call's input tokens), or JSON for scripts. It needs the review workers running on the same machine. The reviewers read a copy of the branch's last commit that Intakt makes for the round and removes afterwards, not the files you have checked out, so you can keep working while they read; reviewing a pull request instead of a branch is planned.
 - Its exit code says the outcome: 0 approved, 10 changes needed, 11 blocked (and 1 when you gave it something wrong), so a script or CI job can act on it.
 - Stopping it with Ctrl-C removes its copy first. Only a hard kill can leave the copy behind: `git worktree list` shows it as `intakt-review-...`, and `git worktree remove --force <path>` removes it.
 
