@@ -76,6 +76,17 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
     }
 
     #[DataProvider('pages')]
+    public function testTheStreamSourceSitsInTheMainColumnSoTheShellGridKeepsTheRailFirst(string $path): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', $path);
+
+        self::assertCount(0, $crawler->filter('.shell > turbo-mercure-stream-source'));
+        self::assertCount(1, $crawler->filter('.shell > .main > turbo-mercure-stream-source'));
+    }
+
+    #[DataProvider('pages')]
     public function testAListPageRendersItsRowsWhileNoHubRunsAtTheConfiguredAddress(string $path): void
     {
         $this->ledger->startRound('round-1', 'alpha');
