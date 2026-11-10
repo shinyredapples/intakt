@@ -14,8 +14,14 @@ use Symfony\Component\Process\Process;
 final class InstanceWorkerModeTest extends InstanceTestCase
 {
     // Never skipped: this is the only pull-request proof that a worker-mode boot gets ready, and bin/instance writes its own Caddyfile, so CaddyfileWorkersTest does not cover its app worker.
-    public function testWithFrankenphpOnThePathTheAppWorkerServesTheReadinessRequestOnLoopbackAndNothingIsLeftBehind(): void
+    // One boot for the lookup and the readiness facts, because each worker-mode boot compiles the real kernel's container cold.
+    public function testAFrankenphpFoundThroughARelativePathEntryFromAnotherDirectoryServesTheReadinessRequestThroughTheAppWorkerOnLoopbackAndLeavesNothing(): void
     {
+        $frankenphp = new ExecutableFinder()->find('frankenphp');
+        self::assertNotNull($frankenphp, 'frankenphp must be on the PATH, as in the image and the build sandbox.');
+        $caller = $this->scratch.'/caller';
+        mkdir($caller.'/tools', recursive: true);
+        symlink($frankenphp, $caller.'/tools/frankenphp');
         // The socket table, because a Caddy site address only matches the Host header; the polling, because FrankenPHP counts a request only after the answer is sent.
         $command = <<<'PHP_WRAP'
         $port = (int) parse_url((string) getenv("INTAKT_INSTANCE_URL"), PHP_URL_PORT);
@@ -39,7 +45,7 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         exit(3);
         PHP_WRAP;
 
-        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $command], $this->environmentWithFrankenphp());
+        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()], [PHP_BINARY, '-r', $command]);
 
         self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
         self::assertSame(0, $run['exit']);
@@ -61,20 +67,6 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         self::assertStringContainsString('"mode":"worker"', $run['status']);
         self::assertStringContainsString('no_such_option', $status['reason']);
         self::assertSame(1, $run['exit']);
-    }
-
-    public function testAFrankenphpFoundThroughARelativePathEntryBootsInWorkerModeFromAnotherDirectory(): void
-    {
-        $frankenphp = new ExecutableFinder()->find('frankenphp');
-        self::assertNotNull($frankenphp, 'frankenphp must be on the PATH, as in the image and the build sandbox.');
-        $caller = $this->scratch.'/caller';
-        mkdir($caller.'/tools', recursive: true);
-        symlink($frankenphp, $caller.'/tools/frankenphp');
-
-        $run = $this->runInstanceFrom($caller, ['PATH' => 'tools:'.$this->pathWithoutFrankenphp()]);
-
-        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
-        self::assertSame(0, $run['exit']);
     }
 
     public function testAFrankenphpInTheCallersDirectoryIsFoundThroughAnEmptyPathEntry(): void
@@ -141,13 +133,15 @@ final class InstanceWorkerModeTest extends InstanceTestCase
 
     /**
      * @param array<string, string|false> $environment
+     * @param list<string>                $command
      *
      * @return array{status: string, exit: int, output: string, errors: string}
      */
-    private function runInstanceFrom(string $directory, array $environment): array
+    private function runInstanceFrom(string $directory, array $environment, array $command = []): array
     {
         $statusFile = $this->scratch.'/status';
-        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
+        $arguments = [] === $command ? [] : ['--', ...$command];
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, self::ROOT.'/bin/instance', ...$arguments])).' 3>'.escapeshellarg($statusFile);
         $process = Process::fromShellCommandline($shell, $directory, [...$this->environment(), ...$environment]);
         $process->run();
 

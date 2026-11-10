@@ -19,13 +19,18 @@ final class InstanceTest extends InstanceTestCase
         self::copyTheStubProject();
     }
 
-    public function testACleanCheckoutReportsReadyExitsZeroAndLeavesNothingInTheTemporaryDirectory(): void
+    // One boot for both, because each boot of the real kernel compiles its container cold.
+    public function testACleanCheckoutReportsReadyExitsZeroAndLeavesNothingInTheTemporaryDirectoryOrTheProjectTree(): void
     {
-        $run = $this->runInstance(self::ROOT);
+        $project = $this->copyOfTheProject();
+        $before = $this->treeOf($project);
+
+        $run = $this->runInstance($project);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertSame(0, $run['exit']);
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame($before, $this->treeOf($project));
     }
 
     public function testABrokenKernelConfigReportsFailedPrintsTheServerLogAndNeverRunsTheCommand(): void
@@ -87,16 +92,6 @@ final class InstanceTest extends InstanceTestCase
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertDirectoryExists($project.'/var');
-    }
-
-    public function testTheProjectTreeIsUnchangedAfterABoot(): void
-    {
-        $project = $this->copyOfTheProject();
-        $before = $this->treeOf($project);
-
-        $this->runInstance($project);
-
-        self::assertSame($before, $this->treeOf($project));
     }
 
     public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
