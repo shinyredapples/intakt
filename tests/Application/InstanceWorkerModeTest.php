@@ -13,8 +13,7 @@ use Symfony\Component\Process\Process;
 #[Group('instance')]
 final class InstanceWorkerModeTest extends InstanceTestCase
 {
-    // Never skipped: this is the only pull-request proof that a worker-mode boot gets ready, and bin/instance writes its own Caddyfile, so CaddyfileWorkersTest does not cover its app worker.
-    // One boot for the lookup and the readiness facts, because each worker-mode boot compiles the real kernel's container cold.
+    // Never skipped: this is the only pull-request proof that a worker-mode boot gets ready, and bin/instance writes its own Caddyfile, so CaddyfileWorkersTest does not cover its app worker; one boot for the lookup and the readiness facts, because each worker-mode boot compiles the real kernel's container cold.
     public function testAFrankenphpFoundThroughARelativePathEntryFromAnotherDirectoryServesTheReadinessRequestThroughTheAppWorkerOnLoopbackAndLeavesNothing(): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');
