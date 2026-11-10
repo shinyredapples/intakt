@@ -66,19 +66,17 @@ final class NetworkGitTest extends TestCase
     public function testEachWaitIsLoggedAsAWarningWithTheAttemptTheDelayAndGitsMessage(): void
     {
         $log = new BufferingLogger();
+        $missing = $this->listRemote($this->directory.'/missing');
+        $gitsMessage = $this->errorOutputOf($missing);
 
         try {
-            new NetworkGit(new RecordingClock(), $log)->run($this->listRemote($this->directory.'/missing'));
+            new NetworkGit(new RecordingClock(), $log)->run($missing);
             self::fail('A call that always fails must fail.');
         } catch (NetworkGitFailed) {
-            $warnings = $log->cleanLogs();
-
-            self::assertSame([[1, 10], [2, 30]], array_map(static fn (array $record): array => [$record[2]['attempt'], $record[2]['delaySeconds']], $warnings));
-            foreach ($warnings as [$level, $message, $context]) {
-                self::assertSame('warning', $level);
-                self::assertSame('A read-only git call failed, retrying.', $message);
-                self::assertStringContainsString('missing', $context['message']);
-            }
+            self::assertSame([
+                ['warning', 'A read-only git call failed, retrying.', ['attempt' => 1, 'delaySeconds' => 10, 'message' => $gitsMessage]],
+                ['warning', 'A read-only git call failed, retrying.', ['attempt' => 2, 'delaySeconds' => 30, 'message' => $gitsMessage]],
+            ], $log->cleanLogs());
         }
     }
 
@@ -172,6 +170,14 @@ final class NetworkGitTest extends TestCase
     private function listRemote(string $remote): GitCall
     {
         return new GitCall(['git', 'ls-remote', '--', $remote], $this->directory, ['GIT_CONFIG_GLOBAL' => '/dev/null']);
+    }
+
+    private function errorOutputOf(GitCall $call): string
+    {
+        $process = new Process($call->command, $call->directory, $call->environment);
+        $process->run();
+
+        return trim($process->getErrorOutput());
     }
 
     private function initBare(string $path): void
