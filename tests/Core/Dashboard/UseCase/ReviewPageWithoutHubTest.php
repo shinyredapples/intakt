@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Asset\Packages;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpFoundation\Request;
@@ -33,6 +34,22 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertSame('0 of 2 reviewers finished.', $crawler->filter('#round-round-1-state')->text());
         self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text())));
+    }
+
+    public function testThePlainPageStillLoadsTheScriptThatHoldsBackTheFirstClickOnStop(): void
+    {
+        $this->givenARunningRound();
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
+        self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
+        self::assertSame(
+            [sprintf("import { holdBackDangerButtons } from '%s'; holdBackDangerButtons(document);", $packages->getUrl('arm.js'))],
+            $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
+        );
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void

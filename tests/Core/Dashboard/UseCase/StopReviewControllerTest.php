@@ -62,8 +62,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $button = $this->browser->request('GET', '/reviews/round-1')->filter('form.stop-reviewer button[type=submit]');
 
         self::assertSame('btn danger sm', $button->attr('class'));
-        self::assertSame('arm', $button->attr('data-controller'));
-        self::assertSame('Click again to stop', $button->attr('data-arm-confirm-value'));
+        self::assertSame('Click again to stop', $button->attr('data-arm-confirm'));
     }
 
     public function testAReviewerThatAnsweredOrFailedShowsNoStopForm(): void
