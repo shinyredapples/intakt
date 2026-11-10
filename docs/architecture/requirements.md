@@ -74,7 +74,7 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 
 | Command | Called by | What for | Needed | Version | In the image |
 |---|---|---|---|---|---|
-| `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ConfinedClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --mcp-config <json> --allowedTools <tool>... --disallowed-tools <tool>... --append-system-prompt <schema> --model <name> -p <prompt>` | only for that provider | a release with those flags (2.1.302 accepts them) | no |
+| `claude` (Claude Code) | `symfony/ai-claude-code-platform` through `ConfinedClaudeCodeClient` | a reviewer on a subscription login, called as `claude --output-format stream-json --verbose --include-partial-messages --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --allowedTools <tool>... --disallowed-tools <tool>... --append-system-prompt <schema> --mcp-config <file> --model <name> -p <prompt>` | only for that provider | a release with those flags (2.1.302 accepts them) | no |
 
 ## Called when a tier maps to `codex`, and by `intakt:codex:probe`
 
