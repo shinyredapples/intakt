@@ -37,6 +37,11 @@ final readonly class CheckRun
         return $line instanceof JsonNode ? implode("\n", array_map(static fn (JsonNode $finding): string => $finding->text(), $line->get('findings')->items())) : '';
     }
 
+    public function omittedOf(string $gate): string
+    {
+        return $this->gateLine($gate)?->get('omitted')->text() ?? '';
+    }
+
     public function noteOf(string $gate): string
     {
         return $this->gateLine($gate)?->get('note')->text() ?? '';
