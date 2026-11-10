@@ -91,7 +91,7 @@ final class SmokeTestScriptTest extends TestCase
         $process = $this->digestsStep('echo "Digest: sha256:base"; seq 200000');
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString("Base image digest: sha256:base (dunglas/frankenphp:", $process->getOutput());
+        self::assertStringContainsString('Base image digest: sha256:base (dunglas/frankenphp:', $process->getOutput());
     }
 
     public function testAFailingImagetoolsFailsTheDigestsStepWithItsOwnError(): void
