@@ -15,7 +15,7 @@ use Symfony\Component\Process\Process;
 // Only for calls that read from a remote, because a retried write could happen twice.
 final readonly class NetworkGit
 {
-    public const array RETRY_DELAYS = [10, 30];
+    private const array RETRY_DELAYS = [10, 30];
 
     // HardenedGit allows no protocol at all, so a network call names the two it needs; GIT_WORK_TREE would point a bare repository and a clone at the wrong place.
     private const array NETWORK = [

@@ -37,11 +37,17 @@ final class NetworkGitTest extends TestCase
     public function testACallThatSucceedsRunsOnceAndNeverSleeps(): void
     {
         $clock = new RecordingClock();
+        $runs = 0;
         $this->initBare($this->directory.'/present');
 
-        $output = new NetworkGit($clock, new NullLogger())->run($this->listRemote($this->directory.'/present'));
+        $output = new NetworkGit($clock, new NullLogger())->runEachAttempt(function () use (&$runs): GitCall {
+            ++$runs;
+
+            return $this->listRemote($this->directory.'/present');
+        });
 
         self::assertSame('', $output);
+        self::assertSame(1, $runs);
         self::assertSame([], $clock->sleeps);
     }
 
@@ -54,6 +60,25 @@ final class NetworkGitTest extends TestCase
             self::fail('A call that always fails must fail.');
         } catch (NetworkGitFailed) {
             self::assertSame([10, 30], $clock->sleeps);
+        }
+    }
+
+    public function testEachWaitIsLoggedAsAWarningWithTheAttemptTheDelayAndGitsMessage(): void
+    {
+        $log = new BufferingLogger();
+
+        try {
+            new NetworkGit(new RecordingClock(), $log)->run($this->listRemote($this->directory.'/missing'));
+            self::fail('A call that always fails must fail.');
+        } catch (NetworkGitFailed) {
+            $warnings = $log->cleanLogs();
+
+            self::assertSame([[1, 10], [2, 30]], array_map(static fn (array $record): array => [$record[2]['attempt'], $record[2]['delaySeconds']], $warnings));
+            foreach ($warnings as [$level, $message, $context]) {
+                self::assertSame('warning', $level);
+                self::assertSame('A read-only git call failed, retrying.', $message);
+                self::assertStringContainsString('missing', $context['message']);
+            }
         }
     }
 
