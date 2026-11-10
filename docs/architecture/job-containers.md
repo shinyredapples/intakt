@@ -22,7 +22,7 @@
 | `Mounts` | each input as a read-only bind, then the job's own output directory as the only writable bind at `/output` | |
 | `User` | the orchestrator's uid and gid | the job can write its output directory, which only that user can read, and never runs as root |
 | `Memory`, `MemorySwap` | the job's limit, both equal | a runaway job is killed at its own limit instead of swapping |
-| `NanoCpus` | CPUs times 10^9 | |
+| `NanoCpus` | CPUs times 10^9, rounded; `JobLimits` refuses a value that is not finite, rounds to less than 1 or does not fit a PHP integer | 0 would turn the engine's CPU limit off |
 | `NetworkMode`, `NetworkDisabled` | `none`, `true` | no network until part 2 adds the per-job proxy |
 | `CapDrop`, `SecurityOpt` | `ALL`, `no-new-privileges` | |
 | `Labels` | `intakt.job=<id>` | finds the job's containers after a crash |
@@ -34,12 +34,14 @@ The container is named `intakt-job-<id>`.
 ```mermaid
 flowchart TD
   lock[Take the job's lock without waiting] -->|busy| refused[JobRefused: already running]
-  lock --> sweep[Remove orphaned jobs]
+  lock --> sweep[Remove orphaned jobs, and any container of this job]
   sweep --> prepare[Create var/jobs/id, mode 0700]
   prepare --> create[Create and start the container]
-  create --> wait[Wait for exit, at most the run time]
+  create --> wait[Wait for exit, at most the run time left]
   wait --> state[Read the state: OOMKilled, ExitCode]
-  state -->|still running| kill[Kill, cause timed_out]
+  state -->|still running, time left| pause[Pause one second]
+  pause --> wait
+  state -->|still running, run time over| kill[Kill, cause timed_out]
   state --> remove[Remove the container]
   kill --> remove
   remove --> record[Ledger: job_ended]
@@ -48,6 +50,7 @@ flowchart TD
 ```
 
 - The cause is `oom` when the engine reports `State.OOMKilled`, `timed_out` when the container still ran after the run time (it is killed, and the exit code is read after up to 10 more seconds), and `exited` otherwise. The ledger gets `job_ended` with `job`, `cause` and `exit_code`.
+- The run time is measured with the `ClockInterface` from the start. A wait that ends without an answer while the container still runs and time is left (a broken connection to the engine) is waited for again, one second later, for the time left; only a container that still runs when the run time is over is killed.
 - The container is removed (`DELETE /containers/<id>?force=true`) whatever happened after it was created, also when a later call fails. The output directory is removed after it was read, also when reading it fails.
 - The output directory is `var/jobs/<id>` under the project folder. A directory of the same id left from an earlier run is removed before the job starts. No other job's output directory is mounted into a job, so a job cannot read another job's output.
 - A link in the output directory is refused rather than followed, because the job wrote it and could point it at a file of the orchestrator.
@@ -58,7 +61,7 @@ Each run holds a lock named after its job (`intakt-job-<id>`, Symfony Lock on th
 
 `Infrastructure/OrphanedJobs::removeAll()` lists the containers labeled `intakt.job` (`GET /containers/json` with a label filter), tries each job's lock without waiting, and for each free lock removes the container and its output directory and records `job_container_removed` (`job`, `container`). It then removes every `var/jobs/<id>` directory whose lock is free. A busy lock is skipped: that job is still running. A label that is not a valid job id is ignored, since Intakt did not write it.
 
-Every run calls it before it starts its own container, so the next job cleans up after a crash. `php bin/console intakt:job:sweep` runs it on demand and lists what it removed.
+Every run calls it before it starts its own container, so the next job cleans up after a crash. The run passes its own job id (`removeAll(JobId)`): since it holds that job's lock and has not created its container yet, every container labeled with that id is a crashed run's and is removed without the lock (`job_container_removed` as well); otherwise the engine would refuse the name `intakt-job-<id>` with 409 Conflict and a retry of that job would fail. `php bin/console intakt:job:sweep` runs it on demand and lists what it removed.
 
 ## The engine client
 

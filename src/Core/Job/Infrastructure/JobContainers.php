@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobSpec;
+use Symfony\Component\Clock\ClockInterface;
 
 final readonly class JobContainers
 {
     // Ten seconds, because the engine needs a moment to deliver SIGKILL and record the exit, and the slot must not stay held.
     private const int KILL_GRACE_SECONDS = 10;
 
+    // One second, so a connection that breaks at once is not called again in a busy loop until the run time ends.
+    private const int RECONNECT_PAUSE_SECONDS = 1;
+
     public function __construct(
         private DockerEngine $engine,
         private JobContainerDefinition $definition,
+        private ClockInterface $clock,
     ) {
     }
 
@@ -26,21 +32,37 @@ final readonly class JobContainers
         try {
             $this->engine->start($container);
 
-            return $this->awaitEnd($container, $spec->limits->seconds);
+            return $this->awaitEnd($container, $this->clock->now()->modify(sprintf('+%d seconds', $spec->limits->seconds)));
         } finally {
             $this->engine->remove($container);
         }
     }
 
-    private function awaitEnd(string $container, int $seconds): JobEnd
+    // Waited for again while the run time lasts, because a wait without an answer can also be a broken connection to a job that still runs.
+    private function awaitEnd(string $container, DateTimeImmutable $deadline): JobEnd
     {
-        $answered = $this->engine->waitForExit($container, $seconds);
-        $state = $this->engine->state($container);
+        // Never called with zero seconds left, because the HTTP client reads a zero duration as no limit.
+        while (($seconds = $this->secondsUntil($deadline)) > 0.0) {
+            $answered = $this->engine->waitForExit($container, $seconds);
+            $state = $this->engine->state($container);
 
-        if ($answered || !$state->running) {
-            return $this->endOf($state);
+            if ($answered || !$state->running) {
+                return $this->endOf($state);
+            }
+
+            $this->clock->sleep(min(self::RECONNECT_PAUSE_SECONDS, $this->secondsUntil($deadline)));
         }
 
+        return $this->killed($container);
+    }
+
+    private function secondsUntil(DateTimeImmutable $deadline): float
+    {
+        return max(0.0, (float) $deadline->format('U.u') - (float) $this->clock->now()->format('U.u'));
+    }
+
+    private function killed(string $container): JobEnd
+    {
         $this->engine->kill($container);
         $this->engine->waitForExit($container, self::KILL_GRACE_SECONDS);
 

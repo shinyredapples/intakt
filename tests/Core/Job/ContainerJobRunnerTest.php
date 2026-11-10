@@ -200,6 +200,27 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertSame([], $this->engine->containerIds());
     }
 
+    public function testAWaitCutOffBeforeTheRunTimeIsWaitedForAgainAndTheJobIsNotKilled(): void
+    {
+        $this->engine->cutOffWaits('build-1', 1);
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+        self::assertSame([['job' => 'build-1', 'cause' => 'exited', 'exit_code' => 0]], $this->ledger->payloads());
+    }
+
+    public function testAJobWhoseWaitsKeepBreakingOffIsKilledOnlyWhenItsRunTimeIsOver(): void
+    {
+        $this->engine->cutOffWaits('build-1', PHP_INT_MAX);
+        $started = $this->engine->clock->now();
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertEquals(new JobEnd(JobCause::TimedOut, 137), $result->end);
+        self::assertSame(60, $this->engine->clock->now()->getTimestamp() - $started->getTimestamp());
+    }
+
     public function testTheContainerAndItsOutputDirectoryAreRemovedAfterExit(): void
     {
         $this->whenJobRuns($this->spec('build-1'));
@@ -265,6 +286,19 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertDirectoryDoesNotExist($this->root.'/build-0');
         self::assertSame([LedgerEventKind::JobContainerRemoved, LedgerEventKind::JobEnded], $this->ledger->kinds());
         self::assertSame(['job' => 'build-0', 'container' => $orphan], $this->ledger->payloads()[0]);
+    }
+
+    public function testAContainerLeftByACrashedRunOfTheSameJobIsRemovedBeforeTheJobRunsAgain(): void
+    {
+        $orphan = $this->engine->leaveRunning('build-1');
+        new Filesystem()->mkdir($this->root.'/build-1');
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+        self::assertSame([], $this->engine->containerIds());
+        self::assertSame([LedgerEventKind::JobContainerRemoved, LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame(['job' => 'build-1', 'container' => $orphan], $this->ledger->payloads()[0]);
     }
 
     public function testTheContainerAndOutputOfALivingRunAreLeftAlone(): void
@@ -336,7 +370,7 @@ final class ContainerJobRunnerTest extends TestCase
             $locks,
             new OrphanedJobs($engine, $outputs, $locks, $ledger),
             $outputs,
-            new JobContainers($engine, new JobContainerDefinition()),
+            new JobContainers($engine, new JobContainerDefinition(), $this->engine->clock),
             $ledger,
         );
 

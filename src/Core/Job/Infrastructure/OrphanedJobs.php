@@ -20,16 +20,24 @@ final readonly class OrphanedJobs
     /**
      * @return list<JobContainer>
      */
-    public function removeAll(): array
+    public function removeAll(?JobId $held = null): array
     {
-        $removed = array_values(array_filter($this->engine->jobContainers(), $this->removeContainer(...)));
+        $removed = array_values(array_filter($this->engine->jobContainers(), fn (JobContainer $container): bool => $this->removeContainer($container, $held)));
         array_map($this->removeDirectory(...), $this->outputs->leftOver());
 
         return $removed;
     }
 
-    private function removeContainer(JobContainer $container): bool
+    // A container of the job whose lock the caller holds is a crashed run's, since its own is not created yet, and it would block the name.
+    private function removeContainer(JobContainer $container, ?JobId $held): bool
     {
+        if ($held?->value === $container->job->value) {
+            $this->engine->remove($container->id);
+            $this->ledger->orphanRemoved($container);
+
+            return true;
+        }
+
         $lock = $this->locks->of($container->job);
 
         if (!$lock->acquire()) {

@@ -11,8 +11,6 @@ use Intakt\Core\Job\Contract\JobSpec;
 // Writable only in the tmpfs work area and the job's own output directory, so nothing else a job writes survives it.
 final readonly class JobContainerDefinition
 {
-    private const int NANO = 1_000_000_000;
-
     /**
      * @return array<string, mixed>
      */
@@ -44,7 +42,7 @@ final readonly class JobContainerDefinition
             // Swap equal to memory, so a runaway job is killed at its limit instead of swapping.
             'Memory' => $spec->limits->memoryBytes,
             'MemorySwap' => $spec->limits->memoryBytes,
-            'NanoCpus' => (int) round($spec->limits->cpus * self::NANO),
+            'NanoCpus' => $spec->limits->nanoCpus,
             // No network until the per-job egress proxy exists, so a job reaches nothing by default.
             'NetworkMode' => 'none',
             'CapDrop' => ['ALL'],

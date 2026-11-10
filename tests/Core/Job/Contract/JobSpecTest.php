@@ -82,9 +82,17 @@ final class JobSpecTest extends TestCase
 
     public function testTheSmallestPositiveLimitsAreAccepted(): void
     {
-        $limits = new JobLimits(1, 0.01, 1);
+        $limits = new JobLimits(1, 1e-9, 1);
 
         self::assertSame(1, $limits->seconds);
+        self::assertSame(1, $limits->nanoCpus);
+    }
+
+    public function testTheLargestCpuLimitTheEngineCanTakeIsAccepted(): void
+    {
+        $limits = new JobLimits(1, 9.2e9, 1);
+
+        self::assertSame(9_200_000_000_000_000_000, $limits->nanoCpus);
     }
 
     /**
@@ -94,11 +102,16 @@ final class JobSpecTest extends TestCase
     {
         yield 'no memory' => [0, 1.0, 60];
         yield 'no CPU' => [1024, 0.0, 60];
+        yield 'negative CPU' => [1024, -1.0, 60];
+        yield 'CPU that rounds to no nanoCPU' => [1024, 1e-12, 60];
+        yield 'CPU not a number' => [1024, NAN, 60];
+        yield 'infinite CPU' => [1024, INF, 60];
+        yield 'CPU past the largest integer in nanoCPUs' => [1024, 9.3e9, 60];
         yield 'no run time' => [1024, 1.0, 0];
     }
 
     #[DataProvider('refusedLimits')]
-    public function testALimitOfZeroIsRefused(int $memoryBytes, float $cpus, int $seconds): void
+    public function testALimitThatCannotBeEnforcedIsRefused(int $memoryBytes, float $cpus, int $seconds): void
     {
         $this->expectExceptionObject(JobRefused::forLimits());
 

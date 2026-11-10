@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Job;
 
 use Closure;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
@@ -26,12 +27,23 @@ final class FakeDockerEngine
     /** @var list<string> */
     private array $hanging = [];
 
+    /** @var array<string, int> */
+    private array $cutOff = [];
+
     /** @var list<string> */
     private array $sockets = [];
 
     private int $next = 0;
     private bool $down = false;
     private bool $garbledState = false;
+
+    // Advanced by a wait that runs into its timeout, so a test sees the run time pass without sleeping.
+    public readonly MockClock $clock;
+
+    public function __construct()
+    {
+        $this->clock = new MockClock();
+    }
 
     public function client(): MockHttpClient
     {
@@ -50,6 +62,12 @@ final class FakeDockerEngine
     public function hang(string $job): void
     {
         $this->hanging[] = $job;
+    }
+
+    // The first waits for the job break off at once while the job still runs, as a dropped connection to the engine does.
+    public function cutOffWaits(string $job, int $times): void
+    {
+        $this->cutOff[$job] = $times;
     }
 
     public function leaveRunning(string $job): string
@@ -111,7 +129,7 @@ final class FakeDockerEngine
         return match (true) {
             'POST' === $method && 'containers/create' === $path => $this->create($url, $options),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),
-            1 === preg_match('#^containers/(\w+)/(start|wait|json|kill)$#', $path, $call) => $this->onContainer($call[1], $call[2]),
+            1 === preg_match('#^containers/(\w+)/(start|wait|json|kill)$#', $path, $call) => $this->onContainer($call[1], $call[2], $options),
             'DELETE' === $method && 1 === preg_match('#^containers/(\w+)$#', $path, $call) => $this->remove($call[1]),
             default => $this->json(['message' => 'page not found'], 404),
         };
@@ -126,15 +144,24 @@ final class FakeDockerEngine
         /** @var array{Labels: array<string, string>, HostConfig: array{Mounts: list<array{Source: string, Target: string}>}} $definition */
         $definition = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '{}', true, flags: JSON_THROW_ON_ERROR);
         $job = $definition['Labels']['intakt.job'];
+        $name = is_string($query['name'] ?? null) ? $query['name'] : '';
+
+        if (in_array($name, array_column($this->containers, 'name'), true)) {
+            return $this->json(['message' => sprintf('Conflict. The container name "/%s" is already in use.', $name)], 409);
+        }
+
         $output = array_column($definition['HostConfig']['Mounts'], 'Source', 'Target')['/output'] ?? '';
         $id = $this->nextId();
-        $this->containers[$id] = new FakeContainer(is_string($query['name'] ?? null) ? $query['name'] : '', $job, $output);
+        $this->containers[$id] = new FakeContainer($name, $job, $output);
         $this->definitions[$job] = $definition;
 
         return $this->json(['Id' => $id], 201);
     }
 
-    private function onContainer(string $id, string $call): MockResponse
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function onContainer(string $id, string $call, array $options): MockResponse
     {
         $container = $this->containers[$id] ?? null;
 
@@ -144,7 +171,7 @@ final class FakeDockerEngine
 
         return match ($call) {
             'start' => $this->start($container),
-            'wait' => $container->running ? new MockResponse('', ['error' => 'Idle timeout reached']) : $this->json(['StatusCode' => $container->exitCode]),
+            'wait' => $this->wait($container, $options),
             'kill' => $this->kill($container),
             default => $this->state($container),
         };
@@ -160,8 +187,33 @@ final class FakeDockerEngine
 
         $behavior = $this->behaviors[$container->job] ?? static fn (string $output): array => [0, false];
         [$container->exitCode, $container->memoryKilled] = $behavior($container->outputDirectory);
+        $container->running = isset($this->cutOff[$container->job]);
 
         return new MockResponse('', ['http_code' => 204]);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function wait(FakeContainer $container, array $options): MockResponse
+    {
+        if ($container->running && ($this->cutOff[$container->job] ?? 0) > 0) {
+            --$this->cutOff[$container->job];
+
+            return new MockResponse('', ['error' => 'Connection reset by peer']);
+        }
+
+        if (!in_array($container->job, $this->hanging, true)) {
+            $container->running = false;
+        }
+
+        if ($container->running) {
+            $this->clock->sleep(is_numeric($options['timeout'] ?? null) ? (float) $options['timeout'] : 0.0);
+
+            return new MockResponse('', ['error' => 'Idle timeout reached']);
+        }
+
+        return $this->json(['StatusCode' => $container->exitCode]);
     }
 
     private function kill(FakeContainer $container): MockResponse

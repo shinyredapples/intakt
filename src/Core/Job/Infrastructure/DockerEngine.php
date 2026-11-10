@@ -45,7 +45,7 @@ final readonly class DockerEngine
     }
 
     // False when the wait ended without an answer (the deadline passed or the connection broke), so the caller reads the state to tell which.
-    public function waitForExit(string $container, int $seconds): bool
+    public function waitForExit(string $container, float $seconds): bool
     {
         try {
             $response = $this->request('POST', sprintf('containers/%s/wait', $container), ['timeout' => $seconds, 'max_duration' => $seconds]);
