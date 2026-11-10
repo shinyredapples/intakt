@@ -1,0 +1,2 @@
+{#- An update of the select's options, not a replace of the select, so the shell's listeners on #projfilter stay bound; no option is marked selected, because the publisher cannot know each tab's choice. -#}
+<turbo-stream action="update" target="projfilter"><template><option value="">All projects</option>{% for name in projects %}<option value="{{ name }}">{{ name }}</option>{% endfor %}</template></turbo-stream>

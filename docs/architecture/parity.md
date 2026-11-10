@@ -29,7 +29,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [ ] Composer changes beyond routine go to the owner, naming the packages. `test_policy.py`, `test_owner_approval.py::test_composer_changes_beyond_routine_wait_for_the_owner_and_name_the_new_packages` [T52]
 - [ ] The orchestrator pushes only signed commits. `test_gitops.py::test_push_refuses_unsigned_commits` [T53]
 - [ ] A crash after the push or after opening the pull request neither pushes again nor opens a second one. `test_lanes.py::test_a_crash_after_the_push_neither_pushes_again_nor_opens_a_second_pull_request` [T53]
-- [ ] Transient git network failures are retried; persistent ones fail with git's message. `test_network_git.py` [T46]
+- [x] Transient git network failures are retried; persistent ones fail with git's message. `test_network_git.py` [T46]
 - [ ] Forge calls use the App's installation token; nothing falls back to another credential. `test_app_auth.py` [T37]
 
 ## CI

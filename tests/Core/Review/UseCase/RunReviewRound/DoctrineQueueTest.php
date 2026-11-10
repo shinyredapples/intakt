@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Exception\TableNotFoundException;
+use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
+use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\TransportException;
 use Symfony\Component\Messenger\MessageBusInterface;
 
@@ -24,6 +26,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 #[CoversClass(RoundOpening::class)]
 #[CoversClass(ReviewRounds::class)]
 #[UsesClass(RoundLedger::class)]
+#[UsesClass(RoundOpened::class)]
 final class DoctrineQueueTest extends KernelTestCase
 {
     private const string TRANSPORT_DSN = 'MESSENGER_TRANSPORT_DSN';
@@ -67,13 +70,30 @@ final class DoctrineQueueTest extends KernelTestCase
         self::assertSame([], $this->fixture->storedRounds());
     }
 
-    public function testTheMessagesOfARoundAreQueuedInTheRoundsTransaction(): void
+    public function testTheMessagesOfARoundAndItsAnnouncementAreQueuedInTheRoundsTransaction(): void
     {
         $this->queue->setup();
 
-        $this->fixture->startOn($this->commands, 3);
+        $round = $this->fixture->startOn($this->commands, 3);
 
-        self::assertSame(3, $this->queue->getMessageCount());
+        self::assertSame(4, $this->queue->getMessageCount());
+        self::assertEquals([new RoundOpened($round, 'alpha')], $this->queuedAnnouncements());
+    }
+
+    public function testARoundOpenedInsideATransactionThatRollsBackIsNeverAnnounced(): void
+    {
+        $this->queue->setup();
+        $connection = $this->fixture->entities->getConnection();
+        $connection->beginTransaction();
+
+        try {
+            $this->fixture->startOn($this->commands, 1);
+        } finally {
+            $connection->rollBack();
+        }
+
+        self::assertSame([], $this->queuedAnnouncements());
+        self::assertSame([], $this->fixture->storedRounds());
     }
 
     public function testARoundWhoseDispatchBreaksTakesItsQueuedMessageBackWithIt(): void
@@ -102,6 +122,16 @@ final class DoctrineQueueTest extends KernelTestCase
 
         $this->fixture->startOn($this->commands, 1);
 
-        self::assertSame(1, $this->queue->getMessageCount());
+        self::assertSame(2, $this->queue->getMessageCount());
+    }
+
+    /**
+     * @return list<RoundOpened>
+     */
+    private function queuedAnnouncements(): array
+    {
+        $messages = array_map(static fn (Envelope $queued): object => $queued->getMessage(), iterator_to_array($this->queue->all(), false));
+
+        return array_values(array_filter($messages, static fn (object $message): bool => $message instanceof RoundOpened));
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
@@ -40,6 +41,7 @@ use RuntimeException;
 #[UsesClass(RoundState::class)]
 #[UsesClass(ReviewerState::class)]
 #[UsesClass(ReviewerTransition::class)]
+#[UsesClass(RoundOpened::class)]
 final class RunReviewRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -69,6 +71,26 @@ final class RunReviewRoundTest extends KernelTestCase
 
         self::assertSame([], $this->fixture->storedRounds());
         self::assertSame([], $this->fixture->ledgerKinds());
+    }
+
+    public function testAnOpenedRoundIsAnnouncedWithItsProjectOnTheQueueOfItsReviewers(): void
+    {
+        $round = $this->fixture->start(2);
+
+        self::assertEquals([new RoundOpened($round->id()->toRfc4122(), $round->project())], $this->fixture->bus->announced);
+    }
+
+    public function testARoundWhoseMessagesCannotAllBeQueuedIsNotAnnounced(): void
+    {
+        $queue = new RecordingBus();
+
+        try {
+            $this->fixture->startOn(new RefusingQueue($queue), 3);
+            self::fail('The refused dispatch was swallowed.');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], $queue->announced);
     }
 
     /**
