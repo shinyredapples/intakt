@@ -9,6 +9,7 @@ use Symfony\AI\Platform\Bridge\Anthropic\Factory;
 use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\Validator\ValidatorSubscriber;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -65,6 +66,17 @@ function events(string $stopReason, array ...$content): MockResponse
     return new MockResponse($body, ['response_headers' => ['content-type' => 'text/event-stream']]);
 }
 
+function describeObjectPart(mixed $answer): string
+{
+    foreach (is_array($answer) ? $answer : [] as $part) {
+        if ($part instanceof ObjectResult && $part->getContent() instanceof Answer) {
+            return sprintf(' (the unvalidated object among the parts has decision "%s")', $part->getContent()->decision);
+        }
+    }
+
+    return '';
+}
+
 /**
  * @param list<MockResponse>   $responses
  * @param array<string, mixed> $options
@@ -87,7 +99,11 @@ function decisionOf(array $responses, array $options): string
 
         $answer = $execution->getResult()->getContent();
 
-        return $answer instanceof Answer ? $answer->decision : 'a '.get_debug_type($answer).' instead of an Answer';
+        if ($answer instanceof Answer) {
+            return $answer->decision;
+        }
+
+        return 'a '.get_debug_type($answer).' instead of an Answer'.describeObjectPart($answer);
     } catch (ValidationException) {
         return 'refused by the Validator';
     } catch (Throwable $failure) {

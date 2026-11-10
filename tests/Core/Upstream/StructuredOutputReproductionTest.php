@@ -13,6 +13,22 @@ final class StructuredOutputReproductionTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';
 
+    private static string $output;
+
+    public static function setUpBeforeClass(): void
+    {
+        $process = new Process([
+            PHP_BINARY,
+            '-r',
+            'require $argv[1]; require $argv[2];',
+            self::ROOT.'/vendor/autoload.php',
+            self::ROOT.'/upstream/ai-structured-output-multi-part-answers/reproduce.php',
+        ]);
+        $process->run();
+
+        self::$output = $process->getOutput();
+    }
+
     public function testAnInvalidAnswerBesideThinkingSkipsTheValidatorWhileTheSameAnswerAloneIsRefused(): void
     {
         $display = $this->reproductionOutput();
@@ -28,15 +44,6 @@ final class StructuredOutputReproductionTest extends TestCase
 
     private function reproductionOutput(): string
     {
-        $process = new Process([
-            PHP_BINARY,
-            '-r',
-            'require $argv[1]; require $argv[2];',
-            self::ROOT.'/vendor/autoload.php',
-            self::ROOT.'/upstream/ai-structured-output-multi-part-answers/reproduce.php',
-        ]);
-        $process->run();
-
-        return $process->getOutput();
+        return self::$output;
     }
 }
