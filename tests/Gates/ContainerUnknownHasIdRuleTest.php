@@ -9,6 +9,7 @@ use Intakt\Gates\PhpStan\AskedServiceIds;
 use Intakt\Gates\PhpStan\ContainerUnknownHasIdRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -25,34 +26,29 @@ final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
         return new ContainerUnknownHasIdRule(new NoServices(), new AskedServiceIds());
     }
 
-    public function testAskingTheContainerForAMisspelledServiceIdFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertRejectedBy('phpstan', 'misspelled-has-service-id', 'src/Lookup.php:17 intakt.containerUnknownHasId Service "kernal" is not registered in the container');
+        return self::casesOfOnePhpstanRun([
+            'AskingTheContainerForAMisspelledServiceIdFailsStaticAnalysis' => ['misspelled-has-service-id', 'src/Lookup.php:17 intakt.containerUnknownHasId Service "kernal" is not registered in the container'],
+            'AskingTheContainerForARegisteredServiceIdPassesStaticAnalysis' => ['registered-has-service-id'],
+            'AskingTheContainerForEitherAKnownOrAMisspelledServiceIdFailsStaticAnalysis' => ['misspelled-has-service-id-in-union', 'src/Lookup.php:19 intakt.containerUnknownHasId Service "kernal" is not registered in the container'],
+            'AskingTheContainerForEitherOfTwoRegisteredServiceIdsPassesStaticAnalysis' => ['registered-has-service-ids-in-union'],
+            'ALocatorTypedAsThePsrContainerIsCheckedAsTheApplicationContainer' => ['psr-typed-locator-has-local-key', 'src/Platforms.php:17 intakt.containerUnknownHasId Service "local" is not registered in the container'],
+        ]);
     }
 
-    public function testAskingTheContainerForARegisteredServiceIdPassesStaticAnalysis(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $this->assertAcceptedBy('phpstan', 'registered-has-service-id');
-    }
-
-    public function testAskingTheContainerForEitherAKnownOrAMisspelledServiceIdFailsStaticAnalysis(): void
-    {
-        $this->assertRejectedBy('phpstan', 'misspelled-has-service-id-in-union', 'src/Lookup.php:19 intakt.containerUnknownHasId Service "kernal" is not registered in the container');
-    }
-
-    public function testAskingTheContainerForEitherOfTwoRegisteredServiceIdsPassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'registered-has-service-ids-in-union');
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testAskingAServiceLocatorForOneOfItsOwnKeysIsAllowed(): void
     {
         $this->assertRuleAccepts('locator-has-local-key');
-    }
-
-    public function testALocatorTypedAsThePsrContainerIsCheckedAsTheApplicationContainer(): void
-    {
-        $this->assertRejectedBy('phpstan', 'psr-typed-locator-has-local-key', 'src/Platforms.php:17 intakt.containerUnknownHasId Service "local" is not registered in the container');
     }
 
     public function testAskingTheContainerBagForAParameterIsAllowed(): void
