@@ -24,6 +24,43 @@ trait UsesSandboxes
         parent::tearDownAfterClass();
     }
 
+    /**
+     * @param array<string, non-empty-list<string>> $cases each case's fixture, followed by the findings it must report under its folder (none for a fixture that must pass)
+     *
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    final protected static function casesOfOnePhpstanRun(array $cases): iterable
+    {
+        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder, and a case still runs alone under --filter
+        $sandbox = Sandbox::withFixturesInFolders(...array_unique(array_column($cases, 0)));
+        $sandbox->borrowKernel();
+
+        try {
+            $run = $sandbox->check('--only=phpstan');
+        } finally {
+            $sandbox->remove();
+        }
+
+        foreach ($cases as $name => $case) {
+            yield $name => [$run, ...$case];
+        }
+    }
+
+    final protected function assertFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
+    {
+        $findings = array_values(array_filter(explode("\n", $run->findingsOf('phpstan')), static fn (string $finding): bool => '' !== $finding));
+        // Because a fixture that must pass reports nothing, a run that judged no file at all would otherwise pass it too.
+        Assert::assertTrue($run->passed('phpstan') || $run->failed('phpstan'), $run->output());
+        Assert::assertSame([], array_values(preg_grep('~^\S+:\d+ ~', $findings, PREG_GREP_INVERT) ?: []), $run->output());
+
+        $inItsFolder = array_values(array_filter($findings, static fn (string $finding): bool => str_starts_with($finding, $fixture.'/')));
+        Assert::assertCount(count($expectedFindings), $inItsFolder, $run->output());
+
+        foreach ($expectedFindings as $index => $expectedFinding) {
+            Assert::assertStringContainsString($fixture.'/'.$expectedFinding, $inItsFolder[$index]);
+        }
+    }
+
     final protected function sandboxWith(string $fixture): Sandbox
     {
         return $this->keep(Sandbox::withFixture($fixture));
