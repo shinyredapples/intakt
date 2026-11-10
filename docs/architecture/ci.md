@@ -1,5 +1,7 @@
 ## CI
 
+`.github/workflows/journeys.yml` runs the journeys on main, nightly and on demand (`gh workflow run journeys.yml`), and a red run files or updates one urgent task ([Journeys](journeys.md)). Its `journeys` job uses the runner and CI image below.
+
 `.github/workflows/ci.yml` runs on every pull request and every push to main, with a read-only token and no secrets. Its four jobs are `check` (`bin/check`), `changes` (whether a pull request touches persistence), `persistence` (the engines, see [Persistence](persistence.md)) and `image` (`docker build --tag intakt:ci .`, nothing pushed, then `docker/smoke-test.sh intakt:ci` on the host, which prints both digests; see [Container image](container-image.md)). The workflow fails when any of its jobs fails; the `image` job fails when the build fails or the script exits non-zero (a failed check or a wrong call).
 
 `.github/workflows/first-start.yml` also runs on every pull request and every push to main, with a read-only token and no secrets. Its one job, `first-start`, runs `docker/verify-first-start.sh`, a smoke check of the demo's first start ([The demo with docker compose](demo-with-docker-compose.md)). It shares the runner and fork guard below. It runs the script directly on the host, not in the CI image, so the CI image and job-container bullets are about `ci.yml` only.
