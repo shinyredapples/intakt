@@ -23,7 +23,8 @@
     <link rel="stylesheet" href="{{ asset('styles/tokens.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/base.css') }}">
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
-    {% block importmap %}{% endblock %}
+    {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
+    {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
@@ -37,6 +38,8 @@
     current_route: app.current_route,
 }, with_context = false) }}
 <div class="main">
+{# One listener for the shell topic and the page's own. The cookie it sets also carries listener_grants, the same on every page, because every tab shares it. It sits here, not beside the rail, because any child of the shell takes a cell of its two-column grid. #}
+{% if live|default(false) %}{% do mercure(null, {subscribe: listener_grants}) %}{{ turbo_stream_from([constant('Intakt\\Core\\Dashboard\\Contract\\DashboardTopics::SHELL')]|merge(topics|default([])), true) }}{% endif %}
 <header class="topbar">
     <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
     <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
