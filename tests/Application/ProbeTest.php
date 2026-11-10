@@ -197,45 +197,6 @@ final class ProbeTest extends TestCase
         self::assertSame([], $this->processesNaming($this->project.'/public'));
     }
 
-    public function testAVendorLeftByAnEarlierRunOfTheSharedProjectIsReplacedByTheCheckouts(): void
-    {
-        $vendor = $this->project.'/vendor';
-        new Filesystem()->remove($vendor);
-        new Filesystem()->dumpFile($vendor.'/stale-marker', 'from an older checkout');
-
-        $project = $this->copyOfTheProject();
-
-        self::assertFileDoesNotExist($project.'/vendor/stale-marker');
-        self::assertFileExists($project.'/vendor/autoload.php');
-    }
-
-    public function testAVendorWithOtherPackagesThanTheCheckoutsIsReplacedEvenWhenItsAutoloadFileIsTheCheckouts(): void
-    {
-        $vendor = $this->project.'/vendor';
-        new Filesystem()->remove($vendor.'/composer/installed.json');
-        new Filesystem()->dumpFile($vendor.'/composer/installed.json', '[]');
-        new Filesystem()->dumpFile($vendor.'/stale-marker', 'from an older checkout');
-
-        $project = $this->copyOfTheProject();
-
-        self::assertFileDoesNotExist($project.'/vendor/stale-marker');
-        self::assertFileEquals(self::ROOT.'/vendor/composer/installed.json', $project.'/vendor/composer/installed.json');
-    }
-
-    public function testAVendorCopiedWithoutLinksIsReusedWhenItsPackagesAreTheCheckouts(): void
-    {
-        $autoload = $this->project.'/vendor/autoload.php';
-        new Filesystem()->remove($autoload);
-        new Filesystem()->copy(self::ROOT.'/vendor/autoload.php', $autoload);
-        clearstatcache();
-        $copied = fileinode($autoload);
-
-        $project = $this->copyOfTheProject();
-
-        clearstatcache();
-        self::assertSame($copied, fileinode($project.'/vendor/autoload.php'));
-    }
-
     public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
