@@ -39,14 +39,16 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 
 ## To run Intakt's own CI
 
-`.github/workflows/ci.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../user/self-hosted-ci.md)).
+`.github/workflows/ci.yml`, `.github/workflows/journeys.yml` and the scripts in `.github/ci/` call these on the runner host, outside the CI image. GitHub's `ubuntu-24.04` runners have them all; a self-hosted runner must provide them and must be ephemeral ([Running Intakt's CI on your own runner](../user/self-hosted-ci.md)).
 
 | Command | Called by | What for | Needed |
 |---|---|---|---|
-| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the runner for the `persistence` service container | building the CI image, running `bin/check` and the persistence group in it, the database service | yes |
+| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the `journeys` and `alarm` jobs of `journeys.yml`, the runner for the `persistence` service container | building the CI image, running `bin/check`, the persistence group, `bin/check --journeys` and `bin/journey-alarm` in it, the database service | yes |
+| `tee` | the `journeys` job's journeys step | keeping the output of `bin/check --journeys` in the runner's temporary folder for the `alarm` job (with `set -o pipefail`, so the step still fails with the journeys) | yes |
+| `gh` (GitHub's CLI) | the `alarm` job of `journeys.yml`, GitHub's `ubuntu-24.04` only | mounted read-only into the CI image at `/usr/local/bin/gh` for `bin/journey-alarm`, which files or updates the urgent task with it; the CI image has no `gh` | on GitHub's runners |
 | `docker build`, the `buildx` plugin, network access to Docker Hub, and what `docker/smoke-test.sh` calls on the host ([below](#to-smoke-test-the-container-image): `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `dirname`, `env`, `timeout`, `sleep`) | the `image` job | building the app image and smoke-testing it; `docker buildx imagetools inspect` asks the registry for the base image tag's digest | yes |
-| `docker run` security options | the `check` job | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
-| `sudo sysctl` | the `check` job, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
+| `docker run` security options | the `check` and `journeys` jobs | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
+| `sudo sysctl` | the `check` and `journeys` jobs, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from a hash of the Dockerfile, `composer.json` and the check ini | yes |
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
