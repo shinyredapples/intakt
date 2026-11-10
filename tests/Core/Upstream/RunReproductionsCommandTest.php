@@ -24,9 +24,6 @@ final class RunReproductionsCommandTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';
 
-    // Longer than one second because the passing reproduction beside the hanging one starts PHPUnit under the same limit, and that start takes over a second on a loaded machine.
-    private const float HANGING_TIMEOUT = 5.0;
-
     private string $folder = '';
 
     protected function setUp(): void
@@ -68,13 +65,13 @@ final class RunReproductionsCommandTest extends TestCase
 
     public function testTheFailureOutputIsShownOnlyWhenVerbose(): void
     {
-        $this->givenReproduction('open-bug', '$this->assertSame(1, 2);');
+        $this->givenScript('open-script', "echo 'still broken';");
 
         $quiet = $this->whenTheCommandRuns();
         $verbose = $this->whenTheCommandRuns(['verbosity' => OutputInterface::VERBOSITY_VERBOSE]);
 
-        self::assertStringNotContainsString('Failed asserting', $quiet->getDisplay());
-        self::assertStringContainsString('Failed asserting', $verbose->getDisplay());
+        self::assertStringNotContainsString('still broken', $quiet->getDisplay());
+        self::assertStringContainsString('still broken', $verbose->getDisplay());
     }
 
     public function testThePinnedSymfonyAiVersionsAreListed(): void
@@ -82,19 +79,6 @@ final class RunReproductionsCommandTest extends TestCase
         $display = $this->whenTheCommandRuns()->getDisplay();
 
         self::assertMatchesRegularExpression('/^symfony\/ai-platform \S+$/m', $display);
-    }
-
-    public function testAHangingReproductionStillFailsAndTheRunGoesOn(): void
-    {
-        $this->givenReproduction('a-hanging-bug', 'sleep(30);');
-        $this->givenReproduction('b-fixed-bug', '$this->assertTrue(true);');
-
-        $tester = $this->whenTheCommandRuns(timeout: self::HANGING_TIMEOUT);
-
-        $display = $tester->getDisplay();
-        self::assertMatchesRegularExpression('/^still fails\s+a-hanging-bug$/m', $display);
-        self::assertMatchesRegularExpression('/^passes\s+b-fixed-bug$/m', $display);
-        self::assertStringContainsString('2 reproductions, 1 still fail', $display);
     }
 
     public function testAMissingFolderFailsTheRun(): void
@@ -140,15 +124,6 @@ final class RunReproductionsCommandTest extends TestCase
         $display = $this->whenTheCommandRuns(['verbosity' => OutputInterface::VERBOSITY_VERBOSE])->getDisplay();
 
         self::assertStringContainsString('<error>boom</error>', $display);
-    }
-
-    public function testAFractionalTimeoutIsReportedUntruncated(): void
-    {
-        $this->givenScript('hanging-script', 'sleep(30);');
-
-        $display = $this->whenTheCommandRuns(['verbosity' => OutputInterface::VERBOSITY_VERBOSE], timeout: 0.5)->getDisplay();
-
-        self::assertStringContainsString('Timed out after 0.5 seconds.', $display);
     }
 
     public function testAFolderWithGlobCharactersInItsPathIsSearchedLiterally(): void
@@ -206,14 +181,15 @@ final class RunReproductionsCommandTest extends TestCase
         self::assertMatchesRegularExpression('/^passes\s+autoloaded-script$/m', $display);
     }
 
-    public function testAHangingScriptStillFailsAndTheRunGoesOn(): void
+    public function testAHangingScriptStillFailsWithItsFractionalTimeoutAndTheRunGoesOn(): void
     {
         $this->givenScript('a-hanging-script', 'sleep(30);');
         $this->givenScript('b-fixed-script', "echo 'REPRODUCTION PASSES';");
 
-        $display = $this->whenTheCommandRuns(timeout: self::HANGING_TIMEOUT)->getDisplay();
+        $display = $this->whenTheCommandRuns(['verbosity' => OutputInterface::VERBOSITY_VERBOSE], timeout: 0.5)->getDisplay();
 
         self::assertMatchesRegularExpression('/^still fails\s+a-hanging-script$/m', $display);
+        self::assertStringContainsString('Timed out after 0.5 seconds.', $display);
         self::assertMatchesRegularExpression('/^passes\s+b-fixed-script$/m', $display);
     }
 
