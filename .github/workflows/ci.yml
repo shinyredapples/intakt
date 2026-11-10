@@ -63,29 +63,27 @@ jobs:
           # that clean state provides it filled for the default branch's lock, so Composer downloads what it lacks, as before.
           # Two containers at once, each on its own copy: one runs the static gates (bin/check --static-gates), one --skips
           # them, so the tests start at once and no gate that runs the change's code can touch the tree a static gate judges.
-          # Only each half's start line streams (bin/check prints nothing before its end); then each output and the summary.
+          # An empty or unreadable gate list fails closed as an unknown gate. Only each half's start line streams (bin/check
+          # prints nothing before its end); then each half's output and the gate lines of both in bin/check's gate order.
           half() {
-            echo 0 > "$RUNNER_TEMP/$1.exit"
-            { docker run --rm --user 1000:1000 \
-              --security-opt seccomp=.github/ci/seccomp-userns.json \
-              --security-opt systempaths=unconfined \
-              $apparmor \
-              --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
-              --tmpfs /tmp:rw,exec,size=1g \
-              --volume intakt-composer-cache:/composer-cache:ro --env COMPOSER_CACHE_DIR=/composer-cache --env COMPOSER_CACHE_READ_ONLY=1 \
-              --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-              "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh .github/ci/check-half.sh "$@" 2>&1 \
-              || echo $? > "$RUNNER_TEMP/$1.exit"; } | tee "$RUNNER_TEMP/$1.log" | grep --line-buffered '^[a-z]* half: bin/check started$' || true
+          echo 0 > "$RUNNER_TEMP/$1.exit"
+          { docker run --rm --user 1000:1000 \
+            --security-opt seccomp=.github/ci/seccomp-userns.json \
+            --security-opt systempaths=unconfined \
+            $apparmor \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume intakt-composer-cache:/composer-cache:ro --env COMPOSER_CACHE_DIR=/composer-cache --env COMPOSER_CACHE_READ_ONLY=1 \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh .github/ci/check-half.sh "$@" 2>&1 || echo $? > "$RUNNER_TEMP/$1.exit"
+          } | tee "$RUNNER_TEMP/$1.log" | grep --line-buffered '^[a-z]* half: bin/check started$' || true
           }
-          half static --only "$@" &
-          half code --skip "$@" &
-          wait
-          for h in static code; do echo "== $h half =="; cat "$RUNNER_TEMP/$h.log"; done
+          half static --only "$@" & half code --skip "$@" & wait
+          cd "$RUNNER_TEMP"
+          for h in static code; do echo "== $h half =="; cat $h.log; done
           echo "== summary =="
-          for g in $(sed -n 's/^gate order: //p' "$RUNNER_TEMP/static.log" "$RUNNER_TEMP/code.log" | head -n 1); do
-            grep -h "^{\"gate\":\"$g\"," "$RUNNER_TEMP/static.log" "$RUNNER_TEMP/code.log" || true
-          done
-          s=$(cat "$RUNNER_TEMP/static.exit") c=$(cat "$RUNNER_TEMP/code.exit")
+          for g in $(sed -n 's/^gate order: //p' static.log code.log | head -n 1); do grep -h "^{\"gate\":\"$g\"[,}]" static.log code.log || true; done
+          s=$(cat static.exit) c=$(cat code.exit)
           exit $(( s > c ? s : c ))
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
   # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming
