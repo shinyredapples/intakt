@@ -52,7 +52,7 @@ final class ProxyEntrypointTest extends TestCase
     {
         $this->entrypointRun('api.example,registry.example');
 
-        $patterns = file($this->folder.'/allow', FILE_IGNORE_NEW_LINES) ?: [];
+        $patterns = explode("\n", trim((string) file_get_contents($this->folder.'/allow')));
         $allowed = array_values(array_filter(
             ['api.example', 'registry.example', 'evil.example', 'api.example.evil.example', 'evil.api.example', 'apixexample'],
             static fn (string $host): bool => array_any($patterns, static fn (string $pattern): bool => 1 === preg_match('/'.$pattern.'/', $host)),
