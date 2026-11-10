@@ -26,6 +26,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use LogicException;
 use RuntimeException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpClient\Exception\TransportException;
@@ -66,6 +67,8 @@ final class PublishProjectFilterTest extends TestCase
     private array $posted = [];
 
     private BufferingLogger $log;
+
+    private ?PublishProjectFilter $secondWorker = null;
 
     protected function setUp(): void
     {
@@ -140,25 +143,24 @@ final class PublishProjectFilterTest extends TestCase
         self::assertSame([['warning', 'The project filter was not published.', 'r1', 'alpha', RuntimeException::class]], $this->loggedWarnings());
     }
 
-    // Forced order: the second round's worker runs while the first one holds a read from before the second round committed.
+    // The second round's worker runs while the first one holds a read from before the second round committed, because a race is proven by forcing its order.
     public function testAFilterReadBeforeAnotherRoundOpenedIsNeverTheLastOnePublished(): void
     {
-        $publisher = null;
+        $locks = new LockFactory(new InMemoryStore());
         $reads = 0;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willReturnCallback(function () use (&$publisher, &$reads): RecordedEvents {
+        $ledger->method('readInOrder')->willReturnCallback(function () use (&$reads): RecordedEvents {
             if (1 === ++$reads) {
-                assert($publisher instanceof PublishProjectFilter);
-                $publisher(new RoundOpened('r2', 'beta'));
+                ($this->secondWorker ?? throw new LogicException('No second worker.'))(new RoundOpened('r2', 'beta'));
 
                 return $this->eventsOf('alpha');
             }
 
             return $this->eventsOf('alpha', 'beta');
         });
-        $publisher = $this->publisher($this->hubThatAccepts(), $ledger);
+        $this->secondWorker = $this->publisher($this->hubThatAccepts(), $ledger, $locks);
 
-        $publisher(new RoundOpened('r1', 'alpha'));
+        $this->publisher($this->hubThatAccepts(), $ledger, $locks)(new RoundOpened('r1', 'alpha'));
 
         self::assertSame([['', 'All projects'], ['alpha', 'alpha'], ['beta', 'beta']], $this->optionsOf($this->postedStream(count($this->posted) - 1)));
     }
