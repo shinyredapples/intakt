@@ -113,6 +113,7 @@ final class UpdateMirrorTest extends TestCase
         yield 'a leading dot' => ['.hidden'];
         yield 'an option' => ['--upload-pack=x'];
         yield 'empty' => [''];
+        yield 'a trailing newline' => ["alpha\n"];
     }
 
     public function testAnEmptyMirrorFolderInsideAWorkTreeBecomesAMirrorAndLeavesTheWorkTreeAlone(): void

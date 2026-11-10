@@ -16,7 +16,7 @@ use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
 {
-    private const string SAFE_NAME = '/^[A-Za-z0-9][A-Za-z0-9._-]*$/';
+    private const string SAFE_NAME = '/^[A-Za-z0-9][A-Za-z0-9._-]*\z/';
 
     // Because a mirror holds every ref of the remote, forced, as "clone --mirror" sets it up.
     private const string MIRROR_REFSPEC = '+refs/*:refs/*';
