@@ -16,29 +16,28 @@ final class InstanceWorkerModeTest extends InstanceTestCase
     // Never skipped: this is the only pull-request proof that a worker-mode boot gets ready, and bin/instance writes its own Caddyfile, so CaddyfileWorkersTest does not cover its app worker.
     public function testWithFrankenphpOnThePathTheAppWorkerServesTheReadinessRequestOnLoopbackAndNothingIsLeftBehind(): void
     {
-        // A Caddy site address only matches the Host header, so the kernel's socket table tells where the listener really is.
-        // FrankenPHP counts a request once the worker has finished it, after the answer is sent, so the command polls.
-        $command = <<<'PHP'
-            $port = (int) parse_url((string) getenv("INTAKT_INSTANCE_URL"), PHP_URL_PORT);
-            $addresses = [];
-            foreach (["/proc/net/tcp", "/proc/net/tcp6"] as $table) {
-                foreach (file($table) ?: [] as $line) {
-                    $columns = preg_split("/\s+/", trim($line));
-                    if ("0A" !== ($columns[3] ?? "")) { continue; }
-                    [$address, $hexPort] = explode(":", $columns[1]);
-                    if (hexdec($hexPort) === $port) { $addresses[] = $address; }
-                }
+        // The socket table, because a Caddy site address only matches the Host header; the polling, because FrankenPHP counts a request only after the answer is sent.
+        $command = <<<'PHP_WRAP'
+        $port = (int) parse_url((string) getenv("INTAKT_INSTANCE_URL"), PHP_URL_PORT);
+        $addresses = [];
+        foreach (["/proc/net/tcp", "/proc/net/tcp6"] as $table) {
+            foreach (file($table) ?: [] as $line) {
+                $columns = preg_split("/\s+/", trim($line));
+                if ("0A" !== ($columns[3] ?? "")) { continue; }
+                [$address, $hexPort] = explode(":", $columns[1]);
+                if (hexdec($hexPort) === $port) { $addresses[] = $address; }
             }
-            echo "listeners: ", implode(",", array_unique($addresses)), "\n";
-            for ($i = 0; $i < 100; ++$i) {
-                $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
-                foreach ($states as $state) {
-                    if (str_starts_with($state["Name"], "Worker ") && $state["RequestCount"] > 0) { echo $state["Name"], " served ", $state["RequestCount"], "\n"; exit(0); }
-                }
-                usleep(100_000);
+        }
+        echo "listeners: ", implode(",", array_unique($addresses)), "\n";
+        for ($i = 0; $i < 100; ++$i) {
+            $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
+            foreach ($states as $state) {
+                if (str_starts_with($state["Name"], "Worker ") && $state["RequestCount"] > 0) { echo $state["Name"], " served ", $state["RequestCount"], "\n"; exit(0); }
             }
-            exit(3);
-            PHP;
+            usleep(100_000);
+        }
+        exit(3);
+        PHP_WRAP;
 
         $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $command], $this->environmentWithFrankenphp());
 
