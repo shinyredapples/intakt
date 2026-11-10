@@ -127,6 +127,8 @@ A pull request from a branch of the repository runs its own workflow, and every 
 - **A clean state for every job.** A fresh VM or container, or a snapshot rolled back before the job, with the runner registered for exactly one job (`--ephemeral` on GitHub). Nothing a job leaves on the host (a re-tagged image, a changed tool, a process) reaches a later job, main's included, and anything that exists when a job starts comes from the clean state the owner prepared. Intakt's own CI relies on this: it reuses a CI image whose tag is a hash of its Dockerfile, `composer.json` and the check ini, which a persistent runner would let a pull request replace for every later run, and reads the runner's Composer cache, where no locked package carries a checksum that would catch a planted archive; mounting it read-only only stops accidental writes, since a pull request runs its own workflow.
 - **No path to the owner's network.** The runner reaches the forge and the registries its jobs download from, nothing else, so a job cannot use the host to reach other machines.
 
+The CI image cache is written only by runs on main, never by a pull request: a pull request runs its own workflow, so a cache it could write would let it plant an image that a later job, main's included, runs. A restored image is used only under the hash of the exact inputs it was built from.
+
 A persistent self-hosted runner is not supported. The workflow scan cannot tell an ephemeral runner from a persistent one, so self-hosted runners always need the owner's approval for a CI change ([Merge](08-merge.md)).
 
 ## Tests of the defenses

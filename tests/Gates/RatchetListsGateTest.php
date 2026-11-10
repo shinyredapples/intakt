@@ -6,10 +6,15 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\IgnoredErrors;
 use Intakt\Gates\IgnoredErrorsReader;
+use Intakt\Gates\Mode;
 use Intakt\Gates\PhpStanIncludes;
 use Intakt\Gates\RatchetListFile;
 use Intakt\Gates\RatchetListsGate;
+use Intakt\Gates\ScratchDirectory;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(RatchetListsGate::class)]
@@ -17,100 +22,79 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(RatchetListFile::class)]
 #[CoversClass(IgnoredErrorsReader::class)]
 #[UsesClass(IgnoredErrors::class)]
+#[UsesClass(ScratchDirectory::class)]
+#[UsesClass(Workspace::class)]
 final class RatchetListsGateTest extends SandboxTestCase
 {
     private const string LIST = 'ratchet/loose-conditions.neon';
     private const string INCLUDE = '../../ratchet/loose-conditions.neon';
     private const string HEADER = "# Cleanup issue: #436\n";
 
-    public function testAnAddedEntryFails(): void
+    // Because every bin/check run costs two PHPStan dumps, the list changes share one repository and one run.
+    public function testTheListChangesFailTheGateInOneRun(): CheckRun
     {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php').$this->entry('#^Only booleans$#', 1, '../src/B.php')),
-        );
+        $run = $this->changeLists(self::listChanges());
 
         self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('entry not on the target branch', $run->findingsOf('ratchet'));
-        self::assertStringContainsString('src/B.php', $run->findingsOf('ratchet'));
+
+        $lists = array_column(self::listChanges(), 0);
+
+        foreach (array_filter(explode("\n", $run->findingsOf('ratchet')), static fn (string $line): bool => '' !== $line) as $finding) {
+            self::assertNotEmpty(array_filter($lists, static fn (string $list): bool => str_starts_with($finding, $list.':')), $finding);
+        }
+
+        return $run;
     }
 
-    public function testARaisedCountFails(): void
+    /**
+     * @param list<string> $expected
+     */
+    #[DataProvider('listOutcomes')]
+    #[Depends('testTheListChangesFailTheGateInOneRun')]
+    public function testEachListChangeIsJudgedAgainstItsTargetBranchVersion(string $list, array $expected, CheckRun $run): void
     {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 3, '../src/A.php')),
-        );
+        $findings = $this->findingsFor($run, $list);
 
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('count rose from 2 to 3', $run->findingsOf('ratchet'));
+        self::assertSame([] === $expected, '' === $findings, $findings);
+
+        foreach ($expected as $text) {
+            self::assertStringContainsString($text, $findings);
+        }
     }
 
-    public function testAWidenedMessagePatternFails(): void
+    /**
+     * @return array<string, array{string, list<string>}>
+     */
+    public static function listOutcomes(): array
     {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, $this->entry('#.*#', 2, '../src/A.php')),
-        );
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('#.*#', $run->findingsOf('ratchet'));
+        return array_map(static fn (array $change): array => [$change[0], $change[3]], self::listChanges());
     }
 
-    public function testAChangedPathFails(): void
+    /**
+     * @return array<string, array{string, string, string, list<string>}>
+     */
+    private static function listChanges(): array
     {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/Moved.php')),
-        );
+        $entry = self::entry('#^Only booleans$#', 2, '../src/A.php');
 
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('src/Moved.php', $run->findingsOf('ratchet'));
-    }
-
-    public function testAChangedIdentifierFails(): void
-    {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, str_replace('if.condNotBoolean', 'if.other', $this->entry('#^Only booleans$#', 2, '../src/A.php'))),
-        );
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('if.other', $run->findingsOf('ratchet'));
-    }
-
-    public function testADeletedEntryPasses(): void
-    {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php').$this->entry('#^Only booleans$#', 1, '../src/B.php')),
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-        );
-
-        self::assertTrue($run->passed('ratchet'), $run->output());
-    }
-
-    public function testALoweredCountPasses(): void
-    {
-        $run = $this->changeList(
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')),
-            $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 1, '../src/A.php')),
-        );
-
-        self::assertTrue($run->passed('ratchet'), $run->output());
-    }
-
-    public function testAnUnchangedListPasses(): void
-    {
-        $list = $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php'));
-
-        self::assertTrue($this->changeList($list, $list)->passed('ratchet'));
+        return [
+            'an added entry fails' => ['ratchet/added-entry.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, $entry.self::entry('#^Only booleans$#', 1, '../src/B.php')), ['entry not on the target branch', 'src/B.php']],
+            'a raised count fails' => ['ratchet/raised-count.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 3, '../src/A.php')), ['count rose from 2 to 3']],
+            'a widened message pattern fails' => ['ratchet/widened-pattern.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#.*#', 2, '../src/A.php')), ['entry not on the target branch', '#.*#']],
+            'a changed path fails' => ['ratchet/changed-path.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/Moved.php')), ['entry not on the target branch', 'src/Moved.php']],
+            'a changed identifier fails' => ['ratchet/changed-identifier.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, str_replace('if.condNotBoolean', 'if.other', $entry)), ['entry not on the target branch', 'if.other']],
+            'a deleted entry passes' => ['ratchet/deleted-entry.neon', self::listOf(self::HEADER, $entry.self::entry('#^Only booleans$#', 1, '../src/B.php')), self::listOf(self::HEADER, $entry), []],
+            'a lowered count passes' => ['ratchet/lowered-count.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 1, '../src/A.php')), []],
+            'an unchanged list passes' => ['ratchet/unchanged.neon', self::listOf(self::HEADER, $entry), self::listOf(self::HEADER, $entry), []],
+            'deleting the last entry with an empty list passes' => ['ratchet/emptied.neon', self::listOf(self::HEADER, $entry), self::HEADER."parameters:\n\tignoreErrors: []\n", []],
+        ];
     }
 
     public function testANewListPassesWithItsIncludeInTheSameChange(): void
     {
         $sandbox = $this->repositoryOnMain($this->configurationIncluding());
         $sandbox->write('config/gates/phpstan.neon', $this->configurationIncluding(self::INCLUDE));
-        $sandbox->write(self::LIST, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')));
+        $sandbox->write(self::LIST, self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/A.php')));
         $sandbox->commitAll('feat: switch the rule on');
 
         $run = $sandbox->check('--only=ratchet', '--base=main');
@@ -121,7 +105,7 @@ final class RatchetListsGateTest extends SandboxTestCase
     public function testANewListFailsWhenItsIncludeIsAlreadyOnTheTargetBranch(): void
     {
         $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE));
-        $sandbox->write(self::LIST, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')));
+        $sandbox->write(self::LIST, self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/A.php')));
         $sandbox->commitAll('feat: bring a list back');
 
         $run = $sandbox->check('--only=ratchet', '--base=main');
@@ -132,57 +116,90 @@ final class RatchetListsGateTest extends SandboxTestCase
 
     public function testAListWithoutACleanupIssueInItsHeaderFails(): void
     {
-        $list = $this->listOf("# Loose conditions\n", $this->entry('#^Only booleans$#', 2, '../src/A.php'));
+        $list = self::listOf("# Loose conditions\n", self::entry('#^Only booleans$#', 2, '../src/A.php'));
+        $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE), $list);
 
-        $run = $this->changeList($list, $list);
+        $run = $sandbox->check('--only=ratchet', '--base=main');
 
         self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('no cleanup issue in its header', $run->findingsOf('ratchet'));
+        self::assertStringContainsString(self::LIST.': no cleanup issue in its header', $run->findingsOf('ratchet'));
     }
 
     public function testACleanupIssueBelowTheHeaderDoesNotCount(): void
     {
-        $list = $this->listOf("# Loose conditions\n", $this->entry('#^Only booleans$#', 2, '../src/A.php'))."# Cleanup issue: #436\n";
+        $list = self::listOf("# Loose conditions\n", self::entry('#^Only booleans$#', 2, '../src/A.php'))."# Cleanup issue: #436\n";
 
-        self::assertTrue($this->changeList($list, $list)->failed('ratchet'));
+        self::assertContains(self::LIST.': no cleanup issue in its header, add a line "# Cleanup issue: #<number>" above the entries', new RatchetListFile(self::LIST, $list)->problems());
+    }
+
+    public function testAListOfIgnoredErrorsUnderItsCleanupIssueHasNoProblems(): void
+    {
+        $list = self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/A.php'));
+
+        self::assertSame([], new RatchetListFile(self::LIST, $list)->problems());
     }
 
     public function testAListThatSetsAnotherParameterFails(): void
     {
-        $list = $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php'))."\treportUnmatchedIgnoredErrors: false\n";
+        $list = self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/A.php'))."\treportUnmatchedIgnoredErrors: false\n";
 
-        $run = $this->changeList($list, $list);
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('holds more than parameters.ignoreErrors', $run->findingsOf('ratchet'));
+        self::assertSame([self::LIST.': holds more than parameters.ignoreErrors, so it could change the analysis'], new RatchetListFile(self::LIST, $list)->problems());
     }
 
     public function testAListThatRegistersAServiceFails(): void
     {
-        $list = $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php'))."services:\n\t- Intakt\\Sample\\Filter\n";
+        $list = self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/A.php'))."services:\n\t- Intakt\\Sample\\Filter\n";
 
-        $run = $this->changeList($list, $list);
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('holds more than parameters.ignoreErrors', $run->findingsOf('ratchet'));
+        self::assertSame([self::LIST.': holds more than parameters.ignoreErrors, so it could change the analysis'], new RatchetListFile(self::LIST, $list)->problems());
     }
 
-    public function testAnEntryWithoutACountFails(): void
+    public function testAnEmptyListThatSetsAnotherParameterFails(): void
     {
-        $entry = "\t\t-\n\t\t\tmessage: '#^Only booleans$#'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tpath: ../src/A.php\n";
-        $list = $this->listOf(self::HEADER, $entry);
+        $list = self::HEADER."parameters:\n\tignoreErrors: []\n\treportUnmatchedIgnoredErrors: false\n";
 
-        $run = $this->changeList($list, $list);
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('entry 1 needs', $run->findingsOf('ratchet'));
+        self::assertSame([self::LIST.': holds more than parameters.ignoreErrors, so it could change the analysis'], new RatchetListFile(self::LIST, $list)->problems());
     }
 
-    public function testAnEntryWithAPathOutsideTheRepositoryFails(): void
+    // Because every list costs a PHPStan dump, the malformed entries are read side by side in one call.
+    /**
+     * @return array<string, IgnoredErrors>
+     */
+    public function testTheMalformedEntriesAreReadSideBySide(): array
     {
-        $list = $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../../../elsewhere/A.php'));
+        $withoutCount = "\t\t-\n\t\t\tmessage: '#^Only booleans$#'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tpath: ../src/A.php\n";
 
-        self::assertTrue($this->changeList($list, $list)->failed('ratchet'));
+        $read = $this->readEntriesOf([
+            'without a count' => self::listOf(self::HEADER, $withoutCount),
+            'outside the repository' => self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../../../elsewhere/A.php')),
+        ]);
+
+        self::assertSame(['without a count', 'outside the repository'], array_keys($read));
+
+        return $read;
+    }
+
+    /**
+     * @param array<string, IgnoredErrors> $entries
+     */
+    #[Depends('testTheMalformedEntriesAreReadSideBySide')]
+    public function testAnEntryWithoutACountFails(array $entries): void
+    {
+        $read = $entries['without a count'];
+
+        self::assertSame([], $read->counts);
+        self::assertSame(['entry 1 needs exactly identifier, path inside the repository, count and one of message or rawMessage'], $read->problems);
+    }
+
+    /**
+     * @param array<string, IgnoredErrors> $entries
+     */
+    #[Depends('testTheMalformedEntriesAreReadSideBySide')]
+    public function testAnEntryWithAPathOutsideTheRepositoryFails(array $entries): void
+    {
+        $read = $entries['outside the repository'];
+
+        self::assertSame([], $read->counts);
+        self::assertSame(['entry 1 needs exactly identifier, path inside the repository, count and one of message or rawMessage'], $read->problems);
     }
 
     public function testAnIncludedListThatIsMissingFails(): void
@@ -199,7 +216,7 @@ final class RatchetListsGateTest extends SandboxTestCase
 
     public function testRemovingAListWithItsIncludePasses(): void
     {
-        $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE), $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')));
+        $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE), self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../src/A.php')));
         $sandbox->write('config/gates/phpstan.neon', $this->configurationIncluding());
         $sandbox->git('rm', '--quiet', self::LIST);
         $sandbox->commitAll('fix: finish the cleanup');
@@ -231,65 +248,32 @@ final class RatchetListsGateTest extends SandboxTestCase
 
     public function testAFlowFormIncludeDoesNotHideAGrowingList(): void
     {
-        $run = $this->growListIncludedBy("includes: [../../ratchet/loose-conditions.neon]\nparameters:\n    level: max\n");
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+        self::assertNull(new PhpStanIncludes()->ratchetListsIn("includes: [../../ratchet/loose-conditions.neon]\nparameters:\n    level: max\n"));
     }
 
     public function testAPlaceholderIncludeDoesNotHideAGrowingList(): void
     {
-        $run = $this->growListIncludedBy("includes:\n    - %currentWorkingDirectory%/ratchet/loose-conditions.neon\nparameters:\n    level: max\n");
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+        self::assertNull(new PhpStanIncludes()->ratchetListsIn("includes:\n    - %currentWorkingDirectory%/ratchet/loose-conditions.neon\nparameters:\n    level: max\n"));
     }
 
     public function testAnIncludesKeyFollowedByACommentDoesNotHideAGrowingList(): void
     {
-        $run = $this->growListIncludedBy("includes: # lists\n    - ".self::INCLUDE."\nparameters:\n    level: max\n");
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
+        self::assertNull(new PhpStanIncludes()->ratchetListsIn("includes: # lists\n    - ".self::INCLUDE."\nparameters:\n    level: max\n"));
     }
 
     public function testAnUnindentedIncludeItemDoesNotHideAGrowingList(): void
     {
-        $run = $this->growListIncludedBy("includes:\n- ".self::INCLUDE."\nparameters:\n    level: max\n");
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('count rose from 1 to 5', $run->findingsOf('ratchet'));
+        self::assertSame([self::LIST], new PhpStanIncludes()->ratchetListsIn("includes:\n- ".self::INCLUDE."\nparameters:\n    level: max\n"));
     }
 
-    public function testALoweredCountPassesWithAnUnindentedIncludeItem(): void
+    public function testAnIndentedIncludeItemIsAList(): void
     {
-        $run = $this->changeCountIncludedBy("includes:\n- ".self::INCLUDE."\nparameters:\n    level: max\n", 5, 1);
-
-        self::assertTrue($run->passed('ratchet'), $run->output());
-        self::assertStringNotContainsString('no ratchet lists', $run->output());
+        self::assertSame([self::LIST], new PhpStanIncludes()->ratchetListsIn($this->configurationIncluding(self::INCLUDE)));
     }
 
     public function testAnIndentedConfigurationDoesNotHideAGrowingList(): void
     {
-        $run = $this->growListIncludedBy("    includes:\n        - ".self::INCLUDE."\n    parameters:\n        level: max\n");
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('cannot read the includes', $run->findingsOf('ratchet'));
-    }
-
-    public function testDeletingTheLastEntryWithAnEmptyListPasses(): void
-    {
-        $run = $this->changeList($this->listOf(self::HEADER, $this->entry('#^Only booleans$#', 2, '../src/A.php')), self::HEADER."parameters:\n\tignoreErrors: []\n");
-
-        self::assertTrue($run->passed('ratchet'), $run->output());
-    }
-
-    public function testAnEmptyListThatSetsAnotherParameterFails(): void
-    {
-        $run = $this->changeList(self::HEADER."parameters:\n\tignoreErrors: []\n", self::HEADER."parameters:\n\tignoreErrors: []\n\treportUnmatchedIgnoredErrors: false\n");
-
-        self::assertTrue($run->failed('ratchet'), $run->output());
-        self::assertStringContainsString('holds more than parameters.ignoreErrors', $run->findingsOf('ratchet'));
+        self::assertNull(new PhpStanIncludes()->ratchetListsIn("    includes:\n        - ".self::INCLUDE."\n    parameters:\n        level: max\n"));
     }
 
     public function testAListWithoutABaseBranchFails(): void
@@ -299,27 +283,56 @@ final class RatchetListsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->check('--only=ratchet', '--base=missing')->failed('ratchet'));
     }
 
-    private function changeList(string $before, string $after): CheckRun
+    /**
+     * @param array<string, array{string, string, string, list<string>}> $changes
+     */
+    private function changeLists(array $changes): CheckRun
     {
-        $sandbox = $this->repositoryOnMain($this->configurationIncluding(self::INCLUDE), $before);
-        $sandbox->write(self::LIST, $after);
-        $sandbox->commitAll('fix: change the list');
+        // Because NEON lets an item sit at its key's indentation, the unindented includes also prove that such a list is read.
+        $includes = array_map(static fn (array $change): string => '- ../../'.$change[0]."\n", $changes);
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('config/gates/phpstan.neon', "includes:\n".implode('', $includes)."parameters:\n    level: max\n");
+
+        foreach ($changes as [$list, $before]) {
+            $sandbox->write($list, $before);
+        }
+
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+
+        foreach ($changes as [$list, , $after]) {
+            $sandbox->write($list, $after);
+        }
+
+        $sandbox->commitAll('fix: change the lists');
 
         return $sandbox->check('--only=ratchet', '--base=main');
     }
 
-    private function growListIncludedBy(string $configuration): CheckRun
+    private function findingsFor(CheckRun $run, string $list): string
     {
-        return $this->changeCountIncludedBy($configuration, 1, 5);
+        $findings = array_filter(explode("\n", $run->findingsOf('ratchet')), static fn (string $finding): bool => str_starts_with($finding, $list.':'));
+
+        return implode("\n", $findings);
     }
 
-    private function changeCountIncludedBy(string $configuration, int $before, int $after): CheckRun
+    /**
+     * @param array<string, string> $lists
+     *
+     * @return array<string, IgnoredErrors>
+     */
+    private function readEntriesOf(array $lists): array
     {
-        $sandbox = $this->repositoryOnMain($configuration, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', $before, '../src/A.php')));
-        $sandbox->write(self::LIST, $this->listOf(self::HEADER, $this->entry('#^Only booleans$#', $after, '../src/A.php')));
-        $sandbox->commitAll('fix: change the list');
+        $workspace = new Workspace($this->emptySandbox()->root, dirname(__DIR__, 2), Mode::Full, null);
+        $scratch = ScratchDirectory::create('intakt-ratchet-test');
+        self::assertInstanceOf(ScratchDirectory::class, $scratch);
 
-        return $sandbox->check('--only=ratchet', '--base=main');
+        try {
+            return new IgnoredErrorsReader()->read($workspace, $scratch, array_map(static fn (string $list): RatchetListFile => new RatchetListFile(self::LIST, $list), $lists));
+        } finally {
+            $scratch->remove();
+        }
     }
 
     private function repositoryOnMain(string $configuration, ?string $list = null): Sandbox
@@ -345,12 +358,12 @@ final class RatchetListsGateTest extends SandboxTestCase
         return "includes:\n".implode('', $includes)."\nparameters:\n    level: max\n";
     }
 
-    private function listOf(string $header, string $entries): string
+    private static function listOf(string $header, string $entries): string
     {
         return $header."parameters:\n\tignoreErrors:\n".$entries;
     }
 
-    private function entry(string $message, int $count, string $path): string
+    private static function entry(string $message, int $count, string $path): string
     {
         return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
     }
