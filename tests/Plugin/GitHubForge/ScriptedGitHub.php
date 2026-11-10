@@ -20,7 +20,7 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
-// GitHub's write API as a script: every write is kept with its decoded JSON body and answered 201, or with the status a test names for a path ending.
+// Keeps each write with its decoded body and answers 201 unless a test refuses its path, because a test must see every write the forge sent and in which order.
 final class ScriptedGitHub
 {
     /** @var list<array{string, array<mixed>}> */

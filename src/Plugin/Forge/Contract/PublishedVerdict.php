@@ -25,9 +25,12 @@ final readonly class PublishedVerdict
         }
     }
 
-    // Redacted with no job credentials, because the reviewers ran no job: what is left to catch are credential headers, URL userinfo and secret shapes.
-    public function redactedComment(): ?string
+    // A list of none or one, so a forge posts what is there without a branch of its own; redacted with no job credentials, because the reviewers ran no job: what is left to catch are credential headers, URL userinfo and secret shapes.
+    /**
+     * @return list<string>
+     */
+    public function redactedComments(): array
     {
-        return null === $this->comment ? null : new Redaction()->redact($this->comment);
+        return null === $this->comment ? [] : [new Redaction()->redact($this->comment)];
     }
 }

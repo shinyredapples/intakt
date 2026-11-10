@@ -73,7 +73,7 @@ final readonly class VerdictForTheLoop
         $approvals = count(array_filter($votes, static fn (PanelVerdict $vote): bool => Decision::Approve === $vote->verdict->verdict));
         $summary = sprintf('%d of %d reviewers approve; findings to act on: %d.', $approvals, count($votes), count($act));
 
-        return LoopReviewComment::of($round->identity()->commits->head, $decision, $act, $summary);
+        return new LoopReviewComment($round->identity()->commits->head, $decision, $act, $summary)->text();
     }
 
     /**

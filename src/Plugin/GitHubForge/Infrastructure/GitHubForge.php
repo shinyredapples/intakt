@@ -129,13 +129,13 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
     {
         $address = PullRequestAddress::of($change);
-        $comment = $verdict->redactedComment();
-        if (null !== $comment && $this->secrets->findsSecretIn($comment)) {
+        $comments = $verdict->redactedComments();
+        if (array_any($comments, $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it.
-        if (null !== $comment) {
+        foreach ($comments as $comment) {
             $this->post($address->issuePath().'/comments', ['body' => $comment]);
         }
 

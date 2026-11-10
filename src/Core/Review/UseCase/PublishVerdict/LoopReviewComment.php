@@ -17,29 +17,37 @@ final readonly class LoopReviewComment
     /**
      * @param list<Finding> $findings
      */
-    public static function of(CommitId $head, Decision $verdict, array $findings, string $summary): string
+    public function __construct(
+        private CommitId $head,
+        private Decision $verdict,
+        private array $findings,
+        private string $summary,
+    ) {
+    }
+
+    public function text(): string
     {
-        $lines = [sprintf(self::HEADING, substr($head->hash, 0, self::SHORT_HEAD)), ''];
-        foreach ($findings as $finding) {
-            $lines[] = self::lineOf($finding);
+        $lines = [sprintf(self::HEADING, substr($this->head->hash, 0, self::SHORT_HEAD)), ''];
+        foreach ($this->findings as $finding) {
+            $lines[] = $this->lineOf($finding);
         }
 
-        if ([] !== $findings) {
+        if ([] !== $this->findings) {
             $lines[] = '';
         }
 
-        $json = json_encode(['verdict' => $verdict->value, 'head' => $head->hash, 'summary' => $summary], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $json = json_encode(['verdict' => $this->verdict->value, 'head' => $this->head->hash, 'summary' => $this->summary], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         return implode("\n", [...$lines, '```json', $json, '```']);
     }
 
     // On one line, because a line break in a model's text could open a fence or a finding line of its own.
-    private static function lineOf(Finding $finding): string
+    private function lineOf(Finding $finding): string
     {
-        return sprintf('[%s] %s: %s', $finding->severity->value, self::oneLine(self::placeOf($finding)), self::oneLine($finding->text));
+        return sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text));
     }
 
-    private static function placeOf(Finding $finding): string
+    private function placeOf(Finding $finding): string
     {
         if (null === $finding->file) {
             return '(no file)';
@@ -48,7 +56,7 @@ final readonly class LoopReviewComment
         return null === $finding->line ? $finding->file : $finding->file.':'.$finding->line;
     }
 
-    private static function oneLine(string $text): string
+    private function oneLine(string $text): string
     {
         return trim((string) preg_replace('/\s+/', ' ', $text));
     }

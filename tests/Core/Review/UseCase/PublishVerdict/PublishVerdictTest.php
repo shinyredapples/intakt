@@ -23,6 +23,7 @@ use Intakt\Core\Shadow\Contract\PullRequestComment;
 use Intakt\Core\Shadow\Domain\LoopReviewReader;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Core\Shadow\Infrastructure\ModeGuardedForgeWrites;
+use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -78,8 +79,9 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAHeadWithChangesGetsAFailureStatusAndOneLinePerFindingToActOn(): void
     {
         $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes(
-            $this->finding('F1', Severity::P2, 'src/Thing.php', 3, "The new line drops\nthe old guard."),
-            $this->finding('F2', Severity::P1, null, null, 'The task asks for a test.'),
+            $this->placed('F1', Severity::P2, "The new line drops\nthe old guard."),
+            $this->unplaced('F2', Severity::P1, 'The task asks for a test.'),
+            new Finding('F3', Severity::P2, 'README.md', null, null, 'The guide still names the old flag.', FixableBy::Builder, false, null, null),
         )]);
 
         self::assertSame([
@@ -88,9 +90,10 @@ final class PublishVerdictTest extends KernelTestCase
                 '',
                 '[P2] src/Thing.php:3: The new line drops the old guard.',
                 '[P1] (no file): The task asks for a test.',
+                '[P2] README.md: The guide still names the old flag.',
                 '',
                 '```json',
-                '{"verdict":"changes","head":"'.SampleIdentity::HEAD.'","summary":"1 of 2 reviewers approve; findings to act on: 2."}',
+                '{"verdict":"changes","head":"'.SampleIdentity::HEAD.'","summary":"1 of 2 reviewers approve; findings to act on: 3."}',
                 '```',
             ])]],
             [self::STATUS, ['state' => 'failure', 'context' => 'intakt/review', 'description' => 'Intakt asks for changes on this head.']],
@@ -99,7 +102,7 @@ final class PublishVerdictTest extends KernelTestCase
 
     public function testTheLoopsReaderReadsThePublishedCommentAsTheVerdictOfThatHead(): void
     {
-        $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->finding('F1', Severity::P2, 'src/Thing.php', 3, 'The new line drops the old guard.'))]);
+        $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P2, 'The new line drops the old guard.'))]);
         $body = $this->github->writes[0][1]['body'] ?? '';
         self::assertIsString($body);
 
@@ -120,7 +123,7 @@ final class PublishVerdictTest extends KernelTestCase
 
     public function testACommentThatStillHoldsASecretAfterRedactionPublishesOnlyAnErrorStatus(): void
     {
-        $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->finding('F1', Severity::P1, 'src/Thing.php', 3, 'The fixture holds a key: sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)))]);
+        $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P1, 'The fixture holds a key: sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)))]);
 
         self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not publish its review of this head.']]], $this->github->writes);
     }
@@ -168,7 +171,7 @@ final class PublishVerdictTest extends KernelTestCase
         $roundId = $this->judgedRound(self::PULL, []);
         $this->github->refuse('/statuses/'.SampleIdentity::HEAD, 422);
 
-        $this->expectExceptionMessage('GitHub answered 422 to a write.');
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered 422 to a write.'));
 
         $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
     }
@@ -233,8 +236,13 @@ final class PublishVerdictTest extends KernelTestCase
         return new Verdict(Decision::Changes, array_values($findings), [], []);
     }
 
-    private function finding(string $id, Severity $severity, ?string $file, ?int $line, string $text): Finding
+    private function placed(string $id, Severity $severity, string $text): Finding
     {
-        return new Finding($id, $severity, $file, $line, null, $text, FixableBy::Builder, false, null, null);
+        return new Finding($id, $severity, 'src/Thing.php', 3, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    private function unplaced(string $id, Severity $severity, string $text): Finding
+    {
+        return new Finding($id, $severity, null, null, null, $text, FixableBy::Builder, false, null, null);
     }
 }
