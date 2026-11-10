@@ -63,7 +63,7 @@ final class FencedToolboxTest extends TestCase
 
     private function answering(string $answer): FencedToolbox
     {
-        $inner = $this->createStub(ToolboxInterface::class);
+        $inner = self::createStub(ToolboxInterface::class);
         $inner->method('execute')->willReturnCallback(static fn (ToolCall $call): ToolResult => new ToolResult($call, $answer));
 
         return new FencedToolbox($inner, new PromptCut(new Fence()), new Fence());
