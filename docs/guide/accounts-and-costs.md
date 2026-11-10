@@ -66,6 +66,10 @@ When a shadow review is held, you see a message that names the project, the comp
 
 The same reason is written in the ledger, Intakt's record of events (`php bin/console intakt:ledger:events` shows it). Until Intakt records how much of each window is used, the shadow ceiling holds nothing back. A project in live mode is never held by it.
 
+## Reviewer for the loop: Intakt's review takes a reviewer's place
+
+If an existing loop already builds and merges a project, you can set the project to **reviewer-for-loop mode** (`mode: reviewer-for-loop` in its configuration). Intakt then reviews each new head of the loop's pull requests with its whole panel, in place of the loop's own Claude reviewer, and its verdicts count. Because Intakt takes a reviewer's place instead of adding one, the shadow ceiling does not hold these reviews back. Intakt still writes nothing to the forge in this mode: it never merges, pushes, labels or approves anything; the loop keeps doing that as before. Posting Intakt's review on the pull request comes later. To go back, switch the loop to its own Claude reviewer again ([details](../user/README.md#reviewer-for-loop-mode)).
+
 ## Several projects on one install
 
 Each project gets a **share** of the week, for example 70% and 30%. A project with nothing to build lends its share to the others; when it has work again, it goes first until it has caught up. A share of 0 pauses the project: once a running job finishes, nothing is built or reviewed for it, not even its open pull requests. Its work waits and carries on when you raise the share again.
