@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use InvalidArgumentException;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Process;
@@ -17,7 +18,7 @@ final readonly class UpdateMirror
 {
     private const string SAFE_NAME = '/^[A-Za-z0-9][A-Za-z0-9._-]*$/';
 
-    // Every ref of the remote, forced and pruned, as "clone --mirror" sets it up.
+    // Because a mirror holds every ref of the remote, forced, as "clone --mirror" sets it up.
     private const string MIRROR_REFSPEC = '+refs/*:refs/*';
 
     private const string REMOTE_HEAD = '/^ref: (refs\/heads\/[^\t\n]+)\tHEAD$/m';
@@ -113,10 +114,8 @@ final readonly class UpdateMirror
 
             $this->filesystem->remove($path);
             $this->filesystem->rename($staging, $path);
-
-            if (!$this->isMirror($path)) {
-                throw MirrorNotUpdated::at($path, 'the published folder is not a bare repository');
-            }
+        } catch (IOException $failed) {
+            throw MirrorNotUpdated::at($path, $failed->getMessage());
         } finally {
             $lock->release();
         }

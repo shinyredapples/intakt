@@ -172,7 +172,7 @@ final class UpdateMirrorTest extends TestCase
             $this->update('alpha', $this->mirrors.'-missing');
             self::fail('An update from a missing remote must fail.');
         } catch (NetworkGitFailed) {
-            self::assertSame([], array_values(array_diff(scandir($this->mirrors) ?: [], ['.', '..'])));
+            self::assertSame(['.', '..'], scandir($this->mirrors));
         }
     }
 

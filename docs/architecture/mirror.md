@@ -10,7 +10,7 @@ Intakt keeps one bare mirror per project at `var/mirrors/<project>.git` (the con
 - Anything else (no folder, an empty folder, a folder that is not a bare repository) gets a new mirror: `git init --bare` in a staging folder `var/mirrors/.<project>.git.<random>`, filled as above, then renamed to `<project>.git`. A clone that fails or dies half-way stays in its staging folder, which is removed, so an incomplete mirror is never published.
 - The rename runs under the Symfony lock `git-mirror-<project>`, which checks the path again first: when another update published the mirror meanwhile, that mirror is kept and the staging folder is dropped. The fetches run outside the lock; git's own ref locks guard them.
 
-A local git step that fails (`init`, `symbolic-ref`) throws `MirrorNotUpdated`; the console command prints it and exits with 1.
+A local git step that fails (`init`, `symbolic-ref`) or a rename that fails throws `MirrorNotUpdated`; the console command prints it and exits with 1.
 
 The project name becomes a folder name, so a name must start with a letter or a digit, hold only letters, digits, `.`, `_` and `-`, and not contain `..`. Anything else is refused before git runs. The remote is passed after `--`, so it can never be read as an option. The remote is an argument because a project has no remote setting yet.
 
