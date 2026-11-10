@@ -21,6 +21,16 @@ final class DependabotImageGroupsTest extends TestCase
         self::assertContains($this->gitleaksImage(), $group['exclude-patterns'] ?? []);
     }
 
+    public function testTheGitleaksImageHasADockerGroupOfItsOwn(): void
+    {
+        /** @var array{updates: list<array{'package-ecosystem': string, groups?: array<string, array{patterns?: list<string>}>}>} $configuration */
+        $configuration = Yaml::parseFile(self::CONFIGURATION);
+        $docker = array_find($configuration['updates'], static fn (array $update): bool => 'docker' === $update['package-ecosystem']);
+        $group = array_find($docker['groups'] ?? [], fn (array $group): bool => [$this->gitleaksImage()] === ($group['patterns'] ?? null));
+
+        self::assertNotNull($group, 'The docker entry of .github/dependabot.yml has no group for the gitleaks image alone.');
+    }
+
     /**
      * @return array{patterns?: list<string>, exclude-patterns?: list<string>}
      */
