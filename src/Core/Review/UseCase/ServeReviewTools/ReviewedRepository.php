@@ -80,7 +80,7 @@ final readonly class ReviewedRepository
         return $reviewer->getUserIdentifier();
     }
 
-    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes.
+    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose.
     /**
      * @param Closure(): string $read
      */
@@ -89,7 +89,7 @@ final readonly class ReviewedRepository
         try {
             return $this->fence->wrap(UntrustedSource::ToolResult, $read());
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
-            throw new ToolCallException($refused->getMessage(), $refused->getCode(), previous: $refused);
+            throw new ToolCallException($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage()), $refused->getCode(), previous: $refused);
         }
     }
 }
