@@ -229,7 +229,7 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertGreaterThan(strpos($body, 'data-theme-toggle'), strpos($body, '<script>'));
     }
 
-    public function testTheShellScriptHandlesTheStreamTheProjectFilterIsPushedOn(): void
+    public function testTheRenderedLayoutWiresTheListenerForTheProjectFilterStream(): void
     {
         $page = $this->browser->request('GET', '/reviews');
 
