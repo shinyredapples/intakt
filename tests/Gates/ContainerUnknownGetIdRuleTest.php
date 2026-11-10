@@ -9,6 +9,7 @@ use Intakt\Gates\PhpStan\AskedServiceIds;
 use Intakt\Gates\PhpStan\ContainerUnknownGetIdRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -25,34 +26,25 @@ final class ContainerUnknownGetIdRuleTest extends PhpStanRuleTestCase
         return new ContainerUnknownGetIdRule(new NoServices(), new AskedServiceIds());
     }
 
-    public function testGettingEitherAKnownOrAMisspelledServiceIdFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertRejectedBy('phpstan', 'misspelled-get-service-id-in-union', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container');
+        return self::casesOfOnePhpstanRun([
+            'GettingEitherAKnownOrAMisspelledServiceIdFailsStaticAnalysis' => ['misspelled-get-service-id-in-union', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container'],
+            'GettingEitherOfTwoRegisteredServiceIdsPassesStaticAnalysis' => ['registered-get-service-ids-in-union'],
+            'GettingEitherAKnownOrAMisspelledServiceIdNamedAfterTheInvalidBehaviorFailsStaticAnalysis' => ['misspelled-get-service-id-in-union-named-last', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container'],
+            'GettingEitherOfTwoRegisteredServiceIdsNamedAfterTheInvalidBehaviorPassesStaticAnalysis' => ['registered-get-service-ids-in-union-named-last'],
+            'GettingEitherAKnownOrAPrivateServiceIdFailsStaticAnalysis' => ['private-get-service-id-in-union', 'src/Lookup.php:20 symfonyContainer.privateService Service "Intakt\Core\Review\Infrastructure\ReviewerPrompt" is private'],
+            'GettingEitherAKnownOrAPrivateServiceIdFromTheTestContainerPassesStaticAnalysis' => ['test-container-get-private-service-id-in-union'],
+        ]);
     }
 
-    public function testGettingEitherOfTwoRegisteredServiceIdsPassesStaticAnalysis(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $this->assertAcceptedBy('phpstan', 'registered-get-service-ids-in-union');
-    }
-
-    public function testGettingEitherAKnownOrAMisspelledServiceIdNamedAfterTheInvalidBehaviorFailsStaticAnalysis(): void
-    {
-        $this->assertRejectedBy('phpstan', 'misspelled-get-service-id-in-union-named-last', 'src/Lookup.php:19 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container');
-    }
-
-    public function testGettingEitherOfTwoRegisteredServiceIdsNamedAfterTheInvalidBehaviorPassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'registered-get-service-ids-in-union-named-last');
-    }
-
-    public function testGettingEitherAKnownOrAPrivateServiceIdFailsStaticAnalysis(): void
-    {
-        $this->assertRejectedBy('phpstan', 'private-get-service-id-in-union', 'src/Lookup.php:20 symfonyContainer.privateService Service "Intakt\Core\Review\Infrastructure\ReviewerPrompt" is private');
-    }
-
-    public function testGettingEitherAKnownOrAPrivateServiceIdFromTheTestContainerPassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'test-container-get-private-service-id-in-union');
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testGettingASingleMisspelledServiceIdIsLeftToPhpstanSymfony(): void

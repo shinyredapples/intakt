@@ -85,6 +85,33 @@ final class SmokeTestScriptTest extends TestCase
         self::assertStringContainsString('Base image digest: sha256:base (dunglas/frankenphp:', $output);
     }
 
+    // A megabyte after the digest outlasts any pipe buffer, so a reader that stops at the digest is gone while docker still writes.
+    public function testTheBaseDigestIsReadWhenImagetoolsWritesFarMoreAfterIt(): void
+    {
+        $process = $this->digestsStep('echo "Digest: sha256:base"; seq 200000');
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString('Base image digest: sha256:base (dunglas/frankenphp:', $process->getOutput());
+    }
+
+    public function testAFailingImagetoolsFailsTheDigestsStepWithItsOwnError(): void
+    {
+        $process = $this->digestsStep('echo "ERROR: manifest unknown" >&2; exit 1');
+
+        self::assertSame(1, $process->getExitCode());
+        self::assertStringContainsString("ERROR: manifest unknown\nsmoke test failed at step 'digests': the base image tag", $process->getErrorOutput());
+    }
+
+    public function testThePublishedPortIsReadWhenDockerPortWritesFarMoreAfterIt(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/docker', "#!/bin/bash\n".'[[ $1 == port ]] || exit 0; echo 127.0.0.1:1; seq 200000');
+
+        $process = $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; web=w; volume=v; start_container'], []);
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+        self::assertStringContainsString("started w on http://127.0.0.1:1\n", $process->getOutput());
+    }
+
     public function testTheSecretsReachTheContainerByNameOnly(): void
     {
         $this->smokeTest('intakt:test');
@@ -142,6 +169,14 @@ final class SmokeTestScriptTest extends TestCase
         $process = $this->script(['bash', '-c', 'source docker/smoke-test.sh; image=i; smoke=s; check_instance'], []);
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+    }
+
+    // The script path as $0 lets print_digests find the Dockerfile; sourced as ./ it does not count as run, so main stays out.
+    private function digestsStep(string $imagetools): Process
+    {
+        new Filesystem()->dumpFile($this->directory.'/docker', "#!/bin/bash\n".'[[ $1 == buildx ]] || { echo sha256:image; exit; }; '.$imagetools);
+
+        return $this->script(['bash', '-c', 'source ./docker/smoke-test.sh; image=i; print_digests', 'docker/smoke-test.sh'], []);
     }
 
     private function dashboardCheck(string $steps): Process

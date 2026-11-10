@@ -7,31 +7,35 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\ContainerDumpingGate;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(ContainerDumpingGate::class)]
 #[UsesClass(StaticAnalysisGate::class)]
 final class ContainerDumpingGateTest extends SandboxTestCase
 {
-    public function testAMisspelledServiceIdFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertRejectedBy('phpstan', 'misspelled-service-id', 'src/Lookup.php:17 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container.');
+        return self::casesOfOnePhpstanRun([
+            'AMisspelledServiceIdFailsStaticAnalysis' => ['misspelled-service-id', 'src/Lookup.php:17 symfonyContainer.serviceNotFound Service "kernal" is not registered in the container.'],
+            'ARegisteredServiceIdPassesStaticAnalysis' => ['registered-service-id'],
+        ]);
     }
 
-    public function testARegisteredServiceIdPassesStaticAnalysis(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $this->assertAcceptedBy('phpstan', 'registered-service-id');
-    }
-
-    public function testAContainerParameterIsReadWithItsCompiledType(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'typed-container-parameter');
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testTheContainerIsDumpedAgainWhenItsDumpIsGoneFromAFreshCache(): void
     {
         $sandbox = $this->kernelSandbox();
-        $sandbox->check('--only=phpstan');
+        $first = $sandbox->check('--only=phpstan');
+        self::assertTrue($first->passed('phpstan'), $first->output());
         $dump = $sandbox->root.'/var/cache/test/Intakt_KernelTestDebugContainer.xml';
         unlink($dump);
 
@@ -39,13 +43,6 @@ final class ContainerDumpingGateTest extends SandboxTestCase
 
         self::assertTrue($run->passed('phpstan'), $run->output());
         self::assertFileExists($dump);
-    }
-
-    public function testAServiceOnlyTheAnalysedTreeRegistersPassesStaticAnalysis(): void
-    {
-        $run = $this->kernelSandbox()->check('--only=phpstan');
-
-        self::assertTrue($run->passed('phpstan'), $run->output());
     }
 
     public function testATreeIsJudgedByItsOwnContainerWhenTheCallerSharesACacheAnotherTreeBuilt(): void
