@@ -18,7 +18,7 @@ final readonly class GitHubMoments
      */
     public function parse(string $text): DateTimeImmutable
     {
-        $moment = DateTimeImmutable::createFromFormat(self::FORMAT, $text);
+        $moment = DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
 
         return false === $moment ? throw new ForgeReadFailed('GitHub answered a moment this forge cannot read.') : $moment->setTimezone(new DateTimeZone('UTC'));
     }

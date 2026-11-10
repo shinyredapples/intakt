@@ -7,9 +7,9 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\Forge\Contract\HeadChecks;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
-use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
 
 // The test environment binds both reads to a recording, so dev and prod are booted to see what an installed instance wires.
