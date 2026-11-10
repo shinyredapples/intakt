@@ -65,6 +65,16 @@ final class ModeGuardedForgeWritesTest extends TestCase
         $guard->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
     }
 
+    public function testAProjectWithoutAModeWritesToTheForgeBesideAShadowProject(): void
+    {
+        $forge = new WriteRefusingForge();
+        $guard = new ModeGuardedForgeWrites($forge, new ConfiguredProjectModes(['alpha' => 'shadow']));
+
+        $this->expectException(LogicException::class);
+
+        $guard->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
+    }
+
     public function testALiveProjectWritesToTheForge(): void
     {
         $forge = new WriteRefusingForge();
