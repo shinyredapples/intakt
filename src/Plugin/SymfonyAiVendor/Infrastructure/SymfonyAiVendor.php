@@ -57,7 +57,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
-        private ReviewServerAccesses $servers,
+        private ?ReviewServerAccesses $servers = null,
     ) {
     }
 
@@ -163,7 +163,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid) {
+        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
             return [];
         }
 

@@ -55,6 +55,8 @@ final readonly class IssuedReviewServerAccesses implements ReviewServerAccesses
      */
     private function nameOf(string $tool): string
     {
-        return array_first(new ReflectionClass($tool)->getAttributes(McpTool::class))?->newInstance()->name ?? throw new LogicException(sprintf('%s names no tool.', $tool));
+        $attribute = new ReflectionClass($tool)->getAttributes(McpTool::class)[0]->newInstance();
+
+        return $attribute->name ?? throw new LogicException(sprintf('%s names no tool.', $tool));
     }
 }
