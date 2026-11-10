@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Job\UseCase\SweepJobContainers;
 
 use Intakt\Core\Job\Contract\DockerEngineFailed;
-use Intakt\Core\Job\Infrastructure\JobContainer;
 use Intakt\Core\Job\Infrastructure\OrphanedJobs;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;

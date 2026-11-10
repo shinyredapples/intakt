@@ -348,7 +348,7 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertIsArray($host);
         self::assertIsArray($host['Mounts']);
 
-        /** @var list<array<string, mixed>> */
+        /* @var list<array<string, mixed>> */
         return $host['Mounts'];
     }
 }
