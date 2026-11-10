@@ -28,6 +28,17 @@ final readonly class Sandbox
         return new self($root);
     }
 
+    // The same owner in the same process gets the same folder, so the tests of a class can share it without holding it in a property; the process id keeps parallel workers apart.
+    public static function ownedBy(string $owner): self
+    {
+        $root = sys_get_temp_dir().'/intakt-gates-'.hash('xxh128', getmypid().':'.$owner);
+        if (!is_dir($root)) {
+            mkdir($root, 0o777, true);
+        }
+
+        return new self($root);
+    }
+
     public static function withFixture(string $name): self
     {
         $sandbox = self::empty();

@@ -11,13 +11,16 @@ trait UsesSandboxes
     /** @var list<Sandbox> */
     private array $sandboxes = [];
 
-    // Shared by the phpstan runs of a class, because dumping this repository's test container takes seconds, no fixture changes it, and the container is baked into the folder it was dumped in.
-    private static ?Sandbox $kernelBorrowing = null;
+    // The class owns one sandbox for its phpstan runs, because dumping this repository's test container takes seconds, no fixture changes it, and the container is baked into the folder it was dumped in. Created fresh before the class, removed after it.
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        Sandbox::ownedBy(static::class)->remove();
+    }
 
     public static function tearDownAfterClass(): void
     {
-        self::$kernelBorrowing?->remove();
-        self::$kernelBorrowing = null;
+        Sandbox::ownedBy(static::class)->remove();
         parent::tearDownAfterClass();
     }
 
@@ -54,11 +57,11 @@ trait UsesSandboxes
             return $this->sandboxWith($fixture);
         }
 
-        self::$kernelBorrowing ??= Sandbox::empty();
-        self::$kernelBorrowing->replaceFixtureWith($fixture);
-        self::$kernelBorrowing->borrowKernel();
+        $sandbox = Sandbox::ownedBy(static::class);
+        $sandbox->replaceFixtureWith($fixture);
+        $sandbox->borrowKernel();
 
-        return self::$kernelBorrowing;
+        return $sandbox;
     }
 
     private function removeSandboxes(): void
