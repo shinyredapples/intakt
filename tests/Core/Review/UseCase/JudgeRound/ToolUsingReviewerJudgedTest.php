@@ -87,7 +87,7 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
         $round = $this->fixture->start(1);
         $document = VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('text', self::FINDING);
         $answer = $document->decoded();
-        $answer['findings'][] = [...$document->finding(), 'id' => 'F4', 'line' => 30, 'text' => self::SECOND_FINDING];
+        $answer['findings'] = [$document->finding(), [...$document->finding(), 'id' => 'F4', 'line' => 30, 'text' => self::SECOND_FINDING]];
         $this->fixture->deliver($this->fixture->bus->messages[0], $this->reviewerAnswering(json_encode($answer, JSON_THROW_ON_ERROR)));
         $judge = new ScriptedJudgement(new Judgement([]));
 
@@ -95,7 +95,7 @@ final class ToolUsingReviewerJudgedTest extends KernelTestCase
 
         $asked = $judge->asked;
         self::assertInstanceOf(JudgeRequest::class, $asked);
-        self::assertSame([['F1', 'P1', self::FINDING], ['F2', 'P1', self::SECOND_FINDING]],array_map(static fn (Finding $finding): array => [$finding->id, $finding->severity->value, $finding->text], $asked->findings));
+        self::assertSame([['F1', 'P1', self::FINDING], ['F2', 'P1', self::SECOND_FINDING]], array_map(static fn (Finding $finding): array => [$finding->id, $finding->severity->value, $finding->text], $asked->findings));
         self::assertSame([Decision::Changes], $this->recordedDecisions());
     }
 
