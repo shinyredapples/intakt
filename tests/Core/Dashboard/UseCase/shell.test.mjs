@@ -362,3 +362,82 @@ test('escape with the sheet closed leaves the focus where it is', () => {
     assert.equal(page.sheetOpen(), false);
     assert.equal(page.moreHasFocus(), false);
 });
+
+test('a pushed project list keeps the project this tab chose', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+
+    page.pushStream('projfilter', ['alpha', 'beta', 'gamma']);
+
+    assert.equal(page.projectFilter.value, 'beta');
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+    assert.equal(page.projectFilter.title, 'beta');
+});
+
+test('a pushed project list that no longer names the chosen project falls back to All projects and shows every row', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+
+    page.pushStream('projfilter', ['alpha']);
+
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+    assert.equal(page.projectFilter.title, 'All projects');
+});
+
+test('a pushed project list adds the new project as an option without choosing it', () => {
+    const page = new Browser('light').open();
+
+    page.pushStream('projfilter', ['alpha', 'beta', 'gamma']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha', 'beta', 'gamma']);
+    assert.equal(page.projectFilter.value, '');
+});
+
+test('a pushed project list leaves the stored choice untouched', () => {
+    const browser = new Browser('light');
+    const page = browser.open();
+    page.chooseProject('beta');
+
+    page.pushStream('projfilter', ['alpha']);
+
+    assert.equal(browser.storage.get('intakt-project'), 'beta');
+});
+
+test('a stream for another target leaves the project filter alone', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+
+    page.pushStream('somewhere-else', ['alpha']);
+
+    assert.deepEqual(page.projectFilter.options.map((option) => option.value), ['', 'alpha']);
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+});
+
+test('a pushed project list does nothing to a page Turbo has left', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+    page.leave();
+
+    page.pushStream('projfilter', ['alpha', 'beta']);
+
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+});
+
+test('the project filter keeps filtering through a dropped connection and a push after it reconnects', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+    page.pushStream('projfilter', ['alpha', 'beta']);
+
+    // The connection drops: no stream event arrives, only the person's own choices.
+    page.chooseProject('alpha');
+    assert.deepEqual(page.shownRows(), ['alpha']);
+
+    // It reconnects and the hub pushes the list again: the tab keeps its choice.
+    page.pushStream('projfilter', ['alpha', 'beta', 'gamma']);
+
+    assert.equal(page.projectFilter.value, 'alpha');
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
