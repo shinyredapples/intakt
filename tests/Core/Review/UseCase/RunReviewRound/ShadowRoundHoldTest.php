@@ -180,6 +180,17 @@ final class ShadowRoundHoldTest extends KernelTestCase
         self::assertSame($id, $fixture->round($id)->id()->toRfc4122());
     }
 
+    public function testAReviewerForLoopRoundStartsAboveTheShadowCeilingWithoutAskingIt(): void
+    {
+        $fixture = $this->fixtureOf('reviewer-for-loop');
+        $guard = $this->everyAccountAt(StartDecision::AtCeiling);
+
+        $id = $fixture->startHandlerOn($fixture->bus, $guard)($fixture->commandFor(RoundFixture::CHANGE, 2));
+
+        self::assertSame([], $guard->asked);
+        self::assertSame($id, $fixture->round($id)->id()->toRfc4122());
+    }
+
     public function testTheCallerOfAHeldRoundGetsTheHoldAndNotAWrappedHandlerFailure(): void
     {
         $fixture = $this->fixtureOf('shadow');
