@@ -43,7 +43,7 @@ The script that registers your ephemeral runner should do three things before ea
 | Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them); `journeys` runs each journey in one too, where `unshare` allows it |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; `journeys` gets the same container settings; the workflows lift AppArmor only on GitHub's runners, never on yours |
 
-The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: it sets the sysctl and `apparmor=unconfined` only on GitHub's runners, which are thrown away after the job. Prepare the clean state so the host meets them.
+The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners, which are thrown away after the job. Prepare the clean state so the host meets them.
 
 ## When it goes wrong
 
