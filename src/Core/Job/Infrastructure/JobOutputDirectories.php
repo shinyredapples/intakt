@@ -51,7 +51,7 @@ final readonly class JobOutputDirectories
         $bytes = 0;
 
         foreach ($entries as $entry) {
-            if (count($files) === self::MAX_FILES) {
+            if (self::MAX_FILES === count($files)) {
                 throw JobOutputRefused::tooMany(self::MAX_FILES);
             }
 
