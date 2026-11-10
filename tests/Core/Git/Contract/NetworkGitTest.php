@@ -77,6 +77,33 @@ final class NetworkGitTest extends TestCase
         self::assertSame([10], $clock->sleeps);
     }
 
+    public function testACallKilledByASignalIsRetriedAndThenFailsWithItsReason(): void
+    {
+        $clock = new RecordingClock();
+        $killed = new GitCall([PHP_BINARY, '-r', 'posix_kill(getmypid(), SIGTERM);'], $this->directory, []);
+
+        try {
+            new NetworkGit($clock, new NullLogger())->run($killed);
+            self::fail('A call that is always killed must fail.');
+        } catch (NetworkGitFailed $failed) {
+            self::assertSame([10, 30], $clock->sleeps);
+            self::assertStringContainsString('signal', $failed->getMessage());
+        }
+    }
+
+    public function testACallThatCannotStartIsRetriedAndThenFails(): void
+    {
+        $clock = new RecordingClock();
+
+        try {
+            new NetworkGit($clock, new NullLogger())->run(new GitCall(['git', 'version'], $this->directory.'/missing', []));
+            self::fail('A call that cannot start must fail.');
+        } catch (NetworkGitFailed $failed) {
+            self::assertSame([10, 30], $clock->sleeps);
+            self::assertStringContainsString('missing', $failed->getMessage());
+        }
+    }
+
     private function listRemote(string $remote): GitCall
     {
         return new GitCall(['git', 'ls-remote', '--', $remote], $this->directory, ['GIT_CONFIG_GLOBAL' => '/dev/null']);

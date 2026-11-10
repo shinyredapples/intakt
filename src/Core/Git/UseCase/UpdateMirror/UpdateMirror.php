@@ -4,20 +4,29 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
+use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use InvalidArgumentException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
 {
     private const string SAFE_NAME = '/^[A-Za-z0-9][A-Za-z0-9._-]*$/';
 
+    // Every ref of the remote, forced and pruned, as "clone --mirror" sets it up.
+    private const string MIRROR_REFSPEC = '+refs/*:refs/*';
+
+    private const string REMOTE_HEAD = '/^ref: (refs\/heads\/[^\t\n]+)\tHEAD$/m';
+
     public function __construct(
         private HardenedGit $hardened,
         private NetworkGit $network,
         private Filesystem $filesystem,
+        private LockFactory $locks,
         private string $mirrorsDirectory,
     ) {
     }
@@ -25,18 +34,19 @@ final readonly class UpdateMirror
     /**
      * @throws InvalidArgumentException
      * @throws NetworkGitFailed
+     * @throws MirrorNotUpdated
      */
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrorPath($project);
 
-        if (is_dir($path)) {
-            $this->fetchMirror($path);
+        if ($this->isMirror($path)) {
+            $this->fill($path, $remote);
 
             return $path;
         }
 
-        $this->cloneMirror($remote, $path);
+        $this->createMirror($project, $remote, $path);
 
         return $path;
     }
@@ -51,15 +61,99 @@ final readonly class UpdateMirror
         return $this->mirrorsDirectory.'/'.$project.'.git';
     }
 
-    private function cloneMirror(string $remote, string $path): void
+    private function isMirror(string $path): bool
     {
-        $this->filesystem->mkdir($this->mirrorsDirectory);
-        // The "--" ends the options, so a remote that starts with a dash is a repository, never an option.
-        $this->network->run($this->hardened->call(['clone', '--mirror', '--quiet', '--', $remote, $path], $this->mirrorsDirectory));
+        // Because git looks upward from a folder that is not a repository and would find the install's own checkout.
+        if (!is_file($path.'/HEAD') || !is_dir($path.'/objects') || !is_dir($path.'/refs')) {
+            return false;
+        }
+
+        $bare = $this->local(['--git-dir='.$path, 'rev-parse', '--is-bare-repository'], $path);
+
+        return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
     }
 
-    private function fetchMirror(string $path): void
+    private function createMirror(string $project, string $remote, string $path): void
     {
-        $this->network->run($this->hardened->call(['fetch', '--prune', '--quiet'], $path));
+        // A leading dot is never a project name, so a staging folder cannot be taken for a mirror; a clone that dies half-way stays there and is never published.
+        $staging = $this->mirrorsDirectory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
+        $this->filesystem->mkdir($this->mirrorsDirectory);
+
+        try {
+            $this->mustRun(['init', '--bare', '--quiet', '--', $staging], $this->mirrorsDirectory);
+            $this->fill($staging, $remote);
+            $this->publish($project, $staging, $path);
+        } finally {
+            $this->filesystem->remove($staging);
+        }
+    }
+
+    private function fill(string $repository, string $remote): void
+    {
+        // The remote is named on each call, so a mirror never depends on a remote setting a half-finished clone may lack; "--" ends the options, so a remote that starts with a dash is a repository, never an option.
+        $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--', $remote, self::MIRROR_REFSPEC], $repository));
+
+        $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
+
+        if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
+            $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
+        }
+    }
+
+    private function publish(string $project, string $staging, string $path): void
+    {
+        $lock = $this->locks->createLock('git-mirror-'.$project);
+        $lock->acquire(true);
+
+        try {
+            // Read again under the lock, because another update may have published this mirror while this one fetched; its mirror is as fresh as this one.
+            if ($this->isMirror($path)) {
+                return;
+            }
+
+            $this->filesystem->remove($path);
+            $this->filesystem->rename($staging, $path);
+
+            if (!$this->isMirror($path)) {
+                throw MirrorNotUpdated::at($path, 'the published folder is not a bare repository');
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function mustRun(array $arguments, string $directory): void
+    {
+        $process = $this->local($arguments, $directory);
+
+        if (!$process->isSuccessful()) {
+            throw MirrorNotUpdated::at($directory, trim($process->getErrorOutput()));
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function local(array $arguments, string $directory): Process
+    {
+        $call = $this->pinned($arguments, $directory);
+        $process = new Process($call->command, $call->directory, $call->environment);
+        $process->run();
+
+        return $process;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function pinned(array $arguments, string $directory): GitCall
+    {
+        $call = $this->hardened->call($arguments, $directory);
+
+        // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
+        return new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
     }
 }

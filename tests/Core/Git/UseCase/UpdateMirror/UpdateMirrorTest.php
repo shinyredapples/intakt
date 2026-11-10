@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -17,11 +18,14 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
+#[UsesClass(NetworkGitFailed::class)]
 #[UsesClass(GitCall::class)]
 final class UpdateMirrorTest extends TestCase
 {
@@ -54,13 +58,13 @@ final class UpdateMirrorTest extends TestCase
     public function testALaterUpdateFetchesANewCommitIntoTheExistingMirror(): void
     {
         $path = $this->update('alpha', $this->remote->path);
-        $inode = fileinode($path.'/HEAD');
+        $inode = fileinode($path.'/objects');
         $second = $this->remote->commitFile('b.txt', 'two');
 
         $this->update('alpha', $this->remote->path);
 
         self::assertSame($second, $this->git($path, 'rev-parse', 'refs/heads/main'));
-        self::assertSame($inode, fileinode($path.'/HEAD'));
+        self::assertSame($inode, fileinode($path.'/objects'));
     }
 
     public function testAnUpdatePrunesABranchTheRemoteDeleted(): void
@@ -109,11 +113,92 @@ final class UpdateMirrorTest extends TestCase
         yield 'empty' => [''];
     }
 
-    private function update(string $project, string $remote): string
+    public function testAnEmptyMirrorFolderInsideAWorkTreeBecomesAMirrorAndLeavesTheWorkTreeAlone(): void
     {
-        $network = new NetworkGit(new RecordingClock(), new NullLogger());
+        $install = new TemporaryRepository();
+        $install->commitFile('install.txt', 'install');
+        $this->git($install->path, 'update-ref', 'refs/remotes/origin/kept', 'HEAD');
+        $this->mirrors = $install->path.'/var/mirrors';
+        mkdir($this->mirrors.'/alpha.git', recursive: true);
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), $this->mirrors)->update($project, $remote);
+        try {
+            $path = $this->update('alpha', $this->remote->path);
+
+            self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+            self::assertSame('refs/remotes/origin/kept', $this->git($install->path, 'for-each-ref', '--format=%(refname)', 'refs/remotes/'));
+        } finally {
+            $install->remove();
+        }
+    }
+
+    public function testAFailedUpdateOfAnEmptyMirrorFolderInsideAWorkTreeLeavesTheWorkTreeAlone(): void
+    {
+        $install = new TemporaryRepository();
+        $install->commitFile('install.txt', 'install');
+        $this->git($install->path, 'update-ref', 'refs/remotes/origin/kept', 'HEAD');
+        $this->mirrors = $install->path.'/var/mirrors';
+        mkdir($this->mirrors.'/alpha.git', recursive: true);
+
+        try {
+            $this->update('alpha', $install->path.'/missing');
+            self::fail('An update from a missing remote must fail.');
+        } catch (NetworkGitFailed) {
+            self::assertSame('refs/remotes/origin/kept', $this->git($install->path, 'for-each-ref', '--format=%(refname)', 'refs/remotes/'));
+        } finally {
+            $install->remove();
+        }
+    }
+
+    public function testABareRepositoryLeftWithoutRefsIsFilledFromTheRemote(): void
+    {
+        mkdir($this->mirrors);
+        $this->git($this->mirrors, 'init', '--bare', '--quiet', 'alpha.git');
+
+        $path = $this->update('alpha', $this->remote->path);
+
+        self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
+    public function testTheMirrorsHeadFollowsTheRemotesHead(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+
+        self::assertSame('refs/heads/main', $this->git($path, 'symbolic-ref', 'HEAD'));
+    }
+
+    public function testAFailedFirstUpdateLeavesNoFolderBehind(): void
+    {
+        try {
+            $this->update('alpha', $this->mirrors.'-missing');
+            self::fail('An update from a missing remote must fail.');
+        } catch (NetworkGitFailed) {
+            self::assertSame([], array_values(array_diff(scandir($this->mirrors) ?: [], ['.', '..'])));
+        }
+    }
+
+    public function testAnUpdateThatAnotherUpdateOvertakesDuringItsRetryDelaySucceeds(): void
+    {
+        $remote = $this->mirrors.'-late-remote';
+        $overtaken = new RecordingClock(function (int $sleeps) use ($remote): void {
+            $this->git(sys_get_temp_dir(), 'init', '--bare', '--quiet', $remote);
+            $this->update('alpha', $remote);
+        });
+
+        try {
+            $path = $this->update('alpha', $remote, $overtaken);
+
+            self::assertSame([10], $overtaken->sleeps);
+            self::assertSame('true', $this->git($path, 'rev-parse', '--is-bare-repository'));
+        } finally {
+            new Filesystem()->remove($remote);
+        }
+    }
+
+    private function update(string $project, string $remote, ?RecordingClock $clock = null): string
+    {
+        $network = new NetworkGit($clock ?? new RecordingClock(), new NullLogger());
+
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $this->mirrors)->update($project, $remote);
     }
 
     private function git(string $directory, string ...$arguments): string

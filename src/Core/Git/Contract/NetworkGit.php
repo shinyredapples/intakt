@@ -6,6 +6,7 @@ namespace Intakt\Core\Git\Contract;
 
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Process\Exception\RuntimeException as ProcessFailure;
 use Symfony\Component\Process\Process;
 
 // Only for calls that read from a remote, because a retried write could happen twice.
@@ -42,7 +43,15 @@ final readonly class NetworkGit
             }
 
             $process = new Process($call->command, $call->directory, [...$call->environment, ...self::NETWORK], timeout: self::TIMEOUT_SECONDS);
-            $process->run();
+
+            try {
+                $process->run();
+            } catch (ProcessFailure $stopped) {
+                // Because a call that hangs until the timeout or is killed by a signal is the most common transient failure, it gets the same retries as one that exits.
+                $failure = trim(($process->isStarted() ? $process->getErrorOutput() : '')."\n".$stopped->getMessage());
+
+                continue;
+            }
 
             if ($process->isSuccessful()) {
                 return $process->getOutput();
