@@ -166,7 +166,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $this->vendor($cli)->review('alpha', Tier::Strong, $this->request());
 
-        self::assertSame(['tools', 'setting_sources', 'strict_mcp_config', 'no_session_persistence', 'append_system_prompt'], array_keys($cli->options));
+        self::assertSame(['tools', 'setting_sources', 'strict_mcp_config', 'no_session_persistence', 'intakt_review_server', 'allowed_tools', 'disallowed_tools', 'append_system_prompt'], array_keys($cli->options));
         self::assertSame([[], '', true, true], [$cli->options['tools'], $cli->options['setting_sources'], $cli->options['strict_mcp_config'], $cli->options['no_session_persistence']]);
         $instruction = $cli->options['append_system_prompt'];
         self::assertIsString($instruction);
@@ -415,6 +415,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers ?? $this->servers());
     }
 }
