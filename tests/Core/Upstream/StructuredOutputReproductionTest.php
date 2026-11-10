@@ -7,7 +7,6 @@ namespace Intakt\Tests\Core\Upstream;
 use Intakt\Core\Upstream\Infrastructure\ReproductionRunner;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(ReproductionRunner::class)]
@@ -31,7 +30,7 @@ final class StructuredOutputReproductionTest extends TestCase
     private function reproductionOutput(): string
     {
         $process = new Process([
-            new PhpExecutableFinder()->find() ?: 'php',
+            PHP_BINARY,
             '-r',
             'require $argv[1]; require $argv[2];',
             self::ROOT.'/vendor/autoload.php',
