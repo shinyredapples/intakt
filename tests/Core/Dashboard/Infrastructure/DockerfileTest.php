@@ -48,7 +48,47 @@ final class DockerfileTest extends TestCase
 
     public function testTheImageInstallsTheProfileExtensionsAndOnlyOpcacheBeside(): void
     {
-        self::assertMatchesRegularExpression('/^\s+install-php-extensions \$\(php -r "\$missing"\) opcache; \\\\$/m', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^\s+install-php-extensions \$exts opcache; \\\\$/m', $this->dockerfile());
+    }
+
+    // A command substitution inside a command's arguments hides its exit status from set -e; an assignment does not.
+    public function testEachImageListsTheMissingExtensionsInAnAssignmentSoAFailingScriptAbortsTheBuild(): void
+    {
+        foreach (['Dockerfile' => 'install-php-extensions', '.github/ci/Dockerfile' => 'docker-php-ext-install -j"$(nproc)"'] as $file => $install) {
+            self::assertMatchesRegularExpression('/^\s+exts="\$\(php -r "\$missing"\)"; \\\\\n\s+'.preg_quote($install, '/').' \$exts /m', $this->file($file), $file);
+        }
+    }
+
+    public function testEachImageRechecksTheMissingExtensionsInAnAssignmentAfterTheInstall(): void
+    {
+        foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
+            self::assertMatchesRegularExpression('/ \$exts .*\n\s+left="\$\(php -r "\$missing"\)"; \\\\\n\s+test -z "\$left"; \\\\$/m', $this->file($file), $file);
+        }
+    }
+
+    public function testEachImageRunsTheSameProfileScript(): void
+    {
+        self::assertSame($this->missingScript('Dockerfile'), $this->missingScript('.github/ci/Dockerfile'));
+    }
+
+    public function testTheProfileListFailsOnAComposerJsonThatDoesNotParse(): void
+    {
+        self::assertNotSame(0, $this->runMissingScript('{"require": {"ext-json": "*"'));
+    }
+
+    public function testTheProfileListFailsOnAComposerJsonWithoutRequire(): void
+    {
+        self::assertNotSame(0, $this->runMissingScript('{"name": "intakt/intakt"}'));
+    }
+
+    public function testTheProfileListFailsWhenRequireIsNoObject(): void
+    {
+        self::assertNotSame(0, $this->runMissingScript('{"require": "ext-json"}'));
+    }
+
+    public function testTheProfileListAcceptsTheRepositoryComposerJson(): void
+    {
+        self::assertSame(0, $this->runMissingScript((string) file_get_contents(__DIR__.'/../../../../composer.json')));
     }
 
     public function testTheImageReadsTheProfileFromTheComposerJsonItCopies(): void
@@ -59,16 +99,11 @@ final class DockerfileTest extends TestCase
     public function testTheProfileListNamesEveryRequiredExtensionThatIsNotLoaded(): void
     {
         $composer = '{"require": {"php": ">=8.5", "ext-json": "*", "ext-intakt_absent": "*", "symfony/console": "*"}}';
-        $process = new Process([PHP_BINARY, '-r', str_replace('/usr/local/share/intakt/composer.json', 'php://stdin', $this->missingScript())], input: $composer);
+        $process = $this->missingScriptProcess($composer);
 
         $process->mustRun();
 
         self::assertSame('intakt_absent ', $process->getOutput());
-    }
-
-    public function testTheBuildFailsWhenAProfileExtensionIsStillMissingAfterTheInstall(): void
-    {
-        self::assertMatchesRegularExpression('/install-php-extensions \$\(php -r "\$missing"\).*\n\s+test -z "\$\(php -r "\$missing"\)"; \\\\$/m', $this->dockerfile());
     }
 
     public function testTheBuildFailsWhenOpcacheIsNotLoaded(): void
@@ -142,16 +177,31 @@ final class DockerfileTest extends TestCase
 
     private function dockerfile(): string
     {
-        $contents = file_get_contents(__DIR__.'/../../../../Dockerfile');
+        return $this->file('Dockerfile');
+    }
+
+    private function file(string $path): string
+    {
+        $contents = file_get_contents(__DIR__.'/../../../../'.$path);
         self::assertIsString($contents);
 
         return $contents;
     }
 
-    private function missingScript(): string
+    private function runMissingScript(string $composer): ?int
     {
-        if (1 !== preg_match("/^\\s+missing='([^']+)'; \\\\$/m", $this->dockerfile(), $match)) {
-            self::fail('The Dockerfile names no script that lists the missing profile extensions.');
+        return $this->missingScriptProcess($composer)->run();
+    }
+
+    private function missingScriptProcess(string $composer): Process
+    {
+        return new Process([PHP_BINARY, '-r', str_replace('/usr/local/share/intakt/composer.json', 'php://stdin', $this->missingScript('Dockerfile'))], input: $composer);
+    }
+
+    private function missingScript(string $file): string
+    {
+        if (1 !== preg_match("/^\\s+missing='([^']+)'; \\\\$/m", $this->file($file), $match)) {
+            self::fail($file.' names no script that lists the missing profile extensions.');
         }
 
         return $match[1];
