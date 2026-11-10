@@ -10,8 +10,8 @@ use Intakt\Core\Review\UseCase\ServeReviewTools\ListDirectoryTool;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReadFileTool;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\SearchFilesTool;
-use Mcp\Capability\Attribute\McpTool;
 use LogicException;
+use Mcp\Capability\Attribute\McpTool;
 use Override;
 use ReflectionClass;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -22,6 +22,9 @@ final readonly class IssuedReviewServerAccesses implements ReviewServerAccesses
     // The tools the review server serves; each is read only and its name is read from its own attribute, so it is spelled once.
     private const array TOOLS = [ReadFileTool::class, ListDirectoryTool::class, SearchFilesTool::class];
 
+    /**
+     * @param non-empty-string $url
+     */
     public function __construct(
         private ReviewCredential $credential,
         #[Autowire('%intakt.review_mcp_url%')]

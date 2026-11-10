@@ -6,16 +6,15 @@ namespace Intakt\Core\Ai\Contract;
 
 use SensitiveParameter;
 
-// The way a subscription CLI reaches the round's review server: the server's address, the credential of the round and the names of the read-only tools it may call.
 final readonly class ReviewServerAccess
 {
-    // The call option that carries it, dropped by every platform but the CLI's, which turns it into flags.
+    // Carried as a call option because only the subscription CLI's client reads it; the agent's own options never name it.
     public const string OPTION = 'intakt_review_server';
 
     /**
-     * @param non-empty-string       $name  the server's key in the CLI's MCP configuration
+     * @param non-empty-string       $name
      * @param non-empty-string       $url
-     * @param non-empty-list<string> $tools the server's own tool names, without the CLI's prefix
+     * @param non-empty-list<string> $tools
      */
     public function __construct(
         public string $name,

@@ -25,7 +25,7 @@ final class TierRoutedPlatform implements PlatformInterface
     private array $rounds = [];
 
     /**
-     * @param array<string, mixed> $options the options of every call, which the agent's own take over
+     * @param array<string, mixed> $options
      */
     public function __construct(
         private readonly TierInvoker $tiers,

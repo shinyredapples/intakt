@@ -157,7 +157,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
 
-        $config = json_decode((string) $cli->options['mcp_config'], true, flags: JSON_THROW_ON_ERROR);
+        $config = json_decode($this->stringOption($cli, 'mcp_config'), true, flags: JSON_THROW_ON_ERROR);
         self::assertSame(['mcpServers' => ['intakt-review' => ['type' => 'http', 'url' => 'http://localhost:7780/mcp/review', 'headers' => ['Authorization' => 'Bearer round-credential']]]], $config);
         self::assertTrue($cli->options['strict_mcp_config']);
     }
@@ -187,8 +187,8 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
 
-        self::assertStringNotContainsString('no tool is available', (string) $cli->options['append_system_prompt']);
-        self::assertStringContainsString('"json_schema"', (string) $cli->options['append_system_prompt']);
+        self::assertStringNotContainsString('no tool is available', $this->stringOption($cli, 'append_system_prompt'));
+        self::assertStringContainsString('"json_schema"', $this->stringOption($cli, 'append_system_prompt'));
     }
 
     public function testAnApprovalWithTheReviewServerStillCountsAsUnreadUntilTheVerdictRuleChanges(): void
@@ -313,9 +313,17 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         return new ClaudeCodePlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, $models);
     }
 
+    private function stringOption(RecordedClaudeCodeCli $cli, string $name): string
+    {
+        $option = $cli->options[$name] ?? null;
+        self::assertIsString($option);
+
+        return $option;
+    }
+
     private function servers(): ReviewServerAccesses
     {
-        $servers = $this->createStub(ReviewServerAccesses::class);
+        $servers = self::createStub(ReviewServerAccesses::class);
         $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
 
         return $servers;

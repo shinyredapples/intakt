@@ -9,8 +9,8 @@ use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
-use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -38,6 +38,7 @@ use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -152,7 +153,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if (Provider::ClaudeCode !== $answering->provider || null === $round || null === $this->servers) {
+        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
             return [];
         }
 
