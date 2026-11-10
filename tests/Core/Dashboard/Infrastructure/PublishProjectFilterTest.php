@@ -150,7 +150,7 @@ final class PublishProjectFilterTest extends TestCase
         $reads = 0;
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturnCallback(function () use (&$reads): RecordedEvents {
-            // The first read only finds alpha's round to be its first, and the second is the filter's read under the lock.
+            // On the second read, because the first one only decides that alpha's round is its first, and the second is the filter's read under the lock.
             if (2 === ++$reads) {
                 ($this->secondWorker ?? throw new LogicException('No second worker.'))(new RoundOpened('r2', 'beta'));
 
