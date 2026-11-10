@@ -33,6 +33,7 @@ use Intakt\Plugin\GitHubForge\Domain\Installation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -383,7 +384,8 @@ final class GitHubForgeTest extends TestCase
         (void) $checked->current();
         // Past the recorded expiry, so the next mint answers with a token that already lapsed.
         $clock->modify('+2 hours');
-        $forge = new GitHubForge(new GitHubCalls(new MockHttpClient(), FreshReadings::at($clock), $tokens), $checked, $this->secretScan());
+        $calls = new GitHubCalls(new MockHttpClient(), FreshReadings::at($clock), $tokens);
+        $forge = new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked));
 
         try {
             $forge->change(new ChangeId(self::PULL));
@@ -595,7 +597,10 @@ final class GitHubForgeTest extends TestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubForge(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), $this->secretScan());
+        $calls = new GitHubCalls($http, $readings, $tokens);
+        $checked = new CheckedInstallationTokens($readBack, $tokens);
+
+        return new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked));
     }
 
     private function secretScan(): SecretScan

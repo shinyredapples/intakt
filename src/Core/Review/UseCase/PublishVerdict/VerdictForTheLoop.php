@@ -17,6 +17,7 @@ use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
+use Intakt\Plugin\Forge\Contract\ReviewToken;
 
 // Decided like intakt:review decides, from the quorum and the stored verdicts alone, so the loop gets the outcome the panel's policy gives.
 final readonly class VerdictForTheLoop
@@ -31,21 +32,30 @@ final readonly class VerdictForTheLoop
 
     public function of(ReviewRound $round): PublishedVerdict
     {
-        $head = $round->identity()->commits->head;
         $votes = array_map($this->voteOf(...), $round->reviewers());
         $decision = $this->decisionOf($round, $votes);
+        if (Decision::Blocked === $decision) {
+            return $this->published($round, HeadStatus::Error, 'Intakt could not review this head.', null);
+        }
 
-        return match ($decision) {
-            Decision::Approve => new PublishedVerdict($head, HeadStatus::Success, 'Intakt approves this head.', $this->commentOf($round, $decision, $votes)),
-            Decision::Changes => new PublishedVerdict($head, HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOf($round, $decision, $votes)),
-            Decision::Blocked => new PublishedVerdict($head, HeadStatus::Error, 'Intakt could not review this head.', null),
-        };
+        $comment = $this->commentOf($round, $decision, $votes);
+
+        // From the comment's verdict, not the decision, so the status and the comment never tell the loop two outcomes.
+        return Decision::Approve === $comment->verdict()
+            ? $this->published($round, HeadStatus::Success, 'Intakt approves this head.', $comment->text())
+            : $this->published($round, HeadStatus::Failure, 'Intakt asks for changes on this head.', $comment->text());
     }
 
     // The status alone, because a comment that would leak a secret must not reach the forge in any form.
     public function unpublishable(ReviewRound $round): PublishedVerdict
     {
-        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not publish its review of this head.', null);
+        return $this->published($round, HeadStatus::Error, 'Intakt could not publish its review of this head.', null);
+    }
+
+    // The round's id as the token, so a retried publication finds the comment an earlier attempt posted.
+    private function published(ReviewRound $round, HeadStatus $status, string $description, ?string $comment): PublishedVerdict
+    {
+        return new PublishedVerdict($round->identity()->commits->head, $status, $description, $comment, new ReviewToken($round->id()->toRfc4122()));
     }
 
     // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
@@ -67,13 +77,13 @@ final readonly class VerdictForTheLoop
     /**
      * @param list<PanelVerdict> $votes
      */
-    private function commentOf(ReviewRound $round, Decision $decision, array $votes): string
+    private function commentOf(ReviewRound $round, Decision $decision, array $votes): LoopReviewComment
     {
         $act = $this->actListOf($round);
         $approvals = count(array_filter($votes, static fn (PanelVerdict $vote): bool => Decision::Approve === $vote->verdict->verdict));
         $summary = sprintf('%d of %d reviewers approve; findings to act on: %d.', $approvals, count($votes), count($act));
 
-        return new LoopReviewComment($round->identity()->commits->head, $decision, $act, $summary)->text();
+        return new LoopReviewComment($round->identity()->commits->head, $decision, $act, $summary);
     }
 
     /**

@@ -24,6 +24,7 @@ use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -227,7 +228,10 @@ final class GitHubForgeRateLimitTest extends TestCase
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $this->readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubForge(new GitHubCalls($http, $this->readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new SecretScan(dirname(__DIR__, 3), 'gitleaks'));
+        $calls = new GitHubCalls($http, $this->readings, $tokens);
+        $checked = new CheckedInstallationTokens($readBack, $tokens);
+
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked));
     }
 
     private function plain(string $url): MockResponse

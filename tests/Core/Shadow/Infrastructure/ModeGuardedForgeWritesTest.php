@@ -125,6 +125,6 @@ final class ModeGuardedForgeWritesTest extends TestCase
 
     private function verdict(): PublishedVerdict
     {
-        return new PublishedVerdict(new CommitId(str_repeat('a', 40)), HeadStatus::Error, 'Intakt could not review this head.', null);
+        return new PublishedVerdict(new CommitId(str_repeat('a', 40)), HeadStatus::Error, 'Intakt could not review this head.', null, new ReviewToken('round-of-the-guard-test'));
     }
 }

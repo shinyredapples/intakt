@@ -38,6 +38,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
 {
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
+    private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -50,6 +51,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
+        private PostedComments $comments,
     ) {
     }
 
@@ -134,9 +136,12 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
-        // The comment before the status, so a head never shows Intakt's status without the comment that explains it.
+        // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
+        $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
         foreach ($comments as $comment) {
-            $this->post($address->issuePath().'/comments', ['body' => $comment]);
+            if (!$this->comments->holdsMarker($address, $marker)) {
+                $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
+            }
         }
 
         $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [

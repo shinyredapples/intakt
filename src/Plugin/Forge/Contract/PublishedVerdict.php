@@ -15,6 +15,7 @@ final readonly class PublishedVerdict
         public HeadStatus $status,
         public string $description,
         public ?string $comment,
+        public ReviewToken $token,
     ) {
         if ('' === trim($description)) {
             throw new InvalidArgumentException('A published verdict has a description.');

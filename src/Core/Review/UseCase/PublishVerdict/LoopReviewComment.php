@@ -6,12 +6,14 @@ namespace Intakt\Core\Review\UseCase\PublishVerdict;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Plugin\Forge\Contract\CommitId;
 
 // The shape of the loop's own reviewer comments, because the loop reads Intakt's verdict as it reads its own reviewers' (issue #1251, D1).
 final readonly class LoopReviewComment
 {
     private const string HEADING = '**Review by Intakt** (head %s)';
+    private const string FOLLOW_UPS = 'Follow-ups:';
     private const int SHORT_HEAD = 12;
 
     /**
@@ -19,24 +21,31 @@ final readonly class LoopReviewComment
      */
     public function __construct(
         private CommitId $head,
-        private Decision $verdict,
+        private Decision $decision,
         private array $findings,
         private string $summary,
     ) {
     }
 
+    // The loop reads an open P1 as changes whatever the JSON says, so an approval that lists one is published as changes and the status can follow this verdict.
+    public function verdict(): Decision
+    {
+        $openP1 = array_any($this->findings, static fn (Finding $finding): bool => Severity::P1 === $finding->severity);
+
+        return Decision::Approve === $this->decision && $openP1 ? Decision::Changes : $this->decision;
+    }
+
     public function text(): string
     {
+        $verdict = $this->verdict();
         $lines = [sprintf(self::HEADING, substr($this->head->hash, 0, self::SHORT_HEAD)), ''];
-        foreach ($this->findings as $finding) {
-            $lines[] = $this->lineOf($finding);
-        }
-
         if ([] !== $this->findings) {
-            $lines[] = '';
+            // Filed as follow-ups under an approval, because the loop reads a P2 above that line as changes.
+            $listed = array_map($this->lineOf(...), $this->findings);
+            $lines = [...$lines, ...(Decision::Approve === $verdict ? [self::FOLLOW_UPS, ...$listed] : $listed), ''];
         }
 
-        $json = json_encode(['verdict' => $this->verdict->value, 'head' => $this->head->hash, 'summary' => $this->summary], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $json = json_encode(['verdict' => $verdict->value, 'head' => $this->head->hash, 'summary' => $this->summary], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         return implode("\n", [...$lines, '```json', $json, '```']);
     }
