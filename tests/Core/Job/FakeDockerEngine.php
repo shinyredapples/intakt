@@ -14,7 +14,7 @@ final class FakeDockerEngine
     // An empty file, because the engine client only checks that its socket exists before the mock answers.
     public const string SOCKET = __DIR__.'/Fixtures/docker.sock';
 
-    /** @var array<string, array{name: string, job: string, definition: array<string, mixed>, running: bool, oom: bool, exit: int}> */
+    /** @var array<string, FakeContainer> */
     private array $containers = [];
 
     /** @var array<string, Closure(string): array{int, bool}> */
@@ -55,7 +55,8 @@ final class FakeDockerEngine
     public function leaveRunning(string $job): string
     {
         $id = $this->nextId();
-        $this->containers[$id] = ['name' => 'intakt-job-'.$job, 'job' => $job, 'definition' => [], 'running' => true, 'oom' => false, 'exit' => 0];
+        $this->containers[$id] = new FakeContainer('intakt-job-'.$job, $job, '');
+        $this->containers[$id]->running = true;
 
         return $id;
     }
@@ -106,10 +107,9 @@ final class FakeDockerEngine
         }
 
         $path = (string) preg_replace('#^/v1\.44/#', '', (string) parse_url($url, PHP_URL_PATH));
-        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
         return match (true) {
-            'POST' === $method && 'containers/create' === $path => $this->create(is_string($query['name'] ?? null) ? $query['name'] : '', is_string($options['body'] ?? null) ? $options['body'] : '{}'),
+            'POST' === $method && 'containers/create' === $path => $this->create($url, $options),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),
             1 === preg_match('#^containers/(\w+)/(start|wait|json|kill)$#', $path, $call) => $this->onContainer($call[1], $call[2]),
             'DELETE' === $method && 1 === preg_match('#^containers/(\w+)$#', $path, $call) => $this->remove($call[1]),
@@ -117,13 +117,18 @@ final class FakeDockerEngine
         };
     }
 
-    private function create(string $name, string $body): MockResponse
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function create(string $url, array $options): MockResponse
     {
-        /** @var array{Labels: array<string, string>} $definition */
-        $definition = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        /** @var array{Labels: array<string, string>, HostConfig: array{Mounts: list<array{Source: string, Target: string}>}} $definition */
+        $definition = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '{}', true, flags: JSON_THROW_ON_ERROR);
         $job = $definition['Labels']['intakt.job'];
+        $output = array_column($definition['HostConfig']['Mounts'], 'Source', 'Target')['/output'] ?? '';
         $id = $this->nextId();
-        $this->containers[$id] = ['name' => $name, 'job' => $job, 'definition' => $definition, 'running' => false, 'oom' => false, 'exit' => 0];
+        $this->containers[$id] = new FakeContainer(is_string($query['name'] ?? null) ? $query['name'] : '', $job, $output);
         $this->definitions[$job] = $definition;
 
         return $this->json(['Id' => $id], 201);
@@ -131,52 +136,49 @@ final class FakeDockerEngine
 
     private function onContainer(string $id, string $call): MockResponse
     {
-        if (!isset($this->containers[$id])) {
+        $container = $this->containers[$id] ?? null;
+
+        if (null === $container) {
             return $this->json(['message' => 'No such container: '.$id], 404);
         }
 
         return match ($call) {
-            'start' => $this->start($id),
-            'wait' => $this->containers[$id]['running'] ? new MockResponse('', ['error' => 'Idle timeout reached']) : $this->json(['StatusCode' => $this->containers[$id]['exit']]),
-            'kill' => $this->kill($id),
-            default => $this->state($id),
+            'start' => $this->start($container),
+            'wait' => $container->running ? new MockResponse('', ['error' => 'Idle timeout reached']) : $this->json(['StatusCode' => $container->exitCode]),
+            'kill' => $this->kill($container),
+            default => $this->state($container),
         };
     }
 
-    private function start(string $id): MockResponse
+    private function start(FakeContainer $container): MockResponse
     {
-        $job = $this->containers[$id]['job'];
-
-        if (in_array($job, $this->hanging, true)) {
-            $this->containers[$id]['running'] = true;
+        if (in_array($container->job, $this->hanging, true)) {
+            $container->running = true;
 
             return new MockResponse('', ['http_code' => 204]);
         }
 
-        [$exit, $oom] = ($this->behaviors[$job] ?? static fn (string $output): array => [0, false])($this->outputOf($id));
-        $this->containers[$id]['exit'] = $exit;
-        $this->containers[$id]['oom'] = $oom;
+        $behavior = $this->behaviors[$container->job] ?? static fn (string $output): array => [0, false];
+        [$container->exitCode, $container->memoryKilled] = $behavior($container->outputDirectory);
 
         return new MockResponse('', ['http_code' => 204]);
     }
 
-    private function kill(string $id): MockResponse
+    private function kill(FakeContainer $container): MockResponse
     {
-        $this->containers[$id]['running'] = false;
-        $this->containers[$id]['exit'] = 137;
+        $container->running = false;
+        $container->exitCode = 137;
 
         return new MockResponse('', ['http_code' => 204]);
     }
 
-    private function state(string $id): MockResponse
+    private function state(FakeContainer $container): MockResponse
     {
         if ($this->garbledState) {
             return $this->json(['State' => 'fine']);
         }
 
-        $container = $this->containers[$id];
-
-        return $this->json(['State' => ['Running' => $container['running'], 'OOMKilled' => $container['oom'], 'ExitCode' => $container['exit']]]);
+        return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => $container->memoryKilled, 'ExitCode' => $container->exitCode]]);
     }
 
     private function remove(string $id): MockResponse
@@ -198,24 +200,10 @@ final class FakeDockerEngine
         $listing = [];
 
         foreach ($this->containers as $id => $container) {
-            $listing[] = ['Id' => $id, 'Names' => ['/'.$container['name']], 'Labels' => ['intakt.job' => $container['job']]];
+            $listing[] = ['Id' => $id, 'Names' => ['/'.$container->name], 'Labels' => ['intakt.job' => $container->job]];
         }
 
         return $listing;
-    }
-
-    private function outputOf(string $id): string
-    {
-        /** @var list<array{Source: string, Target: string}> $mounts */
-        $mounts = $this->containers[$id]['definition']['HostConfig']['Mounts'] ?? [];
-
-        foreach ($mounts as $mount) {
-            if ('/output' === $mount['Target']) {
-                return $mount['Source'];
-            }
-        }
-
-        return '';
     }
 
     private function nextId(): string
