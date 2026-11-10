@@ -19,7 +19,7 @@ use Intakt\Plugin\Forge\Contract\OpenChanges;
 use LogicException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// Serves recorded pull requests and their CI runs to an install in the test environment, because no forge lists them yet (plan task T18) and the evidence of a tick needs a running install.
+// Serves recorded pull requests and their CI runs to an install in the test environment, so the journeys and the evidence of a tick need no GitHub; GitHubWatchReads serves an installed instance.
 /**
  * @phpstan-type Pull array{number: int, head: array{sha: string}, updated_at: string}
  * @phpstan-type Run array{name: string, event: string, head_sha: string, created_at: string, status: string, conclusion: string|null}
