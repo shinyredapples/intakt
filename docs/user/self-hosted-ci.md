@@ -12,6 +12,12 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 
 These jobs then run on a runner with all of those labels: `check`, `changes`, `persistence` and `image` from `ci.yml`, `first-start` from `first-start.yml`, and `journeys` from `journeys.yml`. The `alarm` job of `journeys.yml` always runs on GitHub's `ubuntu-24.04`, because it uses the `gh` command those runners have. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
+## A hosted runner service
+
+A service that runs each job on a new VM and throws the VM away afterwards (for example Ubicloud) is set up the same way: install its GitHub App on the repository and put its runner label in `CI_RUNS_ON`, for example `["ubicloud-standard-4"]`. Such services register their runners as self-hosted, so also set the repository variable `CI_DISPOSABLE_RUNNER` to `true`: the jobs then allow user namespaces and lift AppArmor on that VM, as they do on GitHub's runners. Never set it for a machine you keep.
+
+These services share their IP addresses among their customers, and Docker Hub allows only a few anonymous downloads per address, so a job can fail to fetch an image. Create a read-only access token on a Docker Hub account and store it, with the account name, as the repository secrets `DOCKERHUB_TOKEN` and `DOCKERHUB_USERNAME`; the jobs then log in before they download. A same-repository pull request's job can read the token, so give it no more than read access to public repositories.
+
 `journeys.yml` runs the journeys on main every night and never on a pull request. To start a run yourself, use the "Run workflow" button of the `journeys` workflow on the Actions tab, or `gh workflow run journeys.yml`. When a journey fails, `alarm` files one urgent task, or updates the one already open.
 
 ## The runner must be ephemeral
@@ -41,9 +47,9 @@ The script that registers your ephemeral runner should do three things before ea
 | `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `head`, `dirname`, `env`, `timeout` and `sleep` | `docker/smoke-test.sh` (the `image` job) checks the started container over HTTP with `curl`, reads the `FROM` tag with `awk`, makes the run's random secrets with `od` and `tr`, and limits each wait |
 | `openssl`, `bash` and `sleep` | `docker/verify-first-start.sh` (the `first-start` job) generates the random secrets for the started container with `openssl` on the host and waits with `sleep` until the container answers |
 | Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them); `journeys` runs each journey in one too, where `unshare` allows it |
-| No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; `journeys` gets the same container settings; the workflows lift AppArmor only on GitHub's runners, never on yours |
+| No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; `journeys` gets the same container settings; the workflows lift AppArmor only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, never on other runners of yours |
 
-The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners, which are thrown away after the job. Prepare the clean state so the host meets them.
+The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, both thrown away after the job. Prepare the clean state so the host meets them.
 
 ## When it goes wrong
 
