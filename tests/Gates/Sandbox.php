@@ -80,7 +80,8 @@ final readonly class Sandbox
 
     public function git(string ...$arguments): ProcessResult
     {
-        $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
+        // Without fsync, because a sandbox is a scratch repository that nothing reads after a crash, and side by side workers otherwise wait on each other's disk flushes.
+        $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsync=none'];
 
         return new ProcessRunner()->run(['git', ...$identity, ...array_values($arguments)], $this->root);
     }

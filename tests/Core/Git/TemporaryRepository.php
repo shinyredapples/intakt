@@ -195,7 +195,8 @@ final readonly class TemporaryRepository
                 $unset[$name] = false;
             }
         }
-        $process = new Process(['git', ...$arguments], $this->path, $unset, $input);
+        // Without fsync, because the repository is scratch that nothing reads after a crash, and side by side workers otherwise wait on each other's disk flushes.
+        $process = new Process(['git', '-c', 'core.fsync=none', ...$arguments], $this->path, $unset, $input);
         $process->run();
 
         if (!$process->isSuccessful()) {
