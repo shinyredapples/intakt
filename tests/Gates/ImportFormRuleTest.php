@@ -24,7 +24,7 @@ final class ImportFormRuleTest extends PhpStanRuleTestCase
         return new ImportFormRule();
     }
 
-    public function testAPlainFunctionAndConstantPassTheCodingStandardsAndStaticAnalysis(): void
+    public function testAPlainFunctionAndConstantPassTheCodingStandards(): void
     {
         $this->assertAcceptedBy('cs', 'plain-function-and-constant');
     }
@@ -35,7 +35,7 @@ final class ImportFormRuleTest extends PhpStanRuleTestCase
     public static function casesOfOneRun(): iterable
     {
         return self::casesOfOnePhpstanRun([
-            'APlainFunctionAndConstantPassStaticAnalysis' => ['plain-function-and-constant'],
+            'APlainFunctionAndConstantPassesStaticAnalysis' => ['plain-function-and-constant'],
             'AnImportAliasWithoutAShortNameClashFailsStaticAnalysis' => ['unneeded-import-alias', 'src/Report.php:7 intakt.unneededImportAlias'],
         ]);
     }
