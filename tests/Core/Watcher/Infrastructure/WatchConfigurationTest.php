@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Watcher\Infrastructure;
 
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
@@ -18,6 +19,33 @@ final class WatchConfigurationTest extends TestCase
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.']);
 
         self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.']], $projects);
+    }
+
+    public function testAGitHubRepositoryNamedOwnerSlashNameIsAccepted(): void
+    {
+        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']);
+
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']], $projects);
+    }
+
+    #[DataProvider('misspelledRepositories')]
+    public function testAGitHubRepositoryThatIsNotOwnerSlashNameIsRefused(string $name): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/The "github" key must be owner\/name\./');
+
+        $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => $name]);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function misspelledRepositories(): iterable
+    {
+        yield 'no owner' => ['widgets'];
+        yield 'an address' => ['https://github.com/acme/widgets'];
+        yield 'a third part' => ['acme/widgets/pull'];
+        yield 'dots only' => ['acme/..'];
     }
 
     public function testABlankTaskIsRefused(): void
