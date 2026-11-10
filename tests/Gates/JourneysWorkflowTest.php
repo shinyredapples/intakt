@@ -8,6 +8,11 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
 
+/**
+ * @phpstan-type Step array{env?: array<string, string>}
+ * @phpstan-type Job array{permissions?: array<string, string>, needs?: string|list<string>, if?: string, outputs?: array<string, string>, env?: array<string, string>, steps?: list<Step>}
+ * @phpstan-type WorkflowFile array{on: array<string, mixed>, permissions: array<string, string>, env?: array<string, string>, jobs: array<string, Job>}
+ */
 #[CoversNothing]
 final class JourneysWorkflowTest extends TestCase
 {
@@ -31,7 +36,7 @@ final class JourneysWorkflowTest extends TestCase
     {
         $workflow = $this->workflow();
 
-        self::assertArrayNotHasKey('permissions', $workflow['jobs']['journeys']);
+        self::assertArrayNotHasKey('permissions', $workflow['jobs']['journeys'] ?? []);
     }
 
     public function testOnlyTheAlarmJobMayWriteIssues(): void
@@ -50,48 +55,60 @@ final class JourneysWorkflowTest extends TestCase
     {
         $jobs = $this->workflow()['jobs'];
 
-        self::assertSame('journeys', $jobs['alarm']['needs']);
-        self::assertSame("failure() && needs.journeys.outputs.outcome == 'failure'", $jobs['alarm']['if']);
-        self::assertSame('${{ steps.journeys.outcome }}', $jobs['journeys']['outputs']['outcome']);
+        self::assertSame('journeys', $jobs['alarm']['needs'] ?? null);
+        self::assertSame("failure() && needs.journeys.outputs.outcome == 'failure'", $jobs['alarm']['if'] ?? null);
+        self::assertSame('${{ steps.journeys.outcome }}', $jobs['journeys']['outputs']['outcome'] ?? null);
     }
 
     public function testOnlyTheLastAlarmStepHasTheTokenInItsEnvironment(): void
     {
         $workflow = $this->workflow();
+        $lastStep = array_key_last($workflow['jobs']['alarm']['steps'] ?? []);
 
-        self::assertSame(['jobs.alarm.steps.'.array_key_last($workflow['jobs']['alarm']['steps'])], $this->placesHoldingTheToken($workflow));
+        self::assertSame(['jobs.alarm.steps.'.$lastStep], $this->placesHoldingTheToken($workflow));
     }
 
     /**
-     * @return array<string, mixed>
+     * @return WorkflowFile
      */
     private function workflow(): array
     {
         self::assertFileExists(self::WORKFLOW);
 
-        /** @var array<string, mixed> */
-        return Yaml::parseFile(self::WORKFLOW);
+        /** @var WorkflowFile $workflow */
+        $workflow = Yaml::parseFile(self::WORKFLOW);
+
+        return $workflow;
     }
 
     /**
-     * @param array<string, mixed> $workflow
+     * @param WorkflowFile $workflow
      *
      * @return list<string>
      */
     private function placesHoldingTheToken(array $workflow): array
     {
-        $places = [];
-        if (isset($workflow['env']['GH_TOKEN'])) {
-            $places[] = 'env';
-        }
+        $places = isset($workflow['env']['GH_TOKEN']) ? ['env'] : [];
+
         foreach ($workflow['jobs'] as $name => $job) {
-            if (isset($job['env']['GH_TOKEN'])) {
-                $places[] = 'jobs.'.$name;
-            }
-            foreach ($job['steps'] ?? [] as $index => $step) {
-                if (isset($step['env']['GH_TOKEN'])) {
-                    $places[] = 'jobs.'.$name.'.steps.'.$index;
-                }
+            $places = [...$places, ...$this->placesInJob('jobs.'.$name, $job)];
+        }
+
+        return $places;
+    }
+
+    /**
+     * @param Job $job
+     *
+     * @return list<string>
+     */
+    private function placesInJob(string $path, array $job): array
+    {
+        $places = isset($job['env']['GH_TOKEN']) ? [$path] : [];
+
+        foreach ($job['steps'] ?? [] as $index => $step) {
+            if (isset($step['env']['GH_TOKEN'])) {
+                $places[] = $path.'.steps.'.$index;
             }
         }
 
