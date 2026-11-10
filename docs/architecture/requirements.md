@@ -52,10 +52,10 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from a hash of the Dockerfile, `composer.json` and the check ini | yes |
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
-| `bash`, `cat`, `tee`, `grep`, `sed`, `head` | the `check` job | running the static and the other gates at once, each half's output and exit code in the runner's temporary folder, then printing both and the summary in gate order | yes |
+| `bash`, `cat`, `tee`, `grep`, `sed`, `head` | the `check` job | running both halves at once, keeping their output and exit codes, printing the gate lines in order | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 
-Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above); the `check` job's halves (`.github/ci/check-half.sh`) also run `sh`, `jq`, `date`, `cat`, `sed` and `grep` there (the gate lists, the wall time and the cgroup figures).
+Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above); `check-half.sh` also runs `sh`, `jq`, `date`, `cat`, `sed` and `grep` there.
 
 ## To smoke-test the container image
 
