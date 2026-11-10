@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use UnexpectedValueException;
 
 // The shape of the loop's own reviewer comments, because the loop reads Intakt's verdict as it reads its own reviewers' (issue #1251, D1).
 final readonly class LoopReviewComment
@@ -65,8 +66,11 @@ final readonly class LoopReviewComment
         return null === $finding->line ? $finding->file : $finding->file.':'.$finding->line;
     }
 
+    // Unicode line ends too, because a reader may split on them as it splits on a newline.
     private function oneLine(string $text): string
     {
-        return trim((string) preg_replace('/\s+/', ' ', $text));
+        $line = preg_replace('/[\s\x{85}\x{2028}\x{2029}]+/u', ' ', $text) ?? throw new UnexpectedValueException('A finding holds text that is not valid UTF-8.');
+
+        return trim($line);
     }
 }
