@@ -19,7 +19,7 @@ updates:
       prefix: build
       include: scope
     cooldown:
-      default-days: 3 # zizmor: ignore[dependabot-cooldown] as composer.json's cooldown
+      default-days: 3 # zizmor: ignore[dependabot-cooldown] matches composer's 3-day cooldown (conventions.md)
     groups:
       images:
         patterns: ['*']
@@ -33,7 +33,7 @@ updates:
       include: scope
     versioning-strategy: increase
     cooldown:
-      default-days: 3 # zizmor: ignore[dependabot-cooldown] as composer.json's cooldown
+      default-days: 3 # zizmor: ignore[dependabot-cooldown] matches composer's 3-day cooldown (conventions.md)
       semver-major-days: 7
     groups:
       symfony-ai:

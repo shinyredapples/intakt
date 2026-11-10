@@ -146,6 +146,8 @@ Before it runs any gate, `bin/check` checks that the programs the selected gates
 
 `bin/check` looks for the programs on `PATH`. When `PATH` is not set at all, it looks where the system shell `/bin/sh` then looks, since the gates start their programs through that shell (on Debian and Ubuntu: `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` and `/bin`); if the shell cannot run, it looks only in the project folder. A `PATH` that is set but empty (`PATH=`) is taken as it is: only the project folder is searched, so every other program is reported missing.
 
+The `workflows` gate needs zizmor (version in the requirements) and fails with `missing tool zizmor` without it; `--skip=workflows` leaves it out.
+
 ## The release cooldown for dependencies
 
 `composer.json` sets a release cooldown of 3 days: `composer update` leaves out a package version published less than 3 days ago and locks the newest older one. The `audit` gate of `bin/check` also fails when `composer.lock` holds a release inside that period. Wait until the release is 3 days old; do not shorten the period to make the gate pass. This needs Composer 2.11 or later (see above). Dependabot has its own cooldown, which only decides when its pull requests open. It also holds for the `FROM` images of `Dockerfile` and `.github/ci/Dockerfile`, with one exception: the gitleaks image comes from GitHub's container registry, where Dependabot cannot see when a version was published, so a gitleaks update can open with no wait. The database images that CI starts for the persistence tests (`mysql`, `mariadb` and `postgres` in `.github/workflows/ci.yml`) are not updated by Dependabot at all, so no cooldown applies to them.

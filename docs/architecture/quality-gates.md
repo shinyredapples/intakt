@@ -27,4 +27,4 @@ The gates start `git` only through `Workspace::git()` (and `HighlightFragments`,
 
 Options: `--fast` (changed PHP files only; every PHP file when the change touches the gate definitions or what builds the container: `config/`, `src/Kernel.php` or a `services.yaml` under `tests/`, since a service removed in configuration alone leaves its callers unchanged), `--journeys` (see [Journeys](journeys.md)), `--only=<gate,...>`, `--skip=<gate,...>`, `--base=<ref>` (the base of the change, default `origin/main`).
 
-The last gate, `workflows` (`WorkflowsGate`), runs `zizmor --offline --no-config --format=json .github` without GitHub tokens; any finding of its default audits fails it, unless its line carries `# zizmor: ignore[<audit>]` and a reason.
+The last gate, `workflows` (`WorkflowsGate`), runs `zizmor --offline --no-config --quiet --format=json .github` without GitHub tokens; any finding fails it. `# zizmor: ignore[<audit>]` on its line suppresses one; the project requires a reason after it, which part 3 of #929 makes the gate enforce.

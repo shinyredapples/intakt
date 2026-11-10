@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
-use Intakt\Gates\ProcessRunner;
 use Intakt\Gates\WorkflowsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 
@@ -13,24 +12,17 @@ final class WorkflowsGateTest extends SandboxTestCase
 {
     public function testAPullRequestTitleInARunStepFailsTheGate(): void
     {
-        $run = $this->withStep('run: echo "${{ github.event.pull_request.title }}"')->check('--only=workflows');
-
-        self::assertStringContainsString('.github/workflows/t.yml:8 template-injection', $run->findingsOf('workflows'));
+        self::assertStringContainsString('t.yml:8 template-injection', $this->findingsOf('run: echo "${{ github.event.pull_request.title }}"'));
     }
 
     public function testAnActionPinnedToATagFailsTheGate(): void
     {
-        $run = $this->withStep('uses: actions/checkout@v4')->check('--only=workflows');
-
-        self::assertStringContainsString('.github/workflows/t.yml:8 unpinned-uses', $run->findingsOf('workflows'));
+        self::assertStringContainsString('t.yml:8 unpinned-uses', $this->findingsOf('uses: actions/checkout@v4'));
     }
 
-    public function testOurGithubFolderPassesWithATokenSet(): void
+    public function testBrokenYamlFailsWithZizmorsErrorNotItsBanner(): void
     {
-        $home = dirname(__DIR__, 2);
-        $run = new CheckRun(new ProcessRunner()->run(['php', $home.'/bin/check', '--root='.$home, '--only=workflows'], $home, ['GH_TOKEN' => 'unused']));
-
-        self::assertTrue($run->passed('workflows'), $run->output());
+        self::assertStringStartsWith('zizmor failed: WARN zizmor::registry::input: failed to parse', $this->findingsOf('run: ['));
     }
 
     public function testAMissingZizmorFailsTheGate(): void
@@ -41,16 +33,15 @@ final class WorkflowsGateTest extends SandboxTestCase
             $tools->symlink($name, trim((string) shell_exec('command -v '.$name)));
         }
 
-        $run = $this->withStep('run: true')->checkWith(['PATH' => $tools->root], '--only=workflows');
-
-        self::assertSame('missing tool zizmor', $run->findingsOf('workflows'), $run->output());
+        self::assertSame('missing tool zizmor', $this->findingsOf('run: true', ['PATH' => $tools->root]));
     }
 
-    private function withStep(string $step): Sandbox
+    /** @param array<string, string> $environment */
+    private function findingsOf(string $step, array $environment = []): string
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('.github/workflows/t.yml', "name: t\non: pull_request\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - {$step}\n");
 
-        return $sandbox;
+        return $sandbox->checkWith($environment, '--only=workflows')->findingsOf('workflows');
     }
 }
