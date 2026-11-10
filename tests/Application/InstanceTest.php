@@ -20,7 +20,7 @@ final class InstanceTest extends InstanceTestCase
     }
 
     // One boot for both, because each boot of the real kernel compiles its container cold.
-    public function testACleanCheckoutReportsReadyExitsZeroAndLeavesNothingInTheTemporaryDirectoryOrTheProjectTree(): void
+    public function testACleanCopyOfTheProjectReportsReadyExitsZeroAndLeavesNothingInTheTemporaryDirectoryOrTheProjectTree(): void
     {
         $project = $this->copyOfTheProject();
         $before = $this->treeOf($project);
