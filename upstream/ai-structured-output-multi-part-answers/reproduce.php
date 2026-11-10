@@ -6,9 +6,9 @@ use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Agent\Toolbox\Toolbox;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory;
+use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\Validator\ValidatorSubscriber;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -66,7 +66,7 @@ function events(string $stopReason, array ...$content): MockResponse
 }
 
 /**
- * @param list<MockResponse> $responses
+ * @param list<MockResponse>   $responses
  * @param array<string, mixed> $options
  */
 function decisionOf(array $responses, array $options): string
