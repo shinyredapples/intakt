@@ -79,6 +79,10 @@ final class ShadowRoundTest extends KernelTestCase
                 beta:
                     tiers:
                         standard: { provider: anthropic, model: big }
+                gamma:
+                    mode: reviewer-for-loop
+                    tiers:
+                        standard: { provider: anthropic, model: big }
             YAML);
         $_SERVER['INTAKT_CONFIG'] = $this->file;
         $this->containers = self::compiledContainers();
@@ -147,6 +151,32 @@ final class ShadowRoundTest extends KernelTestCase
     public function testALiveProjectsApprovingVerdictsAreCountedForAMerge(): void
     {
         $review = $this->reviewChange()->review($this->request('beta'));
+
+        $verdicts = $this->countedFor($review);
+
+        self::assertSame(Standing::Current, $verdicts->standing->standing);
+        self::assertCount(2, $verdicts->counting);
+    }
+
+    public function testAReviewerForLoopProjectsRoundRunsItsWholePanelAndPostsNothingToTheForge(): void
+    {
+        $review = $this->reviewAndPost('gamma');
+
+        self::assertSame(Decision::Approve, $review->decision);
+        self::assertCount(2, $review->verdicts);
+        self::assertSame([], $this->forge()->writeLog);
+    }
+
+    public function testAReviewerForLoopProjectsVerdictsAreMarkedWithItsModeInTheLedger(): void
+    {
+        $this->reviewChange()->review($this->request('gamma'));
+
+        self::assertSame(['reviewer-for-loop', 'reviewer-for-loop'], $this->recordedVerdictModes());
+    }
+
+    public function testAReviewerForLoopProjectsApprovingVerdictsAreCountedForAMerge(): void
+    {
+        $review = $this->reviewChange()->review($this->request('gamma'));
 
         $verdicts = $this->countedFor($review);
 
