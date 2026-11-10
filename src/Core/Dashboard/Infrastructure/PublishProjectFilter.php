@@ -14,7 +14,7 @@ use Symfony\Component\Lock\LockFactory;
 use Throwable;
 use Twig\Environment;
 
-// On every opened round, because a round's start is the only ledger row that adds a project to the filter.
+// Only on a project's first round, because that start is the only ledger row that adds a project to the filter, and every publication resets the select of an open page.
 #[AsCommandHandler]
 final readonly class PublishProjectFilter
 {
@@ -35,7 +35,9 @@ final readonly class PublishProjectFilter
     public function __invoke(RoundOpened $opened): void
     {
         try {
-            $this->publishLatest();
+            if ($this->projects->isFirstRoundOf($opened->round, $opened->project)) {
+                $this->publishLatest();
+            }
         } catch (Throwable $failure) {
             // Swallowed after a log, because the round is already committed and a failed live update must not send its start back to the queue.
             $this->logger->warning('The project filter was not published.', ['round' => $opened->round, 'project' => $opened->project, 'exception' => $failure]);

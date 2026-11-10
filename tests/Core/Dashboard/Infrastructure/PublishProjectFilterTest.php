@@ -93,7 +93,7 @@ final class PublishProjectFilterTest extends TestCase
 
     public function testThePublishedFilterOffersAllProjectsFirstAndThenEveryProjectInNameOrder(): void
     {
-        $this->publisher($this->hubThatAccepts(), $this->ledgerOf('beta', 'project10', 'Alpha', 'project9', 'beta'))(new RoundOpened('r5', 'beta'));
+        $this->publisher($this->hubThatAccepts(), $this->ledgerOf('beta', 'project10', 'Alpha', 'project9', 'beta'))(new RoundOpened('r4', 'project9'));
 
         self::assertSame(
             [['', 'All projects'], ['Alpha', 'Alpha'], ['beta', 'beta'], ['project9', 'project9'], ['project10', 'project10']],
@@ -150,13 +150,14 @@ final class PublishProjectFilterTest extends TestCase
         $reads = 0;
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturnCallback(function () use (&$reads): RecordedEvents {
-            if (1 === ++$reads) {
+            // The first read only finds alpha's round to be its first, and the second is the filter's read under the lock.
+            if (2 === ++$reads) {
                 ($this->secondWorker ?? throw new LogicException('No second worker.'))(new RoundOpened('r2', 'beta'));
 
                 return $this->eventsOf('alpha');
             }
 
-            return $this->eventsOf('alpha', 'beta');
+            return 1 === $reads ? $this->eventsOf('alpha') : $this->eventsOf('alpha', 'beta');
         });
         $this->secondWorker = $this->publisher($this->hubThatAccepts(), $ledger, $locks);
 
@@ -182,6 +183,21 @@ final class PublishProjectFilterTest extends TestCase
         $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha', 'beta'))(new RoundOpened('r2', 'beta'));
 
         self::assertCount(1, $this->posted);
+    }
+
+    public function testARoundOfAProjectAlreadyInTheFilterPublishesNothing(): void
+    {
+        $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha', 'beta', 'alpha'))(new RoundOpened('r3', 'alpha'));
+
+        self::assertSame([], $this->posted);
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
+    public function testARoundMissingFromTheLedgerPublishesNothing(): void
+    {
+        $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha'))(new RoundOpened('r9', 'beta'));
+
+        self::assertSame([], $this->posted);
     }
 
     private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
