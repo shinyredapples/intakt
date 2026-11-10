@@ -37,6 +37,12 @@ final class RatchetListsGateTest extends SandboxTestCase
 
         self::assertTrue($run->failed('ratchet'), $run->output());
 
+        $lists = array_column(self::listChanges(), 0);
+
+        foreach (array_filter(explode("\n", $run->findingsOf('ratchet'))) as $finding) {
+            self::assertNotEmpty(array_filter($lists, static fn (string $list): bool => str_starts_with($finding, $list.':')), $finding);
+        }
+
         return $run;
     }
 
