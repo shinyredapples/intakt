@@ -166,6 +166,44 @@ final class UpdateMirrorTest extends TestCase
         self::assertSame('refs/heads/main', $this->git($path, 'symbolic-ref', 'HEAD'));
     }
 
+    public function testTheMirrorOfASha256RemoteResolvesHeadToTheRemotesCommit(): void
+    {
+        $remote = new TemporaryRepository('sha256');
+
+        try {
+            $commit = $remote->commitFile('a.txt', 'one');
+
+            $path = $this->update('alpha', $remote->path);
+
+            self::assertSame($commit, $this->git($path, 'rev-parse', '--verify', 'HEAD'));
+        } finally {
+            $remote->remove();
+        }
+    }
+
+    public function testTheHeadOfAMirrorOfARemoteWithADetachedHeadResolvesToTheDetachedCommit(): void
+    {
+        $first = $this->remote->objectAt('HEAD');
+        $this->remote->commitFile('b.txt', 'two');
+        $this->remote->checkoutDetached($first);
+
+        $path = $this->update('alpha', $this->remote->path);
+
+        self::assertSame($first, $this->git($path, 'rev-parse', '--verify', 'HEAD'));
+    }
+
+    public function testAnExistingMirrorFollowsARemoteWhoseHeadBecameDetached(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+        $first = $this->remote->objectAt('HEAD');
+        $this->remote->commitFile('b.txt', 'two');
+        $this->remote->checkoutDetached($first);
+
+        $this->update('alpha', $this->remote->path);
+
+        self::assertSame($first, $this->git($path, 'rev-parse', '--verify', 'HEAD'));
+    }
+
     public function testAFailedFirstUpdateLeavesNoFolderBehind(): void
     {
         try {

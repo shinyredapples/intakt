@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
+use Closure;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
@@ -13,8 +16,6 @@ use Symfony\Component\Process\Process;
 final readonly class NetworkGit
 {
     public const array RETRY_DELAYS = [10, 30];
-
-    private const int TIMEOUT_SECONDS = 600;
 
     // HardenedGit allows no protocol at all, so a network call names the two it needs; GIT_WORK_TREE would point a bare repository and a clone at the wrong place.
     private const array NETWORK = [
@@ -26,6 +27,7 @@ final readonly class NetworkGit
     public function __construct(
         private ClockInterface $clock,
         private LoggerInterface $logger,
+        private float $timeoutSeconds = 600,
     ) {
     }
 
@@ -33,6 +35,18 @@ final readonly class NetworkGit
      * @throws NetworkGitFailed
      */
     public function run(GitCall $call): string
+    {
+        return $this->runEachAttempt(static fn (): GitCall => $call);
+    }
+
+    /**
+     * Builds the call again for each attempt, for a call that must not reuse what a failed attempt left behind.
+     *
+     * @param Closure(): GitCall $call
+     *
+     * @throws NetworkGitFailed
+     */
+    public function runEachAttempt(Closure $call): string
     {
         $failure = '';
 
@@ -42,7 +56,7 @@ final readonly class NetworkGit
                 $this->clock->sleep($delay);
             }
 
-            $result = $this->attempt($call);
+            $result = $this->attempt($call());
 
             if ($result instanceof Process) {
                 return $result->getOutput();
@@ -56,15 +70,25 @@ final readonly class NetworkGit
 
     private function attempt(GitCall $call): Process|string
     {
-        $process = new Process($call->command, $call->directory, [...$call->environment, ...self::NETWORK], timeout: self::TIMEOUT_SECONDS);
+        $process = new Process($call->command, $call->directory, [...$call->environment, ...self::NETWORK], timeout: $this->timeoutSeconds);
 
         try {
             $process->run();
         } catch (RuntimeException $stopped) {
             // Because a call that hangs until the timeout or is killed by a signal is the most common transient failure, it gets the same retries as one that exits.
-            return trim(($process->isStarted() ? $process->getErrorOutput() : '')."\n".$stopped->getMessage());
+            return trim(($process->isStarted() ? $process->getErrorOutput() : '')."\n".$this->reason($stopped));
         }
 
         return $process->isSuccessful() ? $process : $process->getErrorOutput();
+    }
+
+    // Never the exception's own message, because it holds the whole command line and with it any credential in the remote's URL.
+    private function reason(RuntimeException $stopped): string
+    {
+        return match (true) {
+            $stopped instanceof ProcessTimedOutException => sprintf('git timed out after %s seconds', $this->timeoutSeconds),
+            $stopped instanceof ProcessSignaledException => sprintf('git was killed by signal %d', $stopped->getSignal()),
+            default => 'git could not start',
+        };
     }
 }

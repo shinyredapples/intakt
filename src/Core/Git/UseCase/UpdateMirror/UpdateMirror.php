@@ -23,6 +23,9 @@ final readonly class UpdateMirror
 
     private const string REMOTE_HEAD = '/^ref: (refs\/heads\/[^\t\n]+)\tHEAD$/m';
 
+    // A SHA-1 or a SHA-256 object name.
+    private const string DETACHED_HEAD = '/^([0-9a-f]{40}|[0-9a-f]{64})\tHEAD$/m';
+
     public function __construct(
         private HardenedGit $hardened,
         private NetworkGit $network,
@@ -76,22 +79,32 @@ final readonly class UpdateMirror
 
     private function createMirror(string $project, string $remote, string $path): void
     {
-        // A leading dot is never a project name, so a staging folder cannot be taken for a mirror; a clone that dies half-way stays there and is never published.
-        $staging = $this->mirrorsDirectory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
         $this->filesystem->mkdir($this->mirrorsDirectory);
+        $attempts = [];
+        $staging = '';
 
         try {
-            $this->mustRun(['init', '--bare', '--quiet', '--', $staging], $this->mirrorsDirectory);
-            $this->fill($staging, $remote);
+            // A clone takes the remote's object format, which "init" would have to guess; each attempt gets a new staging folder, so a retry never clones into what a killed attempt left.
+            $this->network->runEachAttempt(function () use ($project, $remote, &$attempts, &$staging): GitCall {
+                $attempts[] = $staging = $this->stagingPath($project);
+
+                return $this->pinned(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrorsDirectory);
+            });
             $published = $this->publish($project, $staging, $path);
         } finally {
-            $this->filesystem->remove($staging);
+            $this->filesystem->remove($attempts);
         }
 
         // Because the update that won fetched at its own moment, possibly before this one: the published mirror is fetched again so it is at least as fresh as this fetch.
         if (!$published) {
             $this->fill($path, $remote);
         }
+    }
+
+    private function stagingPath(string $project): string
+    {
+        // A leading dot is never a project name, so a staging folder cannot be taken for a mirror; a clone that dies half-way stays there and is never published.
+        return $this->mirrorsDirectory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
     }
 
     private function fill(string $repository, string $remote): void
@@ -103,6 +116,9 @@ final readonly class UpdateMirror
 
         if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
             $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
+        } elseif (1 === preg_match(self::DETACHED_HEAD, $heads, $match)) {
+            // Detached, as "clone --mirror" leaves it, because a remote whose HEAD names no branch only advertises the commit.
+            $this->mustRun(['--git-dir='.$repository, 'update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
         }
     }
 

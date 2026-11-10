@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
@@ -100,8 +101,47 @@ final class NetworkGitTest extends TestCase
             self::fail('A call that cannot start must fail.');
         } catch (NetworkGitFailed $failed) {
             self::assertSame([10, 30], $clock->sleeps);
-            self::assertStringContainsString('missing', $failed->getMessage());
+            self::assertStringContainsString('could not start', $failed->getMessage());
         }
+    }
+
+    public function testACallThatTimesOutOnEveryAttemptNamesTheLimitButNeverTheCredentialInItsRemote(): void
+    {
+        $clock = new RecordingClock();
+        $log = new BufferingLogger();
+        $credential = 'not-a-real-'.bin2hex(random_bytes(4));
+        $hanging = new GitCall([PHP_BINARY, '-r', 'sleep(30);', 'https://intakt:'.$credential.'@localhost/repo.git'], $this->directory, []);
+
+        try {
+            new NetworkGit($clock, $log, timeoutSeconds: 0.2)->run($hanging);
+            self::fail('A call that always times out must fail.');
+        } catch (NetworkGitFailed $failed) {
+            $warnings = json_encode($log->cleanLogs(), JSON_THROW_ON_ERROR);
+
+            self::assertSame([10, 30], $clock->sleeps);
+            self::assertStringContainsString('timed out after 0.2 seconds', $failed->getMessage());
+            self::assertStringNotContainsString($credential, $failed->getMessage());
+            self::assertStringContainsString('timed out', $warnings);
+            self::assertStringNotContainsString($credential, $warnings);
+        }
+    }
+
+    public function testEachAttemptRunsTheCallBuiltForIt(): void
+    {
+        $remote = $this->directory.'/late';
+        $attempts = 0;
+        $clock = new RecordingClock(function (int $sleeps) use ($remote): void {
+            $this->initBare($remote);
+        });
+
+        $output = new NetworkGit($clock, new NullLogger())->runEachAttempt(function () use ($remote, &$attempts): GitCall {
+            ++$attempts;
+
+            return $this->listRemote(1 === $attempts ? $remote.'-never' : $remote);
+        });
+
+        self::assertSame('', $output);
+        self::assertSame(2, $attempts);
     }
 
     private function listRemote(string $remote): GitCall
