@@ -52,6 +52,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         );
     }
 
+    public function testTheScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('arm.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function holdBackDangerButtons(page)', (string) $this->browser->getInternalResponse()->getContent());
+    }
+
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void
     {
         $this->givenARunningRound();
