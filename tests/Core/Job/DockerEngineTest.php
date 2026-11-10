@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Job;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
+use Intakt\Core\Job\Infrastructure\EngineAnswer;
 use Intakt\Core\Job\Infrastructure\JobContainer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +17,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 #[CoversClass(DockerEngine::class)]
 #[CoversClass(DockerEngineFailed::class)]
+#[CoversClass(EngineAnswer::class)]
 #[UsesClass(JobContainer::class)]
 #[UsesClass(JobId::class)]
 final class DockerEngineTest extends TestCase

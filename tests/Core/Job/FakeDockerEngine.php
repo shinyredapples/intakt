@@ -38,8 +38,9 @@ final class FakeDockerEngine
         return new MockHttpClient($this->answer(...));
     }
 
+    // The behavior gets the output directory and returns the exit code and whether memory killed the job, so a test plays one run.
     /**
-     * @param Closure(string): array{int, bool} $behavior gets the output directory, returns the exit code and whether memory killed it
+     * @param Closure(string): array{int, bool} $behavior
      */
     public function behaveAs(string $job, Closure $behavior): void
     {
@@ -108,7 +109,7 @@ final class FakeDockerEngine
         parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
 
         return match (true) {
-            'POST' === $method && 'containers/create' === $path => $this->create((string) ($query['name'] ?? ''), is_string($options['body'] ?? null) ? $options['body'] : '{}'),
+            'POST' === $method && 'containers/create' === $path => $this->create(is_string($query['name'] ?? null) ? $query['name'] : '', is_string($options['body'] ?? null) ? $options['body'] : '{}'),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),
             1 === preg_match('#^containers/(\w+)/(start|wait|json|kill)$#', $path, $call) => $this->onContainer($call[1], $call[2]),
             'DELETE' === $method && 1 === preg_match('#^containers/(\w+)$#', $path, $call) => $this->remove($call[1]),

@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Job\Infrastructure;
 
 use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobServices;
 use Intakt\Core\Job\Contract\JobSpec;
 
-// The only writable places are the tmpfs work area, which goes with the container, and the job's own output directory.
+// Writable only in the tmpfs work area and the job's own output directory, so nothing else a job writes survives it.
 final readonly class JobContainerDefinition
 {
     private const int NANO = 1_000_000_000;
@@ -25,7 +26,7 @@ final readonly class JobContainerDefinition
             // A home and caches on the work area, so every job starts with a wiped home.
             'Env' => ['HOME='.JobSpec::WORK_AREA, 'TMPDIR='.JobSpec::WORK_AREA, 'INTAKT_JOB_ID='.$spec->id->value],
             'WorkingDir' => JobSpec::WORK_AREA,
-            'Labels' => [DockerEngine::JOB_LABEL => $spec->id->value],
+            'Labels' => [JobServices::JOB_LABEL => $spec->id->value],
             'NetworkDisabled' => true,
             'HostConfig' => $this->hostConfigOf($spec, $outputDirectory),
         ];
@@ -39,7 +40,7 @@ final readonly class JobContainerDefinition
         return [
             'ReadonlyRootfs' => true,
             'Tmpfs' => [JobSpec::WORK_AREA => 'rw,nosuid,nodev'],
-            'Mounts' => [...array_map($this->inputMountOf(...), $spec->inputs), $this->bindOf($outputDirectory, JobSpec::OUTPUT_DIRECTORY, false)],
+            'Mounts' => [...array_map($this->inputMountOf(...), $spec->inputs), $this->outputMountOf($outputDirectory)],
             // Swap equal to memory, so a runaway job is killed at its limit instead of swapping.
             'Memory' => $spec->limits->memoryBytes,
             'MemorySwap' => $spec->limits->memoryBytes,
@@ -56,14 +57,14 @@ final readonly class JobContainerDefinition
      */
     private function inputMountOf(JobInput $input): array
     {
-        return $this->bindOf($input->hostPath, $input->containerPath, true);
+        return ['Type' => 'bind', 'Source' => $input->hostPath, 'Target' => $input->containerPath, 'ReadOnly' => true];
     }
 
     /**
      * @return array{Type: string, Source: string, Target: string, ReadOnly: bool}
      */
-    private function bindOf(string $source, string $target, bool $readOnly): array
+    private function outputMountOf(string $outputDirectory): array
     {
-        return ['Type' => 'bind', 'Source' => $source, 'Target' => $target, 'ReadOnly' => $readOnly];
+        return ['Type' => 'bind', 'Source' => $outputDirectory, 'Target' => JobSpec::OUTPUT_DIRECTORY, 'ReadOnly' => false];
     }
 }

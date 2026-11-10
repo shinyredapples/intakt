@@ -10,7 +10,7 @@ use Intakt\Core\Job\Contract\JobOutputRefused;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
-// One directory per job, readable by the orchestrator's user only, and mounted into that job alone.
+// One directory per job, readable by the orchestrator's user only and mounted into that job alone, so no other job can read it.
 final readonly class JobOutputDirectories
 {
     public function __construct(

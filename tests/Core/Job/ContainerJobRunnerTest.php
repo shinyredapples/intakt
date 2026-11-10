@@ -19,6 +19,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Job\Infrastructure\ContainerJobRunner;
 use Intakt\Core\Job\Infrastructure\ContainerState;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
+use Intakt\Core\Job\Infrastructure\EngineAnswer;
 use Intakt\Core\Job\Infrastructure\JobContainer;
 use Intakt\Core\Job\Infrastructure\JobContainerDefinition;
 use Intakt\Core\Job\Infrastructure\JobContainers;
@@ -44,6 +45,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(OrphanedJobs::class)]
 #[CoversClass(DockerEngine::class)]
 #[UsesClass(ContainerState::class)]
+#[UsesClass(EngineAnswer::class)]
 #[UsesClass(JobContainer::class)]
 #[UsesClass(JobSpec::class)]
 #[UsesClass(JobId::class)]
@@ -292,10 +294,12 @@ final class ContainerJobRunnerTest extends TestCase
     {
         $this->engine->goDown();
 
-        $this->expectException(DockerEngineFailed::class);
-        $this->expectExceptionMessage('The Docker Engine is not reachable at '.FakeDockerEngine::SOCKET);
-
-        $this->whenJobRuns($this->spec('build-1'));
+        try {
+            $this->whenJobRuns($this->spec('build-1'));
+            self::fail('An unreachable engine must fail the job.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertStringStartsWith('The Docker Engine is not reachable at '.FakeDockerEngine::SOCKET.': ', $failure->getMessage());
+        }
     }
 
     public function testTheEngineIsCalledThroughItsSocket(): void
@@ -346,9 +350,9 @@ final class ContainerJobRunnerTest extends TestCase
     {
         $host = $this->engine->definitionOf($job)['HostConfig'];
         self::assertIsArray($host);
-        self::assertIsArray($host['Mounts']);
+        /** @var list<array<string, mixed>> $mounts */
+        $mounts = $host['Mounts'];
 
-        /* @var list<array<string, mixed>> */
-        return $host['Mounts'];
+        return $mounts;
     }
 }

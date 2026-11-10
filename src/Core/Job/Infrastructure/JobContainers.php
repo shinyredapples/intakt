@@ -10,7 +10,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 
 final readonly class JobContainers
 {
-    // Long enough for the engine to deliver SIGKILL and record the exit, short enough not to hold the slot.
+    // Ten seconds, because the engine needs a moment to deliver SIGKILL and record the exit, and the slot must not stay held.
     private const int KILL_GRACE_SECONDS = 10;
 
     public function __construct(

@@ -16,7 +16,6 @@ final readonly class DockerEngine
 {
     // Pinned, so a newer engine still answers in the shape read here (1.44 is Docker Engine 25).
     private const string API = 'http://docker/v1.44/';
-    public const string JOB_LABEL = 'intakt.job';
     private const string CONTAINER_ID = '/^[A-Za-z0-9]{1,128}$/D';
 
     private HttpClientInterface $client;
@@ -26,7 +25,7 @@ final readonly class DockerEngine
         #[Autowire(param: JobServices::DOCKER_SOCKET)]
         private string $socket,
     ) {
-        // The curl client reads bindto as the Unix socket to connect through.
+        // Set as bindto, because the curl client connects through the Unix socket named there.
         $this->client = $client->withOptions(['base_uri' => self::API, 'bindto' => $socket]);
     }
 
@@ -35,14 +34,14 @@ final readonly class DockerEngine
      */
     public function create(string $name, array $definition): string
     {
-        $answer = $this->call('POST', 'containers/create', ['query' => ['name' => $name], 'json' => $definition], [201]);
+        $answer = $this->send('POST', 'containers/create', ['query' => ['name' => $name], 'json' => $definition])->accepting(201);
 
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
     public function start(string $container): void
     {
-        $this->call('POST', sprintf('containers/%s/start', $container), [], [204, 304]);
+        $this->send('POST', sprintf('containers/%s/start', $container))->accepting(204, 304);
     }
 
     // False when the wait ended without an answer (the deadline passed or the connection broke), so the caller reads the state to tell which.
@@ -65,7 +64,7 @@ final readonly class DockerEngine
 
     public function state(string $container): ContainerState
     {
-        $state = $this->call('GET', sprintf('containers/%s/json', $container), [], [200])['State'] ?? null;
+        $state = $this->send('GET', sprintf('containers/%s/json', $container))->accepting(200)['State'] ?? null;
 
         if (!is_array($state) || !is_bool($state['Running'] ?? null) || !is_bool($state['OOMKilled'] ?? null) || !is_int($state['ExitCode'] ?? null)) {
             throw DockerEngineFailed::unexpected('containers/json');
@@ -74,16 +73,16 @@ final readonly class DockerEngine
         return new ContainerState($state['Running'], $state['OOMKilled'], $state['ExitCode']);
     }
 
-    // A 409 means the container stopped on its own meanwhile, which is what the kill wanted.
+    // A 409 is accepted, because it means the container stopped on its own meanwhile, which is what the kill wanted.
     public function kill(string $container): void
     {
-        $this->call('POST', sprintf('containers/%s/kill', $container), [], [204, 409]);
+        $this->send('POST', sprintf('containers/%s/kill', $container))->accepting(204, 409);
     }
 
-    // A 404 means it is gone already, which is what the removal wanted.
+    // A 404 is accepted, because it means the container is gone already, which is what the removal wanted.
     public function remove(string $container): void
     {
-        $this->call('DELETE', sprintf('containers/%s', $container), ['query' => ['force' => 'true']], [204, 404]);
+        $this->send('DELETE', sprintf('containers/%s', $container), ['query' => ['force' => 'true']])->accepting(204, 404);
     }
 
     /**
@@ -91,7 +90,8 @@ final readonly class DockerEngine
      */
     public function jobContainers(): array
     {
-        $listed = $this->call('GET', 'containers/json', ['query' => ['all' => 'true', 'filters' => json_encode(['label' => [self::JOB_LABEL]], JSON_THROW_ON_ERROR)]], [200]);
+        $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
+        $listed = $this->send('GET', 'containers/json', ['query' => ['all' => 'true', 'filters' => $filters]])->accepting(200);
 
         if (!array_is_list($listed)) {
             throw DockerEngineFailed::unexpected('containers/json');
@@ -102,7 +102,7 @@ final readonly class DockerEngine
 
     private function jobContainerOf(mixed $listed): ?JobContainer
     {
-        $job = is_array($listed) && is_array($listed['Labels'] ?? null) ? ($listed['Labels'][self::JOB_LABEL] ?? null) : null;
+        $job = is_array($listed) && is_array($listed['Labels'] ?? null) ? ($listed['Labels'][JobServices::JOB_LABEL] ?? null) : null;
 
         // Skipped because only a label Intakt could have written names a job whose lock decides the container's fate.
         if (!is_string($job) || !JobId::isValid($job)) {
@@ -123,27 +123,16 @@ final readonly class DockerEngine
 
     /**
      * @param array<string, mixed> $options
-     * @param list<int>            $accepted
-     *
-     * @return array<mixed>
      */
-    private function call(string $method, string $path, array $options, array $accepted): array
+    private function send(string $method, string $path, array $options = []): EngineAnswer
     {
         try {
             $response = $this->request($method, $path, $options);
-            $status = $response->getStatusCode();
-            $body = $response->getContent(false);
+
+            return new EngineAnswer($path, $response->getStatusCode(), $response->getContent(false));
         } catch (TransportExceptionInterface $failure) {
             throw DockerEngineFailed::unreachable($this->socket, $failure);
         }
-
-        $answer = '' === $body ? [] : json_decode($body, true);
-
-        if (!in_array($status, $accepted, true)) {
-            throw DockerEngineFailed::refused($path, $status, is_array($answer) && is_string($answer['message'] ?? null) ? $answer['message'] : '');
-        }
-
-        return is_array($answer) ? $answer : throw DockerEngineFailed::unexpected($path);
     }
 
     /**

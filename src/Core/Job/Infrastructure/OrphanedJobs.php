@@ -18,7 +18,7 @@ final readonly class OrphanedJobs
     }
 
     /**
-     * @return list<JobContainer> the containers removed
+     * @return list<JobContainer>
      */
     public function removeAll(): array
     {

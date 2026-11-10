@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Job;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
+use Intakt\Core\Job\Infrastructure\EngineAnswer;
 use Intakt\Core\Job\Infrastructure\JobContainer;
 use Intakt\Core\Job\Infrastructure\JobLedger;
 use Intakt\Core\Job\Infrastructure\JobLocks;
@@ -29,6 +30,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(OrphanedJobs::class)]
 #[UsesClass(DockerEngine::class)]
 #[UsesClass(DockerEngineFailed::class)]
+#[UsesClass(EngineAnswer::class)]
 #[UsesClass(JobContainer::class)]
 #[UsesClass(JobId::class)]
 #[UsesClass(JobLedger::class)]
