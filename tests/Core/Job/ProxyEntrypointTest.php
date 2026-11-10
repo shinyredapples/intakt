@@ -4,106 +4,73 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job;
 
-use Intakt\Core\Job\Infrastructure\EgressProxy;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// Runs the proxy sidecar's entrypoint with the real tinyproxy, because only the real proxy shows which log lines it writes and where.
+// Runs the proxy sidecar's entrypoint with a stand-in tinyproxy, because the CI image has none and a skipped test fails the tests gate; the refusal lines of the real tinyproxy are in EgressProxyTest.
 #[CoversNothing]
 final class ProxyEntrypointTest extends TestCase
 {
     private const string ENTRYPOINT = __DIR__.'/../../../docker/job-proxy/entrypoint.sh';
 
     private string $folder = '';
-    private ?Process $proxy = null;
 
     protected function setUp(): void
     {
-        if (null === new ExecutableFinder()->find('tinyproxy')) {
-            self::markTestSkipped('tinyproxy is not on the PATH, see docs/architecture/requirements.md.');
-        }
-
         $this->folder = sys_get_temp_dir().'/intakt-proxy-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->folder);
+        new Filesystem()->mkdir($this->folder.'/bin');
+        file_put_contents($this->folder.'/bin/tinyproxy', "#!/bin/sh\nprintf '%s\\n' \"\$*\"\n");
+        chmod($this->folder.'/bin/tinyproxy', 0o755);
     }
 
     protected function tearDown(): void
     {
-        $this->proxy?->stop(0);
         new Filesystem()->remove($this->folder);
     }
 
-    public function testAHostOutsideTheAllowlistIsRefusedAndTheRefusalIsInTheLogTheRunnerReads(): void
+    public function testTheProxyRunsInTheForegroundAndDeniesEveryHostItsFilterDoesNotList(): void
     {
-        $response = $this->connectThroughTheProxy('evil.example');
+        $arguments = $this->entrypointRun('api.example');
 
-        self::assertStringStartsWith('HTTP/1.0 403', $response);
-        self::assertSame(1, preg_match('/Proxying refused on filtered domain "evil\.example"$/', implode("\n", $this->refusals())));
+        $config = (string) file_get_contents($this->folder.'/tinyproxy.conf');
+        self::assertSame("-d -c {$this->folder}/tinyproxy.conf\n", $arguments);
+        self::assertStringContainsString("Filter \"{$this->folder}/allow\"\nFilterDefaultDeny Yes\nFilterType ERE\n", $config);
+        self::assertStringContainsString("Port 3128\n", $config);
+        self::assertStringNotContainsString('LogFile', $config);
     }
 
-    public function testAnAllowedHostIsNotRefused(): void
+    public function testEachAllowedHostBecomesAnAnchoredPatternWithItsDotsEscaped(): void
     {
-        $this->connectThroughTheProxy('api.example');
+        $this->entrypointRun('api.example,,registry.example');
 
-        self::assertSame([], $this->refusals());
+        self::assertSame("^api\\.example$\n^registry\\.example$\n", file_get_contents($this->folder.'/allow'));
     }
 
-    private function connectThroughTheProxy(string $host): string
+    public function testOnlyTheAllowedHostsMatchTheFilter(): void
     {
-        $port = $this->freePort();
-        $this->proxy = new Process(['sh', self::ENTRYPOINT], null, ['INTAKT_PROXY_ALLOW' => 'api.example,registry.example', 'INTAKT_PROXY_PORT' => (string) $port, 'TMPDIR' => $this->folder]);
-        $this->proxy->start();
-        $socket = $this->connected($port);
-        stream_set_timeout($socket, 5);
-        fwrite($socket, "CONNECT {$host}:443 HTTP/1.0\r\n\r\n");
-        $response = (string) fgets($socket);
-        fclose($socket);
-        $this->proxy->stop(1);
+        $this->entrypointRun('api.example,registry.example');
 
-        return $response;
+        $patterns = file($this->folder.'/allow', FILE_IGNORE_NEW_LINES) ?: [];
+        $allowed = array_values(array_filter(
+            ['api.example', 'registry.example', 'evil.example', 'api.example.evil.example', 'evil.api.example', 'apixexample'],
+            static fn (string $host): bool => array_any($patterns, static fn (string $pattern): bool => 1 === preg_match('/'.$pattern.'/', $host)),
+        ));
+
+        self::assertSame(['api.example', 'registry.example'], $allowed);
     }
 
-    /**
-     * @return list<string>
-     */
-    private function refusals(): array
+    private function entrypointRun(string $allow): string
     {
-        return new EgressProxy('p')->refusalsIn((string) $this->proxy?->getOutput());
-    }
+        $process = new Process(['sh', self::ENTRYPOINT], null, [
+            'PATH' => $this->folder.'/bin:/usr/bin:/bin',
+            'INTAKT_PROXY_ALLOW' => $allow,
+            'INTAKT_PROXY_PORT' => '3128',
+            'TMPDIR' => $this->folder,
+        ]);
+        $process->mustRun();
 
-    private function freePort(): int
-    {
-        $server = stream_socket_server('tcp://127.0.0.1:0');
-
-        if (false === $server) {
-            throw new RuntimeException('No free port.');
-        }
-
-        $name = (string) stream_socket_get_name($server, false);
-        fclose($server);
-
-        return (int) substr($name, (int) strrpos($name, ':') + 1);
-    }
-
-    /**
-     * @return resource
-     */
-    private function connected(int $port)
-    {
-        for ($attempt = 0; $attempt < 50; ++$attempt) {
-            $socket = @stream_socket_client('tcp://127.0.0.1:'.$port, $code, $error, 0.2);
-
-            if (false !== $socket) {
-                return $socket;
-            }
-
-            usleep(100_000);
-        }
-
-        throw new RuntimeException('The proxy did not listen: '.$this->proxy?->getErrorOutput());
+        return $process->getOutput();
     }
 }
