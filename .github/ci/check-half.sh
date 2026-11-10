@@ -1,6 +1,5 @@
 #!/bin/sh
-# One half of the check step, inside the copy: <name> --only|--skip <bin/check arguments>. An empty or unreadable
-# gate list fails closed: bin/check refuses it as an unknown gate. The figures after it are D4's of issue 1323.
+# One half of CI's check step, inside the copy: <name> --only|--skip <bin/check arguments> (docs/architecture/ci.md).
 name=$1 half=$2
 shift 2
 list=$(bin/check --static-gates)

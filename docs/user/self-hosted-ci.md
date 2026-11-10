@@ -2,8 +2,6 @@
 
 Intakt's own CI (`.github/workflows/ci.yml`, `.github/workflows/first-start.yml` and `.github/workflows/journeys.yml`) runs on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
 
-The `check` job runs the static gates and the gates that run the change's code in two containers at once, each on its own copy, so the tests start at once. On one checkout, `bin/check` runs the static gates first.
-
 ## Choosing the runner
 
 Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actions, Variables) to a JSON list of runner labels, for example:
