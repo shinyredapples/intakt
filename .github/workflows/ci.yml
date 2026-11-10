@@ -140,7 +140,9 @@ jobs:
   # network the runner creates for the job's services, and reach each database by its service name; no port is published
   # and there is no job container, so no Docker socket inside. The databases take no password (throwaway, never published).
   # The job's if can only be the fork guard, so the changes job's answer gates the steps and the database services instead:
-  # when the change does not touch persistence, no service starts (an empty image) and every step is skipped. A changes
+  # when the change does not touch persistence, no service starts (an empty image) and every step is skipped.
+  # The services take no Docker Hub credentials: an empty secret there is a template error that fails the job, so
+  # their images pull anonymously; the steps log in like the other jobs. A changes
   # job that fails skips the engines and fails the run. Every engine runs to its end even when another fails, so the run
   # reports every engine, each in its own log group.
   persistence:
@@ -153,9 +155,6 @@ jobs:
     services:
       mysql:
         image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mysql || '' }}
-        credentials:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           MYSQL_DATABASE: intakt_test
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
@@ -167,9 +166,6 @@ jobs:
           --health-retries 20
       mariadb:
         image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mariadb || '' }}
-        credentials:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           MARIADB_DATABASE: intakt_test
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
@@ -181,9 +177,6 @@ jobs:
           --health-retries 20
       postgresql:
         image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.postgresql || '' }}
-        credentials:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_DB: intakt_test
           POSTGRES_HOST_AUTH_METHOD: trust
