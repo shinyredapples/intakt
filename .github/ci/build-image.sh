@@ -7,8 +7,15 @@
 # so on a persistent runner it could tag another image with main's hash for every later job, main's included. On a
 # clean state a tag that exists at job start can only come from the image the owner prepared. A persistent self-hosted
 # runner is not supported.
+# With --print-hash it only prints the hash, which .github/actions/ci-image also uses as its cache key. A tag can also
+# come from that cache, which only runs on main write (never a pull request), keyed by the same hash.
 set -eu
-image="intakt-ci:$(sha256sum .github/ci/Dockerfile composer.json config/gates/php/check.ini | sha256sum | cut -c1-32)"
+hash=$(sha256sum .github/ci/Dockerfile composer.json config/gates/php/check.ini | sha256sum | cut -c1-32)
+if [ "${1:-}" = --print-hash ]; then
+    echo "$hash"
+    exit 0
+fi
+image="intakt-ci:$hash"
 if ! docker image inspect "$image" > /dev/null 2>&1; then
     docker build --tag "$image" --file .github/ci/Dockerfile .
 fi
