@@ -12,7 +12,7 @@ Code and conventions:
 Checks, CI and releases:
 - [Quality gates](quality-gates.md)
 - [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the watcher start and the round stream check the journeys use, and each journey (first install and setup, live review progress on the dashboard); a failing journey names itself and its step, and the live review progress journey has a forced-break proof; `bin/journey-alarm` files or updates one urgent task for a red run
-- [CI](ci.md)
+- [CI](ci.md): also the journeys on main, nightly and on demand
 - [Releases](releases.md)
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors
 
