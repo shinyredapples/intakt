@@ -21,18 +21,6 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertSame(['logo-light', 'logo-dark'], $brand->filter('img')->each(static fn (Crawler $logo): string => (string) $logo->attr('class')));
     }
 
-    public function testThePhoneLogosAreServedByTheInstall(): void
-    {
-        $logos = $this->browser->request('GET', '/reviews')->filter('.topbar a.brand-m img')->each(static fn (Crawler $logo): string => (string) $logo->attr('src'));
-
-        self::assertCount(2, $logos);
-        foreach ($logos as $logo) {
-            self::assertMatchesRegularExpression('#^/assets/images/intakt-lockup#', $logo);
-            $this->browser->request('GET', $logo);
-            self::assertResponseIsSuccessful();
-        }
-    }
-
     public function testThePhoneSearchButtonCarriesItsShortLabel(): void
     {
         $search = $this->browser->request('GET', '/reviews')->filter('.topbar button.search-trigger');

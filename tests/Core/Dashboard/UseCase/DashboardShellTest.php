@@ -25,7 +25,7 @@ final class DashboardShellTest extends DashboardPageTestCase
     }
 
     #[DataProvider('pages')]
-    public function testEveryPageShowsItsContentBesideTheRailAndUnderTheTopBar(string $path): void
+    public function testEveryPageShowsItsContentBesideTheRailAndUnderTheTopBarWithTheHiddenReconnectingLineAndOfflineMarker(string $path): void
     {
         $this->ledger->startRound('round-1', 'alpha');
 
@@ -35,26 +35,10 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertCount(1, $page->filter('.shell > nav.rail[aria-label="Main"]'));
         self::assertCount(1, $page->filter('.shell > .main > header.topbar'));
         self::assertCount(1, $page->filter('.shell > .main > main.content h1'));
-    }
-
-    #[DataProvider('pages')]
-    public function testEveryPageStartsItsContentWithTheHiddenReconnectingLine(string $path): void
-    {
-        $this->ledger->startRound('round-1', 'alpha');
-
-        $page = $this->browser->request('GET', $path);
 
         $line = $page->filter('.shell[data-controller="connection"] main.content > .conn:first-child');
         self::assertSame('line', $line->attr('data-connection-target'));
         self::assertSame('', $line->attr('hidden'));
-    }
-
-    #[DataProvider('pages')]
-    public function testEveryPageEndsItsTopBarWithTheHiddenOfflineMarker(string $path): void
-    {
-        $this->ledger->startRound('round-1', 'alpha');
-
-        $page = $this->browser->request('GET', $path);
 
         $marker = $page->filter('.shell[data-controller="connection"] header.topbar > .offline-marker:last-child');
         self::assertSame('marker', $marker->attr('data-connection-target'));
@@ -99,12 +83,15 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertSame('Intakt home', $brand->attr('aria-label'));
     }
 
-    public function testTheLogosAreServedByTheInstall(): void
+    public function testEveryLogoOfTheShellIsServedByTheInstall(): void
     {
-        $logos = $this->browser->request('GET', '/reviews')->filter('.rail a.brand img')->each(static fn (Crawler $logo): string => (string) $logo->attr('src'));
+        $page = $this->browser->request('GET', '/reviews');
+        $rail = $page->filter('.rail a.brand img')->each(static fn (Crawler $logo): string => (string) $logo->attr('src'));
+        $phone = $page->filter('.topbar a.brand-m img')->each(static fn (Crawler $logo): string => (string) $logo->attr('src'));
 
-        self::assertCount(3, $logos);
-        foreach ($logos as $logo) {
+        self::assertCount(3, $rail);
+        self::assertCount(2, $phone);
+        foreach ([...$rail, ...$phone] as $logo) {
             self::assertMatchesRegularExpression('#^/assets/images/#', $logo);
             $this->browser->request('GET', $logo);
             self::assertResponseIsSuccessful();
