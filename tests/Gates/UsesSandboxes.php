@@ -25,14 +25,14 @@ trait UsesSandboxes
     }
 
     /**
-     * @param array<string, non-empty-list<string>> $cases each case's fixture, followed by the findings it must report under its folder (none for a fixture that must pass)
+     * @param array<string, non-empty-list<string>> $fixtureAndFindingsOfEachCase
      *
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
-    final protected static function casesOfOnePhpstanRun(array $cases): iterable
+    final protected static function casesOfOnePhpstanRun(array $fixtureAndFindingsOfEachCase): iterable
     {
         // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder, and a case still runs alone under --filter
-        $sandbox = Sandbox::withFixturesInFolders(...array_unique(array_column($cases, 0)));
+        $sandbox = Sandbox::withFixturesInFolders(...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
         $sandbox->borrowKernel();
 
         try {
@@ -41,8 +41,8 @@ trait UsesSandboxes
             $sandbox->remove();
         }
 
-        foreach ($cases as $name => $case) {
-            yield $name => [$run, ...$case];
+        foreach ($fixtureAndFindingsOfEachCase as $name => $fixtureAndFindings) {
+            yield $name => [$run, ...$fixtureAndFindings];
         }
     }
 
