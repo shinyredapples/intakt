@@ -25,7 +25,7 @@ final class WorkflowsGate implements Gate
 
         $findings = array_map($this->finding(...), JsonNode::parse($result->output)?->items() ?? []);
 
-        return $result->succeeded() ? GateResult::passed('workflows') : GateResult::withFindings('workflows', $findings ?: ['zizmor failed: '.$result->firstErrorLine()]);
+        return $result->succeeded() ? GateResult::passed('workflows') : GateResult::withFindings('workflows', [] !== $findings ? $findings : ['zizmor failed: '.$result->firstErrorLine()]);
     }
 
     private function finding(JsonNode $finding): string
