@@ -78,6 +78,60 @@ final class DockerEngineTest extends TestCase
         $engine->waitForExit('abc123', 60);
     }
 
+    public function testAWaitAnsweredWithAnExitCodeCountsAsAnAnswer(): void
+    {
+        self::assertTrue($this->engineAnswering('{"StatusCode":0}')->waitForExit('abc123', 60));
+    }
+
+    public function testAWaitAnsweredWithAnErrorCountsAsNoAnswer(): void
+    {
+        self::assertFalse($this->engineAnswering('{"StatusCode":-1,"Error":{"Message":"context canceled"}}')->waitForExit('abc123', 60));
+    }
+
+    public function testAWaitAnsweredWithoutAnExitCodeCountsAsNoAnswer(): void
+    {
+        self::assertFalse($this->engineAnswering('')->waitForExit('abc123', 60));
+        self::assertFalse($this->engineAnswering('{"StatusCode":"0"}')->waitForExit('abc123', 60));
+        self::assertFalse($this->engineAnswering('not json')->waitForExit('abc123', 60));
+    }
+
+    public function testRemovalAlsoRemovesTheContainersAnonymousVolumes(): void
+    {
+        $engine = $this->engineRecording($url, '', 204);
+
+        $engine->remove('abc123');
+
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+        self::assertSame(['force' => 'true', 'v' => 'true'], $query);
+    }
+
+    public function testAnImageWithoutVolumesDeclaresNone(): void
+    {
+        self::assertSame([], $this->engineAnswering('{"Config":{"Volumes":null}}')->imageVolumes('sample:latest'));
+        self::assertSame([], $this->engineAnswering('{"Config":{}}')->imageVolumes('sample:latest'));
+    }
+
+    public function testTheVolumesAnImageDeclaresAreListed(): void
+    {
+        self::assertSame(['/data'], $this->engineAnswering('{"Config":{"Volumes":{"/data":{}}}}')->imageVolumes('sample:latest'));
+    }
+
+    public function testAnImageAnswerWithoutAConfigIsRefused(): void
+    {
+        $this->expectExceptionObject(DockerEngineFailed::unexpected('images/json'));
+
+        $this->engineAnswering('{"Id":"sha256:abc"}')->imageVolumes('sample:latest');
+    }
+
+    public function testTheImageNameIsEncodedIntoTheApiPath(): void
+    {
+        $engine = $this->engineRecording($url, '{"Config":{"Volumes":null}}');
+
+        $engine->imageVolumes('localhost:5000/sample:latest');
+
+        self::assertSame('/v1.44/images/localhost%3A5000%2Fsample%3Alatest/json', parse_url($url, PHP_URL_PATH));
+    }
+
     public function testAWaitWithoutTheSocketFailsInsteadOfReadingAsADeadline(): void
     {
         $engine = new DockerEngine(new MockHttpClient(new MockResponse('{"StatusCode":0}')), FakeDockerEngine::SOCKET.'.missing');
@@ -90,5 +144,16 @@ final class DockerEngineTest extends TestCase
     private function engineAnswering(string $body, int $status = 200): DockerEngine
     {
         return new DockerEngine(new MockHttpClient(new MockResponse($body, ['http_code' => $status])), FakeDockerEngine::SOCKET);
+    }
+
+    private function engineRecording(?string &$url, string $body, int $status = 200): DockerEngine
+    {
+        $client = new MockHttpClient(static function (string $method, string $requested) use (&$url, $body, $status): MockResponse {
+            $url = $requested;
+
+            return new MockResponse($body, ['http_code' => $status]);
+        });
+
+        return new DockerEngine($client, FakeDockerEngine::SOCKET);
     }
 }

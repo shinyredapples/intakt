@@ -44,13 +44,13 @@ final readonly class DockerEngine
         $this->send('POST', sprintf('containers/%s/start', $container))->accepting(204, 304);
     }
 
-    // False when the wait ended without an answer (the deadline passed or the connection broke), so the caller reads the state to tell which.
+    // False when the wait ended without an answer (the deadline passed, the connection broke or the body holds no exit code), so the caller reads the state to tell which.
     public function waitForExit(string $container, float $seconds): bool
     {
         try {
             $response = $this->request('POST', sprintf('containers/%s/wait', $container), ['timeout' => $seconds, 'max_duration' => $seconds]);
             $status = $response->getStatusCode();
-            $response->getContent(false);
+            $body = $response->getContent(false);
         } catch (TransportExceptionInterface) {
             return false;
         }
@@ -59,7 +59,36 @@ final readonly class DockerEngine
             throw DockerEngineFailed::refused('containers/wait', $status, '');
         }
 
-        return true;
+        return $this->holdsAnExitCode($body);
+    }
+
+    // The engine sends the 200 header before the wait ends and reports a wait that failed meanwhile as an Error in the body, so only a plain exit code counts.
+    private function holdsAnExitCode(string $body): bool
+    {
+        $answer = json_decode($body, true);
+
+        return is_array($answer) && is_int($answer['StatusCode'] ?? null) && null === ($answer['Error'] ?? null);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function imageVolumes(string $image): array
+    {
+        $config = $this->send('GET', sprintf('images/%s/json', rawurlencode($image)))->accepting(200)['Config'] ?? null;
+
+        if (!is_array($config)) {
+            throw DockerEngineFailed::unexpected('images/json');
+        }
+
+        // Absent or null means none, because the engine leaves an empty map out of its answer.
+        $volumes = $config['Volumes'] ?? [];
+
+        if (!is_array($volumes)) {
+            throw DockerEngineFailed::unexpected('images/json');
+        }
+
+        return array_map(strval(...), array_keys($volumes));
     }
 
     public function state(string $container): ContainerState
@@ -79,10 +108,10 @@ final readonly class DockerEngine
         $this->send('POST', sprintf('containers/%s/kill', $container))->accepting(204, 409);
     }
 
-    // A 404 is accepted, because it means the container is gone already, which is what the removal wanted.
+    // A 404 is accepted, because it means the container is gone already, which is what the removal wanted; v removes the anonymous volumes an image declares with it.
     public function remove(string $container): void
     {
-        $this->send('DELETE', sprintf('containers/%s', $container), ['query' => ['force' => 'true']])->accepting(204, 404);
+        $this->send('DELETE', sprintf('containers/%s', $container), ['query' => ['force' => 'true', 'v' => 'true']])->accepting(204, 404);
     }
 
     /**

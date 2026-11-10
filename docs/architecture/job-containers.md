@@ -7,7 +7,7 @@
 - `Contract/JobRunner::run(JobSpec): JobResult`, implemented by `Infrastructure/ContainerJobRunner`.
 - `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path) and `JobLimits` (memory in bytes, CPUs, run time in seconds). It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
 - `JobResult`: a `JobEnd` (the `JobCause` and the exit code) and the `JobOutput` (the files the job left in its output directory, by name).
-- Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work` or `/output` (after `..` is resolved), and for a job id that is already running. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read. `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read. `JobEventNotRecorded` when the ledger refuses the job's end.
+- Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work` or `/output` (after `..` is resolved), for a job id that is already running, and for an image that declares volumes. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read. `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read, for an output of more than 1000 entries, and for an output of more than 16 MiB in total (`JobOutputDirectories::MAX_FILES`, `MAX_BYTES`). `JobEventNotRecorded` when the ledger refuses the job's end.
 
 ## The container
 
@@ -27,7 +27,7 @@
 | `CapDrop`, `SecurityOpt` | `ALL`, `no-new-privileges` | |
 | `Labels` | `intakt.job=<id>` | finds the job's containers after a crash |
 
-The container is named `intakt-job-<id>`.
+The container is named `intakt-job-<id>`. Before it is created, the image is inspected (`GET /images/<name>/json`, the name URL-encoded into the path) and a job whose image declares volumes (`Config.Volumes`) is refused with `JobRefused`: a volume the image declares stays writable under `ReadonlyRootfs`, so the job could write outside its work area and output directory. An absent or `null` `Config.Volumes` means none.
 
 ## A run
 
@@ -36,7 +36,9 @@ flowchart TD
   lock[Take the job's lock without waiting] -->|busy| refused[JobRefused: already running]
   lock --> sweep[Remove orphaned jobs, and any container of this job]
   sweep --> prepare[Create var/jobs/id, mode 0700]
-  prepare --> create[Create and start the container]
+  prepare --> inspect[Inspect the image]
+  inspect -->|declares volumes| volumes[JobRefused: image volumes]
+  inspect --> create[Create and start the container]
   create --> wait[Wait for exit, at most the run time left]
   wait --> state[Read the state: OOMKilled, ExitCode]
   state -->|still running, time left| pause[Pause one second]
@@ -50,10 +52,11 @@ flowchart TD
 ```
 
 - The cause is `oom` when the engine reports `State.OOMKilled`, `timed_out` when the container still ran after the run time (it is killed, and the exit code is read after up to 10 more seconds), and `exited` otherwise. The ledger gets `job_ended` with `job`, `cause` and `exit_code`.
-- The run time is measured with the `ClockInterface` from the start. A wait that ends without an answer while the container still runs and time is left (a broken connection to the engine) is waited for again, one second later, for the time left; only a container that still runs when the run time is over is killed.
-- The container is removed (`DELETE /containers/<id>?force=true`) whatever happened after it was created, also when a later call fails. The output directory is removed after it was read, also when reading it fails.
+- The run time is measured with the `ClockInterface` from the start. After each wait the state is read, and only a state that says the container no longer runs records an end: the wait's own answer never does, because the engine sends the 200 header before the wait ends and reports a wait that failed on its side (a daemon shutdown, a cancelled wait) as `{"StatusCode":-1,"Error":{...}}` while the job still runs. `DockerEngine::waitForExit()` answers true only for a 200 whose body holds an integer `StatusCode` and no `Error`; an `Error`, an empty or unreadable body, a broken connection and the deadline count as no answer. A container that still runs after a wait, with time left, is waited for again one second later, for the time left; only a container that still runs when the run time is over is killed.
+- The container is removed (`DELETE /containers/<id>?force=true&v=true`, so the anonymous volumes it may own go with it) whatever happened after it was created, also when a later call fails. The output directory is removed after it was read, also when reading it fails.
 - The output directory is `var/jobs/<id>` under the project folder. A directory of the same id left from an earlier run is removed before the job starts. No other job's output directory is mounted into a job, so a job cannot read another job's output.
-- A link in the output directory is refused rather than followed, because the job wrote it and could point it at a file of the orchestrator.
+- The output is read with bounds checked before anything is allocated, because the job's memory limit does not cover what it writes to the host bind mount and the orchestrator holds the output in memory: the entries are counted as they are listed and refused past 1000, and each file's size is added before it is read and the output refused once the total exceeds 16 MiB. A link in the output directory is refused rather than followed, because the job wrote it and could point it at a file of the orchestrator.
+- Before an output directory is removed (after the run, or by the sweep), every folder under it that is not a link is set to mode 0700, because a job can leave a folder without any permission, which would otherwise stop its own cleanup and every later sweep. Links are never touched: `chmod` would follow one to the file it points at.
 
 ## After a crash
 
@@ -67,4 +70,4 @@ Every run calls it before it starts its own container, so the next job cleans up
 
 `Infrastructure/DockerEngine` talks to the Engine API version 1.44 (Docker Engine 25 or later) over the Unix socket in the container parameter `JobServices::DOCKER_SOCKET` (`/var/run/docker.sock`, set in `config/services.yaml`), through Symfony HttpClient with `bindto` set to the socket, which the curl client uses as its Unix socket. A missing socket fails at once with its path, because the curl client would otherwise read `bindto` as a network interface. The orchestrator runs Docker inside its own container, so the paths it mounts are paths the engine sees.
 
-Tests run against `tests/Core/Job/FakeDockerEngine.php`, a `MockHttpClient` callback that answers the same calls and plays a job by writing into the output directory the create request mounts, because the build sandbox has no Docker daemon. No test has run against a live engine yet.
+Tests run against `tests/Core/Job/FakeDockerEngine.php`, a `MockHttpClient` callback that answers the same calls (the image inspection included) and plays a job by writing into the output directory the create request mounts, because the build sandbox has no Docker daemon. No test has run against a live engine yet.

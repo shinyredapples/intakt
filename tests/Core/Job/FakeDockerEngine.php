@@ -31,6 +31,15 @@ final class FakeDockerEngine
     private array $cutOff = [];
 
     /** @var list<string> */
+    private array $waitErrors = [];
+
+    /** @var array<string, int> */
+    private array $waits = [];
+
+    /** @var array<string, list<string>> */
+    private array $volumes = [];
+
+    /** @var list<string> */
     private array $sockets = [];
 
     private int $next = 0;
@@ -68,6 +77,30 @@ final class FakeDockerEngine
     public function cutOffWaits(string $job, int $times): void
     {
         $this->cutOff[$job] = $times;
+    }
+
+    // Answered 200 with an Error in the body at once while the job still runs, as the engine does for a wait that failed on its side.
+    public function answerWaitsWithError(string $job): void
+    {
+        $this->waitErrors[] = $job;
+    }
+
+    /**
+     * @param list<string> $paths
+     */
+    public function declareVolumes(string $image, array $paths): void
+    {
+        $this->volumes[$image] = $paths;
+    }
+
+    public function waitsOf(string $job): int
+    {
+        return $this->waits[$job] ?? 0;
+    }
+
+    public function hasCreated(string $job): bool
+    {
+        return isset($this->definitions[$job]);
     }
 
     public function leaveRunning(string $job): string
@@ -129,6 +162,7 @@ final class FakeDockerEngine
         return match (true) {
             'POST' === $method && 'containers/create' === $path => $this->create($url, $options),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),
+            'GET' === $method && 1 === preg_match('#^images/(.+)/json$#', $path, $call) => $this->image(rawurldecode($call[1])),
             1 === preg_match('#^containers/(\w+)/(start|wait|json|kill)$#', $path, $call) => $this->onContainer($call[1], $call[2], $options),
             'DELETE' === $method && 1 === preg_match('#^containers/(\w+)$#', $path, $call) => $this->remove($call[1]),
             default => $this->json(['message' => 'page not found'], 404),
@@ -187,7 +221,7 @@ final class FakeDockerEngine
 
         $behavior = $this->behaviors[$container->job] ?? static fn (string $output): array => [0, false];
         [$container->exitCode, $container->memoryKilled] = $behavior($container->outputDirectory);
-        $container->running = isset($this->cutOff[$container->job]);
+        $container->running = isset($this->cutOff[$container->job]) || in_array($container->job, $this->waitErrors, true);
 
         return new MockResponse('', ['http_code' => 204]);
     }
@@ -197,6 +231,12 @@ final class FakeDockerEngine
      */
     private function wait(FakeContainer $container, array $options): MockResponse
     {
+        $this->waits[$container->job] = $this->waitsOf($container->job) + 1;
+
+        if ($container->running && in_array($container->job, $this->waitErrors, true)) {
+            return $this->json(['StatusCode' => -1, 'Error' => ['Message' => 'context canceled']]);
+        }
+
         if ($container->running && ($this->cutOff[$container->job] ?? 0) > 0) {
             --$this->cutOff[$container->job];
 
@@ -231,6 +271,14 @@ final class FakeDockerEngine
         }
 
         return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => $container->memoryKilled, 'ExitCode' => $container->exitCode]]);
+    }
+
+    // Volumes come back as a JSON object of paths, or null, as the engine inspects an image.
+    private function image(string $name): MockResponse
+    {
+        $paths = $this->volumes[$name] ?? [];
+
+        return $this->json(['Config' => ['Volumes' => [] === $paths ? null : (object) array_fill_keys($paths, (object) [])]]);
     }
 
     private function remove(string $id): MockResponse

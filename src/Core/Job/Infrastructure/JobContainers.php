@@ -7,6 +7,7 @@ namespace Intakt\Core\Job\Infrastructure;
 use DateTimeImmutable;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobSpec;
 use Symfony\Component\Clock\ClockInterface;
 
@@ -27,6 +28,7 @@ final readonly class JobContainers
 
     public function runToEnd(JobSpec $spec, string $outputDirectory): JobEnd
     {
+        $this->refuseImageVolumes($spec);
         $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory));
 
         try {
@@ -38,15 +40,25 @@ final readonly class JobContainers
         }
     }
 
-    // Waited for again while the run time lasts, because a wait without an answer can also be a broken connection to a job that still runs.
+    // A volume the image declares stays writable under ReadonlyRootfs, so the job could write outside its work area and output directory.
+    private function refuseImageVolumes(JobSpec $spec): void
+    {
+        $volumes = $this->engine->imageVolumes($spec->image);
+
+        if ([] !== $volumes) {
+            throw JobRefused::forImageVolumes($spec->image, $volumes);
+        }
+    }
+
+    // The state decides, never the wait's answer, because the engine answers a wait that failed on its side with 200 while the job still runs.
     private function awaitEnd(string $container, DateTimeImmutable $deadline): JobEnd
     {
         // Never called with zero seconds left, because the HTTP client reads a zero duration as no limit.
         while (($seconds = $this->secondsUntil($deadline)) > 0.0) {
-            $answered = $this->engine->waitForExit($container, $seconds);
+            $this->engine->waitForExit($container, $seconds);
             $state = $this->engine->state($container);
 
-            if ($answered || !$state->running) {
+            if (!$state->running) {
                 return $this->endOf($state);
             }
 

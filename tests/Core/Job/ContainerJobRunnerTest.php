@@ -221,6 +221,156 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertSame(60, $this->engine->clock->now()->getTimestamp() - $started->getTimestamp());
     }
 
+    public function testAWaitAnsweredWithAnErrorWhileTheJobRunsIsWaitedForAgainAndEndsTimedOut(): void
+    {
+        $this->engine->answerWaitsWithError('build-1');
+        $started = $this->engine->clock->now();
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertEquals(new JobEnd(JobCause::TimedOut, 137), $result->end);
+        self::assertSame(60, $this->engine->clock->now()->getTimestamp() - $started->getTimestamp());
+        self::assertGreaterThan(1, $this->engine->waitsOf('build-1'));
+        self::assertSame([['job' => 'build-1', 'cause' => 'timed_out', 'exit_code' => 137]], $this->ledger->payloads());
+        self::assertSame([], $this->engine->containerIds());
+    }
+
+    public function testAnImageThatDeclaresVolumesIsRefusedBeforeAContainerIsCreated(): void
+    {
+        $this->engine->declareVolumes('sample:latest', ['/var/cache', '/data']);
+
+        $this->expectExceptionObject(JobRefused::forImageVolumes('sample:latest', ['/var/cache', '/data']));
+
+        try {
+            $this->whenJobRuns($this->spec('build-1'));
+        } finally {
+            self::assertFalse($this->engine->hasCreated('build-1'));
+            self::assertDirectoryDoesNotExist($this->root.'/build-1');
+        }
+    }
+
+    public function testAnOutputLargerThanTheLimitIsRefusedWithoutBeingRead(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            // Sparse and far above the memory limit, so reading it would end the process instead of failing this test.
+            $bundle = fopen($output.'/bundle', 'w');
+            self::assertNotFalse($bundle);
+            ftruncate($bundle, 4 * 1024 * 1024 * 1024);
+            fclose($bundle);
+
+            return [0, false];
+        });
+
+        $this->expectExceptionObject(JobOutputRefused::tooLarge('bundle', JobOutputDirectories::MAX_BYTES));
+
+        $this->whenJobRuns($this->spec('build-1'));
+    }
+
+    public function testAnOutputExactlyAtTheSizeLimitIsRead(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            $bundle = fopen($output.'/bundle', 'w');
+            self::assertNotFalse($bundle);
+            ftruncate($bundle, JobOutputDirectories::MAX_BYTES - 1);
+            fclose($bundle);
+            file_put_contents($output.'/result', 'x');
+
+            return [0, false];
+        });
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame(['bundle', 'result'], $result->output->names());
+        self::assertSame(JobOutputDirectories::MAX_BYTES - 1, strlen((string) $result->output->contents('bundle')));
+    }
+
+    public function testMoreOutputEntriesThanTheLimitAreRefused(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            for ($file = 0; $file <= JobOutputDirectories::MAX_FILES; ++$file) {
+                touch(sprintf('%s/file-%04d', $output, $file));
+            }
+
+            return [0, false];
+        });
+
+        $this->expectExceptionObject(JobOutputRefused::tooMany(JobOutputDirectories::MAX_FILES));
+
+        $this->whenJobRuns($this->spec('build-1'));
+    }
+
+    public function testAsManyOutputEntriesAsTheLimitAreRead(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            for ($file = 0; $file < JobOutputDirectories::MAX_FILES; ++$file) {
+                touch(sprintf('%s/file-%04d', $output, $file));
+            }
+
+            return [0, false];
+        });
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertCount(JobOutputDirectories::MAX_FILES, $result->output->names());
+    }
+
+    public function testAFolderLeftWithoutPermissionsIsRefusedAndRemovedAllTheSame(): void
+    {
+        $this->engine->behaveAs('evil', static function (string $output): array {
+            mkdir($output.'/locked');
+            touch($output.'/locked/kept');
+            chmod($output.'/locked', 0o000);
+
+            return [0, false];
+        });
+
+        try {
+            $this->whenJobRuns($this->spec('evil'));
+            self::fail('A folder in the output must be refused.');
+        } catch (JobOutputRefused $refusal) {
+            self::assertSame(JobOutputRefused::notAPlainFile('locked')->getMessage(), $refusal->getMessage());
+        }
+
+        self::assertDirectoryDoesNotExist($this->root.'/evil');
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $this->whenJobRuns($this->spec('innocent'))->end);
+    }
+
+    public function testAFolderWithoutPermissionsLeftByACrashedJobDoesNotStopTheNextJob(): void
+    {
+        new Filesystem()->mkdir($this->root.'/build-0/locked/deeper');
+        chmod($this->root.'/build-0/locked/deeper', 0o000);
+        chmod($this->root.'/build-0/locked', 0o000);
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+        self::assertDirectoryDoesNotExist($this->root.'/build-0');
+    }
+
+    public function testALinkToAFolderInTheOutputIsNeverFollowedWhenPermissionsAreRestored(): void
+    {
+        // Beside the jobs root, because anything under it with a job-like name counts as a leftover output directory.
+        $elsewhere = $this->root.'-elsewhere';
+        new Filesystem()->mkdir($elsewhere);
+        chmod($elsewhere, 0o500);
+        $this->engine->behaveAs('build-1', static function (string $output) use ($elsewhere): array {
+            symlink($elsewhere, $output.'/escape');
+
+            return [0, false];
+        });
+
+        try {
+            $this->whenJobRuns($this->spec('build-1'));
+            self::fail('A link in the output must be refused.');
+        } catch (JobOutputRefused) {
+            self::assertSame(0o500, fileperms($elsewhere) & 0o777);
+            self::assertDirectoryDoesNotExist($this->root.'/build-1');
+        } finally {
+            chmod($elsewhere, 0o700);
+            rmdir($elsewhere);
+        }
+    }
+
     public function testTheContainerAndItsOutputDirectoryAreRemovedAfterExit(): void
     {
         $this->whenJobRuns($this->spec('build-1'));
