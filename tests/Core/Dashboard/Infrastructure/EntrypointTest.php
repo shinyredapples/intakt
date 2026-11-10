@@ -12,28 +12,13 @@ use Symfony\Component\Process\Process;
 #[CoversNothing]
 final class EntrypointTest extends TestCase
 {
-    public function testTheEntrypointNamesAMissingMercureIssuer(): void
+    public function testAMissingRequiredValueIsNamedOnStderrBeforeAnythingStarts(): void
     {
         $process = $this->entrypointWith(['MERCURE_JWT_ISSUER' => false]);
 
         self::assertNotSame(0, $process->getExitCode());
         self::assertStringContainsString('MERCURE_JWT_ISSUER', $process->getErrorOutput());
-    }
-
-    public function testTheEntrypointNamesAMissingMercureSecret(): void
-    {
-        $process = $this->entrypointWith(['MERCURE_JWT_SECRET' => false]);
-
-        self::assertNotSame(0, $process->getExitCode());
-        self::assertStringContainsString('MERCURE_JWT_SECRET', $process->getErrorOutput());
-    }
-
-    public function testTheEntrypointNamesAMissingAppSecret(): void
-    {
-        $process = $this->entrypointWith(['APP_SECRET' => false]);
-
-        self::assertNotSame(0, $process->getExitCode());
-        self::assertStringContainsString('APP_SECRET', $process->getErrorOutput());
+        self::assertSame('', $process->getOutput());
     }
 
     public function testEveryValueTheCaddyfileReadsWithoutADefaultIsCheckedByTheEntrypoint(): void

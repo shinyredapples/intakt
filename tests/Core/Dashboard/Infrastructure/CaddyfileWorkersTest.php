@@ -93,13 +93,17 @@ final class CaddyfileWorkersTest extends TestCase
         }
     }
 
-    public function testTheDashboardIsServedByTheAppWorker(): void
+    public function testTheDashboardIsServedByTheAppWorkerAndTheMcpRouteByTheMcpWorker(): void
     {
         $this->start();
         $response = $this->client->request('GET', $this->origin.'/projects');
 
         self::assertSame(200, $response->getStatusCode());
         self::assertSame(['index.php' => 1, 'mcp.php' => 0], $this->requestsPerWorkerFile(1));
+
+        $this->client->request('POST', $this->origin.'/mcp/owner')->getStatusCode();
+
+        self::assertSame(['index.php' => 1, 'mcp.php' => 1], $this->requestsPerWorkerFile(2));
     }
 
     public function testAWorkerPastTheMemoryCeilingIsReplacedWithoutAFailedRequest(): void
@@ -117,14 +121,6 @@ final class CaddyfileWorkersTest extends TestCase
         self::assertSame(array_fill(0, 10, 200), $statuses);
         self::assertTrue($this->server->isRunning());
         self::assertLessThan(self::CEILING_BYTES, $this->bytesHeldByTheAppWorkers());
-    }
-
-    public function testTheMcpRouteIsServedByTheMcpWorker(): void
-    {
-        $this->start();
-        $this->client->request('POST', $this->origin.'/mcp/owner')->getStatusCode();
-
-        self::assertSame(['index.php' => 0, 'mcp.php' => 1], $this->requestsPerWorkerFile(1));
     }
 
     /**
