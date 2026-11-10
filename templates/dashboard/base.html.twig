@@ -131,6 +131,20 @@
             showProject();
         }
     });
+    // Turbo appends a stream to the document element, so only the document sees it; a page left behind does nothing.
+    document.addEventListener('turbo:before-stream-render', (event) => {
+        if (event.target.getAttribute('target') !== 'projfilter' || !projectFilter.isConnected) {
+            return;
+        }
+        const render = event.detail.render;
+        // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
+        event.detail.render = (stream) => {
+            const chosen = projectFilter.value;
+            render(stream);
+            projectFilter.value = [...projectFilter.options].some((option) => option.value === chosen) ? chosen : '';
+            showProject();
+        };
+    });
     if (more) {
         more.addEventListener('click', () => showMore(moreSheet.hidden));
         // A tap beside the sheet's pages lands on its backdrop.
