@@ -154,19 +154,43 @@ final class RatchetListsGateTest extends SandboxTestCase
         self::assertSame([self::LIST.': holds more than parameters.ignoreErrors, so it could change the analysis'], new RatchetListFile(self::LIST, $list)->problems());
     }
 
-    public function testAnEntryWithoutACountFails(): void
+    // Because every list costs a PHPStan dump, the malformed entries are read side by side in one call.
+    /**
+     * @return array<string, IgnoredErrors>
+     */
+    public function testTheMalformedEntriesAreReadSideBySide(): array
     {
-        $entry = "\t\t-\n\t\t\tmessage: '#^Only booleans$#'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tpath: ../src/A.php\n";
+        $withoutCount = "\t\t-\n\t\t\tmessage: '#^Only booleans$#'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tpath: ../src/A.php\n";
 
-        $read = $this->readEntriesOf(self::listOf(self::HEADER, $entry));
+        $read = $this->readEntriesOf([
+            'without a count' => self::listOf(self::HEADER, $withoutCount),
+            'outside the repository' => self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../../../elsewhere/A.php')),
+        ]);
+
+        self::assertSame(['without a count', 'outside the repository'], array_keys($read));
+
+        return $read;
+    }
+
+    /**
+     * @param array<string, IgnoredErrors> $entries
+     */
+    #[Depends('testTheMalformedEntriesAreReadSideBySide')]
+    public function testAnEntryWithoutACountFails(array $entries): void
+    {
+        $read = $entries['without a count'];
 
         self::assertSame([], $read->counts);
         self::assertSame(['entry 1 needs exactly identifier, path inside the repository, count and one of message or rawMessage'], $read->problems);
     }
 
-    public function testAnEntryWithAPathOutsideTheRepositoryFails(): void
+    /**
+     * @param array<string, IgnoredErrors> $entries
+     */
+    #[Depends('testTheMalformedEntriesAreReadSideBySide')]
+    public function testAnEntryWithAPathOutsideTheRepositoryFails(array $entries): void
     {
-        $read = $this->readEntriesOf(self::listOf(self::HEADER, self::entry('#^Only booleans$#', 2, '../../../elsewhere/A.php')));
+        $read = $entries['outside the repository'];
 
         self::assertSame([], $read->counts);
         self::assertSame(['entry 1 needs exactly identifier, path inside the repository, count and one of message or rawMessage'], $read->problems);
@@ -287,14 +311,19 @@ final class RatchetListsGateTest extends SandboxTestCase
         return implode("\n", $findings);
     }
 
-    private function readEntriesOf(string $list): IgnoredErrors
+    /**
+     * @param array<string, string> $lists
+     *
+     * @return array<string, IgnoredErrors>
+     */
+    private function readEntriesOf(array $lists): array
     {
         $workspace = new Workspace($this->emptySandbox()->root, dirname(__DIR__, 2), Mode::Full, null);
         $scratch = ScratchDirectory::create('intakt-ratchet-test');
         self::assertInstanceOf(ScratchDirectory::class, $scratch);
 
         try {
-            return new IgnoredErrorsReader()->read($workspace, $scratch, ['head' => new RatchetListFile(self::LIST, $list)])['head'];
+            return new IgnoredErrorsReader()->read($workspace, $scratch, array_map(static fn (string $list): RatchetListFile => new RatchetListFile(self::LIST, $list), $lists));
         } finally {
             $scratch->remove();
         }
