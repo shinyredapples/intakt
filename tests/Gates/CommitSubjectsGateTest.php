@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\CommitSubjectsGate;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(CommitSubjectsGate::class)]
+#[UsesClass(Workspace::class)]
 final class CommitSubjectsGateTest extends SandboxTestCase
 {
     public function testConventionalSubjectsPass(): void
@@ -58,7 +61,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox->git('switch', '--quiet', '--create', 'change');
         $sandbox->commitAll('feat: new work');
 
-        self::assertTrue($sandbox->check('--only=commits', '--base=main')->passed('commits'));
+        self::assertTrue($sandbox->runGate(new CommitSubjectsGate())->passed('commits'));
     }
 
     public function testTheGateFailsWhenThereIsNoBaseBranch(): void
@@ -66,15 +69,19 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->startRepository();
         $sandbox->commitAll('feat: work');
+        $sandbox->git('branch', '--move', 'trunk');
 
-        self::assertTrue($sandbox->check('--only=commits', '--base=missing')->failed('commits'));
+        $run = $sandbox->runGate(new CommitSubjectsGate());
+
+        self::assertTrue($run->failed('commits'), $run->output());
+        self::assertStringContainsString('no base branch found', $run->findingsOf('commits'));
     }
 
     public function testANonConformingMergeCommitFails(): void
     {
         $sandbox = $this->branchWithAMergeCommit("Merge branch 'main' into change");
 
-        $run = $sandbox->check('--only=commits', '--base=main');
+        $run = $sandbox->runGate(new CommitSubjectsGate());
 
         self::assertTrue($run->failed('commits'), $run->output());
         self::assertStringContainsString("Merge branch 'main' into change", $run->findingsOf('commits'));
@@ -84,14 +91,14 @@ final class CommitSubjectsGateTest extends SandboxTestCase
     {
         $sandbox = $this->branchWithAMergeCommit('chore: merge main into change');
 
-        self::assertTrue($sandbox->check('--only=commits', '--base=main')->passed('commits'));
+        self::assertTrue($sandbox->runGate(new CommitSubjectsGate())->passed('commits'));
     }
 
     public function testTheTestMergeGithubDescribesIsNotChecked(): void
     {
         $sandbox = $this->testMergeOnReportedBase();
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
+        $run = $sandbox->runGate(new CommitSubjectsGate($this->describe($sandbox)));
 
         self::assertTrue($run->passed('commits'), $run->output());
     }
@@ -100,7 +107,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
     {
         $sandbox = $this->testMergeOnMovedBase();
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
+        $run = $sandbox->runGate(new CommitSubjectsGate($this->describe($sandbox)));
 
         self::assertTrue($run->passed('commits'), $run->output());
     }
@@ -119,7 +126,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox = $this->testMergeOnMovedBase();
         $described = explode(':', $this->describe($sandbox));
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.str_repeat('c', 40).':'.$described[1]);
+        $run = $sandbox->runGate(new CommitSubjectsGate(str_repeat('c', 40).':'.$described[1]));
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
@@ -129,7 +136,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox = $this->testMergeOnMovedBase();
         $described = explode(':', $this->describe($sandbox));
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.str_repeat('c', 40));
+        $run = $sandbox->runGate(new CommitSubjectsGate($described[0].':'.str_repeat('c', 40)));
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
@@ -140,7 +147,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $described = explode(':', $this->describe($sandbox));
         $reportedBase = trim($sandbox->git('rev-parse', 'main~1')->output);
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$described[0].':'.$reportedBase.':'.$described[1]);
+        $run = $sandbox->runGate(new CommitSubjectsGate($described[0].':'.$reportedBase.':'.$described[1]));
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
@@ -149,7 +156,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
     {
         $sandbox = $this->testMergeOffTheBase();
 
-        $run = $sandbox->check('--only=commits', '--base=main', '--test-merge='.$this->describe($sandbox));
+        $run = $sandbox->runGate(new CommitSubjectsGate($this->describe($sandbox)));
 
         self::assertTrue($run->failed('commits'), $run->output());
     }
@@ -158,7 +165,7 @@ final class CommitSubjectsGateTest extends SandboxTestCase
     {
         $sandbox = $this->testMergeOnReportedBase();
 
-        self::assertTrue($sandbox->check('--only=commits', '--base=main')->failed('commits'));
+        self::assertTrue($sandbox->runGate(new CommitSubjectsGate())->failed('commits'));
     }
 
     private function describe(Sandbox $sandbox): string
@@ -250,6 +257,6 @@ final class CommitSubjectsGateTest extends SandboxTestCase
             $sandbox->commitAll($subject);
         }
 
-        return $sandbox->check('--only=commits', '--base=main');
+        return $sandbox->runGate(new CommitSubjectsGate());
     }
 }

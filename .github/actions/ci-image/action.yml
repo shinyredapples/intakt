@@ -1,0 +1,44 @@
+name: CI image
+description: >-
+  Makes the CI image available as CI_IMAGE: reuses one already on the runner, else loads the copy a run on main cached
+  for the same inputs, else builds it; a run on main caches a newly built image for later runs. Pull requests never save.
+runs:
+  using: composite
+  steps:
+    # The cache key is the hash that names the image (.github/ci/build-image.sh), so a cached image is reused only for
+    # exactly the inputs it was built from.
+    - id: name
+      shell: bash
+      run: |
+        set -eu
+        hash=$(.github/ci/build-image.sh --print-hash)
+        echo "key=intakt-ci-image-$hash" >> "$GITHUB_OUTPUT"
+        if docker image inspect "intakt-ci:$hash" > /dev/null 2>&1; then echo "present=true" >> "$GITHUB_OUTPUT"; fi
+    - id: restore
+      if: steps.name.outputs.present != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/intakt-ci-image.tar
+        key: ${{ steps.name.outputs.key }}
+    - shell: bash
+      run: |
+        set -eu
+        if [ -f "$RUNNER_TEMP/intakt-ci-image.tar" ]; then
+          docker load --input "$RUNNER_TEMP/intakt-ci-image.tar"
+          rm -f "$RUNNER_TEMP/intakt-ci-image.tar"
+        fi
+        .github/ci/build-image.sh
+    # Only a run on main saves (a push, the nightly journeys or a manual run), never a pull request: a pull request runs
+    # its own workflow, so a save there could plant an image that a later job would run. GitHub also keeps a pull
+    # request's saves out of main's scope; this keeps pull requests from saving at all.
+    - id: export
+      if: >-
+        github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        && steps.name.outputs.present != 'true' && steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: docker save --output "$RUNNER_TEMP/intakt-ci-image.tar" "$CI_IMAGE"
+    - if: steps.export.outcome == 'success'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/intakt-ci-image.tar
+        key: ${{ steps.name.outputs.key }}
