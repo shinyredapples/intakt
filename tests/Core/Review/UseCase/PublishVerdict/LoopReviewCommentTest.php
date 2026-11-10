@@ -10,11 +10,18 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\HeadStatus;
+use Intakt\Plugin\Forge\Contract\PublishedVerdict;
+use Intakt\Plugin\Forge\Contract\ReviewToken;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use UnexpectedValueException;
 
 #[CoversClass(LoopReviewComment::class)]
+#[UsesClass(PublishedVerdict::class)]
+#[UsesClass(ReviewToken::class)]
 final class LoopReviewCommentTest extends TestCase
 {
     private const string HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -46,6 +53,30 @@ final class LoopReviewCommentTest extends TestCase
         $this->expectException(UnexpectedValueException::class);
 
         $this->commentOn('src/A.php', "x\xC3(");
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function redactionsThatRunToTheEndOfTheirText(): iterable
+    {
+        yield 'unclosed list' => ['src/A.php', 'The test sends Authorization: [ without closing it.'];
+        yield 'unclosed quoted value' => ['src/A.php', 'The test sends Authorization: "abc without closing it.'];
+        yield 'print_r list' => ['src/A.php', "The dump shows [Authorization] => Array\n( and no end."];
+        yield 'private key without its end' => ['src/A.php', 'The fixture holds -----BEGIN RSA PRIVATE KEY----- and no end.'];
+        yield 'unclosed list in the file' => ['src/Authorization: [x', 'x'];
+    }
+
+    #[DataProvider('redactionsThatRunToTheEndOfTheirText')]
+    public function testARedactionThatRunsToTheEndOfAFindingKeepsTheVerdictBlockOfTheRedactedComment(string $file, string $text): void
+    {
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn($file, $text), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
+
+        $lines = preg_split('/\R/u', $verdict->redactedComments()[0]);
+
+        self::assertSame(['```json', '{"verdict":"changes","head":"'.self::HEAD.'","summary":"s"}', '```'], array_slice($lines, -3));
+        self::assertCount(7, $lines);
+        self::assertStringContainsString('[redacted]', $lines[2]);
     }
 
     private function commentOn(string $file, string $text): string

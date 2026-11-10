@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\PublishVerdict;
 
+use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Severity;
@@ -51,10 +52,15 @@ final readonly class LoopReviewComment
         return implode("\n", [...$lines, '```json', $json, '```']);
     }
 
-    // On one line, because a line break in a model's text could open a fence or a finding line of its own.
+    // On one line, because a line break in a model's text could open a fence or a finding line of its own; redacted part by part, because a redaction that runs to the end of its text would otherwise take the verdict block with it.
     private function lineOf(Finding $finding): string
     {
-        return sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text));
+        return sprintf('[%s] %s: %s', $finding->severity->value, $this->redacted($this->placeOf($finding)), $this->redacted($finding->text));
+    }
+
+    private function redacted(string $text): string
+    {
+        return new Redaction()->redact($this->oneLine($text));
     }
 
     private function placeOf(Finding $finding): string

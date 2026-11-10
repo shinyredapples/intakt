@@ -234,6 +234,26 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not publish its review of this head.']]], $this->github->writes);
     }
 
+    public function testAnUnclosedCredentialListInAFindingIsRedactedOnItsLineAndTheVerdictBlockIsPublished(): void
+    {
+        $roundId = $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P2, 'The test sends Authorization: [ without closing it.'))]);
+
+        self::assertSame([
+            [self::COMMENT, ['body' => implode("\n", [
+                self::HEADING,
+                '',
+                '[P2] src/Thing.php:3: The test sends Authorization: [redacted]',
+                '',
+                '```json',
+                '{"verdict":"changes","head":"'.SampleIdentity::HEAD.'","summary":"1 of 2 reviewers approve; findings to act on: 1."}',
+                '```',
+                '',
+                $this->marker($roundId),
+            ])]],
+            [self::STATUS, ['state' => 'failure', 'context' => 'intakt/review', 'description' => 'Intakt asks for changes on this head.']],
+        ], $this->github->writes);
+    }
+
     public function testALiveProjectsJudgedRoundPublishesNothing(): void
     {
         $this->publishRoundJudgedOn([], new ConfiguredProjectModes([]));
