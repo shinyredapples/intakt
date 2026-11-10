@@ -9,5 +9,8 @@ use Symfony\Component\Uid\Uuid;
 
 interface ReviewServerAccesses
 {
+    /**
+     * @throws NoReviewServerAccess
+     */
     public function forRound(Uuid $round): ReviewServerAccess;
 }

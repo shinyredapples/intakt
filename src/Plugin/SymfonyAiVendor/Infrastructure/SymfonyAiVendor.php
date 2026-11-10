@@ -17,6 +17,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
@@ -125,7 +126,16 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        $platform = new TierRoutedPlatform($this->tiers, $answering, $this->serverOptions($answering, $request));
+        try {
+            $options = $this->serverOptions($answering, $request);
+        } catch (NoReviewServerAccess) {
+            // Settled with no usage, because the CLI never started; blocked like an API-key reviewer whose toolbox cannot reach the server.
+            $this->usage->settle($reservation);
+
+            return Verdict::noTools();
+        }
+
+        $platform = new TierRoutedPlatform($this->tiers, $answering, $options);
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $answering->model);

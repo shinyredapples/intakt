@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ListDirectoryTool;
@@ -36,7 +37,17 @@ final readonly class IssuedReviewServerAccesses implements ReviewServerAccesses
     #[Override]
     public function forRound(Uuid $round): ReviewServerAccess
     {
-        return new ReviewServerAccess('intakt-review', $this->url, $this->credential->issueFor($round->toRfc4122()), array_map($this->nameOf(...), self::TOOLS));
+        return new ReviewServerAccess('intakt-review', $this->url, $this->bearerFor($round), array_map($this->nameOf(...), self::TOOLS));
+    }
+
+    // Typed, because an empty APP_SECRET is a state of the install the vendor turns into a blocked review, not a programming error.
+    private function bearerFor(Uuid $round): string
+    {
+        try {
+            return $this->credential->issueFor($round->toRfc4122());
+        } catch (LogicException $unsigned) {
+            throw NoReviewServerAccess::because($unsigned);
+        }
     }
 
     /**

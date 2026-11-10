@@ -35,7 +35,9 @@ use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
@@ -49,6 +51,7 @@ use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Kernel;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
@@ -86,6 +89,9 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(SymfonyAiVendor::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewServerAccess::class)]
+#[UsesClass(IssuedReviewServerAccesses::class)]
+#[UsesClass(ReviewCredential::class)]
+#[UsesClass(NoReviewServerAccess::class)]
 #[UsesClass(IsolatedClaudeCodeCli::class)]
 #[UsesClass(RemovedAfterRun::class)]
 #[UsesClass(UsageLedger::class)]
@@ -216,6 +222,26 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
+    }
+
+    public function testAReviewWhoseServerAccessCannotBeIssuedIsBlockedForWantOfToolsWithoutStartingTheCli(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $verdict = $this->vendor($cli, servers: $this->unsignedServers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+        self::assertSame([], $cli->options);
+    }
+
+    public function testAReviewWhoseServerAccessCannotBeIssuedSettlesItsReservationWithNoUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(RecordedClaudeCodeCli::replaying('complete'), $ledger, $this->unsignedServers())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(['started', 'settled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame([], $ledger->payloads()[1]['usages']);
     }
 
     public function testAStreamInWhichTheCliUsedOneOfItsOwnToolsStillYieldsItsVerdict(): void
@@ -372,6 +398,12 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
 
         return $servers;
+    }
+
+    // The real accesses with an empty APP_SECRET, so the credential itself refuses to be issued.
+    private function unsignedServers(): ReviewServerAccesses
+    {
+        return new IssuedReviewServerAccesses(new ReviewCredential(''), 'http://localhost:7780/mcp/review');
     }
 
     private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor

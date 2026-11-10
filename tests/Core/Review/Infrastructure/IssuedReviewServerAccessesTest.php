@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -15,6 +16,7 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(IssuedReviewServerAccesses::class)]
 #[UsesClass(ReviewServerAccess::class)]
 #[UsesClass(ReviewCredential::class)]
+#[UsesClass(NoReviewServerAccess::class)]
 final class IssuedReviewServerAccessesTest extends TestCase
 {
     public function testTheAccessNamesTheServersReadOnlyToolsAsItServesThem(): void
@@ -33,6 +35,13 @@ final class IssuedReviewServerAccessesTest extends TestCase
 
         self::assertSame($credential->issueFor($round->toRfc4122()), $access->bearer);
         self::assertSame('http://localhost:7780/mcp/review', $access->url);
+    }
+
+    public function testNoAccessIsIssuedWithoutASecretToSignItsCredential(): void
+    {
+        $this->expectException(NoReviewServerAccess::class);
+
+        new IssuedReviewServerAccesses(new ReviewCredential(''), 'http://localhost:7780/mcp/review')->forRound(new UuidV7());
     }
 
     private function accesses(): IssuedReviewServerAccesses
