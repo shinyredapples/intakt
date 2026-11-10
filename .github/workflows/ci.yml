@@ -41,8 +41,8 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
-      - name: Build the CI image
-        run: .github/ci/build-image.sh
+      - name: Build or restore the CI image
+        uses: ./.github/actions/ci-image
       # The gate tests run processes in a new user namespace and mount a fresh /proc there. The seccomp profile is
       # Docker's default plus unshare (only together with a new user namespace) and mount. systempaths=unconfined is
       # needed because the kernel refuses a new /proc in a user namespace while Docker's masks cover parts of the old
@@ -197,10 +197,10 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
-      - name: Build the CI image
+      - name: Build or restore the CI image
         id: image
         if: env.ENGINES == 'true'
-        run: .github/ci/build-image.sh
+        uses: ./.github/actions/ci-image
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
       # The three engines run at once (.github/ci/persistence-engines.sh); the step fails when any fails.
       - name: Run the persistence group on each database image
