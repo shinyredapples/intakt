@@ -102,7 +102,7 @@ final readonly class Options
             }
         }
 
-        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>], or bin/check --static-gates');
+        throw new InvalidArgumentException('unknown argument '.$argument.', usage: bin/check [--fast|--journeys] [--base=<ref>] [--only=<gate,...>] [--skip=<gate,...>] [--test-merge=<merge>:<head>]');
     }
 
     /**

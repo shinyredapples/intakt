@@ -8,9 +8,11 @@ use Intakt\Gates\CheckCommand;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(CheckCommand::class)]
+#[UsesClass(ProcessRunner::class)]
 final class StaticGatesListTest extends TestCase
 {
     public function testTheStaticGatesAreListedWithoutTheGatesThatRunTheChangesCode(): void
@@ -18,8 +20,8 @@ final class StaticGatesListTest extends TestCase
         $run = $this->check('--static-gates');
 
         self::assertSame(0, $run->exitCode);
-        self::assertMatchesRegularExpression('/^\{"static":\["cs","rector",.*"ratchet"\]\}\n$/', $run->output);
-        self::assertDoesNotMatchRegularExpression('/"(tests|phpstan|container)"/', $run->output);
+        self::assertMatchesRegularExpression('/^\{"static":\["cs","rector",.*"ratchet"\],"order":\["cs","phpstan","rector",.*"tests",.*"ratchet"\]\}\n$/', $run->output);
+        self::assertDoesNotMatchRegularExpression('/"(tests|phpstan|container)".*\],"order"/', $run->output);
     }
 
     public function testTheStaticGatesListTakesNoOtherArgument(): void

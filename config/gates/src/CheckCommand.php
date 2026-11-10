@@ -20,7 +20,7 @@ final readonly class CheckCommand
     {
         // Because CI runs these gates and the rest in two containers, each on its own copy, and takes the split from here.
         if (['--static-gates'] === $arguments) {
-            $this->print(['static' => array_values(array_map(static fn (Gate $gate): string => $gate->name(), array_filter($this->gates(null), static fn (Gate $gate): bool => !$gate instanceof RunsTheChangesCode)))]);
+            $this->print(['static' => $this->staticGateNames(), 'order' => $this->gateNames()]);
 
             return 0;
         }
@@ -176,6 +176,14 @@ final readonly class CheckCommand
     private function gateNames(): array
     {
         return array_map(static fn (Gate $gate): string => $gate->name(), $this->gates(null));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function staticGateNames(): array
+    {
+        return array_values(array_map(static fn (Gate $gate): string => $gate->name(), array_filter($this->gates(null), static fn (Gate $gate): bool => !$gate instanceof RunsTheChangesCode)));
     }
 
     /**
