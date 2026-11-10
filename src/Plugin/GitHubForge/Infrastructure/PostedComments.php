@@ -25,7 +25,17 @@ final readonly class PostedComments
     ) {
     }
 
-    public function holdsMarker(PullRequestAddress $address, string $marker): bool
+    /**
+     * @param list<string> $comments
+     *
+     * @return list<string>
+     */
+    public function notYetPosted(PullRequestAddress $address, string $marker, array $comments): array
+    {
+        return [] === $comments || $this->holdsMarker($address, $marker) ? [] : $comments;
+    }
+
+    private function holdsMarker(PullRequestAddress $address, string $marker): bool
     {
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
             $comments = $this->page($address, $page);
@@ -53,8 +63,7 @@ final readonly class PostedComments
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            // Not chained, because the client's trace holds the request options with the bearer token.
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached to read the comments before a post (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -77,6 +86,12 @@ final readonly class PostedComments
 
         // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
         return is_array($comments) && array_is_list($comments) && str_starts_with(ltrim($body), '[') ? $comments : throw new ForgeWriteFailed('GitHub answered a comment listing that is not a list.');
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached to read the comments before a post (%s).', $failure));
     }
 
     private function bearer(): string

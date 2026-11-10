@@ -17,6 +17,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -29,12 +30,20 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 final class PostedCommentsTest extends TestCase
 {
     private const string MARKER = '<!-- intakt-verdict: round-of-the-test -->';
+    private const string COMMENT = 'The verdict.';
 
-    public function testItFindsTheMarkerOnALaterPage(): void
+    public function testACommentWhoseMarkerIsOnALaterPageIsNotPostedAgain(): void
     {
-        $pages = [1 => $this->others(100), 2 => [['body' => "The verdict.\n\n".self::MARKER]]];
+        $pages = [1 => $this->others(100), 2 => [['body' => self::COMMENT."\n\n".self::MARKER]]];
 
-        self::assertTrue($this->comments($this->listing($pages))->holdsMarker($this->address(), self::MARKER));
+        self::assertSame([], $this->toPost($this->comments($this->listing($pages))));
+    }
+
+    public function testNoCommentToPostReadsNothing(): void
+    {
+        $comments = $this->comments(static fn (): ResponseInterface => throw new LogicException('No comment, no read.'));
+
+        self::assertSame([], $comments->notYetPosted($this->address(), self::MARKER, []));
     }
 
     public function testItStopsAtTheFirstShortPageWithoutTheMarker(): void
@@ -46,7 +55,7 @@ final class PostedCommentsTest extends TestCase
             return new MockResponse((string) json_encode($this->others(3)), ['http_code' => 200]);
         });
 
-        self::assertFalse($comments->holdsMarker($this->address(), self::MARKER));
+        self::assertSame([self::COMMENT], $this->toPost($comments));
         self::assertSame(['https://api.github.com/repos/acme/widget/issues/7/comments?per_page=100&page=1'], $asked);
     }
 
@@ -54,20 +63,20 @@ final class PostedCommentsTest extends TestCase
     {
         $pages = array_fill(1, 29, $this->others(100)) + [30 => $this->others(99)];
 
-        self::assertFalse($this->comments($this->listing($pages))->holdsMarker($this->address(), self::MARKER));
+        self::assertSame([self::COMMENT], $this->toPost($this->comments($this->listing($pages))));
     }
 
     public function testItRefusesThePostWhenThirtyPagesAreFull(): void
     {
         $this->expectExceptionObject(new ForgeWriteFailed('The pull request holds more comments than this forge reads before a post.'));
 
-        (void) $this->comments($this->listing(array_fill(1, 31, $this->others(100))))->holdsMarker($this->address(), self::MARKER);
+        $this->toPost($this->comments($this->listing(array_fill(1, 31, $this->others(100)))));
     }
 
     public function testARefusedReadFailsThePostAndSaysTheCredentialsWereRefused(): void
     {
         try {
-            (void) $this->comments(new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]))->holdsMarker($this->address(), self::MARKER);
+            $this->toPost($this->comments(new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401])));
             self::fail('A refused read must fail the post.');
         } catch (ForgeWriteFailed $failed) {
             self::assertSame('GitHub answered 401 to a read of the comments before a post.', $failed->getMessage());
@@ -79,15 +88,22 @@ final class PostedCommentsTest extends TestCase
     {
         $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered a comment listing that is not a list.'));
 
-        (void) $this->comments(new MockResponse('{}', ['http_code' => 200]))->holdsMarker($this->address(), self::MARKER);
+        $this->toPost($this->comments(new MockResponse('{}', ['http_code' => 200])));
     }
 
     public function testAnAnswerThatIsNotJsonFailsThePost(): void
     {
-        $this->expectException(ForgeWriteFailed::class);
-        $this->expectExceptionMessage('GitHub listed the comments as something other than JSON.');
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub listed the comments as something other than JSON.', JSON_ERROR_SYNTAX));
 
-        (void) $this->comments(new MockResponse('<html>', ['http_code' => 200]))->holdsMarker($this->address(), self::MARKER);
+        $this->toPost($this->comments(new MockResponse('<html>', ['http_code' => 200])));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function toPost(PostedComments $comments): array
+    {
+        return $comments->notYetPosted($this->address(), self::MARKER, [self::COMMENT]);
     }
 
     /**

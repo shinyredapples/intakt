@@ -138,10 +138,8 @@ final readonly class GitHubForge implements Forge, ForgeWrites
 
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
         $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
-        foreach ($comments as $comment) {
-            if (!$this->comments->holdsMarker($address, $marker)) {
-                $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
-            }
+        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
+            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
         }
 
         $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [

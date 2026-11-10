@@ -34,28 +34,29 @@ final readonly class VerdictForTheLoop
     {
         $votes = array_map($this->voteOf(...), $round->reviewers());
         $decision = $this->decisionOf($round, $votes);
+        $head = $round->identity()->commits->head;
         if (Decision::Blocked === $decision) {
-            return $this->published($round, HeadStatus::Error, 'Intakt could not review this head.', null);
+            return new PublishedVerdict($head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
         }
 
         $comment = $this->commentOf($round, $decision, $votes);
 
         // From the comment's verdict, not the decision, so the status and the comment never tell the loop two outcomes.
         return Decision::Approve === $comment->verdict()
-            ? $this->published($round, HeadStatus::Success, 'Intakt approves this head.', $comment->text())
-            : $this->published($round, HeadStatus::Failure, 'Intakt asks for changes on this head.', $comment->text());
+            ? new PublishedVerdict($head, HeadStatus::Success, 'Intakt approves this head.', $comment->text(), $this->tokenOf($round))
+            : new PublishedVerdict($head, HeadStatus::Failure, 'Intakt asks for changes on this head.', $comment->text(), $this->tokenOf($round));
     }
 
     // The status alone, because a comment that would leak a secret must not reach the forge in any form.
     public function unpublishable(ReviewRound $round): PublishedVerdict
     {
-        return $this->published($round, HeadStatus::Error, 'Intakt could not publish its review of this head.', null);
+        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not publish its review of this head.', null, $this->tokenOf($round));
     }
 
-    // The round's id as the token, so a retried publication finds the comment an earlier attempt posted.
-    private function published(ReviewRound $round, HeadStatus $status, string $description, ?string $comment): PublishedVerdict
+    // The round's id, so a retried publication finds the comment an earlier attempt posted.
+    private function tokenOf(ReviewRound $round): ReviewToken
     {
-        return new PublishedVerdict($round->identity()->commits->head, $status, $description, $comment, new ReviewToken($round->id()->toRfc4122()));
+        return new ReviewToken($round->id()->toRfc4122());
     }
 
     // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
