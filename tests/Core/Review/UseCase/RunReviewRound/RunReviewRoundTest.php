@@ -73,37 +73,24 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame([], $this->fixture->ledgerKinds());
     }
 
-    public function testAnOpenedRoundIsAnnouncedWithItsProjectAfterItsStartIsCommittedToTheLedger(): void
+    public function testAnOpenedRoundIsAnnouncedWithItsProjectOnTheQueueOfItsReviewers(): void
     {
-        $connection = self::getContainer()->get('doctrine.dbal.default_connection');
-        $announced = [];
-        $this->fixture->events->addListener(RoundOpened::class, function (RoundOpened $opened) use (&$announced, $connection): void {
-            $announced[] = [$opened, $this->fixture->ledgerKinds(), $connection->isTransactionActive()];
-        });
-
         $round = $this->fixture->start(2);
 
-        self::assertCount(1, $announced);
-        [$opened, $kinds, $inTransaction] = $announced[0];
-        self::assertSame([$round->id()->toRfc4122(), $round->project()], [$opened->round, $opened->project]);
-        self::assertSame([LedgerEventKind::ReviewStarted], $kinds);
-        self::assertFalse($inTransaction);
+        self::assertEquals([new RoundOpened($round->id()->toRfc4122(), $round->project())], $this->fixture->bus->announced);
     }
 
     public function testARoundWhoseMessagesCannotAllBeQueuedIsNotAnnounced(): void
     {
-        $announced = [];
-        $this->fixture->events->addListener(RoundOpened::class, static function (RoundOpened $opened) use (&$announced): void {
-            $announced[] = $opened;
-        });
+        $queue = new RecordingBus();
 
         try {
-            $this->fixture->startOn(new RefusingQueue(new RecordingBus()), 3);
+            $this->fixture->startOn(new RefusingQueue($queue), 3);
             self::fail('The refused dispatch was swallowed.');
         } catch (RuntimeException) {
         }
 
-        self::assertSame([], $announced);
+        self::assertSame([], $queue->announced);
     }
 
     /**

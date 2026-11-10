@@ -7,7 +7,6 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
 final readonly class RoundOpening
 {
@@ -15,27 +14,19 @@ final readonly class RoundOpening
         private ReviewRounds $rounds,
         private RoundLedger $ledger,
         private MessageBusInterface $commands,
-        private EventDispatcherInterface $events,
     ) {
     }
 
+    // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
     public function open(RunReviewRound $command): string
     {
-        $round = $this->storeWithLedgerAndMessages($command);
-        $this->events->dispatch(new RoundOpened($round->id()->toRfc4122(), $round->project()));
-
-        return $round->id()->toRfc4122();
-    }
-
-    // One transaction with the Doctrine queue, because a round stored without its messages would never be resumed by any worker.
-    private function storeWithLedgerAndMessages(RunReviewRound $command): ReviewRound
-    {
-        return $this->rounds->inOneTransaction(function () use ($command): ReviewRound {
+        return $this->rounds->inOneTransaction(function () use ($command): string {
             $round = $this->rounds->open($command);
             $this->ledger->reviewStarted($round, $command->panel->quorum, $command->round->source);
             $this->dispatchOneMessagePerReviewer($round);
+            $this->announce($round);
 
-            return $round;
+            return $round->id()->toRfc4122();
         });
     }
 
@@ -44,5 +35,11 @@ final readonly class RoundOpening
         foreach ($round->reviewers() as $reviewer) {
             $this->commands->dispatch(new ReviewWithReviewer($reviewer->id()->toRfc4122()));
         }
+    }
+
+    // Queued with the round rather than dispatched after it, because a caller's enclosing transaction may still roll the round back, and only the queue row goes with it.
+    private function announce(ReviewRound $round): void
+    {
+        $this->commands->dispatch(new RoundOpened($round->id()->toRfc4122(), $round->project()));
     }
 }

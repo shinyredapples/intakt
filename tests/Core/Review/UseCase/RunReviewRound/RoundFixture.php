@@ -150,7 +150,7 @@ final readonly class RoundFixture
     {
         $ledger = new RoundLedger($this->ledger, $this->modes, $this->serializer);
 
-        return new RunReviewRoundHandler($this->modes, $this->shadowHold($guard, $tiers, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue, $this->events));
+        return new RunReviewRoundHandler($this->modes, $this->shadowHold($guard, $tiers, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue));
     }
 
     // The panel's tier with one substitute on another provider, so a test sees whether the hold looks at the provider a reviewer may answer on.
@@ -323,7 +323,7 @@ final readonly class RoundFixture
         $ledger = new RoundLedger(new InMemoryLedger(), $this->modes, $this->serializer);
         $hold = $this->shadowHold(new ScriptedAccountGuard(), new ConfiguredTierResolver(self::TIERS, []), $ledger);
 
-        return new RunReviewRoundHandler($this->modes, $hold, new RoundOpening($this->rounds($entities), $ledger, $this->bus, $this->events))($command);
+        return new RunReviewRoundHandler($this->modes, $hold, new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
     }
 
     // The accounts hold a second provider, so a substitute on it has an account the hold can look at.
