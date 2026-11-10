@@ -101,7 +101,7 @@ $toolCall = ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'read_file', 'i
 $verdict = ['type' => 'text', 'text' => '{"decision":"approve"}'];
 $invalid = ['type' => 'text', 'text' => '{"decision":""}'];
 
-// Each case holds what the structured output returns and what it should return.
+// Each case carries its own expectation because the invalid answers must be refused, not approved.
 $cases = [
     'control: the answer alone' => [decisionOf([message('end_turn', $verdict)], []), 'approve'],
     'control: the answer alone, streamed' => [decisionOf([events('end_turn', $verdict)], ['stream' => true]), 'approve'],
