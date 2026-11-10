@@ -1,0 +1,12 @@
+#!/bin/sh
+# Publishes the built highlights page (the one argument) as the single file and the single commit of the branch
+# highlights-page of origin, replacing what the branch held. Run it in a checkout that may push; it never touches main.
+set -eu
+source=$(git rev-parse HEAD)
+git switch --quiet --orphan highlights-page
+git rm -rf --quiet --ignore-unmatch .
+cp "$1" highlights.md
+git add highlights.md
+git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
+    commit --quiet --message "chore: publish the highlights page of $source"
+git push --quiet --force origin highlights-page

@@ -8,6 +8,7 @@ on:
     paths:
       - docs/highlights.d/**
       - bin/highlights
+      - bin/publish-highlights
       - config/gates/src/HighlightFragments.php
       - .github/workflows/highlights.yml
   workflow_dispatch:
@@ -46,12 +47,4 @@ jobs:
           path: publish
       - name: Publish the page
         working-directory: publish
-        run: |
-          set -eu
-          git switch --orphan highlights-page
-          git rm -rf --quiet --ignore-unmatch .
-          cp "$RUNNER_TEMP/page/highlights.md" highlights.md
-          git add highlights.md
-          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
-            commit --quiet --message "chore: publish the highlights page of ${GITHUB_SHA}"
-          git push --force origin highlights-page
+        run: sh "$GITHUB_WORKSPACE/bin/publish-highlights" "$RUNNER_TEMP/page/highlights.md"
