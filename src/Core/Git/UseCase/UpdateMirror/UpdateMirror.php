@@ -23,7 +23,7 @@ final readonly class UpdateMirror
 
     private const string REMOTE_HEAD = '/^ref: (refs\/heads\/[^\t\n]+)\tHEAD$/m';
 
-    // A SHA-1 or a SHA-256 object name.
+    // Both lengths, because a remote may hold SHA-1 or SHA-256 objects.
     private const string DETACHED_HEAD = '/^([0-9a-f]{40}|[0-9a-f]{64})\tHEAD$/m';
 
     public function __construct(

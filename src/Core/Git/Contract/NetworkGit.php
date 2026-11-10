@@ -40,8 +40,6 @@ final readonly class NetworkGit
     }
 
     /**
-     * Builds the call again for each attempt, for a call that must not reuse what a failed attempt left behind.
-     *
      * @param Closure(): GitCall $call
      *
      * @throws NetworkGitFailed
