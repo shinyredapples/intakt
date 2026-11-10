@@ -24,9 +24,18 @@ final class InstanceTest extends TestCase
     // An instance per test, not per class, because each boot builds its container in a scratch folder it removes when it stops, which is what several tests prove, and most tests boot with another project, command or environment.
     private string $scratch;
 
+    public static function setUpBeforeClass(): void
+    {
+        // A stub whose index.php answers 200, because the launcher tests prove the launcher and the kernel's boot (about 4 s) adds nothing to them.
+        $stub = self::stubProject();
+        new Filesystem()->mkdir($stub);
+        ProjectCopy::refresh(self::ROOT, $stub, 'bin', 'public', 'composer.json');
+        file_put_contents($stub.'/public/index.php', "<?php\necho 'ok';\n");
+    }
+
     public static function tearDownAfterClass(): void
     {
-        new Filesystem()->remove(self::sharedProject());
+        new Filesystem()->remove([self::sharedProject(), self::stubProject()]);
     }
 
     protected function setUp(): void
@@ -77,10 +86,11 @@ final class InstanceTest extends TestCase
     public function testTheServerNeverHoldsTheStatusDescriptor(): void
     {
         $statusFile = $this->scratch.'/status';
-        $caller = $this->callerHoldingManyDescriptors($statusFile);
+        $stub = $this->stubWithoutVarFolder();
+        $caller = $this->callerHoldingManyDescriptors($stub, $statusFile);
 
         $caller->start();
-        $held = $this->descriptorsOfTheServerWhile($caller);
+        $held = $this->descriptorsOfTheServerWhile($stub, $caller);
 
         self::assertNotNull($held, 'the server was never seen running');
         self::assertNotContains(realpath($statusFile), $held);
@@ -96,7 +106,7 @@ final class InstanceTest extends TestCase
 
     public function testTheVarFolderItCreatedWithoutTmpdirIsGoneAfterABoot(): void
     {
-        $project = $this->copyOfTheProject();
+        $project = $this->stubWithoutVarFolder();
 
         $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
 
@@ -106,7 +116,7 @@ final class InstanceTest extends TestCase
 
     public function testAVarFolderThatAlreadyExistedStaysWithItsFilesAfterABootWithoutTmpdir(): void
     {
-        $project = $this->copyOfTheProject();
+        $project = $this->stubWithoutVarFolder();
         mkdir($project.'/var');
         file_put_contents($project.'/var/keep.txt', 'kept');
 
@@ -118,7 +128,7 @@ final class InstanceTest extends TestCase
 
     public function testAnEmptyVarFolderThatAlreadyExistedStaysAfterABootWithoutTmpdir(): void
     {
-        $project = $this->copyOfTheProject();
+        $project = $this->stubWithoutVarFolder();
         mkdir($project.'/var');
 
         $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
@@ -178,7 +188,7 @@ final class InstanceTest extends TestCase
 
     public function testWithoutDescriptorThreeNoStatusIsWrittenAndTheExitIsNonZero(): void
     {
-        $process = $this->runInstanceWithoutDescriptorThree([]);
+        $process = $this->runInstanceWithoutDescriptorThree(self::stubProject(), []);
 
         self::assertSame(1, $process->getExitCode());
         self::assertStringNotContainsString('"status"', $process->getOutput());
@@ -190,7 +200,7 @@ final class InstanceTest extends TestCase
             self::markTestSkipped('The Zend OPcache extension is not loaded, so nothing of PHP takes descriptor 3.');
         }
 
-        $process = $this->runInstanceWithoutDescriptorThree(['-d', 'opcache.enable=1', '-d', 'opcache.enable_cli=1']);
+        $process = $this->runInstanceWithoutDescriptorThree(self::stubProject(), ['-d', 'opcache.enable=1', '-d', 'opcache.enable_cli=1']);
 
         self::assertSame(1, $process->getExitCode());
         self::assertStringNotContainsString('"status"', $process->getOutput());
@@ -198,7 +208,7 @@ final class InstanceTest extends TestCase
 
     public function testAMemfdAsDescriptorThreeReceivesTheStatusLineAndTheExitIsZero(): void
     {
-        $process = $this->runInstanceWithAMemfdNamed('status');
+        $process = $this->runInstanceWithAMemfdNamed(self::stubProject(), 'status');
 
         self::assertSame('{"status":"ready"}', trim($process->getErrorOutput()));
         self::assertSame(0, $process->getExitCode());
@@ -206,7 +216,7 @@ final class InstanceTest extends TestCase
 
     public function testAMemfdWhoseNameOnlyStartsLikeOpcachesLockReceivesTheStatusLine(): void
     {
-        $process = $this->runInstanceWithAMemfdNamed('opcache_lock_status');
+        $process = $this->runInstanceWithAMemfdNamed(self::stubProject(), 'opcache_lock_status');
 
         self::assertSame('{"status":"ready"}', trim($process->getErrorOutput()));
         self::assertSame(0, $process->getExitCode());
@@ -214,7 +224,7 @@ final class InstanceTest extends TestCase
 
     public function testAPipeAsDescriptorThreeReceivesTheStatusLine(): void
     {
-        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>&1 >/dev/null';
+        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::stubProject().'/bin/instance').' 3>&1 >/dev/null';
         $process = Process::fromShellCommandline($shell, null, $this->environment());
         $process->run();
 
@@ -224,7 +234,7 @@ final class InstanceTest extends TestCase
 
     public function testACommandRunsOnceTheInstanceIsReadyAndItsExitCodePassesThrough(): void
     {
-        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', 'echo getenv("INTAKT_INSTANCE_URL"), "\n"; exit(5);']);
+        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', 'echo getenv("INTAKT_INSTANCE_URL"), "\n"; exit(5);']);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertMatchesRegularExpression('#^http://127\.0\.0\.1:\d+$#m', $run['output']);
@@ -271,7 +281,7 @@ final class InstanceTest extends TestCase
 
     public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
     {
-        $run = $this->runInstance(self::ROOT, ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
 
         self::assertSame(124, $run['exit']);
         self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);
@@ -466,7 +476,7 @@ final class InstanceTest extends TestCase
             stream_wrapper_register('file', LoseFirstMkdir::class);
             PHP);
 
-        $run = $this->runInstanceWithPhpOptions(['-d', 'auto_prepend_file='.$prepend]);
+        $run = $this->runInstanceWithPhpOptions(self::stubProject(), ['-d', 'auto_prepend_file='.$prepend]);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertSame(0, $run['exit']);
@@ -500,7 +510,7 @@ final class InstanceTest extends TestCase
             stream_wrapper_register('file', SilentMkdirFailure::class);
             PHP);
 
-        $run = $this->runInstanceWithPhpOptions(['-d', 'auto_prepend_file='.$prepend]);
+        $run = $this->runInstanceWithPhpOptions(self::ROOT, ['-d', 'auto_prepend_file='.$prepend]);
 
         $status = $this->decoded($run['status']);
         self::assertSame('failed', $status['status']);
@@ -512,10 +522,10 @@ final class InstanceTest extends TestCase
      *
      * @return array{status: string, exit: int}
      */
-    private function runInstanceWithPhpOptions(array $phpOptions): array
+    private function runInstanceWithPhpOptions(string $project, array $phpOptions): array
     {
         $statusFile = $this->scratch.'/status';
-        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>'.escapeshellarg($statusFile);
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, $project.'/bin/instance'])).' 3>'.escapeshellarg($statusFile);
         $process = Process::fromShellCommandline($shell, null, $this->environment());
         $process->run();
 
@@ -567,17 +577,17 @@ final class InstanceTest extends TestCase
     /**
      * @param list<string> $phpOptions
      */
-    private function runInstanceWithoutDescriptorThree(array $phpOptions): Process
+    private function runInstanceWithoutDescriptorThree(string $project, array $phpOptions): Process
     {
         // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
-        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, $project.'/bin/instance'])).' 3>&-';
         $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp', 'PATH' => $this->pathWithoutFrankenphp()]);
         $process->run();
 
         return $process;
     }
 
-    private function runInstanceWithAMemfdNamed(string $name): Process
+    private function runInstanceWithAMemfdNamed(string $project, string $name): Process
     {
         $python = new ExecutableFinder()->find('python3');
         if (null === $python) {
@@ -587,7 +597,7 @@ final class InstanceTest extends TestCase
         $helper = 'import os, subprocess, sys; fd = os.memfd_create(sys.argv[1]); os.dup2(fd, 3); '
             .'code = subprocess.run(sys.argv[2:], pass_fds=(3,)).returncode; os.lseek(3, 0, 0); '
             .'sys.stderr.write(os.read(3, 4096).decode()); sys.exit(code)';
-        $process = new Process([$python, '-I', '-c', $helper, $name, PHP_BINARY, self::ROOT.'/bin/instance'], null, $this->environment());
+        $process = new Process([$python, '-I', '-c', $helper, $name, PHP_BINARY, $project.'/bin/instance'], null, $this->environment());
         $process->run();
 
         return $process;
@@ -654,6 +664,19 @@ final class InstanceTest extends TestCase
         return $project;
     }
 
+    // The var folder is what several launcher tests prove, and an earlier test of the class may have left it, so each starts without.
+    private function stubWithoutVarFolder(): string
+    {
+        new Filesystem()->remove(self::stubProject().'/var');
+
+        return self::stubProject();
+    }
+
+    private static function stubProject(): string
+    {
+        return self::sharedProject().'-stub';
+    }
+
     // Named by the process, because the copy outlives a test while two runs of this class side by side must not share it.
     private static function sharedProject(): string
     {
@@ -661,9 +684,9 @@ final class InstanceTest extends TestCase
     }
 
     // Regression guard: the caller holds descriptors 3 to 14 so a duplicate of descriptor 3 above 9 would show up, which a shell redirection cannot name.
-    private function callerHoldingManyDescriptors(string $statusFile): Process
+    private function callerHoldingManyDescriptors(string $project, string $statusFile): Process
     {
-        $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
+        $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg($project.'/bin/instance').' 3>'.escapeshellarg($statusFile);
         $caller = 'for ($i = 0; $i < 12; ++$i) { $held[] = fopen("/dev/null", "r"); } passthru('.var_export($command, true).');';
 
         return new Process([PHP_BINARY, '-r', $caller], null, $this->environment());
@@ -672,12 +695,12 @@ final class InstanceTest extends TestCase
     /**
      * @return list<string>|null
      */
-    private function descriptorsOfTheServerWhile(Process $caller): ?array
+    private function descriptorsOfTheServerWhile(string $project, Process $caller): ?array
     {
         $held = null;
 
         while ($caller->isRunning()) {
-            foreach ($this->serverProcesses() as $directory) {
+            foreach ($this->serverProcesses($project) as $directory) {
                 $held = [...$held ?? [], ...$this->descriptorTargets($directory)];
             }
 
@@ -690,9 +713,9 @@ final class InstanceTest extends TestCase
     /**
      * @return list<string>
      */
-    private function serverProcesses(): array
+    private function serverProcesses(string $project): array
     {
-        $public = realpath(self::ROOT).'/public';
+        $public = realpath($project).'/public';
 
         return array_values(array_filter(
             $this->matching('/proc/[0-9]*'),
