@@ -23,16 +23,23 @@ jobs:
           ref: main
           persist-credentials: false
       - name: Allow unprivileged user namespaces
-        if: runner.environment == 'github-hosted'
+        if: runner.environment == 'github-hosted' || vars.CI_DISPOSABLE_RUNNER == 'true'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       - name: Build the CI image
         run: .github/ci/build-image.sh
       - name: Run the journeys
         id: journeys
+        env:
+          DISPOSABLE_RUNNER: ${{ vars.CI_DISPOSABLE_RUNNER }}
         run: |
           set -o pipefail
           apparmor=
-          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ] || [ "$DISPOSABLE_RUNNER" = true ]; then apparmor='--security-opt apparmor=unconfined'; fi
           docker run --rm --user 1000:1000 \
             --security-opt seccomp=.github/ci/seccomp-userns.json \
             --security-opt systempaths=unconfined \
