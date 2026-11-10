@@ -426,10 +426,18 @@ test('a pushed project list does nothing to a page Turbo has left', () => {
     assert.deepEqual(page.shownRows(), ['beta', 'beta']);
 });
 
-test('the project filter keeps filtering when the connection drops and no update arrives', () => {
+test('the project filter keeps filtering through a dropped connection and a push after it reconnects', () => {
     const page = new Browser('light').open();
+    page.chooseProject('beta');
+    page.pushStream('projfilter', ['alpha', 'beta']);
 
+    // The connection drops: no stream event arrives, only the person's own choices.
     page.chooseProject('alpha');
+    assert.deepEqual(page.shownRows(), ['alpha']);
 
+    // It reconnects and the hub pushes the list again: the tab keeps its choice.
+    page.pushStream('projfilter', ['alpha', 'beta', 'gamma']);
+
+    assert.equal(page.projectFilter.value, 'alpha');
     assert.deepEqual(page.shownRows(), ['alpha']);
 });
