@@ -14,13 +14,23 @@ use RecursiveIteratorIterator;
 #[Group('instance')]
 final class InstanceTest extends InstanceTestCase
 {
-    public function testACleanCheckoutReportsReadyExitsZeroAndLeavesNothingInTheTemporaryDirectory(): void
+    public static function setUpBeforeClass(): void
     {
-        $run = $this->runInstance(self::ROOT);
+        self::copyTheStubProject();
+    }
+
+    // One boot for both, because each boot of the real kernel compiles its container cold.
+    public function testACleanCopyOfTheProjectReportsReadyExitsZeroAndLeavesNothingInTheTemporaryDirectoryOrTheProjectTree(): void
+    {
+        $project = $this->copyOfTheProject();
+        $before = $this->treeOf($project);
+
+        $run = $this->runInstance($project);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertSame(0, $run['exit']);
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame($before, $this->treeOf($project));
     }
 
     public function testABrokenKernelConfigReportsFailedPrintsTheServerLogAndNeverRunsTheCommand(): void
@@ -53,7 +63,7 @@ final class InstanceTest extends InstanceTestCase
 
     public function testTheVarFolderItCreatedWithoutTmpdirIsGoneAfterABoot(): void
     {
-        $project = $this->copyOfTheProject();
+        $project = $this->stubWithoutVarFolder();
 
         $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
 
@@ -63,7 +73,7 @@ final class InstanceTest extends InstanceTestCase
 
     public function testAVarFolderThatAlreadyExistedStaysWithItsFilesAfterABootWithoutTmpdir(): void
     {
-        $project = $this->copyOfTheProject();
+        $project = $this->stubWithoutVarFolder();
         mkdir($project.'/var');
         file_put_contents($project.'/var/keep.txt', 'kept');
 
@@ -75,23 +85,13 @@ final class InstanceTest extends InstanceTestCase
 
     public function testAnEmptyVarFolderThatAlreadyExistedStaysAfterABootWithoutTmpdir(): void
     {
-        $project = $this->copyOfTheProject();
+        $project = $this->stubWithoutVarFolder();
         mkdir($project.'/var');
 
         $run = $this->runInstance($project, environment: ['TMPDIR' => false]);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertDirectoryExists($project.'/var');
-    }
-
-    public function testTheProjectTreeIsUnchangedAfterABoot(): void
-    {
-        $project = $this->copyOfTheProject();
-        $before = $this->treeOf($project);
-
-        $this->runInstance($project);
-
-        self::assertSame($before, $this->treeOf($project));
     }
 
     public function testTheOperatingSystemReasonIsInTheMessageWhenTheScratchFolderCannotBeCreated(): void
@@ -109,7 +109,7 @@ final class InstanceTest extends InstanceTestCase
 
     public function testACommandRunsOnceTheInstanceIsReadyWithOnlyTheAllowedEnvironmentAndItsExitCodePassesThrough(): void
     {
-        // One boot for all command-mode facts of the built-in server, because each boot compiles the container cold.
+        // One boot for all command-mode facts of the built-in server, because each boot costs a server start.
         $command = <<<'PHP'
             $lines = [
                 (string) getenv("INTAKT_INSTANCE_URL"),
@@ -124,7 +124,7 @@ final class InstanceTest extends InstanceTestCase
             PHP;
         $printed = $this->scratch.'/printed';
 
-        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $command, $printed, $this->scratch.'/status'], ['INTAKT_TEST_CANARY' => 'visible']);
+        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, $printed, $this->scratch.'/status'], ['INTAKT_TEST_CANARY' => 'visible']);
 
         self::assertSame('{"status":"ready"}', $run['status']);
         self::assertSame(5, $run['exit']);
@@ -141,7 +141,7 @@ final class InstanceTest extends InstanceTestCase
 
     public function testACommandThatOverrunsItsTimeIsKilledWithExitCode124(): void
     {
-        $run = $this->runInstance(self::ROOT, ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
+        $run = $this->runInstance(self::stubProject(), ['sleep', '30'], ['INTAKT_INSTANCE_COMMAND_SECONDS' => '1']);
 
         self::assertSame(124, $run['exit']);
         self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);

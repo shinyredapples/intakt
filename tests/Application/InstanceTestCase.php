@@ -18,7 +18,7 @@ abstract class InstanceTestCase extends TestCase
 
     public static function tearDownAfterClass(): void
     {
-        new Filesystem()->remove(self::sharedProject());
+        new Filesystem()->remove([self::sharedProject(), self::stubProject()]);
     }
 
     protected function setUp(): void
@@ -91,6 +91,28 @@ abstract class InstanceTestCase extends TestCase
         new Filesystem()->remove($project.'/config/reference.php');
 
         return $project;
+    }
+
+    // A stub whose index.php answers 200, because the launcher tests prove the launcher and the kernel's boot (about 4 s) adds nothing to them.
+    protected static function copyTheStubProject(): void
+    {
+        $stub = self::stubProject();
+        new Filesystem()->mkdir($stub);
+        ProjectCopy::refresh(self::ROOT, $stub, 'bin', 'public', 'composer.json');
+        file_put_contents($stub.'/public/index.php', "<?php\necho 'ok';\n");
+    }
+
+    protected static function stubProject(): string
+    {
+        return self::sharedProject().'-stub';
+    }
+
+    // The var folder is what several launcher tests prove, and an earlier test of the class may have left it, so each starts without.
+    protected function stubWithoutVarFolder(): string
+    {
+        new Filesystem()->remove(self::stubProject().'/var');
+
+        return self::stubProject();
     }
 
     /**
