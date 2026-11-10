@@ -80,6 +80,9 @@ jobs:
     timeout-minutes: 5
     outputs:
       persistence: ${{ steps.paths.outputs.persistence }}
+      mysql: ${{ steps.databases.outputs.mysql }}
+      mariadb: ${{ steps.databases.outputs.mariadb }}
+      postgresql: ${{ steps.databases.outputs.postgresql }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -103,6 +106,22 @@ jobs:
           touched=$(.github/ci/persistence-needed.sh "$base" "$HEAD_SHA")
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
+      # The database images live in .github/ci/databases.Dockerfile, where Dependabot reads them; one line per service.
+      # Bash builtins only, so the runner host needs no command beyond those the job already uses.
+      - id: databases
+        run: |
+          declare -A images
+          while read -r line; do
+            if [[ $line =~ ^FROM\ ([^ ]+)\ AS\ (mysql|mariadb|postgresql)$ ]]; then images[${BASH_REMATCH[2]}]+="${BASH_REMATCH[1]} "; fi
+          done < .github/ci/databases.Dockerfile
+          for service in mysql mariadb postgresql; do
+            if [[ ! ${images[$service]:-} =~ ^[^\ ]+\ $ ]]; then
+              echo "::error::.github/ci/databases.Dockerfile must name one image each for mysql, mariadb and postgresql"
+              exit 1
+            fi
+            echo "$service=${images[$service]% }" >> "$GITHUB_OUTPUT"
+            echo "$service=${images[$service]% }"
+          done
   # The persistence group on each supported engine; bin/check keeps running it on SQLite. One job runs all three engines
   # (a service each), in parallel inside one step: on an ephemeral self-hosted runner every job is a full machine reset,
   # so a matrix of three jobs would cost three resets and three runners per run, while one after another took about 13
@@ -123,7 +142,7 @@ jobs:
       ENGINES: ${{ needs.changes.outputs.persistence }}
     services:
       mysql:
-        image: ${{ needs.changes.outputs.persistence == 'true' && 'mysql:8.4' || '' }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mysql || '' }}
         env:
           MYSQL_DATABASE: intakt_test
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
@@ -134,7 +153,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       mariadb:
-        image: ${{ needs.changes.outputs.persistence == 'true' && 'mariadb:11.4' || '' }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mariadb || '' }}
         env:
           MARIADB_DATABASE: intakt_test
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
@@ -145,7 +164,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       postgresql:
-        image: ${{ needs.changes.outputs.persistence == 'true' && 'postgres:17' || '' }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.postgresql || '' }}
         env:
           POSTGRES_DB: intakt_test
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -166,17 +185,20 @@ jobs:
         run: .github/ci/build-image.sh
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
       # The three engines run at once (.github/ci/persistence-engines.sh); the step fails when any fails.
-      - name: Run the persistence group on mysql 8.4, mariadb 11.4 and postgresql 17
+      - name: Run the persistence group on each database image
         if: env.ENGINES == 'true' && !cancelled() && steps.image.outcome == 'success'
         env:
+          MYSQL_IMAGE: ${{ needs.changes.outputs.mysql }}
+          MARIADB_IMAGE: ${{ needs.changes.outputs.mariadb }}
+          POSTGRESQL_IMAGE: ${{ needs.changes.outputs.postgresql }}
           MYSQL_NETWORK: ${{ job.services.mysql.network }}
           MARIADB_NETWORK: ${{ job.services.mariadb.network }}
           POSTGRESQL_NETWORK: ${{ job.services.postgresql.network }}
         run: >-
           .github/ci/persistence-engines.sh
-          "mysql 8.4|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
-          "mariadb 11.4|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
-          "postgresql 17|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
+          "$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
+          "$MARIADB_IMAGE|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
+          "$POSTGRESQL_IMAGE|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
   # The app image, built here and never pushed, then docker/smoke-test.sh on it; every check is in the script.
   image:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'

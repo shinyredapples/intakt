@@ -190,6 +190,35 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
     }
 
+    public function testARoundWithACallWhoseUsageLacksInputTokensHasAnUnknownCostInsteadOfTheOutputOnlySum(): void
+    {
+        $this->recordCall('c1', self::ROUND, 'settled');
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND, 'model' => 'big']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c2', 'phase' => 'settled', 'usages' => [['account' => 'anthropic.default', 'prompt' => null, 'completion' => 3000, 'total' => null] + $this->usage()]]);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, [], 'unknown'], [$cost->usd, $cost->unpriced, $cost->reading()]);
+    }
+
+    public function testACallLackingInputTokensOfAModelWithoutAPriceStillNamesTheModel(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'light', 'round' => self::ROUND, 'model' => 'small']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [['prompt' => null] + $this->usage()]]);
+
+        $cost = $this->reading()->costOf(self::ROUND);
+
+        self::assertSame([null, ['small']], [$cost->usd, $cost->unpriced]);
+    }
+
+    public function testACallReportingZeroInputTokensIsStillPriced(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND, 'model' => 'big']);
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'settled', 'usages' => [['prompt' => 0] + $this->usage()]]);
+
+        self::assertEqualsWithDelta(20 * 10.0 / 1_000_000, $this->reading()->costOf(self::ROUND)->usd, 1e-12);
+    }
+
     public function testARoundWithoutCallsCostsNothing(): void
     {
         $this->recordCall('c1', self::OTHER_ROUND, 'settled');

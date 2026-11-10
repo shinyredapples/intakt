@@ -10,6 +10,7 @@ use Intakt\Gates\ProcessRunner;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
+use Symfony\Component\Filesystem\Filesystem;
 
 final readonly class Sandbox
 {
@@ -23,6 +24,17 @@ final readonly class Sandbox
     {
         $root = sys_get_temp_dir().'/intakt-gates-'.bin2hex(random_bytes(6));
         mkdir($root, 0o777, true);
+
+        return new self($root);
+    }
+
+    // The same owner in the same process gets the same folder, so the tests of a class can share it without holding it in a property; the process id keeps parallel workers apart.
+    public static function ownedBy(string $owner): self
+    {
+        $root = sys_get_temp_dir().'/intakt-gates-'.hash('xxh128', getmypid().':'.$owner);
+        if (!is_dir($root)) {
+            mkdir($root, 0o777, true);
+        }
 
         return new self($root);
     }
@@ -46,6 +58,18 @@ final readonly class Sandbox
         return $sandbox;
     }
 
+    // Keeps var/, so the container an earlier run dumped there serves this fixture too.
+    public function replaceFixtureWith(string $name): void
+    {
+        foreach (new FilesystemIterator($this->root) as $entry) {
+            if ($entry instanceof SplFileInfo && 'var' !== $entry->getFilename()) {
+                new Filesystem()->remove($entry->getPathname());
+            }
+        }
+
+        $this->copyFixture(self::FIXTURES.'/'.$name);
+    }
+
     public function write(string $path, string $contents): void
     {
         $target = $this->root.'/'.$path;
@@ -67,7 +91,8 @@ final readonly class Sandbox
 
     public function git(string ...$arguments): ProcessResult
     {
-        $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null'];
+        // Without fsync, because a sandbox is a scratch repository that nothing reads after a crash, and side by side workers otherwise wait on each other's disk flushes.
+        $identity = ['-c', 'user.name=Gate Test', '-c', 'user.email=gates@example.test', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsync=none'];
 
         return new ProcessRunner()->run(['git', ...$identity, ...array_values($arguments)], $this->root);
     }
