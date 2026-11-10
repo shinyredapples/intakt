@@ -47,7 +47,8 @@ projects:
         # the task text is given to every round until the pull request text is read from the forge.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request. }
     beta:
-        # Optional: shadow never writes to the forge; live, the default, does.
+        # Optional: shadow never writes to the forge and its verdicts never count; reviewer-for-loop reviews the existing loop's heads,
+        # its verdicts count and it writes nothing to the forge yet; live, the default, writes.
         mode: shadow
         tiers:
             strong: { provider: openai, model: gpt-5 }

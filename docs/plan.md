@@ -440,6 +440,13 @@ Conventions, in addition to the ones above:
 
 **Exit (owner's go):** at least seven days and 40 compared heads, fewer than 5% failed reviews, and no more than one in ten heads where the loop raised a P1 the builder then fixed and Intakt approved.
 
+### Reviewer for the loop (issue #1251)
+- **Description:** Intakt does real review work before the builder half exists. A project mode `reviewer-for-loop` replaces `shadow`: for every head the existing loop pushes on a pull request of the project, Intakt runs its Claude panel, and its review takes the place of the loop's Claude reviewer and counts for the merge, while the loop's GPT reviewer stays a required second vote (D1). Intakt never merges, pushes, labels or approves protected heads in this stage; the loop keeps building, merging and asking the owner (D2). Measured use and the start ceiling (T40) and the forge budget work stay as they are; the shadow ceiling does not apply, because Intakt replaces a reviewer instead of adding one (D5).
+- **Parts:** 1 (#1318, built): the mode, a round for each loop head without the shadow ceiling, verdicts marked `reviewer-for-loop` that count, and the project mode guard that lets none of the project's writes reach the forge. 2: Intakt publishes its status and its review comment. 3: the shadow code is removed and the weekly report is built; until then `shadow` keeps working.
+- **Rollback:** the loop switches back to its own Claude reviewer, and the project's mode goes back to `shadow` or `live`.
+- **Acceptance (part 1):** tests cover the mode selection and that a round runs for a loop head.
+- **Evidence (part 1):** on a running install on SQLite, the mode set and a round started for a head.
+
 ## M7 Builder half
 
 ### T44 Job containers through the Docker Engine API
