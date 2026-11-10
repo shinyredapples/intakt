@@ -69,7 +69,7 @@ final class ProjectFilterLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([['', 'All projects'], ['alpha', 'alpha'], ['beta', 'beta']], $pushedOptions);
     }
 
-    // Built from the application's own filter source and templates, with a hub that records instead of posting.
+    // Assembled here from the container's filter source and Twig, because the container inlines its hub, so a recording one cannot be set there.
     private function publisher(): PublishProjectFilter
     {
         $container = self::getContainer();

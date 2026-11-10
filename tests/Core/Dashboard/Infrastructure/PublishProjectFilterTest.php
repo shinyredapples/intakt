@@ -134,11 +134,8 @@ final class PublishProjectFilterTest extends TestCase
 
         $this->publisher($this->hubThatAccepts(), $ledger)(new RoundOpened('r1', 'alpha'));
 
-        $logs = $this->log->cleanLogs();
         self::assertSame([], $this->posted);
-        self::assertSame(['warning', 'The project filter was not published.'], [$logs[0][0] ?? null, $logs[0][1] ?? null]);
-        $context = $logs[0][2] ?? [];
-        self::assertSame(['r1', 'alpha', RuntimeException::class], [$context['round'] ?? null, $context['project'] ?? null, isset($context['exception']) && is_object($context['exception']) ? $context['exception']::class : null]);
+        self::assertSame([['warning', 'The project filter was not published.', 'r1', 'alpha', RuntimeException::class]], $this->loggedWarnings());
     }
 
     private function publisher(MockHttpClient $hub, Ledger $ledger): PublishProjectFilter
@@ -172,6 +169,20 @@ final class PublishProjectFilterTest extends TestCase
 
             return new MockResponse('urn:uuid:'.count($this->posted));
         });
+    }
+
+    /**
+     * @return list<array{mixed, mixed, mixed, mixed, class-string|null}>
+     */
+    private function loggedWarnings(): array
+    {
+        return array_values(array_map(static function (mixed $record): array {
+            $record = is_array($record) ? $record : [];
+            $context = is_array($record[2] ?? null) ? $record[2] : [];
+            $exception = $context['exception'] ?? null;
+
+            return [$record[0] ?? null, $record[1] ?? null, $context['round'] ?? null, $context['project'] ?? null, is_object($exception) ? $exception::class : null];
+        }, $this->log->cleanLogs()));
     }
 
     private function postedStream(): string
