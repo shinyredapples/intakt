@@ -1,0 +1,57 @@
+name: highlights
+# The highlights page is built from docs/highlights.d/ and never committed to main. On each push to main that changes its
+# sources, this job assembles it in the CI image (no credentials in that step) and publishes it as the single file
+# highlights.md of the branch highlights-page, which GitHub renders. The branch holds one commit, replaced every time.
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/highlights.d/**
+      - bin/highlights
+      - config/gates/src/HighlightFragments.php
+      - .github/workflows/highlights.yml
+  workflow_dispatch:
+concurrency:
+  group: highlights
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build the CI image
+        run: .github/ci/build-image.sh
+      - name: Assemble the page
+        run: |
+          set -eu
+          mkdir "$RUNNER_TEMP/page"
+          chmod 777 "$RUNNER_TEMP/page"
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/page:/page" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/highlights && cp docs/highlights.md /page/highlights.md'
+      # A second checkout keeps the job's credentials, and only git commands run in it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: publish
+      - name: Publish the page
+        working-directory: publish
+        run: |
+          set -eu
+          git switch --orphan highlights-page
+          git rm -rf --quiet --ignore-unmatch .
+          cp "$RUNNER_TEMP/page/highlights.md" highlights.md
+          git add highlights.md
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com \
+            commit --quiet --message "chore: publish the highlights page of ${GITHUB_SHA}"
+          git push --force origin highlights-page

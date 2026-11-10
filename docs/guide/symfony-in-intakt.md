@@ -1,6 +1,6 @@
 # How Intakt uses Symfony, in plain words
 
-This page explains which parts of Symfony and Symfony AI Intakt is built from, and what each part does for it, without assuming you know Symfony. The exact list, with the status of every feature and where it lives in the code, is in the highlights page, built from the files in [`docs/highlights.d/`](../highlights.d/) by `bin/highlights`. Intakt is still being built: each section says what is **in use** already and what is **planned**.
+This page explains which parts of Symfony and Symfony AI Intakt is built from, and what each part does for it, without assuming you know Symfony. The exact list, with the status of every feature and where it lives in the code, is in the [highlights page](https://github.com/shinyredapples/intakt/blob/highlights-page/highlights.md) (rebuilt from main after every change to its sources), built from the files in [`docs/highlights.d/`](../highlights.d/) by `bin/highlights`. Intakt is still being built: each section says what is **in use** already and what is **planned**.
 
 ## First, what are these?
 
