@@ -23,6 +23,15 @@ final class OnePhpstanRunFindingsTest extends TestCase
         $this->assertFindingsUnderItsFolder($run, 'accepted');
     }
 
+    public function testAnAcceptedFixtureFailsWhenTheGateFailedWithOnlyANote(): void
+    {
+        $run = $this->runReporting('{"gate":"phpstan","ok":false,"findings":[],"omitted":0,"note":"PHPStan crashed"}');
+
+        $this->expectException(AssertionFailedError::class);
+
+        $this->assertFindingsUnderItsFolder($run, 'accepted');
+    }
+
     public function testAnAcceptedFixturePassesWhenTheGateReportedEveryFinding(): void
     {
         $run = $this->runReporting('{"gate":"phpstan","ok":false,"findings":["rejected/src/Lookup.php:9 intakt.containerUnknownGetId"],"omitted":0}');

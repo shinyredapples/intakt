@@ -52,6 +52,7 @@ trait UsesSandboxes
         // Because a fixture that must pass reports nothing, a run that judged no file at all would otherwise pass it too.
         Assert::assertTrue($run->passed('phpstan') || $run->failed('phpstan'), $run->output());
         // The gate shows only its first findings, so an omitted one could be the finding a fixture that must pass is judged by.
+        Assert::assertFalse($run->failed('phpstan') && [] === $findings, $run->output());
         Assert::assertSame('0', $run->omittedOf('phpstan'), $run->output());
         Assert::assertSame([], array_values(array_filter($findings, static fn (string $finding): bool => 1 !== preg_match('~^\S+:\d+ ~', $finding))), $run->output());
 
