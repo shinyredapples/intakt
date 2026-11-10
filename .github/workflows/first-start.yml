@@ -1,5 +1,6 @@
 name: first-start
-# A smoke check of the demo's first start on the real image and an empty volume; needs Docker on the runner, no secrets.
+# A smoke check of the demo's first start on the real image and an empty volume; needs Docker on the runner, and only the
+# optional read-only Docker Hub secrets (see ci.yml).
 # Never pull_request_target: pull-request code must not run with the base repository's secrets or write token.
 on:
   pull_request:
@@ -19,5 +20,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       - name: Start the image on an empty volume and show the seeded panel
         run: bash docker/verify-first-start.sh

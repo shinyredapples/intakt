@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use FilesystemIterator;
+use Intakt\Gates\Gate;
+use Intakt\Gates\Mode;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
+use Intakt\Gates\Workspace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use SplFileInfo;
@@ -158,6 +161,14 @@ final readonly class Sandbox
         $result = new ProcessRunner()->run(['php', $home.'/bin/check', '--root='.$this->root, ...array_values($arguments)], $home, $environment);
 
         return new CheckRun($result);
+    }
+
+    // Because starting bin/check costs more than a gate that spawns no tool, its tests run it here and read the line bin/check would print for it.
+    public function runGate(Gate $gate): CheckRun
+    {
+        $result = $gate->run(new Workspace($this->root, dirname(__DIR__, 2), Mode::Full, null));
+
+        return new CheckRun(new ProcessResult($result->isPassing() ? 0 : 1, $result->toJson()."\n", ''));
     }
 
     public function remove(): void

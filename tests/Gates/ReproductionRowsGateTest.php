@@ -7,7 +7,9 @@ namespace Intakt\Tests\Gates;
 use DateTimeZone;
 use Intakt\Gates\CheckedReports;
 use Intakt\Gates\FencedCodeBlocks;
+use Intakt\Gates\HighlightFragments;
 use Intakt\Gates\ReproductionRowsGate;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Clock\NativeClock;
@@ -15,6 +17,8 @@ use Symfony\Component\Clock\NativeClock;
 #[CoversClass(ReproductionRowsGate::class)]
 #[CoversClass(CheckedReports::class)]
 #[UsesClass(FencedCodeBlocks::class)]
+#[UsesClass(HighlightFragments::class)]
+#[UsesClass(Workspace::class)]
 final class ReproductionRowsGateTest extends SandboxTestCase
 {
     private const string SECTION = "## Found in the beta\n\nEach entry is a reproduction under `upstream/<slug>/`.\n\n| Probe | Status | Where | Upstream issue |\n|---|---|---|---|\n";
@@ -26,7 +30,10 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
     public function testAReproductionWithARowPasses(): void
     {
-        $this->assertAcceptedBy('reproductions', 'reproduction-with-row');
+        $run = $this->sandboxWith('reproduction-with-row')->runGate($this->gate());
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+        self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
     public function testEveryReproductionWithoutARowIsNamed(): void
@@ -197,7 +204,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $sandbox->write('upstream/a-bug/REPORT.md', "# Report\n");
         $sandbox->write('docs/highlights.md', "# Highlights\n\n## Found in the beta\n\nSee `upstream/a-bug/`.\n");
 
-        $run = $sandbox->check('--only=reproductions');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('reproductions'), $run->output());
     }
@@ -208,7 +215,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $sandbox->write('upstream/a-bug/REPORT.md', "# Report\n");
         $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::SECTION."\n## Agent\n\n| Feature | Status | Where |\n|---|---|---|\n| A | done | `upstream/a-bug/` |\n");
 
-        $run = $sandbox->check('--only=reproductions');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('reproductions'), $run->output());
     }
@@ -225,7 +232,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('upstream/a-bug/REPORT.md', "# Report\n");
 
-        $run = $sandbox->check('--only=reproductions');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertStringContainsString('upstream/a-bug/ has no row', $run->findingsOf('reproductions'));
     }
@@ -237,7 +244,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::SECTION);
         $sandbox->write('upstream/a-bug/REPORT.md', "# Report\n");
 
-        $run = $sandbox->check('--only=reproductions');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertStringContainsString('upstream/a-bug/ has no row', $run->findingsOf('reproductions'));
     }
@@ -247,7 +254,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/Kernel.php', "<?php\n");
 
-        $run = $sandbox->check('--only=reproductions');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
@@ -469,6 +476,11 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
+    private function gate(): ReproductionRowsGate
+    {
+        return new ReproductionRowsGate(new FencedCodeBlocks(), new CheckedReports(new FencedCodeBlocks(), new NativeClock()), new HighlightFragments());
+    }
+
     private function daysAgo(int $days): string
     {
         return new NativeClock()->now()->setTimezone(new DateTimeZone('UTC'))->modify('-'.$days.' days')->format('Y-m-d');
@@ -485,7 +497,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
         $sandbox->write('upstream/a-bug/REPORT.md', $report);
         $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::SECTION."| A | done | `upstream/a-bug/` | |\n");
 
-        return $sandbox->check('--only=reproductions');
+        return $sandbox->runGate($this->gate());
     }
 
     /**
@@ -509,6 +521,6 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
         $sandbox->write('docs/highlights.md', "# Highlights\n\n".$section);
 
-        return $sandbox->check('--only=reproductions');
+        return $sandbox->runGate($this->gate());
     }
 }
