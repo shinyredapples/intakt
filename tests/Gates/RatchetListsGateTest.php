@@ -14,6 +14,7 @@ use Intakt\Gates\ScratchDirectory;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(RatchetListsGate::class)]
@@ -30,19 +31,24 @@ final class RatchetListsGateTest extends SandboxTestCase
     private const string HEADER = "# Cleanup issue: #436\n";
 
     // Because every bin/check run costs two PHPStan dumps, the list changes share one repository and one run.
-    private static ?CheckRun $listChanges = null;
+    public function testTheListChangesFailTheGateInOneRun(): CheckRun
+    {
+        $run = $this->changeLists(self::listChanges());
+
+        self::assertTrue($run->failed('ratchet'), $run->output());
+
+        return $run;
+    }
 
     /**
      * @param list<string> $expected
      */
     #[DataProvider('listOutcomes')]
-    public function testEachListChangeIsJudgedAgainstItsTargetBranchVersion(string $list, array $expected): void
+    #[Depends('testTheListChangesFailTheGateInOneRun')]
+    public function testEachListChangeIsJudgedAgainstItsTargetBranchVersion(string $list, array $expected, CheckRun $run): void
     {
-        self::$listChanges ??= $this->changeLists(self::listChanges());
+        $findings = $this->findingsFor($run, $list);
 
-        $findings = $this->findingsFor(self::$listChanges, $list);
-
-        self::assertTrue(self::$listChanges->failed('ratchet'), self::$listChanges->output());
         self::assertSame([] === $expected, '' === $findings, $findings);
 
         foreach ($expected as $text) {
