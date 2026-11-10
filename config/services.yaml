@@ -25,13 +25,13 @@ services:
             # Built per review with the checkout under review, so the container cannot wire them.
             - '../src/Core/Review/Infrastructure/Repository/'
             # Defined below, because the scan would alias the forge writes to the guard itself while it is their only class.
-            - '../src/Core/Shadow/Infrastructure/ShadowGuardedForgeWrites.php'
+            - '../src/Core/Shadow/Infrastructure/ModeGuardedForgeWrites.php'
             # Defined in config/packages/ai.php beside the parameters they read, because the scan runs later and would replace those definitions.
             - '../src/Core/Budget/Domain/CeilingStartGuard.php'
             - '../src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php'
 
-    # Decorates whichever forge writes, so a forge plugin cannot forget the shadow rule; dropped while no forge writes (plan task T18).
-    Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites:
+    # Decorates whichever forge writes, so a forge plugin cannot forget the project mode's rule; dropped while no forge writes (plan task T18).
+    Intakt\Core\Shadow\Infrastructure\ModeGuardedForgeWrites:
         decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
         decoration_on_invalid: ignore
 

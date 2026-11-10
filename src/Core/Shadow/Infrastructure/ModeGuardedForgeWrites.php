@@ -11,7 +11,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 
-final readonly class ShadowGuardedForgeWrites implements ForgeWrites
+final readonly class ModeGuardedForgeWrites implements ForgeWrites
 {
     public function __construct(
         #[AutowireDecorated]
@@ -22,10 +22,16 @@ final readonly class ShadowGuardedForgeWrites implements ForgeWrites
 
     public function postReview(string $project, Change $change, ReviewComment $comment): void
     {
-        if (ProjectMode::Shadow === $this->modes->of($project)) {
+        if (!$this->writesFor($project)) {
             return;
         }
 
         $this->forge->postReview($project, $change, $comment);
+    }
+
+    // Only a live project writes, because a reviewer-for-loop project publishes nothing until its review is posted (issue #1251, part 2) and never merges, pushes or labels.
+    private function writesFor(string $project): bool
+    {
+        return ProjectMode::Live === $this->modes->of($project);
     }
 }

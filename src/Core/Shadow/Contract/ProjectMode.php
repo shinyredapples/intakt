@@ -8,4 +8,5 @@ enum ProjectMode: string
 {
     case Live = 'live';
     case Shadow = 'shadow';
+    case ReviewerForLoop = 'reviewer-for-loop';
 }
