@@ -90,6 +90,7 @@ final readonly class UpdateMirror
 
                 return $this->pinned(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrorsDirectory);
             });
+            $this->forgetRemote($staging);
             $published = $this->publish($project, $staging, $path);
         } finally {
             $this->filesystem->remove($attempts);
@@ -107,9 +108,15 @@ final readonly class UpdateMirror
         return $this->mirrorsDirectory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
     }
 
+    private function forgetRemote(string $staging): void
+    {
+        // Because the clone saves the remote's address, credential included, as "remote.origin.url"; the remote is named on every call instead, so the mirror keeps no address.
+        $this->mustRun(['--git-dir='.$staging, 'config', '--remove-section', 'remote.origin'], $staging);
+    }
+
     private function fill(string $repository, string $remote): void
     {
-        // The remote is named on each call, so a mirror never depends on a remote setting a half-finished clone may lack; "--" ends the options, so a remote that starts with a dash is a repository, never an option.
+        // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option.
         $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--', $remote, self::MIRROR_REFSPEC], $repository));
 
         $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
@@ -117,6 +124,8 @@ final readonly class UpdateMirror
         if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
             $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
         } elseif (1 === preg_match(self::DETACHED_HEAD, $heads, $match)) {
+            // Fetched by name, because a detached HEAD may sit on a commit no ref reaches, which the refs fetch leaves out; only here, since an empty remote advertises no HEAD.
+            $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--quiet', '--', $remote, 'HEAD'], $repository));
             // Detached, as "clone --mirror" leaves it, because a remote whose HEAD names no branch only advertises the commit.
             $this->mustRun(['--git-dir='.$repository, 'update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
         }

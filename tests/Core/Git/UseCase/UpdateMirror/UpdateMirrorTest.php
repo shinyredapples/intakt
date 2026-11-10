@@ -204,6 +204,29 @@ final class UpdateMirrorTest extends TestCase
         self::assertSame($first, $this->git($path, 'rev-parse', '--verify', 'HEAD'));
     }
 
+    public function testAnExistingMirrorFollowsARemoteWhoseDetachedHeadIsACommitOnNoBranch(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+        $this->remote->checkoutDetached('HEAD');
+        $orphan = $this->remote->commitFile('b.txt', 'on no branch');
+
+        $this->update('alpha', $this->remote->path);
+
+        self::assertSame($orphan, $this->git($path, 'rev-parse', '--verify', 'HEAD'));
+    }
+
+    public function testThePublishedMirrorNamesNoRemoteAndKeepsNoCredentialOfTheAddressItWasClonedFrom(): void
+    {
+        $credential = bin2hex(random_bytes(8));
+
+        $path = $this->update('alpha', 'file://intakt:'.$credential.'@'.$this->remote->path);
+
+        $config = (string) file_get_contents($path.'/config');
+        self::assertStringNotContainsString($credential, $config);
+        self::assertStringNotContainsString('[remote', $config);
+        self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
     public function testAFailedFirstUpdateLeavesNoFolderBehind(): void
     {
         try {
