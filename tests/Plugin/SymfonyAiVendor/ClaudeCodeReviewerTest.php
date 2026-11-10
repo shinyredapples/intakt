@@ -14,8 +14,8 @@ use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
-use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
+use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -124,7 +124,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 {
     private const string NOW = '2026-10-27 12:00:00.000 UTC';
 
-    // Stands in for the claude binary: records its arguments and the configuration file they name, then replays a recorded stream.
+    // Records what the bridge really starts, because the acceptance is about the CLI's arguments and not the options Intakt hands the bridge.
     private const string SCRIPTED_CLI = <<<'PHP_WRAP'
     #!/usr/bin/env php
     <?php
@@ -171,7 +171,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $run = $this->scriptedRun();
 
-        // The prompts are long texts of their own tests; only their flags' places are left out here.
+        // Left out because the prompts are long texts that their own tests check.
         $arguments = $run['arguments'];
         foreach (['--system-prompt', '--append-system-prompt'] as $prompt) {
             $at = array_search($prompt, $arguments, true);
@@ -183,7 +183,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
             '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence',
             '--allowedTools', 'mcp__intakt-review__read_file', '--allowedTools', 'mcp__intakt-review__list_directory', '--allowedTools', 'mcp__intakt-review__search_files',
             '--disallowed-tools', 'Bash', '--disallowed-tools', 'Read', '--disallowed-tools', 'Edit', '--disallowed-tools', 'MultiEdit', '--disallowed-tools', 'Write', '--disallowed-tools', 'NotebookEdit', '--disallowed-tools', 'Glob', '--disallowed-tools', 'Grep', '--disallowed-tools', 'LS', '--disallowed-tools', 'WebFetch', '--disallowed-tools', 'WebSearch', '--disallowed-tools', 'Task', '--disallowed-tools', 'TodoWrite',
-            '--mcp-config', $run['file'], '--model', 'sonnet', '-p', $arguments[array_key_last($arguments)],
+            '--mcp-config', $run['file'], '--model', 'sonnet', '-p', array_last($arguments),
         ], $arguments);
     }
 

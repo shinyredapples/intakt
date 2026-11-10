@@ -8,7 +8,6 @@ use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
 use Symfony\Component\Filesystem\Filesystem;
