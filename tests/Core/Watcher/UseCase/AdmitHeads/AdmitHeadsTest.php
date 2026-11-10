@@ -96,7 +96,7 @@ final class AdmitHeadsTest extends TestCase
 
     public function testAFailedCheckSuiteOfAnotherAppMakesAHeadWithGreenActionsRed(): void
     {
-        // The recording mirrors the head of #1061, where Dependabot's config check failed next to green Actions runs.
+        // Shaped like the head of #1061, because it merged while Dependabot's config check failed next to green Actions runs.
         $decision = ($this->admit)('demo', $this->change('1061', '1'));
 
         self::assertSame(HeadAdmission::Red, $decision->admission);
