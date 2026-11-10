@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
+use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Twig\Attribute\AsTwigFunction;
 
 final readonly class FilterProjects
@@ -28,5 +29,12 @@ final readonly class FilterProjects
         sort($names, SORT_NATURAL | SORT_FLAG_CASE);
 
         return $names;
+    }
+
+    public function isFirstRoundOf(string $round, string $project): bool
+    {
+        $rounds = array_filter($this->reviews->newestFirst(), static fn (ReviewSummary $review): bool => $review->project === $project);
+
+        return $round === array_last($rounds)?->round;
     }
 }
