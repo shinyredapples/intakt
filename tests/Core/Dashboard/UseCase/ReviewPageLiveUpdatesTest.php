@@ -12,6 +12,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Shadow\Contract\ProjectMode;
@@ -23,6 +24,7 @@ use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
 #[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LivePageRendering::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(LedgerPayload::class)]
@@ -79,7 +81,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
+        self::assertStringNotContainsString('review%2Frounds', (string) $crawler->filter('turbo-mercure-stream-source')->attr('src'));
         self::assertSame('Judged.', $crawler->filter('#round-round-1-state')->text());
     }
 
@@ -111,7 +113,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(1, $crawler->filter('turbo-mercure-stream-source'));
-        self::assertSame(['review/rounds/round-1', 'review/rounds/round-2'], $this->subscribedTopics());
+        self::assertSame(['dashboard/shell', 'review/rounds/round-1', 'review/rounds/round-2'], $this->subscribedTopics());
     }
 
     public function testAReviewerThatStartsAfterThePageLoadedGetsItsPlaceFromItsFirstUpdate(): void
@@ -207,7 +209,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
             $payload = explode('.', (string) $cookie->getValue())[1] ?? '';
             $claims = (string) base64_decode(strtr($payload, '-_', '+/'), true);
-            preg_match_all('#review/rounds/[\w-]+#', stripslashes($claims), $topics);
+            preg_match_all('#(?:review/rounds|dashboard)/[\w-]+#', stripslashes($claims), $topics);
 
             return array_values(array_unique($topics[0]));
         }

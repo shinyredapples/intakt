@@ -2,9 +2,6 @@
 
 {% block title %}Review {{ review.change ?: round }} - Intakt{% endblock %}
 
-{# Only a page the hub can reach is told to listen; the plain page below shows the ledger's state either way. #}
-{% block importmap %}{% if live %}{{ importmap('app') }}{% endif %}{% endblock %}
-
 {% block body %}
 <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
 {% set total = review.tokens %}
@@ -18,8 +15,6 @@
 {% else %}
 <p class="no-start">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
 {% endif %}
-{# One listener for every unfinished round, because the hub's subscriber cookie can be set only once per response. #}
-{% if live and topics is not empty %}{{ turbo_stream_from(topics, true) }}{% endif %}
 {% for reviewed in review.rounds %}
 <section class="round" id="round-{{ reviewed.round }}">
     <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
