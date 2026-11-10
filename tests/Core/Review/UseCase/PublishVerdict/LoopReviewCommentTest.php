@@ -72,7 +72,7 @@ final class LoopReviewCommentTest extends TestCase
     {
         $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn($file, $text), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
 
-        $lines = preg_split('/\R/u', $verdict->redactedComments()[0]);
+        $lines = explode("\n", $verdict->redactedComments()[0]);
 
         self::assertSame(['```json', '{"verdict":"changes","head":"'.self::HEAD.'","summary":"s"}', '```'], array_slice($lines, -3));
         self::assertCount(7, $lines);
