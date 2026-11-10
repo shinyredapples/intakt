@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -32,13 +33,18 @@ final readonly class VerdictForTheLoop
 
     public function of(ReviewRound $round): PublishedVerdict
     {
-        $votes = array_map($this->voteOf(...), $round->reviewers());
-        $decision = $this->decisionOf($round, $votes);
-        $head = $round->identity()->commits->head;
-        if (Decision::Blocked === $decision) {
-            return new PublishedVerdict($head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
+        // Only a judging that failed for good publishes a round before its judge transition, and that round has no act list to publish.
+        if (RoundState::Judged !== $round->state()) {
+            return $this->unreviewed($round);
         }
 
+        $votes = array_map($this->voteOf(...), $round->reviewers());
+        $decision = $this->decisionOf($round, $votes);
+        if (Decision::Blocked === $decision) {
+            return $this->unreviewed($round);
+        }
+
+        $head = $round->identity()->commits->head;
         $comment = $this->commentOf($round, $decision, $votes);
 
         // From the comment's verdict, not the decision, so the status and the comment never tell the loop two outcomes.
@@ -51,6 +57,11 @@ final readonly class VerdictForTheLoop
     public function unpublishable(ReviewRound $round): PublishedVerdict
     {
         return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not publish its review of this head.', null, $this->tokenOf($round));
+    }
+
+    private function unreviewed(ReviewRound $round): PublishedVerdict
+    {
+        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
     }
 
     // The round's id, so a retried publication finds the comment an earlier attempt posted.

@@ -15,6 +15,7 @@ use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfJudgedRound;
+use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfUnjudgedRound;
 use Intakt\Core\Review\UseCase\PublishVerdict\VerdictForTheLoop;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -37,7 +38,9 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 // A real round on SQLite, judged by the application's workflow, published through the GitHub forge over a scripted GitHub, so the test sees the very requests the loop would read.
@@ -45,6 +48,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(PublishVerdictHandler::class)]
 #[CoversClass(PublishVerdict::class)]
 #[CoversClass(QueuePublicationOfJudgedRound::class)]
+#[CoversClass(QueuePublicationOfUnjudgedRound::class)]
 #[CoversClass(VerdictForTheLoop::class)]
 #[CoversClass(LoopReviewComment::class)]
 #[CoversClass(RoundLedgerReading::class)]
@@ -182,6 +186,47 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not review this head.']]], $this->github->writes);
     }
 
+    public function testARoundWhoseJudgingFailedForGoodGetsAnErrorStatusAndNoComment(): void
+    {
+        $roundId = $this->reviewedRound(self::PULL, []);
+
+        $this->unjudgedPublications()(new WorkerMessageFailedEvent(new Envelope($this->fixture->judgings()[0]), 'async', new RuntimeException('tier not mapped')));
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not review this head.']]], $this->github->writes);
+    }
+
+    public function testAJudgingThatWillStillBeRetriedQueuesNoPublication(): void
+    {
+        $roundId = $this->reviewedRound(self::PULL, []);
+        $event = new WorkerMessageFailedEvent(new Envelope($this->fixture->judgings()[0]), 'async', new RuntimeException('again'));
+        $event->setForRetry();
+
+        $this->unjudgedPublications()($event);
+
+        self::assertSame([], $this->publicationsOf($roundId));
+    }
+
+    public function testARoundWhoseReviewerMessagesWereAllParkedGetsAnErrorStatusOnceJudged(): void
+    {
+        $roundId = $this->fixture->startFor(self::PULL, $this->fixture->bus, 2);
+        foreach ($this->fixture->bus->messages as $message) {
+            ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope($message), 'async', new RuntimeException('gave up')));
+        }
+
+        foreach ($this->fixture->judgings() as $judging) {
+            $this->fixture->judge(new VerdictPerRole([]))($judging);
+        }
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt could not review this head.']]], $this->github->writes);
+    }
+
     public function testACommentThatStillHoldsASecretAfterRedactionPublishesOnlyAnErrorStatus(): void
     {
         $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P1, 'The fixture holds a key: sk_live_'.str_repeat('4eC39HqLyjWDarjtT1zdp7dc', 2)))]);
@@ -275,16 +320,35 @@ final class PublishVerdictTest extends KernelTestCase
     private function judgedRound(string $change, array $verdicts): string
     {
         $vendor = new VerdictPerRole($verdicts);
-        $roundId = $this->fixture->startFor($change, $this->fixture->bus, 2);
-        foreach ($this->fixture->bus->messages as $message) {
-            $this->fixture->deliver($message, $vendor);
-        }
-
+        $roundId = $this->reviewedRound($change, $verdicts);
         foreach ($this->fixture->judgings() as $judging) {
             $this->fixture->judge($vendor)($judging);
         }
 
         return $roundId;
+    }
+
+    /**
+     * @param array<string, Verdict> $verdicts
+     */
+    private function reviewedRound(string $change, array $verdicts): string
+    {
+        $vendor = new VerdictPerRole($verdicts);
+        $roundId = $this->fixture->startFor($change, $this->fixture->bus, 2);
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
+
+        return $roundId;
+    }
+
+    // The application's listener, so the test sees it wired to the bus that queues on the application's transport.
+    private function unjudgedPublications(): QueuePublicationOfUnjudgedRound
+    {
+        $listener = self::getContainer()->get(QueuePublicationOfUnjudgedRound::class);
+        assert($listener instanceof QueuePublicationOfUnjudgedRound);
+
+        return $listener;
     }
 
     // The application's queue, because the judge transition of the application's workflow queues the publication.

@@ -14,7 +14,7 @@ use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Psr\Log\LoggerInterface;
 
-// The mode is read here and not when the round is queued, so a project switched to or from reviewer-for-loop after its judge publishes by its mode at publication; a failed write is left to Messenger's retries, and a comment GitHub stored while answering an error may then appear twice with the same verdict.
+// The mode is read here and not when the round is queued, so a project switched to or from reviewer-for-loop after its judge publishes by its mode at publication; a failed write is left to Messenger's retries.
 #[AsCommandHandler]
 final readonly class PublishVerdictHandler
 {
