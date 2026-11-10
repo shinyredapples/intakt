@@ -107,15 +107,21 @@ jobs:
           echo "persistence=$([ "$touched" = yes ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           echo "persistence engines needed: $touched"
       # The database images live in .github/ci/databases.Dockerfile, where Dependabot reads them; one line per service.
+      # Bash builtins only, so the runner host needs no command beyond those the job already uses.
       - id: databases
         run: |
-          set -euo pipefail
-          images=$(sed -nE 's/^FROM (\S+) AS (mysql|mariadb|postgresql)$/\2=\1/p' .github/ci/databases.Dockerfile)
-          if [ "$(cut -d= -f1 <<< "$images" | sort | tr '\n' ' ')" != "mariadb mysql postgresql " ]; then
-            echo "::error::.github/ci/databases.Dockerfile must name one image each for mysql, mariadb and postgresql"
-            exit 1
-          fi
-          echo "$images" | tee -a "$GITHUB_OUTPUT"
+          declare -A images
+          while read -r line; do
+            if [[ $line =~ ^FROM\ ([^ ]+)\ AS\ (mysql|mariadb|postgresql)$ ]]; then images[${BASH_REMATCH[2]}]+="${BASH_REMATCH[1]} "; fi
+          done < .github/ci/databases.Dockerfile
+          for service in mysql mariadb postgresql; do
+            if [[ ! ${images[$service]:-} =~ ^[^\ ]+\ $ ]]; then
+              echo "::error::.github/ci/databases.Dockerfile must name one image each for mysql, mariadb and postgresql"
+              exit 1
+            fi
+            echo "$service=${images[$service]% }" >> "$GITHUB_OUTPUT"
+            echo "$service=${images[$service]% }"
+          done
   # The persistence group on each supported engine; bin/check keeps running it on SQLite. One job runs all three engines
   # (a service each), in parallel inside one step: on an ephemeral self-hosted runner every job is a full machine reset,
   # so a matrix of three jobs would cost three resets and three runners per run, while one after another took about 13
