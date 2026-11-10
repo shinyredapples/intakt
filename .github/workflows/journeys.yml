@@ -1,0 +1,80 @@
+name: journeys
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+concurrency:
+  group: journeys
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  journeys:
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    # Every journey at 300 seconds plus the image build.
+    timeout-minutes: 40
+    outputs:
+      commit: ${{ steps.checkout.outputs.commit }}
+      outcome: ${{ steps.journeys.outcome }}
+    steps:
+      - id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Allow unprivileged user namespaces
+        if: runner.environment == 'github-hosted'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Build the CI image
+        run: .github/ci/build-image.sh
+      - name: Run the journeys
+        id: journeys
+        run: |
+          set -o pipefail
+          apparmor=
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          docker run --rm --user 1000:1000 \
+            --security-opt seccomp=.github/ci/seccomp-userns.json \
+            --security-opt systempaths=unconfined \
+            $apparmor \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check --journeys 2>&1 | tee "$RUNNER_TEMP/journeys.out"
+      - if: failure() && steps.journeys.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: journeys-output
+          path: ${{ runner.temp }}/journeys.out
+  alarm:
+    needs: journeys
+    if: failure() && needs.journeys.outputs.outcome == 'failure'
+    # GitHub's image has gh; the CI image lacks it.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.journeys.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: journeys-output
+          path: ${{ runner.temp }}
+      - name: Build the CI image
+        run: .github/ci/build-image.sh
+      - name: File or update the urgent task
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/journeys.out:/journeys.out:ro" \
+            --volume "$(command -v gh):/usr/local/bin/gh:ro" \
+            --env GH_TOKEN --env GITHUB_REPOSITORY \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/journey-alarm --run="$RUN_LINK" /journeys.out
