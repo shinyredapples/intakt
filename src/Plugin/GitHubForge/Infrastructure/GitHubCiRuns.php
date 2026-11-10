@@ -37,10 +37,8 @@ final readonly class GitHubCiRuns
      */
     public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
-        // A suite with no check run never starts, so it would keep a head pending for good.
-        $suites = array_filter($this->entries($answer, 'check_suites'), static fn (array $suite): bool => 0 !== ($suite['latest_check_runs_count'] ?? null));
-
-        return $this->runsOf($repository, $this->ofHead($head, array_values($suites)), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
+        // A queued suite without check runs is kept, because its first job may still start and the other runs alone would make the head green too early.
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
     }
 
     /**

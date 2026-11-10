@@ -49,10 +49,11 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         }
 
         $pulls = $this->pullsOf($first['body']);
-        $later = count($pulls) < self::PAGE_SIZE ? [] : $this->laterPulls($repository);
+        $complete = count($pulls) < self::PAGE_SIZE;
+        $later = $complete ? [] : $this->laterPulls($repository);
 
-        // The validator belongs to the first page only, so a longer list has none and the next listing is full.
-        return OpenChangeListing::listed(array_map($this->openChange(...), [...$pulls, ...$later]), [] === $later ? $first['etag'] : null);
+        // The validator belongs to the first page only, and a reopened older pull request can fill page two without changing a full page one, so such a list has none and the next listing is full.
+        return OpenChangeListing::listed(array_map($this->openChange(...), [...$pulls, ...$later]), $complete ? $first['etag'] : null);
     }
 
     public function ciStateOf(string $project, CommitId $head): CiState
@@ -89,7 +90,13 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
      */
     private function pullsOf(string $body): array
     {
-        return array_map(static fn (mixed $pull): array => is_array($pull) ? $pull : throw new ForgeReadFailed('GitHub listed a pull request that is not an object.'), array_values($this->decode($body)));
+        $pulls = $this->decode($body);
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        if (!array_is_list($pulls) || !str_starts_with(ltrim($body), '[')) {
+            throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
+        }
+
+        return array_map(static fn (mixed $pull): array => is_array($pull) ? $pull : throw new ForgeReadFailed('GitHub listed a pull request that is not an object.'), $pulls);
     }
 
     /**

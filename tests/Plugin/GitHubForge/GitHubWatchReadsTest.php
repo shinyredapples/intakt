@@ -141,14 +141,42 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertNull($listing->validator);
     }
 
-    public function testAFullPageFollowedByAnEmptyOneKeepsTheValidator(): void
+    public function testAFullFirstPageFollowedByAnEmptyOneReturnsNoValidator(): void
     {
         $this->listing = 'pulls_page_full_only.json';
 
         $listing = $this->reads()->listOpen('alpha', null);
 
         self::assertCount(100, $listing->changes());
+        self::assertNull($listing->validator);
+    }
+
+    public function testAnEmptyListIsAnEmptyListingWithItsValidator(): void
+    {
+        $this->listing = 'pulls_none.json';
+
+        $listing = $this->reads()->listOpen('alpha', null);
+
+        self::assertSame([], $listing->changes());
         self::assertSame('W/"listing-2"', $listing->validator);
+    }
+
+    public function testAnEmptyObjectInsteadOfAListingRaisesAReadFailure(): void
+    {
+        $this->listing = 'pulls_empty_object.json';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->reads()->listOpen('alpha', null);
+    }
+
+    public function testAnObjectOfPullRequestsInsteadOfAListingRaisesAReadFailure(): void
+    {
+        $this->listing = 'pulls_keyed_object.json';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->reads()->listOpen('alpha', null);
     }
 
     public function testAListingOfMoreThanTenPagesFailsTheRead(): void
@@ -210,12 +238,11 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Succeeded], $this->statesOfHead());
     }
 
-    public function testACheckSuiteWithNoCheckRunIsLeftOut(): void
+    public function testAQueuedCheckSuiteBeforeItsFirstCheckRunKeepsAGreenHeadUnfinished(): void
     {
-        $this->runs = 'runs_none.json';
         $this->suites = 'suites_empty_queue.json';
 
-        self::assertTrue($this->state()->isEmpty());
+        self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
     }
 
     public function testARunKeepsItsOriginAndStartTime(): void
