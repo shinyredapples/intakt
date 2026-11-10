@@ -4,24 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
-use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
-// Runs the image's entrypoint outside a container, because what is proven here is which processes it starts and starts again, not the image build.
-#[Group('hub')]
+// Runs the image's entrypoint outside a container against stand-ins for php and frankenphp, because what is proven here is which processes it starts, supervises and stops, not the image build.
 #[CoversNothing]
 final class EntrypointProcessesTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
 
-    // Longer than the workers test waits, because the consumers boot the kernel after the migration.
-    private const int SECONDS_TO_WAIT = 90;
+    private const int SECONDS_TO_WAIT = 20;
 
     // POSIX numbers rather than SIGKILL, SIGSTOP and SIGTERM, because those constants exist only with pcntl and the CI image has none.
     private const int KILL = 9;
@@ -44,25 +39,15 @@ final class EntrypointProcessesTest extends TestCase
     protected function setUp(): void
     {
         // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
-        if (null === new ExecutableFinder()->find('frankenphp')) {
-            self::markTestSkipped('The hub tests need the frankenphp binary, see docs/architecture/requirements.md.');
-        }
-
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->directory);
-        $ports = WorkerPorts::ofThisWorker();
-        $port = (string) $ports->next();
         $this->environment = [
-            'SERVER_PORT' => $port,
-            'DASHBOARD_PORT' => $port,
-            'CADDY_ADMIN' => 'localhost:'.$ports->next(),
-            'DATABASE_URL' => 'sqlite:///'.$this->directory.'/intakt.db',
-            'MESSENGER_TRANSPORT_DSN' => 'doctrine://default',
+            'PATH' => $this->standInPrograms().':'.getenv('PATH'),
             'MESSENGER_CONSUMERS' => '2',
+            'WORKER_MEMORY_CEILING_MB' => '256',
             'APP_SECRET' => self::SECRET,
             'MERCURE_JWT_SECRET' => self::SECRET,
-            'MERCURE_JWT_ISSUER' => 'http://localhost:'.$port,
-            'MERCURE_BOLT_PATH' => $this->directory.'/hub.db',
+            'MERCURE_JWT_ISSUER' => 'http://localhost',
         ];
     }
 
@@ -77,24 +62,17 @@ final class EntrypointProcessesTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
-    public function testTheConsumersAndTheSchedulerRunBesideTheWebServer(): void
+    public function testTheConsumersAndTheSchedulerRunBesideTheWebServerAlsoWithPlainPhp(): void
     {
         $this->startEntrypoint();
         $processes = $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
-
-        self::assertSame(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], array_count_values($processes));
-    }
-
-    public function testTheConsumersAndTheSchedulerRunWithPlainPhp(): void
-    {
-        $this->startEntrypoint();
-        $this->waitForProcesses(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1]);
 
         $programs = array_map(
             static fn (array $arguments): string => basename($arguments[0]),
             array_filter($this->childArguments(), static fn (array $arguments): bool => in_array('messenger:consume', $arguments, true)),
         );
 
+        self::assertSame(['web' => 1, 'async' => 2, 'scheduler_watcher' => 1], array_count_values($processes));
         self::assertSame(['php'], array_values(array_unique($programs)));
     }
 
@@ -181,10 +159,7 @@ final class EntrypointProcessesTest extends TestCase
         trap 'if [[ "$BASH_COMMAND" == "running[\$!]=\$1" ]]; then trap - DEBUG; echo "$!" >> "$CHILD_STARTED_BEFORE_THE_STOP"; kill -TERM "$$"; fi' DEBUG
         source docker/entrypoint.sh
         BASH_WRAP;
-        $this->startEntrypoint(['bash', '-c', $forcedOrder], [
-            'PATH' => $this->stubProgramsThatSleep().':'.getenv('PATH'),
-            'CHILD_STARTED_BEFORE_THE_STOP' => $this->childrenStartedBeforeTheStopFile(),
-        ]);
+        $this->startEntrypoint(['bash', '-c', $forcedOrder], ['CHILD_STARTED_BEFORE_THE_STOP' => $this->childrenStartedBeforeTheStopFile()]);
 
         $this->waitForTheEntrypointToEnd(self::GRACE_SECONDS);
 
@@ -244,16 +219,16 @@ final class EntrypointProcessesTest extends TestCase
         $this->entrypoint->start();
     }
 
-    // Stand-ins for php and frankenphp that end at once on SIGTERM, so the entrypoint's own stop is what the forced order measures, not a consumer's.
-    private function stubProgramsThatSleep(): string
+    // Stand-ins that loop over sleep without exec, so /proc keeps their arguments; a bash script dies on SIGTERM and stops on SIGSTOP like the real programs, and the real start is proved by the image smoke test and CaddyfileWorkersTest.
+    private function standInPrograms(): string
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
+        $loop = "while :; do sleep 1; done\n";
 
-        foreach (['php', 'frankenphp'] as $name) {
-            $filesystem->dumpFile($programs.'/'.$name, "#!/bin/bash\ncase \"\$*\" in *migrate*|*validate*) exit 0;; esac\nexec sleep 300\n");
-            $filesystem->chmod($programs.'/'.$name, 0755);
-        }
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\n".$loop);
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) exit 0;; esac\n".$loop);
+        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
 
         return $programs;
     }
@@ -379,6 +354,11 @@ final class EntrypointProcessesTest extends TestCase
             }
 
             $parts = explode("\0", rtrim($commandLine, "\0"));
+
+            // A stand-in is a script, so the kernel starts it as its interpreter followed by its path.
+            if (str_starts_with($parts[1] ?? '', $this->directory)) {
+                array_shift($parts);
+            }
 
             // Left out because the entrypoint's poll sleeps in a child of its own, which it does not supervise.
             if ('sleep' !== basename($parts[0])) {
