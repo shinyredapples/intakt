@@ -242,6 +242,21 @@ final class MakeBuildCloneTest extends TestCase
         self::assertFileDoesNotExist($this->mirrors.'-nowhere');
     }
 
+    public function testAParentFolderThatCannotBeMadeIsReportedAsNotMadeAndTheFileInTheWayIsLeftAlone(): void
+    {
+        $this->givenTheMirror();
+        file_put_contents($this->clone, 'kept');
+
+        try {
+            $this->buildClones()->make('alpha', 'feat/task', $this->clone.'/clone');
+            self::fail('the build clone was made below a file');
+        } catch (BuildCloneNotMade $refused) {
+            self::assertStringContainsString($this->clone.'/clone was not made', $refused->getMessage());
+        }
+
+        self::assertSame('kept', file_get_contents($this->clone));
+    }
+
     public function testAMirrorWhoseHeadNamesNoBranchIsRefused(): void
     {
         $this->remote->checkoutDetached('main');

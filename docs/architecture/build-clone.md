@@ -16,6 +16,6 @@ The use case `MakeBuildClone::make(<project>, <branch>, <directory>)` in `src/Co
 
 Every call is built by `HardenedGit`. The calls in the mirror carry `--git-dir=<mirror>` and unset `GIT_WORK_TREE`, as in `UpdateMirror`; `init` unsets it too, because git refuses a work tree without a git folder. The fetches allow the `file` transport only (`GIT_ALLOW_PROTOCOL=file`), because git reads a local path as that transport. The fetches are local, so they are not retried ([Retried network git calls](network-git.md) are for the remote).
 
-A step that fails throws `BuildCloneNotMade` with git's message. When the folder was already reserved by this call, it is removed, so a clone that failed half-way is never taken for a build clone. A project name that is not a safe folder name, and a branch that is unsafe or main, throw `InvalidArgumentException`.
+A step that fails throws `BuildCloneNotMade` with git's message; parent folders that cannot be made (a file in the way, no permission) throw it with the filesystem's message. When the folder was already reserved by this call, it is removed, so a clone that failed half-way is never taken for a build clone. A project name that is not a safe folder name, and a branch that is unsafe or main, throw `InvalidArgumentException`.
 
 No console command and no build job (plan task T49) calls the use case yet. The `Source:` line of a task, which adds one verified commit as a read-only ref, is the third part of plan task T46 and not built yet.

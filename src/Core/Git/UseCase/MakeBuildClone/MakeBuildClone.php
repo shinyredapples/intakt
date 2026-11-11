@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
 use InvalidArgumentException;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 use Throwable;
@@ -105,7 +106,11 @@ final readonly class MakeBuildClone
 
     private function reserve(string $directory): void
     {
-        $this->filesystem->mkdir(dirname($directory));
+        try {
+            $this->filesystem->mkdir(dirname($directory));
+        } catch (IOException $failed) {
+            throw BuildCloneNotMade::at($directory, $failed->getMessage());
+        }
 
         // A thread-safe PHP resolves the path before mkdir and follows a dangling link, so mkdir alone would make the link's target.
         if ($this->isTaken($directory)) {
