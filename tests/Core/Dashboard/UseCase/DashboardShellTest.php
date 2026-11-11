@@ -156,6 +156,14 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertSame('Esc', $dialog->filter('.q kbd')->text());
     }
 
+    public function testTheSearchDialogCarriesACancelButton(): void
+    {
+        $cancel = $this->browser->request('GET', '/reviews')->filter('#search .q button[data-search-cancel][type="button"]');
+
+        self::assertCount(1, $cancel);
+        self::assertSame('Cancel', $cancel->text());
+    }
+
     public function testTheSearchDialogNamesItsKeys(): void
     {
         $footer = $this->browser->request('GET', '/reviews')->filter('#search .palette footer');

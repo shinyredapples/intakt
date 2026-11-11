@@ -365,7 +365,19 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .palette .none p { margin: 0; }
 .palette .none p + p { margin-top: var(--s4); }
 .palette .none .btn { margin-top: calc(var(--s12) + 2px); }
+.palette .q .btn { display: none; }
 .palette footer { display: flex; gap: var(--s16); padding: calc(var(--s8) + 2px) calc(var(--s16) + 2px); border-top: 1px solid var(--hairline); color: var(--muted); font-size: var(--t13); }
+/* Declared after the desktop rules above, because both have the same specificity and the later one wins; the selectors start with .overlay so each is a rule of its own. The text floor needs no rule: --t13 is 15 px on phones. */
+@media (max-width: 760px) {
+  .overlay:not([hidden]) { padding: 0; }
+  .overlay .palette { display: flex; flex-direction: column; max-width: none; height: 100dvh; margin: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); border: 0; border-radius: 0; }
+  .overlay .palette .q { flex: none; }
+  .overlay .palette .q kbd, .overlay .palette footer { display: none; }
+  .overlay .palette .q .btn { display: inline-flex; min-height: 44px; }
+  .overlay .palette .results { flex: 1; min-height: 0; max-height: none; }
+  .overlay .palette .res { min-height: 52px; }
+  .overlay .palette .none .btn { min-height: 44px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .overlay:not([hidden]) .palette { animation: none; }
 }

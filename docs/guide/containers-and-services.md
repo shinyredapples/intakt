@@ -33,7 +33,7 @@ Images are built once per version of the project and cached, and rebuilt when th
 
 ## When a job runs out of memory
 
-This part is planned, not built yet ([details](../design/04-constraints.md#security-model)).
+The first part is built: every job has a memory limit of its own, and when that limit stops a job, Intakt records `oom` as the reason the job ended. The rest of this section (a limit per command inside a job, the language's own memory limit, the comment on the task, the hand-over and the card on the dashboard) is planned, not built yet, and no build, check or review runs in a job container yet ([details](../design/04-constraints.md#security-model)).
 
 Every job has a memory limit, so a test that eats memory without end can't slow down the rest of the machine. Inside the job, each command the AI runs has a limit of its own, so a runaway test is stopped alone: the AI is told which process was stopped and can fix it in the same session. Your language also gets a **memory limit** for the programs a job starts. By default it is 512 MB, or twice what your project's check needed when Intakt first ran it, whichever is larger, so you don't have to set anything. A limit your project already sets (for example in its test settings) wins.
 
