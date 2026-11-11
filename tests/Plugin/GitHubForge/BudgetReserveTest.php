@@ -18,12 +18,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\NullLogger;
-use ReflectionProperty;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
-use Symfony\Component\Cache\CacheItem;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -46,7 +43,8 @@ final class BudgetReserveTest extends TestCase
     protected function setUp(): void
     {
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->pool = new ArrayAdapter();
+        // The pool expires slots by the test clock, so the seconds a slot lives are the seconds the clock moves.
+        $this->pool = new ArrayAdapter(clock: $this->clock);
         $this->locks = new LockFactory(new InMemoryStore());
         $this->readings = new RateLimitReadings(new ArrayAdapter(), $this->clock, new LockFactory(new InMemoryStore()));
     }
@@ -146,7 +144,6 @@ final class BudgetReserveTest extends TestCase
         $reserve->admitListing('alpha');
         $this->clock->modify('+31 seconds');
         $reserve->admitListing('alpha');
-        $this->ageSlot(BudgetReserve::slotKey('678', 'alpha'), seconds: 61);
         $this->clock->modify('+61 seconds');
         $reserve->admitListing('alpha');
         $this->clock->modify('+31 seconds');
@@ -159,21 +156,15 @@ final class BudgetReserveTest extends TestCase
     public function testBelowTheReserveTheSlotOfAnEarlyListingLivesUntilItsDueTime(): void
     {
         $this->read(remaining: 999);
-        $saved = [];
-        $recording = self::createStub(CacheItemPoolInterface::class);
-        $recording->method('getItem')->willReturnCallback($this->pool->getItem(...));
-        $recording->method('save')->willReturnCallback(function (CacheItemInterface $item) use (&$saved): bool {
-            $saved[] = $item;
-
-            return $this->pool->save($item);
-        });
-        $reserve = $this->reserve(pool: $recording);
+        $reserve = $this->reserve();
         $reserve->admitListing('alpha');
         $this->clock->modify('2026-11-25 10:00:59 UTC');
-
         $reserve->admitListing('alpha');
+        $this->clock->modify('2026-11-25 10:01:59.500 UTC');
 
-        self::assertEqualsWithDelta(61.0, $this->lifetimeOf($saved[1]), 1.0);
+        $slot = $this->pool->getItem(BudgetReserve::slotKey('678', 'alpha'));
+
+        self::assertSame(new MockClock('2026-11-25 10:02:00 UTC')->now()->getTimestamp(), $slot->get());
     }
 
     public function testBelowTheReserveTheNextTicksListingIsAdmittedWhenTheEarlierTickRanAFewSecondsLate(): void
@@ -324,25 +315,6 @@ final class BudgetReserveTest extends TestCase
         }
 
         throw new LogicException('The listing was expected to wait for the reset.');
-    }
-
-    // Real seconds cannot pass in a test: the slot's real-time expiry is moved as the seconds would move it.
-    private function ageSlot(string $key, int $seconds): void
-    {
-        $expiries = new ReflectionProperty(ArrayAdapter::class, 'expiries');
-        $aged = $expiries->getValue($this->pool);
-        self::assertIsArray($aged);
-        self::assertArrayHasKey($key, $aged);
-        $aged[$key] -= $seconds;
-        $expiries->setValue($this->pool, $aged);
-    }
-
-    private function lifetimeOf(CacheItemInterface $item): float
-    {
-        $expiry = new ReflectionProperty(CacheItem::class, 'expiry')->getValue($item);
-        self::assertIsFloat($expiry);
-
-        return $expiry - microtime(true);
     }
 
     private function reserve(string $installationId = '678', int $percent = FreshReadings::RESERVE_PERCENT, ?CacheItemPoolInterface $pool = null): BudgetReserve
