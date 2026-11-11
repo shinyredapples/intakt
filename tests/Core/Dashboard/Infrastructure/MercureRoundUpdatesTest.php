@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,10 +18,15 @@ use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
+use Twig\Error\LoaderError;
+use Twig\Loader\ArrayLoader;
 use Twig\Loader\FilesystemLoader;
 
+// Through the real MercureLiveUpdates over a MockHub, because what callers see is the update that reaches the hub.
 #[CoversClass(MercureRoundUpdates::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(MercureLiveUpdates::class)]
+#[UsesClass(LiveEvent::class)]
 final class MercureRoundUpdatesTest extends TestCase
 {
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
@@ -105,7 +112,7 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $this->published[0]->getData());
     }
 
-    public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedWithItsRoundAndFailure(): void
+    public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedOnceByTheLiveUpdates(): void
     {
         $refusal = new RuntimeException('the hub refused the update');
         $updates = $this->updates(static fn (Update $update): string => throw $refusal);
@@ -113,9 +120,22 @@ final class MercureRoundUpdatesTest extends TestCase
         $updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
 
         self::assertSame(
-            [['warning', 'A live round update was not published.', ['round' => self::ROUND, 'stream' => 'round_changed', 'exception' => $refusal]]],
+            [['warning', 'A live dashboard update was not published.', ['topic' => 'review/rounds/'.self::ROUND, 'exception' => $refusal]]],
             $this->log->cleanLogs(),
         );
+    }
+
+    public function testATemplateThatFailsToRenderIsLoggedWithItsRoundAndStreamAndPublishesNothing(): void
+    {
+        $updates = new MercureRoundUpdates($this->live(), new Environment(new ArrayLoader()), $this->log);
+
+        $updates->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+
+        $logs = $this->log->cleanLogs();
+        self::assertSame([['warning', 'A live round update was not rendered.']], array_map(static fn (array $record): array => [$record[0], $record[1]], $logs));
+        self::assertSame(['round' => self::ROUND, 'stream' => 'tool_called'], array_diff_key($logs[0][2], ['exception' => true]));
+        self::assertInstanceOf(LoaderError::class, $logs[0][2]['exception']);
+        self::assertSame([], $this->published);
     }
 
     public function testAStoppedReviewerReplacesItsStateAndEmptiesItsStopCell(): void
@@ -136,7 +156,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates(static fn (Update $update): string => throw $refusal)->reviewerStopped(Uuid::fromString(self::ROUND), self::REVIEWER);
 
         self::assertSame(
-            [['warning', 'A live round update was not published.', ['round' => self::ROUND, 'stream' => 'reviewer_stopped', 'exception' => $refusal]]],
+            [['warning', 'A live dashboard update was not published.', ['topic' => 'review/rounds/'.self::ROUND, 'exception' => $refusal]]],
             $this->log->cleanLogs(),
         );
     }
@@ -146,14 +166,21 @@ final class MercureRoundUpdatesTest extends TestCase
      */
     private function updates(?callable $publisher = null): MercureRoundUpdates
     {
+        return new MercureRoundUpdates($this->live($publisher), new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $this->log);
+    }
+
+    /**
+     * @param (callable(Update): string)|null $publisher
+     */
+    private function live(?callable $publisher = null): MercureLiveUpdates
+    {
         $publisher ??= function (Update $update): string {
             $this->published[] = $update;
 
             return 'id-'.count($this->published);
         };
-        $hub = new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher);
 
-        return new MercureRoundUpdates($hub, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $this->log);
+        return new MercureLiveUpdates(new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher), $this->log);
     }
 
     private function actionAndTargetOf(Update $update): string
