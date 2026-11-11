@@ -119,12 +119,16 @@ use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\EventDispatcher\Debug\TraceableEventDispatcher;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
+use Symfony\Contracts\Service\ResetInterface;
 
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(UsageLedger::class)]
@@ -183,12 +187,38 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private const int OUTPUT_LIMIT = 16000;
 
+    // One kernel for the class, because booting it is most of a test's time and only its dispatcher is used; the persistence test boots its own.
+    private static KernelInterface $platformKernel;
+
     private VendorAccountLimit $limit;
+
+    private EventDispatcherInterface $dispatcher;
+
+    #[Override]
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        self::$platformKernel = self::createKernel();
+        self::$platformKernel->boot();
+    }
+
+    #[Override]
+    public static function tearDownAfterClass(): void
+    {
+        self::$platformKernel->shutdown();
+        parent::tearDownAfterClass();
+    }
 
     #[Override]
     protected function setUp(): void
     {
         $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+        $container = self::$platformKernel->getContainer();
+        // Resets what a listener kept from the previous test, as the kernel does between two requests.
+        $resetter = $container->get('services_resetter');
+        self::assertInstanceOf(ResetInterface::class, $resetter);
+        $resetter->reset();
+        $this->dispatcher = ScriptedReviewer::in($container)->dispatcher;
     }
 
     public function testAStructuredCallReturnsTheVerdictTheModelAnswered(): void
@@ -235,7 +265,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
                 'standard' => ['provider' => 'anthropic', 'model' => 'middle', 'max_output' => 8000],
             ]],
         ], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW));
 
@@ -580,7 +610,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testAReviewOnATierWhoseOwnProviderIsDisabledIsAnsweredByTheSubstituteAndMarkedAsOne(): void
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
-        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: $this->dispatcher);
         $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
         $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger(new InMemoryLedger(), new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW));
 
@@ -601,7 +631,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testTheStartedRowOfAReviewAnsweredByASubstituteNamesTheSubstitutesModel(): void
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
-        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $answer = MockPlatformFactory::createPlatform(VerdictDocument::fromTheDesign()->json(), eventDispatcher: $this->dispatcher);
         $platforms = new ServiceLocator([Provider::OpenAi->value => static fn (): PlatformInterface => $answer]);
         $ledger = new InMemoryLedger();
         $vendor = new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW));
@@ -971,6 +1001,13 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertArrayNotHasKey('round', $ledger->payloads()[0]);
     }
 
+    // Declared after the tests that call the shared dispatcher, so in the declared order it sees what they left behind.
+    public function testATestStartsOnTheSharedDispatcherWithNoListenerAnEarlierTestCalled(): void
+    {
+        self::assertInstanceOf(TraceableEventDispatcher::class, $this->dispatcher);
+        self::assertSame([], $this->dispatcher->getCalledListeners());
+    }
+
     private function request(?Uuid $round = null): ReviewRequest
     {
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
@@ -1039,7 +1076,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]],
         ], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), $logger, StoredSerializerFactory::create());
 
@@ -1051,7 +1088,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::OUTPUT_LIMIT]]],
         ], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: $this->dispatcher);
         $platforms = new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]);
         $usage = new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create());
 
@@ -1064,7 +1101,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]],
         ], []);
-        $dispatcher = ScriptedReviewer::in(self::getContainer())->dispatcher;
+        $dispatcher = $this->dispatcher;
         $platforms = new ServiceLocator([
             Provider::ClaudeCode->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($own, eventDispatcher: $dispatcher),
             Provider::OpenAi->value => static fn (): PlatformInterface => MockPlatformFactory::createPlatform($substitute, eventDispatcher: $dispatcher),
