@@ -104,7 +104,7 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
 
-        self::assertSame([$message->reviewerId => FinishedState::Stopped],array_last($this->fixture->updates->progress)?->finished);
+        self::assertSame([$message->reviewerId => FinishedState::Stopped], array_last($this->fixture->updates->progress)?->finished);
     }
 
     public function testTheProgressPublishedAfterAVerdictThatFollowedAnEarlierStopShowsTheVerdict(): void
@@ -115,7 +115,7 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
 
-        self::assertSame([$message->reviewerId => FinishedState::Verdict],array_last($this->fixture->updates->progress)?->finished);
+        self::assertSame([$message->reviewerId => FinishedState::Verdict], array_last($this->fixture->updates->progress)?->finished);
     }
 
     public function testAStopPressedDuringARetryWaitStopsTheRetriedRun(): void
