@@ -35,6 +35,8 @@ A builder hands back **a package of commits and a short description**, nothing e
 
 The project's own checks run again in a **separate, fresh container**, then again on GitHub's machines (CI). The builder saying "all tests pass" counts for nothing; the checks do.
 
+The checks also scan the project's CI workflows for known security mistakes, such as text from a pull request run as a command or an action not pinned to an exact version. A change that weakens the CI that way fails before any reviewer sees it.
+
 ## Layer 4: several independent reviewers
 
 - The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).

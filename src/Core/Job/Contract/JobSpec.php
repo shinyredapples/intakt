@@ -20,6 +20,7 @@ final readonly class JobSpec
         public array $command,
         public array $inputs,
         public JobLimits $limits,
+        public JobEgress $egress,
     ) {
     }
 }
