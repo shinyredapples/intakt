@@ -32,8 +32,6 @@ jobs:
         with:
           ref: refs/tags/${{ inputs.tag || github.ref_name }}
           path: release
-          fetch-depth: 0
-          fetch-tags: true
           persist-credentials: false
       - name: Log in to Docker Hub
         env:
@@ -48,3 +46,27 @@ jobs:
           ACTOR: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
         run: .github/ci/release-image.sh
+  latest:
+    needs: image
+    # One run at a time across all tags; GitHub keeps one waiting and drops older waiting ones, which is harmless:
+    # every run points latest at the highest tag as the tags are now, not at its own (.github/ci/release-latest.sh).
+    concurrency:
+      group: release-image-latest
+      cancel-in-progress: false
+    # GitHub's image has gh and docker buildx; the job pulls nothing from Docker Hub.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Point latest at the highest release tag
+        env:
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/ci/release-latest.sh

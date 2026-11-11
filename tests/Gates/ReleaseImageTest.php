@@ -14,6 +14,8 @@ final class ReleaseImageTest extends SandboxTestCase
 {
     private const string SCRIPT = __DIR__.'/../../.github/ci/release-image.sh';
 
+    private const string LATEST = __DIR__.'/../../.github/ci/release-latest.sh';
+
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/release-image.yml';
 
     // Logs every call, so a test compares the exact commands; login reads the token from stdin, because the script must never pass it as an argument.
@@ -24,7 +26,7 @@ final class ReleaseImageTest extends SandboxTestCase
         echo "$*" >> "$CALLS"
         BASH;
 
-    public function testTheHighestReleaseTagIsBuiltFromItsCheckoutAndPushedAsItsVersionAndLatest(): void
+    public function testAReleaseTagIsBuiltFromItsCheckoutAndPushedAsItsVersionOnly(): void
     {
         $sandbox = $this->releaseSandbox(['v0.1.2', 'v0.9.0', 'v0.10.0']);
         $revision = $this->checkOut($sandbox, 'v0.10.0');
@@ -38,18 +40,7 @@ final class ReleaseImageTest extends SandboxTestCase
             'login ghcr.io --username octocat --password-stdin password=token',
             'tag intakt:release ghcr.io/example/repo:0.10.0',
             'push ghcr.io/example/repo:0.10.0',
-            'tag intakt:release ghcr.io/example/repo:latest',
-            'push ghcr.io/example/repo:latest',
         ], $this->calls($sandbox));
-    }
-
-    public function testAnOlderTagIsPushedOnlyAsItsVersionSoLatestNeverMovesBack(): void
-    {
-        $sandbox = $this->releaseSandbox(['v0.1.2', 'v0.9.0', 'v0.10.0']);
-        $this->checkOut($sandbox, 'v0.9.0');
-
-        self::assertTrue($this->runScript($sandbox, 'v0.9.0')->succeeded());
-        self::assertSame(['push ghcr.io/example/repo:0.9.0'], array_values(array_filter($this->calls($sandbox), static fn (string $call): bool => str_starts_with($call, 'push '))));
     }
 
     public function testATagWhoseTreeHasNoReleaseScriptIsStillPublished(): void
@@ -111,6 +102,48 @@ final class ReleaseImageTest extends SandboxTestCase
         yield 'empty' => [''];
     }
 
+    public function testLatestPointsAtTheHighestReleaseTagWhateverTheRunsOwnTag(): void
+    {
+        $sandbox = $this->latestSandbox(['v0.9.0', 'v0.10.0', 'v0.11.0-rc.1', 'nightly'], ['0.9.0', '0.10.0']);
+
+        $result = $this->runLatest($sandbox);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertSame([
+            'login ghcr.io --username octocat --password-stdin password=token',
+            'buildx imagetools inspect ghcr.io/example/repo:0.10.0',
+            'buildx imagetools create --tag ghcr.io/example/repo:latest ghcr.io/example/repo:0.10.0',
+        ], $this->calls($sandbox));
+    }
+
+    public function testAnOlderRunFinishingLastStillPointsLatestAtTheNewerTag(): void
+    {
+        // Runs finish in any order because GitHub schedules them; here the run of v0.1.0 goes last, after v0.2.0 was pushed.
+        $sandbox = $this->latestSandbox(['v0.1.0', 'v0.2.0'], ['0.1.0', '0.2.0']);
+
+        self::assertTrue($this->runLatest($sandbox)->succeeded());
+        self::assertContains('buildx imagetools create --tag ghcr.io/example/repo:latest ghcr.io/example/repo:0.2.0', $this->calls($sandbox));
+    }
+
+    public function testAHighestTagWhoseImageIsNotPushedYetLeavesLatestToItsOwnRun(): void
+    {
+        $sandbox = $this->latestSandbox(['v0.1.0', 'v0.2.0'], ['0.1.0']);
+
+        $result = $this->runLatest($sandbox);
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertStringContainsString('latest stays until the run of v0.2.0', $result->output);
+        self::assertSame([], array_values(array_filter($this->calls($sandbox), static fn (string $call): bool => str_contains($call, 'create'))));
+    }
+
+    public function testNoReleaseTagLeavesLatestAlone(): void
+    {
+        $sandbox = $this->latestSandbox(['nightly', 'v1.0'], []);
+
+        self::assertTrue($this->runLatest($sandbox)->succeeded());
+        self::assertSame([], $this->calls($sandbox));
+    }
+
     public function testTheWorkflowRunsOnlyForTagsAndAnOwnerDispatchWithPackagesWriteOnItsJob(): void
     {
         $workflow = $this->workflow();
@@ -135,6 +168,16 @@ final class ReleaseImageTest extends SandboxTestCase
         self::assertSame('.github/ci/release-image.sh', $steps[3]['run']);
     }
 
+    public function testTheLatestJobRunsOneAtATimeAcrossTagsAfterTheImage(): void
+    {
+        $job = $this->workflow()['jobs']['latest'];
+
+        self::assertSame('image', $job['needs']);
+        self::assertSame(['group' => 'release-image-latest', 'cancel-in-progress' => false], $job['concurrency']);
+        self::assertSame(['contents' => 'read', 'packages' => 'write'], $job['permissions']);
+        self::assertSame('.github/ci/release-latest.sh', $job['steps'][1]['run']);
+    }
+
     /**
      * @param list<string> $tags
      */
@@ -156,6 +199,29 @@ final class ReleaseImageTest extends SandboxTestCase
         return $sandbox;
     }
 
+    /**
+     * @param list<string> $tags
+     * @param list<string> $pushed
+     */
+    private function latestSandbox(array $tags, array $pushed): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('calls', '');
+        $sandbox->write('tags', implode("\n", $tags)."\n");
+        $sandbox->write('pushed', implode("\n", array_map(static fn (string $version): string => 'ghcr.io/example/repo:'.$version, $pushed))."\n");
+        $sandbox->write('bin/gh', "#!/usr/bin/env bash\ncat \"\$TAGS\"\n");
+        $sandbox->write('bin/docker', self::FAKE_DOCKER."\nif [[ \"\$1 \$2 \$3\" == 'buildx imagetools inspect' ]]; then grep -qx -- \"\$4\" \"\$PUSHED\"; fi\n");
+
+        return $sandbox;
+    }
+
+    private function runLatest(Sandbox $sandbox): ProcessResult
+    {
+        $environment = ['REPOSITORY' => 'Example/Repo', 'ACTOR' => 'octocat', 'GHCR_TOKEN' => 'token', 'GH_TOKEN' => 'read', 'CALLS' => $sandbox->root.'/calls', 'TAGS' => $sandbox->root.'/tags', 'PUSHED' => $sandbox->root.'/pushed'];
+
+        return $sandbox->runScript('chmod +x bin/docker bin/gh; PATH="$PWD/bin:$PATH"; bash '.escapeshellarg(self::LATEST), $environment);
+    }
+
     private function checkOut(Sandbox $sandbox, string $tag): string
     {
         $sandbox->run('git', '-C', 'release', 'checkout', '--quiet', '--detach', $tag);
@@ -171,11 +237,11 @@ final class ReleaseImageTest extends SandboxTestCase
     }
 
     /**
-     * @return array{on: array{push: mixed, workflow_dispatch: array{inputs: mixed}}, permissions: mixed, jobs: array{image: array{permissions: mixed, steps: list<array{with: array<string, mixed>, env: array<string, string>, run: string}>}}}
+     * @return array{on: array{push: mixed, workflow_dispatch: array{inputs: mixed}}, permissions: mixed, jobs: array{image: array{permissions: mixed, steps: list<array{with: array<string, mixed>, env: array<string, string>, run: string}>}, latest: array{needs: string, concurrency: mixed, permissions: mixed, steps: list<array{run: string}>}}}
      */
     private function workflow(): array
     {
-        /** @var array{on: array{push: mixed, workflow_dispatch: array{inputs: mixed}}, permissions: mixed, jobs: array{image: array{permissions: mixed, steps: list<array{with: array<string, mixed>, env: array<string, string>, run: string}>}}} $workflow */
+        /** @var array{on: array{push: mixed, workflow_dispatch: array{inputs: mixed}}, permissions: mixed, jobs: array{image: array{permissions: mixed, steps: list<array{with: array<string, mixed>, env: array<string, string>, run: string}>}, latest: array{needs: string, concurrency: mixed, permissions: mixed, steps: list<array{run: string}>}}} $workflow */
         $workflow = Yaml::parseFile(self::WORKFLOW);
 
         return $workflow;

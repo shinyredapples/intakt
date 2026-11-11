@@ -1,9 +1,9 @@
 #!/bin/bash
 # Builds the app image of a release tag, smoke-tests it and pushes it to GitHub's container registry as
-# ghcr.io/<repository>:<version>, and as :latest only when the tag is the highest release tag (docs/releasing.md).
+# ghcr.io/<repository>:<version> (docs/releasing.md); the workflow's `latest` job moves :latest, one run at a time.
 # Run by .github/workflows/release-image.yml from the workflow's own revision, so a tag cut before this script existed
 # can still be published: the tag is checked out apart, in CONTEXT, and only built from there.
-# Environment: TAG (vX.Y.Z), CONTEXT (the tag's checkout, with its tags fetched), REPOSITORY (owner/name), ACTOR and
+# Environment: TAG (vX.Y.Z), CONTEXT (the tag's checkout), REPOSITORY (owner/name), ACTOR and
 # GHCR_TOKEN (the job's token, packages: write).
 set -euo pipefail
 
@@ -19,13 +19,6 @@ if [ "$(git -C "$CONTEXT" rev-parse "refs/tags/$TAG^{commit}" 2>/dev/null)" != "
 fi
 version=${TAG#v}
 image=ghcr.io/${REPOSITORY,,}
-# sort -V orders numeric fields as numbers, so v0.10.0 comes after v0.9.0; only exact release tags take part.
-highest=$(git -C "$CONTEXT" tag --list 'v*' | grep -E "$release" | sort -V | tail -n 1)
-names=("$version")
-if [ "$TAG" = "$highest" ]; then
-    names+=(latest)
-fi
-
 # The source label links the package to the repository; a new package is still private until its visibility is
 # changed once in the package settings (docs/releasing.md).
 docker build \
@@ -36,8 +29,6 @@ docker build \
 docker/smoke-test.sh intakt:release
 
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
-for name in "${names[@]}"; do
-    docker tag intakt:release "$image:$name"
-    docker push "$image:$name"
-done
-echo "Pushed $image as ${names[*]} ($revision)."
+docker tag intakt:release "$image:$version"
+docker push "$image:$version"
+echo "Pushed $image:$version ($revision)."
