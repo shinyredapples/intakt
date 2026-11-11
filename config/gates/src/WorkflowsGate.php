@@ -23,9 +23,23 @@ final class WorkflowsGate implements Gate
             return GateResult::failedBecause('workflows', 'missing tool zizmor');
         }
 
+        $findings = [...$this->zizmorFindings($result), ...new BareZizmorIgnores()->in($workspace->root)];
+
+        return [] === $findings ? GateResult::passed('workflows') : GateResult::withFindings('workflows', $findings);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function zizmorFindings(ProcessResult $result): array
+    {
+        if ($result->succeeded()) {
+            return [];
+        }
+
         $findings = array_map($this->finding(...), JsonNode::parse($result->output)?->items() ?? []);
 
-        return $result->succeeded() ? GateResult::passed('workflows') : GateResult::withFindings('workflows', [] !== $findings ? $findings : ['zizmor failed: '.$this->errorOf($result)]);
+        return [] !== $findings ? $findings : ['zizmor failed: '.$this->errorOf($result)];
     }
 
     // On one line, because zizmor names the cause only on the lines after "fatal: no audit was performed".
