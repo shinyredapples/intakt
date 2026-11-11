@@ -89,7 +89,7 @@ final readonly class RateLimitReadings
         $reset = $this->number($headers, 'x-ratelimit-reset');
 
         // Only whole, because the reserve is a share of the limit and a reading without one could not hold it.
-        return null === $remaining || null === $limit || null === $reset ? null : new RateLimitReading($remaining, $limit, $this->at($reset));
+        return in_array(null, [$remaining, $limit, $reset], true) ? null : new RateLimitReading($remaining, $limit, $this->at($reset));
     }
 
     /**

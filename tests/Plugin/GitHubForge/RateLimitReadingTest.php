@@ -14,22 +14,34 @@ final class RateLimitReadingTest extends TestCase
 {
     public function testOneCallLessThanTheShareIsBelowIt(): void
     {
-        self::assertTrue($this->reading(remaining: 999, limit: 5000)->isBelowShare(20));
+        self::assertTrue($this->reading(
+            remaining: 999,
+            limit: 5000,
+        )->isBelowShare(20));
     }
 
     public function testExactlyTheShareIsNotBelowIt(): void
     {
-        self::assertFalse($this->reading(remaining: 1000, limit: 5000)->isBelowShare(20));
+        self::assertFalse($this->reading(
+            remaining: 1000,
+            limit: 5000,
+        )->isBelowShare(20));
     }
 
     public function testAShareOfALimitThatIsNoMultipleOfAHundredIsNotRounded(): void
     {
-        self::assertTrue($this->reading(remaining: 1000, limit: 5001)->isBelowShare(20));
+        self::assertTrue($this->reading(
+            remaining: 1000,
+            limit: 5001,
+        )->isBelowShare(20));
     }
 
     public function testNothingIsBelowAShareOfNothing(): void
     {
-        self::assertFalse($this->reading(remaining: 0, limit: 5000)->isBelowShare(0));
+        self::assertFalse($this->reading(
+            remaining: 0,
+            limit: 5000,
+        )->isBelowShare(0));
     }
 
     private function reading(int $remaining, int $limit): RateLimitReading
