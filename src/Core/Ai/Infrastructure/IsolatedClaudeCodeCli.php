@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Override;
 use SensitiveParameter;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
@@ -12,6 +13,7 @@ use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\Component\Filesystem\Filesystem;
+use Throwable;
 
 // The CLI runs in a directory of its own, so it never sees Intakt's install, its env files and secrets, or a checkout's settings and instructions.
 final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
@@ -36,7 +38,37 @@ final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
     {
         new Filesystem()->mkdir($this->directory, 0o700);
 
-        return $this->client()->request($model, $payload, $options);
+        $access = $options[ReviewServerAccess::OPTION] ?? null;
+        unset($options[ReviewServerAccess::OPTION]);
+
+        if (!$access instanceof ReviewServerAccess) {
+            return $this->client()->request($model, $payload, $options);
+        }
+
+        $configuration = $this->configurationFileFor($access);
+
+        try {
+            $run = $this->client()->request($model, $payload, [...$options, 'mcp_config' => $configuration]);
+        } catch (Throwable $notStarted) {
+            // No run will read the file, so nothing else would remove the bearer it holds.
+            new Filesystem()->remove($configuration);
+
+            throw $notStarted;
+        }
+
+        return new RemovedAfterRun($run, $configuration);
+    }
+
+    // A file and never the flag's inline JSON, because Process puts the command line into its timeout message, which is logged; one file per run, so runs of other rounds never share one.
+    private function configurationFileFor(ReviewServerAccess $access): string
+    {
+        $files = new Filesystem();
+        $file = $files->tempnam($this->directory, 'review-server-', '.json');
+        // Still empty here, so the bearer is never readable by anyone else.
+        $files->chmod($file, 0o600);
+        $files->appendToFile($file, json_encode($access->mcpConfiguration(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+
+        return $file;
     }
 
     // Built for each request because a worker lives on while variables are added to its environment, and each must reach the CLI emptied.

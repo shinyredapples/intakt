@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -17,9 +18,11 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -36,6 +39,7 @@ use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -53,6 +57,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
+        private ?ReviewServerAccesses $servers = null,
     ) {
     }
 
@@ -121,7 +126,16 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        $platform = new TierRoutedPlatform($this->tiers, $answering);
+        try {
+            $options = $this->serverOptions($answering, $request);
+        } catch (NoReviewServerAccess) {
+            // Settled with no usage, because the CLI never started; blocked like an API-key reviewer whose toolbox cannot reach the server.
+            $this->usage->settle($reservation);
+
+            return Verdict::noTools();
+        }
+
+        $platform = new TierRoutedPlatform($this->tiers, $answering, $options);
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $answering->model);
@@ -139,6 +153,21 @@ final readonly class SymfonyAiVendor implements Vendor
         $this->usage->settle($reservation, ...$platform->rounds());
 
         return $verdict;
+    }
+
+    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    /**
+     * @return array<string, mixed>
+     */
+    private function serverOptions(ResolvedModel $answering, ReviewRequest $request): array
+    {
+        $round = $request->conversation->round;
+
+        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
+            return [];
+        }
+
+        return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
     }
 
     /**
