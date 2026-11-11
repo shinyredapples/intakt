@@ -25,7 +25,7 @@ final class WorkflowsGateTest extends SandboxTestCase
     public function testABrokenWorkflowNextToAValidOneFailsWithZizmorsParseError(): void
     {
         $sandbox = $this->sandboxWithStep('run: true');
-        $sandbox->write('.github/workflows/u.yml', self::workflow('run: ['));
+        $sandbox->write('.github/workflows/u.yml', $this->workflow('run: ['));
 
         self::assertStringStartsWith(
             'zizmor failed: fatal: no audit was performed failed to load file://.github/workflows/u.yml as workflow Caused by: 0: invalid YAML syntax',
@@ -81,12 +81,12 @@ final class WorkflowsGateTest extends SandboxTestCase
     private function sandboxWithStep(string $step): Sandbox
     {
         $sandbox = $this->emptySandbox();
-        $sandbox->write('.github/workflows/t.yml', self::workflow($step));
+        $sandbox->write('.github/workflows/t.yml', $this->workflow($step));
 
         return $sandbox;
     }
 
-    private static function workflow(string $step): string
+    private function workflow(string $step): string
     {
         return "name: t\non: pull_request\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - {$step}\n";
     }

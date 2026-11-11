@@ -6,8 +6,7 @@ namespace Intakt\Gates;
 
 final class WorkflowsGate implements Gate
 {
-    // Because no network, token or config file of the tree may change the answer.
-    // --strict-collection, because zizmor otherwise skips a workflow it cannot parse and passes the rest.
+    // Because no network, token or config file may change the answer, and zizmor without --strict-collection skips a workflow it cannot parse.
     private const array SCAN = ['zizmor', '--offline', '--no-config', '--quiet', '--strict-collection', '--format=json', '.github'];
     private const array NO_TOKENS = ['GH_TOKEN' => false, 'GITHUB_TOKEN' => false, 'ZIZMOR_GITHUB_TOKEN' => false];
 
