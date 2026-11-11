@@ -181,8 +181,9 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         chmod($sandbox->root.'/locked.txt', 0o000);
 
+        // In bin/check, because the gate's failed copy also raises a PHP warning, which fails a test in this process.
         try {
-            $run = $sandbox->runGate(new WorkingTreeSecretsGate());
+            $run = $sandbox->check('--only=secrets');
         } finally {
             chmod($sandbox->root.'/locked.txt', 0o644);
         }
