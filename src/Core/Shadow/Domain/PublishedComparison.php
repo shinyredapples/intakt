@@ -1,0 +1,92 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Shadow\Domain;
+
+use Intakt\Core\Shadow\Contract\Agreement;
+use Intakt\Core\Shadow\Contract\LoopFinding;
+use Intakt\Core\Shadow\Contract\LoopReview;
+use Intakt\Core\Shadow\Contract\LoopReviews;
+use Intakt\Core\Shadow\Contract\LoopVerdict;
+use Intakt\Core\Shadow\Contract\PublishedHead;
+use Intakt\Core\Shadow\Contract\ReviewerDecision;
+use Intakt\Core\Shadow\Contract\ReviewOutcome;
+use Intakt\Core\Shadow\Contract\WeeklyReport;
+use NoDiscard;
+
+// Intakt's published comment follows the loop's own format (issue #1251, D1), so the loop's reader reads both sides.
+final readonly class PublishedComparison
+{
+    private const string INTAKT_REVIEWER = 'intakt';
+
+    public function __construct(
+        private LoopReviewReader $reader,
+        private ReviewComparison $comparison,
+    ) {
+    }
+
+    /**
+     * @param list<RecordedPullRequest> $pullRequests
+     */
+    #[NoDiscard('a report that is not read reports nothing')]
+    public function report(array $pullRequests, Week $week): WeeklyReport
+    {
+        $heads = [];
+        foreach ($pullRequests as $pullRequest) {
+            foreach ($pullRequest->headsReviewedIn($week) as $head) {
+                $heads[] = $this->compareHead($pullRequest, $head);
+            }
+        }
+
+        return new WeeklyReport($week->from, $week->until, $heads);
+    }
+
+    private function compareHead(RecordedPullRequest $pullRequest, string $head): PublishedHead
+    {
+        $loop = $this->reader->read($pullRequest->loopIdentity, $head, $pullRequest->comments());
+        $intakt = $this->reader->read($pullRequest->intaktIdentity, $head, $pullRequest->comments());
+        [$matches, $loopOnly, $intaktOnly] = $this->comparison->matchedSpots($this->findings($loop), $this->findings($intakt));
+
+        return new PublishedHead(
+            pullRequest: $pullRequest->number,
+            head: $head,
+            loopDecisions: array_map(static fn (LoopReview $review): ReviewerDecision => new ReviewerDecision($review->reviewer, ReviewOutcome::from($review->verdict->value)), $loop->reviews),
+            intaktDecisions: array_map(static fn (LoopReview $review): ReviewerDecision => new ReviewerDecision(self::INTAKT_REVIEWER, ReviewOutcome::from($review->verdict->value)), $intakt->reviews),
+            agreement: $this->agreement($loop, $intakt),
+            matched: count($matches),
+            loopOnly: $loopOnly,
+            intaktOnly: $intaktOnly,
+        );
+    }
+
+    /**
+     * @return list<list<LoopFinding>>
+     */
+    private function findings(LoopReviews $side): array
+    {
+        return array_map(static fn (LoopReview $review): array => $review->findings, $side->reviews);
+    }
+
+    private function agreement(LoopReviews $loop, LoopReviews $intakt): Agreement
+    {
+        $loopVerdict = $this->sideVerdict($loop);
+        $intaktVerdict = $this->sideVerdict($intakt);
+        if (LoopVerdict::Unreadable === $loopVerdict || LoopVerdict::Unreadable === $intaktVerdict) {
+            return Agreement::Incomplete;
+        }
+
+        return $loopVerdict === $intaktVerdict ? Agreement::Agree : Agreement::Disagree;
+    }
+
+    // One changes vote holds the head back whatever the side's other reviews say; otherwise a side approves only when it has reviews and all of them could be read, so an unread review never counts as agreement.
+    private function sideVerdict(LoopReviews $side): LoopVerdict
+    {
+        $verdicts = array_map(static fn (LoopReview $review): LoopVerdict => $review->verdict, $side->reviews);
+        if (in_array(LoopVerdict::Changes, $verdicts, true)) {
+            return LoopVerdict::Changes;
+        }
+
+        return [] === $verdicts || in_array(LoopVerdict::Unreadable, $verdicts, true) ? LoopVerdict::Unreadable : LoopVerdict::Approve;
+    }
+}

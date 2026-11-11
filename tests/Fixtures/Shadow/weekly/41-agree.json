@@ -1,0 +1,9 @@
+{
+ "pullRequest": 41,
+ "loop": "loop-bot",
+ "intakt": "intakt-app[bot]",
+ "comments": [
+  {"author": "loop-bot", "head": "aaa111", "postedAt": "2026-11-03T09:12:00Z", "body": "Reviewer: gpt\n\n[P3] `src/Cart.php:12` the name hides the unit\n\n```json\n{\"verdict\": \"approve\"}\n```"},
+  {"author": "intakt-app[bot]", "head": "aaa111", "postedAt": "2026-11-03T09:20:00Z", "body": "**Review by Intakt** (head aaa111)\n\nFollow-ups:\n[P3] src/Cart.php:13: name the unit\n\n```json\n{\"verdict\":\"approve\",\"head\":\"aaa111\",\"summary\":\"Fine.\"}\n```"}
+ ]
+}
