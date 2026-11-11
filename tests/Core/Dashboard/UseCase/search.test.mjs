@@ -90,6 +90,8 @@ class FakeKey {
         this.ctrlKey = modifiers.ctrlKey ?? false;
         this.metaKey = modifiers.metaKey ?? false;
         this.shiftKey = modifiers.shiftKey ?? false;
+        this.isComposing = modifiers.isComposing ?? false;
+        this.keyCode = modifiers.keyCode ?? 0;
     }
 
     preventDefault() {
@@ -512,6 +514,37 @@ test('the keys do nothing while the search is closed', async () => {
     for (const name of ['ArrowDown', 'Enter', 'Escape']) {
         assert.ok(!page.press(name).defaultPrevented, name);
     }
+});
+
+test('enter that commits text an input method composes opens nothing and is left to the input method', async () => {
+    const { page, net } = await openWithRecent();
+    page.type('に');
+    await net.answer(1, ALPHA);
+    page.results.options[0].click = () => assert.fail('the composing Enter opened the selected result');
+
+    const enter = page.press('Enter', { isComposing: true });
+
+    assert.ok(!enter.defaultPrevented);
+    assert.ok(page.isOpen());
+});
+
+test('an arrow pressed while an input method composes text moves nothing and is left to the input method', async () => {
+    const { page } = await openWithRecent();
+
+    const down = page.press('ArrowDown', { isComposing: true });
+
+    assert.ok(!down.defaultPrevented);
+    assert.equal(page.selected().getAttribute('href'), '/reviews/round-2');
+});
+
+test('a key safari reports as the composing key code 229 is left to the input method', async () => {
+    const { page } = await openWithRecent();
+    page.results.options[0].click = () => assert.fail('the composing Enter opened the selected result');
+
+    const enter = page.press('Enter', { keyCode: 229 });
+
+    assert.ok(!enter.defaultPrevented);
+    assert.ok(page.isOpen());
 });
 
 test('no results leave nothing selected and enter does nothing', async () => {

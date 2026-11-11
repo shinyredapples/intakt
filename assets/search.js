@@ -38,6 +38,10 @@ class Search {
     }
 
     key(event) {
+        // An input method composing text (Japanese, Chinese, Korean input) takes Enter and the arrows for its candidates; Safari reports the committing key as key code 229.
+        if (event.isComposing || event.keyCode === 229) {
+            return;
+        }
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
             this.toggle(event);
             return;

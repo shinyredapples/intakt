@@ -96,6 +96,14 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/background:\s*var\(--selected\)/', $this->rulesOf($this->componentSheet())['.palette .res[aria-selected="true"]'] ?? '');
     }
 
+    public function testTheSearchFieldKeepsTheVisibleFocusOutline(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertDoesNotMatchRegularExpression('/outline:\s*(?:none|0)\b/', $rules['.palette .q input'] ?? '');
+        self::assertMatchesRegularExpression('/outline-offset:\s*-2px/', $rules['.palette .q input:focus-visible'] ?? '');
+    }
+
     public function testACompactBannerShowsOnlyItsToggleAtEveryWidth(): void
     {
         $sheet = $this->componentSheet();
