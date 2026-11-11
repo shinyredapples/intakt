@@ -70,7 +70,10 @@ final readonly class BudgetReserve
                 throw new ForgeRateLimited($resetsAt);
             }
 
-            $this->pool->save($item->set($now->getTimestamp())->expiresAfter(DateInterval::createFromDateString(WatchTick::INTERVAL)));
+            // Refused when unrecorded, because a slot nobody can see would admit every later listing too.
+            if (!$this->pool->save($item->set($now->getTimestamp())->expiresAfter(DateInterval::createFromDateString(WatchTick::INTERVAL)))) {
+                throw new ForgeRateLimited($resetsAt);
+            }
         } finally {
             $lock->release();
         }

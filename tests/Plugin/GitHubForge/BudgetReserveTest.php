@@ -18,6 +18,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
@@ -147,6 +148,18 @@ final class BudgetReserveTest extends TestCase
         $this->reserve(percent: 100)->admitListing();
     }
 
+    public function testBelowTheReserveAListingWhoseSlotCannotBeRecordedWaitsForTheReset(): void
+    {
+        $this->read(remaining: 999);
+        $unwritable = self::createStub(CacheItemPoolInterface::class);
+        $unwritable->method('getItem')->willReturnCallback(new ArrayAdapter()->getItem(...));
+        $unwritable->method('save')->willReturn(false);
+
+        $limited = $this->refusal($this->reserve(pool: $unwritable));
+
+        self::assertEquals(new MockClock('2026-11-25 10:30:00 UTC')->now(), $limited->resetsAt);
+    }
+
     /**
      * @return iterable<string, array{int}>
      */
@@ -182,11 +195,11 @@ final class BudgetReserveTest extends TestCase
         throw new LogicException('The listing was expected to wait for the reset.');
     }
 
-    private function reserve(string $installationId = '678', int $percent = FreshReadings::RESERVE_PERCENT): BudgetReserve
+    private function reserve(string $installationId = '678', int $percent = FreshReadings::RESERVE_PERCENT, ?CacheItemPoolInterface $pool = null): BudgetReserve
     {
         $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, new RecordedInstallation('installation-secret')->client(), new NullLogger()), $installationId, $this->clock);
 
-        return new BudgetReserve($this->pool, $this->readings, $tokens, $this->clock, $this->locks, $percent);
+        return new BudgetReserve($pool ?? $this->pool, $this->readings, $tokens, $this->clock, $this->locks, $percent);
     }
 }

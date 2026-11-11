@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChangeListing;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
@@ -23,6 +24,8 @@ final class RecordedForge implements OpenChanges
     public int $conditionalAnswers = 0;
     /** @var list<string|null> */
     public array $received = [];
+    // Set to answer every listing like a forge holding listings back until that moment.
+    public ?DateTimeImmutable $limitedUntil = null;
 
     public function opens(string $project, OpenChange ...$changes): void
     {
@@ -32,6 +35,10 @@ final class RecordedForge implements OpenChanges
 
     public function listOpen(string $project, ?string $validator): OpenChangeListing
     {
+        if ($this->limitedUntil instanceof DateTimeImmutable) {
+            throw new ForgeRateLimited($this->limitedUntil);
+        }
+
         $this->received[] = $validator;
         $current = $this->validatorOf($project);
 

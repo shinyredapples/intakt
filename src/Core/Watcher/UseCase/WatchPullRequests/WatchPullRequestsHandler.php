@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Watcher\Contract\ListingInProgress;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
 #[AsCommandHandler]
@@ -31,6 +32,8 @@ final readonly class WatchPullRequestsHandler
         } catch (ListingInProgress) {
             // Skipped because the running listing reports for itself and the next tick comes soon.
             return;
+        } catch (ForgeRateLimited) {
+            // Only the listing waits for the reset: the CI reads of the queued heads are essential and the forge answers them from its reserve.
         }
 
         $this->heads->lookAtDue($project);

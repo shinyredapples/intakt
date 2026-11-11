@@ -177,6 +177,18 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertCount(2, $this->checks->asked);
     }
 
+    public function testAPendingHeadIsReadAgainWhileTheForgeHoldsTheListingBack(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+
+        $this->clock->modify('+61 seconds');
+        $this->listing->limitedUntil = $this->clock->now()->modify('+30 minutes');
+        $this->tick();
+
+        self::assertCount(2, $this->checks->asked);
+    }
+
     public function testAPendingHeadIsNotReadAgainBeforeItsReadAgainTime(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
