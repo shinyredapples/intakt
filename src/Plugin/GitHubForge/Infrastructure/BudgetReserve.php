@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use DateInterval;
 use DateTimeImmutable;
 use Intakt\Core\Watcher\Contract\WatchTick;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
@@ -77,8 +76,10 @@ final readonly class BudgetReserve
                 throw new ForgeRateLimited($resetsAt);
             }
 
-            // Refused when unrecorded, because a slot nobody can see would admit every later listing too.
-            if (!$this->pool->save($item->set(max($now->getTimestamp(), $due) + $tickSeconds)->expiresAfter(DateInterval::createFromDateString(WatchTick::INTERVAL)))) {
+            $dueNext = max($now->getTimestamp(), $due) + $tickSeconds;
+
+            // Kept until its due time (up to a tick and a half) rather than for a tick, because a slot that expires before it forgets the debt an early listing left behind. Refused when unrecorded, because a slot nobody can see would admit every later listing too.
+            if (!$this->pool->save($item->set($dueNext)->expiresAfter($dueNext - $now->getTimestamp()))) {
                 throw new ForgeRateLimited($resetsAt);
             }
         } finally {
