@@ -34,10 +34,11 @@ final readonly class MakeBuildClone
         $mirror = $this->existingMirror($project, $directory);
         $main = $this->mainOf($mirror, $directory);
         $task = $this->taskRef($mirror, $main, $branch);
-        $this->refuseExistingFolder($directory);
+        $format = $this->objectFormatOf($mirror, $directory);
+        $this->reserve($directory);
 
         try {
-            $this->initialize($directory, $mirror, $branch);
+            $this->initialize($directory, $branch, $format);
             $this->fetch($directory, $mirror, $main);
 
             if ($this->mirrorHolds($mirror, $task)) {
@@ -94,19 +95,36 @@ final readonly class MakeBuildClone
         return self::BRANCHES.$branch;
     }
 
-    private function refuseExistingFolder(string $directory): void
+    private function objectFormatOf(string $mirror, string $directory): string
     {
-        // Because the clone must hold nothing but what it fetched, and a folder that exists may hold someone's work.
-        if (file_exists($directory) || is_link($directory)) {
-            throw BuildCloneNotMade::at($directory, 'the folder already exists');
+        // Because a fetch from a SHA-256 mirror into a SHA-1 repository fails.
+        return trim($this->mustRun($this->inMirror($mirror, ['rev-parse', '--show-object-format']), $directory));
+    }
+
+    private function reserve(string $directory): void
+    {
+        $this->filesystem->mkdir(dirname($directory));
+        $error = '';
+        set_error_handler(static function (int $level, string $message) use (&$error): bool {
+            $error = $message;
+
+            return true;
+        });
+
+        try {
+            // A single mkdir fails when anything is at the path, so of two calls for one folder only one owns it, and a folder that exists may hold someone's work.
+            $made = mkdir($directory);
+        } finally {
+            restore_error_handler();
+        }
+
+        if (!$made) {
+            throw BuildCloneNotMade::at($directory, file_exists($directory) || is_link($directory) ? 'the folder already exists' : $error);
         }
     }
 
-    private function initialize(string $directory, string $mirror, string $branch): void
+    private function initialize(string $directory, string $branch, string $format): void
     {
-        // The mirror's object format, because a fetch from a SHA-256 mirror into a SHA-1 repository fails.
-        $format = trim($this->mustRun($this->inMirror($mirror, ['rev-parse', '--show-object-format']), $directory));
-        $this->filesystem->mkdir($directory);
         $init = $this->hardened->call(['init', '--quiet', '--initial-branch='.$branch, '--object-format='.$format], $directory);
 
         // Because git refuses a work tree without a git folder, which init has yet to make; it makes both in the folder it runs in.
