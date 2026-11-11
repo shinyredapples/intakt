@@ -42,9 +42,10 @@ final readonly class BareZizmorIgnores
         }
 
         $findings = [];
-
         // YAML ends a line at CR LF, CR or LF, so splitting at LF alone would make the next lines of a CR file the ignore's reason.
-        foreach (preg_split('/\r\n|\r|\n/', $contents) ?: [] as $index => $line) {
+        $lines = preg_split('/\r\n|\r|\n/', $contents);
+
+        foreach (false === $lines ? [] : $lines as $index => $line) {
             if (1 === preg_match(self::DIRECTIVE, $line, $directive, PREG_OFFSET_CAPTURE) && !$this->hasReason(substr($line, $directive[0][1]))) {
                 $findings[] = $path.':'.($index + 1).' zizmor ignore without a reason: '.trim($directive[0][0]);
             }
