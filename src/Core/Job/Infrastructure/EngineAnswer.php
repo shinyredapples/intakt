@@ -54,7 +54,7 @@ final readonly class EngineAnswer
         $error = null;
         $image = null;
 
-        foreach (preg_split('/\R/', $this->body) ?: [] as $line) {
+        foreach (explode("\n", $this->body) as $line) {
             if ('' === trim($line)) {
                 continue;
             }
@@ -85,7 +85,8 @@ final readonly class EngineAnswer
 
         $stream = $message->stream ?? '';
         $error = $message->error ?? null;
-        $image = $message->aux->ID ?? null;
+        $aux = $message->aux ?? null;
+        $image = $aux instanceof stdClass ? ($aux->ID ?? null) : null;
 
         if (!is_string($stream) || (null !== $error && !is_string($error)) || (null !== $image && (!is_string($image) || 1 !== preg_match(self::IMAGE_ID, $image)))) {
             throw DockerEngineFailed::unexpected($this->call);

@@ -76,7 +76,7 @@ final readonly class PhpProfile
             return $minor;
         }
 
-        $lowest = implode('.', array_slice(explode('.', strtok($intervals[0]->getStart()->getVersion(), '-') ?: ''), 0, 3));
+        $lowest = implode('.', array_slice(explode('.', explode('-', $intervals[0]->getStart()->getVersion())[0]), 0, 3));
 
         return $this->allows($lowest) ? $lowest : null;
     }

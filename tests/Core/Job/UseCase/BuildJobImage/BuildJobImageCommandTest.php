@@ -81,6 +81,7 @@ final class BuildJobImageCommandTest extends TestCase
     private string $socket = FakeDockerEngine::SOCKET;
     private string $probe = '{"version": "8.5.12", "extensions": ["core", "intl"]}';
     private string $context = '';
+    private ?BuildJobImage $racing = null;
 
     /** @var list<MockResponse> */
     private array $requests = [];
@@ -115,20 +116,19 @@ final class BuildJobImageCommandTest extends TestCase
 
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['php.json' => $this->probe]));
         });
-        $build = null;
         $calls = 0;
-        $client = new MockHttpClient(function () use (&$build, &$calls): MockResponse {
+        $client = new MockHttpClient(function () use (&$calls): MockResponse {
             $first = 1 === ++$calls;
-            if ($first && $build instanceof BuildJobImage) {
-                $build->build($this->repository->path, 'intakt-job/demo:main');
+            if ($first && $this->racing instanceof BuildJobImage) {
+                $this->racing->build($this->repository->path, 'intakt-job/demo:main');
             }
 
             return new MockResponse('{"aux":{"ID":"'.($first ? self::IMAGE : self::OTHER_IMAGE).'"}}'."\n");
         });
         $files = new ProjectFiles();
-        $build = new BuildJobImage(new JobImagePlanner($files), new BuildContext($files), new DockerEngine($client, $this->socket), new PhpInImage($runner));
+        $this->racing = new BuildJobImage(new JobImagePlanner($files), new BuildContext($files), new DockerEngine($client, $this->socket), new PhpInImage($runner));
 
-        $build->build($this->repository->path, 'intakt-job/demo:main');
+        $this->racing->build($this->repository->path, 'intakt-job/demo:main');
 
         self::assertSame([self::OTHER_IMAGE, self::IMAGE], $probed);
     }
