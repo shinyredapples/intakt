@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Override;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 
-// The CLI is a full agent whose own file tools bypass the checkout's path checks and the fence, so it gets no tool, no project settings and no MCP server; every option the agent passes is dropped because the bridge turns each into a CLI flag.
+// The CLI is a full agent whose own file tools bypass the checkout's path checks and the fence, so it gets no built-in tool and no project settings, and no MCP server but the round's review server when it is given one; every other option the agent passes is dropped because the bridge turns each into a CLI flag.
 final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
 {
     private const array CONFINEMENT = [
@@ -19,6 +20,11 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
         'strict_mcp_config' => true,
         'no_session_persistence' => true,
     ];
+
+    // The built-in tools by name, denied even though the empty tool list already disables them, so a CLI release that reads one flag differently still finds them refused.
+    private const array BUILT_IN_TOOLS = ['Bash', 'Read', 'Edit', 'MultiEdit', 'Write', 'NotebookEdit', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch', 'Task', 'TodoWrite'];
+
+    private const string WITH_TOOLS = 'In this session only the read-only tools of the server %s are available: read the change through them, and cite only what the fenced text or a tool answer shows.';
 
     // Because the reviewer's instructions offer Intakt's tools, which the CLI cannot call (plan T15 serves them over MCP).
     private const string NO_TOOLS = 'In this session no tool is available: judge the change from the fenced text you were given, and cite only what it shows.';
@@ -52,6 +58,19 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
         // The CLI has no response format option, so the schema travels as an instruction.
         $schema = null === $format ? '' : ' Answer with one JSON object that matches this JSON schema and nothing else: '.json_encode($format, JSON_THROW_ON_ERROR);
 
-        return [...self::CONFINEMENT, 'append_system_prompt' => self::NO_TOOLS.$schema];
+        $access = $options[ReviewServerAccess::OPTION] ?? null;
+
+        if (!$access instanceof ReviewServerAccess) {
+            return [...self::CONFINEMENT, 'append_system_prompt' => self::NO_TOOLS.$schema];
+        }
+
+        // Passed on whole, because the CLI's folder, where its configuration file is written, belongs to the client inside.
+        return [
+            ...self::CONFINEMENT,
+            ReviewServerAccess::OPTION => $access,
+            'allowed_tools' => array_map(static fn (string $tool): string => sprintf('mcp__%s__%s', $access->name, $tool), $access->tools),
+            'disallowed_tools' => self::BUILT_IN_TOOLS,
+            'append_system_prompt' => sprintf(self::WITH_TOOLS, $access->name).$schema,
+        ];
     }
 }

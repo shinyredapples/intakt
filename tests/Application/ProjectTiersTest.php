@@ -29,7 +29,9 @@ use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
-use Intakt\Core\Shadow\Infrastructure\ShadowGuardedForgeWrites;
+use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\Shadow\Contract\ProjectModes;
+use Intakt\Core\Shadow\Infrastructure\ModeGuardedForgeWrites;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Tests\Core\Shadow\ReviewToPost;
@@ -174,7 +176,7 @@ final class ProjectTiersTest extends KernelTestCase
 
         $forge->postReview('alpha-one', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
 
-        self::assertInstanceOf(ShadowGuardedForgeWrites::class, $forge);
+        self::assertInstanceOf(ModeGuardedForgeWrites::class, $forge);
         $refusing = self::getContainer()->get(WriteRefusingForge::class);
         self::assertInstanceOf(WriteRefusingForge::class, $refusing);
         self::assertSame([], $refusing->writeLog);
@@ -216,6 +218,16 @@ final class ProjectTiersTest extends KernelTestCase
         $this->expectExceptionMessageMatches('/"quiet" is not allowed for path "intakt\.projects\.beta\.mode"/');
 
         $this->bootedContainer();
+    }
+
+    public function testAReviewerForLoopModeIsTheModeTheContainerReadsForItsProject(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        mode: reviewer-for-loop\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        $modes = $this->bootedContainer()->get(ProjectModes::class);
+
+        self::assertInstanceOf(ProjectModes::class, $modes);
+        self::assertSame([ProjectMode::ReviewerForLoop, ProjectMode::Live], [$modes->of('beta'), $modes->of('gamma')]);
     }
 
     public function testAProjectsValueThatIsNoMapStopsTheBoot(): void

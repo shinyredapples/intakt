@@ -6,6 +6,7 @@ Code and conventions:
 - [Module layout](module-layout.md)
 - [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
 - [Sample repository](sample-repository.md)
+- [Retried network git calls](network-git.md)
 - [Upstream reproductions](upstream-reproductions.md)
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
@@ -29,7 +30,7 @@ Forges and identity:
 
 Models and budget:
 - [AI providers](ai-providers.md)
-- [Capability tiers per project](capability-tiers.md): shadow mode per project
+- [Capability tiers per project](capability-tiers.md): shadow mode and reviewer-for-loop mode per project
 - [Vendor](vendor.md): the judge
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
 - [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`

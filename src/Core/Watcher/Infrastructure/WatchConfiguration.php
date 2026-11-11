@@ -10,6 +10,7 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 // Its own tree because the projects tree of the AI module refuses keys it does not know; each tree gets only its part of a project.
 final class WatchConfiguration implements ConfigurationInterface
 {
+    private const string GITHUB_REPOSITORY = '#^[A-Za-z0-9-]+/(?!\.+$)[A-Za-z0-9_.-]+$#';
     private const array KEYS = ['repository', 'base', 'task'];
 
     public function getConfigTreeBuilder(): TreeBuilder
@@ -23,6 +24,10 @@ final class WatchConfiguration implements ConfigurationInterface
             $watch->stringNode($key)->isRequired()->cannotBeEmpty()
                 ->validate()->ifTrue(static fn (string $value): bool => 1 === preg_match('/^\s*$/u', $value))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
         }
+
+        // Optional, because a project watched through a local forge has no GitHub repository; the name is checked here so a typo fails at boot, not at the tick.
+        $watch->stringNode('github')
+            ->validate()->ifTrue(static fn (string $value): bool => 1 !== preg_match(self::GITHUB_REPOSITORY, $value))->thenInvalid('The "github" key must be owner/name.')->end();
 
         return $tree;
     }

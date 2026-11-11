@@ -34,28 +34,29 @@ final class MercureHubTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
 
-    private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
-
     // The hub's own value for the whole history, used because it makes the hub answer at once, which tells the test the subscriber is registered before it publishes.
     private const string FROM_THE_START = 'earliest';
 
     private const int SECONDS_TO_WAIT = 10;
 
-    private Process $hub;
+    // One hub for the class, because starting it costs more than a test; a round of its own per test keeps the tests apart on its history.
+    private static Process $hub;
 
-    private string $storage;
+    private static string $storage;
 
-    private string $url;
+    private static string $url;
 
-    private string $issuer;
+    private static string $issuer;
 
-    private string $admin;
+    private static string $admin;
 
     private HttpClientInterface $client;
 
     private MercureRoundUpdates $updates;
 
-    protected function setUp(): void
+    private string $round;
+
+    public static function setUpBeforeClass(): void
     {
         $frankenphp = new ExecutableFinder()->find('frankenphp');
 
@@ -65,37 +66,42 @@ final class MercureHubTest extends TestCase
 
         $ports = WorkerPorts::ofThisWorker();
         $port = $ports->next();
-        $this->admin = 'localhost:'.$ports->next();
-        $this->storage = sys_get_temp_dir().'/intakt-hub-'.bin2hex(random_bytes(6));
-        mkdir($this->storage);
-        $this->issuer = 'http://localhost:'.$port;
-        $this->url = $this->issuer.'/.well-known/mercure';
-        $this->hub = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), [
+        self::$admin = 'localhost:'.$ports->next();
+        self::$storage = sys_get_temp_dir().'/intakt-hub-'.bin2hex(random_bytes(6));
+        mkdir(self::$storage);
+        self::$issuer = 'http://localhost:'.$port;
+        self::$url = self::$issuer.'/.well-known/mercure';
+        self::$hub = new Process([$frankenphp, 'run', '--config', 'Caddyfile', '--adapter', 'caddyfile'], dirname(__DIR__, 4), [
             'SERVER_PORT' => (string) $port,
-            'CADDY_ADMIN' => $this->admin,
+            'CADDY_ADMIN' => self::$admin,
             'MERCURE_JWT_SECRET' => self::SECRET,
-            'MERCURE_JWT_ISSUER' => $this->issuer,
-            'MERCURE_BOLT_PATH' => $this->storage.'/hub.db',
+            'MERCURE_JWT_ISSUER' => self::$issuer,
+            'MERCURE_BOLT_PATH' => self::$storage.'/hub.db',
         ]);
-        $this->hub->start();
-        $this->waitForTheHub($port);
+        self::$hub->start();
+        self::waitForTheHub($port);
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (isset(self::$hub)) {
+            self::$hub->stop(5);
+        }
+
+        if (isset(self::$storage)) {
+            new Filesystem()->remove(self::$storage);
+        }
+    }
+
+    protected function setUp(): void
+    {
+        $this->round = Uuid::v7()->toRfc4122();
         $this->client = HttpClient::create();
         $this->updates = new MercureRoundUpdates(
-            new Hub($this->url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client),
+            new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client),
             new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates')),
             new BufferingLogger(),
         );
-    }
-
-    protected function tearDown(): void
-    {
-        if (isset($this->hub)) {
-            $this->hub->stop(5);
-        }
-
-        if (isset($this->storage)) {
-            new Filesystem()->remove($this->storage);
-        }
     }
 
     public function testEventsPublishedByARoundReachASubscribedClientInOrder(): void
@@ -110,13 +116,13 @@ final class MercureHubTest extends TestCase
 
     public function testAClientThatReconnectsWithLastEventIdReceivesTheEventsItMissed(): void
     {
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
         $first = $this->subscribe(self::FROM_THE_START);
         $seen = $this->read($first, 1);
         $first->cancel();
 
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, false));
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
         $second = $this->subscribe($seen[0]['id']);
 
         self::assertSame(['2 of 2 reviewers finished.', 'Judged.'], $this->roundStatesIn($this->read($second, 2)));
@@ -125,15 +131,15 @@ final class MercureHubTest extends TestCase
     // The dashboard's connection controller reconnects with a new EventSource, which cannot set the Last-Event-ID header.
     public function testAClientThatAsksInTheAddressForTheEventsAfterTheLastOneItReceivedGetsTheEventsItMissed(): void
     {
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
         $first = $this->subscribe(self::FROM_THE_START);
         $seen = $this->read($first, 1);
         $first->cancel();
 
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, false));
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
-        $topic = MercureRoundUpdates::topicOf(self::ROUND);
-        $second = $this->client->request('GET', $this->url, [
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
+        $topic = MercureRoundUpdates::topicOf($this->round);
+        $second = $this->client->request('GET', self::$url, [
             'query' => ['match' => $topic, 'last_event_id' => $seen[0]['id']],
             'headers' => ['Authorization' => 'Bearer '.$this->token(new Grant([Grant::ACTION_SUBSCRIBE], [$topic]))],
             'timeout' => self::SECONDS_TO_WAIT,
@@ -144,31 +150,31 @@ final class MercureHubTest extends TestCase
 
     public function testAClientWithoutASubscriberTokenReceivesNothing(): void
     {
-        $response = $this->client->request('GET', $this->url, ['query' => ['match' => MercureRoundUpdates::topicOf(self::ROUND)]]);
+        $response = $this->client->request('GET', self::$url, ['query' => ['match' => MercureRoundUpdates::topicOf($this->round)]]);
 
         self::assertSame(401, $response->getStatusCode());
     }
 
     public function testTheAdminApiTheStatusCommandReadsReportsTheHubReady(): void
     {
-        $response = $this->client->request('GET', 'http://'.$this->admin.'/mercure/health/ready');
+        $response = $this->client->request('GET', 'http://'.self::$admin.'/mercure/health/ready');
 
         self::assertSame(200, $response->getStatusCode());
     }
 
     private function publishThree(): void
     {
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, false));
-        $this->updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
     }
 
     private function subscribe(string $lastEventId): ResponseInterface
     {
-        $topic = MercureRoundUpdates::topicOf(self::ROUND);
+        $topic = MercureRoundUpdates::topicOf($this->round);
         $headers = ['Authorization' => 'Bearer '.$this->token(new Grant([Grant::ACTION_SUBSCRIBE], [$topic])), 'Last-Event-ID' => $lastEventId];
 
-        $response = $this->client->request('GET', $this->url, ['query' => ['match' => $topic], 'headers' => $headers, 'timeout' => self::SECONDS_TO_WAIT]);
+        $response = $this->client->request('GET', self::$url, ['query' => ['match' => $topic], 'headers' => $headers, 'timeout' => self::SECONDS_TO_WAIT]);
         self::assertSame(200, $response->getStatusCode());
 
         return $response;
@@ -246,10 +252,10 @@ final class MercureHubTest extends TestCase
 
     private function token(Grant $grant): string
     {
-        return new LcobucciFactory(self::SECRET)->create([$grant], ['iss' => $this->issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => $this->url]);
+        return new LcobucciFactory(self::SECRET)->create([$grant], ['iss' => self::$issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => self::$url]);
     }
 
-    private function waitForTheHub(int $port): void
+    private static function waitForTheHub(int $port): void
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
 
@@ -265,6 +271,6 @@ final class MercureHubTest extends TestCase
             usleep(100_000);
         }
 
-        self::fail('The hub did not start: '.$this->hub->getErrorOutput());
+        self::fail('The hub did not start: '.self::$hub->getErrorOutput());
     }
 }

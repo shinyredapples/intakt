@@ -38,7 +38,12 @@ RUN set -eu; \
 
 COPY composer.json /usr/local/share/intakt/
 COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
-RUN php -r 'foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { if (str_starts_with($p, "ext-") && !extension_loaded(substr($p, 4))) { fwrite(STDERR, "composer.json requires $p, which .github/ci/Dockerfile does not install\n"); $f = 1; } } exit($f ?? 0);'
+# The app image's script; assigned before use because set -e ignores a failing command substitution inside arguments.
+RUN set -eu; \
+    missing='$c = json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true, 512, JSON_THROW_ON_ERROR); if (!is_array($c["require"] ?? null)) { throw new UnexpectedValueException("composer.json has no require object"); } foreach ($c["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
+    left="$(php -r "$missing")"; \
+    for e in $left; do echo "composer.json requires ext-$e, which .github/ci/Dockerfile does not install" >&2; done; \
+    test -z "$left"
 
 USER 1000:1000
 WORKDIR /home/ci

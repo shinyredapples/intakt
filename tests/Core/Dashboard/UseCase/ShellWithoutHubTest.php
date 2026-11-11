@@ -41,7 +41,7 @@ final class ShellWithoutHubTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertStringNotContainsString('importmap', (string) $this->browser->getResponse()->getContent());
-        self::assertGreaterThan(0, $crawler->filter('table tbody tr')->count());
+        self::assertGreaterThan(0, $crawler->filter('main.content [data-project="alpha"]')->count());
     }
 
     public function testThePlainPageKeepsTheFlashLineAndLogsAWarning(): void

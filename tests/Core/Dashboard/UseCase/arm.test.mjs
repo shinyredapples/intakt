@@ -1,81 +1,131 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FakeClick, FakeElement, loadController } from './stimulus-controller.mjs';
+import { FakeClick, FakeElement, root } from './stimulus-controller.mjs';
 
-const ArmController = await loadController('arm');
+const { holdBackDangerButtons } = await import(new URL('assets/arm.js', root));
 
-function dangerButton() {
-    const controller = new ArmController();
-    controller.element = new FakeElement('Pause everything');
-    controller.confirmValue = 'Click again to pause';
+class FakePage {
+    listeners = new Map();
+    buttons = [];
 
-    return controller;
+    addEventListener(type, listener, capture = false) {
+        this.listeners.set(type, { listener, capture });
+    }
+
+    querySelectorAll(selector) {
+        assert.equal(selector, '[data-armed]');
+
+        return this.buttons.filter((button) => button.hasAttribute('data-armed'));
+    }
+
+    click(target) {
+        const click = new FakeClick();
+        click.target = target;
+        this.listeners.get('click').listener(click);
+
+        return click;
+    }
+
+    cacheForGoingBack() {
+        this.listeners.get('turbo:before-cache').listener();
+    }
 }
 
-test('the first click is held back and asks to click again', () => {
-    const button = dangerButton();
-    const click = new FakeClick();
+class FakeButton extends FakeElement {
+    closest(selector) {
+        assert.equal(selector, 'button[data-arm-confirm]');
 
-    button.click(click);
+        return this.hasAttribute('data-arm-confirm') ? this : null;
+    }
+}
+
+function pageWithADangerButton() {
+    const page = new FakePage();
+    const button = new FakeButton('Pause everything');
+    button.setAttribute('data-arm-confirm', 'Click again to pause');
+    page.buttons.push(button);
+    holdBackDangerButtons(page);
+
+    return { page, button };
+}
+
+test('the page is listened to in the capture phase', () => {
+    const { page } = pageWithADangerButton();
+
+    assert.equal(page.listeners.get('click').capture, true);
+});
+
+test('the first click is held back and asks to click again', () => {
+    const { page, button } = pageWithADangerButton();
+
+    const click = page.click(button);
 
     assert.equal(click.defaultPrevented, true);
     assert.equal(click.propagationStopped, true);
-    assert.equal(button.element.hasAttribute('data-armed'), true);
-    assert.equal(button.element.textContent, 'Click again to pause');
+    assert.equal(button.hasAttribute('data-armed'), true);
+    assert.equal(button.textContent, 'Click again to pause');
 });
 
 test('the second click goes through and restores the label', () => {
-    const button = dangerButton();
-    button.click(new FakeClick());
-    const second = new FakeClick();
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
 
-    button.click(second);
+    const second = page.click(button);
 
     assert.equal(second.defaultPrevented, false);
     assert.equal(second.propagationStopped, false);
-    assert.equal(button.element.hasAttribute('data-armed'), false);
-    assert.equal(button.element.textContent, 'Pause everything');
+    assert.equal(button.hasAttribute('data-armed'), false);
+    assert.equal(button.textContent, 'Pause everything');
+});
+
+test('a click on another button goes through', () => {
+    const { page } = pageWithADangerButton();
+    const other = new FakeButton('Start');
+
+    const click = page.click(other);
+
+    assert.equal(click.defaultPrevented, false);
+    assert.equal(other.textContent, 'Start');
 });
 
 test('an armed button disarms itself after four seconds', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
-    const button = dangerButton();
-    button.click(new FakeClick());
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
 
     t.mock.timers.tick(3999);
-    assert.equal(button.element.hasAttribute('data-armed'), true);
+    assert.equal(button.hasAttribute('data-armed'), true);
     t.mock.timers.tick(1);
-    assert.equal(button.element.hasAttribute('data-armed'), false);
-    assert.equal(button.element.textContent, 'Pause everything');
+    assert.equal(button.hasAttribute('data-armed'), false);
+    assert.equal(button.textContent, 'Pause everything');
 });
 
 test('a click after the button disarmed itself is held back again', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
-    const button = dangerButton();
-    button.click(new FakeClick());
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
     t.mock.timers.tick(4000);
-    const late = new FakeClick();
 
-    button.click(late);
+    const late = page.click(button);
 
     assert.equal(late.defaultPrevented, true);
-    assert.equal(button.element.textContent, 'Click again to pause');
+    assert.equal(button.textContent, 'Click again to pause');
 });
 
-test('an armed button that leaves the page comes back unarmed', () => {
-    const button = dangerButton();
-    button.click(new FakeClick());
+test('an armed button on a page kept for going back comes back unarmed', () => {
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
 
-    button.disconnect();
+    page.cacheForGoingBack();
 
-    assert.equal(button.element.hasAttribute('data-armed'), false);
-    assert.equal(button.element.textContent, 'Pause everything');
+    assert.equal(button.hasAttribute('data-armed'), false);
+    assert.equal(button.textContent, 'Pause everything');
 });
 
-test('an unarmed button that leaves the page keeps its label', () => {
-    const button = dangerButton();
+test('an unarmed button on a page kept for going back keeps its label', () => {
+    const { page, button } = pageWithADangerButton();
 
-    button.disconnect();
+    page.cacheForGoingBack();
 
-    assert.equal(button.element.textContent, 'Pause everything');
+    assert.equal(button.textContent, 'Pause everything');
 });

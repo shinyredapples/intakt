@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
+// Booting a kernel only where Twig renders or the asset server answers, because the CSS rules read as text need no ledger or page of their own.
 #[CoversNothing]
-final class ComponentStylesTest extends DashboardPageTestCase
+final class ComponentStylesTest extends WebTestCase
 {
     private const string GALLERY = __DIR__.'/component-gallery.html.twig';
 
+    private const string STYLES = __DIR__.'/../../../../assets/styles/';
+
     public function testTheLayoutServesTheComponentSheet(): void
     {
-        self::assertStringContainsString('.btn.danger[data-armed]', $this->componentSheet());
+        self::assertStringContainsString('.btn.danger[data-armed]', $this->servedComponentSheet());
     }
 
     public function testTheComponentSheetUsesNoRawColor(): void
@@ -58,7 +64,7 @@ final class ComponentStylesTest extends DashboardPageTestCase
     {
         $controllers = $this->gallery()->filter('#gallery [data-controller]')->each(static fn (Crawler $element): string => (string) $element->attr('data-controller'));
 
-        self::assertSame(['arm', 'disclosure', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
+        self::assertSame(['disclosure', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
     }
 
     public function testACompactBannerShowsOnlyItsToggleAtEveryWidth(): void
@@ -146,21 +152,31 @@ final class ComponentStylesTest extends DashboardPageTestCase
      */
     private function sheets(string ...$names): array
     {
-        // One page first, because the client boots a fresh kernel for each request, which drops the test ledger the page reads.
-        $page = $this->browser->request('GET', '/reviews');
-        self::assertResponseIsSuccessful();
-        $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
+        return array_values(array_map(static function (string $name): string {
+            $sheet = file_get_contents(self::STYLES.$name.'.css');
+            self::assertIsString($sheet, $name);
 
-        return array_values(array_map($this->servedAsset(...), $addresses));
+            return $sheet;
+        }, $names));
     }
 
-    private function servedAsset(string $address): string
+    private function servedComponentSheet(): string
     {
-        $this->browser->request('GET', $address);
+        $browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        self::getContainer()->set(Ledger::class, new DashboardLedger());
+        $page = $browser->request('GET', '/reviews');
+        self::assertResponseIsSuccessful();
+
+        return $this->servedAsset($browser, (string) $page->filter('link[rel="stylesheet"][href*="/components-"]')->attr('href'));
+    }
+
+    private function servedAsset(KernelBrowser $browser, string $address): string
+    {
+        $browser->request('GET', $address);
         self::assertResponseIsSuccessful();
 
         // Read from the internal response, because the asset server answers with a BinaryFileResponse, whose getContent() is empty.
-        return $this->browser->getInternalResponse()->getContent();
+        return $browser->getInternalResponse()->getContent();
     }
 
     /**
@@ -187,6 +203,13 @@ final class ComponentStylesTest extends DashboardPageTestCase
 
     private function gallery(): Crawler
     {
+        if (!self::$booted) {
+            self::bootKernel();
+        }
+
+        // Set again, because the browser's last request rebooted the kernel and dropped the ledger the base layout reads.
+        self::getContainer()->set(Ledger::class, new DashboardLedger());
+
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
 

@@ -94,7 +94,7 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', $path);
 
         self::assertResponseIsSuccessful();
-        self::assertGreaterThan(0, $crawler->filter('table tbody tr')->count());
+        self::assertGreaterThan(0, $crawler->filter('main.content [data-project="alpha"]')->count());
     }
 
     #[DataProvider('pages')]

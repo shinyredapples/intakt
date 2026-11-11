@@ -1,6 +1,4 @@
-{#- options: list of {value, label} with string values; the one whose value is the string selected is chosen. Compared strictly, because a loose comparison would also choose "01" and "1.0" for "1", and a browser shows the last of several selected options. aria_label names a select that has no visible label for it. -#}
+{#- options and selected: see _options.html.twig. aria_label names a select that has no visible label for it. -#}
 <select class="select" id="{{ id }}" name="{{ name }}"{% if aria_label is defined %} aria-label="{{ aria_label }}"{% endif %}>
-    {%- for option in options %}
-    <option value="{{ option.value }}"{% if option.value is same as(selected|default('')) %} selected{% endif %}>{{ option.label }}</option>
-    {%- endfor %}
+    {{- include('dashboard/components/_options.html.twig', {options: options, selected: selected|default('')}, with_context = false) }}
 </select>

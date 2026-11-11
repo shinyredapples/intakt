@@ -9,6 +9,7 @@ use Intakt\Gates\PhpStan\ContainerUnknownParameterRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPStan\Symfony\ParameterMap;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -24,13 +25,20 @@ final class ContainerUnknownParameterRuleTest extends PhpStanRuleTestCase
         return new ContainerUnknownParameterRule(self::createStub(ParameterMap::class));
     }
 
-    public function testReadingAMisspelledParameterNameFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertRejectedBy('phpstan', 'misspelled-parameter-name', 'src/Settings.php:17 intakt.containerUnknownParameter Parameter "kernal.debug" is not defined in the container');
+        return self::casesOfOnePhpstanRun([
+            'ReadingAMisspelledParameterNameFailsStaticAnalysis' => ['misspelled-parameter-name', 'src/Settings.php:17 intakt.containerUnknownParameter Parameter "kernal.debug" is not defined in the container'],
+            'ReadingADefinedParameterNamePassesStaticAnalysis' => ['typed-container-parameter'],
+        ]);
     }
 
-    public function testReadingADefinedParameterNamePassesStaticAnalysis(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $this->assertAcceptedBy('phpstan', 'typed-container-parameter');
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 }

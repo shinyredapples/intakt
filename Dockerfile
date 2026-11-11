@@ -6,10 +6,13 @@ COPY composer.json /usr/local/share/intakt/
 
 # The extensions are composer.json's ext-* entries (pcntl among them lets a consumer finish its message on SIGTERM);
 # opcache is no profile entry, it is only for serving. No check.ini: the image keeps production settings.
+# The list is assigned before use because set -e ignores a failing command substitution inside a command's arguments.
 RUN set -eu; \
-    missing='foreach (json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true)["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
-    install-php-extensions $(php -r "$missing") opcache; \
-    test -z "$(php -r "$missing")"; \
+    missing='$c = json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true, 512, JSON_THROW_ON_ERROR); if (!is_array($c["require"] ?? null)) { throw new UnexpectedValueException("composer.json has no require object"); } foreach ($c["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
+    exts="$(php -r "$missing")"; \
+    install-php-extensions $exts opcache; \
+    left="$(php -r "$missing")"; \
+    test -z "$left"; \
     php -r 'if (!extension_loaded("Zend OPcache")) { fwrite(STDERR, "missing PHP extension opcache\n"); exit(1); }'
 
 WORKDIR /app

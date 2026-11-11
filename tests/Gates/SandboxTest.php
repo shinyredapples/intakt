@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Intakt\Gates\GateResult;
+use Intakt\Gates\LongDashesGate;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(Sandbox::class)]
+#[UsesClass(LongDashesGate::class)]
+#[UsesClass(GateResult::class)]
+#[UsesClass(Workspace::class)]
 final class SandboxTest extends TestCase
 {
     private Sandbox $sandbox;
@@ -92,5 +99,27 @@ final class SandboxTest extends TestCase
         $this->sandbox->borrowKernel();
 
         self::assertSame(dirname(__DIR__, 2).'/bin/console', readlink($this->sandbox->root.'/bin/console'));
+    }
+
+    public function testAGateRunInTheTestProcessReadsAsItsCheckLine(): void
+    {
+        $this->sandbox->write('README.md', "Plain \u{2014} text\n");
+
+        $run = $this->sandbox->runGate(new LongDashesGate());
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue($run->failed('dashes'), $run->output());
+        self::assertStringContainsString('README.md:1: U+2014', $run->findingsOf('dashes'));
+    }
+
+    public function testAPassingGateRunInTheTestProcessExitsWithZero(): void
+    {
+        $this->sandbox->write('README.md', "Plain text\n");
+
+        $run = $this->sandbox->runGate(new LongDashesGate());
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+        self::assertTrue($run->passed('dashes'), $run->output());
+        self::assertStringContainsString('commits skipped, no git history', $run->noteOf('dashes'));
     }
 }

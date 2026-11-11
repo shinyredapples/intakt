@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final readonly class WatchedProjects
 {
     /**
-     * @param array<string, array{repository: string, base: string, task: string}> $projects
+     * @param array<string, array{repository: string, base: string, task: string, github?: string}> $projects
      */
     public function __construct(
         #[Autowire(param: WatcherServices::PROJECTS)]

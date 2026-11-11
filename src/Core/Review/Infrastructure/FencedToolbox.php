@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Override;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -21,6 +22,7 @@ final class FencedToolbox implements ToolboxInterface
     public function __construct(
         private readonly ToolboxInterface $inner,
         private readonly PromptCut $cut,
+        private readonly Fence $fence,
     ) {
     }
 
@@ -34,7 +36,9 @@ final class FencedToolbox implements ToolboxInterface
     public function execute(ToolCall $toolCall): ToolResult
     {
         $result = $this->inner->execute($toolCall);
-        $answer = new ToolResultConverter()->convert($result) ?? '';
+        $converted = new ToolResultConverter()->convert($result) ?? '';
+        // The review server fences its answers for the subscription CLI, so the text inside is what is measured and fenced: the server's fence then neither counts toward the ceiling nor loses its end to a cut.
+        $answer = $this->fence->contentOf(UntrustedSource::ToolResult, $converted) ?? $converted;
         $this->cutAnAnswer = $this->cut->cuts($answer) || $this->cutAnAnswer;
 
         return new ToolResult($toolCall, $this->cut->fenced(UntrustedSource::ToolResult, $answer), $result->getSources());
