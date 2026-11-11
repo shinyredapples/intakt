@@ -6,7 +6,7 @@ How Intakt is released. The release notes are the changelog: no CHANGELOG file i
 
 Releases follow a train. Twice a day, at 13:00 and 21:00 Europe/Berlin, a timer on the owner's host takes the newest `main` commit whose `ci.yml` run for the push succeeded. It cuts a release from that commit only when at least one `feat` or `fix` commit landed since the previous tag; otherwise that train is skipped and no release is made.
 
-The timer is the owner's tooling and lives outside this repository. It does what a release by hand does (see [Cutting a release by hand](#cutting-a-release-by-hand)): a signed tag, a pre-release with generated notes, and a fresh [Next draft](#the-next-draft).
+The timer is the owner's tooling and lives outside this repository. A train cuts the release the way a release by hand is cut (see [Cutting a release by hand](#cutting-a-release-by-hand)): a signed tag and a pre-release with generated notes. It also refreshes the [Next draft](#the-next-draft), which the hand-cut steps do not.
 
 ## How versions are chosen
 
@@ -15,7 +15,7 @@ Intakt uses semantic versions. Until the public API settles the major version st
 Before `v1.0.0` the two lower numbers mean:
 
 - **The patch counts trains.** Each train that cuts a release raises the patch by one. A train may carry features, but never a breaking change.
-- **The minor moves at a milestone or at a breaking change.** The owner chooses the milestone versions. A breaking change is a Conventional Commit with `!` after the type or scope (`feat!:`, `fix(config)!:`), or with a `BREAKING CHANGE` footer; the release that carries it raises the minor and resets the patch to `0`.
+- **The minor moves at a milestone or at a breaking change.** The owner chooses the milestone versions. A breaking change is a Conventional Commit with `!` after the type or scope (`feat!:`, `fix(config)!:`), or with a `BREAKING CHANGE` footer; the release that carries it raises the minor.
 
 Planned versions:
 
