@@ -54,10 +54,9 @@ final readonly class RateLimitReadings
      */
     public function observe(string $installationId, int $status, array $headers): void
     {
-        $remaining = $this->number($headers, 'x-ratelimit-remaining');
-        $reset = $this->number($headers, 'x-ratelimit-reset');
-        if (null !== $remaining && null !== $reset) {
-            $this->remember($installationId, $remaining, $reset);
+        $reading = $this->readingOf($headers);
+        if ($reading instanceof RateLimitReading) {
+            $this->remember($installationId, $reading);
         }
 
         $until = $this->limitedUntil($status, $headers);
@@ -71,13 +70,26 @@ final readonly class RateLimitReadings
         $item = $this->pool->getItem($this->key('reading', $installationId));
         $value = $item->get();
 
-        if (!$item->isHit() || !is_array($value) || !is_int($value['remaining'] ?? null) || !is_int($value['reset'] ?? null)) {
+        if (!$item->isHit() || !is_array($value) || !is_int($value['remaining'] ?? null) || !is_int($value['limit'] ?? null) || !is_int($value['reset'] ?? null)) {
             return null;
         }
 
         $resetsAt = $this->at($value['reset']);
 
-        return $resetsAt > $this->clock->now() ? new RateLimitReading($value['remaining'], $resetsAt) : null;
+        return $resetsAt > $this->clock->now() ? new RateLimitReading($value['remaining'], $value['limit'], $resetsAt) : null;
+    }
+
+    /**
+     * @param array<string, list<string>> $headers
+     */
+    private function readingOf(array $headers): ?RateLimitReading
+    {
+        $remaining = $this->number($headers, 'x-ratelimit-remaining');
+        $limit = $this->number($headers, 'x-ratelimit-limit');
+        $reset = $this->number($headers, 'x-ratelimit-reset');
+
+        // Only whole, because the reserve is a share of the limit and a reading without one could not hold it.
+        return null === $remaining || null === $limit || null === $reset ? null : new RateLimitReading($remaining, $limit, $this->at($reset));
     }
 
     /**
@@ -123,14 +135,15 @@ final readonly class RateLimitReadings
         return $moment instanceof DateTimeImmutable && $moment > $now ? $moment : $now->modify(sprintf('+%d seconds', self::SECONDS_WITHOUT_RESET));
     }
 
-    private function remember(string $installationId, int $remaining, int $reset): void
+    private function remember(string $installationId, RateLimitReading $reading): void
     {
-        $resetsAt = $this->at($reset);
+        $resetsAt = $reading->resetsAt;
         if ($resetsAt <= $this->clock->now()) {
             return;
         }
 
-        $item = $this->pool->getItem($this->key('reading', $installationId))->set(['remaining' => $remaining, 'reset' => $reset])->expiresAt($resetsAt);
+        $value = ['remaining' => $reading->remaining, 'limit' => $reading->limit, 'reset' => $resetsAt->getTimestamp()];
+        $item = $this->pool->getItem($this->key('reading', $installationId))->set($value)->expiresAt($resetsAt);
         $this->pool->save($item);
     }
 
