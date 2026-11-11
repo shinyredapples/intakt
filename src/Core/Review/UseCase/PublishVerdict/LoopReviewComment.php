@@ -55,15 +55,7 @@ final readonly class LoopReviewComment
     // On one line, because a line break in a model's text could open a fence or a finding line of its own; the line redacted whole and alone, because a header can start in the place and end in the text, and a redaction that runs to the end of its text must end with its line, not take the verdict block with it.
     private function lineOf(Finding $finding): string
     {
-        $line = new Redaction()->redact(sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text)));
-
-        return $this->withoutHtmlComments($line);
-    }
-
-    // Because GitHub's page hides everything after an opening `<!--`, the verdict block included, and a copied `<!-- intakt-verdict: ... -->` marker would make another round skip its own comment.
-    private function withoutHtmlComments(string $line): string
-    {
-        return str_replace('<!--', '<! --', $line);
+        return new Redaction()->redact(sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text)));
     }
 
     private function placeOf(Finding $finding): string
