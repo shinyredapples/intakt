@@ -10,7 +10,7 @@ use Symfony\Component\Yaml\Yaml;
 
 /**
  * @phpstan-type Step array{uses?: string, run?: string}
- * @phpstan-type Job array{permissions?: array<string, string>, if?: string, steps?: list<Step>}
+ * @phpstan-type Job array{permissions?: array<string, string>, if?: string, environment?: array{name?: string}, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{on: array<string, mixed>, permissions: array<string, string>, jobs: array<string, Job>}
  */
 #[CoversNothing]
@@ -52,6 +52,14 @@ final class HighlightsWorkflowTest extends TestCase
         $steps = $this->workflow()['jobs']['publish']['steps'] ?? [];
 
         self::assertSame([], array_filter($steps, static fn (array $step): bool => isset($step['run']) || str_starts_with($step['uses'] ?? '', 'actions/checkout@') || !str_contains($step['uses'] ?? '', '@')));
+    }
+
+    public function testThePublishJobOnlyDeploysPagesToTheGithubPagesEnvironment(): void
+    {
+        $publish = $this->workflow()['jobs']['publish'];
+
+        self::assertSame('github-pages', $publish['environment']['name'] ?? null);
+        self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => strstr($step['uses'] ?? '', '@', true) ?: '', $publish['steps'] ?? []));
     }
 
     /**
