@@ -54,12 +54,12 @@ final readonly class Review
     /**
      * @return list<RoundFinding>
      */
-    // Only "fix now" findings stay open into the next round; follow-ups wait for a later task.
+    // A follow-up waits for a later task, so only a "fix now" finding stays open into the next round.
     public function openFindings(): array
     {
         $judged = $this->lastJudgedRound();
 
-        return null === $judged ? [] : array_values(array_filter($judged->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call));
+        return $judged instanceof ReviewedRound ? array_values(array_filter($judged->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)) : [];
     }
 
     public function tokens(): TokenFigures
