@@ -108,7 +108,7 @@ final readonly class MakeBuildClone
         $this->filesystem->mkdir(dirname($directory));
 
         // A thread-safe PHP resolves the path before mkdir and follows a dangling link, so mkdir alone would make the link's target.
-        if (is_link($directory) || file_exists($directory)) {
+        if ($this->isTaken($directory)) {
             throw BuildCloneNotMade::at($directory, 'the folder already exists');
         }
 
@@ -127,8 +127,19 @@ final readonly class MakeBuildClone
         }
 
         if (!$made) {
-            throw BuildCloneNotMade::at($directory, file_exists($directory) || is_link($directory) ? 'the folder already exists' : $error);
+            throw BuildCloneNotMade::at($directory, $this->isTaken($directory) ? 'the folder already exists' : $error);
         }
+    }
+
+    /**
+     * @phpstan-impure
+     */
+    private function isTaken(string $directory): bool
+    {
+        clearstatcache(true, $directory);
+
+        // is_link does not follow the link, so a dangling link counts as taken.
+        return is_link($directory) || file_exists($directory);
     }
 
     private function initialize(string $directory, string $branch, string $format): void
