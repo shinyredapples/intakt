@@ -156,7 +156,7 @@ The `tests` gate runs the test files in several workers at once: one for each pr
 For example:
 
 ```
-{"static":["cs","rector",...,"ratchet"],"order":["cs","phpstan","rector",...,"container","ratchet"]}
+{"static":["cs","rector",...,"ratchet","workflows"],"order":["cs","phpstan","rector",...,"container","ratchet","workflows"]}
 ```
 
 With any other argument beside it, `bin/check` runs no gate: it prints an `error` line with its usage and exits with 2. A normal `bin/check` run is unchanged: it still starts the static gates before the gates that run your change's code.

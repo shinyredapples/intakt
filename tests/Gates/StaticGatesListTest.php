@@ -27,14 +27,14 @@ final class StaticGatesListTest extends TestCase
     {
         $static = $this->namesIn($this->check('--static-gates'), 'static');
 
-        self::assertSame(['cs', 'rector', 'architecture', 'comments', 'audit', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'ratchet'], $static);
+        self::assertSame(['cs', 'rector', 'architecture', 'comments', 'audit', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'ratchet', 'workflows'], $static);
     }
 
     public function testTheOrderNamesEveryGateInGateOrder(): void
     {
         $order = $this->namesIn($this->check('--static-gates'), 'order');
 
-        self::assertSame(['cs', 'phpstan', 'rector', 'architecture', 'comments', 'audit', 'tests', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'container', 'ratchet'], $order);
+        self::assertSame(['cs', 'phpstan', 'rector', 'architecture', 'comments', 'audit', 'tests', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'container', 'ratchet', 'workflows'], $order);
     }
 
     public function testACodeGateSitsBetweenStaticGatesInTheOrder(): void
