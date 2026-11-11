@@ -7,7 +7,7 @@ const { jobsFor, measureFloors, report, failed } = createRequire(import.meta.url
 const floors = { text: 15, target: 44 };
 
 class FakeElement {
-    constructor({ tag = 'span', text = '', fontSize = 15, height = 20, width = 100, visibility = 'visible', display = 'block', hiddenBy = null, labels = [], parent = null, value = undefined, attributes = {} } = {}) {
+    constructor({ tag = 'span', text = '', fontSize = 15, height = 20, width = 100, visibility = 'visible', display = 'block', labels = [], parent = null, value = undefined, attributes = {} } = {}) {
         this.tagName = tag.toUpperCase();
         this.id = '';
         this.classList = [];
@@ -15,7 +15,6 @@ class FakeElement {
         this.textContent = text;
         this.style = { fontSize: fontSize + 'px', visibility, display };
         this.box = { width, height };
-        this.hiddenBy = hiddenBy;
         this.labels = labels;
         this.parentElement = parent;
         this.value = value;
@@ -30,10 +29,15 @@ class FakeElement {
         return this.attributes[name] ?? null;
     }
 
+    // Answers `[name]` and `[name="value"]` selectors over the parent chain as a browser would, so a test fails for what the script measures, not for which DOM call it makes.
     closest(selector) {
-        assert.equal(selector, '[inert], [aria-hidden="true"]');
+        const wanted = [...selector.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)].map(([, name, value]) => ({ name, value }));
 
-        return this.hiddenBy;
+        for (let node = this; node; node = node.parentElement) {
+            if (wanted.some(({ name, value }) => node.getAttribute(name) !== null && (value === undefined || node.getAttribute(name) === value))) return node;
+        }
+
+        return null;
     }
 }
 
@@ -83,10 +87,22 @@ test('text nobody can see is not measured', () => {
         new FakeElement({ text: 'collapsed', fontSize: 12, height: 0, width: 0 }),
         new FakeElement({ text: 'only for screen readers', fontSize: 12, height: 1, width: 1 }),
         new FakeElement({ text: 'invisible', fontSize: 12, visibility: 'hidden' }),
-        new FakeElement({ text: 'behind the search', fontSize: 12, hiddenBy: new FakeElement() }),
+        new FakeElement({ text: 'behind the search', fontSize: 12, parent: new FakeElement({ parent: new FakeElement({ attributes: { inert: '' } }) }) }),
     ];
 
     assert.deepEqual(measureFloors(floors, pageOf(hidden)), []);
+});
+
+test('text under an aria-hidden ancestor stays on screen, so it is measured', () => {
+    const count = new FakeElement({ text: '3', fontSize: 12, parent: new FakeElement({ attributes: { 'aria-hidden': 'true' } }) });
+
+    assert.deepEqual(measureFloors(floors, pageOf([count])), ['text 12 px: span "3"']);
+});
+
+test('a visible button marked aria-hidden is measured for its text and its height', () => {
+    const button = new FakeElement({ tag: 'button', text: 'Go', fontSize: 13, height: 30, attributes: { 'aria-hidden': 'true' } });
+
+    assert.deepEqual(measureFloors(floors, pageOf([button], [button])), ['text 13 px: button "Go"', 'target 30 px: button "Go"']);
 });
 
 test('an element without text of its own is no text', () => {

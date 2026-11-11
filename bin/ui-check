@@ -117,10 +117,18 @@ async function runAxe() {
 
 // Runs inside the page, so it uses nothing from this file; the second parameter lets the tests hand it a fake page.
 function measureFloors(floors, view = globalThis) {
+  // Only `inert` hides from sight and touch; `aria-hidden` hides from assistive technology alone, so its text is still measured.
+  const inert = (element) => {
+    for (let node = element; node; node = node.parentElement) {
+      if (node.getAttribute('inert') !== null) return true;
+    }
+
+    return false;
+  };
   const visible = (element) => {
     const box = element.getBoundingClientRect();
 
-    return box.width > 1 && box.height > 1 && view.getComputedStyle(element).visibility !== 'hidden' && element.closest('[inert], [aria-hidden="true"]') === null;
+    return box.width > 1 && box.height > 1 && view.getComputedStyle(element).visibility !== 'hidden' && !inert(element);
   };
   const describe = (element) => {
     const name = (element.getAttribute('aria-label') ?? (element.textContent || fieldText(element))).trim().replace(/\s+/g, ' ').slice(0, 40);
