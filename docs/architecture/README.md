@@ -12,7 +12,7 @@ Code and conventions:
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
 Checks, CI and releases:
-- [Quality gates](quality-gates.md)
+- [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline
 - [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the watcher start and the round stream check the journeys use, and each journey (first install and setup, live review progress on the dashboard); a failing journey names itself and its step, and the live review progress journey has a forced-break proof; `bin/journey-alarm` files or updates one urgent task for a red run
 - [CI](ci.md): also the journeys on main, nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except the gitleaks image (on GHCR, so no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images. zizmor is no image and Dependabot does not update it.
 - [Releases](releases.md)
@@ -23,7 +23,7 @@ Running Intakt:
 - [Container image](container-image.md)
 - [The demo with docker compose](demo-with-docker-compose.md)
 - [Persistence](persistence.md)
-- [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the memory-kill cause, and the cleanup after a crash
+- [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the memory-kill cause, and the cleanup after a crash
 - [MCP server for the owner](mcp-server.md)
 
 Forges and identity:

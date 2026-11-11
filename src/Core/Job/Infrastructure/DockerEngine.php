@@ -17,6 +17,7 @@ final readonly class DockerEngine
     // Pinned, so a newer engine still answers in the shape read here (1.44 is Docker Engine 25).
     private const string API = 'http://docker/v1.44/';
     private const string CONTAINER_ID = '/^[A-Za-z0-9]{1,128}$/D';
+    private const string NETWORK_NAME = '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
 
     private HttpClientInterface $client;
 
@@ -112,6 +113,87 @@ final readonly class DockerEngine
     public function remove(string $container): void
     {
         $this->send('DELETE', sprintf('containers/%s', $container), ['query' => ['force' => 'true', 'v' => 'true']])->accepting(204, 404);
+    }
+
+    // Internal, so the engine gives the network no route out and only a container attached to it as well can reach outside; without an address of the host on its bridge and without IPv6, so a job cannot reach a service on the host past its proxy either.
+    public function createNetwork(string $name, JobId $job): void
+    {
+        $network = [
+            'Name' => $name,
+            'Internal' => true,
+            'EnableIPv6' => false,
+            'Options' => ['com.docker.network.bridge.inhibit_ipv4' => 'true'],
+            'Labels' => [JobServices::JOB_LABEL => $job->value],
+        ];
+
+        $this->send('POST', 'networks/create', ['json' => $network])->accepting(201);
+    }
+
+    // Stopped wins over the health status, because the engine keeps the last status of a container that exited.
+    public function health(string $container): ContainerHealth
+    {
+        $state = $this->send('GET', sprintf('containers/%s/json', $container))->accepting(200)['State'] ?? null;
+        $status = is_array($state) && is_array($state['Health'] ?? null) ? ($state['Health']['Status'] ?? null) : null;
+
+        if (!is_array($state) || !is_bool($state['Running'] ?? null) || !is_string($status)) {
+            throw DockerEngineFailed::unexpected('containers/json');
+        }
+
+        if (!$state['Running']) {
+            return ContainerHealth::Stopped;
+        }
+
+        $health = ContainerHealth::tryFrom($status);
+
+        if (null === $health || ContainerHealth::Stopped === $health) {
+            throw DockerEngineFailed::unexpected('containers/json');
+        }
+
+        return $health;
+    }
+
+    // A 404 is accepted, because it means the network is gone already, which is what the removal wanted.
+    public function removeNetwork(string $name): void
+    {
+        $this->send('DELETE', sprintf('networks/%s', $name))->accepting(204, 404);
+    }
+
+    public function logs(string $container, int $lines): string
+    {
+        return $this->send('GET', sprintf('containers/%s/logs', $container), ['query' => ['stdout' => 'true', 'tail' => (string) $lines]])->demultiplexed(200);
+    }
+
+    /**
+     * @return list<JobNetwork>
+     */
+    public function jobNetworks(): array
+    {
+        $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
+        $listed = $this->send('GET', 'networks', ['query' => ['filters' => $filters]])->accepting(200);
+
+        if (!array_is_list($listed)) {
+            throw DockerEngineFailed::unexpected('networks');
+        }
+
+        return array_values(array_filter(array_map($this->jobNetworkOf(...), $listed)));
+    }
+
+    private function jobNetworkOf(mixed $listed): ?JobNetwork
+    {
+        $job = is_array($listed) && is_array($listed['Labels'] ?? null) ? ($listed['Labels'][JobServices::JOB_LABEL] ?? null) : null;
+
+        // Skipped because only a label Intakt could have written names a job whose lock decides the network's fate.
+        if (!is_string($job) || !JobId::isValid($job)) {
+            return null;
+        }
+
+        $name = $listed['Name'] ?? null;
+
+        if (!is_string($name) || 1 !== preg_match(self::NETWORK_NAME, $name)) {
+            throw DockerEngineFailed::unexpected('networks');
+        }
+
+        return new JobNetwork($name, new JobId($job));
     }
 
     /**

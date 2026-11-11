@@ -28,4 +28,6 @@ enum LedgerEventKind: string
     case HeadForgotten = 'head_forgotten';
     case JobEnded = 'job_ended';
     case JobContainerRemoved = 'job_container_removed';
+    case JobEgressRefused = 'job_egress_refused';
+    case JobNetworkRemoved = 'job_network_removed';
 }

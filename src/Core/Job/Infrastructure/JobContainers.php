@@ -23,14 +23,29 @@ final readonly class JobContainers
     public function __construct(
         private DockerEngine $engine,
         private JobContainerDefinition $definition,
+        private EgressProxy $egress,
         private ClockInterface $clock,
     ) {
     }
 
+    // The proxy is closed after the job's container is gone, because the engine removes no network a container still uses.
     public function runToEnd(JobSpec $spec, string $outputDirectory): JobEnd
     {
         $this->refuseImageVolumes($spec);
-        $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory));
+
+        try {
+            $end = $this->runInContainer($spec, $outputDirectory, $this->egress->open($spec));
+            $this->egress->recordRefusals($spec);
+
+            return $end;
+        } finally {
+            $this->egress->close($spec);
+        }
+    }
+
+    private function runInContainer(JobSpec $spec, string $outputDirectory, EgressRoute $route): JobEnd
+    {
+        $container = $this->engine->create('intakt-job-'.$spec->id->value, $this->definition->of($spec, $outputDirectory, $route));
 
         try {
             $this->engine->start($container);
