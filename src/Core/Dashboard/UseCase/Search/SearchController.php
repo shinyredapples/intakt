@@ -21,7 +21,6 @@ final readonly class SearchController
     }
 
     #[Route('/search', name: DashboardRoutes::SEARCH, methods: ['GET'])]
-    // A fragment, not a page: the shell's search shows it in place.
     public function __invoke(#[MapQueryParameter] string $q = ''): Response
     {
         $answer = $this->index->answer(new SearchQuery($q));

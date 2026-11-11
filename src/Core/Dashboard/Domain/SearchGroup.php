@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// The order of the cases is the order of the groups in the results.
+// Kept in this order because SearchAnswer shows the groups in case order, the order of the search mock.
 enum SearchGroup: string
 {
     case Recent = 'Recent';

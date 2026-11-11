@@ -15,7 +15,8 @@ final readonly class SearchQuery
     {
         // Scrubbed first, because the address may carry bytes that are not UTF-8 and the word split refuses them.
         $this->text = trim(mb_scrub($text));
-        $this->words = preg_split('/\s+/u', mb_strtolower($this->text), flags: PREG_SPLIT_NO_EMPTY) ?: [];
+        $words = preg_split('/\s+/u', mb_strtolower($this->text), flags: PREG_SPLIT_NO_EMPTY);
+        $this->words = false === $words ? [] : $words;
     }
 
     public function isEmpty(): bool
