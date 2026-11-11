@@ -60,7 +60,6 @@ final class PhpInImageTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $images = new PhpInImage($runner);
         $running = [];
-        // The second build's probe starts while the first one's still runs, as a job runner holding each job id's lock sees it.
         $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$running, $images, $profile, $result): JobResult {
             if (in_array($spec->id->value, $running, true)) {
                 throw JobRefused::alreadyRunning($spec->id);
