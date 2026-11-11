@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
-// The checks docker/job/start-check.sh runs, and the report it leaves, by the names the script writes.
+// Spelled as docker/job/start-check.sh writes them, because its report is read by these names.
 enum StartCheck: string
 {
     case Output = 'output';

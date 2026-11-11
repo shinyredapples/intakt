@@ -51,7 +51,7 @@ final readonly class JobOutputDirectories
         $bytes = 0;
 
         foreach ($entries as $entry) {
-            if ($entry->isDot() || StartCheckReport::FILE === $entry->getFilename()) {
+            if ($this->isNoOutput($entry)) {
                 continue;
             }
 
@@ -96,6 +96,12 @@ final readonly class JobOutputDirectories
     private function of(JobId $job): string
     {
         return $this->root.'/'.$job->value;
+    }
+
+    // The start check's report is read on its own, so the job's output holds only what the job handed back.
+    private function isNoOutput(DirectoryIterator $entry): bool
+    {
+        return $entry->isDot() || StartCheckReport::FILE === $entry->getFilename();
     }
 
     // The job wrote this directory, so a link could point the orchestrator at a file of its own.

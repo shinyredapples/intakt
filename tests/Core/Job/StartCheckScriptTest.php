@@ -131,32 +131,37 @@ final class StartCheckScriptTest extends TestCase
 
     public function testTheJobsCommandGetsItsOwnArgumentsAfterTheInputs(): void
     {
-        $run = $this->whenTheCheckRuns([$this->root.'/input'], command: ['/bin/sh', '-c', 'printf "%s|%s" "$0" "$1"', 'first', '-- second']);
+        $run = $this->startCheckWith([$this->root.'/input', '--', '/bin/sh', '-c', 'printf "%s|%s" "$0" "$1"', 'first', '-- second'], $this->environment(null, (string) getenv('PATH')));
 
         self::assertSame('first|-- second', $run->getOutput());
     }
 
     public function testWithoutACommandTheCheckEndsWithAUsageError(): void
     {
-        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', $this->root.'/input'], null, $this->environment(null, (string) getenv('PATH')));
-        $run->run();
+        $run = $this->startCheckWith([$this->root.'/input'], $this->environment(null, (string) getenv('PATH')));
 
         self::assertSame(64, $run->getExitCode());
         self::assertStringContainsString('intakt-start-check: no command to run', $run->getErrorOutput());
     }
 
     /**
-     * @param list<string>      $inputs
-     * @param list<string>|null $command
+     * @param list<string> $inputs
      */
-    private function whenTheCheckRuns(array $inputs, ?string $egress = null, ?string $path = null, ?array $command = null): Process
+    private function whenTheCheckRuns(array $inputs, ?string $egress = null, ?string $path = null): Process
     {
-        $command ??= ['/bin/sh', '-c', 'printf "%s" "${INTAKT_REDUCED_MODE-unset}"'];
-        $run = new Process(
-            ['/bin/sh', '-c', $this->script(), 'intakt-start-check', ...$inputs, '--', ...$command],
-            null,
+        return $this->startCheckWith(
+            [...$inputs, '--', '/bin/sh', '-c', 'printf "%s" "${INTAKT_REDUCED_MODE-unset}"'],
             $this->environment($egress, $this->tools.':'.($path ?? (string) getenv('PATH'))),
         );
+    }
+
+    /**
+     * @param list<string>                $arguments
+     * @param array<string, string|false> $environment
+     */
+    private function startCheckWith(array $arguments, array $environment): Process
+    {
+        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', ...$arguments], null, $environment);
         $run->run();
 
         return $run;
