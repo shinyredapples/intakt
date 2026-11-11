@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Job\Infrastructure;
 
 use DateTimeImmutable;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobRefused;
@@ -73,12 +74,18 @@ final readonly class JobContainers
         return max(0.0, (float) $deadline->format('U.u') - (float) $this->clock->now()->format('U.u'));
     }
 
+    // Classified from the state after the kill, because memory can kill the job in the last pause, and an exit code of a container still running was never confirmed.
     private function killed(string $container): JobEnd
     {
         $this->engine->kill($container);
         $this->engine->waitForExit($container, self::KILL_GRACE_SECONDS);
+        $state = $this->engine->state($container);
 
-        return new JobEnd(JobCause::TimedOut, $this->engine->state($container)->exitCode);
+        if ($state->running) {
+            throw DockerEngineFailed::notStoppedAfterKill($container, self::KILL_GRACE_SECONDS);
+        }
+
+        return new JobEnd($state->memoryKilled ? JobCause::MemoryKilled : JobCause::TimedOut, $state->exitCode);
     }
 
     private function endOf(ContainerState $state): JobEnd

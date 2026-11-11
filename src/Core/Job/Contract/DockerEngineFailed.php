@@ -25,6 +25,11 @@ final class DockerEngineFailed extends RuntimeException implements ReportableFai
         return new self(sprintf('The Docker Engine refused %s with status %d: %s', $call, $status, $message));
     }
 
+    public static function notStoppedAfterKill(string $container, int $graceSeconds): self
+    {
+        return new self(sprintf('The container %s did not stop within %d seconds after the kill; no exit code is recorded.', $container, $graceSeconds));
+    }
+
     public static function unexpected(string $call): self
     {
         return new self(sprintf('The Docker Engine answered %s with an unexpected body.', $call));
