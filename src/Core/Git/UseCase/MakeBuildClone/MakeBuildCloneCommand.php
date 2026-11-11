@@ -6,8 +6,8 @@ namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use InvalidArgumentException;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -19,24 +19,17 @@ final readonly class MakeBuildCloneCommand
     ) {
     }
 
-    public function __invoke(
-        SymfonyStyle $io,
-        #[Argument(description: 'The project name')]
-        string $project,
-        #[Argument(description: 'The task\'s branch; one the mirror does not hold yet starts at main')]
-        string $branch,
-        #[Argument(description: 'The folder to clone into, which must not exist yet')]
-        string $directory,
-    ): int {
+    public function __invoke(SymfonyStyle $io, #[MapInput] MakeBuildCloneInput $input): int
+    {
         try {
-            $this->clones->make($project, $branch, $directory);
+            $this->clones->make($input->project, $input->branch, $input->directory);
         } catch (InvalidArgumentException|ReportableFailure $failure) {
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
         }
 
-        $io->writeln('clone '.$directory);
+        $io->writeln('clone '.$input->directory);
 
         return Command::SUCCESS;
     }

@@ -11,6 +11,7 @@ use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneCommand;
+use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneInput;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -27,6 +28,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(MakeBuildCloneCommand::class)]
 #[UsesClass(MakeBuildClone::class)]
+#[UsesClass(MakeBuildCloneInput::class)]
 #[UsesClass(BuildCloneNotMade::class)]
 #[UsesClass(Mirrors::class)]
 #[UsesClass(UpdateMirror::class)]

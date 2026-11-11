@@ -39,7 +39,13 @@ final readonly class MakeBuildClone
         try {
             $this->initialize($directory, $mirror, $branch);
             $this->fetch($directory, $mirror, $main);
-            $this->takeTaskBranch($directory, $mirror, $task, $main);
+
+            if ($this->mirrorHolds($mirror, $task)) {
+                $this->fetch($directory, $mirror, $task);
+            } else {
+                $this->startAtMain($directory, $task, $main);
+            }
+
             $this->checkOut($directory);
         } catch (Throwable $failed) {
             // Because a clone that failed half-way must never be taken for a build clone.
@@ -112,19 +118,17 @@ final readonly class MakeBuildClone
         // Init and fetch instead of "clone", so the clone gets no remote, no remote-tracking refs and no tags; the task's branch is the one checked out, which a fetch only updates with --update-head-ok.
         $call = $this->hardened->call(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, '+'.$ref.':'.$ref], $directory);
 
-        // HardenedGit allows no transport, and git reads a local path as the "file" transport.
+        // Because HardenedGit allows no transport, and git reads a local path as the "file" transport.
         $this->mustRun(new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_ALLOW_PROTOCOL' => 'file']), $directory);
     }
 
-    private function takeTaskBranch(string $directory, string $mirror, string $task, string $main): void
+    private function mirrorHolds(string $mirror, string $ref): bool
     {
-        if ($this->run($this->inMirror($mirror, ['show-ref', '--verify', '--quiet', $task]))->isSuccessful()) {
-            $this->fetch($directory, $mirror, $task);
+        return $this->run($this->inMirror($mirror, ['show-ref', '--verify', '--quiet', $ref]))->isSuccessful();
+    }
 
-            return;
-        }
-
-        // A task that has no branch yet starts at main.
+    private function startAtMain(string $directory, string $task, string $main): void
+    {
         $this->mustRun($this->hardened->call(['update-ref', $task, $main], $directory), $directory);
     }
 
