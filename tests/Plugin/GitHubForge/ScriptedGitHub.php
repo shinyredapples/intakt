@@ -15,6 +15,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -61,7 +62,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), $this->locks);
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
     }
 
     /**
@@ -85,7 +86,7 @@ final class ScriptedGitHub
             }
         }
 
-        // Stamped with the App that posted it, as GitHub stamps a comment posted with an installation token.
+        // Stamped with the App's id, because GitHub stamps a comment posted with an installation token so, and a retry counts only such a comment as its own.
         if (str_ends_with($url, '/comments')) {
             $this->comments[] = [...$payload, 'performed_via_github_app' => ['id' => (int) self::APP_ID]];
         }

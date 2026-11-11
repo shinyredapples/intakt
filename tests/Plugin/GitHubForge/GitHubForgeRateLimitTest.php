@@ -33,6 +33,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -233,7 +234,7 @@ final class GitHubForgeRateLimitTest extends TestCase
         $calls = new GitHubCalls($http, $this->readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new LockFactory(new InMemoryStore()));
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())));
     }
 
     private function plain(string $url): MockResponse

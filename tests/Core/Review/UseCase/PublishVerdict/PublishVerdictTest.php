@@ -30,6 +30,7 @@ use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
+use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -57,6 +58,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ModeGuardedForgeWrites::class)]
 #[UsesClass(LoopReviewReader::class)]
 #[UsesClass(PostedComments::class)]
+#[UsesClass(VerdictLocks::class)]
 #[UsesClass(ReviewToken::class)]
 final class PublishVerdictTest extends KernelTestCase
 {

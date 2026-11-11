@@ -32,7 +32,6 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
 use JsonException;
 use NoDiscard;
-use Symfony\Component\Lock\LockFactory;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 final readonly class GitHubForge implements Forge, ForgeWrites
@@ -40,7 +39,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
-    private const string VERDICT_LOCK = 'intakt.verdict.';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -54,7 +52,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
         private PostedComments $comments,
-        private LockFactory $locks,
+        private VerdictLocks $verdictLocks,
     ) {
     }
 
@@ -139,17 +137,8 @@ final readonly class GitHubForge implements Forge, ForgeWrites
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
-        // Held from the read of the comments to the last post, so two deliveries of one round cannot both find no comment and both post one; not waited for, because the busy delivery is retried and then finds the comment.
-        $lock = $this->locks->createLock(self::VERDICT_LOCK.$verdict->token->value);
-        if (!$lock->acquire()) {
-            throw new ForgeWriteFailed('Another delivery is publishing this round\'s verdict.');
-        }
-
-        try {
-            $this->postVerdict($address, $verdict, $comments);
-        } finally {
-            $lock->release();
-        }
+        // Held from the read of the comments to the last post, because the read decides whether the comment is posted.
+        $this->verdictLocks->whileHeld($verdict->token, fn () => $this->postVerdict($address, $verdict, $comments));
     }
 
     /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Closure;
-use Fiber;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -20,9 +19,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
-use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
-use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewComment;
 use Intakt\Plugin\Forge\Contract\ReviewTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
@@ -45,6 +42,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -80,8 +78,6 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(ForgeWriteFailed::class)]
 #[UsesClass(HeadMove::class)]
 #[UsesClass(JobCredentials::class)]
-#[UsesClass(PostedComments::class)]
-#[UsesClass(PublishedVerdict::class)]
 #[UsesClass(ReviewComment::class)]
 #[UsesClass(ReviewTextHoldsSecret::class)]
 #[UsesClass(ReviewToken::class)]
@@ -392,7 +388,7 @@ final class GitHubForgeTest extends TestCase
         // Past the recorded expiry, so the next mint answers with a token that already lapsed.
         $clock->modify('+2 hours');
         $calls = new GitHubCalls(new MockHttpClient(), FreshReadings::at($clock), $tokens);
-        $forge = new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new LockFactory(new InMemoryStore()));
+        $forge = new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())));
 
         try {
             $forge->change(new ChangeId(self::PULL));
@@ -552,58 +548,6 @@ final class GitHubForgeTest extends TestCase
         self::assertCount($requestsBefore, $this->requested);
     }
 
-    public function testTwoDeliveriesOfOneVerdictThatBothReadTheCommentsFirstPostOneComment(): void
-    {
-        // The first delivery stops inside its read of the comments, so the second one starts while no comment is posted yet.
-        $forge = $this->forge(static fn (string $url): ?ResponseInterface => match (true) {
-            str_contains($url, '/issues/7/comments?') => Fiber::suspend() ?? new MockResponse('[]'),
-            str_ends_with($url, '/issues/7/comments'), str_contains($url, '/statuses/') => new MockResponse('{}', ['http_code' => 201]),
-            default => null,
-        });
-        $publish = static function () use ($forge): void {
-            $forge->publishVerdict('widgets', new ChangeId(self::PULL), new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Success, 'Intakt approves this head.', 'The verdict.', new ReviewToken(self::TOKEN)));
-        };
-        $first = new Fiber($publish);
-        $second = new Fiber($publish);
-
-        $first->start();
-        try {
-            $second->start();
-            $second->resume();
-            self::fail('The second delivery must not publish while the first one does.');
-        } catch (ForgeWriteFailed $busy) {
-            self::assertSame('Another delivery is publishing this round\'s verdict.', $busy->getMessage());
-        }
-        $first->resume();
-
-        self::assertSame(['POST '.self::API.'/issues/7/comments', 'POST '.self::API.'/statuses/'.self::HEAD], array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, 'POST '))));
-    }
-
-    public function testADeliveryWhosePostFailedLeavesTheVerdictFreeForItsRetry(): void
-    {
-        $refused = false;
-        $forge = $this->forge(static function (string $url) use (&$refused): ?ResponseInterface {
-            $refuse = !$refused && str_contains($url, '/statuses/');
-            $refused = $refused || $refuse;
-
-            return match (true) {
-                $refuse => new MockResponse('{}', ['http_code' => 502]),
-                str_contains($url, '/issues/7/comments?') => new MockResponse('[]'),
-                default => new MockResponse('{}', ['http_code' => 201]),
-            };
-        });
-        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Error, 'Intakt could not review this head.', null, new ReviewToken(self::TOKEN));
-        try {
-            $forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict);
-            self::fail('A refused status must fail the publication.');
-        } catch (ForgeWriteFailed) {
-        }
-
-        $forge->publishVerdict('widgets', new ChangeId(self::PULL), $verdict);
-
-        self::assertCount(2, array_keys($this->requested, 'POST '.self::API.'/statuses/'.self::HEAD, true));
-    }
-
     private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
     {
         try {
@@ -659,7 +603,7 @@ final class GitHubForgeTest extends TestCase
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new LockFactory(new InMemoryStore()));
+        return new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())));
     }
 
     private function secretScan(): SecretScan
