@@ -54,16 +54,13 @@ final class DockerfileTest extends TestCase
     // An assignment, because set -e ignores a failing command substitution inside a command's arguments.
     public function testEachImageListsTheMissingExtensionsInAnAssignmentSoAFailingScriptAbortsTheBuild(): void
     {
-        foreach (['Dockerfile' => 'install-php-extensions', '.github/ci/Dockerfile' => 'docker-php-ext-install -j"$(nproc)"'] as $file => $install) {
-            self::assertMatchesRegularExpression('/^\s+exts="\$\(php -r "\$missing"\)"; \\\\\n\s+'.preg_quote($install, '/').' \$exts /m', $this->file($file), $file);
-        }
+        self::assertMatchesRegularExpression('/^\s+exts="\$\(php -r "\$missing"\)"; \\\\\n\s+install-php-extensions \$exts /m', $this->dockerfile());
     }
 
     public function testEachImageRechecksTheMissingExtensionsInAnAssignmentAfterTheInstall(): void
     {
-        foreach (['Dockerfile', '.github/ci/Dockerfile'] as $file) {
-            self::assertMatchesRegularExpression('/ \$exts .*\n\s+left="\$\(php -r "\$missing"\)"; \\\\\n\s+test -z "\$left"; \\\\$/m', $this->file($file), $file);
-        }
+        self::assertMatchesRegularExpression('/ \$exts .*\n\s+left="\$\(php -r "\$missing"\)"; \\\\\n\s+test -z "\$left"; \\\\$/m', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^COPY composer\.json .*\n(?:.*\n)*\s+left="\$\(php -r "\$missing"\)"; \\\\\n.*\n\s+test -z "\$left"$/m', $this->file('.github/ci/Dockerfile'));
     }
 
     public function testEachImageRunsTheSameProfileScript(): void

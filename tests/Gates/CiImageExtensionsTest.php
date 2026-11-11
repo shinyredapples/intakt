@@ -30,7 +30,7 @@ final class CiImageExtensionsTest extends TestCase
         $process = $this->check('{"require": {"php": ">=8.5", "ext-ctype": "*", "ext-intakt_absent": "*"}}');
 
         self::assertSame(1, $process->getExitCode());
-        self::assertStringContainsString('ext-intakt_absent', $process->getErrorOutput());
+        self::assertStringContainsString('composer.json requires ext-intakt_absent, which .github/ci/Dockerfile does not install', $process->getErrorOutput());
         self::assertStringNotContainsString('ext-ctype', $process->getErrorOutput());
     }
 
@@ -41,13 +41,24 @@ final class CiImageExtensionsTest extends TestCase
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
     }
 
+    public function testAComposerJsonThatDoesNotParseFailsTheBuild(): void
+    {
+        self::assertNotSame(0, $this->check('{"require": {"ext-ctype": "*"')->getExitCode());
+    }
+
+    public function testAComposerJsonWithoutRequireFailsTheBuild(): void
+    {
+        self::assertNotSame(0, $this->check('{"name": "intakt/intakt"}')->getExitCode());
+    }
+
     private function check(string $composer): Process
     {
-        if (1 !== preg_match("/^RUN php( -r '.*composer\\.json.*')$/m", (string) file_get_contents(self::DOCKERFILE), $run)) {
-            self::fail('.github/ci/Dockerfile has no RUN php -r line that checks composer.json.');
+        if (1 !== preg_match('/^RUN (set -eu; \\\\\n\s+missing=.*\n\s+test -z "\$left")$/ms', (string) file_get_contents(self::DOCKERFILE), $run)) {
+            self::fail('.github/ci/Dockerfile has no RUN that checks composer.json after copying it.');
         }
 
-        $process = Process::fromShellCommandline(PHP_BINARY.str_replace('/usr/local/share/intakt/composer.json', 'php://stdin', $run[1]), input: $composer);
+        $script = str_replace(['/usr/local/share/intakt/composer.json', 'php -r'], ['php://stdin', escapeshellarg(PHP_BINARY).' -r'], $run[1]);
+        $process = Process::fromShellCommandline($script, input: $composer);
         $process->run();
 
         return $process;
