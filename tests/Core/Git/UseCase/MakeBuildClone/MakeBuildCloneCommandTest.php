@@ -73,7 +73,7 @@ final class MakeBuildCloneCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('alpha', 'feat/task');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('has no mirror yet', $tester->getDisplay());
+        self::assertStringContainsString('has no mirror yet', $this->displayOnOneLine($tester));
     }
 
     public function testTheCommandPrintsTheReasonForARefusedProjectNameAndExitsWithOne(): void
@@ -81,7 +81,15 @@ final class MakeBuildCloneCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('../alpha', 'feat/task');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('is not a project name that can be a folder name', $tester->getDisplay());
+        self::assertStringContainsString('is not a project name that can be a folder name', $this->displayOnOneLine($tester));
+    }
+
+    /**
+     * The error block wraps at the terminal width, which depends on how long the temporary path is.
+     */
+    private function displayOnOneLine(CommandTester $tester): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
     private function whenTheCommandRuns(string $project, string $branch): CommandTester
