@@ -155,7 +155,8 @@ function measureFloors(floors, view = globalThis) {
     const size = parseFloat(view.getComputedStyle(element).fontSize);
     if (size < floors.text) found.push(`text ${size} px: ${describe(element)}`);
   }
-  for (const element of view.document.body.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])')) {
+  // A search result row is out of the tab order, since the arrow keys move between rows, yet a tap opens it.
+  for (const element of view.document.body.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="option"], [tabindex]:not([tabindex="-1"])')) {
     if (!visible(element) || inSentence(element)) continue;
     const height = tapHeight(element);
     // Rounded down for the report only, so a target just under the floor never reads as meeting it.

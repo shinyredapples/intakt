@@ -52,6 +52,23 @@ function pageOf(texts, targets = []) {
     };
 }
 
+// Answers a selector list of `tag`, `[name]`, `[name="value"]` and one `:not(...)` per part, so a test fails when the script's own selector misses an element.
+function matches(element, selector) {
+    return selector.split(',').some((part) => {
+        if (part.trim() === '*') return true;
+        const [, tag, attributes, negated] = part.trim().match(/^([a-z]*)((?:\[[\w-]+(?:="[^"]*")?\])*)(?::not\((.*)\))?$/);
+        const wanted = [...attributes.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)];
+
+        return (tag === '' || element.tagName === tag.toUpperCase())
+            && wanted.every(([, name, value]) => element.getAttribute(name) !== null && (value === undefined || element.getAttribute(name) === value))
+            && (negated === undefined || !matches(element, negated));
+    });
+}
+
+function pageSelecting(elements) {
+    return { ...pageOf([]), document: { body: { querySelectorAll: (selector) => elements.filter((element) => matches(element, selector)) } } };
+}
+
 function run(overrides) {
     return { page: 'projects', theme: 'light', width: 390, errors: [], violations: [], floors: [], ...overrides };
 }
@@ -201,6 +218,24 @@ test('a block link beside text is a touch target', () => {
     const link = new FakeElement({ tag: 'a', text: 'Open', height: 30, display: 'inline-flex', parent: row });
 
     assert.deepEqual(measureFloors(floors, pageOf([], [link])), ['target 30 px: a "Open"']);
+});
+
+test('a search result row is a touch target though it is out of the tab order', () => {
+    const row = new FakeElement({ tag: 'div', height: 30, attributes: { role: 'option', tabindex: '-1' } });
+
+    assert.deepEqual(measureFloors(floors, pageSelecting([row])), ['target 30 px: div']);
+});
+
+test('an element taken out of the tab order without a role is no touch target', () => {
+    const panel = new FakeElement({ tag: 'div', height: 30, attributes: { tabindex: '-1' } });
+
+    assert.deepEqual(measureFloors(floors, pageSelecting([panel])), []);
+});
+
+test('an element in the tab order is a touch target', () => {
+    const region = new FakeElement({ tag: 'div', height: 30, attributes: { tabindex: '0' } });
+
+    assert.deepEqual(measureFloors(floors, pageSelecting([region])), ['target 30 px: div']);
 });
 
 test('a hidden touch target is not measured', () => {

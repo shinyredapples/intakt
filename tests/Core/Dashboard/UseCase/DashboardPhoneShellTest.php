@@ -132,6 +132,11 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('min-height: 44px', $this->phoneRules()['.subtabs a, .row .t a, .ledger td a'] ?? '');
     }
 
+    public function testOnPhonesTheSectionLinksOfTheComponentsPageAreAtLeast44PixelsTall(): void
+    {
+        self::assertStringContainsString('min-height: 44px', $this->phoneRules()['.comp-nav a'] ?? '');
+    }
+
     public function testOnPhonesTheSmallestTextIs15PixelsAlsoInsideAPaneWithItsOwnTheme(): void
     {
         self::assertStringContainsString('--t13: 15px', $this->phoneRulesOf($this->sheets('tokens')[0])[':root, [data-theme]'] ?? '');
