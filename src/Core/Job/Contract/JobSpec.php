@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Job\Contract;
+
+// Holds no environment and no mount but its inputs, so no forge credential or signing key can reach a job.
+final readonly class JobSpec
+{
+    public const string WORK_AREA = '/work';
+    public const string OUTPUT_DIRECTORY = '/output';
+
+    /**
+     * @param list<string>   $command
+     * @param list<JobInput> $inputs
+     */
+    public function __construct(
+        public JobId $id,
+        public string $image,
+        public array $command,
+        public array $inputs,
+        public JobLimits $limits,
+    ) {
+    }
+}

@@ -31,7 +31,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
       - name: Build or restore the CI image
-        uses: ./.github/actions/ci-image
+        uses: $/.github/actions/ci-image
       - name: Run the journeys
         id: journeys
         env:

@@ -21,6 +21,12 @@ final class DownloadedScriptStandInsTest extends DashboardPageTestCase
         }
     }
 
+    // Two PHPUnit runs started by hand share the system temp directory, so a folder without the process in its name would let one remove the other's stand-ins.
+    public function testTheStandInFolderBelongsToThisProcessAlone(): void
+    {
+        self::assertSame(self::STAND_INS_NAMESPACE.'_'.getmypid(), basename($this->standInFolder()));
+    }
+
     // Another worker's asset mapper lists every file it maps before it loads them, so a stand-in it maps that this worker removes in between fails its request.
     public function testRemovingTheStandInsWhileAnotherWorkerListsItsAssetsBreaksNoListing(): void
     {
