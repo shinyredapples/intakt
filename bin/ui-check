@@ -1,0 +1,183 @@
+#!/usr/bin/env node
+// The UI check of docs/design/mocks/DESIGN.md: every dashboard page in a headless browser, light and dark, at 1440, 1920 and 390 wide.
+// Reports axe violations by impact, text under 15 px and touch targets under 44 px at 390, and saves a screenshot of each run.
+// Usage: bin/ui-check [address of a running dashboard, default http://localhost:7780]
+// Needs Node.js 22, Playwright and axe-core (NODE_PATH names where they are installed); CHROME_PATH names a system Chrome or Chromium.
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const DEFAULT_ADDRESS = 'http://localhost:7780';
+const OUT = path.resolve(__dirname, '..', 'var', 'ui-check');
+const THEMES = ['light', 'dark'];
+const SIZES = [
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 390, height: 844 },
+];
+const PHONE_WIDTH = 390;
+const FLOORS = { text: 15, target: 44 };
+const IMPACTS = ['critical', 'serious', 'moderate', 'minor'];
+const FAILING_IMPACTS = ['critical', 'serious'];
+const PAGES = [
+  { name: 'shell', path: '/' },
+  { name: 'components', path: '/components' },
+  { name: 'projects', path: '/projects' },
+  { name: 'reviews', path: '/reviews' },
+  { name: 'search', path: '/reviews', search: true },
+];
+
+async function main(argv) {
+  const { chromium } = require('playwright');
+  const axe = require.resolve('axe-core/axe.min.js');
+  const address = (argv[0] ?? DEFAULT_ADDRESS).replace(/\/+$/, '');
+
+  clearScreenshots();
+  const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
+  try {
+    const pages = [...PAGES, await reviewPage(browser, address)];
+    const runs = [];
+    for (const job of jobsFor(pages)) runs.push(await check(browser, address, job, axe));
+    console.log(report(runs));
+    console.log('Screenshots in var/ui-check/');
+
+    return failed(runs) ? 1 : 0;
+  } finally {
+    await browser.close();
+  }
+}
+
+function clearScreenshots() {
+  fs.mkdirSync(OUT, { recursive: true });
+  for (const file of fs.readdirSync(OUT)) if (file.endsWith('.png')) fs.unlinkSync(path.join(OUT, file));
+}
+
+// The page of one review needs a round, and the newest one on /reviews is the one a reader opens first.
+async function reviewPage(browser, address) {
+  const page = await browser.newPage();
+  try {
+    await page.goto(address + '/reviews');
+    const links = await page.$$eval('a[href]', (anchors) => anchors.map((anchor) => new URL(anchor.href).pathname));
+    const round = links.find((link) => /^\/reviews\/[^/]+$/.test(link));
+    if (round === undefined) throw new Error('no review round on ' + address + '/reviews, so the page of a review cannot be checked: start a review first');
+
+    return { name: 'review', path: round };
+  } finally {
+    await page.close();
+  }
+}
+
+function jobsFor(pages) {
+  return pages.flatMap((page) => THEMES.flatMap((theme) => SIZES.map((size) => ({ ...page, theme, ...size }))));
+}
+
+async function check(browser, address, job, axe) {
+  const context = await browser.newContext({ viewport: { width: job.width, height: job.height }, colorScheme: job.theme, bypassCSP: true });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  try {
+    await open(page, address + job.path, errors);
+    await expectTheme(page, job.theme, errors);
+    if (job.search) await openSearch(page);
+    await page.addScriptTag({ path: axe });
+    const violations = await page.evaluate(runAxe);
+    const floors = job.width === PHONE_WIDTH ? await page.evaluate(measureFloors, FLOORS) : [];
+    await page.screenshot({ path: path.join(OUT, `${job.name}-${job.theme}-${job.width}.png`), fullPage: true });
+
+    return { page: job.name, theme: job.theme, width: job.width, errors, violations, floors };
+  } finally {
+    await context.close();
+  }
+}
+
+async function open(page, url, errors) {
+  const response = await page.goto(url, { waitUntil: 'load' });
+  if (!response.ok()) errors.push(`HTTP ${response.status()} for ${url}`);
+  await page.evaluate(() => document.fonts.ready);
+}
+
+// The theme follows the browser's setting on a first visit; a page that ignores it would be checked twice in one look.
+async function expectTheme(page, theme, errors) {
+  const shown = await page.evaluate(() => document.documentElement.dataset.theme);
+  if (shown !== theme) errors.push(`the page shows the ${shown} theme instead of ${theme}`);
+}
+
+async function openSearch(page) {
+  await page.keyboard.press('Control+k');
+  await page.waitForSelector('#search:not([hidden]) #search-results > *');
+}
+
+async function runAxe() {
+  const result = await axe.run(document, { resultTypes: ['violations'] });
+
+  return result.violations.map((violation) => ({ id: violation.id, impact: violation.impact, help: violation.help, nodes: violation.nodes.length }));
+}
+
+// Runs inside the page, so it uses nothing from this file; the second parameter lets the tests hand it a fake page.
+function measureFloors(floors, view = globalThis) {
+  const visible = (element) => {
+    const box = element.getBoundingClientRect();
+
+    return box.width > 1 && box.height > 1 && view.getComputedStyle(element).visibility !== 'hidden' && element.closest('[inert], [aria-hidden="true"]') === null;
+  };
+  const describe = (element) => {
+    const name = (element.getAttribute('aria-label') ?? element.textContent).trim().replace(/\s+/g, ' ').slice(0, 40);
+
+    return element.tagName.toLowerCase() + (element.id ? '#' + element.id : '') + (element.classList[0] ? '.' + element.classList[0] : '') + (name ? ` "${name}"` : '');
+  };
+  const ownText = (element) => [...element.childNodes].some((node) => node.nodeType === 3 && node.textContent.trim() !== '');
+  const tapHeight = (element) => Math.max(element.getBoundingClientRect().height, ...[...(element.labels ?? [])].map((label) => label.getBoundingClientRect().height));
+  const found = [];
+
+  for (const element of view.document.body.querySelectorAll('*')) {
+    if (!ownText(element) || !visible(element)) continue;
+    const size = parseFloat(view.getComputedStyle(element).fontSize);
+    if (size < floors.text) found.push(`text ${size} px: ${describe(element)}`);
+  }
+  for (const element of view.document.body.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [tabindex]:not([tabindex="-1"])')) {
+    if (!visible(element)) continue;
+    const height = Math.round(tapHeight(element));
+    if (height < floors.target) found.push(`target ${height} px: ${describe(element)}`);
+  }
+
+  return found;
+}
+
+function report(runs) {
+  const lines = runs.flatMap(runLines);
+  const failing = runs.flatMap((run) => run.violations.filter((violation) => FAILING_IMPACTS.includes(violation.impact))).length;
+  const floors = runs.reduce((sum, run) => sum + run.floors.length, 0);
+  const errors = runs.reduce((sum, run) => sum + run.errors.length, 0);
+  lines.push(`UI check: ${runs.length} runs, ${failing} serious or critical axe violations, ${floors} phone floor findings, ${errors} page errors.`);
+
+  return lines.join('\n');
+}
+
+function runLines(run) {
+  const counts = IMPACTS.map((impact) => `${impact} ${run.violations.filter((violation) => violation.impact === impact).length}`);
+
+  return [
+    `${run.page} ${run.theme} ${run.width}: axe ${counts.join(', ')}` + (run.width === PHONE_WIDTH ? `, phone floor findings ${run.floors.length}` : ''),
+    ...run.violations.map((violation) => `  ${violation.impact} ${violation.id}: ${violation.help} (${violation.nodes} nodes)`),
+    ...run.floors.map((finding) => '  ' + finding),
+    ...run.errors.map((error) => '  error: ' + error),
+  ];
+}
+
+function failed(runs) {
+  return runs.some((run) => run.errors.length > 0 || run.floors.length > 0 || run.violations.some((violation) => FAILING_IMPACTS.includes(violation.impact)));
+}
+
+module.exports = { jobsFor, measureFloors, report, failed };
+
+if (require.main === module) {
+  main(process.argv.slice(2)).then(
+    (code) => (process.exitCode = code),
+    (error) => {
+      console.error('UI check stopped: ' + error.message);
+      process.exitCode = 2;
+    },
+  );
+}
