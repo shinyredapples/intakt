@@ -23,8 +23,8 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T75 to T80, T81, T32 (optional) | after the deadline |
-| M6 Shadow | see [Replacing the existing loop](#replacing-the-existing-loop) | T37 to T43 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
-| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T44 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M6 Shadow | see [Replacing the existing loop](#replacing-the-existing-loop) | T37 to T46 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T47 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
@@ -382,11 +382,13 @@ Conventions, in addition to the ones above:
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M6 Shadow | Intakt reviews every new green head of the owner's two projects alongside the existing loop, posts nothing that counts, and a report compares the verdicts | T37 to T43 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T44 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M6 Shadow | Intakt reviews every new green head of the owner's two projects alongside the existing loop, posts nothing that counts, and a report compares the verdicts | T37 to T46 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M6 Shadow
+
+T44 to T46 run in M6 alongside T37 to T43 (owner decision 2026-11-09, to start the builder chain early); their sections are under M7 Builder half.
 
 ### T37 GitHub App identity
 - **Description:** `Plugin/GitHubForge` authenticates as Intakt's own GitHub App: a short-lived installation token per forge call and per git fetch or push, minted from the App's private key; a failed exchange stops the call and never falls back to another credential. At start the installation is read back and its repositories and permissions are compared with the configured ones. Trust checks (write access through the permission API, bot accounts never steer except Intakt's own identity and its maintainer's) use this identity.
@@ -450,6 +452,8 @@ Conventions, in addition to the ones above:
 - **Evidence (part 2):** from a running install on SQLite, the published status and comment against a scripted forge double; the first loop pull request merged on Intakt's and the loop's GPT approvals (owner provides).
 
 ## M7 Builder half
+
+T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); M7 holds T47 to T69, and their sections stay here.
 
 ### T44 Job containers through the Docker Engine API
 - **Description:** A new `Core/Job` module starts each job in a fresh container: read-only root, a tmpfs work area, inputs mounted read-only, one output directory read after exit, memory and CPU limits, no forge credential or signing key, and an egress allowlist through a per-job proxy (vendor API and package registries only; `none` for check and probe jobs). Each job checks at start that what it was told it can do works (a probe file written and read back, the vendor reachable through the proxy) and runs in a reduced mode that says so otherwise. Creates `docs/architecture/differences-from-the-existing-loop.md`.
