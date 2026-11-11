@@ -145,6 +145,21 @@ The `tests` gate runs the test files in several workers at once: one for each pr
 
 `bin/check` runs the selected gates at the same time, as many at once as there are processors it may use (capped by a CPU quota of its container, rounded up), but fewer when its container has a memory limit (its own control group, each group above it and the top group it can see are all read): each test worker and each gate gets 2 GiB of it, the test workers first, because a gate such as `phpstan` may use that much (at least one gate runs). The gates that run your change's code (`tests`, `container`, `journeys`, and `phpstan`, which starts your change's kernel to dump the test container) start only after every other gate has finished, because a test could otherwise change the files or tools another gate is still checking. The other gates start first, in the usual gate order as earlier ones finish; then the `tests` gate starts first, so it never waits, and `phpstan` and `container` follow, in that order. Because the test workers need processors too, the `tests` gate counts for as many gates as it runs workers, but always leaves room for one other gate beside it. When the `tests` gate runs and more than one gate runs at once, the `phpstan` and `container` gates beside it run at the lowest processor priority, so they only use processor time the test workers leave idle; every other gate (and every gate with `--only=phpstan`, or `INTAKT_GATE_SLOTS=1`) keeps its usual priority. Set `INTAKT_GATE_SLOTS` to choose how many gates run at once (from 1 to 999); `INTAKT_GATE_SLOTS=1` runs them one after another. Any other value stops `bin/check` with exit code 2 before any gate starts. The lines, the result line and the exit code are the same however many run at once.
 
+## Listing the static gates and the gate order
+
+`bin/check --static-gates`, with no other argument, runs no gate. It prints one JSON line with two lists and exits with 0:
+
+- `static`: the gates that do not run your change's code, so they can check a copy of the change on their own (every gate except `phpstan`, `tests` and `container`);
+- `order`: every gate of a run without `--journeys`, in gate order (the order of the gate list in `bin/check`).
+
+For example:
+
+```
+{"static":["cs","rector",...,"ratchet"],"order":["cs","phpstan","rector",...,"container","ratchet"]}
+```
+
+With any other argument beside it, `bin/check` runs no gate: it prints an `error` line with its usage and exits with 2. A normal `bin/check` run is unchanged: it still starts the static gates before the gates that run your change's code.
+
 ## When `bin/check` reports a missing tool
 
 Before it runs any gate, `bin/check` checks that the programs the selected gates call are installed. When one is missing, it runs no gate, prints one line naming every missing program, such as `gitleaks not found, see docs/architecture/requirements.md`, and exits with 2. A Composer older than 2.11 is reported the same way, naming the version found, because it would ignore a release cooldown set in `composer.json`. It also needs PHP's `pcntl` and `posix` extensions, so that a Ctrl-C reaches the gates' processes; a missing one is named the same way (`PHP extension pcntl not found, ...`). Install the program or the extension (the [requirements](../architecture/requirements.md) name the version), point `INTAKT_GITLEAKS` at gitleaks if it is not on the path, or leave the gate that needs it out with `--skip=<gate>`. `bin/probe` reports a missing `unshare`, `sh` or `ip` the same way, with exit code 2, before it starts anything.
