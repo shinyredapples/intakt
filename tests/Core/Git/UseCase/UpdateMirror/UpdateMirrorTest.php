@@ -396,10 +396,12 @@ final class UpdateMirrorTest extends TestCase
         $this->update('alpha', $this->remote->path);
         $this->beforeTheFirstGitCallWith('fetch', sprintf('"$REAL" %s update-ref -d refs/heads/topic', escapeshellarg('--git-dir='.$this->remote->path.'/.git')));
 
-        $this->expectException(MirrorNotUpdated::class);
-        $this->expectExceptionMessage('HEAD names refs/heads/topic');
-
-        $this->update('alpha', $this->remote->path);
+        try {
+            $this->update('alpha', $this->remote->path);
+            self::fail('An update whose HEAD names a branch the fetch did not bring must fail.');
+        } catch (MirrorNotUpdated $failed) {
+            self::assertStringContainsString('HEAD names refs/heads/topic', $failed->getMessage());
+        }
     }
 
     private function beforeTheFirstGitCallWith(string $command, string $action): void
