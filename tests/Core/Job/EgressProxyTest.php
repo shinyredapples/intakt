@@ -29,7 +29,7 @@ final class EgressProxyTest extends TestCase
     private const string REFUSED_PLAIN_REQUEST = '1762855201.456      1 192.0.2.3 TCP_DENIED/403 3968 GET http://outside.example/upload - HIER_NONE/- text/html';
     private const string REFUSED_PORT = '1762855202.789      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT api.vendor.example:22 - HIER_NONE/- text/html';
     private const string IMAGE_DIRECTORY = __DIR__.'/../../../docker/egress-proxy';
-    private const string TUNNEL ='1762855203.012  45210 192.0.2.3 TCP_TUNNEL/200 6143 CONNECT api.vendor.example:443 - HIER_DIRECT/api.vendor.example -';
+    private const string TUNNEL = '1762855203.012  45210 192.0.2.3 TCP_TUNNEL/200 6143 CONNECT api.vendor.example:443 - HIER_DIRECT/api.vendor.example -';
 
     public function testTheProxyAllowsOnlyTlsTunnelsToTheAllowlistedHosts(): void
     {
