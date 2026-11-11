@@ -73,9 +73,11 @@ final class SweepJobContainersCommandTest extends TestCase
 
         $tester = $this->whenTheSweepRuns();
 
+        // The error block wraps at the terminal width, and the socket path grows with the checkout's path.
+        $display = (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('The Docker Engine is not reachable at', $tester->getDisplay());
-        self::assertStringContainsString('Connection refused', $tester->getDisplay());
+        self::assertStringContainsString('The Docker Engine is not reachable at', $display);
+        self::assertStringContainsString('Connection refused', $display);
     }
 
     public function testAMissingSocketFailsTheSweepWithItsPath(): void
