@@ -1,0 +1,16 @@
+{#- One review as a board card. A round from before the ledger named its change has no change, so the round names it, as on the review page; the round number falls back to the count of rounds for the same reason. -#}
+{%- set latest = review.latest -%}
+{%- set unnamed = review.change is same as('') -%}
+<article data-project="{{ review.project }}">
+    {{ include('dashboard/components/card.html.twig', {
+        number: unnamed ? latest.round : review.change,
+        project: review.project,
+        title: 'Review of ' ~ (unnamed ? 'round ' ~ latest.round : review.change),
+        href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: latest.round}),
+        meta: [
+            {text: include('dashboard/components/term.html.twig', {term: 'round', words: 'Round ' ~ (latest.number ?? review.rounds|length)}, with_context = false)},
+            {text: latest.reviewers ~ (latest.reviewers == 1 ? ' reviewer' : ' reviewers')},
+            {text: 'Cost ' ~ review.cost.reading},
+        ],
+    }, with_context = false) }}
+</article>
