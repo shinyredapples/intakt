@@ -41,13 +41,27 @@ final class PhpProfileTest extends TestCase
         self::assertNull($php->platform);
     }
 
-    public function testAMinorIsAdmittedWhenSomePatchOfItMeetsTheRule(): void
+    public function testAMinorWhoseNewestPatchesMeetTheRuleIsItsMovingTag(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.3 <8.5"}}');
 
-        self::assertTrue($php->admitsMinor('8.4'));
-        self::assertFalse($php->admitsMinor('8.5'));
-        self::assertFalse($php->admitsMinor('8.3'));
+        self::assertSame('8.4', $php->imageVersionIn('8.4'));
+        self::assertNull($php->imageVersionIn('8.5'));
+        self::assertNull($php->imageVersionIn('8.3'));
+    }
+
+    public function testARuleCappedInsideAMinorGetsItsLowestPatch(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.5"}}');
+
+        self::assertSame('8.4.1', $php->imageVersionIn('8.4'));
+    }
+
+    public function testARuleWithoutAnIncludedLowestPatchInsideAMinorHasNoVersionThere(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.5"}}');
+
+        self::assertNull($php->imageVersionIn('8.4'));
     }
 
     public function testAComposerJsonWithoutAPhpRecordIsRefused(): void

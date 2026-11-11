@@ -50,6 +50,15 @@ final class GeneratedDockerfileTest extends TestCase
         yield 'tilde patch' => ['~8.3.4', '8.3'];
         yield 'range' => ['>=8.4.3 <8.5', '8.4'];
         yield 'alternatives' => ['8.2.* || 8.3.*', '8.3'];
+        yield 'exact patch' => ['8.4.1', '8.4.1'];
+        yield 'capped inside a minor' => ['>=8.4.1 <8.4.5', '8.4.1'];
+    }
+
+    public function testATwoPartPlatformVersionWithAnExactRequirePhpIsBuiltOnThatPatch(): void
+    {
+        $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": "8.4.1"}, "config": {"platform": {"php": "8.4"}}}'));
+
+        self::assertStringStartsWith('FROM php:8.4.1-cli'."\n", $dockerfile);
     }
 
     public function testAConstraintNoSupportedMinorAdmitsIsRefused(): void

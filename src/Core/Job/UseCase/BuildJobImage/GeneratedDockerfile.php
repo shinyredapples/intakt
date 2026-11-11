@@ -34,13 +34,20 @@ final readonly class GeneratedDockerfile
         ]);
     }
 
+    // Only the platform's own minor when there is one, because the platform version is the PHP Composer resolved the lock file for.
     private static function baseVersionFor(PhpProfile $php): string
     {
-        if (null !== $php->platform) {
-            return $php->platform;
+        $minors = null === $php->platform ? self::MINORS : [implode('.', array_slice(explode('.', $php->platform), 0, 2))];
+
+        foreach ($minors as $minor) {
+            $version = $php->imageVersionIn($minor);
+
+            if (null !== $version) {
+                return $version;
+            }
         }
 
-        return array_find(self::MINORS, $php->admitsMinor(...)) ?? throw JobImageNotBuilt::noSupportedMinor($php->rule, self::MINORS);
+        throw JobImageNotBuilt::noSupportedMinor($php->rule, $minors);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 use Composer\Semver\Constraint\Constraint;
 use Composer\Semver\Constraint\ConstraintInterface;
 use Composer\Semver\Constraint\MultiConstraint;
+use Composer\Semver\Intervals;
 use Composer\Semver\VersionParser;
 use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -19,6 +20,8 @@ final readonly class PhpProfile
     private const string FILE = 'composer.json';
     private const string PLATFORM_VERSION = '/^\d+\.\d+(?:\.\d+)?$/D';
     private const string EXTENSION = '/^[a-z0-9][a-z0-9_-]*$/D';
+    // Above any patch PHP will release, so a rule that allows it allows whatever patch a moving minor tag holds.
+    private const int NEWEST_PATCH = 9999;
 
     /**
      * @param list<string> $extensions
@@ -59,9 +62,23 @@ final readonly class PhpProfile
         }
     }
 
-    public function admitsMinor(string $minor): bool
+    // The minor's moving tag only when its newest patches meet the rule, otherwise the lowest patch the rule admits in it, so an exact or capped rule gets an image whose PHP meets it.
+    public function imageVersionIn(string $minor): ?string
     {
-        return $this->constraint->matches(new VersionParser()->parseConstraints($minor.'.*'));
+        $parser = new VersionParser();
+        $intervals = Intervals::get(MultiConstraint::create([$parser->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
+
+        if ([] === $intervals) {
+            return null;
+        }
+
+        if ($this->allows($minor.'.'.self::NEWEST_PATCH)) {
+            return $minor;
+        }
+
+        $lowest = implode('.', array_slice(explode('.', strtok($intervals[0]->getStart()->getVersion(), '-') ?: ''), 0, 3));
+
+        return $this->allows($lowest) ? $lowest : null;
     }
 
     /**
