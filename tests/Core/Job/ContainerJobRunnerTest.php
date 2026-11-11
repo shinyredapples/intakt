@@ -76,7 +76,7 @@ final class ContainerJobRunnerTest extends TestCase
 {
     private const int MEMORY = 512 * 1024 * 1024;
 
-    // A line in Squid's native access log format, as the proxy writes it for a tunnel outside the allowlist.
+    // Written as Squid's native access log writes a refused tunnel, so the run reads the proxy's real format.
     private const string REFUSED_TUNNEL = "1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html\n";
 
     private string $root = '';
@@ -573,6 +573,7 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertFalse($definition['NetworkDisabled']);
         self::assertSame('intakt-job-build-1', $this->hostConfigOf('build-1')['NetworkMode']);
         self::assertArrayNotHasKey('NetworkingConfig', $definition);
+        self::assertIsArray($definition['Env']);
         self::assertContains('HTTPS_PROXY=http://egress-proxy:3128', $definition['Env']);
         self::assertContains('https_proxy=http://egress-proxy:3128', $definition['Env']);
     }
@@ -583,9 +584,10 @@ final class ContainerJobRunnerTest extends TestCase
 
         $proxy = $this->engine->proxyDefinitionOf('build-1');
         self::assertSame('intakt-egress-proxy', $proxy['Image']);
-        self::assertSame(['bridge' => [], 'intakt-job-build-1' => ['Aliases' => ['egress-proxy']]], $proxy['NetworkingConfig']['EndpointsConfig'] ?? null);
-        self::assertIsList($proxy['Env']);
-        self::assertStringContainsString("\nacl intakt_allowed dstdomain -n api.vendor.example repo.packagist.org\n", (string) $proxy['Env'][0]);
+        self::assertSame(['EndpointsConfig' => ['bridge' => [], 'intakt-job-build-1' => ['Aliases' => ['egress-proxy']]]], $proxy['NetworkingConfig']);
+        self::assertIsArray($proxy['Env']);
+        self::assertIsString($proxy['Env'][0] ?? null);
+        self::assertStringContainsString("\nacl intakt_allowed dstdomain -n api.vendor.example repo.packagist.org\n", $proxy['Env'][0]);
     }
 
     public function testARefusalFromTheProxysLogIsRecordedBeforeTheJobsEnd(): void
@@ -683,10 +685,9 @@ final class ContainerJobRunnerTest extends TestCase
      */
     private function hostConfigOf(string $job): array
     {
-        $host = $this->engine->definitionOf($job)['HostConfig'];
-        self::assertIsArray($host);
-
         /** @var array<string, mixed> $host */
+        $host = $this->engine->definitionOf($job)['HostConfig'];
+
         return $host;
     }
 

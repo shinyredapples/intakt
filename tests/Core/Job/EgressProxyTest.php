@@ -24,7 +24,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(JobSpec::class)]
 final class EgressProxyTest extends TestCase
 {
-    // Lines in Squid's native access log format, as the proxy writes them.
+    // Lines in Squid's native access log format, so the tests read what the proxy really writes.
     private const string REFUSED_TUNNEL = '1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html';
     private const string REFUSED_PLAIN_REQUEST = '1762855201.456      1 192.0.2.3 TCP_DENIED/403 3968 GET http://outside.example/upload - HIER_NONE/- text/html';
     private const string REFUSED_PORT = '1762855202.789      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT api.vendor.example:22 - HIER_NONE/- text/html';
@@ -114,7 +114,7 @@ final class EgressProxyTest extends TestCase
 
         $refusals = new EgressLog()->refusalsIn(str_replace('http://outside.example/upload', $long, self::REFUSED_PLAIN_REQUEST).PHP_EOL);
 
-        self::assertSame(substr($long, 0, 255), $refusals[0]->target ?? null);
+        self::assertSame(substr($long, 0, 255), array_first($refusals)?->target);
     }
 
     /**

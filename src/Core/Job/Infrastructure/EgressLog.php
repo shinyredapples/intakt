@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
-// Squid's native access log: time, elapsed, client, code/status, bytes, method, target, user, hierarchy/peer, type.
+// Reads Squid's native access log format (https://wiki.squid-cache.org/Features/LogFormat), because that is what the proxy writes.
 final readonly class EgressLog
 {
     // The last lines only, because the job decides how much the proxy logs and the orchestrator holds the log in memory.

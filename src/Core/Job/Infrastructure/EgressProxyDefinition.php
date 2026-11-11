@@ -50,7 +50,7 @@ final readonly class EgressProxyDefinition
         ];
     }
 
-    // Only TLS tunnels to the allowlisted hosts pass, everything else falls through to deny all, and only what is denied is logged.
+    // Everything but a TLS tunnel to an allowlisted host falls through to deny all, so the proxy denies by default; only denials are logged, so allowed traffic cannot push them out of the log.
     public function squidConfigOf(JobEgress $egress): string
     {
         return implode(PHP_EOL, [

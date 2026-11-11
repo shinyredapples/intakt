@@ -80,7 +80,7 @@ final class JobEgressTest extends TestCase
         JobEgress::to([$host]);
     }
 
-    // Three labels of 63 characters, one filling up the rest, and a top-level domain of three letters.
+    // Three labels of 63 characters and a top-level domain of three letters, so the fourth label alone sets the length.
     private function hostOfLength(int $length): string
     {
         $label = str_repeat('a', 63);

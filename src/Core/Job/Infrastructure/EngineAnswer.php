@@ -30,7 +30,7 @@ final readonly class EngineAnswer
         return is_array($answer) ? $answer : throw DockerEngineFailed::unexpected($this->call);
     }
 
-    // A log of a container without a terminal comes in frames: one byte for the stream, three zero bytes and a big-endian length before each chunk.
+    // A log of a container without a terminal comes in frames (one byte for the stream, three zero bytes and a big-endian length before each chunk), so the headers must go before the text is read.
     public function demultiplexed(int ...$statuses): string
     {
         $this->refuseOtherThan($statuses);

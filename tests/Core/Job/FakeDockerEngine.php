@@ -48,8 +48,7 @@ final class FakeDockerEngine
     /** @var list<string> */
     private array $sockets = [];
 
-    /** @var array<string, array<string, mixed>> */
-    private array $networks = [];
+    private FakeNetworks $networks;
 
     /** @var array<string, string> */
     private array $proxyLogs = [];
@@ -67,6 +66,7 @@ final class FakeDockerEngine
     public function __construct()
     {
         $this->clock = new MockClock();
+        $this->networks = new FakeNetworks();
     }
 
     public function client(): MockHttpClient
@@ -158,7 +158,7 @@ final class FakeDockerEngine
 
     public function leaveNetwork(string $job): void
     {
-        $this->networks['intakt-job-'.$job] = ['Name' => 'intakt-job-'.$job, 'Internal' => true, 'Labels' => ['intakt.job' => $job]];
+        $this->networks->leave($job);
     }
 
     /**
@@ -166,7 +166,7 @@ final class FakeDockerEngine
      */
     public function networkNames(): array
     {
-        return array_keys($this->networks);
+        return $this->networks->names();
     }
 
     /**
@@ -174,7 +174,7 @@ final class FakeDockerEngine
      */
     public function networkOf(string $name): array
     {
-        return $this->networks[$name];
+        return $this->networks->of($name);
     }
 
     /**
@@ -232,15 +232,20 @@ final class FakeDockerEngine
 
         $path = (string) preg_replace('#^/v1\.44/#', '', (string) parse_url($url, PHP_URL_PATH));
 
+        return $this->networks->answer($method, $path, $options, $this->containers) ?? $this->answerOnContainers($method, $url, $path, $options);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function answerOnContainers(string $method, string $url, string $path, array $options): MockResponse
+    {
         return match (true) {
             'POST' === $method && 'containers/create' === $path => $this->create($url, $options),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),
             'GET' === $method && 1 === preg_match('#^images/(.+)/json$#', $path, $call) => $this->image(rawurldecode($call[1])),
             1 === preg_match('#^containers/([\w.-]+)/(start|wait|json|kill|logs)$#', $path, $call) => $this->onContainer($call[1], $call[2], $options),
             'DELETE' === $method && 1 === preg_match('#^containers/([\w.-]+)$#', $path, $call) => $this->remove($call[1]),
-            'POST' === $method && 'networks/create' === $path => $this->createNetwork($options),
-            'GET' === $method && 'networks' === $path => $this->json(array_values($this->networks)),
-            'DELETE' === $method && 1 === preg_match('#^networks/([\w.-]+)$#', $path, $call) => $this->removeNetwork($call[1]),
             default => $this->json(['message' => 'page not found'], 404),
         };
     }
@@ -261,7 +266,7 @@ final class FakeDockerEngine
         }
 
         $networks = array_values(array_unique([$definition['HostConfig']['NetworkMode'], ...array_keys($definition['NetworkingConfig']['EndpointsConfig'] ?? [])]));
-        $missing = array_diff($networks, ['none', 'bridge'], array_keys($this->networks));
+        $missing = $this->networks->missing($networks);
 
         if ([] !== $missing) {
             return $this->json(['message' => sprintf('network %s not found', implode(', ', $missing))], 404);
@@ -308,7 +313,7 @@ final class FakeDockerEngine
         return $idOrName;
     }
 
-    // Framed as the engine frames the log of a container without a terminal: stream 1, three zero bytes, the length, the chunk.
+    // Framed as the engine frames the log of a container without a terminal (stream 1, three zero bytes, the length, the chunk), so the client's frame reading is exercised.
     private function logs(FakeContainer $container): MockResponse
     {
         $lines = preg_split('/(?<=\n)/', $this->proxyLogs[$container->job] ?? '', flags: PREG_SPLIT_NO_EMPTY);
@@ -319,40 +324,6 @@ final class FakeDockerEngine
         }
 
         return new MockResponse($framed, ['http_code' => 200, 'response_headers' => ['content-type' => 'application/vnd.docker.multiplexed-stream']]);
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function createNetwork(array $options): MockResponse
-    {
-        /** @var array{Name: string, Internal: bool, Labels: array<string, string>} $network */
-        $network = json_decode(is_string($options['body'] ?? null) ? $options['body'] : '{}', true, flags: JSON_THROW_ON_ERROR);
-
-        if (isset($this->networks[$network['Name']])) {
-            return $this->json(['message' => sprintf('network with name %s already exists', $network['Name'])], 409);
-        }
-
-        $this->networks[$network['Name']] = $network;
-
-        return $this->json(['Id' => 'feed'.$network['Name']], 201);
-    }
-
-    private function removeNetwork(string $name): MockResponse
-    {
-        if (!isset($this->networks[$name])) {
-            return $this->json(['message' => sprintf('network %s not found', $name)], 404);
-        }
-
-        foreach ($this->containers as $container) {
-            if (in_array($name, $container->networks, true)) {
-                return $this->json(['message' => sprintf('error while removing network: network %s has active endpoints', $name)], 403);
-            }
-        }
-
-        unset($this->networks[$name]);
-
-        return new MockResponse('', ['http_code' => 204]);
     }
 
     private function start(FakeContainer $container): MockResponse
