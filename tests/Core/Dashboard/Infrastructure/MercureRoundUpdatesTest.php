@@ -19,7 +19,6 @@ use Symfony\Component\Mercure\Update;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 use Twig\Error\LoaderError;
-use Twig\Loader\ArrayLoader;
 use Twig\Loader\FilesystemLoader;
 
 // Through the real MercureLiveUpdates over a MockHub, because what callers see is the update that reaches the hub.
@@ -127,14 +126,16 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testATemplateThatFailsToRenderIsLoggedWithItsRoundAndStreamAndPublishesNothing(): void
     {
-        $updates = new MercureRoundUpdates($this->live(), new Environment(new ArrayLoader()), $this->log);
+        $failure = new LoaderError('Template "dashboard/stream/tool_called.stream.html.twig" is not defined.');
+        $twig = self::createStub(Environment::class);
+        $twig->method('render')->willThrowException($failure);
 
-        $updates->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+        new MercureRoundUpdates($this->live(), $twig, $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
 
-        $logs = $this->log->cleanLogs();
-        self::assertSame([['warning', 'A live round update was not rendered.']], array_map(static fn (array $record): array => [$record[0], $record[1]], $logs));
-        self::assertSame(['round' => self::ROUND, 'stream' => 'tool_called'], array_diff_key($logs[0][2], ['exception' => true]));
-        self::assertInstanceOf(LoaderError::class, $logs[0][2]['exception']);
+        self::assertSame(
+            [['warning', 'A live round update was not rendered.', ['round' => self::ROUND, 'stream' => 'tool_called', 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
         self::assertSame([], $this->published);
     }
 
