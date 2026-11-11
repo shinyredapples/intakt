@@ -143,11 +143,11 @@ final class SearchControllerTest extends DashboardPageTestCase
         $rows = $this->browser->request('GET', '/search?q=a')->filter('.res');
 
         self::assertGreaterThan(1, $rows->count());
-        foreach ($rows as $row) {
-            self::assertSame('option', $row->getAttribute('role'));
-            self::assertSame('-1', $row->getAttribute('tabindex'));
-            self::assertSame('false', $row->getAttribute('aria-selected'));
-        }
+        $rows->each(static function (Crawler $row): void {
+            self::assertSame('option', $row->attr('role'));
+            self::assertSame('-1', $row->attr('tabindex'));
+            self::assertSame('false', $row->attr('aria-selected'));
+        });
     }
 
     public function testAnEmptyQueryShowsTheNewestRoundsAsRecentThenTheActions(): void
