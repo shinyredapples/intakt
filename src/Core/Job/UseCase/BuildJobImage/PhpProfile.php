@@ -76,9 +76,31 @@ final readonly class PhpProfile
             return $minor;
         }
 
-        $lowest = implode('.', array_slice(explode('.', explode('-', $intervals[0]->getStart()->getVersion())[0]), 0, 3));
+        foreach ($intervals as $interval) {
+            $lowest = $this->lowestPatchFrom($interval->getStart()->getVersion());
 
-        return $this->allows($lowest) ? $lowest : null;
+            if (null !== $lowest) {
+                return $lowest;
+            }
+        }
+
+        return null;
+    }
+
+    // The patch after the start too, because a start the rule excludes (">8.4.1") or a fourth part ("8.4.1.5") admits only the next patch.
+    private function lowestPatchFrom(string $start): ?string
+    {
+        [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $start)[0]), 0, 3));
+
+        foreach ([$patch, $patch + 1] as $candidate) {
+            $version = sprintf('%d.%d.%d', $major, $minor, $candidate);
+
+            if ($this->allows($version)) {
+                return $version;
+            }
+        }
+
+        return null;
     }
 
     /**

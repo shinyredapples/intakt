@@ -52,6 +52,7 @@ final class GeneratedDockerfileTest extends TestCase
         yield 'alternatives' => ['8.2.* || 8.3.*', '8.3'];
         yield 'exact patch' => ['8.4.1', '8.4.1'];
         yield 'capped inside a minor' => ['>=8.4.1 <8.4.5', '8.4.1'];
+        yield 'capped with an excluded lower bound' => ['>8.4.1 <8.4.5', '8.4.2'];
     }
 
     public function testATwoPartPlatformVersionWithAnExactRequirePhpIsBuiltOnThatPatch(): void

@@ -57,11 +57,25 @@ final class PhpProfileTest extends TestCase
         self::assertSame('8.4.1', $php->imageVersionIn('8.4'));
     }
 
-    public function testARuleWithoutAnIncludedLowestPatchInsideAMinorHasNoVersionThere(): void
+    public function testARuleThatExcludesItsLowerBoundGetsThePatchAfterIt(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.5"}}');
 
+        self::assertSame('8.4.2', $php->imageVersionIn('8.4'));
+    }
+
+    public function testARuleThatAdmitsNoPatchOfAMinorHasNoVersionThere(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.2"}}');
+
         self::assertNull($php->imageVersionIn('8.4'));
+    }
+
+    public function testALaterRangeIsUsedWhenTheFirstAdmitsNoPatch(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.2 || 8.4.7"}}');
+
+        self::assertSame('8.4.7', $php->imageVersionIn('8.4'));
     }
 
     public function testAComposerJsonWithoutAPhpRecordIsRefused(): void

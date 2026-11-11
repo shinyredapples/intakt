@@ -10,6 +10,7 @@ use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
@@ -50,6 +51,40 @@ final class PhpInImageTest extends TestCase
             ->willReturn($this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}'));
 
         new PhpInImage($runner)->verify('intakt-job/demo:main', self::IMAGE, PhpProfile::fromComposerJson(self::COMPOSER_JSON));
+    }
+
+    public function testTwoProbesOfOneImageThatOverlapRunUnderTheirOwnJobIds(): void
+    {
+        $profile = PhpProfile::fromComposerJson(self::COMPOSER_JSON);
+        $runner = new class($this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}'), $profile, self::IMAGE) implements JobRunner {
+            /** @var array<string, true> */
+            private array $running = [];
+            public ?PhpInImage $images = null;
+
+            public function __construct(private readonly JobResult $result, private readonly PhpProfile $profile, private readonly string $image)
+            {
+            }
+
+            public function run(JobSpec $spec): JobResult
+            {
+                if (isset($this->running[$spec->id->value])) {
+                    throw JobRefused::alreadyRunning($spec->id);
+                }
+
+                $this->running[$spec->id->value] = true;
+
+                if (1 === count($this->running)) {
+                    $this->images?->verify('intakt-job/other:main', $this->image, $this->profile);
+                }
+
+                unset($this->running[$spec->id->value]);
+
+                return $this->result;
+            }
+        };
+        $runner->images = new PhpInImage($runner);
+
+        self::assertSame('8.5.12', $runner->images->verify('intakt-job/demo:main', self::IMAGE, $profile));
     }
 
     public function testAnotherPhpIsRefusedWithBothVersions(): void

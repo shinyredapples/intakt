@@ -57,7 +57,8 @@ final readonly class PhpInImage
     private function probe(string $tag, string $image): array
     {
         $result = $this->jobs->run(new JobSpec(
-            new JobId('image-probe-'.substr(hash('xxh128', $image), 0, 16)),
+            // A random part as well, because two builds that end in the same image id would otherwise share the probe's job id and container name.
+            new JobId(sprintf('image-probe-%s-%s', substr(hash('xxh128', $image), 0, 16), bin2hex(random_bytes(8)))),
             $image,
             ['php', '-r', sprintf(self::PROBE, JobSpec::OUTPUT_DIRECTORY, self::ANSWER)],
             [],
