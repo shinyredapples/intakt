@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
+use RuntimeException;
 use SplFileInfo;
 
 // Reads what docker/job/start-check.sh left in the output directory; the job ran after it and could rewrite it, so anything malformed is a failure, never a pass.
@@ -37,11 +38,23 @@ final readonly class StartCheckReport
             return [new StartCheckFailure(StartCheck::Report, sprintf('the report is larger than %d bytes', self::MAX_BYTES))];
         }
 
-        $contents = file_get_contents($report->getPathname());
+        $contents = $this->contentsOf($report);
 
-        return false === $contents
+        return null === $contents
             ? [new StartCheckFailure(StartCheck::Report, 'the report cannot be read')]
             : array_slice($this->failuresListedIn($contents), 0, self::MAX_FAILURES);
+    }
+
+    // SplFileObject throws instead of warning, so an unreadable report never reaches the runner's error handler; one byte over the limit keeps a report that grew after the size check from passing.
+    private function contentsOf(SplFileInfo $report): ?string
+    {
+        try {
+            $contents = $report->openFile('r')->fread(self::MAX_BYTES + 1);
+        } catch (RuntimeException) {
+            return null;
+        }
+
+        return false === $contents || strlen($contents) > self::MAX_BYTES ? null : $contents;
     }
 
     /**

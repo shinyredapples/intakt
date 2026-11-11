@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job;
 
+use ErrorException;
 use Intakt\Core\Job\Infrastructure\StartCheck;
 use Intakt\Core\Job\Infrastructure\StartCheckFailure;
 use Intakt\Core\Job\Infrastructure\StartCheckReport;
@@ -119,12 +120,20 @@ final class StartCheckReportTest extends TestCase
         self::assertSame([StartCheck::Report], $this->checksOf(null));
     }
 
-    public function testAnUnreadableReportIsAFailedReport(): void
+    public function testAnUnreadableReportIsAFailedReportEvenWhenWarningsAreThrown(): void
     {
         file_put_contents($this->output.'/'.StartCheckReport::FILE, "end\n");
         chmod($this->output.'/'.StartCheckReport::FILE, 0o000);
+        // The runner's error handler turns a warning into an exception, which would abort the job before its end is recorded.
+        set_error_handler(static fn (int $level, string $message): never => throw new ErrorException($message, 0, $level));
 
-        self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], @new StartCheckReport()->failuresIn($this->output));
+        try {
+            $failures = new StartCheckReport()->failuresIn($this->output);
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
     }
 
     /**
