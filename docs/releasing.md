@@ -29,6 +29,10 @@ Releases are cut by the owner. A build or review job never sets a tag and never 
 3. Push the tag: `git push origin v0.1.0`.
 4. On the [releases page](https://github.com/shinyredapples/intakt/releases) create a release from that tag, choose "Generate release notes", tick "Set as a pre-release" (for every version before `v1.0.0`), and publish.
 
+## The container image
+
+Every pushed release tag publishes the app image to GitHub's container registry: `.github/workflows/release-image.yml` builds it from the tag, runs `docker/smoke-test.sh` on it, and pushes `ghcr.io/shinyredapples/intakt:<version>` (the tag without its `v`, for example `0.1.0`) and `ghcr.io/shinyredapples/intakt:latest`. A failed smoke test pushes nothing. For a tag cut before the workflow existed, or after a failed run, publish it by hand: `gh workflow run release-image.yml -f tag=v0.1.0`. The package takes the repository's visibility, so while the repository is private, pulling needs a GitHub token with `read:packages` (`docker login ghcr.io`).
+
 ## Release notes
 
 GitHub generates the notes from the merged pull requests since the previous tag, and groups them only by pull-request label. So `.github/workflows/release-labels.yml` labels every pull request with the Conventional Commit type of its title (the part before the optional scope, `!` and colon) when it is opened, reopened or its title is edited: `feat`, `fix` or `docs`, and it removes a label of the three that no longer matches. It creates a missing label first. It never checks out the pull request, and it skips a pull request from a fork, whose token cannot write labels.
