@@ -32,7 +32,7 @@ flowchart LR
 | **GitHub** | its own GitHub App, to be created by the setup wizard with one confirmation (planned; for now you create it and set it up through environment variables, see [setting up Intakt](setting-up-intakt.md#installing)), installed only on the repositories you choose |
 | **Gitea** | a bot user of its own |
 
-Intakt always acts as **itself**, never as you, so its comments and your approvals can always be told apart. It reads the tasks, opens and updates pull requests, reads CI results, comments and merges. It learns about changes by checking the forge regularly, and checks more often while something is waiting. If GitHub says Intakt has used up its hourly allowance of requests, Intakt stops asking until the time GitHub names. This needs no public address. Notifications from the forge (webhooks) are an optional extra for installs that have one. *(planned)*
+Intakt always acts as **itself**, never as you, so its comments and your approvals can always be told apart. It reads the tasks, opens and updates pull requests, reads CI results, comments and merges. It learns about changes by checking the forge regularly, and checks more often while something is waiting. If GitHub says Intakt has used up its hourly allowance of requests, Intakt stops asking until the time GitHub names. When less than a fifth of that allowance is left (you can change the share), Intakt reads a list of open pull requests at most once a minute, for all your projects together, and keeps the rest for the checks, reviews and merges that cannot wait. This needs no public address. Notifications from the forge (webhooks) are an optional extra for installs that have one. *(planned)*
 
 ## AI companies (vendors)
 
