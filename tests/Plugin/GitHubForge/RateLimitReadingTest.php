@@ -34,6 +34,6 @@ final class RateLimitReadingTest extends TestCase
 
     private function reading(int $remaining, int $limit): RateLimitReading
     {
-        return new RateLimitReading($remaining, $limit, new DateTimeImmutable('2026-11-25 10:30:00 UTC'));
+        return new RateLimitReading($remaining, $limit, new DateTimeImmutable('2026-11-25T10:30:00Z'));
     }
 }
