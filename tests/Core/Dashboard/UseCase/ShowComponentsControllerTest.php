@@ -55,6 +55,9 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'forced card focus' => ['a.card.is-focus'];
         yield 'forced input focus' => ['input.input.is-focus[aria-label]'];
         yield 'forced sub-tab focus' => ['.subtabs a.is-focus'];
+        yield 'search results' => ['.palette.static [role="group"] > .grp svg.i'];
+        yield 'selected search result' => ['.palette.static .res[role="option"][aria-selected="true"]'];
+        yield 'no search results' => ['.palette.static .none button[data-search-action="clear-search"]'];
         yield 'toast' => ['.toast'];
         yield 'skeleton' => ['.skel-card'];
         yield 'empty state' => ['.empty'];
