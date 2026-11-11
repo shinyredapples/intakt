@@ -1,6 +1,6 @@
 name: release-image
-# Publishes the app image to GitHub's container registry for every release tag (docs/releasing.md). Only the owner pushes
-# release tags; no pull request runs this workflow, so pull-request code never runs with its write token.
+# Publishes the app image to GitHub's container registry for every release tag (docs/releasing.md). Release tags are
+# owner-only (docs/releasing.md#cutting-a-release-by-hand); no pull request runs this workflow, so pull-request code never runs with its write token.
 # workflow_dispatch publishes the image of an existing tag (a tag cut before this workflow, or a failed run). The script
 # runs from this workflow's revision and builds the tag from its own checkout in release/, so an older tag works too.
 on:
