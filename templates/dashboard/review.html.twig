@@ -3,22 +3,36 @@
 {% block title %}Review {{ review.change ?: round }} - Intakt{% endblock %}
 
 {% block body %}
-<h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
 {% set total = review.tokens %}
-<p class="summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: {{ review.cost.reading }}.</p>
-{% if review.source is not null and review.nextNumber is not null %}
-<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
-    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
-    <input type="hidden" name="number" value="{{ review.nextNumber }}">
-    <button type="submit">Start the next round on the current head</button>
-</form>
-{% else %}
-<p class="no-start">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
-{% endif %}
+{% set can_start = review.source is not null and review.nextNumber is not null %}
+<div class="page-head">
+    <div>
+        <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+        <p class="lead summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: {{ review.cost.reading }}.</p>
+        {% if not can_start %}
+        <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
+        {% endif %}
+    </div>
+    {% if can_start %}
+    <div class="actions">
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
+            <input type="hidden" name="number" value="{{ review.nextNumber }}">
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the next round on the current head'}, with_context = false) }}
+        </form>
+    </div>
+    {% endif %}
+</div>
 {% for reviewed in review.rounds %}
-<section class="round" id="round-{{ reviewed.round }}">
-    <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
-    <p>Round <code>{{ reviewed.round }}</code>, started {{ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') }} UTC, <span class="{{ reviewed.state.name == 'Judged' ? 'state-judged' : 'state-running' }}">{{ reviewed.state.value }}</span>.</p>
+<section class="section round" id="round-{{ reviewed.round }}">
+    <div class="round-head">
+        <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+        {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
+    </div>
+    {{ include('dashboard/components/meta.html.twig', {facts: [
+        {text: reviewed.round, mono: true},
+        {icon: 'clock', text: 'Started ' ~ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
+    ]}, with_context = false) }}
 
     {% set unfinished = reviewed.state.name != 'Judged' %}
     <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
@@ -28,10 +42,11 @@
     {% endif %}
 
     <h3>Reviewers</h3>
-    <p>{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
+    <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
     {% if reviewed.outcomes is not empty %}
-    <table class="reviewers">
-        <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th>Findings</th><th>Note</th><th>Stop</th></tr></thead>
+    <div class="table-scroll">
+    <table class="ledger reviewers">
+        <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th class="num">Findings</th><th>Note</th><th>Stop</th></tr></thead>
         <tbody>
         {% for outcome in reviewed.outcomes %}
             <tr>
@@ -39,19 +54,20 @@
                 <td>{{ outcome.tier }}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</td>
                 <td>{{ outcome.decision ?? '' }}{% if outcome.decision is not null and outcome.mode.name == 'Shadow' %} (shadow){% endif %}</td>
-                <td>{{ outcome.findings ?? '' }}</td>
+                <td class="num">{{ outcome.findings ?? '' }}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if unfinished and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">
-                    <button type="submit">Stop this reviewer</button>
+                    {{ include('dashboard/components/button.html.twig', {kind: 'danger', small: true, type: 'submit', label: 'Stop this reviewer', confirm: 'Click again to stop'}, with_context = false) }}
                 </form>{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
+    </div>
     {% endif %}
     {% if unfinished %}
-    <div id="round-{{ reviewed.round }}-live">
+    <div class="live-reviewers" id="round-{{ reviewed.round }}-live">
     {% for outcome in reviewed.outcomes %}
         {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
     {% endfor %}
@@ -60,21 +76,22 @@
 
     <h3>Findings and the judge's call</h3>
     {% if reviewed.state.name != 'Judged' %}
-    <p>The judge has not judged this round yet.</p>
+    <p class="muted">The judge has not judged this round yet.</p>
     {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
-    <p>The reviewers reported no findings, so the judge had nothing to mark.</p>
+    <p class="muted">The reviewers reported no findings, so the judge had nothing to mark.</p>
     {% elseif reviewed.findings is empty %}
-    <p>This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
+    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
     {% else %}
     {% if not reviewed.findingTextRecorded %}
-    <p>This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
+    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
     {% endif %}
-    <table class="findings">
+    <div class="table-scroll">
+    <table class="ledger findings">
         <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
         <tbody>
         {% for finding in reviewed.findings %}
             <tr>
-                <td>{{ finding.id }}</td>
+                <td class="mono">{{ finding.id }}</td>
                 <td>{{ finding.severity ?? 'not recorded' }}</td>
                 <td>{{ finding.text ?? 'not recorded' }}</td>
                 <td>{{ finding.call.value }}</td>
@@ -82,23 +99,26 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
     {% endif %}
 
     <h3>Tokens and cost</h3>
-    <table class="tokens">
-        <thead><tr><th>Prompt</th><th>Cache read</th><th>Cache write</th><th>Cached</th><th>Completion</th><th>Total</th><th>Cost</th></tr></thead>
+    <div class="table-scroll">
+    <table class="ledger tokens">
+        <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost</th></tr></thead>
         <tbody>
             <tr>
-                <td>{{ reviewed.tokens.prompt }}</td>
-                <td>{{ reviewed.tokens.cacheRead }}</td>
-                <td>{{ reviewed.tokens.cacheWrite }}</td>
-                <td>{{ reviewed.tokens.cached }}</td>
-                <td>{{ reviewed.tokens.completion }}</td>
-                <td>{{ reviewed.tokens.total }}</td>
+                <td class="num">{{ reviewed.tokens.prompt }}</td>
+                <td class="num">{{ reviewed.tokens.cacheRead }}</td>
+                <td class="num">{{ reviewed.tokens.cacheWrite }}</td>
+                <td class="num">{{ reviewed.tokens.cached }}</td>
+                <td class="num">{{ reviewed.tokens.completion }}</td>
+                <td class="num">{{ reviewed.tokens.total }}</td>
                 <td>{{ reviewed.cost.reading }}</td>
             </tr>
         </tbody>
     </table>
+    </div>
 </section>
 {% endfor %}
 {% endblock %}

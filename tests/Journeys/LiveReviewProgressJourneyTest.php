@@ -78,7 +78,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         // Without a live listener, because the instance has no hub secret to authorize one, so the updates are read from the recording hub.
         $page = $this->visit('/reviews/'.$round);
 
-        self::assertSame('in progress', $page->filter('.state-running')->text());
+        self::assertSame('in progress', mb_strtolower($page->filter('.state-running')->text()));
         self::assertMatchesRegularExpression(self::PROGRESS, $page->filter('#round-'.$round.'-state')->text());
 
         return $page;

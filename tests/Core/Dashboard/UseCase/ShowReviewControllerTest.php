@@ -174,7 +174,35 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertStringContainsString('The judge has not judged this round yet.', $crawler->filter('#round-round-1')->text());
-        self::assertSelectorTextContains('#round-round-1 .state-running', 'in progress');
+        self::assertSelectorTextContains('#round-round-1 .chip.state-running', 'In progress');
+    }
+
+    public function testAJudgedRoundCarriesTheJudgedChip(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Judged', 'Judged'], $crawler->filter('section.round .chip.state-judged')->each(static fn (Crawler $chip): string => $chip->text()));
+    }
+
+    public function testThePageHeadHoldsTheTitleAndTheSummaryAsItsLead(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('Review of feat/thing in alpha', $crawler->filter('.page-head h1')->text());
+        self::assertCount(1, $crawler->filter('.page-head p.summary.lead'));
+    }
+
+    public function testEachRoundNamesItsIdAndStartOnItsMetaLine(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['round-1', 'Started 2026-10-28 12:00:00 UTC'], $crawler->filter('#round-round-1 .meta > span')->each(static fn (Crawler $fact): string => $fact->text()));
     }
 
     public function testEachRoundShowsItsTokensAndTheReviewTheirSumWithUnknownCostWhenTheModelHasNoPrice(): void
