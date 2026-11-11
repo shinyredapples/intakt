@@ -61,8 +61,8 @@ final class SweepJobContainersCommandTest extends TestCase
         $tester = $this->whenTheSweepRuns();
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString(sprintf('removed %s (job build-7)', $orphan), $tester->getDisplay());
-        self::assertStringContainsString('1 orphaned job containers removed.', $tester->getDisplay());
+        self::assertStringContainsString(sprintf('removed %s (job build-7)', $orphan), $this->display($tester));
+        self::assertStringContainsString('1 orphaned job containers removed.', $this->display($tester));
         self::assertSame([], $this->engine->containerIds());
         self::assertSame([LedgerEventKind::JobContainerRemoved], $this->ledger->kinds());
     }
@@ -74,8 +74,8 @@ final class SweepJobContainersCommandTest extends TestCase
         $tester = $this->whenTheSweepRuns();
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('The Docker Engine is not reachable at', $tester->getDisplay());
-        self::assertStringContainsString('Connection refused', $tester->getDisplay());
+        self::assertStringContainsString('The Docker Engine is not reachable at', $this->display($tester));
+        self::assertStringContainsString('Connection refused', $this->display($tester));
     }
 
     public function testAMissingSocketFailsTheSweepWithItsPath(): void
@@ -85,7 +85,7 @@ final class SweepJobContainersCommandTest extends TestCase
         $tester = $this->whenTheSweepRuns($missing);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('there is no socket at', $tester->getDisplay());
+        self::assertStringContainsString('there is no socket at', $this->display($tester));
         self::assertSame([], $this->engine->sockets());
     }
 
@@ -99,5 +99,11 @@ final class SweepJobContainersCommandTest extends TestCase
         $tester->execute([]);
 
         return $tester;
+    }
+
+    // The error block wraps at the terminal width, and the socket path in it sets where, so a phrase can break across lines in one checkout and not in another.
+    private function display(CommandTester $tester): string
+    {
+        return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 }
