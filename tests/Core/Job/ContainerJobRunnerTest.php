@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Job;
 
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
@@ -19,12 +20,18 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Job\Infrastructure\ContainerJobRunner;
 use Intakt\Core\Job\Infrastructure\ContainerState;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
+use Intakt\Core\Job\Infrastructure\EgressLog;
+use Intakt\Core\Job\Infrastructure\EgressProxy;
+use Intakt\Core\Job\Infrastructure\EgressProxyDefinition;
+use Intakt\Core\Job\Infrastructure\EgressRefusal;
+use Intakt\Core\Job\Infrastructure\EgressRoute;
 use Intakt\Core\Job\Infrastructure\EngineAnswer;
 use Intakt\Core\Job\Infrastructure\JobContainer;
 use Intakt\Core\Job\Infrastructure\JobContainerDefinition;
 use Intakt\Core\Job\Infrastructure\JobContainers;
 use Intakt\Core\Job\Infrastructure\JobLedger;
 use Intakt\Core\Job\Infrastructure\JobLocks;
+use Intakt\Core\Job\Infrastructure\JobNetwork;
 use Intakt\Core\Job\Infrastructure\JobOutputDirectories;
 use Intakt\Core\Job\Infrastructure\OrphanedJobs;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -44,8 +51,15 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(JobLocks::class)]
 #[CoversClass(OrphanedJobs::class)]
 #[CoversClass(DockerEngine::class)]
+#[CoversClass(EgressProxy::class)]
+#[CoversClass(EgressRoute::class)]
+#[CoversClass(EngineAnswer::class)]
+#[UsesClass(EgressProxyDefinition::class)]
+#[UsesClass(EgressLog::class)]
+#[UsesClass(EgressRefusal::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(JobNetwork::class)]
 #[UsesClass(ContainerState::class)]
-#[UsesClass(EngineAnswer::class)]
 #[UsesClass(JobContainer::class)]
 #[UsesClass(JobSpec::class)]
 #[UsesClass(JobId::class)]
@@ -61,6 +75,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class ContainerJobRunnerTest extends TestCase
 {
     private const int MEMORY = 512 * 1024 * 1024;
+
+    // A line in Squid's native access log format, as the proxy writes it for a tunnel outside the allowlist.
+    private const string REFUSED_TUNNEL = "1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html\n";
 
     private string $root = '';
     private FakeDockerEngine $engine;
@@ -123,7 +140,7 @@ final class ContainerJobRunnerTest extends TestCase
 
     public function testMemoryAndCpuLimitsAreSetOnTheJobsOwnContainer(): void
     {
-        $this->whenJobRuns(new JobSpec(new JobId('build-1'), 'sample:latest', ['true'], [], new JobLimits(self::MEMORY, 1.5, 60)));
+        $this->whenJobRuns(new JobSpec(new JobId('build-1'), 'sample:latest', ['true'], [], new JobLimits(self::MEMORY, 1.5, 60), JobEgress::none()));
 
         $host = $this->engine->definitionOf('build-1')['HostConfig'];
         self::assertIsArray($host);
@@ -531,12 +548,146 @@ final class ContainerJobRunnerTest extends TestCase
         $this->whenJobRuns($this->spec('build-1'));
     }
 
+    public function testACheckOrProbeJobGetsNoNetworkAndNoProxy(): void
+    {
+        $this->whenJobRuns($this->spec('check-1'));
+
+        $definition = $this->engine->definitionOf('check-1');
+        self::assertTrue($definition['NetworkDisabled']);
+        self::assertSame('none', $this->hostConfigOf('check-1')['NetworkMode']);
+        self::assertFalse($this->engine->hasCreatedProxy('check-1'));
+        self::assertSame([], $this->engine->networkNames());
+    }
+
+    public function testAJobWithAnAllowlistIsOnlyOnItsOwnInternalNetworkWithItsProxy(): void
+    {
+        $this->engine->behaveAs('build-1', function (string $output): array {
+            self::assertSame(['Name' => 'intakt-job-build-1', 'Internal' => true, 'Labels' => ['intakt.job' => 'build-1']], $this->engine->networkOf('intakt-job-build-1'));
+
+            return [0, false];
+        });
+
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+
+        $definition = $this->engine->definitionOf('build-1');
+        self::assertFalse($definition['NetworkDisabled']);
+        self::assertSame('intakt-job-build-1', $this->hostConfigOf('build-1')['NetworkMode']);
+        self::assertArrayNotHasKey('NetworkingConfig', $definition);
+        self::assertContains('HTTPS_PROXY=http://egress-proxy:3128', $definition['Env']);
+        self::assertContains('https_proxy=http://egress-proxy:3128', $definition['Env']);
+    }
+
+    public function testTheProxyIsOnTheJobsNetworkAndTheBridgeAndAllowsOnlyTheJobsHosts(): void
+    {
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example', 'repo.packagist.org'])));
+
+        $proxy = $this->engine->proxyDefinitionOf('build-1');
+        self::assertSame('intakt-egress-proxy', $proxy['Image']);
+        self::assertSame(['bridge' => [], 'intakt-job-build-1' => ['Aliases' => ['egress-proxy']]], $proxy['NetworkingConfig']['EndpointsConfig'] ?? null);
+        self::assertIsList($proxy['Env']);
+        self::assertStringContainsString("\nacl intakt_allowed dstdomain -n api.vendor.example repo.packagist.org\n", (string) $proxy['Env'][0]);
+    }
+
+    public function testARefusalFromTheProxysLogIsRecordedBeforeTheJobsEnd(): void
+    {
+        $this->engine->proxyLogs('build-1', self::REFUSED_TUNNEL);
+
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+
+        self::assertSame([LedgerEventKind::JobEgressRefused, LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame(['job' => 'build-1', 'method' => 'CONNECT', 'target' => 'outside.example:443'], $this->ledger->payloads()[0]);
+    }
+
+    public function testTheProxyAndTheNetworkAreRemovedAfterTheJob(): void
+    {
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+
+        self::assertTrue($this->engine->hasCreatedProxy('build-1'));
+        self::assertSame([], $this->engine->containerIds());
+        self::assertSame([], $this->engine->networkNames());
+    }
+
+    public function testTheProxyAndTheNetworkAreRemovedWhenTheJobFails(): void
+    {
+        $this->engine->garbleState();
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('A garbled state must fail the job.');
+        } catch (DockerEngineFailed) {
+            self::assertSame([], $this->engine->containerIds());
+            self::assertSame([], $this->engine->networkNames());
+        }
+    }
+
+    public function testAProxyLogTheEngineFramedWronglyFailsTheJobAndLeavesNothingBehind(): void
+    {
+        $this->engine->proxyLogs('build-1', '');
+        $this->engine->breakLogFrames('build-1');
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('A broken log frame must fail the job.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::unexpected('containers/intakt-egress-build-1/logs')->getMessage(), $failure->getMessage());
+            self::assertSame([], $this->engine->containerIds());
+            self::assertSame([], $this->engine->networkNames());
+        }
+    }
+
+    public function testTheProxyAndNetworkOfACrashedRunOfTheSameJobAreRemovedBeforeItRunsAgain(): void
+    {
+        $proxy = $this->engine->leaveRunning('build-1', 'intakt-egress-');
+        $this->engine->leaveNetwork('build-1');
+
+        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+        self::assertSame([LedgerEventKind::JobContainerRemoved, LedgerEventKind::JobNetworkRemoved, LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame(['job' => 'build-1', 'container' => $proxy], $this->ledger->payloads()[0]);
+        self::assertSame(['job' => 'build-1', 'network' => 'intakt-job-build-1'], $this->ledger->payloads()[1]);
+        self::assertSame([], $this->engine->networkNames());
+    }
+
+    public function testTheNetworkOfALivingRunIsLeftAlone(): void
+    {
+        $this->engine->leaveNetwork('build-0');
+        $holder = new LockFactory($this->locks)->createLock('intakt-job-build-0', ttl: null);
+        self::assertTrue($holder->acquire());
+
+        $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame(['intakt-job-build-0'], $this->engine->networkNames());
+    }
+
+    public function testTheNetworkOfAGoneRunIsRemoved(): void
+    {
+        $this->engine->leaveNetwork('build-0');
+
+        $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame([], $this->engine->networkNames());
+        self::assertSame([LedgerEventKind::JobNetworkRemoved, LedgerEventKind::JobEnded], $this->ledger->kinds());
+    }
+
     /**
      * @param list<JobInput> $inputs
      */
-    private function spec(string $job, array $inputs = []): JobSpec
+    private function spec(string $job, array $inputs = [], ?JobEgress $egress = null): JobSpec
     {
-        return new JobSpec(new JobId($job), 'sample:latest', ['composer', 'test'], $inputs, new JobLimits(self::MEMORY, 1.0, 60));
+        return new JobSpec(new JobId($job), 'sample:latest', ['composer', 'test'], $inputs, new JobLimits(self::MEMORY, 1.0, 60), $egress ?? JobEgress::none());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function hostConfigOf(string $job): array
+    {
+        $host = $this->engine->definitionOf($job)['HostConfig'];
+        self::assertIsArray($host);
+
+        /** @var array<string, mixed> $host */
+        return $host;
     }
 
     private function whenJobRuns(JobSpec $spec): JobResult
@@ -549,7 +700,12 @@ final class ContainerJobRunnerTest extends TestCase
             $locks,
             new OrphanedJobs($engine, $outputs, $locks, $ledger),
             $outputs,
-            new JobContainers($engine, new JobContainerDefinition(), $this->engine->clock),
+            new JobContainers(
+                $engine,
+                new JobContainerDefinition(),
+                new EgressProxy($engine, new EgressProxyDefinition('intakt-egress-proxy'), new EgressLog(), $ledger),
+                $this->engine->clock,
+            ),
             $ledger,
         );
 
