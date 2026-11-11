@@ -19,7 +19,9 @@ printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-
 # Only a confirmed missing image waits for its own run; any other failure (an outage, a refused token) fails this run,
 # so it shows red and can be run again, instead of leaving latest behind on a green run.
 if ! answer=$(docker buildx imagetools inspect "$image:${highest#v}" 2>&1 > /dev/null); then
-    if grep -qi -E 'not found|manifest unknown' <<< "$answer"; then
+    # Missing means buildx's own line for this exact reference, or the registry's MANIFEST_UNKNOWN; a 404 from anything
+    # else (the token endpoint, a proxy) is an error like any other.
+    if grep -qx -F "ERROR: $image:${highest#v}: not found" <<< "$answer" || grep -qi 'manifest unknown' <<< "$answer"; then
         echo "$image:${highest#v} is not pushed yet: latest stays until the run of $highest."
         exit 0
     fi

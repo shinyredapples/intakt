@@ -136,15 +136,37 @@ final class ReleaseImageTest extends SandboxTestCase
         self::assertSame([], array_values(array_filter($this->calls($sandbox), static fn (string $call): bool => str_contains($call, 'create'))));
     }
 
-    public function testARegistryThatCannotBeReadFailsTheRunInsteadOfLeavingLatestBehind(): void
+    #[DataProvider('registryErrors')]
+    public function testARegistryThatCannotBeReadFailsTheRunInsteadOfLeavingLatestBehind(string $error): void
     {
         $sandbox = $this->latestSandbox(['v0.1.0', 'v0.2.0'], ['0.1.0']);
 
-        $result = $this->runLatest($sandbox, 'ERROR: unexpected status from HEAD request: 503 Service Unavailable');
+        $result = $this->runLatest($sandbox, $error);
 
         self::assertFalse($result->succeeded());
-        self::assertStringContainsString('503 Service Unavailable', $result->errors);
+        self::assertStringContainsString($error, $result->errors);
         self::assertSame([], array_values(array_filter($this->calls($sandbox), static fn (string $call): bool => str_contains($call, 'create'))));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function registryErrors(): iterable
+    {
+        yield 'outage' => ['ERROR: unexpected status from HEAD request: 503 Service Unavailable'];
+        yield 'refused token' => ['ERROR: unexpected status: 401 Unauthorized'];
+        yield 'token endpoint not found' => ['ERROR: failed to authorize: failed to fetch anonymous token: unexpected status: 404 Not Found'];
+        yield 'another reference not found' => ['ERROR: ghcr.io/example/other:0.2.0: not found'];
+    }
+
+    public function testAManifestTheRegistryReportsUnknownCountsAsNotPushedYet(): void
+    {
+        $sandbox = $this->latestSandbox(['v0.1.0', 'v0.2.0'], ['0.1.0']);
+
+        $result = $this->runLatest($sandbox, 'ERROR: failed to resolve: MANIFEST_UNKNOWN: manifest unknown');
+
+        self::assertTrue($result->succeeded(), $result->errors);
+        self::assertStringContainsString('latest stays until the run of v0.2.0', $result->output);
     }
 
     public function testNoReleaseTagLeavesLatestAlone(): void
