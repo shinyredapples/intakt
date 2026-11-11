@@ -51,18 +51,29 @@ final readonly class EngineAnswer
         $output = '';
         $error = null;
 
-        foreach (preg_split('/\r?\n/', trim($this->body)) ?: [] as $line) {
-            $message = '' === $line ? [] : json_decode($line, true);
-
-            if (!is_array($message) || !is_string($message['stream'] ?? '') || !is_string($message['error'] ?? '')) {
-                throw DockerEngineFailed::unexpected($this->call);
-            }
-
-            $output .= $message['stream'] ?? '';
-            $error = $message['error'] ?? $error;
+        foreach (explode("\n", trim($this->body)) as $line) {
+            [$stream, $failure] = $this->buildLine(trim($line));
+            $output .= $stream;
+            $error = $failure ?? $error;
         }
 
         return new ImageBuild($output, $error);
+    }
+
+    /**
+     * @return array{string, ?string}
+     */
+    private function buildLine(string $line): array
+    {
+        $message = '' === $line ? [] : json_decode($line, true);
+        $stream = is_array($message) ? ($message['stream'] ?? '') : null;
+        $error = is_array($message) ? ($message['error'] ?? null) : false;
+
+        if (!is_string($stream) || (null !== $error && !is_string($error))) {
+            throw DockerEngineFailed::unexpected($this->call);
+        }
+
+        return [$stream, $error];
     }
 
     /**

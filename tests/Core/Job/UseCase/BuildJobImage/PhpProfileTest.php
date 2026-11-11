@@ -59,21 +59,21 @@ final class PhpProfileTest extends TestCase
 
     public function testAPlatformVersionOutsideRequirePhpIsRefused(): void
     {
-        $this->expectExceptionMessage('config.platform.php 8.4.1 does not meet require.php ^8.5');
+        $this->expectExceptionObject(JobImageNotBuilt::platformOutsideRequire('8.4.1', '^8.5'));
 
         PhpProfile::fromComposerJson('{"require": {"php": "^8.5"}, "config": {"platform": {"php": "8.4.1"}}}');
     }
 
     public function testAPlatformVersionThatIsNoVersionIsRefused(): void
     {
-        $this->expectExceptionMessage('config.platform.php "8.x" is not a version');
+        $this->expectExceptionObject(JobImageNotBuilt::notAVersion('8.x'));
 
         PhpProfile::fromComposerJson('{"config": {"platform": {"php": "8.x"}}}');
     }
 
     public function testARequirePhpThatIsNoConstraintIsRefused(): void
     {
-        $this->expectExceptionMessage('require.php "eight" is not a version constraint');
+        $this->expectExceptionObject(JobImageNotBuilt::notAConstraint('eight'));
 
         PhpProfile::fromComposerJson('{"require": {"php": "eight"}}');
     }
@@ -87,21 +87,21 @@ final class PhpProfileTest extends TestCase
 
     public function testAnExtensionNameThatIsNoPlainNameIsRefused(): void
     {
-        $this->expectExceptionMessage('"ext-intl; rm" in composer.json is not a PHP extension name');
+        $this->expectExceptionObject(JobImageNotBuilt::notAnExtension('ext-intl; rm'));
 
         PhpProfile::fromComposerJson('{"require": {"php": "^8.5", "ext-intl; rm": "*"}}');
     }
 
     public function testABrokenComposerJsonIsRefusedWithTheReason(): void
     {
-        $this->expectExceptionMessage('composer.json is not valid JSON: Syntax error');
+        $this->expectExceptionObject(JobImageNotBuilt::notJson('composer.json', 'Syntax error'));
 
         PhpProfile::fromComposerJson('{"require": ');
     }
 
     public function testARequireThatIsNoObjectIsRefused(): void
     {
-        $this->expectExceptionMessage('composer.json has a require that is not an object');
+        $this->expectExceptionObject(JobImageNotBuilt::notAnObject('composer.json', 'require'));
 
         PhpProfile::fromComposerJson('{"require": "php"}');
     }

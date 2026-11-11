@@ -22,14 +22,6 @@ final readonly class BuildJobImage
 
     /**
      * @throws JobImageNotBuilt
-     */
-    public function plan(string $directory): JobImagePlan
-    {
-        return $this->planner->planFor($directory);
-    }
-
-    /**
-     * @throws JobImageNotBuilt
      * @throws JobRefused
      * @throws DockerEngineFailed
      * @throws JobOutputRefused

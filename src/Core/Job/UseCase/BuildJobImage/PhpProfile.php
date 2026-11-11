@@ -138,16 +138,16 @@ final readonly class PhpProfile
             return [(string) $constraint, $required ?? throw JobImageNotBuilt::withoutPhpRecord()];
         }
 
-        // A platform version of two parts stands for every patch of that minor, as in Composer's own platform check.
+        // Every patch of that minor for two parts, because Composer's own platform check reads a two-part version so.
         $exact = 3 === count(explode('.', $platform));
         $pinned = new VersionParser()->parseConstraints($exact ? $platform : $platform.'.*');
 
-        if (!$required instanceof ConstraintInterface) {
+        if (null === $constraint || !$required instanceof ConstraintInterface) {
             return [$platform, $pinned];
         }
 
         if (!$required->matches($pinned)) {
-            throw JobImageNotBuilt::platformOutsideRequire($platform, (string) $constraint);
+            throw JobImageNotBuilt::platformOutsideRequire($platform, $constraint);
         }
 
         return [$exact ? $platform : $platform.'.* and '.$constraint, MultiConstraint::create([$pinned, $required])];

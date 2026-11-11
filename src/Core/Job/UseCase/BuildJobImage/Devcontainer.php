@@ -93,7 +93,7 @@ final readonly class Devcontainer
      */
     private static function decoded(string $jsonc): array
     {
-        $keepStrings = static fn (array $match): string => $match[1] ?? '';
+        $keepStrings = static fn (array $match): string => is_string($match[1] ?? null) ? $match[1] : '';
         $json = preg_replace_callback(self::TRAILING_COMMA, $keepStrings, preg_replace_callback(self::COMMENT, $keepStrings, $jsonc) ?? '');
 
         try {

@@ -54,7 +54,7 @@ final class GeneratedDockerfileTest extends TestCase
 
     public function testAConstraintNoSupportedMinorAdmitsIsRefused(): void
     {
-        $this->expectExceptionMessage('No supported PHP minor (8.5, 8.4, 8.3, 8.2) meets require.php ^7.4');
+        $this->expectExceptionObject(JobImageNotBuilt::noSupportedMinor('^7.4', ['8.5', '8.4', '8.3', '8.2']));
 
         GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": "^7.4"}}'));
     }
@@ -124,9 +124,9 @@ final class GeneratedDockerfileTest extends TestCase
             $require['ext-'.$extension] = '*';
         }
         $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson(json_encode(['require' => $require], JSON_THROW_ON_ERROR)));
-        self::assertSame(1, preg_match('/^RUN (set -eu; for extension in .*?done)$/ms', $dockerfile, $match));
+        preg_match('/^RUN (set -eu; for extension in .*?done)$/ms', $dockerfile, $match);
 
-        return $match[1];
+        return $match[1] ?? self::fail('The generated Dockerfile has no extension step.');
     }
 
     // Stand-ins for php -m and the installer, so the step's shell runs here as it runs in the build.

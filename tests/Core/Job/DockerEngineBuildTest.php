@@ -30,8 +30,10 @@ final class DockerEngineBuildTest extends TestCase
         self::assertFalse($build->failed());
         self::assertSame('POST', $response->getRequestMethod());
         self::assertSame('http://docker/v1.44/build?t=intakt-job/demo:main&dockerfile=.devcontainer/Dockerfile&rm=true&forcerm=true', $response->getRequestUrl());
-        self::assertSame('tar bytes', $response->getRequestOptions()['body']);
-        self::assertContains('Content-Type: application/x-tar', $response->getRequestOptions()['headers']);
+        $options = $response->getRequestOptions();
+        self::assertSame('tar bytes', $options['body']);
+        self::assertIsArray($options['headers']);
+        self::assertContains('Content-Type: application/x-tar', $options['headers']);
     }
 
     public function testAFailedStepIsTheBuildsError(): void
@@ -49,7 +51,7 @@ final class DockerEngineBuildTest extends TestCase
     {
         $response = new MockResponse('{"message":"invalid reference format"}', ['http_code' => 400]);
 
-        $this->expectExceptionMessage('The Docker Engine refused build with status 400: invalid reference format');
+        $this->expectExceptionObject(DockerEngineFailed::refused('build', 400, 'invalid reference format'));
 
         $this->engineAnswering($response)->build('tar', 'demo', 'Dockerfile');
     }

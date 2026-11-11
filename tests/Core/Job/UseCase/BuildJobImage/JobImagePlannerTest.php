@@ -130,7 +130,7 @@ final class JobImagePlannerTest extends TestCase
 
     public function testADirectoryWithoutACommitIsRefused(): void
     {
-        $this->expectExceptionMessage(sprintf('%s is not a git checkout with a commit', $this->repository->path));
+        $this->expectExceptionMessageMatches('/^'.preg_quote($this->repository->path.' is not a git checkout with a commit that git can read: ', '/').'/');
 
         $this->planFor();
     }
@@ -140,7 +140,7 @@ final class JobImagePlannerTest extends TestCase
         $this->repository->commitFile('composer.json', self::COMPOSER_JSON);
         $this->repository->commitFile('sample/README.md', 'sample');
 
-        $this->expectExceptionMessage(sprintf('%s/sample is not a git checkout with a commit that git can read: there is no .git at its top', $this->repository->path));
+        $this->expectExceptionObject(JobImageNotBuilt::unreadable($this->repository->path.'/sample', 'there is no .git at its top'));
 
         new JobImagePlanner(new ProjectFiles())->planFor($this->repository->path.'/sample');
     }
@@ -149,7 +149,7 @@ final class JobImagePlannerTest extends TestCase
     {
         $this->repository->commitFile('.devcontainer/devcontainer.json', '{"build": {"dockerfile": ["Dockerfile"]}}');
 
-        $this->expectExceptionMessage('.devcontainer/devcontainer.json has a build.dockerfile that is not text');
+        $this->expectExceptionObject(JobImageNotBuilt::notText('build.dockerfile'));
 
         $this->planFor();
     }

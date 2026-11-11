@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class ImageBuild
 {
-    // The error is the engine's message for a step that failed, null when the image was built.
+    // The engine's own error line, so a failed step is told apart without reading the output.
     public function __construct(
         public string $output,
         public ?string $error,

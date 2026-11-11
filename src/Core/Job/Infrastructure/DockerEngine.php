@@ -18,7 +18,7 @@ final readonly class DockerEngine
     private const string API = 'http://docker/v1.44/';
     private const string CONTAINER_ID = '/^[A-Za-z0-9]{1,128}$/D';
     private const string NETWORK_NAME = '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
-    // A step such as installing an extension may print nothing for minutes, and a whole build gets an hour before it counts as stuck.
+    // Generous, because a step such as compiling an extension may print nothing for minutes; a whole build gets an hour before it counts as stuck.
     private const float BUILD_IDLE_SECONDS = 600.0;
     private const float BUILD_SECONDS = 3600.0;
 
@@ -43,7 +43,7 @@ final readonly class DockerEngine
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
-    // The context is a tar holding the Dockerfile at the given path; rm and forcerm leave no container of a step behind, also after a failed one.
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one.
     public function build(string $context, string $tag, string $dockerfile): ImageBuild
     {
         return $this->send('POST', 'build', [

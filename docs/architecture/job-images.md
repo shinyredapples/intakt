@@ -1,6 +1,6 @@
 # Job images
 
-`Core/Job/UseCase/BuildJobImage` builds the image a project's jobs run in (plan task T45) and checks that the image has the project's PHP. The door is `intakt:job:image <directory> <tag> [--dry-run]`; no lane builds an image or starts a job from one yet (the build job arrives with T49). The jobs themselves run as described in [Job containers](job-containers.md).
+`Core/Job/UseCase/BuildJobImage` builds the image a project's jobs run in (plan task T45) and checks that the image has the project's PHP. The doors are `intakt:job:build-image <directory> <tag>` (`BuildJobImage`: plan, build, probe) and `intakt:job:plan-image <directory>` (the plan alone, with the generated Dockerfile or where the project's Dockerfile is built, no engine call); no lane builds an image or starts a job from one yet (the build job arrives with T49). The jobs themselves run as described in [Job containers](job-containers.md).
 
 ## Where the image comes from
 

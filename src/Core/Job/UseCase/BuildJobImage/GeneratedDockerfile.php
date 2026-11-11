@@ -54,7 +54,7 @@ final readonly class GeneratedDockerfile
             return [];
         }
 
-        // php -m prints names such as "Zend OPcache", which Composer spells zend-opcache; an extension that is still not loaded after the installer fails the build with its name.
+        // Compared in Composer's spelling, because php -m prints names such as "Zend OPcache"; still missing after the installer, the build must fail with its name.
         return [
             sprintf('RUN set -eu; for extension in %s; do \\', implode(' ', $extensions)),
             '        php -m | tr \'A-Z \' \'a-z-\' | grep -qx "$extension" || install-php-extensions "$extension" || true; \\',

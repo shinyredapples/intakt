@@ -13,7 +13,7 @@ use Symfony\Component\Process\Process;
 final readonly class ProjectFiles
 {
     private const int TIMEOUT_SECONDS = 120;
-    // A symlink or a submodule is no file whose content git can hand over as it is.
+    // Only these, because a symlink or a submodule is no file whose content git can hand over as it is.
     private const array REGULAR_FILES = ['100644', '100755'];
 
     public function __construct(private HardenedGit $git = new HardenedGit())

@@ -53,45 +53,46 @@ final class PhpInImageTest extends TestCase
 
     public function testAnotherPhpIsRefusedWithBothVersions(): void
     {
-        $this->expectExceptionMessage('The image intakt-job/demo:main has PHP 8.4.19, which does not meet >=8.5.12');
+        $this->expectExceptionObject(JobImageNotBuilt::anotherPhp('intakt-job/demo:main', '8.4.19', '>=8.5.12'));
 
         $this->verify('{"version": "8.4.19", "extensions": ["intl", "pdo_sqlite"]}');
     }
 
     public function testAMissingExtensionIsRefusedWithItsName(): void
     {
-        $this->expectExceptionMessage('The image intakt-job/demo:main lacks the PHP extensions pdo_sqlite');
+        $this->expectExceptionObject(JobImageNotBuilt::missingExtensions('intakt-job/demo:main', ['pdo_sqlite']));
 
         $this->verify('{"version": "8.5.12", "extensions": ["intl"]}');
     }
 
     public function testAProbeThatFailsIsRefusedWithItsEnd(): void
     {
-        $runner = $this->createStub(JobRunner::class);
-        $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 127), new JobOutput([])));
+        $runner = self::createStub(JobRunner::class);
+        $end = new JobEnd(JobCause::Exited, 127);
+        $runner->method('run')->willReturn(new JobResult($end, new JobOutput([])));
 
-        $this->expectExceptionMessage('The PHP probe in the image intakt-job/demo:main ended exited with exit code 127');
+        $this->expectExceptionObject(JobImageNotBuilt::probeFailed('intakt-job/demo:main', $end));
 
         new PhpInImage($runner)->verify('intakt-job/demo:main', PhpProfile::fromComposerJson(self::COMPOSER_JSON));
     }
 
     public function testAProbeAnswerWithoutAVersionIsRefused(): void
     {
-        $this->expectExceptionMessage('The PHP probe in the image intakt-job/demo:main wrote no version and extension list');
+        $this->expectExceptionObject(JobImageNotBuilt::probeUnreadable('intakt-job/demo:main'));
 
         $this->verify('{"version": "eight", "extensions": ["intl"]}');
     }
 
     public function testAProbeAnswerWithAnExtensionThatIsNoTextIsRefused(): void
     {
-        $this->expectExceptionMessage('The PHP probe in the image intakt-job/demo:main wrote no version and extension list');
+        $this->expectExceptionObject(JobImageNotBuilt::probeUnreadable('intakt-job/demo:main'));
 
         $this->verify('{"version": "8.5.12", "extensions": ["intl", 7]}');
     }
 
     private function verify(string $answer): string
     {
-        $runner = $this->createStub(JobRunner::class);
+        $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturn($this->resultWith($answer));
 
         return new PhpInImage($runner)->verify('intakt-job/demo:main', PhpProfile::fromComposerJson(self::COMPOSER_JSON));

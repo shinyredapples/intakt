@@ -38,6 +38,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RecursiveIteratorIterator;
+use SplFileInfo;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -122,15 +123,6 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertStringContainsString('has PHP 8.4.19, which does not meet', $this->display($tester));
     }
 
-    public function testADryRunPrintsTheDockerfileWithoutBuilding(): void
-    {
-        $tester = $this->whenTheCommandRuns(self::BUILT, '--dry-run');
-
-        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString('FROM php:8.5.12-cli', $this->display($tester));
-        self::assertSame([], $this->requests);
-    }
-
     public function testTheProjectsContextHoldsOnlyItsCommittedFiles(): void
     {
         $this->repository->commitFile('Dockerfile', "FROM php:8.5.12-cli\n");
@@ -156,7 +148,7 @@ final class BuildJobImageCommandTest extends TestCase
 
     public function testATagThatIsNoImageReferenceIsRefused(): void
     {
-        $tester = $this->whenTheCommandRuns(self::BUILT, tag: 'Demo:main tag');
+        $tester = $this->whenTheCommandRuns(self::BUILT, 'Demo:main tag');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('"Demo:main tag" is not an image tag', $this->display($tester));
@@ -172,24 +164,24 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertStringContainsString('there is no socket at /nonexistent/docker.sock', $this->display($tester));
     }
 
-    private function whenTheCommandRuns(string $stream, string $option = '', string $tag = 'intakt-job/demo:main'): CommandTester
+    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main'): CommandTester
     {
         $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream): MockResponse {
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
-            new Filesystem()->dumpFile($this->context, $options['body']);
+            new Filesystem()->dumpFile($this->context, is_string($options['body']) ? $options['body'] : self::fail('The build context is no string.'));
             $response = new MockResponse($stream);
             $this->requests[] = $response;
 
             return $response;
         });
-        $runner = $this->createStub(JobRunner::class);
+        $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturn(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['php.json' => $this->probe])));
         $files = new ProjectFiles();
         $build = new BuildJobImage(new JobImagePlanner($files), new BuildContext($files), new DockerEngine($client, $this->socket), new PhpInImage($runner));
         $application = new Application();
         $application->addCommand(new BuildJobImageCommand($build));
-        $tester = new CommandTester($application->find('intakt:job:image'));
-        $tester->execute(['directory' => $this->repository->path, 'tag' => $tag, ...('' === $option ? [] : [$option => true])]);
+        $tester = new CommandTester($application->find('intakt:job:build-image'));
+        $tester->execute(['directory' => $this->repository->path, 'tag' => $tag]);
 
         return $tester;
     }
@@ -201,7 +193,7 @@ final class BuildJobImageCommandTest extends TestCase
     {
         $names = [];
         foreach (new RecursiveIteratorIterator(new PharData($this->context)) as $file) {
-            $names[] = $file->getFilename();
+            $names[] = $file instanceof SplFileInfo ? $file->getFilename() : self::fail('The build context holds an entry that is no file.');
         }
         sort($names);
 

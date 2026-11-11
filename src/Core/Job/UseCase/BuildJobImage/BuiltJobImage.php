@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class BuiltJobImage
 {
-    // The PHP version is null for an image of a project without composer.json, which has no PHP to check.
+    // No PHP version for a project without composer.json, because it names no PHP to check.
     public function __construct(
         public JobImagePlan $plan,
         public string $output,

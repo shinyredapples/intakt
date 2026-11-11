@@ -65,56 +65,71 @@ final class DevcontainerTest extends TestCase
 
     public function testAComposeSetupIsRefused(): void
     {
-        $this->expectExceptionMessage('.devcontainer/devcontainer.json uses dockerComposeFile, which Intakt does not build a job image from yet');
+        $this->expectExceptionObject(JobImageNotBuilt::composeUnsupported());
 
         Devcontainer::planFrom('{"dockerComposeFile": "compose.yaml", "service": "app"}');
     }
 
     public function testADevcontainerWithNeitherImageNorBuildIsRefused(): void
     {
-        $this->expectExceptionMessage('.devcontainer/devcontainer.json names neither an image nor a build with a dockerfile');
+        $this->expectExceptionObject(JobImageNotBuilt::withoutImageOrBuild());
 
         Devcontainer::planFrom('{"name": "dev"}');
     }
 
     public function testAContextOutsideTheRepositoryIsRefused(): void
     {
-        $this->expectExceptionMessage('The build context "../.." of .devcontainer/devcontainer.json is outside the repository');
+        $this->expectExceptionObject(JobImageNotBuilt::contextOutside('../..'));
 
         Devcontainer::planFrom('{"build": {"dockerfile": "Dockerfile", "context": "../.."}}');
     }
 
+    public function testAContextThatStaysInsideTheRepositoryIsAllowed(): void
+    {
+        $plan = Devcontainer::planFrom('{"build": {"dockerfile": "../docker/Dockerfile", "context": "../docker"}}');
+
+        self::assertSame('docker', $plan->tree);
+        self::assertSame('Dockerfile', $plan->dockerfile);
+    }
+
     public function testAnAbsoluteContextIsRefused(): void
     {
-        $this->expectExceptionMessage('The build context "/srv" of .devcontainer/devcontainer.json is outside the repository');
+        $this->expectExceptionObject(JobImageNotBuilt::contextOutside('/context'));
 
-        Devcontainer::planFrom('{"build": {"dockerfile": "Dockerfile", "context": "/srv"}}');
+        Devcontainer::planFrom('{"build": {"dockerfile": "Dockerfile", "context": "/context"}}');
     }
 
     public function testADockerfileOutsideTheContextIsRefused(): void
     {
-        $this->expectExceptionMessage('The dockerfile "../Dockerfile" of .devcontainer/devcontainer.json is outside its build context');
+        $this->expectExceptionObject(JobImageNotBuilt::dockerfileOutsideContext('../Dockerfile'));
 
         Devcontainer::planFrom('{"build": {"dockerfile": "../Dockerfile"}}');
     }
 
     public function testAnImageThatIsNoReferenceIsRefused(): void
     {
-        $this->expectExceptionMessage("The image \"php:8.5\nRUN id\" of .devcontainer/devcontainer.json is not an image reference");
+        $this->expectExceptionObject(JobImageNotBuilt::notAnImage("php:8.5\nRUN id"));
 
         Devcontainer::planFrom('{"image": "php:8.5\nRUN id"}');
     }
 
+    public function testAnImageWithARegistryPortAndDigestIsAllowed(): void
+    {
+        $image = 'localhost:5000/team/php:8.5@sha256:'.str_repeat('a', 64);
+
+        self::assertSame(sprintf("FROM %s\n", $image), Devcontainer::planFrom(sprintf('{"image": "%s"}', $image))->generated);
+    }
+
     public function testABrokenFileIsRefusedWithTheReason(): void
     {
-        $this->expectExceptionMessage('.devcontainer/devcontainer.json is not valid JSON: Syntax error');
+        $this->expectExceptionObject(JobImageNotBuilt::notJson(Devcontainer::PATH, 'Syntax error'));
 
         Devcontainer::planFrom('{"image": ');
     }
 
     public function testATopLevelThatIsNoObjectIsRefused(): void
     {
-        $this->expectExceptionMessage('.devcontainer/devcontainer.json is not valid JSON: not an object');
+        $this->expectExceptionObject(JobImageNotBuilt::notJson(Devcontainer::PATH, 'not an object'));
 
         Devcontainer::planFrom('["php"]');
     }
