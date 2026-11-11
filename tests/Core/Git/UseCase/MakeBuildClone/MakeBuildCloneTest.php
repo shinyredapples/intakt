@@ -50,7 +50,7 @@ final class MakeBuildCloneTest extends TestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove([$this->mirrors, $this->clone]);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->mirrors.'-nowhere']);
         $this->remote->remove();
     }
 
@@ -240,6 +240,44 @@ final class MakeBuildCloneTest extends TestCase
 
         self::assertTrue(is_link($this->clone));
         self::assertFileDoesNotExist($this->mirrors.'-nowhere');
+    }
+
+    #[DataProvider('endingsThatNameTheLinkItself')]
+    public function testADanglingLinkNamedWithATrailingSeparatorIsRefusedAndLeftAlone(string $ending): void
+    {
+        $this->givenTheMirror();
+        symlink($this->mirrors.'-nowhere', $this->clone);
+
+        try {
+            $this->buildClones()->make('alpha', 'feat/task', $this->clone.$ending);
+            self::fail('the build clone was made through a link');
+        } catch (BuildCloneNotMade $refused) {
+            self::assertStringContainsString('the folder already exists', $refused->getMessage());
+        }
+
+        self::assertTrue(is_link($this->clone));
+        self::assertFileDoesNotExist($this->mirrors.'-nowhere');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function endingsThatNameTheLinkItself(): iterable
+    {
+        yield 'a slash' => ['/'];
+        yield 'two slashes' => ['//'];
+        yield 'a slash and a dot' => ['/.'];
+        yield 'a dot between slashes' => ['/./'];
+    }
+
+    public function testAFolderNamedWithATrailingSlashIsMadeWithoutIt(): void
+    {
+        $this->givenABranch('feat/task', 'b.txt');
+        $this->givenTheMirror();
+
+        $this->buildClones()->make('alpha', 'feat/task', $this->clone.'/');
+
+        self::assertSame('feat/task', trim($this->inTheClone('branch', '--show-current')));
     }
 
     public function testAParentFolderThatCannotBeMadeIsReportedAsNotMadeAndTheFileInTheWayIsLeftAlone(): void

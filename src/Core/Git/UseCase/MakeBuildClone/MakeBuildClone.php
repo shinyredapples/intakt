@@ -32,6 +32,7 @@ final readonly class MakeBuildClone
      */
     public function make(string $project, string $branch, string $directory): void
     {
+        $directory = $this->withoutTrailingSeparators($directory);
         $mirror = $this->existingMirror($project, $directory);
         $main = $this->mainOf($mirror, $directory);
         $task = $this->taskRef($mirror, $main, $branch);
@@ -55,6 +56,14 @@ final readonly class MakeBuildClone
 
             throw $failed;
         }
+    }
+
+    private function withoutTrailingSeparators(string $directory): string
+    {
+        // Because a path that ends in "/" or "/." makes lstat follow a link at its last name, so a dangling link would not count as taken.
+        $trimmed = preg_replace('~(?:/\.?)+$~', '', $directory);
+
+        return $trimmed === '' || $trimmed === null ? '/' : $trimmed;
     }
 
     private function existingMirror(string $project, string $directory): string
