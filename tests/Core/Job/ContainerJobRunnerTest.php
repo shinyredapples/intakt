@@ -564,7 +564,9 @@ final class ContainerJobRunnerTest extends TestCase
 
         chmod($path, 0o700);
 
-        foreach (array_diff(scandir($path) ?: [], ['.', '..']) as $name) {
+        $names = scandir($path);
+
+        foreach (array_diff(false === $names ? [] : $names, ['.', '..']) as $name) {
             $this->restoreOwnerAccess($path.'/'.$name);
         }
     }
