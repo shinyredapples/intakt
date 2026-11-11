@@ -52,6 +52,23 @@ final class LoopReviewReaderTest extends TestCase
         self::assertSame([], $reviews->reviews);
     }
 
+    public function testTheReviewerIsNamedByTheReviewerLineOutsideQuotesAndFences(): void
+    {
+        $reader = new LoopReviewReader();
+
+        self::assertSame('gpt', $reader->reviewerNamedIn(new PullRequestComment('loop-bot', 'abc123', "> Reviewer: claude\nReviewer: gpt\n{}")));
+        self::assertSame('unknown', $reader->reviewerNamedIn(new PullRequestComment('loop-bot', 'abc123', "```\nReviewer: gpt\n```\nMerged.")));
+    }
+
+    public function testACommentHoldsAVerdictOnlyWithAJsonLineOrJsonFenceEvenABrokenOne(): void
+    {
+        $reader = new LoopReviewReader();
+
+        self::assertTrue($reader->holdsVerdict(new PullRequestComment('loop-bot', 'abc123', "```json\n{\"verdict\":\n```")));
+        self::assertTrue($reader->holdsVerdict(new PullRequestComment('loop-bot', 'abc123', '{"verdict": "approve"}')));
+        self::assertFalse($reader->holdsVerdict(new PullRequestComment('loop-bot', 'abc123', "Merged this pull request.\n> {\"verdict\": \"approve\"}")));
+    }
+
     public function testAReviewWithoutAFinalJsonVerdictIsUnreadable(): void
     {
         self::assertSame(LoopVerdict::Unreadable, $this->only("Reviewer: a\n\nApproved, all good."));

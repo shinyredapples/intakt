@@ -20,6 +20,7 @@ use Intakt\Core\Shadow\Contract\ShadowSummary;
 use Intakt\Core\Shadow\Domain\LoopReviewReader;
 use Intakt\Core\Shadow\Domain\PeriodSummary;
 use Intakt\Core\Shadow\Domain\ReviewComparison;
+use Intakt\Core\Shadow\Infrastructure\RecordedFolder;
 use Intakt\Core\Shadow\Infrastructure\RecordedHead;
 use Intakt\Core\Shadow\UseCase\ShadowReport\ReportFormat;
 use Intakt\Core\Shadow\UseCase\ShadowReport\ShadowReportCommand;
@@ -38,6 +39,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(ConsoleDisplay::class)]
 #[UsesClass(ReportFormat::class)]
 #[UsesClass(RecordedHead::class)]
+#[UsesClass(RecordedFolder::class)]
 #[UsesClass(LoopReviewReader::class)]
 #[UsesClass(ReviewComparison::class)]
 #[UsesClass(PeriodSummary::class)]

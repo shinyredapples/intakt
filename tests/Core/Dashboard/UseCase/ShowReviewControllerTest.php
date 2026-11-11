@@ -330,6 +330,17 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
     }
 
+    public function testEveryTableOfTheReviewPageScrollsInANamedRegionTheKeyboardReaches(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $wrappers = $crawler->filter('.table-scroll');
+        self::assertGreaterThan(0, $wrappers->count());
+        self::assertCount($wrappers->count(), $crawler->filter('.table-scroll[tabindex="0"][role="region"][aria-label]:not([aria-label=""])'));
+    }
+
     private function givenACompletedTwoRoundReview(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
