@@ -18,6 +18,7 @@ final readonly class ContainerJobRunner implements JobRunner
         private JobOutputDirectories $outputs,
         private JobContainers $containers,
         private JobLedger $ledger,
+        private StartCheckReport $startCheck,
     ) {
     }
 
@@ -46,11 +47,20 @@ final readonly class ContainerJobRunner implements JobRunner
 
         try {
             $end = $this->containers->runToEnd($spec, $directory);
+            $this->recordStartCheck($spec, $directory);
             $this->ledger->jobEnded($spec->id, $end);
 
             return new JobResult($end, $this->outputs->read($directory));
         } finally {
             $this->outputs->remove($spec->id);
+        }
+    }
+
+    // Recorded with its reason, so a job that ran in its reduced mode is never taken for one that could do everything it was told.
+    private function recordStartCheck(JobSpec $spec, string $directory): void
+    {
+        foreach ($this->startCheck->failuresIn($directory) as $failure) {
+            $this->ledger->startCheckFailed($spec->id, $failure);
         }
     }
 }

@@ -32,6 +32,11 @@ final readonly class JobLedger
         $this->append(LedgerEventKind::JobEgressRefused, ['job' => $job->value, 'method' => $refusal->method, 'target' => $refusal->target]);
     }
 
+    public function startCheckFailed(JobId $job, StartCheckFailure $failure): void
+    {
+        $this->append(LedgerEventKind::JobStartCheckFailed, ['job' => $job->value, 'check' => $failure->check->value, 'reason' => $failure->reason]);
+    }
+
     public function networkRemoved(JobNetwork $network): void
     {
         $this->append(LedgerEventKind::JobNetworkRemoved, ['job' => $network->job->value, 'network' => $network->name]);
