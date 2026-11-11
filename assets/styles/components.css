@@ -228,6 +228,15 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .empty p { margin: 0; }
 .col-empty { margin: 0; padding: var(--s8) 2px; color: var(--muted); font-size: var(--t13); }
 
+/* Board: the nine columns side by side, scrolled sideways where they do not fit (docs/design/mocks/index.html). */
+.content.wide { max-width: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); }
+.board .col { flex: 1 1 0; min-width: 184px; }
+.col-head { display: flex; align-items: center; gap: var(--s8); height: 32px; margin-bottom: var(--s8); font-family: var(--f-head); }
+.col-head h3 { margin: 0; font-size: var(--t15); font-weight: 600; }
+.col-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--s8); }
+
 /* Connection state; the page stays at full contrast while it shows (DESIGN.md: never fade the page). */
 .conn { display: flex; align-items: center; gap: var(--s12); margin-bottom: var(--s16); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .conn p { flex: 1; margin: 0; }
