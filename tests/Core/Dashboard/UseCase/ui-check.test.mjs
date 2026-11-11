@@ -7,16 +7,17 @@ const { jobsFor, measureFloors, report, failed } = createRequire(import.meta.url
 const floors = { text: 15, target: 44 };
 
 class FakeElement {
-    constructor({ tag = 'span', text = '', fontSize = 15, height = 20, width = 100, visibility = 'visible', hiddenBy = null, labels = [] } = {}) {
+    constructor({ tag = 'span', text = '', fontSize = 15, height = 20, width = 100, visibility = 'visible', display = 'block', hiddenBy = null, labels = [], parent = null } = {}) {
         this.tagName = tag.toUpperCase();
         this.id = '';
         this.classList = [];
         this.childNodes = text === '' ? [] : [{ nodeType: 3, textContent: text }];
         this.textContent = text;
-        this.style = { fontSize: fontSize + 'px', visibility };
+        this.style = { fontSize: fontSize + 'px', visibility, display };
         this.box = { width, height };
         this.hiddenBy = hiddenBy;
         this.labels = labels;
+        this.parentElement = parent;
     }
 
     getBoundingClientRect() {
@@ -116,6 +117,27 @@ test('a small control with a small label is reported with the larger of the two'
     assert.deepEqual(measureFloors(floors, pageOf([], [toggle])), ['target 36 px: input']);
 });
 
+test('a link inside a sentence is part of the text, not a touch target', () => {
+    const sentence = new FakeElement({ tag: 'p', text: 'Each project has a ' });
+    const term = new FakeElement({ text: 'weekly share', height: 20, display: 'inline', parent: sentence });
+
+    assert.deepEqual(measureFloors(floors, pageOf([], [term])), []);
+});
+
+test('an inline link with no sentence around it is a touch target', () => {
+    const cell = new FakeElement({ tag: 'td' });
+    const link = new FakeElement({ tag: 'a', text: 'acme-shop', height: 19, display: 'inline', parent: cell });
+
+    assert.deepEqual(measureFloors(floors, pageOf([], [link])), ['target 19 px: a "acme-shop"']);
+});
+
+test('a block link beside text is a touch target', () => {
+    const row = new FakeElement({ tag: 'div', text: 'Round 2 ' });
+    const link = new FakeElement({ tag: 'a', text: 'Open', height: 30, display: 'inline-flex', parent: row });
+
+    assert.deepEqual(measureFloors(floors, pageOf([], [link])), ['target 30 px: a "Open"']);
+});
+
 test('a hidden touch target is not measured', () => {
     const button = new FakeElement({ tag: 'button', text: 'Cancel', height: 0, width: 0 });
 
@@ -124,15 +146,21 @@ test('a hidden touch target is not measured', () => {
 
 test('serious and critical axe violations fail the check', () => {
     for (const impact of ['serious', 'critical']) {
-        assert.equal(failed([run({ violations: [{ id: 'color-contrast', impact, help: 'Contrast', nodes: 1 }] })]), true);
+        assert.equal(failed([run({ violations: [{ id: 'color-contrast', impact, help: 'Contrast', nodes: ['.meta'] }] })]), true);
     }
 });
 
 test('minor and moderate axe violations are reported without failing the check', () => {
-    const runs = [run({ violations: [{ id: 'region', impact: 'moderate', help: 'Landmarks', nodes: 2 }, { id: 'x', impact: 'minor', help: 'X', nodes: 1 }] })];
+    const runs = [run({ violations: [{ id: 'region', impact: 'moderate', help: 'Landmarks', nodes: ['.a', '.b'] }, { id: 'x', impact: 'minor', help: 'X', nodes: ['.c'] }] })];
 
     assert.equal(failed(runs), false);
-    assert.match(report(runs), /projects light 390: axe critical 0, serious 0, moderate 1, minor 1, phone floor findings 0\n {2}moderate region: Landmarks \(2 nodes\)/);
+    assert.match(report(runs), /projects light 390: axe critical 0, serious 0, moderate 1, minor 1, phone floor findings 0\n {2}moderate region: Landmarks \(2 nodes: \.a, \.b\)/);
+});
+
+test('a violation names its first three nodes', () => {
+    const runs = [run({ violations: [{ id: 'list', impact: 'serious', help: 'Lists', nodes: ['li.a', 'li.b', 'li.c', 'li.d'] }] })];
+
+    assert.match(report(runs), /serious list: Lists \(4 nodes: li\.a, li\.b, li\.c, \.\.\.\)/);
 });
 
 test('a phone floor finding fails the check', () => {
