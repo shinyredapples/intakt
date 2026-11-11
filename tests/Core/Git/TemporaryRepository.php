@@ -126,6 +126,11 @@ final readonly class TemporaryRepository
         $this->git('checkout', '--quiet', $name);
     }
 
+    public function checkoutDetached(string $revision): void
+    {
+        $this->git('checkout', '--quiet', '--detach', $revision);
+    }
+
     /**
      * @return list<string>
      */

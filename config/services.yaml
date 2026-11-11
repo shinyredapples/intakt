@@ -10,6 +10,8 @@ parameters:
     !php/const Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices::ACCOUNT_PARALLEL_CALLS: 3
     # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::GITLEAKS: gitleaks
+    # One bare mirror per project lives here, rebuilt from the remote if lost.
+    !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
 
 services:
     # default configuration for services in *this* file
@@ -52,6 +54,9 @@ services:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'
             $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
+    Intakt\Plugin\GitHubForge\Infrastructure\PostedComments:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
@@ -101,6 +106,10 @@ services:
             $minLevel: warning
             $output: 'php://stderr'
             $formatter: '@Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter'
+
+    Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror:
+        arguments:
+            $mirrorsDirectory: '%intakt.git.mirrors_directory%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

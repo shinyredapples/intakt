@@ -13,4 +13,11 @@ interface ForgeWrites
      * @throws ForgeWriteFailed
      */
     public function postReview(string $project, Change $change, ReviewComment $comment): void;
+
+    /**
+     * @throws ReviewTextHoldsSecret
+     * @throws ChangeNotFound
+     * @throws ForgeWriteFailed
+     */
+    public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void;
 }
