@@ -25,8 +25,8 @@
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
     {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
     {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
-    {# Imported by its own address, not through the import map, so a danger button asks first also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
-    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; holdBackDangerButtons(document);</script>
+    {# Imported by their own address, not through the import map, so a danger button asks first and the search opens also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
+    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; import { offerSearch } from '{{ asset('search.js') }}'; holdBackDangerButtons(document); offerSearch(document);</script>
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
@@ -44,7 +44,7 @@
 {% if live|default(false) %}{% do mercure(null, {subscribe: listener_grants}) %}{{ turbo_stream_from([constant('Intakt\\Core\\Dashboard\\Contract\\DashboardTopics::SHELL')]|merge(topics|default([])), true) }}{% endif %}
 <header class="topbar">
     <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
-    <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
+    <button class="search-trigger" type="button" aria-haspopup="dialog" aria-controls="search" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>
     {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. #}
     {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
@@ -61,6 +61,14 @@
 {% endfor %}
 {% block body %}{% endblock %}
 </main>
+</div>
+</div>
+{# Outside the shell, because any child of it takes a cell of its grid, and because the search script makes the shell inert while this is open. assets/search.js opens it and fills the list box with the results fragment of the search route. #}
+<div class="overlay" id="search" role="dialog" aria-modal="true" aria-label="Search" data-search-url="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SEARCH')) }}" hidden>
+<div class="palette">
+    <div class="q">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<input id="search-q" type="text" placeholder="Search tasks, pull requests, settings…" autocomplete="off" role="combobox" aria-label="Search" aria-autocomplete="list" aria-expanded="true" aria-controls="search-results"><kbd>Esc</kbd></div>
+    <div class="results" id="search-results" role="listbox" aria-label="Results"></div>
+    <footer><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
 </div>
 </div>
 {# Listens on the body, because Turbo replaces it on a visit and runs this script again, so no listener is left twice. #}
@@ -173,10 +181,6 @@
         if (event.key === 'Escape' && more && !moreSheet.hidden) {
             showMore(false);
             more.focus();
-        }
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-            event.preventDefault();
-            search.focus();
         }
     });
 })();</script>

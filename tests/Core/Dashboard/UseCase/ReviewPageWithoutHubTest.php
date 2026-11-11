@@ -47,7 +47,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
         self::assertSame(
-            [sprintf("import { holdBackDangerButtons } from '%s'; holdBackDangerButtons(document);", $packages->getUrl('arm.js'))],
+            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; holdBackDangerButtons(document); offerSearch(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
         );
     }
@@ -61,6 +61,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('export function holdBackDangerButtons(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testTheSearchScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('search.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function offerSearch(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void

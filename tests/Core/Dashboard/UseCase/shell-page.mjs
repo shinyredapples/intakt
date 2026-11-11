@@ -143,7 +143,6 @@ export class Browser {
 
                 return event;
             },
-            searchHasFocus: () => page.focused === search,
             chooseProject: (value) => {
                 projectFilter.value = value;
                 projectFilter.dispatch('change');
