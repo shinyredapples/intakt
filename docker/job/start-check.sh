@@ -90,6 +90,7 @@ if [ -n "$failed" ]; then
     export INTAKT_REDUCED_MODE
     log "reduced mode: $failed"
 else
+    unset INTAKT_REDUCED_MODE
     log 'full mode'
 fi
 

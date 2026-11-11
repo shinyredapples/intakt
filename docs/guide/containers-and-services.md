@@ -33,7 +33,7 @@ Images are built once per version of the project and cached, and rebuilt when th
 
 ## A check before every job
 
-This part is built, but no build, check or review runs in a job container yet. Before a job starts its real work, it checks that its box works as promised: it writes a small file into the folder it hands its results back in and into its scratch area and reads it back, makes sure it can read every input it was given, and tries each internet address it is allowed to reach. If something does not work (for example a folder that was not mounted properly), the job does not stop: it carries on in a reduced mode, says so at the top of its log, and Intakt writes each failed check and its reason into its ledger. So a broken folder is named at the start instead of making the job fail halfway for no clear reason.
+This part is built, but no build, check or review runs in a job container yet. Before a job starts its real work, it checks that its box works as promised: it writes a small file into the folder it hands its results back in and into its scratch area and reads it back, makes sure it can read every input it was given, and tries each internet address it is allowed to reach. If something does not work (for example a folder that was not mounted properly), the job does not stop: it carries on in a reduced mode, says so at the top of its log, and Intakt writes each failed check and its reason into its ledger. When the output folder itself is broken, the ledger gets a single `output` failure, and the input and egress reasons appear only in the log. So a broken folder is named at the start instead of making the job fail halfway for no clear reason.
 
 ## When a job runs out of memory
 
