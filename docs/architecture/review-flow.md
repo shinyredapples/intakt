@@ -28,6 +28,7 @@ flowchart TD
     judge --> updates
     updates --> live["Dashboard live updates"]
     act --> out["intakt:review prints the decision and the act list"]
+    judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head"]
 ```
 
 Every arrow into the ledger is an append of one event (`review_started`, `verdict_received`, `judge_done`, ...); the dashboard pages are rendered from the ledger alone, while the live updates reach the page through the Review module's `RoundUpdates` contract, which the Dashboard publishes to Mercure: the workers stream each tool call and text piece as they go (`LiveProgress`), and the round's latest state is published after each verdict and after the judge (`LiveRoundProgress::publishLatest()`); opening the round publishes nothing.

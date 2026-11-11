@@ -30,4 +30,5 @@ framework:
             Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer: async
             Intakt\Core\Review\UseCase\JudgeRound\JudgeRound: async
             Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings: async
+            Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict: async
             Intakt\Core\Review\Contract\RoundOpened: async
