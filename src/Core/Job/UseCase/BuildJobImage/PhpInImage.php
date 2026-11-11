@@ -80,11 +80,10 @@ final readonly class PhpInImage
         $version = is_array($answer) ? ($answer['version'] ?? null) : null;
         $extensions = is_array($answer) ? ($answer['extensions'] ?? null) : null;
 
-        if (!is_string($version) || 1 !== preg_match(self::VERSION, $version) || !is_array($extensions) || !array_is_list($extensions) || [] !== array_filter($extensions, static fn (mixed $name): bool => !is_string($name))) {
+        if (!is_string($version) || 1 !== preg_match(self::VERSION, $version) || !is_array($extensions) || !array_is_list($extensions)) {
             throw JobImageNotBuilt::probeUnreadable($tag);
         }
 
-        /** @var list<string> $extensions */
-        return [$version, $extensions];
+        return [$version, array_map(static fn (mixed $name): string => is_string($name) ? $name : throw JobImageNotBuilt::probeUnreadable($tag), $extensions)];
     }
 }
