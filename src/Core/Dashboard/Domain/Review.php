@@ -35,6 +35,22 @@ final readonly class Review
         return null === $latest ? null : $latest + 1;
     }
 
+    // Null once the judge has called the latest round, because nothing is then in progress.
+    public function activeRound(): ?ReviewedRound
+    {
+        $latest = array_last($this->rounds);
+
+        return $latest->isJudged() ? null : $latest;
+    }
+
+    // The newest judged round is the one whose "fix now" findings the builder is working through while the active round runs.
+    public function lastJudgedRound(): ?ReviewedRound
+    {
+        $judged = array_filter($this->rounds, static fn (ReviewedRound $round): bool => $round->isJudged());
+
+        return [] === $judged ? null : array_last($judged);
+    }
+
     public function tokens(): TokenFigures
     {
         return array_reduce($this->rounds, static fn (TokenFigures $sum, ReviewedRound $round): TokenFigures => $sum->plus($round->tokens), TokenFigures::none());
