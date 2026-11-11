@@ -38,6 +38,22 @@ final class BareZizmorIgnoresTest extends SandboxTestCase
         self::assertStringContainsString('t.yml:8 zizmor ignore without a reason', $this->findingsOf(self::TAGGED_CHECKOUT.' # zizmor: ignore[unpinned-uses] # zizmor: ignore[artipacked]'));
     }
 
+    public function testDirectiveTextInAQuotedValueCannotBeTheReasonOfABareIgnoreInTheComment(): void
+    {
+        self::assertSame(
+            '.github/workflows/t.yml:8 zizmor ignore without a reason: # zizmor: ignore[unpinned-uses,artipacked]',
+            $this->findingsOf("{name: '# zizmor: ignore[foo] harmless', ".self::TAGGED_CHECKOUT.'} # zizmor: ignore[unpinned-uses,artipacked]'),
+        );
+    }
+
+    public function testDirectiveTextInAQuotedValueWithNoWordsAfterItIsReportedToo(): void
+    {
+        self::assertSame(
+            '.github/workflows/t.yml:8 zizmor ignore without a reason: # zizmor: ignore[artipacked]',
+            $this->findingsOf("name: '# zizmor: ignore[artipacked]'\n        run: true"),
+        );
+    }
+
     public function testABareIgnoreInAYamlFileOutsideTheWorkflowsFailsTheGate(): void
     {
         $sandbox = $this->sandboxWithStep('run: true');

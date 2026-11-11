@@ -46,18 +46,23 @@ final readonly class BareZizmorIgnores
         $lines = preg_split('/\r\n|\r|\n/', $contents);
 
         foreach (false === $lines ? [] : $lines as $index => $line) {
-            if (1 === preg_match(self::DIRECTIVE, $line, $directive, PREG_OFFSET_CAPTURE) && !$this->hasReason(substr($line, $directive[0][1]))) {
-                $findings[] = $path.':'.($index + 1).' zizmor ignore without a reason: '.trim($directive[0][0]);
+            // A YAML comment runs to the end of the line, so the directive zizmor honors is the last match; an earlier one may sit in a quoted value, and the words after it must not pass as the comment's reason.
+            if (0 < (int) preg_match_all(self::DIRECTIVE, $line, $directives, PREG_OFFSET_CAPTURE)) {
+                [$directive, $offset] = $directives[0][array_key_last($directives[0])];
+
+                if (!$this->hasReason(substr($line, $offset + strlen($directive)))) {
+                    $findings[] = $path.':'.($index + 1).' zizmor ignore without a reason: '.trim($directive);
+                }
             }
         }
 
         return $findings;
     }
 
-    // A reason is words, so blanks, punctuation or a second directive alone do not count as one.
-    private function hasReason(string $fromDirective): bool
+    // A reason is words, so blanks or punctuation alone do not count as one.
+    private function hasReason(string $afterDirective): bool
     {
-        return 1 === preg_match('/\p{L}/u', preg_replace(self::DIRECTIVE, '', $fromDirective) ?? '');
+        return 1 === preg_match('/\p{L}/u', $afterDirective);
     }
 
     /**
