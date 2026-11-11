@@ -88,6 +88,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
+use stdClass;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
@@ -1001,10 +1002,18 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertArrayNotHasKey('round', $ledger->payloads()[0]);
     }
 
-    // Declared after the tests that call the shared dispatcher, so in the declared order it sees what they left behind.
     public function testATestStartsOnTheSharedDispatcherWithNoListenerAnEarlierTestCalled(): void
     {
         self::assertInstanceOf(TraceableEventDispatcher::class, $this->dispatcher);
+        $this->dispatcher->addListener(stdClass::class, static function (): void {
+        });
+        $this->dispatcher->dispatch(new stdClass());
+        self::assertNotSame([], $this->dispatcher->getCalledListeners());
+
+        $resetter = self::$platformKernel->getContainer()->get('services_resetter');
+        self::assertInstanceOf(ResetInterface::class, $resetter);
+        $resetter->reset();
+
         self::assertSame([], $this->dispatcher->getCalledListeners());
     }
 
