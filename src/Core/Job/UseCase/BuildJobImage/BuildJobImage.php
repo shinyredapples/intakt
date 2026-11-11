@@ -36,10 +36,10 @@ final readonly class BuildJobImage
         $plan = $this->planner->planFor($directory);
         $build = $this->engine->build($this->context->of($plan, $directory), $tag, $plan->dockerfile);
 
-        if (null !== $build->error) {
-            throw JobImageNotBuilt::buildFailed($tag, $build->error, $build->output);
+        if (null !== $build->error || null === $build->image) {
+            throw JobImageNotBuilt::buildFailed($tag, $build->error ?? 'no image', $build->output);
         }
 
-        return new BuiltJobImage($plan, $build->output, $plan->php instanceof PhpProfile ? $this->php->verify($tag, $plan->php) : null);
+        return new BuiltJobImage($plan, $build->output, $build->image, $plan->php instanceof PhpProfile ? $this->php->verify($tag, $build->image, $plan->php) : null);
     }
 }

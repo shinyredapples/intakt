@@ -37,9 +37,10 @@ final readonly class PhpInImage
      * @throws JobOutputRefused
      * @throws JobEventNotRecorded
      */
-    public function verify(string $tag, PhpProfile $php): string
+    // Runs in the image id and names the tag, because another build may have moved the tag to its own image meanwhile.
+    public function verify(string $tag, string $image, PhpProfile $php): string
     {
-        [$version, $extensions] = $this->probe($tag);
+        [$version, $extensions] = $this->probe($tag, $image);
 
         if (!$php->allows($version)) {
             throw JobImageNotBuilt::anotherPhp($tag, $version, $php->rule);
@@ -53,11 +54,11 @@ final readonly class PhpInImage
     /**
      * @return array{string, list<string>}
      */
-    private function probe(string $tag): array
+    private function probe(string $tag, string $image): array
     {
         $result = $this->jobs->run(new JobSpec(
-            new JobId('image-probe-'.substr(hash('xxh128', $tag), 0, 16)),
-            $tag,
+            new JobId('image-probe-'.substr(hash('xxh128', $image), 0, 16)),
+            $image,
             ['php', '-r', sprintf(self::PROBE, JobSpec::OUTPUT_DIRECTORY, self::ANSWER)],
             [],
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),

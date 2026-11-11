@@ -35,7 +35,7 @@ final readonly class BuildJobImageCommand
 
         $io->writeln($built->plan->summary());
         $io->write($built->output);
-        $io->success(null === $built->phpVersion ? sprintf('Image %s built.', $tag) : sprintf('Image %s built: PHP %s with every required extension.', $tag, $built->phpVersion));
+        $io->success(null === $built->phpVersion ? sprintf('Image %s (%s) built.', $tag, $built->image) : sprintf('Image %s (%s) built: PHP %s with every required extension.', $tag, $built->image, $built->phpVersion));
 
         return Command::SUCCESS;
     }

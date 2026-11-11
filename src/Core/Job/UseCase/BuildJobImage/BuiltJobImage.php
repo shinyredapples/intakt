@@ -13,6 +13,7 @@ final readonly class BuiltJobImage
     public function __construct(
         public JobImagePlan $plan,
         public string $output,
+        public string $image,
         public ?string $phpVersion,
     ) {
     }

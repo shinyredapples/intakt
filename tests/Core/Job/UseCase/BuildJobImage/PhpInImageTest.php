@@ -32,6 +32,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(JobSpec::class)]
 final class PhpInImageTest extends TestCase
 {
+    private const string IMAGE = 'sha256:2d2f1c0b5f6e4a3b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b';
     private const string COMPOSER_JSON = '{"require": {"php": ">=8.5.12", "ext-intl": "*", "ext-pdo_sqlite": "*"}}';
 
     public function testAnImageWithTheRightPhpAndEveryExtensionPassesWithItsVersion(): void
@@ -41,14 +42,14 @@ final class PhpInImageTest extends TestCase
         self::assertSame('8.5.12', $version);
     }
 
-    public function testTheProbeRunsInTheImageWithoutNetwork(): void
+    public function testTheProbeRunsInTheBuiltImageIdWithoutNetwork(): void
     {
         $runner = $this->createMock(JobRunner::class);
         $runner->expects($this->once())->method('run')
-            ->with(self::callback(static fn (JobSpec $spec): bool => 'intakt-job/demo:main' === $spec->image && $spec->egress->isNone() && [] === $spec->inputs && 'php' === $spec->command[0]))
+            ->with(self::callback(static fn (JobSpec $spec): bool => self::IMAGE === $spec->image && $spec->egress->isNone() && [] === $spec->inputs && 'php' === $spec->command[0]))
             ->willReturn($this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}'));
 
-        new PhpInImage($runner)->verify('intakt-job/demo:main', PhpProfile::fromComposerJson(self::COMPOSER_JSON));
+        new PhpInImage($runner)->verify('intakt-job/demo:main', self::IMAGE, PhpProfile::fromComposerJson(self::COMPOSER_JSON));
     }
 
     public function testAnotherPhpIsRefusedWithBothVersions(): void
@@ -73,7 +74,7 @@ final class PhpInImageTest extends TestCase
 
         $this->expectExceptionObject(JobImageNotBuilt::probeFailed('intakt-job/demo:main', $end));
 
-        new PhpInImage($runner)->verify('intakt-job/demo:main', PhpProfile::fromComposerJson(self::COMPOSER_JSON));
+        new PhpInImage($runner)->verify('intakt-job/demo:main', self::IMAGE, PhpProfile::fromComposerJson(self::COMPOSER_JSON));
     }
 
     public function testAProbeAnswerWithoutAVersionIsRefused(): void
@@ -95,7 +96,7 @@ final class PhpInImageTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturn($this->resultWith($answer));
 
-        return new PhpInImage($runner)->verify('intakt-job/demo:main', PhpProfile::fromComposerJson(self::COMPOSER_JSON));
+        return new PhpInImage($runner)->verify('intakt-job/demo:main', self::IMAGE, PhpProfile::fromComposerJson(self::COMPOSER_JSON));
     }
 
     private function resultWith(string $answer): JobResult

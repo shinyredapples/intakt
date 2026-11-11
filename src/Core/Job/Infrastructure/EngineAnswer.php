@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Core\Job\Infrastructure;
 
 use Intakt\Core\Job\Contract\DockerEngineFailed;
+use stdClass;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 #[Exclude]
 final readonly class EngineAnswer
 {
     private const int FRAME_HEADER_BYTES = 8;
+    private const string IMAGE_ID = '/^sha256:[a-f0-9]{64}$/D';
 
     public function __construct(
         private string $call,
@@ -44,36 +46,52 @@ final readonly class EngineAnswer
         return $text;
     }
 
-    // A build answers one JSON object per line and reports a failed step as an error line after a 200, so the lines decide.
+    // A build answers one JSON object per line and reports a failed step as an error line after a 200, so the lines decide; only the image id the engine names on completion makes a build without an error a success.
     public function built(int ...$statuses): ImageBuild
     {
         $this->refuseOtherThan($statuses);
         $output = '';
         $error = null;
+        $image = null;
 
-        foreach (explode("\n", trim($this->body)) as $line) {
-            [$stream, $failure] = $this->buildLine(trim($line));
+        foreach (preg_split('/\R/', $this->body) ?: [] as $line) {
+            if ('' === trim($line)) {
+                continue;
+            }
+
+            [$stream, $failure, $built] = $this->buildLine($line);
             $output .= $stream;
             $error = $failure ?? $error;
+            $image = $built ?? $image;
         }
 
-        return new ImageBuild($output, $error);
-    }
-
-    /**
-     * @return array{string, ?string}
-     */
-    private function buildLine(string $line): array
-    {
-        $message = '' === $line ? [] : json_decode($line, true);
-        $stream = is_array($message) ? ($message['stream'] ?? '') : null;
-        $error = is_array($message) ? ($message['error'] ?? null) : false;
-
-        if (!is_string($stream) || (null !== $error && !is_string($error))) {
+        if (null === $error && null === $image) {
             throw DockerEngineFailed::unexpected($this->call);
         }
 
-        return [$stream, $error];
+        return new ImageBuild($output, $error, $image);
+    }
+
+    /**
+     * @return array{string, ?string, ?string}
+     */
+    private function buildLine(string $line): array
+    {
+        $message = json_decode($line);
+
+        if (!$message instanceof stdClass) {
+            throw DockerEngineFailed::unexpected($this->call);
+        }
+
+        $stream = $message->stream ?? '';
+        $error = $message->error ?? null;
+        $image = $message->aux->ID ?? null;
+
+        if (!is_string($stream) || (null !== $error && !is_string($error)) || (null !== $image && (!is_string($image) || 1 !== preg_match(self::IMAGE_ID, $image)))) {
+            throw DockerEngineFailed::unexpected($this->call);
+        }
+
+        return [$stream, $error, $image];
     }
 
     /**
