@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
@@ -103,7 +104,7 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
 
-        self::assertSame([$message->reviewerId => 'stopped'], array_last($this->fixture->updates->progress)?->finished);
+        self::assertSame([$message->reviewerId => FinishedState::Stopped],array_last($this->fixture->updates->progress)?->finished);
     }
 
     public function testTheProgressPublishedAfterAVerdictThatFollowedAnEarlierStopShowsTheVerdict(): void
@@ -114,7 +115,7 @@ final class StopReviewerTest extends KernelTestCase
 
         $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
 
-        self::assertSame([$message->reviewerId => 'verdict'], array_last($this->fixture->updates->progress)?->finished);
+        self::assertSame([$message->reviewerId => FinishedState::Verdict],array_last($this->fixture->updates->progress)?->finished);
     }
 
     public function testAStopPressedDuringARetryWaitStopsTheRetriedRun(): void

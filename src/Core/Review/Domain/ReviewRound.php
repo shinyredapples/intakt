@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Domain;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -162,7 +163,7 @@ final class ReviewRound implements HasPlace
             $id = $reviewer->id()->toRfc4122();
 
             if ($reviewer->isFinished()) {
-                $finished[$id] = in_array($id, $stopped, true) ? 'stopped' : $reviewer->state()->value;
+                $finished[$id] = in_array($id, $stopped, true) ? FinishedState::Stopped : FinishedState::from($reviewer->state()->value);
             }
         }
 

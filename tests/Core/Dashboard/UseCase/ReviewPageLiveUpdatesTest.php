@@ -14,6 +14,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Override;
@@ -34,6 +35,7 @@ use Twig\Environment;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(FinishedState::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -109,7 +111,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
-            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => 'stopped'])]);
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
 
         foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
             self::assertCount(1, $page->filter('#'.$target), $target);
@@ -144,7 +146,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
         $this->ledger->answer('round-1', 'correctness', 0);
 
-        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => 'verdict'])]));
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
         self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
         self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
@@ -158,7 +160,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
-            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => 'stopped'])]));
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]));
 
         self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
         self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());

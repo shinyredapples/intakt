@@ -10,9 +10,9 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class RoundProgress
 {
-    // $finished holds each finished reviewer's state in words by reviewer id, so the page can stop showing it running.
+    // $finished holds each finished reviewer's state by reviewer id, so the page can stop showing it running.
     /**
-     * @param array<string, string> $finished
+     * @param array<string, FinishedState> $finished
      */
     public function __construct(
         public int $reviewersFinished,
