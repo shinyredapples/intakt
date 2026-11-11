@@ -1,0 +1,14 @@
+{#- One group of search results under its heading, each result an option of the overlay's list box. A result with href opens it; one with action carries the action the overlay's script runs. selected marks the option the arrows are on, which only the components page passes. Options are no tab stops, because the arrows move between them while the focus stays in the field. -#}
+<div role="group" aria-labelledby="{{ id }}">
+<div class="grp" id="{{ id }}">{{ include('dashboard/components/icon.html.twig', {name: icon}, with_context = false) }}{{ label }}</div>
+{% for result in results %}
+{%- set href = result.href ?? null -%}
+{%- set action = result.action ?? null -%}
+{%- set selected = (result.selected ?? false) ? 'true' : 'false' -%}
+{% if href is not null %}
+<a class="res" role="option" tabindex="-1" aria-selected="{{ selected }}" href="{{ href }}"><span class="lbl">{{ result.label }}</span><span class="sub">{{ result.detail }}</span></a>
+{% else %}
+<div class="res" role="option" tabindex="-1" aria-selected="{{ selected }}"{% if action is not null %} data-search-action="{{ action.value }}"{% endif %}><span class="lbl">{{ result.label }}</span><span class="sub">{{ result.detail }}</span></div>
+{% endif %}
+{% endfor %}
+</div>

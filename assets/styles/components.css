@@ -341,6 +341,35 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .menu a[aria-current="page"] { background: var(--selected); }
 }
 
+/* Search overlay: an opaque panel over the scrim. The panel moves in and never fades, so it is readable from the first frame (DESIGN.md, Overlay). The mock pads the field 18 px and a result 9 by 10 px, which have no step, so tokens only (D2) wins with calc() of the nearest steps. */
+.overlay { position: fixed; inset: 0; z-index: 100; padding: 12vh var(--s16) var(--s16); background: var(--backdrop); }
+.overlay[hidden] { display: none; }
+.overlay:not([hidden]) .palette { animation: rise .14s ease-out; }
+@keyframes rise { from { transform: translateY(8px); } }
+.palette { max-width: 640px; margin: 0 auto; overflow: hidden; border: 1px solid var(--hairline); border-radius: var(--r-overlay); background: var(--raised); }
+.palette.static { max-width: 560px; margin: 0 0 var(--s12); }
+.palette .q { display: flex; align-items: center; gap: var(--s12); height: 60px; padding: 0 calc(var(--s16) + 2px); border-bottom: 1px solid var(--hairline); color: var(--muted); }
+.palette .q input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: var(--ink); font: 400 var(--t17) var(--f-body); }
+/* The field fills its 60 px row, so the shared focus outline sits inside it, where the panel's rounded corners and the row's hairline do not cut it. */
+.palette .q input:focus-visible { outline-offset: -2px; }
+.palette .results { max-height: 52vh; overflow: auto; padding: var(--s8); }
+.palette .grp { display: flex; align-items: center; gap: var(--s8); padding: calc(var(--s8) + 2px) calc(var(--s8) + 2px) var(--s4); color: var(--muted); font: 500 var(--t13)/1.3 var(--f-head); }
+.palette .res { display: flex; align-items: center; gap: var(--s12); padding: calc(var(--s8) + 1px) calc(var(--s8) + 2px); border-radius: var(--r-btn); color: var(--ink); text-decoration: none; cursor: pointer; }
+.palette .res:hover { background: var(--tint); }
+.palette .res[aria-selected="true"] { background: var(--selected); }
+/* Long names wrap and never clip mid-word (DESIGN.md, Long titles). */
+.palette .res .lbl { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.palette .res .sub { max-width: 50%; color: var(--muted); font-size: var(--t13); text-align: right; overflow-wrap: anywhere; }
+.palette .res[aria-selected="true"] .sub { color: var(--ink); }
+.palette .none { padding: var(--s24) calc(var(--s8) + 2px); color: var(--muted); text-align: center; }
+.palette .none p { margin: 0; }
+.palette .none p + p { margin-top: var(--s4); }
+.palette .none .btn { margin-top: calc(var(--s12) + 2px); }
+.palette footer { display: flex; gap: var(--s16); padding: calc(var(--s8) + 2px) calc(var(--s16) + 2px); border-top: 1px solid var(--hairline); color: var(--muted); font-size: var(--t13); }
+@media (prefers-reduced-motion: reduce) {
+  .overlay:not([hidden]) .palette { animation: none; }
+}
+
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
 .page-head .actions { margin-left: auto; }
