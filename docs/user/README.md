@@ -24,7 +24,7 @@ What the guide covers today, feature by feature; the parts marked planned arrive
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
 
-The list of Symfony and Symfony AI features Intakt uses (the highlights page) is not stored as one file in the repository; it is assembled from small pieces and published from main at <https://shinyredapples.github.io/intakt/> once the owner has set the repository's Pages source to "GitHub Actions" ([how](../architecture/highlights-page.md)). Run `bin/highlights` to build it locally as `docs/highlights.md`.
+The highlights page (the Symfony and Symfony AI features Intakt uses) is assembled from small pieces and published from main at <https://shinyredapples.github.io/intakt/> ([how](../architecture/highlights-page.md)); `bin/highlights` builds it locally as `docs/highlights.md`.
 
 For whoever maintains a copy of the Intakt repository: [Running Intakt's CI on your own runner](self-hosted-ci.md).
 
