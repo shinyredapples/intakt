@@ -44,6 +44,27 @@ final readonly class EngineAnswer
         return $text;
     }
 
+    // A build answers one JSON object per line and reports a failed step as an error line after a 200, so the lines decide.
+    public function built(int ...$statuses): ImageBuild
+    {
+        $this->refuseOtherThan($statuses);
+        $output = '';
+        $error = null;
+
+        foreach (preg_split('/\r?\n/', trim($this->body)) ?: [] as $line) {
+            $message = '' === $line ? [] : json_decode($line, true);
+
+            if (!is_array($message) || !is_string($message['stream'] ?? '') || !is_string($message['error'] ?? '')) {
+                throw DockerEngineFailed::unexpected($this->call);
+            }
+
+            $output .= $message['stream'] ?? '';
+            $error = $message['error'] ?? $error;
+        }
+
+        return new ImageBuild($output, $error);
+    }
+
     /**
      * @param array<int> $statuses
      */
