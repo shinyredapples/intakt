@@ -25,27 +25,29 @@ final class StaticGatesListTest extends TestCase
 
     public function testTheStaticGatesLeaveOutTheGatesThatRunTheChangesCode(): void
     {
-        $static = $this->listIn($this->check('--static-gates'))['static'];
+        $static = $this->namesIn($this->check('--static-gates'), 'static');
 
         self::assertSame(['cs', 'rector', 'architecture', 'comments', 'audit', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'ratchet'], $static);
     }
 
     public function testTheOrderNamesEveryGateInGateOrder(): void
     {
-        $order = $this->listIn($this->check('--static-gates'))['order'];
+        $order = $this->namesIn($this->check('--static-gates'), 'order');
 
         self::assertSame(['cs', 'phpstan', 'rector', 'architecture', 'comments', 'audit', 'tests', 'secrets', 'secrets-history', 'commits', 'dashes', 'highlights', 'reproductions', 'container', 'ratchet'], $order);
     }
 
     public function testACodeGateSitsBetweenStaticGatesInTheOrder(): void
     {
-        $list = $this->listIn($this->check('--static-gates'));
-        $phpstan = array_search('phpstan', $list['order'], true);
+        $run = $this->check('--static-gates');
+        $static = $this->namesIn($run, 'static');
+        $order = $this->namesIn($run, 'order');
+        $phpstan = array_search('phpstan', $order, true);
 
-        self::assertNotContains('phpstan', $list['static']);
+        self::assertNotContains('phpstan', $static);
         self::assertIsInt($phpstan);
-        self::assertContains($list['order'][$phpstan - 1], $list['static']);
-        self::assertContains($list['order'][$phpstan + 1], $list['static']);
+        self::assertContains($order[$phpstan - 1] ?? null, $static);
+        self::assertContains($order[$phpstan + 1] ?? null, $static);
     }
 
     public function testTheStaticGatesListTakesNoOtherArgument(): void
@@ -57,12 +59,25 @@ final class StaticGatesListTest extends TestCase
     }
 
     /**
-     * @return array{static: list<string>, order: list<string>}
+     * @return array<mixed>
      */
     private function listIn(ProcessResult $run): array
     {
-        /** @var array{static: list<string>, order: list<string>} */
-        return json_decode($run->output, true, flags: JSON_THROW_ON_ERROR);
+        $list = json_decode($run->output, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($list);
+
+        return $list;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function namesIn(ProcessResult $run, string $key): array
+    {
+        $names = $this->listIn($run)[$key] ?? null;
+        self::assertIsArray($names);
+
+        return array_values(array_filter($names, is_string(...)));
     }
 
     private function check(string ...$arguments): ProcessResult
