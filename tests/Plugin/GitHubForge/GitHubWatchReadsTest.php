@@ -12,13 +12,16 @@ use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChangeListing;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
+use Intakt\Plugin\GitHubForge\Domain\RateLimitReading;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\BudgetReserve;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
@@ -60,6 +63,9 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[UsesClass(OpenChange::class)]
 #[UsesClass(OpenChangeListing::class)]
 #[UsesClass(RateLimitReadings::class)]
+#[UsesClass(RateLimitReading::class)]
+#[UsesClass(BudgetReserve::class)]
+#[UsesClass(ForgeRateLimited::class)]
 #[UsesClass(InstallationToken::class)]
 #[UsesClass(InstallationTokenMinter::class)]
 #[UsesClass(InstallationTokens::class)]
@@ -87,6 +93,68 @@ final class GitHubWatchReadsTest extends TestCase
     private string $runs = 'runs_green.json';
     private string $suites = 'suites_none.json';
     private int $failWith = 0;
+    private ?int $remaining = null;
+    private MockClock $clock;
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+    }
+
+    public function testBelowTheReserveASecondListingInOneTickMakesNoRequestAndWaitsForTheReset(): void
+    {
+        $this->remaining = 999;
+        $reads = $this->reads();
+        $reads->ciStateOf('alpha', new CommitId(self::HEAD));
+        $reads->listOpen('alpha', null);
+
+        try {
+            $reads->listOpen('alpha', null);
+            self::fail('The second listing was expected to wait for the reset.');
+        } catch (ForgeRateLimited $limited) {
+            self::assertEquals($this->clock->now()->modify('+30 minutes'), $limited->resetsAt);
+        }
+
+        self::assertCount(1, $this->listingRequests());
+    }
+
+    public function testBelowTheReserveTheNextTickListsAgain(): void
+    {
+        $this->remaining = 999;
+        $reads = $this->reads();
+        $reads->ciStateOf('alpha', new CommitId(self::HEAD));
+        $reads->listOpen('alpha', null);
+        $this->clock->modify('+1 minute');
+
+        $reads->listOpen('alpha', null);
+
+        self::assertCount(2, $this->listingRequests());
+    }
+
+    public function testAtTheReserveListingsAreNotHeldBack(): void
+    {
+        $this->remaining = 1000;
+        $reads = $this->reads();
+        $reads->ciStateOf('alpha', new CommitId(self::HEAD));
+
+        $reads->listOpen('alpha', null);
+        $reads->listOpen('alpha', null);
+
+        self::assertCount(2, $this->listingRequests());
+    }
+
+    public function testBelowTheReserveTheCiOfAWaitingHeadIsReadOnEveryCall(): void
+    {
+        $this->remaining = 1;
+        $reads = $this->reads();
+        $reads->listOpen('alpha', null);
+        $this->requested = [];
+
+        $reads->ciStateOf('alpha', new CommitId(self::HEAD));
+        $reads->ciStateOf('alpha', new CommitId(self::HEAD));
+
+        self::assertCount(4, $this->requested);
+    }
 
     public function testAListingAnsweredNotModifiedIsReportedUnchanged(): void
     {
@@ -435,7 +503,7 @@ final class GitHubWatchReadsTest extends TestCase
 
             return $this->answer($url);
         }, 'https://api.github.com');
-        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $clock = $this->clock;
         $identity = new RecordedInstallation('installation-secret')->client();
         $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
@@ -443,7 +511,7 @@ final class GitHubWatchReadsTest extends TestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments());
+        return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
     private function answer(string $url): ResponseInterface
@@ -458,9 +526,21 @@ final class GitHubWatchReadsTest extends TestCase
 
         return match (true) {
             str_contains($url, '/pulls') => $this->listingPage($url),
-            str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs)),
-            default => new MockResponse($this->fixture($this->suites)),
+            str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs), ['response_headers' => $this->budget()]),
+            default => new MockResponse($this->fixture($this->suites), ['response_headers' => $this->budget()]),
         };
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function budget(): array
+    {
+        return null === $this->remaining ? [] : [
+            'x-ratelimit-limit' => '5000',
+            'x-ratelimit-remaining' => (string) $this->remaining,
+            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
+        ];
     }
 
     private function listingPage(string $url): MockResponse
@@ -470,7 +550,7 @@ final class GitHubWatchReadsTest extends TestCase
         }
 
         $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
-        $headers = ['response_headers' => ['ETag' => $this->listingEtag]];
+        $headers = ['response_headers' => ['ETag' => $this->listingEtag, ...$this->budget()]];
 
         return match ($this->listing) {
             'pulls_page_full.json' => new MockResponse($this->fixture(1 === $page ? 'pulls_page_full.json' : 'pulls_page_last.json'), $headers),

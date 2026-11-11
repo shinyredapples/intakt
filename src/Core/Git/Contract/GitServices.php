@@ -1,0 +1,11 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Git\Contract;
+
+// The container parameter names of this module, so config and code never spell one twice.
+final readonly class GitServices
+{
+    public const string MIRRORS_DIRECTORY = 'intakt.git.mirrors_directory';
+}

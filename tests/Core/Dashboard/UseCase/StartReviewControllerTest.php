@@ -173,6 +173,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSame('/reviews/round-1/start', $crawler->filter('form.start-review')->attr('action'));
         self::assertNotSame('', $crawler->filter('form.start-review input[name=_token]')->attr('value'));
+        self::assertSame('btn primary', $crawler->filter('.page-head .actions form.start-review button[type=submit]')->attr('class'));
     }
 
     public function testAPageWhoseRoundRecordedNoRepositoryShowsNoButtonAndSaysWhy(): void

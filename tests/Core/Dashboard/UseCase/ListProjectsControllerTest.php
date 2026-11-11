@@ -29,9 +29,25 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/projects');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(['alpha', 'zeta'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
-        self::assertSame('2', $crawler->filter('tbody tr:first-child td:nth-child(2)')->text());
-        self::assertSame('1', $crawler->filter('tbody tr:first-child td:nth-child(3)')->text());
+        self::assertSame(['alpha', 'zeta'], $crawler->filter('.list .row .t')->each(static fn ($title): string => $title->text()));
+        self::assertSame('2 review rounds, 1 judged.', $crawler->filter('.list .row .d')->first()->text());
+    }
+
+    public function testAProjectWithOneRoundSaysRoundInTheSingular(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertSame('1 review round, 0 judged.', $crawler->filter('.list .row .d')->text());
+    }
+
+    public function testThePageHeadNamesThePageAndSaysWhatItLists(): void
+    {
+        $crawler = $this->browser->request('GET', '/projects');
+
+        self::assertSame('Projects', $crawler->filter('.page-head h1')->text());
+        self::assertSame('Every project that has started a review. Open one to see its reviews.', $crawler->filter('.page-head .lead')->text());
     }
 
     public function testEachProjectLinksToItsReviews(): void
@@ -40,7 +56,7 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/projects');
 
-        self::assertSame('/reviews?project=alpha', $crawler->filter('tbody a')->attr('href'));
+        self::assertSame('/reviews?project=alpha', $crawler->filter('.list .row .t a')->attr('href'));
     }
 
     public function testTheProjectListSaysSoWhenTheLedgerHasNoReviews(): void
@@ -48,8 +64,8 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/projects');
 
         self::assertResponseIsSuccessful();
-        self::assertSelectorTextContains('main', 'No project has started a review yet.');
-        self::assertSelectorNotExists('table');
+        self::assertSelectorTextContains('main .empty', 'No project has started a review yet.');
+        self::assertSelectorNotExists('.list');
     }
 
     public function testAProjectNameWithMarkupIsEscaped(): void
