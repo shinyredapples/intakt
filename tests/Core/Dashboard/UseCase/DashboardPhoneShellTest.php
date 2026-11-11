@@ -124,7 +124,17 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
 
     public function testOnPhonesASearchResultRowIsAtLeast52PixelsTall(): void
     {
-        self::assertStringContainsString('min-height: 52px', $this->phoneRules()['.overlay .palette .res'] ?? '');
+        self::assertStringContainsString('min-height: 52px', $this->phoneRules()['.palette .res'] ?? '');
+    }
+
+    public function testOnPhonesSubTabsAndTheLinksOfRowsAndTableCellsAreAtLeast44PixelsTall(): void
+    {
+        self::assertStringContainsString('min-height: 44px', $this->phoneRules()['.subtabs a, .row .t a, .ledger td a'] ?? '');
+    }
+
+    public function testOnPhonesTheSmallestTextIs15PixelsAlsoInsideAPaneWithItsOwnTheme(): void
+    {
+        self::assertStringContainsString('--t13: 15px', $this->phoneRulesOf($this->sheets('tokens')[0])[':root, [data-theme]'] ?? '');
     }
 
     public function testOnPhonesTheCancelAndClearButtonsOfTheSearchAreAtLeast44PixelsTall(): void
