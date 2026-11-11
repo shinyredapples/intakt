@@ -72,9 +72,16 @@ final class PublishedComparisonTest extends TestCase
 
     public function testOneChangesVoteOnASideMakesThatSideChangesWhateverItsOtherReviewSays(): void
     {
-        $report = $this->report($this->loop('h1', self::CHANGES), $this->loop('h1', 'no verdict'), $this->intakt('h1', self::CHANGES));
+        $report = $this->report($this->loop('h1', self::CHANGES), $this->loop('h1', self::APPROVE), $this->intakt('h1', self::CHANGES));
 
         self::assertSame(Agreement::Agree, $report->heads[0]->agreement);
+    }
+
+    public function testAnUnreadableReviewBesideAChangesVoteIsIncompleteNeverAgreement(): void
+    {
+        $report = $this->report($this->loop('h1', self::CHANGES), $this->loop('h1', 'no verdict'), $this->intakt('h1', self::CHANGES));
+
+        self::assertSame(Agreement::Incomplete, $report->heads[0]->agreement);
     }
 
     public function testAnUnreadableLoopReviewIsIncompleteNeverAgreement(): void

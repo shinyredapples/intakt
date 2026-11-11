@@ -159,6 +159,7 @@ final class WeeklyReportCommandTest extends TestCase
         yield 'a comment without body' => [self::json([...$pullRequest, 'comments' => [['author' => 'loop-bot', 'head' => 'h1', 'postedAt' => '2026-11-03T00:00:00Z']]])];
         yield 'a comment whose moment has no offset' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => '2026-11-03T00:00:00']]])];
         yield 'a comment whose moment is no date' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => '2026-13-01T00:00:00Z']]])];
+        yield 'a comment whose moment holds a null byte' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => "2026-11-03T00:00:00Z\0"]]])];
     }
 
     /**

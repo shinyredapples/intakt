@@ -91,14 +91,15 @@ final readonly class PublishedComparison
         return $loopVerdict === $intaktVerdict ? Agreement::Agree : Agreement::Disagree;
     }
 
-    // One changes vote holds the head back whatever the side's other reviews say; otherwise a side approves only when it has reviews and all of them could be read, so an unread review never counts as agreement.
+    // A side without reviews or with one it could not read stays unread even beside a changes vote, so an unread review never counts as agreement; otherwise one changes vote holds the head back.
     private function sideVerdict(LoopReviews $side): LoopVerdict
     {
         $verdicts = array_map(static fn (LoopReview $review): LoopVerdict => $review->verdict, $side->reviews);
-        if (in_array(LoopVerdict::Changes, $verdicts, true)) {
-            return LoopVerdict::Changes;
-        }
 
-        return [] === $verdicts || in_array(LoopVerdict::Unreadable, $verdicts, true) ? LoopVerdict::Unreadable : LoopVerdict::Approve;
+        return match (true) {
+            [] === $verdicts, in_array(LoopVerdict::Unreadable, $verdicts, true) => LoopVerdict::Unreadable,
+            in_array(LoopVerdict::Changes, $verdicts, true) => LoopVerdict::Changes,
+            default => LoopVerdict::Approve,
+        };
     }
 }

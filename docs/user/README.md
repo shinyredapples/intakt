@@ -598,9 +598,9 @@ The week is the seven days before `--until` (a moment with its offset; without i
 
 - `agree` when both sides ask for changes, or both approve;
 - `disagree` when one side asks for changes and the other approves;
-- `incomplete` when a side posted no review on the head, or none of its reviews asks for changes and one could not be read. A review that cannot be read never counts as agreement.
+- `incomplete` when a side posted no review on the head, or one of its reviews could not be read, even when another of its reviews asks for changes. A review that cannot be read never counts as agreement.
 
-A side asks for changes when any of its reviews does. Findings are matched as in the shadow report (same file, lines at most 3 apart, a spot several reviewers of one side raised counts once); a finding Intakt files under `Follow-ups:` in an approval still counts as a finding. A finding line without a file and line is not read. An end that is not such a moment, a folder that cannot be read, or a file in it that is not a recorded pull request, stops the command with an error that names it.
+Otherwise a side asks for changes when any of its reviews does. Findings are matched as in the shadow report (same file, lines at most 3 apart, a spot several reviewers of one side raised counts once); a finding Intakt files under `Follow-ups:` in an approval still counts as a finding. A finding line without a file and line is not read. An end that is not such a moment, a folder that cannot be read, or a file in it that is not a recorded pull request, stops the command with an error that names it.
 
 ## The sample repository
 

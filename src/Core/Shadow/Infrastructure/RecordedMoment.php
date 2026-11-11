@@ -14,7 +14,12 @@ final readonly class RecordedMoment
 
     public static function parse(string $text): ?DateTimeImmutable
     {
-        $moment = DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
+        // PHP throws on a null byte instead of refusing the text, which would skip the error that names the recorded file.
+        if (str_contains($text, "\0")) {
+            return null;
+        }
+
+        $moment =DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
 
         // Refused on a warning, because PHP rolls an impossible date such as February 30 over into another day.
         if (false === $moment || false !== DateTimeImmutable::getLastErrors()) {
