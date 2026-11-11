@@ -8,6 +8,7 @@ use Intakt\Gates\PhpStan\ContainerRegistration;
 use Intakt\Gates\PhpStan\StatefulServiceResetRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -23,6 +24,23 @@ final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
         return new StatefulServiceResetRule(new ContainerRegistration($root));
     }
 
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
+    {
+        return self::casesOfOnePhpstanRun([
+            'AReadonlyServicePassesStaticAnalysis' => ['readonly-service'],
+            'ADomainServiceWithAMutablePropertyFailsStaticAnalysis' => ['domain-service', 'src/Core/Review/Domain/VerdictPolicy.php:10 intakt.statefulService Service property $cache'],
+        ], 'src/');
+    }
+
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
+    {
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
+    }
+
     public function testAServiceWithAMutablePropertyFailsStaticAnalysis(): void
     {
         $findings = $this->ruleFindingsOf('mutable-service');
@@ -34,11 +52,6 @@ final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
     public function testAServiceWithAMutablePropertyAndResetInterfacePassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('resettable-service');
-    }
-
-    public function testAReadonlyServicePassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'readonly-service');
     }
 
     public function testDoctrineColumnTypesWithMutablePropertiesPassStaticAnalysis(): void
@@ -70,11 +83,6 @@ final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
 
         self::assertStringContainsString('src/Mailer.php:13 intakt.statefulService Service property $subject', $findings);
         self::assertStringNotContainsString('$greeting', $findings);
-    }
-
-    public function testADomainServiceWithAMutablePropertyFailsStaticAnalysis(): void
-    {
-        $this->assertRejectedBy('phpstan', 'domain-service', 'src/Core/Review/Domain/VerdictPolicy.php:10 intakt.statefulService Service property $cache');
     }
 
     public function testAStaticMutablePropertyOfAServiceFailsStaticAnalysis(): void
