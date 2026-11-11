@@ -12,7 +12,7 @@
 {% if forge_budgets is not empty %}
 <section class="section forge-budgets">
 <h2>Forge budget this hour</h2>
-<div class="table-scroll">
+<div class="table-scroll" tabindex="0" role="region" aria-label="Forge budget this hour">
 <table class="ledger">
     <thead><tr><th>Installation</th><th>Calls used</th><th>Calls remaining</th><th>Forge reserve</th></tr></thead>
     <tbody>
@@ -60,7 +60,7 @@
 {{ include('dashboard/components/empty.html.twig', {title: 'No reviews yet', text: 'No review has started yet.'}, with_context = false) }}
 {% else %}
 <section class="section">
-<div class="table-scroll">
+<div class="table-scroll" tabindex="0" role="region" aria-label="Review rounds">
 <table class="ledger">
     <thead><tr><th>Round</th><th>Project</th><th>Reviewers</th><th>Started (UTC)</th><th>State</th></tr></thead>
     <tbody>

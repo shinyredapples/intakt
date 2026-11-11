@@ -38,6 +38,15 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSame('2026-10-28 12:00:00', $crawler->filter('tbody tr:first-child td:nth-child(4)')->text());
     }
 
+    public function testTheTableOfRoundsScrollsInANamedRegionTheKeyboardReaches(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Review rounds', $crawler->filter('.table-scroll[tabindex="0"][role="region"]')->last()->attr('aria-label'));
+    }
+
     public function testARoundWithAJudgeDecisionIsListedAsJudged(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
