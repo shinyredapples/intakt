@@ -48,7 +48,7 @@ final class FakeDockerEngine
     /** @var list<string> */
     private array $sockets = [];
 
-    private FakeNetworks $networks;
+    private readonly FakeNetworks $networks;
 
     /** @var array<string, string> */
     private array $proxyLogs = [];

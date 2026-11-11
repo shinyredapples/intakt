@@ -45,7 +45,7 @@ final class FakeNetworks
 
     // Null for a call that is not about networks, so the engine answers it instead.
     /**
-     * @param array<string, mixed>        $options
+     * @param array<string, mixed>         $options
      * @param array<string, FakeContainer> $containers
      */
     public function answer(string $method, string $path, array $options, array $containers): ?MockResponse
