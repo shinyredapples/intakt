@@ -72,7 +72,7 @@ final class BareZizmorIgnoresTest extends SandboxTestCase
     public function testTheRepositorysOwnWorkflowsPassTheGate(): void
     {
         $sandbox = $this->emptySandbox();
-        new Filesystem()->mirror(\dirname(__DIR__, 2).'/.github', $sandbox->root.'/.github');
+        new Filesystem()->mirror(dirname(__DIR__, 2).'/.github', $sandbox->root.'/.github');
 
         self::assertTrue($sandbox->check('--only=workflows')->passed('workflows'));
     }

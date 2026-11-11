@@ -70,8 +70,8 @@ final readonly class BareZizmorIgnores
         $paths = [];
 
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/'.self::SCANNED, FilesystemIterator::SKIP_DOTS)) as $file) {
-            if ($file instanceof SplFileInfo && $file->isFile() && \in_array(strtolower($file->getExtension()), ['yml', 'yaml'], true)) {
-                $paths[] = substr($file->getPathname(), \strlen($root) + 1);
+            if ($file instanceof SplFileInfo && $file->isFile() && in_array(strtolower($file->getExtension()), ['yml', 'yaml'], true)) {
+                $paths[] = substr($file->getPathname(), strlen($root) + 1);
             }
         }
 
