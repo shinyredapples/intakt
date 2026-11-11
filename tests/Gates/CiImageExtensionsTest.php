@@ -39,7 +39,7 @@ final class CiImageExtensionsTest extends TestCase
     private function check(string $composer): Process
     {
         self::assertSame(1, preg_match('/^RUN (set -eu; \\\\\n\s+missing=.*\n\s+test -z "\$left")$/ms', $this->dockerfile(), $run));
-        $process = Process::fromShellCommandline(str_replace('/usr/local/share/intakt/composer.json', 'php://stdin', $run[1]), input: $composer);
+        $process = Process::fromShellCommandline(str_replace('/usr/local/share/intakt/composer.json', 'php://stdin', $run[1] ?? ''), input: $composer);
         $process->run();
 
         return $process;
