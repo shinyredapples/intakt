@@ -171,6 +171,15 @@ final readonly class TemporaryRepository
         $this->git('replace', $object, $replacement);
     }
 
+    // A copy costs no git call, so a test class can build its history once and hand each changing case its own.
+    public function copy(): self
+    {
+        $copy = clone($this, ['path' => sys_get_temp_dir().'/intakt-forge-'.bin2hex(random_bytes(6))]);
+        new Filesystem()->mirror($this->path, $copy->path);
+
+        return $copy;
+    }
+
     public function remove(): void
     {
         new Filesystem()->remove($this->path);
