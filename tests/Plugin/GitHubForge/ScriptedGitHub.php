@@ -19,11 +19,15 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
 // Keeps each write with its decoded body and answers 201 unless a test refuses its path once, because a test must see every write the forge sent and in which order; lists the comments posted so far, so a retry can find its own.
 final class ScriptedGitHub
 {
+    private const string APP_ID = '12345';
+
     /** @var list<array{string, array<mixed>}> */
     public array $writes = [];
 
@@ -32,6 +36,12 @@ final class ScriptedGitHub
 
     /** @var array<string, int> */
     private array $refusals = [];
+
+    // Shared by every forge it builds, so a retry meets the lock an earlier delivery took, as the workers share one lock store.
+    public function __construct(
+        private readonly LockFactory $locks = new LockFactory(new InMemoryStore()),
+    ) {
+    }
 
     public function refuseOnce(string $pathEnding, int $status): void
     {
@@ -42,7 +52,7 @@ final class ScriptedGitHub
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation('installation-secret')->client();
-        $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
+        $jwt = new AppJwt(self::APP_ID, AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
         $readings = FreshReadings::at($clock);
@@ -51,7 +61,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked));
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), $this->locks);
     }
 
     /**
@@ -75,8 +85,9 @@ final class ScriptedGitHub
             }
         }
 
+        // Stamped with the App that posted it, as GitHub stamps a comment posted with an installation token.
         if (str_ends_with($url, '/comments')) {
-            $this->comments[] = $payload;
+            $this->comments[] = [...$payload, 'performed_via_github_app' => ['id' => (int) self::APP_ID]];
         }
 
         return new MockResponse('{}', ['http_code' => 201]);

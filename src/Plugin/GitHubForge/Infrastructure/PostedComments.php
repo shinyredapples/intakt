@@ -22,6 +22,7 @@ final readonly class PostedComments
     public function __construct(
         private GitHubCalls $calls,
         private CheckedInstallationTokens $tokens,
+        private string $appId,
     ) {
     }
 
@@ -39,7 +40,7 @@ final readonly class PostedComments
     {
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
             $comments = $this->page($address, $page);
-            if (array_any($comments, static fn (mixed $comment): bool => is_array($comment) && is_string($comment['body'] ?? null) && str_contains($comment['body'], $marker))) {
+            if (array_any($comments, fn (mixed $comment): bool => $this->isOwnCommentWith($comment, $marker))) {
                 return true;
             }
 
@@ -49,6 +50,19 @@ final readonly class PostedComments
         }
 
         throw new ForgeWriteFailed('The pull request holds more comments than this forge reads before a post.');
+    }
+
+    // Posted through this App, which GitHub alone sets, because anyone who learns the round's id can write its marker into a comment of their own.
+    private function isOwnCommentWith(mixed $comment, string $marker): bool
+    {
+        if (!is_array($comment) || !is_string($comment['body'] ?? null) || !str_contains($comment['body'], $marker)) {
+            return false;
+        }
+
+        $app = $comment['performed_via_github_app'] ?? null;
+        $id = is_array($app) ? ($app['id'] ?? null) : null;
+
+        return is_int($id) && (string) $id === $this->appId;
     }
 
     /**

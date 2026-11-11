@@ -31,12 +31,25 @@ final class PostedCommentsTest extends TestCase
 {
     private const string MARKER = '<!-- intakt-verdict: round-of-the-test -->';
     private const string COMMENT = 'The verdict.';
+    private const int APP_ID = 12345;
 
     public function testACommentWhoseMarkerIsOnALaterPageIsNotPostedAgain(): void
     {
-        $pages = [1 => $this->others(100), 2 => [['body' => self::COMMENT."\n\n".self::MARKER]]];
+        $pages = [1 => $this->others(100), 2 => [$this->postedBy(self::APP_ID)]];
 
         self::assertSame([], $this->toPost($this->comments($this->listing($pages))));
+    }
+
+    public function testAMarkerInAPersonsCommentDoesNotStopTheAppsComment(): void
+    {
+        $foreign = ['body' => self::MARKER, 'user' => ['login' => 'outsider', 'type' => 'User'], 'performed_via_github_app' => null];
+
+        self::assertSame([self::COMMENT], $this->toPost($this->comments($this->listing([1 => [$foreign]]))));
+    }
+
+    public function testAMarkerInAnotherAppsCommentDoesNotStopTheAppsComment(): void
+    {
+        self::assertSame([self::COMMENT], $this->toPost($this->comments($this->listing([1 => [$this->postedBy(54321)]]))));
     }
 
     public function testNoCommentToPostReadsNothing(): void
@@ -107,7 +120,15 @@ final class PostedCommentsTest extends TestCase
     }
 
     /**
-     * @param array<int, list<array<string, string>>> $pages
+     * @return array<string, mixed>
+     */
+    private function postedBy(int $app): array
+    {
+        return ['body' => self::COMMENT."\n\n".self::MARKER, 'performed_via_github_app' => ['id' => $app]];
+    }
+
+    /**
+     * @param array<int, list<array<string, mixed>>> $pages
      */
     private function listing(array $pages): callable
     {
@@ -136,12 +157,12 @@ final class PostedCommentsTest extends TestCase
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation('installation-secret')->client();
-        $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
+        $jwt = new AppJwt((string) self::APP_ID, AppKey::generate()->private, $clock);
         $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new PostedComments(new GitHubCalls(new MockHttpClient($answer, 'https://api.github.com'), $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens));
+        return new PostedComments(new GitHubCalls(new MockHttpClient($answer, 'https://api.github.com'), $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), (string) self::APP_ID);
     }
 }

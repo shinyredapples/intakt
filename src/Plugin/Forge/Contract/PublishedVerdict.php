@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Forge\Contract;
 
-use Intakt\Core\Platform\Contract\Redaction;
 use InvalidArgumentException;
 
 // Null comment for a head Intakt could not review, because the comment's verdict is only ever approve or changes.
@@ -26,12 +25,12 @@ final readonly class PublishedVerdict
         }
     }
 
-    // A list of none or one, so a forge posts what is there without a branch of its own; redacted with no job credentials, because the reviewers ran no job: what is left to catch are credential headers, URL userinfo and secret shapes.
+    // A list of none or one, so a forge posts what is there without a branch of its own; not redacted again, because its author redacts each line alone and a pass over the whole text could carry a redaction with no end into the verdict block.
     /**
      * @return list<string>
      */
-    public function redactedComments(): array
+    public function comments(): array
     {
-        return null === $this->comment ? [] : [new Redaction()->redact($this->comment)];
+        return null === $this->comment ? [] : [$this->comment];
     }
 }

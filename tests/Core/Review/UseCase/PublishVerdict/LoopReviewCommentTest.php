@@ -56,32 +56,46 @@ final class LoopReviewCommentTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{string, ?int, string}>
      */
     public static function redactionsThatRunToTheEndOfTheirText(): iterable
     {
-        yield 'unclosed list' => ['src/A.php', 'The test sends Authorization: [ without closing it.'];
-        yield 'unclosed quoted value' => ['src/A.php', 'The test sends Authorization: "abc without closing it.'];
-        yield 'print_r list' => ['src/A.php', "The dump shows [Authorization] => Array\n( and no end."];
-        yield 'private key without its end' => ['src/A.php', 'The fixture holds -----BEGIN RSA PRIVATE KEY----- and no end.'];
-        yield 'unclosed list in the file' => ['src/Authorization: [x', 'x'];
+        yield 'unclosed list' => ['src/A.php', 3, 'The test sends Authorization: [ without closing it.'];
+        yield 'unclosed quoted value' => ['src/A.php', 3, 'The test sends Authorization: "abc without closing it.'];
+        yield 'print_r list' => ['src/A.php', 3, "The dump shows [Authorization] => Array\n( and no end."];
+        yield 'private key without its end' => ['src/A.php', 3, 'The fixture holds -----BEGIN RSA PRIVATE KEY----- and no end.'];
+        yield 'unclosed list in the file' => ['src/Authorization: [x', 3, 'x'];
+        yield 'header file without a line, unclosed list in the text' => ['src/Authorization', null, '[ unclosed'];
+        yield 'header file without a line, unclosed quote in the text' => ['Authorization', null, '"abc without end'];
+        yield 'cookie file without a line, bracket in the text' => ['Cookie', null, '[a'];
     }
 
     #[DataProvider('redactionsThatRunToTheEndOfTheirText')]
-    public function testARedactionThatRunsToTheEndOfAFindingKeepsTheVerdictBlockOfTheRedactedComment(string $file, string $text): void
+    public function testARedactionThatRunsToTheEndOfAFindingStopsAtItsLineAndKeepsTheVerdictBlock(string $file, ?int $line, string $text): void
     {
-        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn($file, $text), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn($file, $text, $line), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
 
-        $lines = explode("\n", $verdict->redactedComments()[0]);
+        $lines = explode("\n", $verdict->comments()[0]);
 
         self::assertSame(['```json', '{"verdict":"changes","head":"'.self::HEAD.'","summary":"s"}', '```'], array_slice($lines, -3));
         self::assertCount(7, $lines);
+        self::assertStringStartsWith('[P2] ', $lines[2]);
         self::assertStringContainsString('[redacted]', $lines[2]);
     }
 
-    private function commentOn(string $file, string $text): string
+    public function testAHeaderThatStartsInTheFileAndEndsInTheTextIsRedacted(): void
     {
-        $finding = new Finding('F1', Severity::P2, $file, 3, null, $text, FixableBy::Builder, false, null, null);
+        self::assertStringContainsString("\n[P2] src/Authorization: [redacted]\n", $this->commentOn('src/Authorization', 'Bearer-less-value-42', null));
+    }
+
+    public function testAFindingWithoutAnythingToRedactIsKeptAsWritten(): void
+    {
+        self::assertStringContainsString("\n[P2] src/Cookies.php: The cookie jar [is] not cleared.\n", $this->commentOn('src/Cookies.php', 'The cookie jar [is] not cleared.', null));
+    }
+
+    private function commentOn(string $file, string $text, ?int $line = 3): string
+    {
+        $finding = new Finding('F1', Severity::P2, $file, $line, null, $text, FixableBy::Builder, false, null, null);
 
         return new LoopReviewComment(new CommitId(self::HEAD), Decision::Changes, [$finding], 's')->text();
     }

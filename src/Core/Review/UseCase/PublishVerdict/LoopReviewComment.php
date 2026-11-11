@@ -52,15 +52,10 @@ final readonly class LoopReviewComment
         return implode("\n", [...$lines, '```json', $json, '```']);
     }
 
-    // On one line, because a line break in a model's text could open a fence or a finding line of its own; redacted part by part, because a redaction that runs to the end of its text would otherwise take the verdict block with it.
+    // On one line, because a line break in a model's text could open a fence or a finding line of its own; the line redacted whole and alone, because a header can start in the place and end in the text, and a redaction that runs to the end of its text must end with its line, not take the verdict block with it.
     private function lineOf(Finding $finding): string
     {
-        return sprintf('[%s] %s: %s', $finding->severity->value, $this->redacted($this->placeOf($finding)), $this->redacted($finding->text));
-    }
-
-    private function redacted(string $text): string
-    {
-        return new Redaction()->redact($this->oneLine($text));
+        return new Redaction()->redact(sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text)));
     }
 
     private function placeOf(Finding $finding): string

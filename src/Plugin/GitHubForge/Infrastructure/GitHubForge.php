@@ -32,6 +32,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use InvalidArgumentException;
 use JsonException;
 use NoDiscard;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 
 final readonly class GitHubForge implements Forge, ForgeWrites
@@ -39,6 +40,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // An HTML comment, so the token is invisible on the pull request while the orchestrator can still match it.
     private const string TOKEN_MARKER = '<!-- intakt-review-token: %s -->';
     private const string VERDICT_MARKER = '<!-- intakt-verdict: %s -->';
+    private const string VERDICT_LOCK = 'intakt.verdict.';
     private const string STATUS_CONTEXT = 'intakt/review';
     private const string JSON = 'application/vnd.github+json';
     private const string DIFF = 'application/vnd.github.diff';
@@ -52,6 +54,7 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         private CheckedInstallationTokens $tokens,
         private SecretScan $secrets,
         private PostedComments $comments,
+        private LockFactory $locks,
     ) {
     }
 
@@ -131,11 +134,29 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
     {
         $address = PullRequestAddress::of($change);
-        $comments = $verdict->redactedComments();
+        $comments = $verdict->comments();
         if (array_any($comments, $this->secrets->findsSecretIn(...))) {
             throw ReviewTextHoldsSecret::afterRedaction();
         }
 
+        // Held from the read of the comments to the last post, so two deliveries of one round cannot both find no comment and both post one; not waited for, because the busy delivery is retried and then finds the comment.
+        $lock = $this->locks->createLock(self::VERDICT_LOCK.$verdict->token->value);
+        if (!$lock->acquire()) {
+            throw new ForgeWriteFailed('Another delivery is publishing this round\'s verdict.');
+        }
+
+        try {
+            $this->postVerdict($address, $verdict, $comments);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param list<string> $comments
+     */
+    private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
+    {
         // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
         $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
         foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {

@@ -43,6 +43,8 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 use Symfony\Component\HttpClient\RetryableHttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -231,7 +233,7 @@ final class GitHubForgeRateLimitTest extends TestCase
         $calls = new GitHubCalls($http, $this->readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked));
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new LockFactory(new InMemoryStore()));
     }
 
     private function plain(string $url): MockResponse
