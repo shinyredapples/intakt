@@ -72,8 +72,7 @@ final readonly class BudgetReserve
             $tickSeconds = $now->getTimestamp() - $now->modify('-'.WatchTick::INTERVAL)->getTimestamp();
             $due = $item->isHit() && is_int($due) ? $due : $now->getTimestamp();
 
-            // Counted from when the listing was due, not when it ran, so a tick handled late (behind another project's on the serial consumer) keeps the next tick's listing and an early one adds none; the half tick is the lateness a listing may make up.
-            // Compared with the clock because the cache expiry runs on system time.
+            // Counted from when the listing was due, not when it ran, so a tick handled late (behind another project's on the serial consumer) keeps the next tick's listing and an early one adds none; the half tick is the lateness a listing may make up, compared with the clock because the cache expiry runs on system time.
             if ($now->getTimestamp() <= $due - intdiv($tickSeconds, 2)) {
                 throw new ForgeRateLimited($resetsAt);
             }
