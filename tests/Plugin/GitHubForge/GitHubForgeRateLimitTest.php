@@ -170,6 +170,19 @@ final class GitHubForgeRateLimitTest extends TestCase
         self::assertCount(1, $this->requested);
     }
 
+    public function testItPostsAReviewWithTheHourlyBudgetBelowTheReserve(): void
+    {
+        $this->limited = false;
+        $forge = $this->forgeAnswering(static fn (): ?MockResponse => null);
+        $change = $forge->change(new ChangeId(self::PULL));
+        $this->readings->observe('678', 200, ['x-ratelimit-remaining' => ['3'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [(string) ($this->clock->now()->getTimestamp() + 1800)]]);
+        $this->requested = [];
+
+        $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken('round-7-token-0123456789'), new JobCredentials()));
+
+        self::assertSame(['GET https://api.github.com/repos/acme/widgets/pulls/7', 'POST https://api.github.com/repos/acme/widgets/pulls/7/reviews'], $this->requested);
+    }
+
     public function testItStillRetriesADroppedConnectionOfARead(): void
     {
         $this->limited = false;
@@ -191,7 +204,7 @@ final class GitHubForgeRateLimitTest extends TestCase
     {
         $reset = $this->clock->now()->getTimestamp() + 900;
         $this->limited = false;
-        $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse(self::pull(), ['response_headers' => ['x-ratelimit-remaining' => '4321', 'x-ratelimit-reset' => (string) $reset]]));
+        $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse(self::pull(), ['response_headers' => ['x-ratelimit-remaining' => '4321', 'x-ratelimit-limit' => '5000', 'x-ratelimit-reset' => (string) $reset]]));
 
         $change = new Change(new ChangeId(self::PULL), new CommitRange(new CommitId(self::MERGE_BASE), new CommitId(self::HEAD)), new Diff('', new ChangedFiles()));
 

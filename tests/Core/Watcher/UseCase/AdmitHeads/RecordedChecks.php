@@ -12,6 +12,7 @@ use Intakt\Plugin\Forge\Contract\CiRunOrigin;
 use Intakt\Plugin\Forge\Contract\CiRunState;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\HeadChecks;
 use JsonException;
 use LogicException;
@@ -24,6 +25,7 @@ final class RecordedChecks implements HeadChecks
 {
     /** @var list<string> */
     public array $asked = [];
+    public ?DateTimeImmutable $pausedUntil = null;
 
     /**
      * @param array<string, string> $recordings
@@ -34,6 +36,11 @@ final class RecordedChecks implements HeadChecks
 
     public function ciStateOf(string $project, CommitId $head): CiState
     {
+        // Before the head is counted as asked, because the real forge refuses a read during its pause without any request.
+        if ($this->pausedUntil instanceof DateTimeImmutable) {
+            throw new ForgeRateLimited($this->pausedUntil);
+        }
+
         $this->asked[] = $head->hash;
         $recorded = $this->read($this->recordings[$head->hash] ?? '');
         $runs = [];

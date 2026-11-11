@@ -1,0 +1,9 @@
+{#- The search results fragment: the shell's search overlay puts it in its list box, so it extends no layout. -#}
+{%- set c = 'dashboard/components/' -%}
+{% if answer.recovery %}
+{{ include(c ~ 'search_none.html.twig', {query: answer.query.text, suggestion: answer.suggestion, recovery: answer.recovery}, with_context = false) }}
+{% else %}
+{% for group in answer.groups %}
+{{ include(c ~ 'search_group.html.twig', {id: 'search-' ~ group.group.name|lower, icon: group.group.icon, label: group.group.value, results: group.results}, with_context = false) }}
+{% endfor %}
+{% endif %}
