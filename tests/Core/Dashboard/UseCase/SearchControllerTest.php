@@ -119,6 +119,16 @@ final class SearchControllerTest extends DashboardPageTestCase
         self::assertSame(SearchAction::SwitchTheme->value, $this->rowsOf($crawler, 'Actions')->attr('data-search-action'));
     }
 
+    public function testEveryActionHasAHandlerInTheOverlayScript(): void
+    {
+        $script = file_get_contents(__DIR__.'/../../../../assets/search.js');
+        self::assertIsString($script);
+        preg_match('/const ACTIONS = \{(.*?)\n\};/s', $script, $handlers);
+        preg_match_all("/^    '([\\w-]+)': /m", $handlers[1] ?? '', $names);
+
+        self::assertSame(array_column(SearchAction::cases(), 'value'), $names[1]);
+    }
+
     public function testALinkedResultCarriesNoAction(): void
     {
         $crawler = $this->browser->request('GET', '/search?q=components');
