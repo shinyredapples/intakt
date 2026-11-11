@@ -33,7 +33,7 @@ final readonly class WatchPullRequestsHandler
             // Skipped because the running listing reports for itself and the next tick comes soon.
             return;
         } catch (ForgeRateLimited) {
-            // Only the listing waits for the reset: the CI reads of the queued heads are essential and the forge answers them from its reserve.
+            // Not ended here, because the CI reads of the queued heads are essential and the forge answers them from its reserve.
         }
 
         $this->heads->lookAtDue($project);

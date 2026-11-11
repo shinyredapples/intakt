@@ -7,6 +7,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Doctrine\DBAL\Connection;
 use Intakt\Core\Watcher\Contract\ListingInProgress;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 
 final readonly class ChangedHeads
@@ -22,6 +23,7 @@ final readonly class ChangedHeads
     // One transaction with the listing's record, because a listing recorded as seen names those pull requests never again, so they must be queued or the record undone.
     /**
      * @throws ListingInProgress
+     * @throws ForgeRateLimited
      */
     public function enqueue(string $project): void
     {

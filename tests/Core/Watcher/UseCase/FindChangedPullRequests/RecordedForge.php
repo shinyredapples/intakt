@@ -24,7 +24,6 @@ final class RecordedForge implements OpenChanges
     public int $conditionalAnswers = 0;
     /** @var list<string|null> */
     public array $received = [];
-    // Set to answer every listing like a forge holding listings back until that moment.
     public ?DateTimeImmutable $limitedUntil = null;
 
     public function opens(string $project, OpenChange ...$changes): void
