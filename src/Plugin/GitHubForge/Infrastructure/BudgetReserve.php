@@ -68,18 +68,18 @@ final readonly class BudgetReserve
         try {
             $item = $this->pool->getItem($key);
             $now = $this->clock->now();
-            $last = $item->get();
-
-            // Half a tick, because a tick handled late (behind another project's on the serial consumer) must not cost the next tick its listing.
+            $due = $item->get();
             $tickSeconds = $now->getTimestamp() - $now->modify('-'.WatchTick::INTERVAL)->getTimestamp();
+            $due = $item->isHit() && is_int($due) ? $due : $now->getTimestamp();
 
+            // Counted from when the listing was due, not when it ran, so a tick handled late (behind another project's on the serial consumer) keeps the next tick's listing and an early one adds none; the half tick is the lateness a listing may make up.
             // Compared with the clock because the cache expiry runs on system time.
-            if ($item->isHit() && is_int($last) && $now->getTimestamp() - $last < intdiv($tickSeconds, 2)) {
+            if ($now->getTimestamp() <= $due - intdiv($tickSeconds, 2)) {
                 throw new ForgeRateLimited($resetsAt);
             }
 
             // Refused when unrecorded, because a slot nobody can see would admit every later listing too.
-            if (!$this->pool->save($item->set($now->getTimestamp())->expiresAfter(DateInterval::createFromDateString(WatchTick::INTERVAL)))) {
+            if (!$this->pool->save($item->set(max($now->getTimestamp(), $due) + $tickSeconds)->expiresAfter(DateInterval::createFromDateString(WatchTick::INTERVAL)))) {
                 throw new ForgeRateLimited($resetsAt);
             }
         } finally {

@@ -91,13 +91,47 @@ final class BudgetReserveTest extends TestCase
         $this->expectNotToPerformAssertions();
     }
 
-    public function testBelowTheReserveAListingHalfATickAfterTheLastIsAdmitted(): void
+    public function testBelowTheReserveAListingHalfATickAfterTheLastWaitsForTheReset(): void
     {
         $this->read(remaining: 999);
         $this->reserve()->admitListing('alpha');
         $this->clock->modify('+30 seconds');
 
-        $this->reserve()->admitListing('alpha');
+        $limited = $this->refusal($this->reserve(), 'alpha');
+
+        self::assertEquals(new MockClock('2026-11-25 10:30:00 UTC')->now(), $limited->resetsAt);
+    }
+
+    public function testBelowTheReserveListingsEveryHalfTickAreAdmittedOnlyOncePerTick(): void
+    {
+        $this->read(remaining: 10);
+        $reserve = $this->reserve();
+        $admitted = 0;
+
+        foreach (range(1, 4) as $halfTick) {
+            try {
+                $reserve->admitListing('alpha');
+                ++$admitted;
+            } catch (ForgeRateLimited) {
+            }
+            $this->clock->modify('+30 seconds');
+        }
+
+        self::assertSame(2, $admitted);
+    }
+
+    public function testBelowTheReserveATickThatRanEarlyKeepsItsListingButAddsNoneBeforeTheNextTick(): void
+    {
+        $this->read(remaining: 999);
+        $reserve = $this->reserve();
+        $reserve->admitListing('alpha');
+        $this->clock->modify('2026-11-25 10:00:59 UTC');
+        $reserve->admitListing('alpha');
+        $this->clock->modify('2026-11-25 10:01:29 UTC');
+
+        $this->refusal($reserve, 'alpha');
+        $this->clock->modify('2026-11-25 10:02:00 UTC');
+        $reserve->admitListing('alpha');
 
         $this->expectNotToPerformAssertions();
     }
