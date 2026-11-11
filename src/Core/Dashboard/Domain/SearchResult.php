@@ -11,6 +11,7 @@ final readonly class SearchResult
         public string $label,
         public string $detail,
         public ?string $href = null,
+        public ?SearchAction $action = null,
     ) {
     }
 

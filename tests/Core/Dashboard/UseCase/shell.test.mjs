@@ -65,38 +65,12 @@ test('the rail still collapses when storage refuses access', () => {
     assert.equal(page.rail(), 'collapsed');
 });
 
-test('ctrl k moves the focus to the search field instead of the browser', () => {
+// The search script answers it (search.test.mjs), so the shell script must not take the key first.
+test('ctrl k is left to the search script', () => {
     const page = new Browser('light').open();
 
     const key = page.press('k', { ctrlKey: true });
 
-    assert.ok(page.searchHasFocus());
-    assert.ok(key.defaultPrevented);
-});
-
-test('cmd k moves the focus to the search field', () => {
-    const page = new Browser('light', { platform: 'MacIntel' }).open();
-
-    page.press('K', { metaKey: true });
-
-    assert.ok(page.searchHasFocus());
-});
-
-test('k without a modifier is left to the page', () => {
-    const page = new Browser('light').open();
-
-    const key = page.press('k');
-
-    assert.ok(!page.searchHasFocus());
-    assert.ok(!key.defaultPrevented);
-});
-
-test('another shortcut with ctrl is left to the browser', () => {
-    const page = new Browser('light').open();
-
-    const key = page.press('l', { ctrlKey: true });
-
-    assert.ok(!page.searchHasFocus());
     assert.ok(!key.defaultPrevented);
 });
 
