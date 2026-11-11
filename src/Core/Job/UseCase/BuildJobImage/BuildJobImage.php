@@ -48,6 +48,6 @@ final readonly class BuildJobImage
             throw JobImageNotBuilt::buildFailed($tag, $build->error, $build->output);
         }
 
-        return new BuiltJobImage($plan, $build->output, null === $plan->php ? null : $this->php->verify($tag, $plan->php));
+        return new BuiltJobImage($plan, $build->output, $plan->php instanceof PhpProfile ? $this->php->verify($tag, $plan->php) : null);
     }
 }

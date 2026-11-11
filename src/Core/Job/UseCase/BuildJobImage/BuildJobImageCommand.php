@@ -58,7 +58,7 @@ final readonly class BuildJobImageCommand
     {
         $php = $plan->php;
 
-        if (null === $php) {
+        if (!$php instanceof PhpProfile) {
             return sprintf('Job image from %s, without composer.json to check its PHP against.', $plan->source->label());
         }
 

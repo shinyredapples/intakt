@@ -34,6 +34,6 @@ final readonly class JobImagePlan
 
     public function withPhp(?PhpProfile $php): self
     {
-        return clone($this, ['php' => $php]);
+        return clone ($this, ['php' => $php]);
     }
 }

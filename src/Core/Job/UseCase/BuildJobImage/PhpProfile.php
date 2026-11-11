@@ -142,7 +142,7 @@ final readonly class PhpProfile
         $exact = 3 === count(explode('.', $platform));
         $pinned = new VersionParser()->parseConstraints($exact ? $platform : $platform.'.*');
 
-        if (null === $required) {
+        if (!$required instanceof ConstraintInterface) {
             return [$platform, $pinned];
         }
 

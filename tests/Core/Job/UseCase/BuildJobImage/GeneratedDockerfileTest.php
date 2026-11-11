@@ -78,7 +78,10 @@ final class GeneratedDockerfileTest extends TestCase
     public function testAnExtensionTheBaseImageLacksIsInstalled(): void
     {
         $step = $this->extensionStepFor('intl');
-        $this->givenTheTools(loaded: 'ctype', installable: 'intl');
+        $this->givenTheTools(
+            loaded: 'ctype',
+            installable: 'intl',
+        );
 
         $process = $this->runTheStep($step);
 
@@ -89,7 +92,10 @@ final class GeneratedDockerfileTest extends TestCase
     public function testAnExtensionThatCannotBeInstalledFailsTheBuildWithItsName(): void
     {
         $step = $this->extensionStepFor('ctype', 'nosuchext');
-        $this->givenTheTools(loaded: 'ctype', installable: 'intl');
+        $this->givenTheTools(
+            loaded: 'ctype',
+            installable: 'intl',
+        );
 
         $process = $this->runTheStep($step);
 
@@ -100,7 +106,10 @@ final class GeneratedDockerfileTest extends TestCase
     public function testAnExtensionTheBaseImageHasIsNotInstalledAgain(): void
     {
         $step = $this->extensionStepFor('zend-opcache');
-        $this->givenTheTools(loaded: 'Zend OPcache', installable: 'none');
+        $this->givenTheTools(
+            loaded: 'Zend OPcache',
+            installable: 'none',
+        );
 
         $process = $this->runTheStep($step);
 

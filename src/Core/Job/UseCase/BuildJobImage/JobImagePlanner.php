@@ -46,6 +46,6 @@ final readonly class JobImagePlanner
 
     private function generatedFor(?PhpProfile $php): JobImagePlan
     {
-        return null === $php ? throw JobImageNotBuilt::withoutSource() : JobImagePlan::generated(JobImageSource::Generated, GeneratedDockerfile::for($php));
+        return $php instanceof PhpProfile ? JobImagePlan::generated(JobImageSource::Generated, GeneratedDockerfile::for($php)) : throw JobImageNotBuilt::withoutSource();
     }
 }
