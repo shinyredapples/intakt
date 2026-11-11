@@ -138,7 +138,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $facts = $this->column($this->browser->request('GET', '/'), 'In review')->filter('.card .meta > span');
 
         self::assertCount(3, $facts);
-        self::assertSame('Round 2', $this->wordsOf($facts->eq(0)->filter('.term')));
+        self::assertSame('Round 2', $this->wordsWithoutExplanationOf($facts->eq(0)->filter('.term')));
         self::assertSame(['2 reviewers', 'Cost '.Cost::none()->reading()], [$facts->eq(1)->text(), $facts->eq(2)->text()]);
     }
 
@@ -160,7 +160,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertSame('#round-7', $card->filter('.top span')->first()->text());
         self::assertSame('Review of round round-7', $card->filter('.title')->text());
-        self::assertSame('Round 1', $this->wordsOf($card->filter('.meta .term')));
+        self::assertSame('Round 1', $this->wordsWithoutExplanationOf($card->filter('.meta .term')));
     }
 
     public function testTheBoardLinksToTheReviewListBehindIt(): void
@@ -188,8 +188,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         return $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => $column->filter('.col-head h3')->text() === $name);
     }
 
-    // The words a term shows, without its explanation, which sits inside it for hover and focus.
-    private function wordsOf(Crawler $term): string
+    private function wordsWithoutExplanationOf(Crawler $term): string
     {
         return trim(str_replace($term->filter('.term-tip')->text(), '', $term->text()));
     }
@@ -199,6 +198,6 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
      */
     private function cardNumbersIn(Crawler $page, string $name): array
     {
-        return array_values($this->column($page, $name)->filter('.col-cards .card .top span:first-child')->each(static fn (Crawler $number): string => $number->text()));
+        return $this->column($page, $name)->filter('.col-cards .card .top span:first-child')->each(static fn (Crawler $number): string => $number->text());
     }
 }
