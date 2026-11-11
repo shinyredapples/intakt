@@ -7,7 +7,7 @@ const { jobsFor, measureFloors, report, failed } = createRequire(import.meta.url
 const floors = { text: 15, target: 44 };
 
 class FakeElement {
-    constructor({ tag = 'span', text = '', fontSize = 15, height = 20, width = 100, visibility = 'visible', display = 'block', hiddenBy = null, labels = [], parent = null } = {}) {
+    constructor({ tag = 'span', text = '', fontSize = 15, height = 20, width = 100, visibility = 'visible', display = 'block', hiddenBy = null, labels = [], parent = null, value = undefined, attributes = {} } = {}) {
         this.tagName = tag.toUpperCase();
         this.id = '';
         this.classList = [];
@@ -18,14 +18,16 @@ class FakeElement {
         this.hiddenBy = hiddenBy;
         this.labels = labels;
         this.parentElement = parent;
+        this.value = value;
+        this.attributes = attributes;
     }
 
     getBoundingClientRect() {
         return this.box;
     }
 
-    getAttribute() {
-        return null;
+    getAttribute(name) {
+        return this.attributes[name] ?? null;
     }
 
     closest(selector) {
@@ -91,6 +93,41 @@ test('an element without text of its own is no text', () => {
     assert.deepEqual(measureFloors(floors, pageOf([new FakeElement({ fontSize: 12 })])), []);
 });
 
+test('the value shown in a field under 15 px is reported, though a field has no text nodes', () => {
+    const field = new FakeElement({ tag: 'input', value: 'Visible field text', fontSize: 12 });
+
+    assert.deepEqual(measureFloors(floors, pageOf([field])), ['text 12 px: input "Visible field text"']);
+});
+
+test('a field value of exactly 15 px passes', () => {
+    assert.deepEqual(measureFloors(floors, pageOf([new FakeElement({ tag: 'textarea', value: 'Notes', fontSize: 15 })])), []);
+});
+
+test('a placeholder under 15 px in an empty field is reported', () => {
+    const field = new FakeElement({ tag: 'input', value: '', fontSize: 13, attributes: { placeholder: 'Search' } });
+
+    assert.deepEqual(measureFloors(floors, pageOf([field])), ['text 13 px: input "Search"']);
+});
+
+test('the chosen option of a select under 15 px is reported', () => {
+    const select = new FakeElement({ tag: 'select', value: 'open', fontSize: 14 });
+
+    assert.deepEqual(measureFloors(floors, pageOf([select])), ['text 14 px: select "open"']);
+});
+
+test('an empty field without a placeholder is no text', () => {
+    assert.deepEqual(measureFloors(floors, pageOf([new FakeElement({ tag: 'input', value: '', fontSize: 12 })])), []);
+});
+
+test('the value of a checkbox or radio button is not shown, so it is no text', () => {
+    const boxes = [
+        new FakeElement({ tag: 'input', value: 'on', fontSize: 12, attributes: { type: 'checkbox' } }),
+        new FakeElement({ tag: 'input', value: 'dark', fontSize: 12, attributes: { type: 'Radio' } }),
+    ];
+
+    assert.deepEqual(measureFloors(floors, pageOf(boxes)), []);
+});
+
 test('a touch target under 44 px tall is reported', () => {
     const button = new FakeElement({ tag: 'button', text: 'Stop', height: 40 });
 
@@ -101,6 +138,18 @@ test('a touch target of exactly 44 px passes', () => {
     const button = new FakeElement({ tag: 'button', text: 'Stop', height: 44 });
 
     assert.deepEqual(measureFloors(floors, pageOf([], [button])), []);
+});
+
+test('a touch target a fraction under 44 px is reported, not rounded up to pass', () => {
+    const button = new FakeElement({ tag: 'button', text: 'Go', height: 43.6 });
+
+    assert.deepEqual(measureFloors(floors, pageOf([], [button])), ['target 43.6 px: button "Go"']);
+});
+
+test('a touch target just under 44 px is never shown as 44 px', () => {
+    const button = new FakeElement({ tag: 'button', text: 'Go', height: 43.999 });
+
+    assert.deepEqual(measureFloors(floors, pageOf([], [button])), ['target 43.99 px: button "Go"']);
 });
 
 test('a small control counts the height of its label, which takes the tap too', () => {
