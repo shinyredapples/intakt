@@ -47,7 +47,7 @@ Reviews:
 - [Reviewer agent](reviewer-agent.md)
 - [Project memory](project-memory.md)
 - [Ledger](ledger.md)
-- [Shadow: reading the loop's reviews](shadow-loop-reviews.md)
+- [Shadow: reading the loop's reviews, and the weekly report](shadow-loop-reviews.md)
 
 Dashboard:
 - [Dashboard](dashboard.md)
