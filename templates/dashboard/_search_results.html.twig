@@ -1,21 +1,9 @@
-{#- The search results fragment: the shell's search shows it in place, so it extends no layout. -#}
+{#- The search results fragment: the shell's search overlay puts it in its list box, so it extends no layout. -#}
 {%- set c = 'dashboard/components/' -%}
 {% if answer.recovery %}
-{{ include(c ~ 'empty.html.twig', {title: 'No results for “' ~ answer.query.text ~ '”', text: answer.suggestion}, with_context = false) }}
-<form method="get" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SEARCH')) }}">
-    {{ include(c ~ 'button.html.twig', {kind: 'secondary', small: true, type: 'submit', label: answer.recovery.label}, with_context = false) }}
-</form>
+{{ include(c ~ 'search_none.html.twig', {query: answer.query.text, suggestion: answer.suggestion, recovery: answer.recovery}, with_context = false) }}
 {% else %}
 {% for group in answer.groups %}
-<section class="section" aria-labelledby="search-{{ group.group.name|lower }}">
-<h2 id="search-{{ group.group.name|lower }}">{{ include(c ~ 'icon.html.twig', {name: group.group.icon}, with_context = false) }}{{ group.group.value }}</h2>
-<div class="list">
-    {% for result in group.results %}
-    {{ include(c ~ 'list_row.html.twig', result.href is null
-        ? {title: result.label, explanation: result.detail}
-        : {title: result.label, href: result.href, explanation: result.detail}, with_context = false) }}
-    {% endfor %}
-</div>
-</section>
+{{ include(c ~ 'search_group.html.twig', {id: 'search-' ~ group.group.name|lower, icon: group.group.icon, label: group.group.value, results: group.results}, with_context = false) }}
 {% endfor %}
 {% endif %}

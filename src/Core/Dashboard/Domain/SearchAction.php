@@ -19,6 +19,6 @@ enum SearchAction: string
 
     public function result(): SearchResult
     {
-        return new SearchResult(SearchGroup::Actions, $this->label(), 'All projects');
+        return new SearchResult(SearchGroup::Actions, $this->label(), 'All projects', action: $this);
     }
 }

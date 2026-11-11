@@ -1,0 +1,6 @@
+{#- No search results: what was asked, what to try, and the recovery action. Its form asks again without script; the overlay's script clears the field instead. -#}
+<div class="none">
+<p><strong>No results for “{{ query }}”</strong></p>
+<p>{{ suggestion }}</p>
+<form method="get" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SEARCH')) }}"><button class="btn secondary sm" type="submit" data-search-action="{{ recovery.value }}">{{ recovery.label }}</button></form>
+</div>
