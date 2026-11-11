@@ -11,6 +11,8 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\JudgeDone;
+use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
@@ -43,6 +45,20 @@ final readonly class RoundLedgerReading implements RoundCosts
         }
 
         return [];
+    }
+
+    // Null for a round whose start was recorded before the quorum was, so its outcome cannot be decided.
+    public function quorumOf(string $roundId): ?QuorumPolicy
+    {
+        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewStarted) as $recorded) {
+            $started = $this->payloads->of($recorded, ReviewStarted::class);
+
+            if ($roundId === $started?->round) {
+                return $started->quorum;
+            }
+        }
+
+        return null;
     }
 
     public function tokensOf(string $roundId): RoundTokens

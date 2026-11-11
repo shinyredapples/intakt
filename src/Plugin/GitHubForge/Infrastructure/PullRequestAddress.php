@@ -48,4 +48,10 @@ final readonly class PullRequestAddress
     {
         return $this->repositoryPath().'/pulls/'.$this->number;
     }
+
+    // GitHub keeps a pull request's conversation comments under its issue number.
+    public function issuePath(): string
+    {
+        return $this->repositoryPath().'/issues/'.$this->number;
+    }
 }

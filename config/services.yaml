@@ -56,6 +56,9 @@ services:
         arguments:
             $appId: '%env(GITHUB_APP_ID)%'
             $privateKey: '%env(GITHUB_APP_PRIVATE_KEY)%'
+    Intakt\Plugin\GitHubForge\Infrastructure\PostedComments:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
