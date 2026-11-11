@@ -5,6 +5,7 @@ const OPTION = '[role="option"]';
 // The options are reached with the arrows, so only the other controls of the list, such as Clear the search, are Tab stops.
 const STOP = 'button:not([tabindex="-1"]), a[href]:not([tabindex="-1"])';
 const ACTION = '[data-search-action]';
+const CANCEL = '[data-search-cancel]';
 const RESULT_LINK = '#search-results a[href]';
 const FAILED = '<div class="test-result err" role="alert"><p><strong>Search did not answer.</strong> Type again to try once more; nothing was changed.</p></div>';
 
@@ -79,6 +80,10 @@ class Search {
             return;
         }
         if (target === this.overlay()) {
+            this.close();
+            return;
+        }
+        if (target?.closest?.(CANCEL)) {
             this.close();
             return;
         }
@@ -204,7 +209,10 @@ class Search {
 
     // The shell is inert, so without this Tab from the last stop of the dialog would leave the page for the browser's own controls, where Escape no longer reaches the search.
     keepFocus(event) {
-        const stops = [this.field(), ...this.results().querySelectorAll(STOP)];
+        // Cancel only exists on a phone: on a wider screen it is hidden, and Tab must not stop on what cannot be seen.
+        const cancel = this.page.querySelector(CANCEL);
+        const shown = cancel && cancel.getClientRects().length > 0 ? [cancel] : [];
+        const stops = [this.field(), ...shown, ...this.results().querySelectorAll(STOP)];
         const [first, last] = [stops[0], stops.at(-1)];
         const leaving = event.shiftKey ? event.target === first : event.target === last;
         if (leaving || !stops.includes(event.target)) {
