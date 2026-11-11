@@ -9,7 +9,7 @@ Code and conventions:
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
 - [Upstream reproductions](upstream-reproductions.md)
-- [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published from main and how it gets there
+- [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
 Checks, CI and releases:
