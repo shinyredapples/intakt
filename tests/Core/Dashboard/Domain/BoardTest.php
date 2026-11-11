@@ -68,8 +68,8 @@ final class BoardTest extends TestCase
     {
         $board = new Board([
             new Review([$this->round('r1', 'feat/a', 1)]),
-            new Review([$this->started(new RoundStart('r2', 'beta', 2), new RoundPlace('feat/b', 1), self::morning())]),
-            new Review([$this->started(new RoundStart('r3', 'gamma', 2), new RoundPlace('feat/c', 1), self::morning())]),
+            new Review([$this->started(new RoundStart('r2', 'beta', 2), new RoundPlace('feat/b', 1), $this->morning())]),
+            new Review([$this->started(new RoundStart('r3', 'gamma', 2), new RoundPlace('feat/c', 1), $this->morning())]),
         ]);
 
         self::assertSame(3, $board->countOf(BoardColumn::InReview));
@@ -77,14 +77,14 @@ final class BoardTest extends TestCase
 
     public function testACardCarriesItsProject(): void
     {
-        $board = new Board([new Review([$this->started(new RoundStart('r1', 'beta', 2), new RoundPlace('feat/a', 1), self::morning())])]);
+        $board = new Board([new Review([$this->started(new RoundStart('r1', 'beta', 2), new RoundPlace('feat/a', 1), $this->morning())])]);
 
         self::assertSame('beta', $board->cardsIn(BoardColumn::InReview)[0]->project);
     }
 
     public function testACardShowsItsLatestRoundForItsNumberReviewersAndLink(): void
     {
-        $card = new Review([$this->round('r1', 'feat/a', 1), $this->started(new RoundStart('r2', 'alpha', 3), new RoundPlace('feat/a', 2), self::morning())]);
+        $card = new Review([$this->round('r1', 'feat/a', 1), $this->started(new RoundStart('r2', 'alpha', 3), new RoundPlace('feat/a', 2), $this->morning())]);
 
         self::assertSame(['r2', 2, 3], [$card->latest()->round, $card->latest()->number, $card->latest()->reviewers]);
     }
@@ -110,7 +110,7 @@ final class BoardTest extends TestCase
 
     private function round(string $round, string $change, int $number): ReviewedRound
     {
-        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), self::morning());
+        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), $this->morning());
     }
 
     private function started(RoundStart $start, RoundPlace $place, DateTimeImmutable $startedAt): ReviewedRound
@@ -118,7 +118,7 @@ final class BoardTest extends TestCase
         return new ReviewedRound($start, $place, $startedAt, null);
     }
 
-    private static function morning(): DateTimeImmutable
+    private function morning(): DateTimeImmutable
     {
         return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
     }
