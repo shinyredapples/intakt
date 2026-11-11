@@ -21,6 +21,7 @@ use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
@@ -35,16 +36,25 @@ final class UpdateMirrorTest extends TestCase
 
     private TemporaryRepository $remote;
 
+    private string $wrapper;
+
+    private ?string $originalPath = null;
+
     protected function setUp(): void
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->wrapper = $this->mirrors.'-bin';
         $this->remote = new TemporaryRepository();
         $this->remote->commitFile('a.txt', 'one');
     }
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove($this->mirrors);
+        if (null !== $this->originalPath) {
+            $this->withPath($this->originalPath);
+        }
+
+        new Filesystem()->remove([$this->mirrors, $this->wrapper]);
         $this->remote->remove();
     }
 
@@ -364,6 +374,58 @@ final class UpdateMirrorTest extends TestCase
         $this->expectException(MirrorNotUpdated::class);
 
         $this->update('alpha', $this->remote->path);
+    }
+
+    public function testAnExistingMirrorFollowsARemoteThatSwitchesToANewBranchWhenTheMirrorAsksForItsHead(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+        $this->remote->checkoutDetached('HEAD');
+        $next = $this->remote->commitFile('b.txt', 'on the new branch');
+        $this->remote->checkout('main');
+        $remote = escapeshellarg('--git-dir='.$this->remote->path.'/.git');
+        $this->beforeTheFirstGitCallWith('ls-remote', sprintf('"$REAL" %1$s update-ref refs/heads/next %2$s && "$REAL" %1$s symbolic-ref HEAD refs/heads/next', $remote, $next));
+
+        $this->update('alpha', $this->remote->path);
+
+        self::assertSame($next, $this->git($path, 'rev-parse', '--verify', 'HEAD'));
+    }
+
+    public function testAnUpdateWhoseRemoteDeletesTheBranchItsHeadNamedBeforeTheFetchThrowsMirrorNotUpdated(): void
+    {
+        $this->remote->checkoutNewBranch('topic');
+        $this->update('alpha', $this->remote->path);
+        $this->beforeTheFirstGitCallWith('fetch', sprintf('"$REAL" %s update-ref -d refs/heads/topic', escapeshellarg('--git-dir='.$this->remote->path.'/.git')));
+
+        $this->expectException(MirrorNotUpdated::class);
+        $this->expectExceptionMessage('HEAD names refs/heads/topic');
+
+        $this->update('alpha', $this->remote->path);
+    }
+
+    private function beforeTheFirstGitCallWith(string $command, string $action): void
+    {
+        // A git first on PATH runs the action once, right before the call, so the remote changes at that exact moment instead of by chance.
+        $real = new ExecutableFinder()->find('git') ?? self::fail('git is not on PATH.');
+        $marker = $this->wrapper.'/ran';
+        new Filesystem()->dumpFile($this->wrapper.'/git', sprintf(
+            "#!/bin/sh\nREAL=%s\nfor argument in \"\$@\"; do\n  if [ \"\$argument\" = %s ] && [ ! -e %s ]; then\n    : > %3\$s\n    %s || exit 99\n  fi\ndone\nexec \"\$REAL\" \"\$@\"\n",
+            escapeshellarg($real),
+            escapeshellarg($command),
+            escapeshellarg($marker),
+            $action,
+        ));
+        chmod($this->wrapper.'/git', 0o755);
+        $this->originalPath = (string) getenv('PATH');
+        $this->withPath($this->wrapper.':'.$this->originalPath);
+    }
+
+    private function withPath(string $path): void
+    {
+        putenv('PATH='.$path);
+        // Because Symfony Process gives a child $_ENV ahead of the process environment.
+        if (array_key_exists('PATH', $_ENV)) {
+            $_ENV['PATH'] = $path;
+        }
     }
 
     private function update(string $project, string $remote, ?RecordingClock $clock = null): string

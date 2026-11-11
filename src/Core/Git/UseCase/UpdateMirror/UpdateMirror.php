@@ -136,18 +136,29 @@ final readonly class UpdateMirror
 
     private function fill(string $repository, string $remote): void
     {
+        // Asked before the refs fetch, so a branch the remote's HEAD names already exists when the fetch runs and comes in with it.
+        $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
+
         // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option. No FETCH_HEAD, because git writes the remote's address into it, and the mirror keeps no address.
         $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC], $repository));
 
-        $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
-
         if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
             $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
+            $this->mustResolveHead($repository, $match[1]);
         } elseif (1 === preg_match(self::DETACHED_HEAD, $heads, $match)) {
             // Fetched by name, because a detached HEAD may sit on a commit no ref reaches, which the refs fetch leaves out; only here, since an empty remote advertises no HEAD.
             $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--quiet', '--no-write-fetch-head', '--', $remote, 'HEAD'], $repository));
             // Detached, as "clone --mirror" leaves it, because a remote whose HEAD names no branch only advertises the commit.
             $this->mustRun(['--git-dir='.$repository, 'update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
+            $this->mustResolveHead($repository, $match[1]);
+        }
+    }
+
+    private function mustResolveHead(string $repository, string $ref): void
+    {
+        // Because the remote may delete the branch between "ls-remote" and the fetch: the update then fails, and the next one repairs HEAD.
+        if (!$this->local(['--git-dir='.$repository, 'rev-parse', '--verify', '--quiet', 'HEAD'], $repository)->isSuccessful()) {
+            throw MirrorNotUpdated::at($repository, sprintf('HEAD names %s, which the mirror does not hold', $ref));
         }
     }
 
