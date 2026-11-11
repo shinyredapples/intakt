@@ -66,7 +66,7 @@ final class FakeDockerEngine
     public function __construct()
     {
         $this->clock = new MockClock();
-        $this->networks = new FakeNetworks();
+        $this->networks = new FakeNetworks(fn (): array => $this->containers);
     }
 
     public function client(): MockHttpClient
@@ -230,16 +230,21 @@ final class FakeDockerEngine
             return new MockResponse('', ['error' => 'Connection refused']);
         }
 
-        $path = (string) preg_replace('#^/v1\.44/#', '', (string) parse_url($url, PHP_URL_PATH));
+        return $this->networks->answer($method, $this->pathOf($url), $options) ?? $this->answerOnContainers($method, $url, $options);
+    }
 
-        return $this->networks->answer($method, $path, $options, $this->containers) ?? $this->answerOnContainers($method, $url, $path, $options);
+    private function pathOf(string $url): string
+    {
+        return (string) preg_replace('#^/v1\.44/#', '', (string) parse_url($url, PHP_URL_PATH));
     }
 
     /**
      * @param array<string, mixed> $options
      */
-    private function answerOnContainers(string $method, string $url, string $path, array $options): MockResponse
+    private function answerOnContainers(string $method, string $url, array $options): MockResponse
     {
+        $path = $this->pathOf($url);
+
         return match (true) {
             'POST' === $method && 'containers/create' === $path => $this->create($url, $options),
             'GET' === $method && 'containers/json' === $path => $this->json($this->listing()),

@@ -105,7 +105,7 @@ final class EgressProxyTest extends TestCase
         $refusals = new EgressLog()->refusalsIn(implode(PHP_EOL, $lines).PHP_EOL);
 
         self::assertCount(EgressLog::MAX_REFUSALS, $refusals);
-        self::assertSame('host20.example:443', array_last($refusals)->target);
+        self::assertSame('host20.example:443', array_last($refusals)?->target);
     }
 
     public function testALongTargetIsCutTo255Bytes(): void
