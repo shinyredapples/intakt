@@ -56,7 +56,7 @@ final class ReviewTest extends TestCase
         self::assertNull(new Review([$this->round('round-1', 1)])->lastJudgedRound());
     }
 
-    public function testOnlyTheFindingsTheJudgeCalledFixNowAreToFix(): void
+    public function testOnlyTheFindingsTheJudgeCalledFixNowAreOpen(): void
     {
         $round = $this->round('round-1', 1)->judgedWith([
             new RoundFinding('F1', 'P1', 'Fix it.')->calledBy(JudgeCall::Act),
@@ -64,7 +64,14 @@ final class ReviewTest extends TestCase
             new RoundFinding('F3', 'P3', 'No.'),
         ], new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
-        self::assertSame(['F1'], array_map(static fn (RoundFinding $finding): string => $finding->id, $round->findingsToFix()));
+        $review = new Review([$round, $this->round('round-2', 2)]);
+
+        self::assertSame(['F1'], array_map(static fn (RoundFinding $finding): string => $finding->id, $review->openFindings()));
+    }
+
+    public function testAReviewWithNoJudgedRoundHasNoOpenFindings(): void
+    {
+        self::assertSame([], new Review([$this->round('round-1', 1)])->openFindings());
     }
 
     private function judged(string $id, int $number): ReviewedRound

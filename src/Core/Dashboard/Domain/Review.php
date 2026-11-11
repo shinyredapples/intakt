@@ -43,12 +43,23 @@ final readonly class Review
         return $latest->isJudged() ? null : $latest;
     }
 
-    // The newest judged round is the one whose "fix now" findings the builder is working through while the active round runs.
+    // Null before the first judge's call, because only a judged round has findings to carry forward.
     public function lastJudgedRound(): ?ReviewedRound
     {
         $judged = array_filter($this->rounds, static fn (ReviewedRound $round): bool => $round->isJudged());
 
         return [] === $judged ? null : array_last($judged);
+    }
+
+    /**
+     * @return list<RoundFinding>
+     */
+    // Only "fix now" findings stay open into the next round; follow-ups wait for a later task.
+    public function openFindings(): array
+    {
+        $judged = $this->lastJudgedRound();
+
+        return null === $judged ? [] : array_values(array_filter($judged->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call));
     }
 
     public function tokens(): TokenFigures

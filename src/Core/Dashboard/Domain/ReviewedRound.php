@@ -56,16 +56,7 @@ final readonly class ReviewedRound
 
     public function isJudged(): bool
     {
-        return ReviewState::Judged === $this->state;
-    }
-
-    // Only "fix now" findings stay open into the next round; follow-ups wait for a later task.
-    /**
-     * @return list<RoundFinding>
-     */
-    public function findingsToFix(): array
-    {
-        return array_values(array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call));
+        return $this->state->isJudged();
     }
 
     public function failedReviewers(): int

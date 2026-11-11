@@ -7,7 +7,7 @@
 {% set latest = review.rounds|last %}
 {% set active = review.activeRound %}
 {% set judged = review.lastJudgedRound %}
-{% set open = judged is not null ? judged.findingsToFix : [] %}
+{% set open = review.openFindings %}
 {% set can_start = review.source is not null and review.nextNumber is not null %}
 <div class="page-head">
     <div>
