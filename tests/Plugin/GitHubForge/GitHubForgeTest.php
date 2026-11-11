@@ -38,9 +38,11 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -54,6 +56,8 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 use Symfony\Component\HttpClient\RetryableHttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -383,7 +387,8 @@ final class GitHubForgeTest extends TestCase
         (void) $checked->current();
         // Past the recorded expiry, so the next mint answers with a token that already lapsed.
         $clock->modify('+2 hours');
-        $forge = new GitHubForge(new GitHubCalls(new MockHttpClient(), FreshReadings::at($clock), $tokens), $checked, $this->secretScan());
+        $calls = new GitHubCalls(new MockHttpClient(), FreshReadings::at($clock), $tokens);
+        $forge = new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())));
 
         try {
             $forge->change(new ChangeId(self::PULL));
@@ -595,7 +600,10 @@ final class GitHubForgeTest extends TestCase
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubForge(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), $this->secretScan());
+        $calls = new GitHubCalls($http, $readings, $tokens);
+        $checked = new CheckedInstallationTokens($readBack, $tokens);
+
+        return new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())));
     }
 
     private function secretScan(): SecretScan

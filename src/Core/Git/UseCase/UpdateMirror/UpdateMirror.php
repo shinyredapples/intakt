@@ -1,0 +1,221 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Git\UseCase\UpdateMirror;
+
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\NetworkGitFailed;
+use InvalidArgumentException;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Process\Process;
+
+final readonly class UpdateMirror
+{
+    private const string SAFE_NAME = '/^[A-Za-z0-9][A-Za-z0-9._-]*\z/';
+
+    // Because a mirror holds every ref of the remote, forced, as "clone --mirror" sets it up.
+    private const string MIRROR_REFSPEC = '+refs/*:refs/*';
+
+    private const string REMOTE_HEAD = '/^ref: (refs\/heads\/[^\t\n]+)\tHEAD$/m';
+
+    // Both lengths, because a remote may hold SHA-1 or SHA-256 objects.
+    private const string DETACHED_HEAD = '/^([0-9a-f]{40}|[0-9a-f]{64})\tHEAD$/m';
+
+    public function __construct(
+        private HardenedGit $hardened,
+        private NetworkGit $network,
+        private Filesystem $filesystem,
+        private LockFactory $locks,
+        private string $mirrorsDirectory,
+    ) {
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     * @throws NetworkGitFailed
+     * @throws MirrorNotUpdated
+     */
+    public function update(string $project, string $remote): string
+    {
+        $path = $this->mirrorPath($project);
+        $remote = $this->fromMirrorsDirectory($remote);
+
+        if ($this->isMirror($path)) {
+            $this->fill($path, $remote);
+
+            return $path;
+        }
+
+        $this->createMirror($project, $remote, $path);
+
+        return $path;
+    }
+
+    private function mirrorPath(string $project): string
+    {
+        // Because the name becomes a path segment: a separator or a leading dot would leave the mirrors directory.
+        if (1 !== preg_match(self::SAFE_NAME, $project) || str_contains($project, '..')) {
+            throw new InvalidArgumentException(sprintf('"%s" is not a project name that can be a folder name', $project));
+        }
+
+        return $this->mirrorsDirectory.'/'.$project.'.git';
+    }
+
+    private function fromMirrorsDirectory(string $remote): string
+    {
+        // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
+        if ('' === $remote || str_starts_with($remote, '/') || 1 === preg_match('#^[^/]*:#', $remote)) {
+            return $remote;
+        }
+
+        return Path::makeAbsolute($remote, $this->mirrorsDirectory);
+    }
+
+    private function isMirror(string $path): bool
+    {
+        // Because git looks upward from a folder that is not a repository and would find the install's own checkout.
+        if (!is_file($path.'/HEAD') || !is_dir($path.'/objects') || !is_dir($path.'/refs')) {
+            return false;
+        }
+
+        $bare = $this->local(['--git-dir='.$path, 'rev-parse', '--is-bare-repository'], $path);
+
+        return $bare->isSuccessful() && 'true' === trim($bare->getOutput());
+    }
+
+    private function createMirror(string $project, string $remote, string $path): void
+    {
+        $this->filesystem->mkdir($this->mirrorsDirectory);
+        $attempts = [];
+        $staging = '';
+
+        try {
+            // A clone takes the remote's object format, which "init" would have to guess; each attempt gets a new staging folder, so a retry never clones into what a killed attempt left.
+            $this->network->runEachAttempt(function () use ($project, $remote, &$attempts, &$staging): GitCall {
+                $attempts[] = $staging = $this->stagingPath($project);
+
+                return $this->withoutAttributeSource($this->pinned(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrorsDirectory));
+            });
+            $this->forgetRemote($staging);
+            $published = $this->publish($project, $staging, $path);
+        } finally {
+            $this->filesystem->remove($attempts);
+        }
+
+        // Because the update that won fetched at its own moment, possibly before this one: the published mirror is fetched again so it is at least as fresh as this fetch.
+        if (!$published) {
+            $this->fill($path, $remote);
+        }
+    }
+
+    private function withoutAttributeSource(GitCall $call): GitCall
+    {
+        // Because the clone runs in the mirrors folder, where HardenedGit names SHA-1's empty tree, and a "file://" remote hands that on to its upload-pack, which refuses it in a SHA-256 repository; a bare mirror clone checks out nothing and reads no attributes, and the attributes file and system settings stay off.
+        $command = array_values(array_filter($call->command, static fn (string $part): bool => !str_starts_with($part, '--attr-source=')));
+
+        return new GitCall($command, $call->directory, [...$call->environment, 'GIT_ATTR_SOURCE' => false]);
+    }
+
+    private function stagingPath(string $project): string
+    {
+        // A leading dot is never a project name, so a staging folder cannot be taken for a mirror; a clone that dies half-way stays there and is never published.
+        return $this->mirrorsDirectory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
+    }
+
+    private function forgetRemote(string $staging): void
+    {
+        // Because the clone saves the remote's address, credential included, as "remote.origin.url"; the remote is named on every call instead, so the mirror keeps no address.
+        $this->mustRun(['--git-dir='.$staging, 'config', '--remove-section', 'remote.origin'], $staging);
+    }
+
+    private function fill(string $repository, string $remote): void
+    {
+        // Asked before the refs fetch, so a branch the remote's HEAD names already exists when the fetch runs and comes in with it.
+        $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
+
+        // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option. No FETCH_HEAD, because git writes the remote's address into it, and the mirror keeps no address.
+        $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC], $repository));
+
+        if (1 === preg_match(self::REMOTE_HEAD, $heads, $match)) {
+            $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
+            $this->mustResolveHead($repository, $match[1]);
+        } elseif (1 === preg_match(self::DETACHED_HEAD, $heads, $match)) {
+            // Fetched by name, because a detached HEAD may sit on a commit no ref reaches, which the refs fetch leaves out; only here, since an empty remote advertises no HEAD.
+            $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--quiet', '--no-write-fetch-head', '--', $remote, 'HEAD'], $repository));
+            // Detached, as "clone --mirror" leaves it, because a remote whose HEAD names no branch only advertises the commit.
+            $this->mustRun(['--git-dir='.$repository, 'update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
+            $this->mustResolveHead($repository, $match[1]);
+        }
+    }
+
+    private function mustResolveHead(string $repository, string $ref): void
+    {
+        // Because the remote may delete the branch between "ls-remote" and the fetch: the update then fails, and the next one repairs HEAD.
+        if (!$this->local(['--git-dir='.$repository, 'rev-parse', '--verify', '--quiet', 'HEAD'], $repository)->isSuccessful()) {
+            throw MirrorNotUpdated::at($repository, sprintf('HEAD names %s, which the mirror does not hold', $ref));
+        }
+    }
+
+    private function publish(string $project, string $staging, string $path): bool
+    {
+        $lock = $this->locks->createLock('git-mirror-'.$project);
+        $lock->acquire(true);
+
+        try {
+            // Read again under the lock, because another update may have published this mirror while this one fetched; it is kept, since an in-place fetch may already be writing into it.
+            if ($this->isMirror($path)) {
+                return false;
+            }
+
+            $this->filesystem->remove($path);
+            $this->filesystem->rename($staging, $path);
+
+            return true;
+        } catch (IOException $failed) {
+            throw MirrorNotUpdated::at($path, $failed->getMessage());
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function mustRun(array $arguments, string $directory): void
+    {
+        $process = $this->local($arguments, $directory);
+
+        if (!$process->isSuccessful()) {
+            throw MirrorNotUpdated::at($directory, trim($process->getErrorOutput()));
+        }
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function local(array $arguments, string $directory): Process
+    {
+        $call = $this->pinned($arguments, $directory);
+        $process = new Process($call->command, $call->directory, $call->environment);
+        $process->run();
+
+        return $process;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function pinned(array $arguments, string $directory): GitCall
+    {
+        $call = $this->hardened->call($arguments, $directory);
+
+        // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
+        return new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
+    }
+}

@@ -62,7 +62,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Review lane** | the bench where finished work is reviewed and merged | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Review panel** | the reviewers for a change: the core panel plus specialists | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Review server** | the read-only server through which a reviewer reads the head under review | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
-| **Reviewer-for-loop mode** | a project setting: Intakt reviews an existing loop's changes in place of one of its reviewers, its verdicts count, and it writes nothing to the forge yet | [costs](accounts-and-costs.md#reviewer-for-the-loop-intakts-review-takes-a-reviewers-place) |
+| **Reviewer-for-loop mode** | a project setting: Intakt reviews an existing loop's changes in place of one of its reviewers, its verdicts count, and the only thing it writes to the forge is its verdict on each head (a status and a comment) | [costs](accounts-and-costs.md#reviewer-for-the-loop-intakts-review-takes-a-reviewers-place) |
 | **Shadow mode** | a project setting: Intakt reviews alongside your existing process, never writes to the forge, and its verdicts never count | [costs](accounts-and-costs.md#shadow-mode-trying-intakt-alongside-your-process) |
 | **Share** | a project's part of the week's AI allowance | [several projects](several-projects.md) |
 | **Sidecar** | an extra container a job needs, such as a database | [containers](containers-and-services.md) |
@@ -71,7 +71,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Stale (note)** | a memory note whose code changed since it was written | [project memory](project-memory.md) |
 | **Stand-in** | a cheaper reviewer on an in-between version while the usual reviewer's allowance is tight; the usual reviewer still reviews the final version | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Substitute** | a reviewer from another company reviewing in place of one whose every account is over its limit; a catch-up review follows | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
-| **Subscription reviewer** | a reviewer that runs on a Claude or Codex subscription; for now it cannot read the project, so it can never pass a change on its own | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-or-codex-subscription) |
+| **Subscription reviewer** | a reviewer that runs on a Claude or Codex subscription; a Claude one can read its round's change through the read-only server, a Codex one cannot read the project yet; a Claude reviewer's approval counts when its call receives the review server, while a Codex approval stays blocked | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-or-codex-subscription) |
 | **Take-over** | a label that hands Intakt an issue or pull request it did not create (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
 | **Verdict** | a reviewer's answer: approve, changes with findings, or blocked (held for a person) | [journey](the-journey-of-a-task.md#5-reviewing) |

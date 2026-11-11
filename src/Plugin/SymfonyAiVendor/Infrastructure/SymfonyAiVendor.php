@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -17,9 +18,11 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\NoReviewServerAccess;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -36,6 +39,7 @@ use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -53,6 +57,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
+        private ?ReviewServerAccesses $servers = null,
     ) {
     }
 
@@ -69,10 +74,7 @@ final readonly class SymfonyAiVendor implements Vendor
         $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->retriedOnceAtTheLimit($first, $retry)),
-            $substitute,
-        ));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnceAtTheLimit($first, $retry), $substitute));
     }
 
     // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again; a second stop fails the reviewer.
@@ -121,7 +123,16 @@ final readonly class SymfonyAiVendor implements Vendor
 
     private function verdictOn(ResolvedModel $answering, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
-        $platform = new TierRoutedPlatform($this->tiers, $answering);
+        try {
+            $options = $this->serverOptions($answering, $request);
+        } catch (NoReviewServerAccess) {
+            // Settled with no usage, because the CLI never started; blocked like an API-key reviewer whose toolbox cannot reach the server.
+            $this->usage->settle($reservation);
+
+            return Verdict::noTools();
+        }
+
+        $platform = new TierRoutedPlatform($this->tiers, $answering, $options);
 
         try {
             $verdict = $this->reviewer->review($request, $platform, $answering->model);
@@ -138,7 +149,22 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $verdict;
+        return $this->readOrRefused($answering->provider, $options, $verdict);
+    }
+
+    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    /**
+     * @return array<string, mixed>
+     */
+    private function serverOptions(ResolvedModel $answering, ReviewRequest $request): array
+    {
+        $round = $request->conversation->round;
+
+        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
+            return [];
+        }
+
+        return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
     }
 
     /**
@@ -174,10 +200,13 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
-    private function readOrRefused(Provider $answeredBy, Verdict $verdict): Verdict
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
+    /**
+     * @param array<string, mixed> $serverOptions
+     */
+    private function readOrRefused(Provider $answeredBy, array $serverOptions, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout()) {
+        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout() || isset($serverOptions[ReviewServerAccess::OPTION])) {
             return $verdict;
         }
 

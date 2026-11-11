@@ -56,18 +56,21 @@ final class ClockOnlyRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $findings);
     }
 
-    public function testTheClockAdapterMayReadTheSystemTime(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertAcceptedBy('phpstan', 'clock-adapter');
+        return self::casesOfOnePhpstanRun([
+            'TheClockAdapterMayReadTheSystemTime' => ['clock-adapter'],
+            'AClassBesideTheClockAdapterMayNot' => ['clock-beside-adapter', 'src/Core/Platform/Infrastructure/Clock/OtherClock.php:11 intakt.clockOnly'],
+        ]);
     }
 
-    public function testAClassBesideTheClockAdapterMayNot(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->borrowKernel();
-        $sandbox->write('src/Core/Platform/Infrastructure/Clock/OtherClock.php', "<?php\n\ndeclare(strict_types=1);\n\nnamespace Intakt\\Core\\Platform\\Infrastructure\\Clock;\n\nfinal readonly class OtherClock\n{\n    public function now(): int\n    {\n        return time();\n    }\n}\n");
-
-        self::assertTrue($sandbox->check('--only=phpstan')->failed('phpstan'));
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     /**

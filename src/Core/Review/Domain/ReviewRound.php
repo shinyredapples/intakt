@@ -66,6 +66,12 @@ final class ReviewRound implements HasPlace
         return VerdictIdentity::fromRecorded($this->identity)->standingAt($current, $move);
     }
 
+    // Throws for a round stored before identities were recorded, because such a round names no head to publish on.
+    public function identity(): VerdictIdentity
+    {
+        return VerdictIdentity::fromRecorded($this->identity);
+    }
+
     public function addReviewer(UuidV7 $id, PanelReviewer $member): void
     {
         $this->reviewers->add(new RoundReviewer($id, $this, $member));

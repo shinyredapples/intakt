@@ -1,7 +1,7 @@
-{#- Embed it inside a .list and fill the actions block. -#}
+{#- Embed it inside a .list and fill the actions block; href makes the title a link. -#}
 <div class="row">
     <div class="body">
-        <p class="t">{{ title }}</p>
+        <p class="t">{% if href is defined %}<a href="{{ href }}">{{ title }}</a>{% else %}{{ title }}{% endif %}</p>
         <p class="d">{{ explanation }}</p>
     </div>
     <div class="side">{% block actions %}{% endblock %}</div>

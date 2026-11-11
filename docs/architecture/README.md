@@ -7,6 +7,7 @@ Code and conventions:
 - [Conventions](conventions.md): logging, Doctrine mapping, message handlers, the dependency policy and which release cooldown decides what (Dependabot's or Composer's)
 - [Sample repository](sample-repository.md)
 - [Retried network git calls](network-git.md)
+- [Bare mirror](mirror.md)
 - [Upstream reproductions](upstream-reproductions.md)
 - [Development diagnostics (Mate)](development-diagnostics.md)
 

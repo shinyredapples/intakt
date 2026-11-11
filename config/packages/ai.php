@@ -271,6 +271,8 @@ return static function (ContainerConfigurator $container): void {
     ]];
 
     $container->extension('ai', ['platform' => $platform, 'agent' => $agents, 'message_store' => $conversations, ...$memory]);
+    // The rest of this connection is in mcp.yaml; its address is set here because YAML can name the parameter only by spelling it.
+    $container->extension('mcp', ['clients' => ['reviewer' => ['servers' => ['review' => ['url' => '%'.ReviewServices::MCP_URL.'%']]]]]);
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);
