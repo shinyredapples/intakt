@@ -44,7 +44,9 @@ The owner cuts a release by hand for a milestone version, or when the timer is o
 
 ## The container image
 
-Every pushed release tag publishes the app image to GitHub's container registry: `.github/workflows/release-image.yml` builds it from the tag, runs `docker/smoke-test.sh` on it, and pushes `ghcr.io/shinyredapples/intakt:<version>` (the tag without its `v`, for example `0.1.0`) and `ghcr.io/shinyredapples/intakt:latest`. A failed smoke test pushes nothing. For a tag cut before the workflow existed, or after a failed run, publish it by hand: `gh workflow run release-image.yml -f tag=v0.1.0`. The package takes the repository's visibility, so while the repository is private, pulling needs a GitHub token with `read:packages` (`docker login ghcr.io`).
+Every pushed release tag publishes the app image to GitHub's container registry: `.github/workflows/release-image.yml` checks the tag out apart (in `release/`), builds the image from it, runs `docker/smoke-test.sh` on it, and pushes `ghcr.io/shinyredapples/intakt:<version>` (the tag without its `v`, for example `0.1.0`). It also pushes `:latest`, but only when the tag is the highest release tag in version order, so publishing an older tag again never moves `latest` back. A failed smoke test pushes nothing. For a tag cut before the workflow existed, or after a failed run, publish it by hand: `gh workflow run release-image.yml -f tag=v0.1.0`. The script runs from the workflow's own revision, so this works for a tag whose tree has no release script.
+
+A new package on the registry is private, whatever the repository's visibility. After the first publish, the owner makes it public once in the package's settings (Package settings, Danger Zone, Change visibility); while it is private, pulling needs a GitHub token with `read:packages` (`docker login ghcr.io`).
 
 ## Release notes
 
