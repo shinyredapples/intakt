@@ -43,15 +43,17 @@ flowchart TD
   wait --> state[Read the state: OOMKilled, ExitCode]
   state -->|still running, time left| pause[Pause one second]
   pause --> wait
-  state -->|still running, run time over| kill[Kill, cause timed_out]
+  state -->|still running, run time over| kill[Kill, read the state again]
   state --> remove[Remove the container]
-  kill --> remove
+  kill -->|stopped: cause oom or timed_out| remove
+  kill -->|still running| failed[Remove the container, DockerEngineFailed, no job_ended]
+  failed --> clean
   remove --> record[Ledger: job_ended]
   record --> read[Read the output files]
   read --> clean[Remove the output directory, release the lock]
 ```
 
-- The cause is `oom` when the engine reports `State.OOMKilled`, `timed_out` when the container still ran after the run time (it is killed, and the exit code is read after up to 10 more seconds), and `exited` otherwise. The ledger gets `job_ended` with `job`, `cause` and `exit_code`.
+- The cause is `oom` when the engine reports `State.OOMKilled`, `timed_out` when the container still ran after the run time, and `exited` otherwise. A container still running after the run time is killed, and its state is read once more after up to 10 more seconds: a memory kill found then (the job hit its limit in the last pause, and the kill was answered 409) is recorded as `oom`, any other stopped state as `timed_out`, both with the exit code from that state. A container that still runs after the kill and those 10 seconds fails the run with `DockerEngineFailed`: no exit code and no `job_ended` are recorded, and the container is still removed. The ledger gets `job_ended` with `job`, `cause` and `exit_code`.
 - The run time is measured with the `ClockInterface` from the start. After each wait the state is read, and only a state that says the container no longer runs records an end: the wait's own answer never does, because the engine sends the 200 header before the wait ends and reports a wait that failed on its side (a daemon shutdown, a cancelled wait) as `{"StatusCode":-1,"Error":{...}}` while the job still runs. `DockerEngine::waitForExit()` answers true only for a 200 whose body holds an integer `StatusCode` and no `Error`; an `Error`, an empty or unreadable body, a broken connection and the deadline count as no answer. A container that still runs after a wait, with time left, is waited for again one second later, for the time left; only a container that still runs when the run time is over is killed.
 - The container is removed (`DELETE /containers/<id>?force=true&v=true`, so the anonymous volumes it may own go with it) whatever happened after it was created, also when a later call fails. The output directory is removed after it was read, also when reading it fails.
 - The output directory is `var/jobs/<id>` under the project folder. A directory of the same id left from an earlier run is removed before the job starts. No other job's output directory is mounted into a job, so a job cannot read another job's output.
