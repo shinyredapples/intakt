@@ -74,10 +74,7 @@ final readonly class SymfonyAiVendor implements Vendor
         $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview(
-            $this->readOrRefused($answering->provider, $this->retriedOnceAtTheLimit($first, $retry)),
-            $substitute,
-        ));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnceAtTheLimit($first, $retry), $substitute));
     }
 
     // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again; a second stop fails the reviewer.
@@ -152,7 +149,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $verdict;
+        return $this->readOrRefused($answering->provider, $options, $verdict);
     }
 
     // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
@@ -203,10 +200,13 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
-    private function readOrRefused(Provider $answeredBy, Verdict $verdict): Verdict
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
+    /**
+     * @param array<string, mixed> $serverOptions
+     */
+    private function readOrRefused(Provider $answeredBy, array $serverOptions, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout()) {
+        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout() || isset($serverOptions[ReviewServerAccess::OPTION])) {
             return $verdict;
         }
 

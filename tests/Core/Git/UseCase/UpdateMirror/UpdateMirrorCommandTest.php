@@ -1,0 +1,99 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Git\UseCase\UpdateMirror;
+
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
+use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirrorCommand;
+use Intakt\Tests\Core\Git\RecordingClock;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+
+#[CoversClass(UpdateMirrorCommand::class)]
+#[UsesClass(UpdateMirror::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(NetworkGit::class)]
+#[UsesClass(NetworkGitFailed::class)]
+#[UsesClass(MirrorNotUpdated::class)]
+#[UsesClass(GitCall::class)]
+final class UpdateMirrorCommandTest extends TestCase
+{
+    private string $mirrors;
+
+    private TemporaryRepository $remote;
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->mirrors);
+        $this->remote->remove();
+    }
+
+    public function testTheCommandPrintsThePathOfTheMirrorAndExitsWithZero(): void
+    {
+        $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString('mirror '.$this->mirrors.'/alpha.git', $tester->getDisplay());
+    }
+
+    public function testTheCommandPrintsTheReasonForARefusedNameAndExitsWithOne(): void
+    {
+        $tester = $this->whenTheCommandRuns('../alpha', $this->remote->path);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('is not a project name that can be a folder name', $tester->getDisplay());
+    }
+
+    public function testTheCommandPrintsTheFailureOfAMissingRemoteAndExitsWithOne(): void
+    {
+        $tester = $this->whenTheCommandRuns('alpha', $this->mirrors.'-missing');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('git failed after 3 attempts', $tester->getDisplay());
+    }
+
+    public function testTheCommandPrintsAMirrorThatWasNotUpdatedAndExitsWithOne(): void
+    {
+        $this->whenTheCommandRuns('alpha', $this->remote->path);
+        file_put_contents($this->mirrors.'/alpha.git/HEAD.lock', '');
+
+        $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('was not updated', $tester->getDisplay());
+    }
+
+    private function whenTheCommandRuns(string $project, string $remote): CommandTester
+    {
+        $network = new NetworkGit(new RecordingClock(), new NullLogger());
+        $mirror = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $this->mirrors);
+        $application = new Application();
+        $application->addCommand(new UpdateMirrorCommand($mirror));
+        $tester = new CommandTester($application->find('intakt:mirror:update'));
+        $tester->execute(['project' => $project, 'remote' => $remote]);
+
+        return $tester;
+    }
+}

@@ -4,6 +4,6 @@
 
 A `GitCall` from `HardenedGit` allows no transport protocol and pins a work tree, so `NetworkGit` overrides just three variables of the call it runs: `GIT_ALLOW_PROTOCOL=file:https`, no `GIT_WORK_TREE`, and `GIT_TERMINAL_PROMPT=0` (git never asks for a password). `HardenedGit` itself is unchanged.
 
-Only calls that read from a remote go through `NetworkGit`: a retried write could happen twice. No caller uses it yet; the bare mirror per project (plan task T46) is its first.
+Only calls that read from a remote go through `NetworkGit`: a retried write could happen twice. Its caller is `UpdateMirror` (`src/Core/Git/UseCase/UpdateMirror/UpdateMirror.php`), which keeps the bare mirror per project (`docs/architecture/mirror.md`): its `clone --mirror`, both fetches and `ls-remote` run through `NetworkGit`.
 
 The tests (`tests/Core/Git/Contract/NetworkGitTest.php`) prove the delays with a clock that records each sleep and never waits (`tests/Core/Git/RecordingClock.php`); one test makes the remote appear during the first sleep to prove that a call that fails once succeeds on the retry, and one times out on every attempt (a 0.2-second limit) with a credential in the remote's URL and checks that the credential is in neither the warnings nor the failure.
