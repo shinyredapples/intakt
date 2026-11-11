@@ -17,7 +17,6 @@ use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfJudgedRound;
 use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfUnjudgedRound;
 use Intakt\Core\Review\UseCase\PublishVerdict\VerdictForTheLoop;
-use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Shadow\Contract\LoopVerdict;
@@ -54,7 +53,6 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[CoversClass(VerdictForTheLoop::class)]
 #[CoversClass(LoopReviewComment::class)]
 #[CoversClass(RoundLedgerReading::class)]
-#[UsesClass(ShadowRounds::class)]
 #[UsesClass(PublishedVerdict::class)]
 #[UsesClass(HeadStatus::class)]
 #[UsesClass(ModeGuardedForgeWrites::class)]
@@ -269,23 +267,13 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $modes = new ConfiguredProjectModes(['alpha' => 'shadow']);
         $handlerModes = new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']);
-        $handler = new PublishVerdictHandler($this->fixture->transactions(), $handlerModes, $this->shadowRounds($handlerModes), $this->verdicts(), new ModeGuardedForgeWrites($this->github->forge(), $modes), $this->fixture->log);
+        $handler = new PublishVerdictHandler($this->fixture->transactions(), $handlerModes, $this->verdicts(), new ModeGuardedForgeWrites($this->github->forge(), $modes), $this->fixture->log);
 
         foreach ($this->publicationsOf($this->judgedRound(self::PULL, [])) as $publication) {
             $handler($publication);
         }
 
         self::assertSame([], $this->github->writes);
-    }
-
-    public function testARoundReviewedInShadowModeGetsOnlyAnErrorStatusAfterTheProjectSwitchesToReviewerForLoop(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
-        $roundId = $this->judgedRound(self::PULL, []);
-
-        $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
-
-        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt reviewed this head in shadow mode, so its verdict does not count.']]], $this->github->writes);
     }
 
     public function testARoundReviewedForTheLoopIsStillPublishedAsItsVerdict(): void
@@ -407,12 +395,7 @@ final class PublishVerdictTest extends KernelTestCase
 
     private function handler(ConfiguredProjectModes $modes): PublishVerdictHandler
     {
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $this->shadowRounds($modes), $this->verdicts(), new ModeGuardedForgeWrites($this->github->forge(), $modes), $this->fixture->log);
-    }
-
-    private function shadowRounds(ConfiguredProjectModes $modes): ShadowRounds
-    {
-        return new ShadowRounds($modes, $this->fixture->ledger(), $this->fixture->ledgerPayloads());
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $this->verdicts(), new ModeGuardedForgeWrites($this->github->forge(), $modes), $this->fixture->log);
     }
 
     private function verdicts(): VerdictForTheLoop
