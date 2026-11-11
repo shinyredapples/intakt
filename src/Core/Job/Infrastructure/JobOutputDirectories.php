@@ -51,7 +51,7 @@ final readonly class JobOutputDirectories
         $bytes = 0;
 
         foreach ($entries as $entry) {
-            if ($entry->isDot()) {
+            if ($entry->isDot() || StartCheckReport::FILE === $entry->getFilename()) {
                 continue;
             }
 
