@@ -29,8 +29,6 @@ A persistent self-hosted runner is not supported. The runner must start every jo
 
 Why: a pull request from a branch of the repository runs its own version of the workflow and of `.github/ci/` on the runner, with access to the host's Docker daemon, which is as good as root on that host. On a machine that persists, such a run could leave something behind for a later job, main's included: for example an image tagged with the hash of main's `.github/ci/Dockerfile`, `composer.json` and `config/gates/php/check.ini`, which `.github/ci/build-image.sh` would then reuse instead of building, so main's `bin/check` would run in an image the pull request chose. On a clean state for every job nothing a job does reaches the next one, and an image that exists when a job starts can only be one you put into the clean state yourself. Baking the CI image into that state saves the build; leaving it out is also fine, since the jobs then restore the copy a run on main cached, or build it.
 
-Build the baked image in that state rather than loading it from a file, so Docker's build cache keeps its layers. When main's `composer.json` or check ini changes, the image's name changes and the job builds again, but it reuses the slow first part (system packages and PHP extensions) from that cache and takes seconds. Rebuild the baked image whenever main's image name changes; that is your step on the host, CI does not do it.
-
 ## Keeping the runner usable
 
 The script that registers your ephemeral runner should do three things before each registration, so a runner that died mid-job does not block CI until someone cleans up by hand:

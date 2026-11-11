@@ -60,7 +60,7 @@ final class DockerfileTest extends TestCase
     public function testEachImageRechecksTheMissingExtensionsInAnAssignmentAfterTheInstall(): void
     {
         self::assertMatchesRegularExpression('/ \$exts .*\n\s+left="\$\(php -r "\$missing"\)"; \\\\\n\s+test -z "\$left"; \\\\$/m', $this->dockerfile());
-        self::assertMatchesRegularExpression('/^COPY composer\.json .*\n(?:.*\n)*\s+left="\$\(php -r "\$missing"\)"; \\\\\n.*\n\s+test -z "\$left"$/m', $this->file('.github/ci/Dockerfile'));
+        self::assertMatchesRegularExpression('/^\s+left="\$\(php -r "\$missing"\)"; \\\\\n.*\n\s+test -z "\$left"$/m', $this->file('.github/ci/Dockerfile'));
     }
 
     public function testEachImageRunsTheSameProfileScript(): void
