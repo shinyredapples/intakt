@@ -3,21 +3,25 @@
 {% block title %}Projects - Intakt{% endblock %}
 
 {% block body %}
-<h1>Projects</h1>
+<div class="page-head">
+    <div>
+        <h1>Projects</h1>
+        <p class="lead">Every project that has started a review. Open one to see its reviews.</p>
+    </div>
+</div>
 {% if projects is empty %}
-<p>No project has started a review yet.</p>
+{{ include('dashboard/components/empty.html.twig', {title: 'No projects yet', text: 'No project has started a review yet.'}, with_context = false) }}
 {% else %}
-<table>
-    <thead><tr><th>Project</th><th>Rounds</th><th>Judged</th></tr></thead>
-    <tbody>
+<div class="list">
     {% for project in projects %}
-        <tr data-project="{{ project.name }}">
-            <td><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: project.name}) }}">{{ project.name }}</a></td>
-            <td>{{ project.rounds }}</td>
-            <td>{{ project.judgedRounds }}</td>
-        </tr>
+    <div data-project="{{ project.name }}">
+        {{ include('dashboard/components/list_row.html.twig', {
+            title: project.name,
+            href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: project.name}),
+            explanation: project.rounds ~ (project.rounds == 1 ? ' review round, ' : ' review rounds, ') ~ project.judgedRounds ~ ' judged.',
+        }, with_context = false) }}
+    </div>
     {% endfor %}
-    </tbody>
-</table>
+</div>
 {% endif %}
 {% endblock %}

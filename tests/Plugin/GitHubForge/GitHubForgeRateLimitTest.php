@@ -29,9 +29,11 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\PullRequestAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -42,6 +44,8 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\HttpClient\Retry\GenericRetryStrategy;
 use Symfony\Component\HttpClient\RetryableHttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
@@ -166,6 +170,19 @@ final class GitHubForgeRateLimitTest extends TestCase
         self::assertCount(1, $this->requested);
     }
 
+    public function testItPostsAReviewWithTheHourlyBudgetBelowTheReserve(): void
+    {
+        $this->limited = false;
+        $forge = $this->forgeAnswering(static fn (): ?MockResponse => null);
+        $change = $forge->change(new ChangeId(self::PULL));
+        $this->readings->observe('678', 200, ['x-ratelimit-remaining' => ['3'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [(string) ($this->clock->now()->getTimestamp() + 1800)]]);
+        $this->requested = [];
+
+        $forge->postReview('widgets', $change, new ReviewComment('Two reviewers approve.', new ReviewToken('round-7-token-0123456789'), new JobCredentials()));
+
+        self::assertSame(['GET https://api.github.com/repos/acme/widgets/pulls/7', 'POST https://api.github.com/repos/acme/widgets/pulls/7/reviews'], $this->requested);
+    }
+
     public function testItStillRetriesADroppedConnectionOfARead(): void
     {
         $this->limited = false;
@@ -187,7 +204,7 @@ final class GitHubForgeRateLimitTest extends TestCase
     {
         $reset = $this->clock->now()->getTimestamp() + 900;
         $this->limited = false;
-        $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse(self::pull(), ['response_headers' => ['x-ratelimit-remaining' => '4321', 'x-ratelimit-reset' => (string) $reset]]));
+        $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse(self::pull(), ['response_headers' => ['x-ratelimit-remaining' => '4321', 'x-ratelimit-limit' => '5000', 'x-ratelimit-reset' => (string) $reset]]));
 
         $change = new Change(new ChangeId(self::PULL), new CommitRange(new CommitId(self::MERGE_BASE), new CommitId(self::HEAD)), new Diff('', new ChangedFiles()));
 
@@ -227,7 +244,10 @@ final class GitHubForgeRateLimitTest extends TestCase
         $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $this->readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubForge(new GitHubCalls($http, $this->readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new SecretScan(dirname(__DIR__, 3), 'gitleaks'));
+        $calls = new GitHubCalls($http, $this->readings, $tokens);
+        $checked = new CheckedInstallationTokens($readBack, $tokens);
+
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())));
     }
 
     private function plain(string $url): MockResponse

@@ -70,21 +70,25 @@ final readonly class PendingHeads
         return true === $pending?->isDueAt($this->clock->now()) ? $pending->openChange() : null;
     }
 
-    // Only while the row still holds this head, in one statement, because a newer head the listing queued meanwhile is due now and must not wait for this one's time.
     public function keep(string $project, HeadDecision $decision): void
     {
-        $readAgainAt = $decision->readAgainAt ?? throw new LogicException('Only a pending head is kept.');
+        $this->waitUntil($project, $decision->change, $decision->readAgainAt ?? throw new LogicException('Only a pending head is kept.'));
+    }
+
+    // Only while the row still holds this head, in one statement, because a newer head the listing queued meanwhile is due now and must not wait for this one's time; the failures stay, because a wait is no failure.
+    public function waitUntil(string $project, OpenChange $head, DateTimeImmutable $until): void
+    {
         $this->entities->createQueryBuilder()
             ->update(PendingHead::class, 'p')
             ->set('p.readAgainAt', ':readAgainAt')
             ->where('p.project = :project AND p.change = :change AND p.head = :head')
-            ->setParameter('readAgainAt', PendingHead::momentOf($readAgainAt))
+            ->setParameter('readAgainAt', PendingHead::momentOf($until))
             ->setParameter('project', $project)
-            ->setParameter('change', $decision->change->id->value)
-            ->setParameter('head', $decision->change->head->hash)
+            ->setParameter('change', $head->id->value)
+            ->setParameter('head', $head->head->hash)
             ->getQuery()
             ->execute();
-        $this->dropLoaded($this->keyOf($project, $decision->change));
+        $this->dropLoaded($this->keyOf($project, $head));
     }
 
     public function failuresOf(string $project, OpenChange $head): int

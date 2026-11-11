@@ -7,6 +7,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Closure;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Persistence\ManagerRegistry;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Psr\Log\LoggerInterface;
 use Throwable;
@@ -16,6 +17,7 @@ final readonly class HeadBackOff
 {
     public function __construct(
         private FailedHeads $failed,
+        private PendingHeads $pending,
         private ManagerRegistry $doctrine,
         private LoggerInterface $logger,
     ) {
@@ -33,6 +35,12 @@ final readonly class HeadBackOff
     {
         try {
             return $step();
+        } catch (ForgeRateLimited $paused) {
+            // No failure, because the forge refused the read before any request and named when it answers again; counted as one, a pause of a few ticks handed a healthy head over.
+            $this->logger->info('A head waits for the forge\'s rate-limit reset.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'resets_at' => $paused->resetsAt->format(DATE_ATOM)]);
+            $this->pending->waitUntil($project, $head, $paused->resetsAt);
+
+            return null;
         } catch (Throwable $failure) {
             $this->logger->error('A head failed; it backs off alone.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $failure]);
             $this->reopenEntityManager();

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\DomCrawler\Crawler;
+use Twig\Environment;
 
 #[CoversNothing]
 final class DashboardShellTest extends DashboardPageTestCase
@@ -207,7 +208,7 @@ final class DashboardShellTest extends DashboardPageTestCase
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->startRound('round-2', 'beta');
 
-        $rows = $this->browser->request('GET', '/projects')->filter('main.content tbody tr');
+        $rows = $this->browser->request('GET', '/projects')->filter('main.content .list > [data-project]');
 
         self::assertEqualsCanonicalizing(['alpha', 'beta'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-project')));
     }
@@ -226,5 +227,28 @@ final class DashboardShellTest extends DashboardPageTestCase
         $body = $this->browser->request('GET', '/reviews')->filter('body')->html();
 
         self::assertGreaterThan(strpos($body, 'data-theme-toggle'), strpos($body, '<script>'));
+    }
+
+    public function testTheRenderedLayoutWiresTheListenerForTheProjectFilterStream(): void
+    {
+        $page = $this->browser->request('GET', '/reviews');
+
+        $script = $page->filter('body > script')->text();
+        self::assertStringContainsString("addEventListener('turbo:before-stream-render'", $script);
+        self::assertStringContainsString("'projfilter'", $script);
+        self::assertCount(1, $page->filter('select#projfilter'));
+    }
+
+    public function testThePushedProjectFilterIsRenderedWithTheOptionMarkupOfTheLayout(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+        $twig = self::getContainer()->get('twig');
+        self::assertInstanceOf(Environment::class, $twig);
+
+        $stream = new Crawler($twig->render('dashboard/stream/project_filter.stream.html.twig', ['projects' => ['alpha']]));
+        $page = $this->browser->request('GET', '/reviews');
+
+        $pushed = $stream->filter('template')->html();
+        self::assertSame(str_replace(' selected', '', trim($page->filter('#projfilter')->html())), $pushed);
     }
 }

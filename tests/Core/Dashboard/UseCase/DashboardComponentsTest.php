@@ -79,9 +79,7 @@ final class DashboardComponentsTest extends KernelTestCase
         ])->filter('button');
 
         self::assertSame('btn danger', $button->attr('class'));
-        self::assertSame('arm', $button->attr('data-controller'));
-        self::assertSame('arm#click', $button->attr('data-action'));
-        self::assertSame('Click again to pause', $button->attr('data-arm-confirm-value'));
+        self::assertSame('Click again to pause', $button->attr('data-arm-confirm'));
         self::assertSame('submit', $button->attr('type'));
     }
 

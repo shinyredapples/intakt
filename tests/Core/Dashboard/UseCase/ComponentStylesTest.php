@@ -64,7 +64,7 @@ final class ComponentStylesTest extends WebTestCase
     {
         $controllers = $this->gallery()->filter('#gallery [data-controller]')->each(static fn (Crawler $element): string => (string) $element->attr('data-controller'));
 
-        self::assertSame(['arm', 'disclosure', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
+        self::assertSame(['disclosure', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
     }
 
     public function testACompactBannerShowsOnlyItsToggleAtEveryWidth(): void

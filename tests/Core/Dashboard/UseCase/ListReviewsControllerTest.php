@@ -45,7 +45,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('judged', $crawler->filter('tbody tr td:nth-child(5)')->text());
+        self::assertSame('Judged', $crawler->filter('tbody tr td:nth-child(5) .chip.state-judged')->text());
     }
 
     public function testARoundWithoutAJudgeDecisionIsListedAsInProgress(): void
@@ -54,7 +54,15 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('in progress', $crawler->filter('tbody tr td:nth-child(5)')->text());
+        self::assertSame('In progress', $crawler->filter('tbody tr td:nth-child(5) .chip.state-running')->text());
+    }
+
+    public function testThePageHeadNamesThePageAndSaysWhatItLists(): void
+    {
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Reviews', $crawler->filter('.page-head h1')->text());
+        self::assertSame('Every review round, newest first. Open a round to see its review.', $crawler->filter('.page-head .lead')->text());
     }
 
     public function testTheProjectParameterChoosesThatProjectInTheTopBarFilter(): void
@@ -138,7 +146,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
     {
         $this->browser->request('GET', '/reviews');
 
-        self::assertSelectorTextContains('main', 'No review has started yet.');
+        self::assertSelectorTextContains('main .empty', 'No review has started yet.');
         self::assertSelectorNotExists('table');
         self::assertSelectorNotExists('.failing-heads');
     }
@@ -149,9 +157,31 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('alpha, pull request 7', $crawler->filter('.failing-heads .card h3')->text());
-        self::assertSame('handed over to the maintainer agent, 4 failures in a row, next try 2026-10-28 12:08:00 UTC', $crawler->filter('.failing-heads .card .state')->text());
-        self::assertSame('RuntimeException: commit <b> not fetched', $crawler->filter('.failing-heads .card .cause')->text());
+        self::assertSame('alpha', $crawler->filter('.failing-heads .card .pname')->text());
+        self::assertSame('Pull request 7: handed over to the maintainer agent', $crawler->filter('.failing-heads .card .title')->text());
+        self::assertSame('RuntimeException: commit <b> not fetched', $crawler->filter('.failing-heads .card .blocker.broken')->text());
+        self::assertSame(['4 failures in a row', 'Next try 2026-10-28 12:08:00 UTC'], $crawler->filter('.failing-heads .card .meta > span')->each(static fn ($fact): string => $fact->text()));
+    }
+
+    public function testAHeadThatIsNotHandedOverSaysItIsBackingOff(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Pull request 7: backing off', $crawler->filter('.failing-heads .card .title')->text());
+        self::assertSame('1 failure in a row', $crawler->filter('.failing-heads .card .meta > span')->first()->text());
+    }
+
+    // A card that links nowhere would take the hover of one that opens a page.
+    public function testAFailingHeadCardIsNoLink(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertCount(1, $crawler->filter('.failing-heads div.card'));
+        self::assertCount(0, $crawler->filter('.failing-heads a'));
     }
 
     public function testTheProjectParameterKeepsTheFailedHeadsOfEveryProjectForTheTopBarFilter(): void
@@ -161,6 +191,6 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews?project=beta');
 
-        self::assertSame(['alpha', 'beta'], $crawler->filter('.failing-heads .card')->each(static fn ($card): ?string => $card->attr('data-project')));
+        self::assertSame(['alpha', 'beta'], $crawler->filter('.failing-heads [data-project]')->each(static fn ($card): ?string => $card->attr('data-project')));
     }
 }

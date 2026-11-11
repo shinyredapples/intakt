@@ -25,6 +25,8 @@
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
     {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
     {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
+    {# Imported by its own address, not through the import map, so a danger button asks first also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
+    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; holdBackDangerButtons(document);</script>
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
@@ -130,6 +132,20 @@
         if (projectFilter.isConnected) {
             showProject();
         }
+    });
+    // Turbo appends a stream to the document element, so only the document sees it; a page left behind does nothing.
+    document.addEventListener('turbo:before-stream-render', (event) => {
+        if (event.target.getAttribute('target') !== 'projfilter' || !projectFilter.isConnected) {
+            return;
+        }
+        const render = event.detail.render;
+        // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
+        event.detail.render = (stream) => {
+            const chosen = projectFilter.value;
+            render(stream);
+            projectFilter.value = [...projectFilter.options].some((option) => option.value === chosen) ? chosen : '';
+            showProject();
+        };
     });
     if (more) {
         more.addEventListener('click', () => showMore(moreSheet.hidden));

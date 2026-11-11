@@ -20,7 +20,7 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
     public static function componentMarkers(): iterable
     {
         yield 'button' => ['.btn.primary'];
-        yield 'danger button' => ['.btn.danger[data-controller="arm"]'];
+        yield 'danger button' => ['.btn.danger[data-arm-confirm]'];
         yield 'chip' => ['.chip'];
         yield 'count' => ['.count.needs'];
         yield 'card' => ['.card'];

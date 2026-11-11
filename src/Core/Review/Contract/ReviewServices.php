@@ -8,4 +8,6 @@ namespace Intakt\Core\Review\Contract;
 final readonly class ReviewServices
 {
     public const string PANELS = 'intakt.review.panels';
+
+    public const string MCP_URL = 'intakt.review.mcp_url';
 }
