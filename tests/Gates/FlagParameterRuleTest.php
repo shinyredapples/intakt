@@ -8,6 +8,7 @@ use Intakt\Gates\PhpStan\ContainerRegistration;
 use Intakt\Gates\PhpStan\FlagParameterRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -23,9 +24,21 @@ final class FlagParameterRuleTest extends PhpStanRuleTestCase
         return new FlagParameterRule($root, new ContainerRegistration($root));
     }
 
-    public function testABooleanParameterOfAServiceMethodFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertRejectedBy('phpstan', 'flag-parameter-in-service', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag');
+        return self::casesOfOnePhpstanRun([
+            'ABooleanParameterOfAServiceMethodFailsStaticAnalysis' => ['flag-parameter-in-service', 'src/Mailer.php:9 intakt.flagParameter Parameter $urgent is a flag'],
+            'AnEnumParameterPassesStaticAnalysis' => ['enum-parameter'],
+        ]);
+    }
+
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
+    {
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testABooleanParameterOfAClosureFailsStaticAnalysis(): void
@@ -146,10 +159,5 @@ final class FlagParameterRuleTest extends PhpStanRuleTestCase
     public function testAPromotedBooleanOfAReadonlyClassOutsideTheSourceFolderFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('readonly-gate-class-with-flag', 'config/gates/src/Strictness.php:9 intakt.flagParameter Parameter $strict is a flag');
-    }
-
-    public function testAnEnumParameterPassesStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'enum-parameter');
     }
 }

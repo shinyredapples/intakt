@@ -44,7 +44,7 @@
     <h3>Reviewers</h3>
     <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
     {% if reviewed.outcomes is not empty %}
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Reviewers of round {{ reviewed.round }}">
     <table class="ledger reviewers">
         <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th class="num">Findings</th><th>Note</th><th>Stop</th></tr></thead>
         <tbody>
@@ -85,7 +85,7 @@
     {% if not reviewed.findingTextRecorded %}
     <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
     {% endif %}
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Findings of round {{ reviewed.round }}">
     <table class="ledger findings">
         <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
         <tbody>
@@ -103,7 +103,7 @@
     {% endif %}
 
     <h3>Tokens and cost</h3>
-    <div class="table-scroll">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Tokens and cost of round {{ reviewed.round }}">
     <table class="ledger tokens">
         <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost</th></tr></thead>
         <tbody>

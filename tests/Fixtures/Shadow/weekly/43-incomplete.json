@@ -1,0 +1,10 @@
+{
+ "pullRequest": 43,
+ "loop": "loop-bot",
+ "intakt": "intakt-app[bot]",
+ "comments": [
+  {"author": "loop-bot", "head": "ccc333", "postedAt": "2026-11-06T08:00:00Z", "body": "Reviewer: gpt\n\nThe review stopped before its verdict."},
+  {"author": "intakt-app[bot]", "head": "ccc333", "postedAt": "2026-11-06T08:03:00Z", "body": "**Review by Intakt** (head ccc333)\n\n[P1] src/Pay.php:7: the refund skips the lock\n\n```json\n{\"verdict\":\"changes\",\"head\":\"ccc333\",\"summary\":\"One blocker.\"}\n```"},
+  {"author": "alice", "head": "ccc333", "postedAt": "2026-11-06T09:00:00Z", "body": "{\"verdict\": \"approve\"}"}
+ ]
+}
