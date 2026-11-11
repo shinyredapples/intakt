@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\UsesClass;
 
-// A sandbox and a scan per test that needs a tree of its own (a clean scan, a scanner configuration, git state, a scanner stub), because one planted secret would fail another test's clean scan; most of a scan's second is the gate starting gitleaks twice (version check, then scan), which is the code under test.
+// A sandbox and a scan per test that needs a tree of its own (a clean scan, a scanner configuration, git state, a scanner stub), because one planted secret would fail another test's clean scan; most of a scan's second is the gate starting gitleaks twice (version check, then scan), which is the code under test, so a case that reads only the gate's line runs the gate in the test process, and bin/check stays for its exit code, its output and the scanner it finds.
 #[CoversClass(WorkingTreeSecretsGate::class)]
 #[UsesClass(GitleaksGate::class)]
 final class WorkingTreeSecretsGateTest extends SandboxTestCase
@@ -94,7 +94,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration());
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->passed('secrets'), $run->output());
     }
@@ -104,7 +104,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration().'token = "'.$this->fakeGithubToken()."\"\n");
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('config/gates/gitleaks.toml', $run->findingsOf('secrets'));
@@ -115,7 +115,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration().'stopwords = [\n    "'.$this->fakeGithubToken()."\",\n]\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->failed('secrets'));
     }
 
     #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
@@ -129,7 +129,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration()."\n[[rules]]\nid = \"planted\"\nregex = '''".$this->fakeGithubToken()."'''\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->failed('secrets'));
     }
 
     #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
@@ -182,7 +182,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         chmod($sandbox->root.'/locked.txt', 0o000);
 
         try {
-            $run = $sandbox->check('--only=secrets');
+            $run = $sandbox->runGate(new WorkingTreeSecretsGate());
         } finally {
             chmod($sandbox->root.'/locked.txt', 0o644);
         }
@@ -197,7 +197,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->write('vendor/package/tests/key.txt', 'token='.$this->fakeGithubToken()."\n");
         $sandbox->write('README.md', "start\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->passed('secrets'));
     }
 
     public function testAScannerOtherThanThePinnedVersionIsRefused(): void
@@ -248,7 +248,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
         $sandbox->git('add', '--force', '--all');
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString($path, $run->findingsOf('secrets'));
@@ -259,7 +259,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/settings.txt', 'token='.$this->fakeGithubToken().' # '.$this->inlineAllowDirective()."\n");
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('inline allow directive', $run->findingsOf('secrets'));
@@ -271,7 +271,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->write('src/settings.txt', 'token='.$this->fakeGithubToken()."\n");
         $sandbox->write('.gitleaksignore', "src/settings.txt:github-pat:1\n");
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('.gitleaksignore', $run->findingsOf('secrets'));
@@ -285,7 +285,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         $sandbox->write('vendor/package/settings.txt', 'token='.$this->fakeGithubToken()."\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->passed('secrets'));
     }
 
     public function testAnUntrackedFileThatIsNotIgnoredIsScanned(): void
@@ -295,14 +295,14 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         $sandbox->write('notes.svg', 'token='.$this->fakeGithubToken()."\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->failed('secrets'));
     }
 
     public function testATreeWithoutSecretsPassesTheScan(): void
     {
         $sandbox = $this->sandboxWith('clean');
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->passed('secrets'));
     }
 
     private function checkWithScannerReporting(string $version): CheckRun

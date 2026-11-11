@@ -87,7 +87,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/resolution.txt');
         $sandbox->commitAll('fix: remove the resolution file');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('resolution.txt', $run->findingsOf('secrets-history'));
@@ -104,7 +104,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/hidden.dat');
         $sandbox->commitAll('fix: remove the files');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('hidden.txt', $run->findingsOf('secrets-history'));
@@ -122,7 +122,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('settings.txt', 'token='.$this->fakeGithubToken()."\n");
         $sandbox->commitAll('feat: add settings');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('settings.txt', $run->findingsOf('secrets-history'));
@@ -139,7 +139,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('settings.txt', 'token '.$this->fakeGithubToken()."\n");
         $sandbox->commitAll('feat: add the gates');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
@@ -160,7 +160,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('settings.txt', 'token '.$this->fakeGithubToken()."\n");
         $sandbox->commitAll('feat: add lax rules and a token');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
@@ -178,7 +178,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('feat: add the gates');
         unlink($sandbox->root.'/.git/objects/'.substr($tree, 0, 2).'/'.substr($tree, 2));
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('cannot read config/gates at the tip of the base', $run->findingsOf('secrets-history'));
@@ -194,7 +194,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('config/gates/gitleaks.toml', (string) file_get_contents(__DIR__.'/../../config/gates/gitleaks.toml'));
         $sandbox->commitAll('feat: add the configuration');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('base has no config/gates/gitleaks.toml', $run->findingsOf('secrets-history'));
@@ -248,7 +248,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/settings.txt');
         $sandbox->commitAll('fix: remove settings');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('inline allow directive', $run->findingsOf('secrets-history'));
@@ -302,7 +302,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=missing');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'missing');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
     }

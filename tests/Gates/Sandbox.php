@@ -170,9 +170,9 @@ final readonly class Sandbox
     }
 
     // Because starting bin/check costs more than a gate that spawns no tool, its tests run it here and read the line bin/check would print for it.
-    public function runGate(Gate $gate): CheckRun
+    public function runGate(Gate $gate, ?string $base = null): CheckRun
     {
-        $result = $this->gateResult($gate);
+        $result = $this->gateResult($gate, $base);
 
         return new CheckRun(new ProcessResult($result->isPassing() ? 0 : 1, $result->toJson()."\n", ''));
     }
