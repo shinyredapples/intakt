@@ -122,7 +122,7 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertNotSame(Command::FAILURE, $tester->getStatusCode());
     }
 
-    // The lines themselves are ReviewReportTest's: here only that the command prints the report it is asked for.
+    // Only the report's arrival here, because ReviewReportTest checks its lines without a git repository.
     public function testTheTextFormatPrintsTheReportsLines(): void
     {
         $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Changes));

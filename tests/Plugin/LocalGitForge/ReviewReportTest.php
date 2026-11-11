@@ -112,7 +112,7 @@ final class ReviewReportTest extends TestCase
         self::assertSame([], $this->schemaErrors($json));
     }
 
-    // One decision stands for all three: the decision is one enum value under one schema rule, and blocked also carries reasons.
+    // One decision stands for all three, because the schema checks the decision as one enum; blocked is the one that also carries reasons.
     public function testTheJsonOutputValidatesAgainstTheDocumentedSchema(): void
     {
         $json = $this->report()->asJson($this->review(Decision::Blocked));
