@@ -35,18 +35,17 @@
 {% if active is not null %}
 <section class="state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
-        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} in review</h2>
-        {{ include('dashboard/_round_state.html.twig', {state: active.state}, with_context = false) }}
-    </div>
+        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>    </div>
     <div class="sb-grid">
         <div>
             <h3>Reviewers</h3>
+            <p class="muted" id="round-{{ active.round }}-now-progress">{{ active.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ active.reviewers }} reviewers finished.</p>
             {% if active.outcomes is empty %}
             <p class="muted">No reviewer has started yet.</p>
             {% else %}
             <ul class="sb-list">
                 {% for outcome in active.outcomes %}
-                <li><span><strong>{{ outcome.role }}</strong> ({{ outcome.tier }}): {{ outcome.progress.value }}{% if outcome.decision is not null %}, {{ outcome.decision }}{% endif %}</span></li>
+                <li><span><strong>{{ outcome.role }}</strong> ({{ outcome.tier }}): <span id="round-{{ active.round }}-now-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</span>{% if outcome.decision is not null %}, {{ outcome.decision }}{% endif %}</span></li>
                 {% endfor %}
             </ul>
             {% endif %}
@@ -63,7 +62,7 @@
         </div>
         <div>
             <h3>The judge's call</h3>
-            <p class="muted">The judge has not judged this round yet.</p>
+            <p class="muted" id="round-{{ active.round }}-now-judge">The judge has not judged this round yet.</p>
         </div>
     </div>
 </section>
