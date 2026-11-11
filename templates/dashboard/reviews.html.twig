@@ -9,6 +9,32 @@
         <p class="lead">Every review round, newest first. Open a round to see its review.</p>
     </div>
 </div>
+{% if forge_budgets is not empty %}
+<section class="section forge-budgets">
+<h2>Forge budget this hour</h2>
+<div class="table-scroll">
+<table class="ledger">
+    <thead><tr><th>Installation</th><th>Calls used</th><th>Calls remaining</th><th>Forge reserve</th></tr></thead>
+    <tbody>
+    {% for budget in forge_budgets %}
+        <tr data-installation="{{ budget.installation }}">
+            <td class="mono">{{ budget.installation }}</td>
+        {% if budget.read %}
+            <td class="num">{{ budget.used }}</td>
+            <td class="num">{{ budget.remaining }}</td>
+            <td>{{ budget.reserveInForce
+                ? include('dashboard/components/chip.html.twig', {icon: 'clock', label: 'In force: routine reads wait', on_page: true, extra: 'reserve-in-force'}, with_context = false)
+                : include('dashboard/components/chip.html.twig', {dot: 'ok', label: 'Not in force', on_page: true, extra: 'reserve-idle'}, with_context = false) }}</td>
+        {% else %}
+            <td colspan="3" class="unread">No reading this hour</td>
+        {% endif %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</section>
+{% endif %}
 {% if failing is not empty %}
 <section class="section failing-heads">
 <h2>Pull requests that failed</h2>
