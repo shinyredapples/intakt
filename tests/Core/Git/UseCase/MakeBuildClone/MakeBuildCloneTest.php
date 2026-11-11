@@ -214,7 +214,7 @@ final class MakeBuildCloneTest extends TestCase
         $winner = $this->givenABranch('feat/winner', 'w.txt');
         $main = $this->remote->objectAt('main');
         $this->givenTheMirror();
-        $racing = $this->filesystemThatLetsAnotherCloneInFirst('feat/winner');
+        $racing = new FilesystemThatLetsAnotherCloneInFirst($this->buildClones(), 'feat/winner', $this->clone);
 
         try {
             new MakeBuildClone(new HardenedGit(), $racing, new Mirrors($this->mirrors))->make('alpha', 'feat/loser', $this->clone);
@@ -282,25 +282,6 @@ final class MakeBuildCloneTest extends TestCase
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
 
         return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
-    }
-
-    private function filesystemThatLetsAnotherCloneInFirst(string $branch): Filesystem
-    {
-        $other = $this->buildClones();
-        $clone = $this->clone;
-
-        // Forces the losing order: the other clone takes the folder between this call's checks and its own folder.
-        return new class($other, $branch, $clone) extends Filesystem {
-            public function __construct(private readonly MakeBuildClone $other, private readonly string $branch, private readonly string $clone)
-            {
-            }
-
-            public function mkdir(string|iterable $dirs, int $mode = 0o777): void
-            {
-                $this->other->make('alpha', $this->branch, $this->clone);
-                parent::mkdir($dirs, $mode);
-            }
-        };
     }
 
     private function whenTheBuildCloneIsMade(string $branch): void
