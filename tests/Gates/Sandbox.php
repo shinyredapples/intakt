@@ -52,10 +52,15 @@ final readonly class Sandbox
 
     public static function withFixturesInFolders(string ...$names): self
     {
+        return self::withFixturesInFoldersUnder('', ...$names);
+    }
+
+    public static function withFixturesInFoldersUnder(string $parent, string ...$names): self
+    {
         $sandbox = self::empty();
 
         foreach ($names as $name) {
-            $sandbox->copyFixture(self::FIXTURES.'/'.$name, $name.'/');
+            $sandbox->copyFixture(self::FIXTURES.'/'.$name, $parent.$name.'/');
         }
 
         return $sandbox;

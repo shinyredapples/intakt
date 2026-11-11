@@ -29,10 +29,10 @@ trait UsesSandboxes
      *
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
-    final protected static function casesOfOnePhpstanRun(array $fixtureAndFindingsOfEachCase): iterable
+    final protected static function casesOfOnePhpstanRun(array $fixtureAndFindingsOfEachCase, string $parent = ''): iterable
     {
-        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder, and a case still runs alone under --filter
-        $sandbox = Sandbox::withFixturesInFolders(...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
+        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder (under a parent such as src/ when the rule judges only that folder, or its cases would pass unjudged), and a case still runs alone under --filter
+        $sandbox = Sandbox::withFixturesInFoldersUnder($parent, ...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
         $sandbox->borrowKernel();
 
         try {
@@ -42,7 +42,7 @@ trait UsesSandboxes
         }
 
         foreach ($fixtureAndFindingsOfEachCase as $name => $fixtureAndFindings) {
-            yield $name => [$run, ...$fixtureAndFindings];
+            yield $name => [$run, $parent.array_shift($fixtureAndFindings), ...$fixtureAndFindings];
         }
     }
 
