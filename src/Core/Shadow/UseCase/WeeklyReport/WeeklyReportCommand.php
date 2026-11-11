@@ -28,6 +28,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'intakt:shadow:weekly-report', description: 'Print the week\'s comparison of the loop\'s reviews and Intakt\'s published reviews on the same heads of recorded pull requests')]
 final readonly class WeeklyReportCommand
 {
+    private const string MOMENT = 'Y-m-d\TH:i:sp';
+
     public function __construct(
         private PublishedComparison $comparison,
         private ClockInterface $clock,
@@ -86,7 +88,7 @@ final readonly class WeeklyReportCommand
 
     private function print(SymfonyStyle $io, WeeklyReport $report): void
     {
-        $io->writeln(sprintf('Week from %s to %s', $report->from->format(RecordedMoment::FORMAT), $report->until->format(RecordedMoment::FORMAT)), OutputInterface::OUTPUT_RAW);
+        $io->writeln(sprintf('Week from %s to %s', $report->from->format(self::MOMENT), $report->until->format(self::MOMENT)), OutputInterface::OUTPUT_RAW);
         $io->table(
             ['pull request', 'head', 'loop', 'intakt', 'agreement', 'matched', 'loop only', 'intakt only'],
             array_map(fn (PublishedHead $head): array => [
@@ -118,7 +120,7 @@ final readonly class WeeklyReportCommand
      */
     private function decisions(array $decisions): string
     {
-        return implode("\n", array_map(static fn (ReviewerDecision $decision): string => sprintf('%s: %s', $decision->reviewer, $decision->outcome->value), $decisions));
+        return implode("\n", array_map(static fn (ReviewerDecision $d): string => sprintf('%s: %s', $d->reviewer, $d->outcome->value), $decisions));
     }
 
     /**
@@ -126,6 +128,6 @@ final readonly class WeeklyReportCommand
      */
     private function findings(array $findings): string
     {
-        return implode("\n", array_map(static fn (LoopFinding $finding): string => sprintf('%s %s:%d', $finding->severity->value, $finding->file, $finding->line), $findings));
+        return implode("\n", array_map(static fn (LoopFinding $f): string => sprintf('%s %s:%d', $f->severity->value, $f->file, $f->line), $findings));
     }
 }
