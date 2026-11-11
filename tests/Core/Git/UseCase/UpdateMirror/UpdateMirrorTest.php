@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
@@ -25,6 +26,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
+#[UsesClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
@@ -434,7 +436,7 @@ final class UpdateMirrorTest extends TestCase
     {
         $network = new NetworkGit($clock ?? new RecordingClock(), new NullLogger());
 
-        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $this->mirrors)->update($project, $remote);
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update($project, $remote);
     }
 
     private function git(string $directory, string ...$arguments): string

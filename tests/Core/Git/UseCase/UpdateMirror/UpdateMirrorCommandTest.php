@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirrorCommand;
@@ -26,6 +27,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(UpdateMirrorCommand::class)]
 #[UsesClass(UpdateMirror::class)]
+#[UsesClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
@@ -88,7 +90,7 @@ final class UpdateMirrorCommandTest extends TestCase
     private function whenTheCommandRuns(string $project, string $remote): CommandTester
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $mirror = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $this->mirrors);
+        $mirror = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors));
         $application = new Application();
         $application->addCommand(new UpdateMirrorCommand($mirror));
         $tester = new CommandTester($application->find('intakt:mirror:update'));

@@ -107,9 +107,9 @@ services:
             $output: 'php://stderr'
             $formatter: '@Intakt\Core\Platform\Infrastructure\RedactedJsonFormatter'
 
-    Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror:
+    Intakt\Core\Git\Domain\Mirrors:
         arguments:
-            $mirrorsDirectory: '%intakt.git.mirrors_directory%'
+            $directory: '%intakt.git.mirrors_directory%'
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
