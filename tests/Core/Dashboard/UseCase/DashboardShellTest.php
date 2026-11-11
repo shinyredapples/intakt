@@ -19,6 +19,7 @@ final class DashboardShellTest extends DashboardPageTestCase
      */
     public static function pages(): iterable
     {
+        yield 'the board' => ['/'];
         yield 'the project list' => ['/projects'];
         yield 'the review list' => ['/reviews'];
         yield 'a review' => ['/reviews/round-1'];
@@ -50,9 +51,16 @@ final class DashboardShellTest extends DashboardPageTestCase
     {
         $rail = $this->browser->request('GET', '/reviews')->filter('.rail a.nav');
 
-        self::assertSame(['Projects'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
-        self::assertSame('/projects', $rail->attr('href'));
+        self::assertSame(['Board', 'Projects'], $rail->each(static fn (Crawler $item): string => trim($item->text())));
+        self::assertSame(['/', '/projects'], $rail->each(static fn (Crawler $item): string => (string) $item->attr('href')));
         self::assertCount(0, $rail->filter('.count'));
+    }
+
+    public function testTheRailMarksTheBoardItemCurrentOnTheBoard(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(['board'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
     }
 
     public function testTheRailMarksTheProjectsItemCurrentOnTheProjectsPage(): void
