@@ -1,7 +1,5 @@
 name: highlights
-# Publishes the highlights page, assembled by bin/highlights from docs/highlights.d/, to GitHub Pages from the gh-pages
-# branch, so a reader of the public repository finds it without the page ever being committed to main. Runs on main
-# only (never a pull request, so no pull-request code runs with the write permission) and by hand.
+# Publishes the page bin/highlights assembles from docs/highlights.d/ to GitHub Pages; it is never committed.
 on:
   push:
     branches: [main]
@@ -13,7 +11,7 @@ permissions:
   contents: read
 jobs:
   build:
-    if: github.repository == 'shinyredapples/intakt'
+    if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -22,48 +20,35 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Build or restore the CI image
-        uses: ./.github/actions/ci-image
-      # The fragments are ordered by the commit that added each, so the full history above is needed. The page is
-      # written into a folder mounted read-write; the checkout itself stays read-only, as in ci.yml.
+        uses: $/.github/actions/ci-image
       - name: Assemble the page
         run: |
           set -eu
-          mkdir "$RUNNER_TEMP/page"
-          chmod 777 "$RUNNER_TEMP/page"
+          mkdir _highlights
+          chmod 777 _highlights
           docker run --rm --user 1000:1000 \
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            --volume "$RUNNER_TEMP/page:/page" \
+            --volume "$GITHUB_WORKSPACE/_highlights:/page" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/highlights && cp docs/highlights.md /page/index.md'
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
-          name: highlights-page
-          path: ${{ runner.temp }}/page/index.md
-          if-no-files-found: error
-          retention-days: 7
+          source: ./_highlights
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
   publish:
     needs: build
+    if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: write
+      pages: &pages-write write
+      # The same value through the alias on its own line, so no value follows a key named like a credential.
+      id-token:
+        *pages-write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: highlights-page
-          path: page
-      # Only the page goes onto the branch, and it is rewritten as one commit, so the branch never grows.
-      - name: Publish the page on gh-pages
-        env:
-          REPOSITORY: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cd page
-          git init --quiet --initial-branch=gh-pages
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.md
-          git commit --quiet --message 'docs: publish the highlights page'
-          git -c "http.https://github.com/.extraheader=Authorization: Basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
-            push --force "https://github.com/$REPOSITORY.git" gh-pages
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
