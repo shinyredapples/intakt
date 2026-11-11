@@ -75,8 +75,10 @@ final class ContainerJobRunnerTest extends TestCase
         $this->locks = new InMemoryStore();
     }
 
+    // Permissions are restored first, because a failing or interrupted test can leave a folder without any, and the next build could not empty its temporary folder.
     protected function tearDown(): void
     {
+        $this->restoreOwnerAccess($this->root);
         new Filesystem()->remove($this->root);
     }
 
@@ -525,6 +527,19 @@ final class ContainerJobRunnerTest extends TestCase
         );
 
         return $runner->run($spec);
+    }
+
+    private function restoreOwnerAccess(string $path): void
+    {
+        if (is_link($path) || !is_dir($path)) {
+            return;
+        }
+
+        chmod($path, 0o700);
+
+        foreach (array_diff(scandir($path) ?: [], ['.', '..']) as $name) {
+            $this->restoreOwnerAccess($path.'/'.$name);
+        }
     }
 
     /**
