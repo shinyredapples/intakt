@@ -253,6 +253,21 @@ final class MakeBuildCloneTest extends TestCase
         $this->whenTheBuildCloneIsMade('feat/task');
     }
 
+    public function testAMirrorWhoseHeadNamesATagIsRefused(): void
+    {
+        $this->remote->tag('v1');
+        $mirror = $this->givenTheMirror();
+        $this->git($mirror, '--git-dir='.$mirror, 'symbolic-ref', 'HEAD', 'refs/tags/v1');
+
+        $this->expectExceptionObject(BuildCloneNotMade::at($this->clone, 'the mirror\'s HEAD names no branch, so it has no main'));
+
+        try {
+            $this->whenTheBuildCloneIsMade('feat/task');
+        } finally {
+            self::assertDirectoryDoesNotExist($this->clone);
+        }
+    }
+
     public function testAFetchThatFailsLeavesNoCloneFolderBehind(): void
     {
         $mirror = $this->givenTheMirror();

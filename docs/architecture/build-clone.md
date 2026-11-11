@@ -5,7 +5,7 @@ A build works in a fresh clone of the project made from its [bare mirror](mirror
 `php bin/console intakt:build:clone <project> <branch> <directory>` (`MakeBuildClone` in `src/Core/Git/UseCase/MakeBuildClone/`) makes it:
 
 1. The mirror is `var/mirrors/<project>.git` (`Intakt\Core\Git\Domain\Mirrors`, the one home of the project-name rule that `UpdateMirror` uses too). A project whose mirror has no `HEAD` file has no mirror yet, and the clone is refused.
-2. Main is the branch the mirror's `HEAD` names (`git --git-dir=<mirror> symbolic-ref --quiet HEAD`), because the mirror's `HEAD` follows the remote's default branch. A mirror whose `HEAD` is detached has no main, and the clone is refused.
+2. Main is the branch the mirror's `HEAD` names (`git --git-dir=<mirror> symbolic-ref --quiet HEAD`), because the mirror's `HEAD` follows the remote's default branch. A mirror whose `HEAD` is detached, or names a ref outside `refs/heads/` (a tag, for example), has no main, and the clone is refused.
 3. The branch must pass `git check-ref-format --branch <branch>`, and git's answer must be the name itself, because git expands a name such as `@{-1}` to another branch. A branch that is main itself is refused.
 4. The mirror's object format is read (`rev-parse --show-object-format`), because a fetch from a SHA-256 mirror into a SHA-1 repository fails.
 5. The folder is reserved: its parent folders are made, then the folder itself with a single `mkdir`, which fails when anything (a folder, a file or a link) is already at the path. A clone therefore never mixes with what a folder already holds, and of two calls for the same folder only the one whose `mkdir` succeeds goes on; the other is refused with `the folder already exists`.

@@ -71,12 +71,14 @@ final readonly class MakeBuildClone
     {
         // Main is the branch the mirror's HEAD names, because the mirror's HEAD follows the remote's default branch.
         $head = $this->run($this->inMirror($mirror, ['symbolic-ref', '--quiet', 'HEAD']));
+        $main = trim($head->getOutput());
 
-        if (!$head->isSuccessful()) {
+        // Because git lets HEAD name any ref under refs/, and a tag as main would put a tag in a clone that promises none.
+        if (!$head->isSuccessful() || !str_starts_with($main, self::BRANCHES)) {
             throw BuildCloneNotMade::at($directory, 'the mirror\'s HEAD names no branch, so it has no main');
         }
 
-        return trim($head->getOutput());
+        return $main;
     }
 
     private function taskRef(string $mirror, string $main, string $branch): string
