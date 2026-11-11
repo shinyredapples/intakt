@@ -154,6 +154,23 @@ final class JobImagePlannerTest extends TestCase
         $this->planFor();
     }
 
+    // The job runner refuses an image that declares volumes, so the Dockerfile Intakt's own image comes from must declare none.
+    public function testIntaktsOwnSourcesPlanItsRootDockerfileWhichDeclaresNoVolume(): void
+    {
+        $root = dirname(__DIR__, 5);
+
+        foreach (['composer.json', 'Dockerfile'] as $file) {
+            $this->repository->commitFile($file, (string) file_get_contents($root.'/'.$file));
+        }
+
+        $plan = $this->planFor();
+
+        self::assertSame(JobImageSource::Dockerfile, $plan->source);
+        self::assertSame('8.5.12', $plan->php?->rule);
+        self::assertFileDoesNotExist($root.'/'.Devcontainer::PATH);
+        self::assertDoesNotMatchRegularExpression('/^\s*VOLUME\b/im', (string) file_get_contents($root.'/Dockerfile'));
+    }
+
     private function planFor(): JobImagePlan
     {
         return new JobImagePlanner(new ProjectFiles())->planFor($this->repository->path);

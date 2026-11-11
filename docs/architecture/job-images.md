@@ -47,4 +47,4 @@ Whenever there is a `PhpProfile`, `PhpInImage` runs a probe job in the new image
 
 - Images are built on demand by the command; nothing caches them per commit or rebuilds them when `composer.json` or the Dockerfile changes yet.
 - A compose file and an owner-supplied prebuilt image ([decision 4](../design/06-decisions.md)) are not image sources yet.
-- The release image's `Dockerfile` at Intakt's own root declares `VOLUME /app/var/data`, so the probe of an image built from it is refused. Intakt has no `.devcontainer/devcontainer.json` yet, which would come first and could name a job Dockerfile without a volume.
+- Intakt's own job image is its release image: the `Dockerfile` at its root, with PHP 8.5.12 and every `ext-*` of `composer.json`, but no Claude Code or Codex CLI. That `Dockerfile` declares no `VOLUME`, so its probe is not refused (`JobImagePlannerTest::testIntaktsOwnSourcesPlanItsRootDockerfileWhichDeclaresNoVolume`); `/app/var/data` is mounted by whoever runs it. Intakt has no `.devcontainer/devcontainer.json`, which would come first.
