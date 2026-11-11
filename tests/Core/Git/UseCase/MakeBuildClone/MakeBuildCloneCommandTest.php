@@ -84,11 +84,9 @@ final class MakeBuildCloneCommandTest extends TestCase
         self::assertStringContainsString('is not a project name that can be a folder name', $this->displayOnOneLine($tester));
     }
 
-    /**
-     * The error block wraps at the terminal width, which depends on how long the temporary path is.
-     */
     private function displayOnOneLine(CommandTester $tester): string
     {
+        // The error block wraps at the terminal width, so where it breaks depends on the temporary path's length.
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
