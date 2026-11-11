@@ -34,6 +34,17 @@ final readonly class LoopReviewReader
         return new LoopReviews(array_values(array_map($this->readComment(...), $own)));
     }
 
+    public function reviewerNamedIn(PullRequestComment $comment): string
+    {
+        return $this->reviewerOf($this->readableLines($comment->body));
+    }
+
+    // A broken verdict block still counts, so a review that failed to state its verdict reads as unreadable rather than as no review.
+    public function holdsVerdict(PullRequestComment $comment): bool
+    {
+        return [] !== $this->verdictCandidates($this->readableLines($comment->body));
+    }
+
     private function readComment(PullRequestComment $comment): LoopReview
     {
         $lines = $this->readableLines($comment->body);
@@ -175,7 +186,7 @@ final readonly class LoopReviewReader
      */
     private function declaredVerdict(array $lines): LoopVerdict
     {
-        $candidates = array_filter($lines, static fn (array $line): bool => $line['json'] || str_starts_with(ltrim($line['text']), '{'));
+        $candidates = $this->verdictCandidates($lines);
         if ([] === $candidates) {
             return LoopVerdict::Unreadable;
         }
@@ -189,5 +200,15 @@ final readonly class LoopReviewReader
         $value = is_array($decoded) ? ($decoded['verdict'] ?? null) : null;
 
         return (is_string($value) ? LoopVerdict::tryFrom($value) : null) ?? LoopVerdict::Unreadable;
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
+     *
+     * @return array<int, array{text: string, json: bool}>
+     */
+    private function verdictCandidates(array $lines): array
+    {
+        return array_filter($lines, static fn (array $line): bool => $line['json'] || str_starts_with(ltrim($line['text']), '{'));
     }
 }

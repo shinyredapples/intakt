@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Shadow\Domain;
 
+use Closure;
 use Intakt\Core\Shadow\Contract\PullRequestComment;
 
 final readonly class RecordedPullRequest
@@ -17,6 +18,16 @@ final readonly class RecordedPullRequest
         public string $intaktIdentity,
         private array $postedComments,
     ) {
+    }
+
+    /**
+     * @param Closure(PullRequestComment): bool $isReview
+     */
+    public function keepingReviews(Closure $isReview): self
+    {
+        $reviews = array_filter($this->postedComments, static fn (PostedComment $posted): bool => $isReview($posted->comment));
+
+        return new self($this->number, $this->loopIdentity, $this->intaktIdentity, array_values($reviews));
     }
 
     /**

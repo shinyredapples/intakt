@@ -47,6 +47,7 @@ final class PublishedComparisonTest extends TestCase
     private const string INTAKT = 'intakt-app[bot]';
     private const string APPROVE = "```json\n{\"verdict\": \"approve\"}\n```";
     private const string CHANGES = "```json\n{\"verdict\": \"changes\"}\n```";
+    private const string GPT = "Reviewer: gpt\n";
 
     public function testBothSidesApprovingTheHeadAgree(): void
     {
@@ -81,7 +82,7 @@ final class PublishedComparisonTest extends TestCase
         $report = $this->report($this->loop('h1', 'no verdict'), $this->intakt('h1', self::APPROVE));
 
         self::assertSame(Agreement::Incomplete, $report->heads[0]->agreement);
-        self::assertEquals([new ReviewerDecision('unknown', ReviewOutcome::Unreadable)], $report->heads[0]->loopDecisions);
+        self::assertEquals([new ReviewerDecision('gpt', ReviewOutcome::Unreadable)], $report->heads[0]->loopDecisions);
     }
 
     public function testAHeadIntaktPublishedNoReviewOnIsIncomplete(): void
@@ -94,7 +95,7 @@ final class PublishedComparisonTest extends TestCase
 
     public function testIntaktsDecisionIsNamedIntaktAndTheLoopsByItsReviewerLine(): void
     {
-        $report = $this->report($this->loop('h1', "Reviewer: gpt\n".self::APPROVE), $this->intakt('h1', self::CHANGES));
+        $report = $this->report($this->loop('h1', self::APPROVE), $this->intakt('h1', self::CHANGES));
 
         self::assertEquals([new ReviewerDecision('gpt', ReviewOutcome::Approve)], $report->heads[0]->loopDecisions);
         self::assertEquals([new ReviewerDecision('intakt', ReviewOutcome::Changes)], $report->heads[0]->intaktDecisions);
@@ -132,14 +133,14 @@ final class PublishedComparisonTest extends TestCase
 
     public function testAHeadWhoseLastReviewIsAtTheWeeksStartIsInTheWeek(): void
     {
-        $report = $this->report(new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::APPROVE), $this->moment('2026-11-02T00:00:00Z')));
+        $report = $this->report(new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::GPT.self::APPROVE), $this->moment('2026-11-02T00:00:00Z')));
 
         self::assertCount(1, $report->heads);
     }
 
     public function testAHeadWhoseLastReviewIsAtTheWeeksEndBelongsToTheNextWeek(): void
     {
-        $report = $this->report(new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::APPROVE), $this->moment('2026-11-09T00:00:00Z')));
+        $report = $this->report(new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::GPT.self::APPROVE), $this->moment('2026-11-09T00:00:00Z')));
 
         self::assertSame([], $report->heads);
     }
@@ -147,7 +148,7 @@ final class PublishedComparisonTest extends TestCase
     public function testAHeadIsPlacedByItsLastReviewSoAReviewInTheWeekBringsAnEarlierOneAlong(): void
     {
         $report = $this->report(
-            new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::CHANGES), $this->moment('2026-11-01T23:00:00Z')),
+            new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::GPT.self::CHANGES), $this->moment('2026-11-01T23:00:00Z')),
             new PostedComment(new PullRequestComment(self::INTAKT, 'h1', self::CHANGES), $this->moment('2026-11-02T01:00:00Z')),
         );
 
@@ -157,7 +158,7 @@ final class PublishedComparisonTest extends TestCase
     public function testAHeadReviewedOnlyAfterTheWeekIsLeftOut(): void
     {
         $report = $this->report(
-            new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::CHANGES), $this->moment('2026-11-08T23:00:00Z')),
+            new PostedComment(new PullRequestComment(self::LOOP, 'h1', self::GPT.self::CHANGES), $this->moment('2026-11-08T23:00:00Z')),
             new PostedComment(new PullRequestComment(self::INTAKT, 'h1', self::CHANGES), $this->moment('2026-11-09T01:00:00Z')),
         );
 
@@ -169,6 +170,47 @@ final class PublishedComparisonTest extends TestCase
         $report = $this->report(new PostedComment(new PullRequestComment('alice', 'h1', self::APPROVE), $this->moment('2026-11-03T00:00:00Z')));
 
         self::assertSame([], $report->heads);
+    }
+
+    public function testOnlyTheLoopsGptReviewIsComparedWithIntakts(): void
+    {
+        $report = $this->report(
+            $this->loop('h1', self::APPROVE),
+            new PostedComment(new PullRequestComment(self::LOOP, 'h1', "Reviewer: claude\n".self::CHANGES), $this->moment('2026-11-04T00:00:00Z')),
+            $this->intakt('h1', self::APPROVE),
+        );
+
+        self::assertSame(Agreement::Agree, $report->heads[0]->agreement);
+        self::assertEquals([new ReviewerDecision('gpt', ReviewOutcome::Approve)], $report->heads[0]->loopDecisions);
+    }
+
+    public function testAHeadOnlyAnotherLoopReviewerReviewedIsLeftOut(): void
+    {
+        $report = $this->report(new PostedComment(new PullRequestComment(self::LOOP, 'h1', "Reviewer: claude\n".self::APPROVE), $this->moment('2026-11-04T00:00:00Z')));
+
+        self::assertSame([], $report->heads);
+    }
+
+    public function testAnOrdinaryLoopMessageAfterTheWeekDoesNotMoveAReviewedHeadOutOfIt(): void
+    {
+        $report = $this->report(
+            $this->loop('h1', self::APPROVE),
+            $this->intakt('h1', self::APPROVE),
+            new PostedComment(new PullRequestComment(self::LOOP, 'h1', 'Merged this pull request.'), $this->moment('2026-11-10T00:00:00Z')),
+        );
+
+        self::assertCount(1, $report->heads);
+    }
+
+    public function testAnIntaktMessageWithoutAVerdictNeitherReviewsNorPlacesAHead(): void
+    {
+        $report = $this->report(
+            $this->loop('h1', self::APPROVE),
+            $this->intakt('h1', self::APPROVE),
+            new PostedComment(new PullRequestComment(self::INTAKT, 'h1', 'Started a review round.'), $this->moment('2026-11-10T00:00:00Z')),
+        );
+
+        self::assertSame(Agreement::Agree, $report->heads[0]->agreement);
     }
 
     public function testAHeadOfDigitsOnlyStaysText(): void
@@ -200,7 +242,7 @@ final class PublishedComparisonTest extends TestCase
 
     private function loop(string $head, string $body): PostedComment
     {
-        return new PostedComment(new PullRequestComment(self::LOOP, $head, $body), $this->moment('2026-11-04T10:00:00Z'));
+        return new PostedComment(new PullRequestComment(self::LOOP, $head, self::GPT.$body), $this->moment('2026-11-04T10:00:00Z'));
     }
 
     private function intakt(string $head, string $body): PostedComment

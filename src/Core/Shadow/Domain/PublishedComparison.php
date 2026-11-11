@@ -10,6 +10,7 @@ use Intakt\Core\Shadow\Contract\LoopReview;
 use Intakt\Core\Shadow\Contract\LoopReviews;
 use Intakt\Core\Shadow\Contract\LoopVerdict;
 use Intakt\Core\Shadow\Contract\PublishedHead;
+use Intakt\Core\Shadow\Contract\PullRequestComment;
 use Intakt\Core\Shadow\Contract\ReviewerDecision;
 use Intakt\Core\Shadow\Contract\ReviewOutcome;
 use Intakt\Core\Shadow\Contract\WeeklyReport;
@@ -19,6 +20,7 @@ use NoDiscard;
 final readonly class PublishedComparison
 {
     private const string INTAKT_REVIEWER = 'intakt';
+    private const string GPT_REVIEWER = 'gpt';
 
     public function __construct(
         private LoopReviewReader $reader,
@@ -33,13 +35,23 @@ final readonly class PublishedComparison
     public function report(array $pullRequests, Week $week): WeeklyReport
     {
         $heads = [];
-        foreach ($pullRequests as $pullRequest) {
+        foreach (array_map($this->reviewsOf(...), $pullRequests) as $pullRequest) {
             foreach ($pullRequest->headsReviewedIn($week) as $head) {
                 $heads[] = $this->compareHead($pullRequest, $head);
             }
         }
 
         return new WeeklyReport($week->from, $week->until, $heads);
+    }
+
+    // Selected before heads are placed, because another loop reviewer's vote or a bot's later message must neither change the comparison nor move a head to another week.
+    private function reviewsOf(RecordedPullRequest $pullRequest): RecordedPullRequest
+    {
+        return $pullRequest->keepingReviews(fn (PullRequestComment $comment): bool => match ($comment->author) {
+            $pullRequest->loopIdentity => self::GPT_REVIEWER === strtolower($this->reader->reviewerNamedIn($comment)),
+            $pullRequest->intaktIdentity => $this->reader->holdsVerdict($comment),
+            default => false,
+        });
     }
 
     private function compareHead(RecordedPullRequest $pullRequest, string $head): PublishedHead
