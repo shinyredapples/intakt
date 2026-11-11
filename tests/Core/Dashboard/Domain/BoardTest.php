@@ -43,21 +43,21 @@ final class BoardTest extends TestCase
 
     public function testAReviewWhoseLatestRoundIsJudgedIsACardInDone(): void
     {
-        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([])])]);
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
 
         self::assertSame(['r1'], $this->roundsIn($board, BoardColumn::Done));
     }
 
     public function testAReviewWithAJudgedRoundAndANewRunningOneIsInInReviewOnly(): void
     {
-        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([]), $this->round('r2', 'feat/a', 2)])]);
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning()), $this->round('r2', 'feat/a', 2)])]);
 
         self::assertSame([['r2'], []], [$this->roundsIn($board, BoardColumn::InReview), $this->roundsIn($board, BoardColumn::Done)]);
     }
 
     public function testEveryColumnWithoutATaskSourceHoldsNothing(): void
     {
-        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([])])]);
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
 
         $others = array_filter(BoardColumn::cases(), static fn (BoardColumn $column): bool => !in_array($column, [BoardColumn::InReview, BoardColumn::Done], true));
 
