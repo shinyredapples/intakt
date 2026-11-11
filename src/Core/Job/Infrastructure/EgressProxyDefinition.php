@@ -22,6 +22,8 @@ final readonly class EgressProxyDefinition
     // Fixed, so the traffic of a job cannot grow its proxy, which keeps no disk cache.
     private const int MEMORY_BYTES = 256 * 1024 * 1024;
 
+    private const int SECOND_NS = 1_000_000_000;
+
     public function __construct(
         #[Autowire(param: JobServices::EGRESS_PROXY_IMAGE)]
         private string $image,
@@ -37,6 +39,15 @@ final readonly class EgressProxyDefinition
             'Image' => $this->image,
             'Env' => ['INTAKT_EGRESS_SQUID_CONF='.$this->squidConfigOf($spec->egress)],
             'Labels' => [JobServices::JOB_LABEL => $spec->id->value],
+            // Healthy once Squid accepts a connection on its port, checked with bash's /dev/tcp because the image has no HTTP client; the start interval needs Engine API 1.44.
+            'Healthcheck' => [
+                'Test' => ['CMD', 'bash', '-c', sprintf('exec 3<>/dev/tcp/127.0.0.1/%d', self::PORT)],
+                'Interval' => 30 * self::SECOND_NS,
+                'Timeout' => self::SECOND_NS,
+                'Retries' => 3,
+                'StartPeriod' => 30 * self::SECOND_NS,
+                'StartInterval' => self::SECOND_NS / 4,
+            ],
             'HostConfig' => [
                 'ReadonlyRootfs' => true,
                 'Tmpfs' => [self::CONFIG_DIRECTORY => 'rw,nosuid,nodev,noexec'],
@@ -50,7 +61,7 @@ final readonly class EgressProxyDefinition
         ];
     }
 
-    // Everything but a TLS tunnel to an allowlisted host falls through to deny all, so the proxy denies by default; only denials are logged, so allowed traffic cannot push them out of the log.
+    // Everything but a TLS tunnel to an allowlisted host falls through to deny all, so the proxy denies by default; only denials are logged, so allowed traffic and the health check's connections from localhost cannot push them out of the log.
     public function squidConfigOf(JobEgress $egress): string
     {
         return implode(PHP_EOL, [
@@ -61,6 +72,7 @@ final readonly class EgressProxyDefinition
             'http_access allow intakt_connect intakt_tls intakt_allowed',
             'http_access deny all',
             'access_log none intakt_connect intakt_tls intakt_allowed',
+            'access_log none localhost',
             'access_log stdio:/dev/stdout logformat=squid',
             'cache_log /dev/stderr',
             'cache deny all',

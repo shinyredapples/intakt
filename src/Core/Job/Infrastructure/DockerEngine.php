@@ -115,10 +115,40 @@ final readonly class DockerEngine
         $this->send('DELETE', sprintf('containers/%s', $container), ['query' => ['force' => 'true', 'v' => 'true']])->accepting(204, 404);
     }
 
-    // Internal, so the engine gives the network no route out and only a container attached to it as well can reach outside.
+    // Internal, so the engine gives the network no route out and only a container attached to it as well can reach outside; without an address of the host on its bridge and without IPv6, so a job cannot reach a service on the host past its proxy either.
     public function createNetwork(string $name, JobId $job): void
     {
-        $this->send('POST', 'networks/create', ['json' => ['Name' => $name, 'Internal' => true, 'Labels' => [JobServices::JOB_LABEL => $job->value]]])->accepting(201);
+        $network = [
+            'Name' => $name,
+            'Internal' => true,
+            'EnableIPv6' => false,
+            'Options' => ['com.docker.network.bridge.inhibit_ipv4' => 'true'],
+            'Labels' => [JobServices::JOB_LABEL => $job->value],
+        ];
+
+        $this->send('POST', 'networks/create', ['json' => $network])->accepting(201);
+    }
+
+    // Stopped wins over the health status, because the engine keeps the last status of a container that exited.
+    public function health(string $container): ContainerHealth
+    {
+        $state = $this->send('GET', sprintf('containers/%s/json', $container))->accepting(200)['State'] ?? null;
+        $status = is_array($state) && is_array($state['Health'] ?? null) ? ($state['Health']['Status'] ?? null) : null;
+
+        if (!is_array($state) || !is_bool($state['Running'] ?? null) || !is_string($status)) {
+            throw DockerEngineFailed::unexpected('containers/json');
+        }
+
+        if (!$state['Running']) {
+            return ContainerHealth::Stopped;
+        }
+
+        return match ($status) {
+            'starting' => ContainerHealth::Starting,
+            'healthy' => ContainerHealth::Healthy,
+            'unhealthy' => ContainerHealth::Unhealthy,
+            default => throw DockerEngineFailed::unexpected('containers/json'),
+        };
     }
 
     // A 404 is accepted, because it means the network is gone already, which is what the removal wanted.

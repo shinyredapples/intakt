@@ -17,6 +17,7 @@ use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Job\Infrastructure\ContainerHealth;
 use Intakt\Core\Job\Infrastructure\ContainerJobRunner;
 use Intakt\Core\Job\Infrastructure\ContainerState;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
@@ -53,6 +54,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(DockerEngine::class)]
 #[CoversClass(EgressProxy::class)]
 #[CoversClass(EgressRoute::class)]
+#[CoversClass(ContainerHealth::class)]
 #[CoversClass(EngineAnswer::class)]
 #[UsesClass(EgressProxyDefinition::class)]
 #[UsesClass(EgressLog::class)]
@@ -562,7 +564,7 @@ final class ContainerJobRunnerTest extends TestCase
     public function testAJobWithAnAllowlistIsOnlyOnItsOwnInternalNetworkWithItsProxy(): void
     {
         $this->engine->behaveAs('build-1', function (string $output): array {
-            self::assertSame(['Name' => 'intakt-job-build-1', 'Internal' => true, 'Labels' => ['intakt.job' => 'build-1']], $this->engine->networkOf('intakt-job-build-1'));
+            self::assertSame(['Name' => 'intakt-job-build-1', 'Internal' => true, 'EnableIPv6' => false, 'Options' => ['com.docker.network.bridge.inhibit_ipv4' => 'true'], 'Labels' => ['intakt.job' => 'build-1']], $this->engine->networkOf('intakt-job-build-1'));
 
             return [0, false];
         });
@@ -588,6 +590,91 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertIsArray($proxy['Env']);
         self::assertIsString($proxy['Env'][0] ?? null);
         self::assertStringContainsString("\nacl intakt_allowed dstdomain -n api.vendor.example repo.packagist.org\n", $proxy['Env'][0]);
+    }
+
+    public function testAJobStartsOnlyOnceItsProxyIsHealthy(): void
+    {
+        $this->engine->proxyHealth('build-1', 'starting', 'starting', 'healthy');
+        $started = $this->engine->clock->now();
+        $this->engine->behaveAs('build-1', function (string $output) use ($started): array {
+            self::assertEqualsWithDelta(0.5, (float) $this->engine->clock->now()->format('U.u') - (float) $started->format('U.u'), 0.001);
+
+            return [0, false];
+        });
+
+        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
+    }
+
+    public function testAProxyThatStopsBeforeItIsHealthyFailsTheRunBeforeTheJobIsCreated(): void
+    {
+        $this->engine->proxyHealth('build-1', 'starting', 'exited');
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('A proxy that stopped must fail the run.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::proxyNotReady('intakt-egress-build-1', 'it stopped')->getMessage(), $failure->getMessage());
+            self::assertFalse($this->engine->hasCreated('build-1'));
+            self::assertSame([], $this->engine->containerIds());
+            self::assertSame([], $this->engine->networkNames());
+            self::assertSame([], $this->ledger->kinds());
+        }
+    }
+
+    public function testAnUnhealthyProxyFailsTheRunBeforeTheJobIsCreated(): void
+    {
+        $this->engine->proxyHealth('build-1', 'unhealthy');
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('An unhealthy proxy must fail the run.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::proxyNotReady('intakt-egress-build-1', 'it is unhealthy')->getMessage(), $failure->getMessage());
+            self::assertFalse($this->engine->hasCreated('build-1'));
+            self::assertSame([], $this->engine->containerIds());
+        }
+    }
+
+    public function testAProxyStillStartingAfterThirtySecondsFailsTheRunBeforeTheJobIsCreated(): void
+    {
+        $this->engine->proxyHealth('build-1', 'starting');
+        $started = $this->engine->clock->now();
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('A proxy that never gets healthy must fail the run.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::proxyNotReady('intakt-egress-build-1', 'it was still starting after 30 seconds')->getMessage(), $failure->getMessage());
+            self::assertSame(30, $this->engine->clock->now()->getTimestamp() - $started->getTimestamp());
+            self::assertFalse($this->engine->hasCreated('build-1'));
+            self::assertSame([], $this->engine->containerIds());
+            self::assertSame([], $this->engine->networkNames());
+        }
+    }
+
+    public function testAProxyWithoutAHealthCheckStatusFailsTheRunBeforeTheJobIsCreated(): void
+    {
+        $this->engine->proxyHealth('build-1', 'none');
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('A proxy without a health check status must fail the run.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::unexpected('containers/json')->getMessage(), $failure->getMessage());
+            self::assertFalse($this->engine->hasCreated('build-1'));
+            self::assertSame([], $this->engine->networkNames());
+        }
+    }
+
+    public function testAProxyHealthyJustAtItsDeadlineLetsTheJobStart(): void
+    {
+        $this->engine->proxyHealth('build-1', ...[...array_fill(0, 120, 'starting'), 'healthy']);
+
+        $result = $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+
+        self::assertEquals(new JobEnd(JobCause::Exited, 0), $result->end);
     }
 
     public function testARefusalFromTheProxysLogIsRecordedBeforeTheJobsEnd(): void
@@ -704,7 +791,7 @@ final class ContainerJobRunnerTest extends TestCase
             new JobContainers(
                 $engine,
                 new JobContainerDefinition(),
-                new EgressProxy($engine, new EgressProxyDefinition('intakt-egress-proxy'), new EgressLog(), $ledger),
+                new EgressProxy($engine, new EgressProxyDefinition('intakt-egress-proxy'), new EgressLog(), $ledger, $this->engine->clock),
                 $this->engine->clock,
             ),
             $ledger,

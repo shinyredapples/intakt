@@ -56,6 +56,9 @@ final class FakeDockerEngine
     /** @var list<string> */
     private array $brokenLogs = [];
 
+    /** @var array<string, non-empty-list<string>> */
+    private array $proxyHealth = [];
+
     private int $next = 0;
     private bool $down = false;
     private bool $garbledState = false;
@@ -139,6 +142,12 @@ final class FakeDockerEngine
     public function proxyLogs(string $job, string $log): void
     {
         $this->proxyLogs[$job] = $log;
+    }
+
+    // Each state read of the job's proxy takes the next status ('exited' for a proxy that stopped) and the last one stays, so a test plays a proxy that starts slowly, stops or never gets healthy.
+    public function proxyHealth(string $job, string $status, string ...$later): void
+    {
+        $this->proxyHealth[$job] = [$status, ...array_values($later)];
     }
 
     // The first frame claims more bytes than the body holds, so a test plays a log the engine framed wrongly.
@@ -406,7 +415,28 @@ final class FakeDockerEngine
             return $this->json(['State' => 'fine']);
         }
 
+        if (str_starts_with($container->name, 'intakt-egress-')) {
+            return $this->proxyState($container);
+        }
+
         return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => $container->memoryKilled, 'ExitCode' => $container->exitCode]]);
+    }
+
+    // Healthy unless a test said otherwise, with the health status the engine keeps for a container it runs health checks in.
+    private function proxyState(FakeContainer $container): MockResponse
+    {
+        $statuses = $this->proxyHealth[$container->job] ?? ['healthy'];
+        $status = array_shift($statuses);
+
+        if ([] !== $statuses) {
+            $this->proxyHealth[$container->job] = $statuses;
+        }
+
+        if ('exited' === $status) {
+            [$container->running, $container->exitCode, $status] = [false, 1, 'unhealthy'];
+        }
+
+        return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => false, 'ExitCode' => $container->exitCode, 'Health' => ['Status' => $status]]]);
     }
 
     // A JSON object keyed by path, or null, because that is the shape the engine's image inspection answers with.

@@ -28,7 +28,8 @@ final class EgressProxyTest extends TestCase
     private const string REFUSED_TUNNEL = '1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html';
     private const string REFUSED_PLAIN_REQUEST = '1762855201.456      1 192.0.2.3 TCP_DENIED/403 3968 GET http://outside.example/upload - HIER_NONE/- text/html';
     private const string REFUSED_PORT = '1762855202.789      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT api.vendor.example:22 - HIER_NONE/- text/html';
-    private const string TUNNEL = '1762855203.012  45210 192.0.2.3 TCP_TUNNEL/200 6143 CONNECT api.vendor.example:443 - HIER_DIRECT/api.vendor.example -';
+    private const string IMAGE_DIRECTORY = __DIR__.'/../../../docker/egress-proxy';
+    private const string TUNNEL ='1762855203.012  45210 192.0.2.3 TCP_TUNNEL/200 6143 CONNECT api.vendor.example:443 - HIER_DIRECT/api.vendor.example -';
 
     public function testTheProxyAllowsOnlyTlsTunnelsToTheAllowlistedHosts(): void
     {
@@ -52,7 +53,31 @@ final class EgressProxyTest extends TestCase
     {
         $config = $this->configFor(JobEgress::to(['api.vendor.example']));
 
-        self::assertSame(['access_log none intakt_connect intakt_tls intakt_allowed', 'access_log stdio:/dev/stdout logformat=squid'], $this->linesStartingWith('access_log ', $config));
+        self::assertSame(['access_log none intakt_connect intakt_tls intakt_allowed', 'access_log none localhost', 'access_log stdio:/dev/stdout logformat=squid'], $this->linesStartingWith('access_log ', $config));
+    }
+
+    public function testTheProxyIsHealthyOnlyOnceItAcceptsConnectionsOnItsPort(): void
+    {
+        $definition = new EgressProxyDefinition('intakt-egress-proxy')->of($this->spec(JobEgress::to(['api.vendor.example'])), 'intakt-job-build-1');
+
+        self::assertSame([
+            'Test' => ['CMD', 'bash', '-c', 'exec 3<>/dev/tcp/127.0.0.1/3128'],
+            'Interval' => 30_000_000_000,
+            'Timeout' => 1_000_000_000,
+            'Retries' => 3,
+            'StartPeriod' => 30_000_000_000,
+            'StartInterval' => 250_000_000,
+        ], $definition['Healthcheck']);
+    }
+
+    public function testTheProxysEntrypointIsExecutable(): void
+    {
+        self::assertTrue(is_executable(self::IMAGE_DIRECTORY.'/entrypoint.sh'));
+    }
+
+    public function testTheProxyImageKeepsItsEntrypointExecutable(): void
+    {
+        self::assertStringContainsString("\nCOPY --chmod=0755 entrypoint.sh /usr/local/bin/intakt-egress-proxy\n", (string) file_get_contents(self::IMAGE_DIRECTORY.'/Dockerfile'));
     }
 
     public function testTheProxyRunsReadOnlyWithoutCapabilitiesOnTheJobsNetworkAndTheBridge(): void
