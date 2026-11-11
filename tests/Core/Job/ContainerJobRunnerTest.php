@@ -668,6 +668,19 @@ final class ContainerJobRunnerTest extends TestCase
         }
     }
 
+    public function testARunningProxyWhoseHealthStatusReadsStoppedFailsTheRunBeforeTheJobIsCreated(): void
+    {
+        $this->engine->proxyHealth('build-1', 'stopped');
+
+        try {
+            $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example'])));
+            self::fail('A health status the engine does not report must fail the run.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::unexpected('containers/json')->getMessage(), $failure->getMessage());
+            self::assertFalse($this->engine->hasCreated('build-1'));
+        }
+    }
+
     public function testAProxyHealthyJustAtItsDeadlineLetsTheJobStart(): void
     {
         $this->engine->proxyHealth('build-1', ...[...array_fill(0, 120, 'starting'), 'healthy']);

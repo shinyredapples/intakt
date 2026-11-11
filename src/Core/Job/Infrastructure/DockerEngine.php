@@ -143,12 +143,13 @@ final readonly class DockerEngine
             return ContainerHealth::Stopped;
         }
 
-        return match ($status) {
-            'starting' => ContainerHealth::Starting,
-            'healthy' => ContainerHealth::Healthy,
-            'unhealthy' => ContainerHealth::Unhealthy,
-            default => throw DockerEngineFailed::unexpected('containers/json'),
-        };
+        $health = ContainerHealth::tryFrom($status);
+
+        if (null === $health || ContainerHealth::Stopped === $health) {
+            throw DockerEngineFailed::unexpected('containers/json');
+        }
+
+        return $health;
     }
 
     // A 404 is accepted, because it means the network is gone already, which is what the removal wanted.
