@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\ParameterLimitRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -21,14 +22,21 @@ final class ParameterLimitRuleTest extends PhpStanRuleTestCase
         return new ParameterLimitRule($root);
     }
 
-    public function testParametersAtTheLimitPassStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertAcceptedBy('phpstan', 'parameters-at-limit');
+        return self::casesOfOnePhpstanRun([
+            'ParametersAtTheLimitPassStaticAnalysis' => ['parameters-at-limit'],
+            'AMethodWithFourParametersFailsStaticAnalysis' => ['method-with-four-parameters', 'src/Report.php:9 intakt.parameterLimit Method line() takes 4 parameters, at most 3 allowed'],
+        ]);
     }
 
-    public function testAMethodWithFourParametersFailsStaticAnalysis(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $this->assertRejectedBy('phpstan', 'method-with-four-parameters', 'intakt.parameterLimit Method line() takes 4 parameters, at most 3 allowed');
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testAFunctionWithFourParametersFailsStaticAnalysis(): void
