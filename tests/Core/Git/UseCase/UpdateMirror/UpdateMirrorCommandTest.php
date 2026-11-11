@@ -65,7 +65,7 @@ final class UpdateMirrorCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('../alpha', $this->remote->path);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('is not a project name that can be a folder name', $tester->getDisplay());
+        self::assertStringContainsString('is not a project name that can be a folder name', $this->displayOnOneLine($tester));
     }
 
     public function testTheCommandPrintsTheFailureOfAMissingRemoteAndExitsWithOne(): void
@@ -73,7 +73,7 @@ final class UpdateMirrorCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('alpha', $this->mirrors.'-missing');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('git failed after 3 attempts', $tester->getDisplay());
+        self::assertStringContainsString('git failed after 3 attempts', $this->displayOnOneLine($tester));
     }
 
     public function testTheCommandPrintsAMirrorThatWasNotUpdatedAndExitsWithOne(): void
@@ -84,7 +84,13 @@ final class UpdateMirrorCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('was not updated', $tester->getDisplay());
+        self::assertStringContainsString('was not updated', $this->displayOnOneLine($tester));
+    }
+
+    private function displayOnOneLine(CommandTester $tester): string
+    {
+        // The error block wraps at the terminal width, so where it breaks depends on the temporary path's length.
+        return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
     private function whenTheCommandRuns(string $project, string $remote): CommandTester
