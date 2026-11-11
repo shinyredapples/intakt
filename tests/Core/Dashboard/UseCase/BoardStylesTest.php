@@ -59,9 +59,8 @@ final class BoardStylesTest extends TestCase
     private function mediaBlock(string $query): string
     {
         preg_match('/@media \('.preg_quote($query, '/').'\) \{(.*?)\n\}/s', $this->sheet(), $block);
-        self::assertArrayHasKey(1, $block, $query);
 
-        return $block[1];
+        return $block[1] ?? self::fail($query);
     }
 
     /**
