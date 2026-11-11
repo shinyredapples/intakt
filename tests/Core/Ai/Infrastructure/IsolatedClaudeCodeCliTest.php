@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
+use Intakt\Core\Ai\Infrastructure\RemovedAfterRun;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
+use Symfony\AI\Platform\Bridge\ClaudeCode\Exception\CliNotFoundException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(IsolatedClaudeCodeCli::class)]
+#[CoversClass(RemovedAfterRun::class)]
+#[CoversClass(ReviewServerAccess::class)]
 final class IsolatedClaudeCodeCliTest extends TestCase
 {
     private const string INHERITED = 'INTAKT_TEST_INHERITED_CREDENTIAL';
@@ -19,9 +24,14 @@ final class IsolatedClaudeCodeCliTest extends TestCase
 
     private const string FAKE_CLI = <<<'PHP_WRAP'
     #!/usr/bin/env php
-    <?php echo json_encode(['type' => 'result', 'result' => json_encode(['cwd' => getcwd(), 'environment' => getenv()])]), PHP_EOL;
+    <?php
+    $at = array_search('--mcp-config', $argv, true);
+    $configuration = false === $at ? null : ['file' => $argv[$at + 1], 'mode' => fileperms($argv[$at + 1]) & 0o777, 'text' => file_get_contents($argv[$at + 1])];
+    echo json_encode(['type' => 'result', 'result' => json_encode(['cwd' => getcwd(), 'environment' => getenv(), 'arguments' => array_slice($argv, 1), 'configuration' => $configuration])]), PHP_EOL;
 
     PHP_WRAP;
+
+    private const string BEARER = 'round-credential';
 
     private string $root;
 
@@ -80,15 +90,75 @@ final class IsolatedClaudeCodeCliTest extends TestCase
         self::assertSame(['login', $this->root.'/home'], [$seen['environment']['CLAUDE_CODE_OAUTH_TOKEN'], $seen['environment']['HOME']]);
     }
 
-    /**
-     * @return array{cwd: string, environment: array<string, string>}
-     */
-    private function runOf(IsolatedClaudeCodeCli $cli): array
+    public function testTheRoundsBearerNeverReachesTheCliCommandLineWhichATimeoutWouldLog(): void
     {
-        $result = $cli->request(new ClaudeCode('sonnet'), 'Review.')->getData()['result'];
+        $seen = $this->runOf(new IsolatedClaudeCodeCli($this->root.'/home', 'login'), [ReviewServerAccess::OPTION => $this->access()]);
+
+        self::assertStringNotContainsString(self::BEARER, implode(' ', $seen['arguments']));
+    }
+
+    public function testTheCliReadsTheReviewServerFromAFileInItsOwnDirectoryThatOnlyItsOwnerCanRead(): void
+    {
+        $seen = $this->runOf(new IsolatedClaudeCodeCli($this->root.'/home', 'login'), [ReviewServerAccess::OPTION => $this->access()]);
+
+        self::assertNotNull($seen['configuration']);
+        self::assertSame([$this->root.'/home', 0o600], [dirname($seen['configuration']['file']), $seen['configuration']['mode']]);
+        self::assertSame(['mcpServers' => ['intakt-review' => ['type' => 'http', 'url' => 'http://localhost:7780/mcp/review', 'headers' => ['Authorization' => 'Bearer '.self::BEARER]]]], json_decode($seen['configuration']['text'], true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function testTheConfigurationFileIsRemovedOnceTheRunWasRead(): void
+    {
+        $seen = $this->runOf(new IsolatedClaudeCodeCli($this->root.'/home', 'login'), [ReviewServerAccess::OPTION => $this->access()]);
+
+        self::assertNotNull($seen['configuration']);
+        self::assertFileDoesNotExist($seen['configuration']['file']);
+    }
+
+    public function testTheConfigurationFileIsRemovedOnceTheStreamOfTheRunWasRead(): void
+    {
+        $result = new IsolatedClaudeCodeCli($this->root.'/home', 'login')->request(new ClaudeCode('sonnet'), 'Review.', [ReviewServerAccess::OPTION => $this->access()]);
+
+        iterator_to_array($result->getDataStream());
+
+        self::assertSame([], glob($this->root.'/home/review-server-*'));
+    }
+
+    public function testTheConfigurationFileIsRemovedWhenTheCliCannotStart(): void
+    {
+        putenv('PATH='.$this->root.'/empty');
+
+        try {
+            new IsolatedClaudeCodeCli($this->root.'/home', 'login')->request(new ClaudeCode('sonnet'), 'Review.', [ReviewServerAccess::OPTION => $this->access()]);
+            self::fail('The CLI started although it is not on the PATH.');
+        } catch (CliNotFoundException) {
+        }
+
+        self::assertSame([], glob($this->root.'/home/review-server-*'));
+    }
+
+    public function testWithoutAReviewServerTheCliIsGivenNoMcpConfiguration(): void
+    {
+        $seen = $this->runOf(new IsolatedClaudeCodeCli($this->root.'/home', 'login'));
+
+        self::assertNull($seen['configuration']);
+    }
+
+    private function access(): ReviewServerAccess
+    {
+        return new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', self::BEARER, ['read_file']);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     *
+     * @return array{cwd: string, environment: array<string, string>, arguments: list<string>, configuration: array{file: string, mode: int, text: string}|null}
+     */
+    private function runOf(IsolatedClaudeCodeCli $cli, array $options = []): array
+    {
+        $result = $cli->request(new ClaudeCode('sonnet'), 'Review.', $options)->getData()['result'];
         self::assertIsString($result);
 
-        /** @var array{cwd: string, environment: array<string, string>} $seen */
+        /** @var array{cwd: string, environment: array<string, string>, arguments: list<string>, configuration: array{file: string, mode: int, text: string}|null} $seen */
         $seen = json_decode($result, true, flags: JSON_THROW_ON_ERROR);
 
         return $seen;

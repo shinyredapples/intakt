@@ -128,7 +128,7 @@ return static function (ContainerConfigurator $container): void {
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
-    /** @var array<string, array{repository: string, base: string, task: string}> $projectWatches */
+    /** @var array<string, array{repository: string, base: string, task: string, github?: string}> $projectWatches */
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
@@ -271,6 +271,8 @@ return static function (ContainerConfigurator $container): void {
     ]];
 
     $container->extension('ai', ['platform' => $platform, 'agent' => $agents, 'message_store' => $conversations, ...$memory]);
+    // The rest of this connection is in mcp.yaml; its address is set here because YAML can name the parameter only by spelling it.
+    $container->extension('mcp', ['clients' => ['reviewer' => ['servers' => ['review' => ['url' => '%'.ReviewServices::MCP_URL.'%']]]]]);
     $container->parameters()->set(AiServices::DISABLED_PROVIDERS, $disabled);
     $container->parameters()->set(AiServices::DISABLED_ACCOUNTS, $disabledAccounts);
     $container->parameters()->set(AiServices::ACCOUNTS, $enabledAccounts);

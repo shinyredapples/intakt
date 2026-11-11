@@ -1,0 +1,22 @@
+[
+ {
+  "html_url": "https://github.com/acme/widgets/pull/7",
+  "number": 7,
+  "state": "open",
+  "updated_at": "2026-11-02T09:00:00Z",
+  "head": {
+   "ref": "feature/7",
+   "sha": "1111111111111111111111111111111111111111"
+  }
+ },
+ {
+  "html_url": "https://github.com/acme/widgets/pull/8",
+  "number": 8,
+  "state": "open",
+  "updated_at": "2026-11-02T09:30:00+02:00",
+  "head": {
+   "ref": "feature/8",
+   "sha": "2222222222222222222222222222222222222222"
+  }
+ }
+]

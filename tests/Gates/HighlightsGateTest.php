@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\FencedCodeBlocks;
+use Intakt\Gates\HighlightFragments;
 use Intakt\Gates\HighlightsGate;
 use Intakt\Gates\HighlightStatus;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HighlightsGate::class)]
 #[UsesClass(FencedCodeBlocks::class)]
 #[UsesClass(HighlightStatus::class)]
+#[UsesClass(HighlightFragments::class)]
+#[UsesClass(Workspace::class)]
 final class HighlightsGateTest extends SandboxTestCase
 {
     private const string HEADER = "| Feature | How Intakt uses it | Status | Where |\n|---|---|---|---|\n";
@@ -108,7 +112,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('`var/cache.txt`, which does not exist', $run->findingsOf('highlights'));
@@ -124,7 +128,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->write('src/Untracked.php', "<?php\n");
         $sandbox->write('docs/highlights.md', self::HEADER."| A | a | done | `src/Untracked.php` |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('`src/Untracked.php`, which does not exist', $run->findingsOf('highlights'));
@@ -137,7 +141,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -149,7 +153,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertStringContainsString('`src/../src/Kernel.php`, which does not exist', $run->findingsOf('highlights'));
     }
@@ -160,7 +164,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "```markdown\n".$example."```\n\n~~~\n".$example."~~~\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -170,7 +174,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "```\n| Status | Where |\n|---|---|\n| started | x |\n```\n\n| Status | Where |\n|---|---|\n| open | x |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertStringContainsString('docs/highlights.md:9: status "open"', $run->findingsOf('highlights'));
         self::assertStringNotContainsString('started', $run->findingsOf('highlights'));
@@ -181,7 +185,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "````markdown\n```\n| Status | Where |\n|---|---|\n| invalid | PR12 |\n```\n````\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -191,7 +195,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "````markdown\n```php\necho 1;\n```\n````\n\n| Status | Where |\n|---|---|\n| open | x |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertStringContainsString('docs/highlights.md:9: status "open"', $run->findingsOf('highlights'));
     }
@@ -213,7 +217,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "Status | Where are we\nsome text | more text\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -223,7 +227,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "| Probe | Status | Reproduction |\n|---|---|---|\n| P | done | `upstream/none/` |\n| Q | open | x |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertStringContainsString('status "open"', $run->findingsOf('highlights'));
         self::assertStringNotContainsString('does not exist', $run->findingsOf('highlights'));
@@ -234,7 +238,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "```markdown\n```not-a-close\n| Status | Where |\n|---|---|\n| started | PR #77 |\n```\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -244,7 +248,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "```\n| Status | Where |\n|---|---|\n| started | x |\n   ```  \t\n\n| Status | Where |\n|---|---|\n| open | x |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('docs/highlights.md:9: status "open"', $run->findingsOf('highlights'));
@@ -256,7 +260,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "   ```markdown\n| Status | Where |\n|---|---|\n| started | PR #77 |\n```\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -266,7 +270,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "    ```\n\n| Status | Where |\n|---|---|\n| open | x |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('docs/highlights.md:5: status "open"', $run->findingsOf('highlights'));
@@ -277,7 +281,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "```inline``` code here\n\n| Status | Where |\n|---|---|\n| open | x |\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('docs/highlights.md:5: status "open"', $run->findingsOf('highlights'));
@@ -288,7 +292,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "~~~ a`b\n| Status | Where |\n|---|---|\n| started | PR #77 |\n~~~\n");
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -301,7 +305,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -323,7 +327,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -345,7 +349,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -389,7 +393,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->failed('highlights'), $run->output());
         self::assertStringContainsString('`missing@2.php`, which does not exist', $run->findingsOf('highlights'));
@@ -404,7 +408,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -417,7 +421,7 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=highlights');
+        $run = $sandbox->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -457,7 +461,7 @@ final class HighlightsGateTest extends SandboxTestCase
 
     public function testAMissingHighlightsFilePasses(): void
     {
-        $run = $this->sandboxWithKernel()->check('--only=highlights');
+        $run = $this->sandboxWithKernel()->runGate($this->gate());
 
         self::assertTrue($run->passed('highlights'), $run->output());
     }
@@ -467,7 +471,12 @@ final class HighlightsGateTest extends SandboxTestCase
         $sandbox = $this->sandboxWithKernel();
         $sandbox->write('docs/highlights.md', "# Highlights\n\n".self::HEADER.$rows);
 
-        return $sandbox->check('--only=highlights');
+        return $sandbox->runGate($this->gate());
+    }
+
+    private function gate(): HighlightsGate
+    {
+        return new HighlightsGate(new FencedCodeBlocks(), new HighlightFragments());
     }
 
     private function sandboxWithKernel(): Sandbox

@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\LongDashesGate;
+use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(LongDashesGate::class)]
+#[UsesClass(Workspace::class)]
 final class LongDashesGateTest extends SandboxTestCase
 {
     private const string EM_DASH = "\u{2014}";
@@ -19,7 +22,7 @@ final class LongDashesGateTest extends SandboxTestCase
         $sandbox = $this->changeWithFile('docs/guide.md', "# Guide\n\nA plain - hyphen and an en dash \u{2013} are fine.\n");
         $sandbox->commitAll("docs: write the guide\n\nA body with a plain hyphen - only.");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->passed('dashes'), $run->output());
     }
@@ -28,7 +31,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('docs/guide.md', "# Guide\n\nFirst line.\nA claim ".self::EM_DASH." and its reason.\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->failed('dashes'), $run->output());
         self::assertStringContainsString('docs/guide.md:4: U+2014', $run->findingsOf('dashes'));
@@ -38,7 +41,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('src/Report.php', "<?php\n\n// A rule ".self::EM_DASH." see the link\nfinal class Report {}\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->failed('dashes'), $run->output());
         self::assertStringContainsString('src/Report.php:3: U+2014', $run->findingsOf('dashes'));
@@ -48,7 +51,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('src/Report.php', "<?php\n\nfinal class Report\n{\n    public const string TITLE = 'Sales ".self::EM_DASH." monthly';\n}\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->failed('dashes'), $run->output());
         self::assertStringContainsString('src/Report.php:5: U+2014', $run->findingsOf('dashes'));
@@ -58,7 +61,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('config/services.yaml', 'title: "a '.self::HORIZONTAL_BAR." b\"\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertStringContainsString('config/services.yaml:1: U+2015', $run->findingsOf('dashes'));
     }
@@ -67,7 +70,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('.env', 'APP_TITLE="a '.self::TWO_EM_DASH." b\"\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertStringContainsString('.env:1: U+2E3A', $run->findingsOf('dashes'));
     }
@@ -76,7 +79,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('notes.txt', 'a '.self::TWO_EM_DASH.' b '.self::EM_DASH." c\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertStringContainsString('notes.txt:1: U+2014, U+2E3A', $run->findingsOf('dashes'));
     }
@@ -86,7 +89,7 @@ final class LongDashesGateTest extends SandboxTestCase
         $sandbox = $this->changeWithFile('spikes/cache/README.md', 'Result '.self::EM_DASH." fast\n");
         $sandbox->write('tests/Gates/Fixtures/clean/src/Report.php.fixture', '// '.self::EM_DASH."\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertStringContainsString('spikes/cache/README.md:1: U+2014', $run->findingsOf('dashes'));
         self::assertStringContainsString('tests/Gates/Fixtures/clean/src/Report.php.fixture:1: U+2014', $run->findingsOf('dashes'));
@@ -96,7 +99,7 @@ final class LongDashesGateTest extends SandboxTestCase
     {
         $sandbox = $this->changeWithFile('public/logo.png', "\x89PNG\0\0".self::EM_DASH."\0");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->passed('dashes'), $run->output());
     }
@@ -106,7 +109,7 @@ final class LongDashesGateTest extends SandboxTestCase
         $sandbox = $this->changeWithFile('.gitignore', "/PR.md\n");
         $sandbox->write('PR.md', 'Title '.self::EM_DASH." draft\n");
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->passed('dashes'), $run->output());
     }
@@ -117,7 +120,7 @@ final class LongDashesGateTest extends SandboxTestCase
         $sandbox->commitAll('feat: place an order '.self::EM_DASH.' fast');
         $commit = $this->shortHashOf($sandbox, 'HEAD');
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->failed('dashes'), $run->output());
         self::assertStringContainsString('commit '.$commit.' subject: U+2014', $run->findingsOf('dashes'));
@@ -129,7 +132,7 @@ final class LongDashesGateTest extends SandboxTestCase
         $sandbox->commitAll("feat: place an order\n\nWhy it matters:\nit is fast ".self::EM_DASH.' and safe.');
         $commit = $this->shortHashOf($sandbox, 'HEAD');
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->failed('dashes'), $run->output());
         self::assertStringContainsString('commit '.$commit.' message line 4: U+2014', $run->findingsOf('dashes'));
@@ -143,7 +146,7 @@ final class LongDashesGateTest extends SandboxTestCase
         $sandbox->git('switch', '--quiet', '--create', 'change');
         $sandbox->commitAll('feat: new work');
 
-        $run = $sandbox->check('--only=dashes', '--base=main');
+        $run = $sandbox->runGate(new LongDashesGate());
 
         self::assertTrue($run->passed('dashes'), $run->output());
     }
@@ -165,8 +168,8 @@ final class LongDashesGateTest extends SandboxTestCase
         $dashed = $this->emptySandbox();
         $dashed->write('README.md', 'Plain '.self::EM_DASH." text\n");
 
-        $cleanRun = $clean->check('--only=dashes');
-        $dashedRun = $dashed->check('--only=dashes');
+        $cleanRun = $clean->runGate(new LongDashesGate());
+        $dashedRun = $dashed->runGate(new LongDashesGate());
 
         self::assertTrue($cleanRun->passed('dashes'), $cleanRun->output());
         self::assertStringContainsString('commits skipped, no git history', $cleanRun->noteOf('dashes'));

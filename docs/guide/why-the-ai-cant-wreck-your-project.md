@@ -51,6 +51,7 @@ A reviewer reads the change through its own **read-only review server**, not thr
 - A **review credential**, made for one round, decides which round the reviewer sees. What the reviewer asks for does not: a request that names another round still gets only its own.
 - A request **without a valid credential is refused**, the owner's token included.
 - The credential **stops working once the round is judged**, and the files of that round are removed.
+- Every answer the server gives is **marked as untrusted data**, so text in your files that tries to give the reviewer orders reads as material to examine, also for a reviewer whose tool reads the server directly.
 
 ```mermaid
 flowchart LR
@@ -62,12 +63,12 @@ This is built: the server and its credentials (task #578), and Intakt's reviewer
 
 ### A reviewer on a Claude or Codex subscription
 
-A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). For now it is given **no tools and does not see the project's files**, so it judges from the task text alone. The `codex` tool also gets no shell, no web search and no browser. Because it cannot read the change, it cannot vouch for it:
+A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). Neither tool gets a shell or web search. A Claude reviewer is now connected to the same read-only server as the other reviewers, for its own round only, and allowed just its three reading tools (read a file, list a folder, search); the server still checks every request itself. A Codex reviewer still gets **no tools and does not see the project's files**, so it judges from the task text alone. Until Intakt also counts what a Claude reviewer read (the next part of this work), neither can vouch for a change:
 
 - if it answers **approve**, Intakt turns that into **blocked** (held for a person, not passed);
 - if it answers **changes**, that stays **changes**.
 
-So this reviewer can ask for more work, but it can never pass a change on its own. Letting it read the project's files is planned for a later part (plan task T15). The exact rules are in the user docs ([Claude](../user/README.md#a-reviewer-on-a-claude-subscription), [Codex](../user/README.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
+So this reviewer can ask for more work, but it can never pass a change on its own. Letting a Claude reviewer's approval count once it read the change is planned for the next part; Codex follows later. The exact rules are in the user docs ([Claude](../user/README.md#a-reviewer-on-a-claude-subscription), [Codex](../user/README.md#a-reviewer-on-a-codex-subscription)) and the [threat model](../design/05-architecture/14-threat-model.md).
 
 ## Layer 5: the rules protect themselves
 

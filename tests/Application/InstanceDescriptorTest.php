@@ -13,6 +13,11 @@ use Symfony\Component\Process\Process;
 #[Group('instance')]
 final class InstanceDescriptorTest extends InstanceTestCase
 {
+    public static function setUpBeforeClass(): void
+    {
+        self::copyTheStubProject();
+    }
+
     public function testWithoutDescriptorThreeNoStatusIsWrittenAndTheExitIsNonZero(): void
     {
         $process = $this->runInstanceWithoutDescriptorThree([]);
@@ -43,7 +48,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
 
     public function testAPipeAsDescriptorThreeReceivesTheStatusLine(): void
     {
-        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>&1 >/dev/null';
+        $shell = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::stubProject().'/bin/instance').' 3>&1 >/dev/null';
         $process = Process::fromShellCommandline($shell, null, $this->environment());
         $process->run();
 
@@ -145,7 +150,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
     private function runInstanceWithPhpOptions(array $phpOptions): array
     {
         $statusFile = $this->scratch.'/status';
-        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>'.escapeshellarg($statusFile);
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::stubProject().'/bin/instance'])).' 3>'.escapeshellarg($statusFile);
         $process = Process::fromShellCommandline($shell, null, $this->environment());
         $process->run();
 
@@ -158,7 +163,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
     private function runInstanceWithoutDescriptorThree(array $phpOptions): Process
     {
         // PHPUnit's own descriptor 3 (Composer's bin proxy keeps the script open) would otherwise reach the child as a read-only file.
-        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::ROOT.'/bin/instance'])).' 3>&-';
+        $shell = 'exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, ...$phpOptions, self::stubProject().'/bin/instance'])).' 3>&-';
         $process = Process::fromShellCommandline($shell, null, ['TMPDIR' => $this->scratch.'/tmp', 'PATH' => $this->pathWithoutFrankenphp()]);
         $process->run();
 
@@ -175,7 +180,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
         $helper = 'import os, subprocess, sys; fd = os.memfd_create(sys.argv[1]); os.dup2(fd, 3); '
             .'code = subprocess.run(sys.argv[2:], pass_fds=(3,)).returncode; os.lseek(3, 0, 0); '
             .'sys.stderr.write(os.read(3, 4096).decode()); sys.exit(code)';
-        $process = new Process([$python, '-I', '-c', $helper, $name, PHP_BINARY, self::ROOT.'/bin/instance'], null, $this->environment());
+        $process = new Process([$python, '-I', '-c', $helper, $name, PHP_BINARY, self::stubProject().'/bin/instance'], null, $this->environment());
         $process->run();
 
         return $process;
@@ -184,7 +189,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
     // Regression guard: the caller holds descriptors 3 to 14 so a duplicate of descriptor 3 above 9 would show up, which a shell redirection cannot name.
     private function callerHoldingManyDescriptors(string $statusFile): Process
     {
-        $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::ROOT.'/bin/instance').' 3>'.escapeshellarg($statusFile);
+        $command = 'exec '.escapeshellarg(PHP_BINARY).' '.escapeshellarg(self::stubProject().'/bin/instance').' 3>'.escapeshellarg($statusFile);
         $caller = 'for ($i = 0; $i < 12; ++$i) { $held[] = fopen("/dev/null", "r"); } passthru('.var_export($command, true).');';
 
         return new Process([PHP_BINARY, '-r', $caller], null, $this->environment());
@@ -213,7 +218,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
      */
     private function serverProcesses(): array
     {
-        $public = realpath(self::ROOT).'/public';
+        $public = realpath(self::stubProject()).'/public';
 
         return array_values(array_filter(
             $this->matching('/proc/[0-9]*'),

@@ -120,7 +120,8 @@ print_digests() {
     echo "Image digest: $digest"
     tag=$(awk 'toupper($1) == "FROM" { print $2; exit }' "$(dirname "$0")/../Dockerfile")
     tag=${tag%@*}
-    base=$(docker buildx imagetools inspect "$tag" | awk '$1 == "Digest:" { print $2; exit }') || fail "the base image tag $tag did not resolve"
+    # Under pipefail a reader that stops early kills imagetools by SIGPIPE, so awk reads to the end.
+    base=$(docker buildx imagetools inspect "$tag" | awk '$1 == "Digest:" && digest == "" { digest = $2 } END { print digest }') || fail "the base image tag $tag did not resolve"
     [[ -n $base ]] || fail "the base image tag $tag did not resolve"
     echo "Base image digest: $base ($tag)"
 }
@@ -134,7 +135,7 @@ start_container() {
     docker volume create "$volume" >/dev/null || fail "docker cannot create the volume $volume"
     containers+=("$web")
     docker run -d --name "$web" -e APP_SECRET -e MERCURE_JWT_SECRET --volume "$volume:/app/var/data" --publish 127.0.0.1::7781 "$image" >/dev/null || fail "docker cannot start $image"
-    origin=http://$(docker port "$web" 7781/tcp | head -n 1)
+    origin=http://$(docker port "$web" 7781/tcp | awk 'NR == 1')
     dashboard_host=(--header "Host: localhost:7781")
     echo "started $web on $origin"
 }
