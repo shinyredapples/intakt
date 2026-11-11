@@ -45,12 +45,11 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 
 | Command | Called by | What for | Needed |
 |---|---|---|---|
-| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the `journeys` and `alarm` jobs of `journeys.yml`, the `build` job of `highlights.yml`, the runner for the `persistence` service container | building the CI image, running `bin/check`, the persistence group, `bin/check --journeys`, `bin/journey-alarm` and `bin/highlights` in it, the database service | yes |
+| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the `journeys` and `alarm` jobs of `journeys.yml`, the runner for the `persistence` service container | building the CI image, running `bin/check`, the persistence group, `bin/check --journeys` and `bin/journey-alarm` in it, the database service | yes |
 | `docker` in the `image` job of `release-image.yml` | `.github/ci/release-image.sh` | `docker build` of the release tag's checkout, `docker login ghcr.io` (the job's token on stdin), `docker tag` and `docker push` to GitHub's container registry | on the runner that publishes a release |
 | `git` | `.github/ci/release-image.sh` | `git rev-parse` of the tag's checkout and of the tag, so a checkout that is not the tag's commit builds nothing | on the runner that publishes a release |
 | `gh`, `grep`, `sort` (coreutils, `-V`), `docker` with `buildx` | `.github/ci/release-latest.sh`, the `latest` job of `release-image.yml`, GitHub's `ubuntu-24.04` only | the release tags as they are now (`gh api`), the highest of them in version order, `docker buildx imagetools inspect` (is its image on the registry) and `imagetools create` (point `latest` at it) | on GitHub's `ubuntu-24.04` |
 | `tee` | the `journeys` job's journeys step | keeping the output of `bin/check --journeys` in the runner's temporary folder for the `alarm` job (with `set -o pipefail`, so the step still fails with the journeys) | yes |
-| `mkdir`, `chmod` (coreutils) | the `build` job of `highlights.yml`, its page step | making the output folder `_highlights` that the CI image's uid 1000 user can write the assembled page into | yes |
 | `gh` (GitHub's CLI) | the `alarm` job of `journeys.yml`, GitHub's `ubuntu-24.04` only | mounted read-only into the CI image at `/usr/local/bin/gh` for `bin/journey-alarm`, which files or updates the urgent task with it; the CI image has no `gh` | on GitHub's runners |
 | `docker build`, the `buildx` plugin, network access to Docker Hub, and what `docker/smoke-test.sh` calls on the host ([below](#to-smoke-test-the-container-image): `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `dirname`, `env`, `timeout`, `sleep`) | the `image` job | building the app image and smoke-testing it; `docker buildx imagetools inspect` asks the registry for the base image tag's digest | yes |
 | `docker run` security options | the `check` and `journeys` jobs | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
@@ -59,6 +58,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
+| `mkdir`, `chmod` (coreutils), `docker` | the `build` job of `highlights.yml`, its page step | making the output folder `_highlights` that the CI image's uid 1000 user can write, running `bin/highlights` in the CI image | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
 
