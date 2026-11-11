@@ -19,6 +19,7 @@ What the guide covers today, feature by feature; the parts marked planned arrive
 - Watching a project's open pull requests: the code that lists them with conditional requests and returns only those whose head or update time changed exists, as does the code that reads a head's CI state and decides to wait (CI running, or a run cancelled and not run again), skip (CI red) or review (CI green), and a `watch` section makes a tick run them every minute (see [Capability tiers per project](#capability-tiers-per-project)); the GitHub App identity reads the pull requests and CI from GitHub for a project whose `watch` section names its `github` repository
 - Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; a shadow round starts only below a lower usage ceiling (see [below](#shadow-mode)); the steps to run an install with every project in shadow mode are on [Setting up a shadow install](shadow-setup.md)
 - Reviewer-for-loop mode per project: a project set to `mode: reviewer-for-loop` has Intakt's panel review the existing loop's heads in place of the loop's Claude reviewer; its verdicts count, the shadow ceilings never hold it, and the only thing it writes to the forge is its verdict on each head, as a commit status `intakt/review` and one pull request comment (see [below](#reviewer-for-loop-mode))
+- Running a job in a fresh container of its own, with its own memory limit, and cleaning up after a crash with `intakt:job:sweep`; no build, check or review runs in one yet (see [Job containers](#job-containers))
 - Taking tasks from GitHub issues, with `Waits for #n` holding a task until the named issues are closed, is planned. Intakt will learn whether a waited-for issue is closed only from the one list of open issues it reads each round (a list that comes back incomplete releases no wait), never by reading each waited-for issue on its own, and a worker with no room for new work will ask GitHub nothing, so routine reads do not use up GitHub's hourly allowance (see the [design](../design/05-architecture/03-choosing-work.md)).
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
@@ -349,7 +350,7 @@ Intakt can keep short notes about a project, each tied to the files it explains,
 
 ## The ledger
 
-Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. Only the model calls of the vendor write to it so far (their token usage). Create the table with:
+Intakt has a ledger that can store review events (review started, reviewer started, verdict received, judge done, usage recorded) in one SQLite table, `ledger_event`, and read them back in the order they were stored, even if the system clock is set back in between. Each event gets an id that carries the time it was stored (a UUID version 7) and keeps the moment it was stored in UTC, and reads it back the same whatever time zone PHP is set to. So far the model calls of the vendor write to it (their token usage), and so do job containers (how each job ended, and containers removed after a crash; see below). Create the table with:
 
 ```
 php bin/console doctrine:migrations:migrate
@@ -368,6 +369,20 @@ php bin/console intakt:ledger:events
 ```
 
 It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
+
+## Job containers
+
+Intakt has the part that will run each build, check and review in a container of its own; no build, check or review uses it yet. Each job gets a fresh container that is thrown away afterwards: its system files cannot be changed, it works in a scratch area that is gone when it ends (its home folder and caches live there too, so every job starts clean), the inputs it is given are read-only, and the only thing it can hand back is what it leaves in its own output folder, which no other job can see. It gets none of Intakt's keys or tokens, has no network for now (a filtered connection to the AI company and the package registries comes later), and has its own memory and CPU limit, so a job that runs out of memory is stopped alone. What a job hands back is bounded too: at most 1000 files and 16 MiB in total, so a job that writes more fails instead of exhausting Intakt's memory. An image that declares volumes is refused, because a job could write into them. The ledger records how each job ended (`job_ended`): `exited` with its exit code, `oom` when its memory limit stopped it, or `timed_out` when it ran past its time and was stopped (a job that runs out of memory just before it is stopped still counts as `oom`). A container that keeps running even after it was stopped fails the job: no end is recorded, and the container is removed.
+
+Intakt needs the Docker Engine's socket at `/var/run/docker.sock` for this. Without it a job fails with `The Docker Engine is not reachable: there is no socket at /var/run/docker.sock.`
+
+Containers are removed when their job ends. If Intakt itself crashed while jobs ran, their containers are removed before the next job starts (`job_container_removed` in the ledger). To clean up at once, run:
+
+```
+php bin/console intakt:job:sweep
+```
+
+It prints one line per container it removed and a count, for example `1 orphaned job containers removed.`, and leaves the containers of jobs that are still running alone. When the engine cannot be reached it prints the reason and exits with 1.
 
 ## Measured use of subscription windows
 
