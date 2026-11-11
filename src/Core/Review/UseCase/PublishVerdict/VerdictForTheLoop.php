@@ -59,6 +59,12 @@ final readonly class VerdictForTheLoop
         return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not publish its review of this head.', null, $this->tokenOf($round));
     }
 
+    // An error and no comment, because a verdict given in shadow mode must never count for the loop, even after the project left shadow mode.
+    public function shadowed(ReviewRound $round): PublishedVerdict
+    {
+        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt reviewed this head in shadow mode, so its verdict does not count.', null, $this->tokenOf($round));
+    }
+
     private function unreviewed(ReviewRound $round): PublishedVerdict
     {
         return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
