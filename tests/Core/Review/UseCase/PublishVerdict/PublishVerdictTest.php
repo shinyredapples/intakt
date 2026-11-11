@@ -276,6 +276,16 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([], $this->github->writes);
     }
 
+    public function testARoundReviewedInShadowModeIsPublishedAsItsVerdictAfterTheProjectSwitchesToReviewerForLoop(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
+        $roundId = $this->judgedRound(self::PULL, []);
+
+        $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+
+        self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
+    }
+
     public function testARoundReviewedForTheLoopIsStillPublishedAsItsVerdict(): void
     {
         $roundId = $this->judgedRound(self::PULL, []);

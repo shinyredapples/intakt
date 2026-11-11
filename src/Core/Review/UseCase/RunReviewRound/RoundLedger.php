@@ -62,7 +62,7 @@ final readonly class RoundLedger
         $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer)));
     }
 
-    // The mode goes with each verdict, because a verdict recorded as shadow must never count for a merge, even after the project is switched to live.
+    // The mode goes with each verdict, because the mode of its moment is lost once the project is switched; the review page labels shadow verdicts from it.
     public function verdictReceived(RoundReviewer $reviewer, Verdict $verdict): void
     {
         $this->append(LedgerEventKind::VerdictReceived, new VerdictReceived(
