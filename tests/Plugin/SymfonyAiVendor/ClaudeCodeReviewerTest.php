@@ -217,11 +217,18 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertStringContainsString('"json_schema"', $this->stringOption($cli, 'append_system_prompt'));
     }
 
-    public function testAnApprovalWithTheReviewServerStillCountsAsUnreadUntilTheVerdictRuleChanges(): void
+    public function testAnApprovalFromACliGivenTheReviewServerCounts(): void
     {
         $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
 
-        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAnApprovalFromACliStartedWithoutTheReviewServerForWantOfARoundIsStillRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->servers())->review('alpha', Tier::Strong, $this->requestWithoutRound())->verdict;
+
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
     public function testAReviewWhoseServerAccessCannotBeIssuedIsBlockedForWantOfToolsWithoutStartingTheCli(): void
@@ -345,6 +352,13 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     private function request(): ReviewRequest
     {
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
+    }
+
+    private function requestWithoutRound(): ReviewRequest
+    {
+        $request = $this->request();
+
+        return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function openFinding(string $id): Finding

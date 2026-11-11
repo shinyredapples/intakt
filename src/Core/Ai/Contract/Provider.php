@@ -27,7 +27,7 @@ enum Provider: string
         };
     }
 
-    // The subscription CLIs get no tool until the per-review MCP server serves them the fenced ones (plan T15), so they never see the change.
+    // False for the subscription CLIs, because the provider alone gives them no tool: a claude_code call reads the change only when the vendor gives it the per-review MCP server.
     public function readsTheCheckout(): bool
     {
         return !in_array($this, [self::ClaudeCode, self::Codex], true);
