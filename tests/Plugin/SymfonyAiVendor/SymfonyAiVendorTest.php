@@ -214,7 +214,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
         $container = self::$platformKernel->getContainer();
-        // Resets what a listener kept from the previous test, as the kernel does between two requests.
+        // Reset before each test, because a listener of the shared kernel would otherwise carry what the previous test left.
         $resetter = $container->get('services_resetter');
         self::assertInstanceOf(ResetInterface::class, $resetter);
         $resetter->reset();
