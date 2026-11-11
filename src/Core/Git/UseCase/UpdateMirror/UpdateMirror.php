@@ -11,6 +11,7 @@ use Intakt\Core\Git\Contract\NetworkGitFailed;
 use InvalidArgumentException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Process;
 
@@ -43,6 +44,7 @@ final readonly class UpdateMirror
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrorPath($project);
+        $remote = $this->fromMirrorsDirectory($remote);
 
         if ($this->isMirror($path)) {
             $this->fill($path, $remote);
@@ -63,6 +65,16 @@ final readonly class UpdateMirror
         }
 
         return $this->mirrorsDirectory.'/'.$project.'.git';
+    }
+
+    private function fromMirrorsDirectory(string $remote): string
+    {
+        // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
+        if ('' === $remote || str_starts_with($remote, '/') || 1 === preg_match('#^[^/]*:#', $remote)) {
+            return $remote;
+        }
+
+        return Path::makeAbsolute($remote, $this->mirrorsDirectory);
     }
 
     private function isMirror(string $path): bool
@@ -124,8 +136,8 @@ final readonly class UpdateMirror
 
     private function fill(string $repository, string $remote): void
     {
-        // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option.
-        $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--', $remote, self::MIRROR_REFSPEC], $repository));
+        // The remote is named on each call, so a mirror never depends on a remote setting; "--" ends the options, so a remote that starts with a dash is a repository, never an option. No FETCH_HEAD, because git writes the remote's address into it, and the mirror keeps no address.
+        $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--prune', '--quiet', '--no-write-fetch-head', '--', $remote, self::MIRROR_REFSPEC], $repository));
 
         $heads = $this->network->run($this->pinned(['--git-dir='.$repository, 'ls-remote', '--symref', '--', $remote, 'HEAD'], $repository));
 
@@ -133,7 +145,7 @@ final readonly class UpdateMirror
             $this->mustRun(['--git-dir='.$repository, 'symbolic-ref', 'HEAD', $match[1]], $repository);
         } elseif (1 === preg_match(self::DETACHED_HEAD, $heads, $match)) {
             // Fetched by name, because a detached HEAD may sit on a commit no ref reaches, which the refs fetch leaves out; only here, since an empty remote advertises no HEAD.
-            $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--quiet', '--', $remote, 'HEAD'], $repository));
+            $this->network->run($this->pinned(['--git-dir='.$repository, 'fetch', '--quiet', '--no-write-fetch-head', '--', $remote, 'HEAD'], $repository));
             // Detached, as "clone --mirror" leaves it, because a remote whose HEAD names no branch only advertises the commit.
             $this->mustRun(['--git-dir='.$repository, 'update-ref', '--no-deref', 'HEAD', $match[1]], $repository);
         }

@@ -230,6 +230,50 @@ final class UpdateMirrorTest extends TestCase
         self::assertSame($this->remote->objectAt('HEAD'), $this->git($path, 'rev-parse', 'refs/heads/main'));
     }
 
+    public function testASecondUpdateThroughACredentialedFileAddressLeavesNoFetchHeadInTheMirror(): void
+    {
+        $address = 'file://intakt:'.bin2hex(random_bytes(8)).'@'.$this->remote->path;
+        $path = $this->update('alpha', $address);
+        $this->remote->commitFile('b.txt', 'two');
+
+        $this->update('alpha', $address);
+
+        self::assertFileDoesNotExist($path.'/FETCH_HEAD');
+    }
+
+    public function testFollowingADetachedHeadOnNoBranchLeavesNoFetchHeadInTheMirror(): void
+    {
+        $path = $this->update('alpha', $this->remote->path);
+        $this->remote->checkoutDetached('HEAD');
+        $this->remote->commitFile('b.txt', 'on no branch');
+
+        $this->update('alpha', $this->remote->path);
+
+        self::assertFileDoesNotExist($path.'/FETCH_HEAD');
+    }
+
+    public function testARelativeRemotePathCountsFromTheMirrorsFolderOnEveryUpdate(): void
+    {
+        // Resolved against the mirrors folder, not the mirror, so the first update (a clone) and the second (a fetch) name the same repository.
+        $relative = '../'.basename($this->remote->path);
+        $path = $this->update('alpha', $relative);
+        $second = $this->remote->commitFile('b.txt', 'two');
+
+        self::assertSame($path, $this->update('alpha', $relative));
+        self::assertSame($second, $this->git($path, 'rev-parse', 'refs/heads/main'));
+    }
+
+    public function testARemoteWithAHostBeforeThePathIsNotReadAsARelativePath(): void
+    {
+        try {
+            $this->update('alpha', 'localhost:missing.git');
+            self::fail('An ssh address must be refused by the transport allowlist.');
+        } catch (NetworkGitFailed $failed) {
+            self::assertStringContainsString("'ssh'", $failed->getMessage());
+            self::assertStringNotContainsString($this->mirrors, $failed->getMessage());
+        }
+    }
+
     public function testAFailedFirstUpdateLeavesNoFolderBehind(): void
     {
         try {
