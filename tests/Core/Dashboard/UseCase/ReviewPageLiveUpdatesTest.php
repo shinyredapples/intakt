@@ -109,7 +109,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
-            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]);
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => 'stopped'])]);
 
         foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
             self::assertCount(1, $page->filter('#'.$target), $target);
@@ -136,6 +136,32 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
         self::assertSame('Now: round 1 in review', $updated->filter('#state-block-title')->text());
+    }
+
+    public function testAVerdictPushedToThePageStopsShowingTheReviewerRunning(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $this->ledger->answer('round-1', 'correctness', 0);
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => 'verdict'])]));
+
+        self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
+        self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertSame('verdict', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-reviewer-round-1-correctness-stop form'));
+    }
+
+    public function testAStoppedReviewerStaysStoppedWhenTheRoundIsJudged(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => 'stopped'])]));
+
+        self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
     }
 
     public function testAJudgedRoundPushedToThePageTurnsTheCurrentStateBlockToJudged(): void

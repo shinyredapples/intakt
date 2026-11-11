@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Domain\RoundReviewer;
+use Intakt\Core\Review\Infrastructure\StopRequests;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Uid\Uuid;
 
@@ -17,6 +18,7 @@ final readonly class LiveRoundProgress
         private ReviewRounds $rounds,
         private RoundUpdates $updates,
         private LockFactory $locks,
+        private StopRequests $stops,
     ) {
     }
 
@@ -58,6 +60,6 @@ final readonly class LiveRoundProgress
 
     private function progressOf(Uuid $roundId): RoundProgress
     {
-        return $this->rounds->stored($roundId->toRfc4122())->progress();
+        return $this->rounds->stored($roundId->toRfc4122())->progress($this->stops->stoppedIn($roundId));
     }
 }

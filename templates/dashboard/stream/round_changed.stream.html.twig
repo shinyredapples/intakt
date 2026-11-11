@@ -1,5 +1,10 @@
 <turbo-stream action="replace" target="round-{{ round }}-state"><template><p id="round-{{ round }}-state">{% if progress.judged %}Judged.{% else %}{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.{% endif %}</p></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-progress"><template><p class="muted" id="round-{{ round }}-now-progress">{{ progress.reviewersFinished }} of {{ progress.reviewers }} reviewers finished.</p></template></turbo-stream>
+{% for reviewer, state in progress.finished %}
+<turbo-stream action="replace" target="round-{{ round }}-reviewer-{{ reviewer }}-state"><template><td id="round-{{ round }}-reviewer-{{ reviewer }}-state">{{ state }}</td></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-reviewer-{{ reviewer }}-stop"><template><td id="round-{{ round }}-reviewer-{{ reviewer }}-stop"></td></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-reviewer-{{ reviewer }}-state"><template><span id="round-{{ round }}-now-reviewer-{{ reviewer }}-state">{{ state }}</span></template></turbo-stream>
+{% endfor %}
 {% if progress.judged %}
 <turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">judged</span></template></turbo-stream>
 {# The stream carries no findings, so the judge's call itself is read from the ledger on the next load. #}

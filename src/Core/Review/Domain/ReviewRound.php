@@ -150,11 +150,23 @@ final class ReviewRound implements HasPlace
         return array_all($this->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished());
     }
 
-    public function progress(): RoundProgress
+    // A stopped reviewer ends with a verdict, so only the ledger knows it was stopped, and the caller names it.
+    /**
+     * @param list<string> $stopped
+     */
+    public function progress(array $stopped = []): RoundProgress
     {
-        $finished = count(array_filter($this->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished()));
+        $finished = [];
 
-        return new RoundProgress($finished, count($this->reviewers()), RoundState::Judged === $this->state);
+        foreach ($this->reviewers() as $reviewer) {
+            $id = $reviewer->id()->toRfc4122();
+
+            if ($reviewer->isFinished()) {
+                $finished[$id] = in_array($id, $stopped, true) ? 'stopped' : $reviewer->state()->value;
+            }
+        }
+
+        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished);
     }
 
     public function state(): RoundState

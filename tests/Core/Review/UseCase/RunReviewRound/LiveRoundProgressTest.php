@@ -61,6 +61,17 @@ final class LiveRoundProgressTest extends KernelTestCase
         self::assertSame([$this->state($round, '1/2'), $this->state($round, '2/2')], $this->fixture->updates->seen);
     }
 
+    public function testTheProgressNamesEachFinishedReviewerWithItsState(): void
+    {
+        $round = $this->fixture->start(2);
+        $answered = $this->fixture->bus->messages[0];
+
+        $this->fixture->deliver($answered, new VerdictPerRole([]));
+
+        self::assertSame([$answered->reviewerId => 'verdict'], $this->fixture->updates->progress[0]->finished);
+        self::assertSame([$this->state($round, '1/2')], $this->fixture->updates->seen);
+    }
+
     private function state(ReviewRound $round, string $finished): string
     {
         return sprintf('round %s %s', $round->id()->toRfc4122(), $finished);

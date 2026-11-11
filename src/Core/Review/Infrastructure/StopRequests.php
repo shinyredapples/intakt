@@ -16,6 +16,8 @@ final readonly class StopRequests
 {
     private const array ROWS = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::ReviewerStopped];
 
+    private const array ANSWERS = [LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerFailed, LedgerEventKind::ReviewerBlocked, LedgerEventKind::ReviewerStopped];
+
     public function __construct(
         private Ledger $ledger,
         private LedgerPayloads $payloads,
@@ -26,6 +28,31 @@ final readonly class StopRequests
     public function pendingFor(Uuid $round, Uuid $reviewer): bool
     {
         return LedgerEventKind::ReviewerStopRequested === $this->lastRowFor($round, $reviewer);
+    }
+
+    // Only while a reviewer_stopped row is a reviewer's last answer, because a stop rolled back with its lease can be followed by another run's verdict.
+    /**
+     * @return list<string>
+     */
+    public function stoppedIn(Uuid $round): array
+    {
+        $id = $round->toRfc4122();
+
+        if (!array_any(iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopped)), fn (RecordedEvent $row): bool => $id === ($this->stoppedPairOf($row)[0] ?? null))) {
+            return [];
+        }
+
+        $last = [];
+
+        foreach ($this->ledger->readInOrder() as $row) {
+            [$answered, $reviewer] = in_array($row->event->kind, self::ANSWERS, true) ? $this->namedPairOf($row) ?? [null, null] : [null, null];
+
+            if ($id === $answered && is_string($reviewer)) {
+                $last[$reviewer] = $row->event->kind;
+            }
+        }
+
+        return array_map(strval(...), array_keys(array_filter($last, static fn (LedgerEventKind $kind): bool => LedgerEventKind::ReviewerStopped === $kind)));
     }
 
     private function lastRowFor(Uuid $round, Uuid $reviewer): ?LedgerEventKind
@@ -55,7 +82,7 @@ final readonly class StopRequests
      */
     private function pairOf(RecordedEvent $row): ?array
     {
-        return LedgerEventKind::ReviewerStopped === $row->event->kind ? $this->stoppedPairOf($row) : $this->requestedPairOf($row);
+        return LedgerEventKind::ReviewerStopped === $row->event->kind ? $this->stoppedPairOf($row) : $this->namedPairOf($row);
     }
 
     /**
@@ -68,11 +95,11 @@ final readonly class StopRequests
         return null === $stopped ? null : [$stopped->round, $stopped->reviewer];
     }
 
-    // Read as an array, because the dashboard writes the request row without a payload class.
+    // Read as an array, because the dashboard writes the request row without a payload class, and every answer row names its round and reviewer the same way.
     /**
      * @return array{mixed, mixed}|null
      */
-    private function requestedPairOf(RecordedEvent $row): ?array
+    private function namedPairOf(RecordedEvent $row): ?array
     {
         $payload = json_decode($row->event->payload, true);
 

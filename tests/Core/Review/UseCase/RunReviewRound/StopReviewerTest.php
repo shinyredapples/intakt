@@ -96,6 +96,27 @@ final class StopReviewerTest extends KernelTestCase
         self::assertCount(1, $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
     }
 
+    public function testTheProgressPublishedAfterAStopShowsTheReviewerStopped(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+
+        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
+
+        self::assertSame([$message->reviewerId => 'stopped'], array_last($this->fixture->updates->progress)?->finished);
+    }
+
+    public function testTheProgressPublishedAfterAVerdictThatFollowedAnEarlierStopShowsTheVerdict(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+        $this->record(LedgerEventKind::ReviewerStopped, $message);
+
+        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
+
+        self::assertSame([$message->reviewerId => 'verdict'], array_last($this->fixture->updates->progress)?->finished);
+    }
+
     public function testAStopPressedDuringARetryWaitStopsTheRetriedRun(): void
     {
         $message = $this->started();

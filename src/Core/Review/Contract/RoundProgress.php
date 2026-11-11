@@ -10,15 +10,19 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class RoundProgress
 {
+    /**
+     * @param array<string, string> $finished the state in words of each finished reviewer, by reviewer id
+     */
     public function __construct(
         public int $reviewersFinished,
         public int $reviewers,
         public bool $judged,
+        public array $finished = [],
     ) {
     }
 
     public function isSameAs(?self $other): bool
     {
-        return $other instanceof self && $other->reviewersFinished === $this->reviewersFinished && $other->reviewers === $this->reviewers && $other->judged === $this->judged;
+        return $other instanceof self && $other->reviewersFinished === $this->reviewersFinished && $other->reviewers === $this->reviewers && $other->judged === $this->judged && $other->finished === $this->finished;
     }
 }

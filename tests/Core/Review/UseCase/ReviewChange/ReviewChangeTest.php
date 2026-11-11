@@ -157,7 +157,9 @@ final class ReviewChangeTest extends KernelTestCase
 
         $this->reviewChange($work)->review($this->request(), $progress);
 
-        self::assertEquals(new RoundProgress(2, 2, true), array_last($progress->reported));
+        $last = array_last($progress->reported);
+        self::assertInstanceOf(RoundProgress::class, $last);
+        self::assertSame([2, 2, true, ['verdict', 'verdict']], [$last->reviewersFinished, $last->reviewers, $last->judged, array_values($last->finished)]);
     }
 
     public function testTheTokensOfTheCallsMadeForTheRoundAreAddedAndNoOthers(): void
