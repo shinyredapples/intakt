@@ -6,7 +6,7 @@ namespace Intakt\Plugin\Forge\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Used and remaining are both null while no answer of this hour reported the installation's budget.
+// Used and remaining stay null while no answer of this hour reported the budget, because a figure in their place would hide that it is unknown.
 #[Exclude]
 final readonly class ForgeBudget
 {

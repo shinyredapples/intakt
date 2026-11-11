@@ -58,7 +58,7 @@ final class GitHubForgeBudgetsTest extends TestCase
 
     public function testTheBudgetCountsTheCallsUsedAndRemainingOfTheLatestReading(): void
     {
-        $this->read(remaining: 4200, limit: 5000);
+        $this->read(remaining: 4200);
 
         $budget = $this->budgets('678')->thisHour()[0];
 
@@ -70,28 +70,28 @@ final class GitHubForgeBudgetsTest extends TestCase
 
     public function testTheReserveIsInForceBelowItsShareOfTheLimit(): void
     {
-        $this->read(remaining: 999, limit: 5000);
+        $this->read(remaining: 999);
 
         self::assertTrue($this->budgets('678')->thisHour()[0]->reserveInForce);
     }
 
     public function testTheReserveIsNotInForceAtExactlyItsShareOfTheLimit(): void
     {
-        $this->read(remaining: 1000, limit: 5000);
+        $this->read(remaining: 1000);
 
         self::assertFalse($this->budgets('678')->thisHour()[0]->reserveInForce);
     }
 
     public function testARemainingAboveTheLimitCountsNoCallUsed(): void
     {
-        $this->read(remaining: 5100, limit: 5000);
+        $this->read(remaining: 5100);
 
         self::assertSame(0, $this->budgets('678')->thisHour()[0]->used);
     }
 
     public function testAReadingWhoseHourHasPassedIsShownUnread(): void
     {
-        $this->read(remaining: 999, limit: 5000);
+        $this->read(remaining: 999);
         $this->clock->modify('+31 minutes');
 
         $budget = $this->budgets('678')->thisHour()[0];
@@ -102,16 +102,16 @@ final class GitHubForgeBudgetsTest extends TestCase
 
     public function testAnotherInstallationsReadingIsNotShown(): void
     {
-        $this->read(remaining: 999, limit: 5000);
+        $this->read(remaining: 999);
 
         self::assertFalse($this->budgets('679')->thisHour()[0]->isRead());
     }
 
-    private function read(int $remaining, int $limit): void
+    private function read(int $remaining): void
     {
         $reset = new MockClock('2026-11-25 10:30:00 UTC')->now()->getTimestamp();
 
-        $this->readings->observe('678', 200, ['x-ratelimit-remaining' => [(string) $remaining], 'x-ratelimit-limit' => [(string) $limit], 'x-ratelimit-reset' => [(string) $reset]]);
+        $this->readings->observe('678', 200, ['x-ratelimit-remaining' => [(string) $remaining], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [(string) $reset]]);
     }
 
     private function budgets(string $installationId): GitHubForgeBudgets

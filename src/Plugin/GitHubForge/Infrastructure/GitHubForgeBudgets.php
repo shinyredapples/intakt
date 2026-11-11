@@ -34,7 +34,12 @@ final readonly class GitHubForgeBudgets implements ForgeBudgets
         $reading = $this->readings->latest($installationId);
 
         if (!$reading instanceof RateLimitReading) {
-            return new ForgeBudget($installationId, used: null, remaining: null, reserveInForce: false);
+            return new ForgeBudget(
+                $installationId,
+                used: null,
+                remaining: null,
+                reserveInForce: false,
+            );
         }
 
         // At least 0, because a remaining above the limit (a limit raised within the hour) leaves nothing used.

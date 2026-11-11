@@ -47,7 +47,12 @@ final class ForgeBudgetOnTheBoardTest extends DashboardPageTestCase
 
     public function testAnInstallationWithoutAReadingThisHourSaysSo(): void
     {
-        $crawler = $this->boardWith(new ForgeBudget('678', used: null, remaining: null, reserveInForce: false));
+        $crawler = $this->boardWith(new ForgeBudget(
+            '678',
+            used: null,
+            remaining: null,
+            reserveInForce: false,
+        ));
 
         self::assertSame('No reading this hour', $crawler->filter('tr[data-installation="678"] td.unread')->text());
         self::assertCount(0, $crawler->filter('tr[data-installation="678"] .chip'));
