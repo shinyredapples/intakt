@@ -40,11 +40,21 @@ final class RateLimitReadingsTest extends TestCase
     {
         $reset = $this->clock->now()->getTimestamp() + 600;
 
-        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['4000'], 'x-ratelimit-reset' => [(string) $reset]]);
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['4000'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [(string) $reset]]);
 
         $reading = $this->process()->latest('678');
         self::assertSame(4000, $reading?->remaining);
+        self::assertSame(5000, $reading->limit);
         self::assertSame($reset, $reading->resetsAt->getTimestamp());
+    }
+
+    public function testAnAnswerWithoutItsHourlyLimitRecordsNoReading(): void
+    {
+        $reset = $this->clock->now()->getTimestamp() + 600;
+
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['4000'], 'x-ratelimit-reset' => [(string) $reset]]);
+
+        self::assertNull($this->process()->latest('678'));
     }
 
     public function testAPauseSetByOneProcessStopsAnother(): void
@@ -67,7 +77,7 @@ final class RateLimitReadingsTest extends TestCase
 
     public function testAReadingIsForgottenOnceItsResetHasPassed(): void
     {
-        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['10'], 'x-ratelimit-reset' => [(string) ($this->clock->now()->getTimestamp() + 60)]]);
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['10'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [(string) ($this->clock->now()->getTimestamp() + 60)]]);
 
         $this->clock->modify('+2 minutes');
 
@@ -123,7 +133,7 @@ final class RateLimitReadingsTest extends TestCase
     {
         $reset = (string) ($this->clock->now()->getTimestamp() + 600);
 
-        $this->process()->observe('678', 403, ['x-ratelimit-remaining' => ['12'], 'x-ratelimit-reset' => [$reset]]);
+        $this->process()->observe('678', 403, ['x-ratelimit-remaining' => ['12'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset]]);
         $this->process()->refuseWhileLimited('678');
 
         self::assertSame(12, $this->process()->latest('678')?->remaining);
