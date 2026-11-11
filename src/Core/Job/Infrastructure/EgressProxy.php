@@ -45,8 +45,11 @@ final readonly class EgressProxy
     {
         $deadline = $this->clock->now()->modify(sprintf('+%d seconds', self::READY_SECONDS));
 
-        while (ContainerHealth::Starting === ($health = $this->engine->health($proxy)) && $this->clock->now() < $deadline) {
+        $health = $this->engine->health($proxy);
+
+        while (ContainerHealth::Starting === $health && $this->clock->now() < $deadline) {
             $this->clock->sleep(self::POLL_SECONDS);
+            $health = $this->engine->health($proxy);
         }
 
         $reason = match ($health) {
