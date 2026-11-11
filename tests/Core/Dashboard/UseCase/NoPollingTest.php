@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 #[CoversNothing]
 final class NoPollingTest extends DashboardPageTestCase
 {
-    // The list pages listen to the shell topic only when the hub can authorize a listener, which the test environment cannot (no key), so they hold just the inline scripts here; the stream source and its import map are asserted in ShellLiveUpdatesTest.
+    // The list pages listen to the shell topic only when the hub can authorize a listener, which the test environment cannot (no key), so they hold just the inline scripts here (the third imports the danger buttons' script, which only answers clicks); the stream source and its import map are asserted in ShellLiveUpdatesTest.
     /**
      * @return iterable<string, array{string}>
      */
@@ -44,13 +44,14 @@ final class NoPollingTest extends DashboardPageTestCase
 
         $page = strtolower((string) $this->browser->getResponse()->getContent());
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('<table', $page);
+        self::assertStringContainsString('data-project="alpha"', $page);
 
-        self::assertSame(2, substr_count($page, '<script'));
+        self::assertSame(3, substr_count($page, '<script'));
         self::assertSame(2, substr_count($page, '<script>(() => {'));
+        self::assertSame(1, substr_count($page, '<script type="module">import { holdbackdangerbuttons } from \'/assets/arm-'));
         self::assertStringContainsString('prefers-color-scheme', $page);
         self::assertStringContainsString('data-rail-toggle', $page);
-        foreach (['http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'eventsource', 'websocket', '<script src', 'type="module"'] as $polling) {
+        foreach (['http-equiv', 'setinterval', 'settimeout', 'fetch(', 'xmlhttprequest', 'eventsource', 'websocket', '<script src'] as $polling) {
             self::assertStringNotContainsString($polling, $page);
         }
     }

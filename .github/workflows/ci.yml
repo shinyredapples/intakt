@@ -154,7 +154,7 @@ jobs:
       ENGINES: ${{ needs.changes.outputs.persistence }}
     services:
       mysql:
-        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mysql || '' }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mysql || '' }} # zizmor: ignore[unpinned-images] tag only until digests come, docs/architecture/README.md
         env:
           MYSQL_DATABASE: intakt_test
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
@@ -165,7 +165,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       mariadb:
-        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mariadb || '' }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.mariadb || '' }} # zizmor: ignore[unpinned-images] tag only until digests come, docs/architecture/README.md
         env:
           MARIADB_DATABASE: intakt_test
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
@@ -176,7 +176,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
       postgresql:
-        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.postgresql || '' }}
+        image: ${{ needs.changes.outputs.persistence == 'true' && needs.changes.outputs.postgresql || '' }} # zizmor: ignore[unpinned-images] tag only until digests come, docs/architecture/README.md
         env:
           POSTGRES_DB: intakt_test
           POSTGRES_HOST_AUTH_METHOD: trust

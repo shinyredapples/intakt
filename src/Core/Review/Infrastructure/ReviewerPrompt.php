@@ -107,7 +107,7 @@ final readonly class ReviewerPrompt
     // The tool answers are prompt input too, so they reach the model through the same fence as the task.
     public function fenced(ToolboxInterface $toolbox): FencedToolbox
     {
-        return new FencedToolbox($toolbox, $this->cut);
+        return new FencedToolbox($toolbox, $this->cut, $this->fence);
     }
 
     // The instructions ask for a verdict, so an answer that is not one becomes the invalid-output verdict here.
