@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Tests\Support\WorkerPorts;
@@ -30,6 +32,8 @@ use Twig\Loader\FilesystemLoader;
 #[Group('hub')]
 #[CoversClass(MercureRoundUpdates::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(MercureLiveUpdates::class)]
+#[UsesClass(LiveEvent::class)]
 final class MercureHubTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
@@ -97,10 +101,11 @@ final class MercureHubTest extends TestCase
     {
         $this->round = Uuid::v7()->toRfc4122();
         $this->client = HttpClient::create();
+        $logger = new BufferingLogger();
         $this->updates = new MercureRoundUpdates(
-            new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client),
+            new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
             new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates')),
-            new BufferingLogger(),
+            $logger,
         );
     }
 

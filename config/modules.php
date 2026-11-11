@@ -7,6 +7,7 @@ return [
     'Core/Budget',
     'Core/Dashboard',
     'Core/Git',
+    'Core/Job',
     'Core/Ledger',
     'Core/Mcp',
     'Core/Memory',

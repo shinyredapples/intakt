@@ -36,6 +36,7 @@ class FakeNode {
         const matches = {
             '.search-trigger': this.tag === 'trigger',
             '[data-search-action]': this.attributes.has('data-search-action'),
+            '[data-search-cancel]': this.attributes.has('data-search-cancel'),
             '#search-results a[href]': this.tag === 'a' && this.attributes.has('href'),
         };
 
@@ -48,6 +49,11 @@ class FakeNode {
 
     click() {
         return this.page.click(this);
+    }
+
+    // A hidden element has no boxes, as in a browser.
+    getClientRects() {
+        return this.hidden ? [] : [{}];
     }
 
     scrollIntoView(options) {
@@ -111,12 +117,13 @@ class FakePage {
     baseURI = 'http://localhost/reviews';
     themeClicks = 0;
 
-    constructor({ overlay = true } = {}) {
+    constructor({ overlay = true, cancelShown = false } = {}) {
         this.trigger = new FakeNode(this, 'trigger');
         this.shell = new FakeNode(this, 'div');
         this.overlay = overlay ? Object.assign(new FakeNode(this, 'div', { 'data-search-url': '/search' }), { hidden: true }) : null;
         this.field = new FakeNode(this, 'input');
         this.results = new FakeResults(this, 'div');
+        this.cancel = Object.assign(new FakeNode(this, 'button', { 'data-search-cancel': '' }), { hidden: !cancelShown });
         this.themeToggle = Object.assign(new FakeNode(this, 'button'), { click: () => this.themeClicks++ });
         this.trigger.focus();
     }
@@ -128,7 +135,7 @@ class FakePage {
     querySelector(selector) {
         const elements = { '#search': this.overlay, '.shell': this.shell, '[data-theme-toggle]': this.themeToggle };
         if (this.overlay) {
-            Object.assign(elements, { '#search-q': this.field, '#search-results': this.results });
+            Object.assign(elements, { '#search-q': this.field, '#search-results': this.results, '[data-search-cancel]': this.cancel });
         }
 
         return elements[selector] ?? null;
@@ -408,6 +415,51 @@ test('shift tab from the field goes round to the clear button', async () => {
 
     assert.ok(tab.defaultPrevented);
     assert.equal(page.activeElement, page.results.buttons[0]);
+});
+
+test('pressing cancel closes the search, gives the shell back and returns the focus to the button that opened it', async () => {
+    const { page } = await openPage({ cancelShown: true });
+    page.trigger.click();
+    assert.ok(page.isOpen());
+
+    page.cancel.click();
+
+    assert.ok(!page.isOpen());
+    assert.equal(page.shell.inert, false);
+    assert.equal(page.activeElement, page.trigger);
+});
+
+test('an answer that arrives after cancel is not shown', async () => {
+    const { page, net } = await openPage({ cancelShown: true });
+    page.trigger.click();
+    page.cancel.click();
+
+    await net.answer(0, RECENT);
+
+    assert.equal(page.results.options.length, 0);
+});
+
+test('tab from the field stops on cancel when it is shown, and from cancel goes on to the clear button', async () => {
+    const { page, net } = await openPage({ cancelShown: true });
+    page.trigger.click();
+    await net.answer(0, NONE);
+    page.press('Tab');
+    assert.ok(!page.press('Tab', {}, page.field).defaultPrevented);
+
+    const tab = page.press('Tab', {}, page.results.buttons[0]);
+
+    assert.ok(tab.defaultPrevented);
+    assert.equal(page.activeElement, page.field);
+    assert.ok(page.press('Tab', { shiftKey: true }, page.field).defaultPrevented);
+    assert.equal(page.activeElement, page.results.buttons[0]);
+});
+
+test('tab from the field to a hidden cancel button never stops on it', async () => {
+    const { page } = await openWithRecent();
+
+    page.press('Tab');
+
+    assert.equal(page.activeElement, page.field);
 });
 
 test('tab while the search is closed is left to the page', async () => {

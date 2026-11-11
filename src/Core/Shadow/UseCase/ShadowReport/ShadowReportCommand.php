@@ -10,6 +10,7 @@ use Intakt\Core\Shadow\Contract\ShadowSummary;
 use Intakt\Core\Shadow\Domain\LoopReviewReader;
 use Intakt\Core\Shadow\Domain\PeriodSummary;
 use Intakt\Core\Shadow\Domain\ReviewComparison;
+use Intakt\Core\Shadow\Infrastructure\RecordedFolder;
 use Intakt\Core\Shadow\Infrastructure\RecordedHead;
 use NoDiscard;
 use Symfony\Component\Console\Attribute\Argument;
@@ -36,7 +37,7 @@ final readonly class ShadowReportCommand
         #[Option('Output format: table or json')]
         ReportFormat $format = ReportFormat::Table,
     ): int {
-        $files = $this->files($folder);
+        $files = RecordedFolder::jsonFiles($folder);
         if (null === $files) {
             $io->error(sprintf('Cannot read the folder %s.', $folder));
 
@@ -61,22 +62,6 @@ final readonly class ShadowReportCommand
         };
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * @return list<string>|null
-     */
-    // Listed literally rather than with glob(), because a folder name holding [, * or ? is a pattern to glob() and matches nothing.
-    private function files(string $folder): ?array
-    {
-        $names = is_dir($folder) ? scandir($folder) : false;
-        if (false === $names) {
-            return null;
-        }
-
-        $paths = array_map(static fn (string $name): string => rtrim($folder, '/').'/'.$name, $names);
-
-        return array_values(array_filter($paths, static fn (string $path): bool => str_ends_with($path, '.json') && is_file($path)));
     }
 
     private function compare(string $file): ?HeadComparison

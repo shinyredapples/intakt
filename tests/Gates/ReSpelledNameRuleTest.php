@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\ReSpelledNameRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -24,14 +25,21 @@ final class ReSpelledNameRuleTest extends PhpStanRuleTestCase
         return new ReSpelledNameRule($root, self::createReflectionProvider(), self::PROVIDER);
     }
 
-    public function testServiceIdsInTheirIdsClassPassStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertAcceptedBy('phpstan', 'service-ids-in-their-ids-class');
+        return self::casesOfOnePhpstanRun([
+            'ServiceIdsInTheirIdsClassPassStaticAnalysis' => ['service-ids-in-their-ids-class'],
+            'ARespelledServiceIdFailsStaticAnalysis' => ['re-spelled-service-id', "src/PlatformLookup.php:11 intakt.reSpelledName 'intakt.ai.platform.codex' re-spells a container id or parameter name"],
+        ], 'src/');
     }
 
-    public function testARespelledServiceIdFailsStaticAnalysis(): void
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
-        $this->assertRejectedBy('phpstan', 're-spelled-service-id', "intakt.reSpelledName 'intakt.ai.platform.codex' re-spells a container id or parameter name");
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testAProviderValueWrittenOutsideProviderFailsStaticAnalysis(): void

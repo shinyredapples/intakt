@@ -10,6 +10,10 @@ parameters:
     !php/const Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices::ACCOUNT_PARALLEL_CALLS: 3
     # The scanner when INTAKT_GITLEAKS is unset or empty, as for the secrets gates.
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::GITLEAKS: gitleaks
+    # The engine's own socket, because the orchestrator runs Docker inside its container and so shares the paths it mounts.
+    !php/const Intakt\Core\Job\Contract\JobServices::DOCKER_SOCKET: /var/run/docker.sock
+    # Built from docker/egress-proxy on the engine's host, because it is the per-job proxy every job with an allowlist goes through.
+    !php/const Intakt\Core\Job\Contract\JobServices::EGRESS_PROXY_IMAGE: intakt-egress-proxy
     # The share of a GitHub installation's hourly budget kept for essential calls (0 to 100); below it, each project's listing runs once per watcher tick.
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RESERVE_PERCENT: 20
     # One bare mirror per project lives here, rebuilt from the remote if lost.

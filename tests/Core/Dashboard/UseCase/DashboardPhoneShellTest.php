@@ -111,6 +111,60 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('display: none', $rules['.topbar .brand-m, .search-trigger .ph-short, .rail .nav.more, .menu'] ?? '');
     }
 
+    public function testOnPhonesTheSearchFillsTheWholeScreenWithoutRadiusOrScrimGap(): void
+    {
+        $rules = $this->phoneRules();
+
+        self::assertStringContainsString('padding: 0', $rules['.overlay:not([hidden])'] ?? '');
+        self::assertStringContainsString('height: 100dvh', $rules['.overlay .palette'] ?? '');
+        self::assertStringContainsString('border-radius: 0', $rules['.overlay .palette'] ?? '');
+        self::assertStringContainsString('max-width: none', $rules['.overlay .palette'] ?? '');
+        self::assertStringContainsString('max-height: none', $rules['.overlay .palette .results'] ?? '');
+    }
+
+    public function testOnPhonesASearchResultRowIsAtLeast52PixelsTall(): void
+    {
+        self::assertStringContainsString('min-height: 52px', $this->phoneRules()['.palette .res'] ?? '');
+    }
+
+    public function testOnPhonesSubTabsAndTheLinksOfRowsAndTableCellsAreAtLeast44PixelsTall(): void
+    {
+        self::assertStringContainsString('min-height: 44px', $this->phoneRules()['.subtabs a, .row .t a, .ledger td a'] ?? '');
+    }
+
+    public function testOnPhonesTheSectionLinksOfTheComponentsPageAreAtLeast44PixelsTall(): void
+    {
+        self::assertStringContainsString('min-height: 44px', $this->phoneRules()['.comp-nav a'] ?? '');
+    }
+
+    public function testOnPhonesTheSmallestTextIs15PixelsAlsoInsideAPaneWithItsOwnTheme(): void
+    {
+        self::assertStringContainsString('--t13: 15px', $this->phoneRulesOf($this->sheets('tokens')[0])[':root, [data-theme]'] ?? '');
+    }
+
+    public function testOnPhonesTheCancelAndClearButtonsOfTheSearchAreAtLeast44PixelsTall(): void
+    {
+        $rules = $this->phoneRules();
+
+        self::assertStringContainsString('min-height: 44px', $rules['.overlay .palette .q .btn'] ?? '');
+        self::assertStringContainsString('min-height: 44px', $rules['.overlay .palette .none .btn'] ?? '');
+    }
+
+    public function testOnPhonesTheSearchHidesTheKeyHintsAndShowsCancel(): void
+    {
+        $rules = $this->phoneRules();
+
+        self::assertStringContainsString('display: none', $rules['.overlay .palette .q kbd, .overlay .palette footer'] ?? '');
+        self::assertStringContainsString('display: inline-flex', $rules['.overlay .palette .q .btn'] ?? '');
+    }
+
+    public function testOnADesktopTheSearchCancelButtonIsHidden(): void
+    {
+        $rules = $this->rulesOf($this->sheets('components')[0]);
+
+        self::assertStringContainsString('display: none', $rules['.palette .q .btn'] ?? '');
+    }
+
     public function testOnPhonesTheMoreSheetOpensAboveTheBar(): void
     {
         $rules = $this->phoneRules();

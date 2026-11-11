@@ -105,6 +105,15 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         self::assertGreaterThan(0, $page->filter('script[type="importmap"]')->count());
     }
 
+    public function testEveryResultOfTheSearchExampleSitsInAListBox(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        $options = $page->filter('#c-search [role="option"]');
+        self::assertGreaterThan(0, $options->count());
+        self::assertCount($options->count(), $page->filter('#c-search [role="listbox"][aria-label] [role="option"]'));
+    }
+
     public function testEveryControlOfTheComponentsPageHasAnAccessibleName(): void
     {
         $page = $this->browser->request('GET', '/components');
