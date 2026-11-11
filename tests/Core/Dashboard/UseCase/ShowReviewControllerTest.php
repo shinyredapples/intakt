@@ -345,6 +345,36 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
+    public function testAFoldedRoundJudgedBeforeTheFindingsWereKeptSaysTheyWereNotRecordedInsteadOfZero(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 3);
+        $this->ledger->judgeMarksOnly('round-1', [], []);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        $summary = $crawler->filter('#round-round-1 details.ev > summary')->text();
+        self::assertStringContainsString('outcome not recorded, findings not recorded', $summary);
+        self::assertStringNotContainsString('0 findings', $summary);
+        self::assertStringContainsString('findings were not recorded', $crawler->filter('#round-round-1 details.ev')->text());
+    }
+
+    public function testAFoldedRoundJudgedBeforeTheFindingsWereKeptShowsTheJudgesMarksAsMarksNotAsTheFindingCount(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 5);
+        $this->ledger->judgeMarksOnly('round-1', ['F1'], ['F2']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $summary = $crawler->filter('#round-round-1 details.ev > summary')->text();
+        self::assertStringContainsString('findings not recorded, 2 marked by the judge', $summary);
+        self::assertStringNotContainsString('2 findings', $summary);
+    }
+
     public function testTheActiveRoundStaysOpenInTheTimelineAndCompletedOnesFold(): void
     {
         $this->givenARoundJudgedAndASecondRunning();
