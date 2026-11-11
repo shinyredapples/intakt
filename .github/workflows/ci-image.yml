@@ -1,0 +1,43 @@
+name: ci-image
+# Publishes the CI image (.github/ci/Dockerfile) to GitHub's container registry, named by the hash of its inputs, so a
+# build loop can run the checks in exactly CI's environment. Only main publishes, never a pull request: a pull request
+# runs its own workflow, so it could otherwise plant an image that the loop would then trust.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/ci/Dockerfile
+      - .github/ci/build-image.sh
+      - .github/ci/publish-ci-image.sh
+      - .github/workflows/ci-image.yml
+      - composer.json
+      - config/gates/php/check.ini
+  workflow_dispatch:
+concurrency:
+  group: ci-image
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
+      - name: Publish the CI image unless its hash is published already
+        env:
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: .github/ci/publish-ci-image.sh
