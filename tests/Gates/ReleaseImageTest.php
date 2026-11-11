@@ -136,6 +136,17 @@ final class ReleaseImageTest extends SandboxTestCase
         self::assertSame([], array_values(array_filter($this->calls($sandbox), static fn (string $call): bool => str_contains($call, 'create'))));
     }
 
+    public function testARegistryThatCannotBeReadFailsTheRunInsteadOfLeavingLatestBehind(): void
+    {
+        $sandbox = $this->latestSandbox(['v0.1.0', 'v0.2.0'], ['0.1.0']);
+
+        $result = $this->runLatest($sandbox, 'ERROR: unexpected status from HEAD request: 503 Service Unavailable');
+
+        self::assertFalse($result->succeeded());
+        self::assertStringContainsString('503 Service Unavailable', $result->errors);
+        self::assertSame([], array_values(array_filter($this->calls($sandbox), static fn (string $call): bool => str_contains($call, 'create'))));
+    }
+
     public function testNoReleaseTagLeavesLatestAlone(): void
     {
         $sandbox = $this->latestSandbox(['nightly', 'v1.0'], []);
@@ -210,14 +221,14 @@ final class ReleaseImageTest extends SandboxTestCase
         $sandbox->write('tags', implode("\n", $tags)."\n");
         $sandbox->write('pushed', implode("\n", array_map(static fn (string $version): string => 'ghcr.io/example/repo:'.$version, $pushed))."\n");
         $sandbox->write('bin/gh', "#!/usr/bin/env bash\ncat \"\$TAGS\"\n");
-        $sandbox->write('bin/docker', self::FAKE_DOCKER."\nif [[ \"\$1 \$2 \$3\" == 'buildx imagetools inspect' ]]; then grep -qx -- \"\$4\" \"\$PUSHED\"; fi\n");
+        $sandbox->write('bin/docker', self::FAKE_DOCKER."\nif [[ \"\$1 \$2 \$3\" == 'buildx imagetools inspect' ]]; then grep -qx -- \"\$4\" \"\$PUSHED\" || { echo \"\${INSPECT_ERROR:-ERROR: \$4: not found}\" >&2; exit 1; }; fi\n");
 
         return $sandbox;
     }
 
-    private function runLatest(Sandbox $sandbox): ProcessResult
+    private function runLatest(Sandbox $sandbox, string $inspectError = ''): ProcessResult
     {
-        $environment = ['REPOSITORY' => 'Example/Repo', 'ACTOR' => 'octocat', 'GHCR_TOKEN' => 'token', 'GH_TOKEN' => 'read', 'CALLS' => $sandbox->root.'/calls', 'TAGS' => $sandbox->root.'/tags', 'PUSHED' => $sandbox->root.'/pushed'];
+        $environment = ['INSPECT_ERROR' => $inspectError, 'REPOSITORY' => 'Example/Repo', 'ACTOR' => 'octocat', 'GHCR_TOKEN' => 'token', 'GH_TOKEN' => 'read', 'CALLS' => $sandbox->root.'/calls', 'TAGS' => $sandbox->root.'/tags', 'PUSHED' => $sandbox->root.'/pushed'];
 
         return $sandbox->runScript('chmod +x bin/docker bin/gh; PATH="$PWD/bin:$PATH"; bash '.escapeshellarg(self::LATEST), $environment);
     }

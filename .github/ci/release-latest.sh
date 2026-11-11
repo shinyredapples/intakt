@@ -16,9 +16,15 @@ if [ -z "$highest" ]; then
 fi
 
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
-if ! docker buildx imagetools inspect "$image:${highest#v}" > /dev/null 2>&1; then
-    echo "$image:${highest#v} is not pushed yet: latest stays until the run of $highest."
-    exit 0
+# Only a confirmed missing image waits for its own run; any other failure (an outage, a refused token) fails this run,
+# so it shows red and can be run again, instead of leaving latest behind on a green run.
+if ! answer=$(docker buildx imagetools inspect "$image:${highest#v}" 2>&1 > /dev/null); then
+    if grep -qi -E 'not found|manifest unknown' <<< "$answer"; then
+        echo "$image:${highest#v} is not pushed yet: latest stays until the run of $highest."
+        exit 0
+    fi
+    echo "Could not read $image:${highest#v}: $answer" >&2
+    exit 1
 fi
 docker buildx imagetools create --tag "$image:latest" "$image:${highest#v}"
 echo "$image:latest is ${highest#v}."
