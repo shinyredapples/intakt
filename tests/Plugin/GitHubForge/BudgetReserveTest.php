@@ -73,7 +73,7 @@ final class BudgetReserveTest extends TestCase
     {
         $this->read(remaining: 999);
         $this->reserve()->admitListing('alpha');
-        $this->clock->modify('+59 seconds');
+        $this->clock->modify('+29 seconds');
 
         $limited = $this->refusal($this->reserve(), 'alpha');
 
@@ -87,6 +87,30 @@ final class BudgetReserveTest extends TestCase
         $this->clock->modify('+60 seconds');
 
         $this->reserve()->admitListing('alpha');
+
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testBelowTheReserveAListingHalfATickAfterTheLastIsAdmitted(): void
+    {
+        $this->read(remaining: 999);
+        $this->reserve()->admitListing('alpha');
+        $this->clock->modify('+30 seconds');
+
+        $this->reserve()->admitListing('alpha');
+
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testBelowTheReserveTheNextTicksListingIsAdmittedWhenTheEarlierTickRanAFewSecondsLate(): void
+    {
+        $this->clock->modify('2026-11-25 10:00:03.200 UTC');
+        $this->read(remaining: 900);
+        $reserve = $this->reserve();
+        $reserve->admitListing('beta');
+        $this->clock->modify('2026-11-25 10:01:00.500 UTC');
+
+        $reserve->admitListing('beta');
 
         $this->expectNotToPerformAssertions();
     }

@@ -70,8 +70,11 @@ final readonly class BudgetReserve
             $now = $this->clock->now();
             $last = $item->get();
 
+            // Half a tick, because a tick handled late (behind another project's on the serial consumer) must not cost the next tick its listing.
+            $tickSeconds = $now->getTimestamp() - $now->modify('-'.WatchTick::INTERVAL)->getTimestamp();
+
             // Compared with the clock because the cache expiry runs on system time.
-            if ($item->isHit() && is_int($last) && $now->setTimestamp($last) > $now->modify('-'.WatchTick::INTERVAL)) {
+            if ($item->isHit() && is_int($last) && $now->getTimestamp() - $last < intdiv($tickSeconds, 2)) {
                 throw new ForgeRateLimited($resetsAt);
             }
 
