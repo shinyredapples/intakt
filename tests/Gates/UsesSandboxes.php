@@ -31,8 +31,7 @@ trait UsesSandboxes
      */
     final protected static function casesOfOnePhpstanRun(array $fixtureAndFindingsOfEachCase, string $parent = ''): iterable
     {
-        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder, and a case still runs alone under --filter
-        // A rule that judges only the tree's src/ needs the folders under a parent there, or its cases would pass without being judged.
+        // PHPUnit calls a provider once for all its cases, so one run answers every fixture, each in its own folder (under a parent such as src/ when the rule judges only that folder, or its cases would pass unjudged), and a case still runs alone under --filter
         $sandbox = Sandbox::withFixturesInFoldersUnder($parent, ...array_unique(array_column($fixtureAndFindingsOfEachCase, 0)));
         $sandbox->borrowKernel();
 
