@@ -30,6 +30,11 @@ final class DockerEngineFailed extends RuntimeException implements ReportableFai
         return new self(sprintf('The container %s did not stop within %d seconds after the kill; no exit code is recorded.', $container, $graceSeconds));
     }
 
+    public static function proxyNotReady(string $proxy, string $reason): self
+    {
+        return new self(sprintf('The egress proxy %s did not get ready, because %s; the job was not started.', $proxy, $reason));
+    }
+
     public static function unexpected(string $call): self
     {
         return new self(sprintf('The Docker Engine answered %s with an unexpected body.', $call));
