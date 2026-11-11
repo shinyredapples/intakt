@@ -438,7 +438,7 @@ The image a project's jobs will run in comes from the project's last commit (fil
 
 1. `.devcontainer/devcontainer.json`: its `image`, or the Dockerfile its `build` names (comments and trailing commas are fine; a compose setup is not supported yet).
 2. A `Dockerfile` at the top of the repository, used as it is.
-3. Only `composer.json`: Intakt writes the Dockerfile itself, with the PHP from `config.platform.php` (exactly that version) or else the newest of PHP 8.5, 8.4, 8.3 and 8.2 that `require.php` allows, Composer, every `ext-*` extension under `require` and `require-dev`, and fixed versions of the Claude Code and Codex command-line tools.
+3. Only `composer.json`: Intakt writes the Dockerfile itself, with the PHP from `config.platform.php` (exactly that version) or else the newest of PHP 8.5, 8.4, 8.3 and 8.2 that `require.php` allows (its latest patch, or the lowest patch `require.php` allows when it stops inside that version, as `8.4.1` does), Composer, every `ext-*` extension under `require` and `require-dev`, and fixed versions of the Claude Code and Codex command-line tools.
 
 A job never gets another PHP: when `composer.json` names no PHP version at all, no image is built, whatever else the project has. After the build, Intakt starts the image once without network and asks its PHP for its version and extensions; an image whose PHP does not match `composer.json`, or that lacks an extension, is refused with the version or the extension's name. An extension that cannot be installed fails the build with `missing PHP extension: <name>`.
 
@@ -446,7 +446,7 @@ A job never gets another PHP: when `composer.json` names no PHP version at all, 
 php bin/console intakt:job:build-image path/to/checkout intakt-job/my-project:main
 ```
 
-It prints where the image comes from, the build's output, and for example `Image intakt-job/my-project:main built: PHP 8.5.12 with every required extension.` To see where the image would come from and the Dockerfile Intakt would write, without building, run `php bin/console intakt:job:plan-image path/to/checkout`. On any failure both print the reason and exit with 1. It needs the Docker Engine's socket like the jobs do, and the Docker machine must reach Docker Hub, Debian's package mirrors and the npm registry for a generated image. Nothing builds images on its own yet, and images are not rebuilt when the project changes.
+It prints where the image comes from, the build's output, and for example `Image intakt-job/my-project:main (sha256:...) built: PHP 8.5.12 with every required extension.`, with the id of the image this build made: the check ran in that image, even if another build has since given the tag to its own. To see where the image would come from and the Dockerfile Intakt would write, without building, run `php bin/console intakt:job:plan-image path/to/checkout`. On any failure both print the reason and exit with 1. It needs the Docker Engine's socket like the jobs do, and the Docker machine must reach Docker Hub, Debian's package mirrors and the npm registry for a generated image. Nothing builds images on its own yet, and images are not rebuilt when the project changes.
 
 ## Measured use of subscription windows
 
