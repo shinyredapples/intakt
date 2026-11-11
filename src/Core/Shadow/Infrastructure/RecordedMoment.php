@@ -19,7 +19,7 @@ final readonly class RecordedMoment
             return null;
         }
 
-        $moment =DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
+        $moment = DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
 
         // Refused on a warning, because PHP rolls an impossible date such as February 30 over into another day.
         if (false === $moment || false !== DateTimeImmutable::getLastErrors()) {
