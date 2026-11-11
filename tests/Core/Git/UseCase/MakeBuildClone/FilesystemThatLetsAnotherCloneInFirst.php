@@ -8,9 +8,7 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Override;
 use Symfony\Component\Filesystem\Filesystem;
 
-/**
- * Forces the losing order of two calls for one folder, because the other clone must take it between this call's checks and its own folder.
- */
+// Forces the losing order of two calls for one folder, because the other clone must take it between this call's checks and its own folder.
 final class FilesystemThatLetsAnotherCloneInFirst extends Filesystem
 {
     public function __construct(
@@ -20,6 +18,9 @@ final class FilesystemThatLetsAnotherCloneInFirst extends Filesystem
     ) {
     }
 
+    /**
+     * @param string|iterable<mixed> $dirs
+     */
     #[Override]
     public function mkdir(string|iterable $dirs, int $mode = 0o777): void
     {
