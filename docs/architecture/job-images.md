@@ -1,0 +1,50 @@
+# Job images
+
+`Core/Job/UseCase/BuildJobImage` builds the image a project's jobs run in (plan task T45) and checks that the image has the project's PHP. The door is `intakt:job:image <directory> <tag> [--dry-run]`; no lane builds an image or starts a job from one yet (the build job arrives with T49). The jobs themselves run as described in [Job containers](job-containers.md).
+
+## Where the image comes from
+
+`JobImagePlanner` reads the commit at `HEAD` of the checkout, never its working tree (`ProjectFiles`, through the [hardened git call](requirements.md#the-hardened-git-call): `ls-tree` to find a file, `cat-file blob` to read it, `archive` for a build context). Only a regular file counts (mode `100644` or `100755`), so a symlink or a submodule named `Dockerfile` is no source. The directory must hold `.git` itself: git would otherwise find the repository of a parent folder and read that project's files. The first source that exists wins:
+
+| Source | Plan | Build context |
+|---|---|---|
+| `.devcontainer/devcontainer.json` with `build.dockerfile` | that Dockerfile; `build.context` (default `.`) and `build.dockerfile` are relative to `.devcontainer/` | `git archive HEAD:<context>` |
+| `.devcontainer/devcontainer.json` with `image` | a one-line Dockerfile `FROM <image>` | that Dockerfile alone |
+| `Dockerfile` at the root | that Dockerfile, used as it is | `git archive HEAD` |
+| `composer.json` alone | a generated Dockerfile (below) | that Dockerfile alone |
+
+`devcontainer.json` is read as JSON with comments: `//` and `/* */` comments and trailing commas are removed outside strings before `json_decode`. It is refused (`JobImageNotBuilt`) when it uses `dockerComposeFile`, names neither `image` nor `build.dockerfile`, names a context outside the repository (absolute, or `..` past the root) or a Dockerfile outside its context, or an `image` that is not an image reference (Docker's grammar in short: lowercase path parts, an optional port, tag and `sha256` digest, so no space or line break reaches the `FROM` line). Other devcontainer keys (`build.args`, `build.target`, features) are not read. Because the context comes from `git archive`, it holds the committed files only; `.dockerignore` is not applied.
+
+## The project's PHP
+
+`PhpProfile` reads `composer.json` at `HEAD` before any source is chosen:
+
+- `config.platform.php` (a version of two or three numbers) and `require.php` (a Composer constraint, parsed with `composer/semver`). With neither, every source is refused (`composer.json names no PHP version ...`), also beside a Dockerfile: a job never gets an image with some other PHP. A platform version that does not meet `require.php` is refused too.
+- The rule an image must meet: the platform version exactly when it has three numbers, every patch of that minor when it has two (`8.4` means `8.4.*`), and `require.php` as well.
+- The extensions: every `ext-*` key of `require` and `require-dev`, lowercased as Composer does. A name that is not `a-z`, `0-9`, `_` and `-` is refused.
+
+A project without `composer.json` gets its devcontainer or Dockerfile image unchecked; one without any of the four sources is refused.
+
+## The generated Dockerfile
+
+`GeneratedDockerfile` writes, in order:
+
+1. `FROM php:<version>-cli`: the platform version when there is one; otherwise the newest of the minors 8.5, 8.4, 8.3 and 8.2 for which some patch meets `require.php` (`php:8.4-cli`, a tag that moves with the patches). A constraint none of them meets is refused.
+2. Composer from `composer:2.11.1`, by the release image's digest, and `install-php-extensions` from `mlocati/php-extension-installer:2.13.2`.
+3. `ca-certificates`, `curl`, `git`, `unzip`, `nodejs` and `npm` from Debian: `curl` for the [start check](job-containers.md#start-check), `git` for the checkout.
+4. `npm install --global @anthropic-ai/claude-code@2.1.322 @openai/codex@0.167.1`.
+5. For each extension: skipped when `php -m` lists it already (spelled as Composer spells it), otherwise `install-php-extensions <name>`; still missing afterwards, the step prints `missing PHP extension: <name>` and fails the build.
+
+## The build
+
+`DockerEngine::build` sends the context as a tar to `POST /build` with `t=<tag>`, `dockerfile=<path in the context>`, `rm` and `forcerm`, waits up to 600 seconds without output and 3600 seconds in all, and reads the answer line by line (`EngineAnswer::built`): `stream` lines are the output, an `error` line is the failure. A line that is no JSON object, or whose `stream` or `error` is not text, is `DockerEngineFailed`. A failed build is `JobImageNotBuilt` with the engine's error and the last 20 lines of output, so a missing extension names itself. The tag must be an image reference without digest.
+
+## The check after the build
+
+Whenever there is a `PhpProfile`, `PhpInImage` runs a probe job in the new image through `JobRunner` (job id `image-probe-<hash of the tag>`, no network, no inputs, 256 MiB, one CPU, 60 seconds). It runs `php -r` and writes `PHP_VERSION` and the loaded extensions (lowercased, a space as `-`) to `php.json` in its output directory. The image is refused when the probe does not exit with 0, writes no version of three numbers or no list of names, has a PHP the rule does not allow (`The image <tag> has PHP 8.4.19, which does not meet >=8.5.12.`), or lacks an extension (`The image <tag> lacks the PHP extensions pdo_sqlite.`). This also covers a devcontainer or Dockerfile image, and the moving minor tag of a generated one. The probe is a job like any other, so an image that declares volumes is refused there (`JobRefused`).
+
+## Limits
+
+- Images are built on demand by the command; nothing caches them per commit or rebuilds them when `composer.json` or the Dockerfile changes yet.
+- A compose file and an owner-supplied prebuilt image ([decision 4](../design/06-decisions.md)) are not image sources yet.
+- The release image's `Dockerfile` at Intakt's own root declares `VOLUME /app/var/data`, so the probe of an image built from it is refused.

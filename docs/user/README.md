@@ -20,6 +20,7 @@ What the guide covers today, feature by feature; the parts marked planned arrive
 - Shadow mode per project: a project set to `mode: shadow` never writes to its forge (see [below](#shadow-mode)); its verdicts are marked shadow in the ledger and never count toward a merge; a shadow round starts only below a lower usage ceiling (see [below](#shadow-mode)); the steps to run an install with every project in shadow mode are on [Setting up a shadow install](shadow-setup.md)
 - Reviewer-for-loop mode per project: a project set to `mode: reviewer-for-loop` has Intakt's panel review the existing loop's heads in place of the loop's Claude reviewer; its verdicts count, the shadow ceilings never hold it, and the only thing it writes to the forge is its verdict on each head, as a commit status `intakt/review` and one pull request comment (see [below](#reviewer-for-loop-mode))
 - Running a job in a fresh container of its own, with its own memory limit and a check at start that its folders and allowed hosts work, and cleaning up after a crash with `intakt:job:sweep`; no build, check or review runs in one yet (see [Job containers](#job-containers))
+- Building a project's job image with `intakt:job:image`, from its devcontainer, its Dockerfile or `composer.json`, and checking that it has the project's PHP and extensions; no job uses such an image yet (see [Job images](#job-images))
 - Taking tasks from GitHub issues, with `Waits for #n` holding a task until the named issues are closed, is planned. Intakt will learn whether a waited-for issue is closed only from the one list of open issues it reads each round (a list that comes back incomplete releases no wait), never by reading each waited-for issue on its own, and a worker with no room for new work will ask GitHub nothing, so routine reads do not use up GitHub's hourly allowance (see the [design](../design/05-architecture/03-choosing-work.md)).
 - Looking at projects, reviews and the page of one review in the browser (see [below](#the-dashboard)); the button that starts the next round of a change is described [below](#the-dashboard)
 - Connecting an agent through MCP: the owner's server answers `list_projects`, `review_status`, `review_verdicts` and `review_act_list`, serves a round's findings, and starts a review of a branch with `start_review` when the owner's token is sent and writes are allowed (see [Connecting an agent through MCP](mcp.md)); starting a review of a pull request is planned
@@ -430,6 +431,22 @@ php bin/console intakt:job:sweep
 ```
 
 It prints one line per container it removed and a count, for example `1 orphaned job containers removed.`, and leaves the containers of jobs that are still running alone. When the engine cannot be reached it prints the reason and exits with 1.
+
+### Job images
+
+The image a project's jobs will run in comes from the project's last commit (files you have not committed do not count), from the first of these it has:
+
+1. `.devcontainer/devcontainer.json`: its `image`, or the Dockerfile its `build` names (comments and trailing commas are fine; a compose setup is not supported yet).
+2. A `Dockerfile` at the top of the repository, used as it is.
+3. Only `composer.json`: Intakt writes the Dockerfile itself, with the PHP from `config.platform.php` (exactly that version) or else the newest of PHP 8.5, 8.4, 8.3 and 8.2 that `require.php` allows, Composer, every `ext-*` extension under `require` and `require-dev`, and fixed versions of the Claude Code and Codex command-line tools.
+
+A job never gets another PHP: when `composer.json` names no PHP version at all, no image is built, whatever else the project has. After the build, Intakt starts the image once without network and asks its PHP for its version and extensions; an image whose PHP does not match `composer.json`, or that lacks an extension, is refused with the version or the extension's name. An extension that cannot be installed fails the build with `missing PHP extension: <name>`.
+
+```
+php bin/console intakt:job:image path/to/checkout intakt-job/my-project:main
+```
+
+It prints where the image comes from, the build's output, and for example `Image intakt-job/my-project:main built: PHP 8.5.12 with every required extension.` Add `--dry-run` to see where the image would come from and the Dockerfile Intakt would write, without building. On any failure it prints the reason and exits with 1. It needs the Docker Engine's socket like the jobs do, and the Docker machine must reach Docker Hub, Debian's package mirrors and the npm registry for a generated image. Nothing builds images on its own yet, and images are not rebuilt when the project changes.
 
 ## Measured use of subscription windows
 

@@ -17,7 +17,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [x] The builder has no forge credential or signing key; each session gets a clean home and its own caches. `test_build_slot_ops.py` [T44]; Intakt: `ContainerJobRunnerTest::testAJobGetsAWipedHomeAndNoEnvironmentFromTheOrchestrator`
 - [ ] Builder and reviewer egress is limited to an allowlist; the vendor login is unreadable to the model's commands. `test_review_gpt_egress.py` [T44]
 - [x] A runaway step is killed alone and the kill is recorded as its cause. `test_step_memory.py` [T44]; Intakt: `ContainerJobRunnerTest::testARunawayJobIsKilledAloneAndTheOtherJobKeepsItsOwnCause` (per job; a command's own memory group inside a job is not built)
-- [ ] Builds run the project's own PHP, never a fallback. `test_entry_harness.py::test_a_project_without_its_php_record_gets_no_probes` [T45]
+- [ ] Builds run the project's own PHP, never a fallback. `test_entry_harness.py::test_a_project_without_its_php_record_gets_no_probes` [T45]; Intakt: `JobImagePlannerTest::testAComposerJsonWithoutAPhpRecordIsRefusedEvenBesideADockerfile`, `PhpInImageTest::testAnotherPhpIsRefusedWithBothVersions` (the image is checked; no build runs in it yet, T49)
 - [ ] Issue quotes, CI logs and findings reach the builder prompt only fenced. `test_injection_canary.py::test_the_builder_prompt_fences_issue_quotes_ci_logs_and_findings`, `test_prompt_fencing.py::test_every_prompt_interpolation_is_fenced_or_allowed` [T49]
 - [ ] A hand-back never pushes main or force-pushes. `test_no_force.py`, `test_policy.py::test_main_and_ledger_cannot_be_pushed` [T50]
 - [ ] Attribution trailers are stripped from builder commits. `test_attribution.py::test_rebase_strips_attribution_from_builder_commits` [T50]
