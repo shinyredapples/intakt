@@ -94,6 +94,7 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 | `git` | every job image | builders and reviewers work in a git checkout |
 | the AI companies' command-line tools (Claude Code, Codex) | every job image | running builders and reviewers on a subscription |
 | the Docker or Podman API | the orchestrator | starting job containers and sidecars, through the socket (an API, not a command); the job container runner is built (`src/Core/Job/Infrastructure/DockerEngine.php`, Engine API 1.44 on `/var/run/docker.sock`, with an internal network and an egress proxy per job that has an allowlist, which needs Docker Engine 25.0.5 or later, see [Job containers](job-containers.md#egress)), no lane starts a job through it yet, and sidecars are planned |
+| `sh` (POSIX), `rm`, `curl` | every job image | `docker/job/start-check.sh`, the job container's entrypoint, runs under `/bin/sh -c` before the job's command; it uses `rm` to remove its probe files and `curl` to try each allowlisted host through the job's proxy (without `curl` each such host is a failed `egress` check), see [Start check](job-containers.md#start-check); no lane starts a job yet |
 | `squid` | the egress proxy image (`docker/egress-proxy/Dockerfile`, Debian's package, built on the engine's host as `intakt-egress-proxy`), started by `docker/egress-proxy/entrypoint.sh` as `squid -N -f /run/squid/squid.conf` | the per-job egress proxy that lets only TLS tunnels to a job's allowlisted hosts through; the image has not run against a real engine yet |
 
 ## When a tool is missing

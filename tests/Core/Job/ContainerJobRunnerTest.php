@@ -35,11 +35,15 @@ use Intakt\Core\Job\Infrastructure\JobLocks;
 use Intakt\Core\Job\Infrastructure\JobNetwork;
 use Intakt\Core\Job\Infrastructure\JobOutputDirectories;
 use Intakt\Core\Job\Infrastructure\OrphanedJobs;
+use Intakt\Core\Job\Infrastructure\StartCheck;
+use Intakt\Core\Job\Infrastructure\StartCheckFailure;
+use Intakt\Core\Job\Infrastructure\StartCheckReport;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -56,6 +60,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(EgressRoute::class)]
 #[CoversClass(ContainerHealth::class)]
 #[CoversClass(EngineAnswer::class)]
+#[CoversClass(StartCheckReport::class)]
+#[UsesClass(StartCheck::class)]
+#[UsesClass(StartCheckFailure::class)]
 #[UsesClass(EgressProxyDefinition::class)]
 #[UsesClass(EgressLog::class)]
 #[UsesClass(EgressRefusal::class)]
@@ -77,6 +84,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class ContainerJobRunnerTest extends TestCase
 {
     private const int MEMORY = 512 * 1024 * 1024;
+    private const string START_CHECK = __DIR__.'/../../../docker/job/start-check.sh';
 
     // Written as Squid's native access log writes a refused tunnel, so the run reads the proxy's real format.
     private const string REFUSED_TUNNEL = "1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html\n";
@@ -136,7 +144,7 @@ final class ContainerJobRunnerTest extends TestCase
         }
 
         $definition = $this->engine->definitionOf('build-1');
-        self::assertSame(['HOME=/work', 'TMPDIR=/work', 'INTAKT_JOB_ID=build-1'], $definition['Env']);
+        self::assertSame(['HOME=/work', 'TMPDIR=/work', 'INTAKT_JOB_ID=build-1', 'INTAKT_JOB_OUTPUT=/output'], $definition['Env']);
         self::assertSame(sprintf('%d:%d', posix_getuid(), posix_getgid()), $definition['User']);
     }
 
@@ -580,6 +588,73 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertContains('https_proxy=http://egress-proxy:3128', $definition['Env']);
     }
 
+    public function testTheStartCheckRunsBeforeTheJobsCommandAndChecksItsInputs(): void
+    {
+        $this->whenJobRuns($this->spec('build-1', [new JobInput('/srv/mirror/sample.git', '/input/repository')]));
+
+        $definition = $this->engine->definitionOf('build-1');
+        self::assertSame(['/bin/sh', '-c', file_get_contents(self::START_CHECK), 'intakt-start-check'], $definition['Entrypoint']);
+        self::assertSame(['/input/repository', '--', 'composer', 'test'], $definition['Cmd']);
+    }
+
+    public function testAJobWithAnAllowlistIsToldWhichHostsTheStartCheckTries(): void
+    {
+        $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example', 'repo.packagist.example'])));
+
+        $definition = $this->engine->definitionOf('build-1');
+        self::assertIsArray($definition['Env']);
+        self::assertContains('INTAKT_JOB_EGRESS=api.vendor.example repo.packagist.example', $definition['Env']);
+    }
+
+    public function testAPassedStartCheckRecordsOnlyTheEndAndItsReportIsNoPartOfTheOutput(): void
+    {
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame([LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame([], $result->output->names());
+    }
+
+    public function testABrokenMountTheStartCheckReportsIsRecordedWithItsReasonBeforeTheEnd(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            file_put_contents($output.'/.intakt-start-check', "input: /input/repository is not readable\nend\n");
+
+            return [0, false];
+        });
+
+        $this->whenJobRuns($this->spec('build-1', [new JobInput('/srv/mirror/sample.git', '/input/repository')]));
+
+        self::assertSame([LedgerEventKind::JobStartCheckFailed, LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame(['job' => 'build-1', 'check' => 'input', 'reason' => '/input/repository is not readable'], $this->ledger->payloads()[0]);
+    }
+
+    public function testAJobThatLeftNoStartCheckReportIsRecordedAsABrokenOutputMount(): void
+    {
+        $this->engine->behaveAs('build-1', static function (string $output): array {
+            unlink($output.'/.intakt-start-check');
+
+            return [0, false];
+        });
+
+        $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertSame([LedgerEventKind::JobStartCheckFailed, LedgerEventKind::JobEnded], $this->ledger->kinds());
+        self::assertSame('output', $this->ledger->payloads()[0]['check'] ?? null);
+    }
+
+    public function testAMissingStartCheckScriptFailsTheJobBeforeItsContainerIsCreated(): void
+    {
+        try {
+            $this->whenJobRuns($this->spec('build-1'), $this->root.'/absent.sh');
+            self::fail('The job ran without its start check.');
+        } catch (IOException $failure) {
+            self::assertStringContainsString($this->root.'/absent.sh', $failure->getMessage());
+        }
+
+        self::assertFalse($this->engine->hasCreated('build-1'));
+        self::assertSame([], $this->ledger->kinds());
+    }
+
     public function testTheProxyIsOnTheJobsNetworkAndTheBridgeAndAllowsOnlyTheJobsHosts(): void
     {
         $this->whenJobRuns($this->spec('build-1', egress: JobEgress::to(['api.vendor.example', 'repo.packagist.org'])));
@@ -791,7 +866,7 @@ final class ContainerJobRunnerTest extends TestCase
         return $host;
     }
 
-    private function whenJobRuns(JobSpec $spec): JobResult
+    private function whenJobRuns(JobSpec $spec, string $startCheck = self::START_CHECK): JobResult
     {
         $engine = new DockerEngine($this->engine->client(), FakeDockerEngine::SOCKET);
         $outputs = new JobOutputDirectories($this->root);
@@ -803,11 +878,12 @@ final class ContainerJobRunnerTest extends TestCase
             $outputs,
             new JobContainers(
                 $engine,
-                new JobContainerDefinition(),
+                new JobContainerDefinition($startCheck),
                 new EgressProxy($engine, new EgressProxyDefinition('intakt-egress-proxy'), new EgressLog(), $ledger, $this->engine->clock),
                 $this->engine->clock,
             ),
             $ledger,
+            new StartCheckReport(),
         );
 
         return $runner->run($spec);

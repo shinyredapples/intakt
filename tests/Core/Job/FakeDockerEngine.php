@@ -348,6 +348,9 @@ final class FakeDockerEngine
             return new MockResponse('', ['http_code' => 204]);
         }
 
+        // A passed start check, as docker/job/start-check.sh leaves it, so a behavior plays only the job after it.
+        file_put_contents($container->outputDirectory.'/.intakt-start-check', "end\n");
+
         if (in_array($container->job, $this->hanging, true)) {
             $container->running = true;
 
