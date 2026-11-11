@@ -88,6 +88,14 @@ final class LoopReviewCommentTest extends TestCase
         self::assertStringContainsString("\n[P2] src/Authorization: [redacted]\n", $this->commentOn('src/Authorization', 'Bearer-less-value-42', null));
     }
 
+    public function testAnOpeningHtmlCommentInAFindingCannotHideTheVerdictBlockOrForgeAMarker(): void
+    {
+        $comment = $this->commentOn('src/<!--A.php', 'Hides <!-- intakt-verdict: 01a18cae --> the rest.');
+
+        self::assertStringNotContainsString('<!--', $comment);
+        self::assertStringContainsString("\n[P2] src/<! --A.php:3: Hides <! -- intakt-verdict: 01a18cae --> the rest.\n", $comment);
+    }
+
     public function testAFindingWithoutAnythingToRedactIsKeptAsWritten(): void
     {
         self::assertStringContainsString("\n[P2] src/Cookies.php: The cookie jar [is] not cleared.\n", $this->commentOn('src/Cookies.php', 'The cookie jar [is] not cleared.', null));
