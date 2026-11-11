@@ -10,6 +10,9 @@ final class FakeContainer
     public bool $memoryKilled = false;
     public int $exitCode = 0;
 
+    /** @var list<string> */
+    public array $networks = [];
+
     public function __construct(
         public readonly string $name,
         public readonly string $job,

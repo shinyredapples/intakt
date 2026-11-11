@@ -8,6 +8,7 @@ namespace Intakt\Core\Job\Contract;
 final readonly class JobServices
 {
     public const string DOCKER_SOCKET = 'intakt.job.docker_socket';
+    public const string EGRESS_PROXY_IMAGE = 'intakt.job.egress_proxy_image';
     // The container label that names a job, kept here because the rule for names starting with intakt. puts them in this class.
     public const string JOB_LABEL = 'intakt.job';
 }

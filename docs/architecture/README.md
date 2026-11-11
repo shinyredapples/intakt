@@ -23,7 +23,7 @@ Running Intakt:
 - [Container image](container-image.md)
 - [The demo with docker compose](demo-with-docker-compose.md)
 - [Persistence](persistence.md)
-- [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the memory-kill cause, and the cleanup after a crash
+- [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the memory-kill cause, and the cleanup after a crash
 - [MCP server for the owner](mcp-server.md)
 
 Forges and identity:

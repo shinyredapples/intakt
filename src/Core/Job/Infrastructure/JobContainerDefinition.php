@@ -14,7 +14,7 @@ final readonly class JobContainerDefinition
     /**
      * @return array<string, mixed>
      */
-    public function of(JobSpec $spec, string $outputDirectory): array
+    public function of(JobSpec $spec, string $outputDirectory, EgressRoute $route): array
     {
         return [
             'Image' => $spec->image,
@@ -22,18 +22,18 @@ final readonly class JobContainerDefinition
             // The orchestrator's own user, so the job can write the output directory only it may read, and never runs as root.
             'User' => sprintf('%d:%d', posix_getuid(), posix_getgid()),
             // A home and caches on the work area, so every job starts with a wiped home.
-            'Env' => ['HOME='.JobSpec::WORK_AREA, 'TMPDIR='.JobSpec::WORK_AREA, 'INTAKT_JOB_ID='.$spec->id->value],
+            'Env' => ['HOME='.JobSpec::WORK_AREA, 'TMPDIR='.JobSpec::WORK_AREA, 'INTAKT_JOB_ID='.$spec->id->value, ...$route->environment],
             'WorkingDir' => JobSpec::WORK_AREA,
             'Labels' => [JobServices::JOB_LABEL => $spec->id->value],
-            'NetworkDisabled' => true,
-            'HostConfig' => $this->hostConfigOf($spec, $outputDirectory),
+            'NetworkDisabled' => $route->isNone(),
+            'HostConfig' => $this->hostConfigOf($spec, $outputDirectory, $route),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function hostConfigOf(JobSpec $spec, string $outputDirectory): array
+    private function hostConfigOf(JobSpec $spec, string $outputDirectory, EgressRoute $route): array
     {
         return [
             'ReadonlyRootfs' => true,
@@ -43,8 +43,8 @@ final readonly class JobContainerDefinition
             'Memory' => $spec->limits->memoryBytes,
             'MemorySwap' => $spec->limits->memoryBytes,
             'NanoCpus' => $spec->limits->nanoCpus,
-            // No network until the per-job egress proxy exists, so a job reaches nothing by default.
-            'NetworkMode' => 'none',
+            // No network, or the job's internal network whose only way out is its own proxy, so a job reaches nothing by default.
+            'NetworkMode' => $route->networkMode,
             'CapDrop' => ['ALL'],
             'SecurityOpt' => ['no-new-privileges'],
         ];

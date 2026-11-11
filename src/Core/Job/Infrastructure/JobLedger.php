@@ -27,6 +27,16 @@ final readonly class JobLedger
         $this->append(LedgerEventKind::JobContainerRemoved, ['job' => $container->job->value, 'container' => $container->id]);
     }
 
+    public function egressRefused(JobId $job, EgressRefusal $refusal): void
+    {
+        $this->append(LedgerEventKind::JobEgressRefused, ['job' => $job->value, 'method' => $refusal->method, 'target' => $refusal->target]);
+    }
+
+    public function networkRemoved(JobNetwork $network): void
+    {
+        $this->append(LedgerEventKind::JobNetworkRemoved, ['job' => $network->job->value, 'network' => $network->name]);
+    }
+
     /**
      * @param array<string, int|string> $payload
      */
