@@ -67,6 +67,43 @@ final class ComponentStylesTest extends WebTestCase
         self::assertSame(['disclosure', 'disclosure', 'disclosure', 'disclosure', 'toast'], $controllers);
     }
 
+    public function testTheSearchOverlayIsAnOpaqueRaisedPanelWithRadius18OverTheScrim(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertMatchesRegularExpression('/background:\s*var\(--backdrop\)/', $rules['.overlay'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*none/', $rules['.overlay[hidden]'] ?? '');
+        $palette = $rules['.palette'] ?? '';
+        self::assertMatchesRegularExpression('/background:\s*var\(--raised\)/', $palette);
+        self::assertMatchesRegularExpression('/border-radius:\s*var\(--r-overlay\)/', $palette);
+        self::assertMatchesRegularExpression('/border:\s*1px solid var\(--hairline\)/', $palette);
+        self::assertStringNotContainsString('opacity', $palette);
+    }
+
+    public function testTheSearchPanelMovesInWithoutFading(): void
+    {
+        self::assertMatchesRegularExpression('/\.overlay:not\(\[hidden\]\) \.palette \{ animation: rise /', $this->componentSheet());
+        self::assertMatchesRegularExpression('/@keyframes rise \{ from \{ transform: translateY\(8px\); \} \}/', $this->componentSheet());
+    }
+
+    public function testTheSearchPanelDoesNotMoveUnderReducedMotion(): void
+    {
+        self::assertMatchesRegularExpression('/@media \(prefers-reduced-motion: reduce\) \{\s*\.overlay:not\(\[hidden\]\) \.palette \{ animation: none; \}/', $this->componentSheet());
+    }
+
+    public function testTheSelectedSearchResultTakesTheSelectedTint(): void
+    {
+        self::assertMatchesRegularExpression('/background:\s*var\(--selected\)/', $this->rulesOf($this->componentSheet())['.palette .res[aria-selected="true"]'] ?? '');
+    }
+
+    public function testTheSearchFieldKeepsTheVisibleFocusOutline(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertDoesNotMatchRegularExpression('/outline:\s*(?:none|0)\b/', $rules['.palette .q input'] ?? '');
+        self::assertMatchesRegularExpression('/outline-offset:\s*-2px/', $rules['.palette .q input:focus-visible'] ?? '');
+    }
+
     public function testACompactBannerShowsOnlyItsToggleAtEveryWidth(): void
     {
         $sheet = $this->componentSheet();

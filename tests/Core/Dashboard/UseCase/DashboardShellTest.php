@@ -121,13 +121,46 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertStringContainsString('Search tasks, pull requests, settings', $search->text());
     }
 
-    // Because search arrives with part 3 of #910, a field that promised a dialog would open nothing.
-    public function testTheSearchFieldIsMarkedUnavailableUntilSearchIsBuilt(): void
+    public function testTheSearchFieldOpensTheSearchDialog(): void
     {
         $search = $this->browser->request('GET', '/reviews')->filter('.topbar button.search-trigger');
 
-        self::assertSame('true', $search->attr('aria-disabled'));
-        self::assertNull($search->attr('aria-haspopup'));
+        self::assertNull($search->attr('aria-disabled'));
+        self::assertSame('dialog', $search->attr('aria-haspopup'));
+        self::assertSame('search', $search->attr('aria-controls'));
+    }
+
+    #[DataProvider('pages')]
+    public function testEveryPageHoldsTheClosedSearchDialogOutsideTheShell(string $path): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', $path);
+
+        $dialog = $page->filter('body > .shell + .overlay#search[role="dialog"][aria-modal="true"][aria-label="Search"][hidden]');
+        self::assertCount(1, $dialog);
+        self::assertSame('/search', $dialog->attr('data-search-url'));
+        self::assertCount(0, $page->filter('.shell .overlay'));
+    }
+
+    public function testTheSearchFieldOfTheDialogControlsItsListOfResults(): void
+    {
+        $dialog = $this->browser->request('GET', '/reviews')->filter('#search .palette');
+
+        $field = $dialog->filter('.q input#search-q');
+        self::assertSame('combobox', $field->attr('role'));
+        self::assertSame('Search', $field->attr('aria-label'));
+        self::assertSame('off', $field->attr('autocomplete'));
+        self::assertSame('search-results', $field->attr('aria-controls'));
+        self::assertCount(1, $dialog->filter('.results#search-results[role="listbox"][aria-label="Results"]:empty'));
+        self::assertSame('Esc', $dialog->filter('.q kbd')->text());
+    }
+
+    public function testTheSearchDialogNamesItsKeys(): void
+    {
+        $footer = $this->browser->request('GET', '/reviews')->filter('#search .palette footer');
+
+        self::assertSame(['↑ ↓ move', 'Enter open', 'Esc close'], $footer->filter('span')->each(static fn (Crawler $hint): string => $hint->text()));
     }
 
     public function testTheTopBarHoldsTheThemeToggle(): void
