@@ -41,9 +41,14 @@ final readonly class BudgetReserve
         $installationId = $this->tokens->installationId;
         $reading = $this->readings->latest($installationId);
 
-        if ($reading instanceof RateLimitReading && $reading->isBelowShare($this->percent)) {
+        if ($reading instanceof RateLimitReading && $this->isInForce($reading)) {
             $this->takeTheListingOfThisTick(self::slotKey($installationId, $project), $reading->resetsAt);
         }
+    }
+
+    public function isInForce(RateLimitReading $reading): bool
+    {
+        return $reading->isBelowShare($this->percent);
     }
 
     // One slot per project, because each project's tick lists once and a shared slot would leave every project but the first unwatched until the reset.

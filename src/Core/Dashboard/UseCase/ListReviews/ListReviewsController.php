@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Plugin\Forge\Contract\ForgeBudgets;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
@@ -19,6 +20,7 @@ final readonly class ListReviewsController
         private LedgerReviews $reviews,
         private LedgerFailingHeads $failingHeads,
         private LivePageRendering $pages,
+        private ForgeBudgets $forgeBudgets,
     ) {
     }
 
@@ -29,6 +31,7 @@ final readonly class ListReviewsController
         return new Response($this->pages->render($request, 'dashboard/reviews.html.twig', [
             'reviews' => $this->reviews->newestFirst(),
             'failing' => $this->failingHeads->now(),
+            'forge_budgets' => $this->forgeBudgets->thisHour(),
             'linked_project' => $project,
         ]));
     }
