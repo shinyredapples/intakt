@@ -63,7 +63,7 @@ final readonly class MakeBuildClone
         // Because a path that ends in "/" or "/." makes lstat follow a link at its last name, so a dangling link would not count as taken.
         $trimmed = preg_replace('~(?:/\.?)+$~', '', $directory);
 
-        return $trimmed === '' || $trimmed === null ? '/' : $trimmed;
+        return '' === $trimmed || null === $trimmed ? '/' : $trimmed;
     }
 
     private function existingMirror(string $project, string $directory): string
