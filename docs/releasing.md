@@ -42,6 +42,8 @@ The owner cuts a release by hand for a milestone version, or when the timer is o
 3. Push the tag: `git push origin v0.2.0`.
 4. On the [releases page](https://github.com/shinyredapples/intakt/releases) create a release from that tag, choose "Generate release notes", tick "Set as a pre-release" (for every version before `v1.0.0`), and publish.
 
+Release tags are protected by the repository ruleset "Release tags: owner only" (set by the owner on 2026-11-11). Only the owner, as the repository and organization admin, can create, move or delete a `v*` tag. So no other account, the build loop's app included, can start the release workflow with its `packages: write` token by pushing a tag.
+
 ## The container image
 
 Every pushed release tag publishes the app image to GitHub's container registry: the `image` job of `.github/workflows/release-image.yml` checks the tag out apart (in `release/`), builds the image from it, runs `docker/smoke-test.sh` on it, and pushes `ghcr.io/shinyredapples/intakt:<version>` (the tag without its `v`, for example `0.1.0`). A failed smoke test pushes nothing. The smoke test is the workflow's own, so an older tag is checked against today's test; if that test asks for something the old image lacks, the run fails and nothing is pushed.

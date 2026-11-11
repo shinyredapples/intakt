@@ -1,0 +1,36 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Board - Intakt{% endblock %}
+
+{% block content_width %} wide{% endblock %}
+
+{% block body %}
+<div class="page-head">
+    <div>
+        <h1>Board</h1>
+        <p class="lead">Every change under review, in the column of where it is now.</p>
+    </div>
+    <div class="actions">
+        <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
+    </div>
+</div>
+<section aria-labelledby="board-h">
+    <h2 id="board-h" class="sr-only">Tasks by state</h2>
+    {# The counts are totals over every project, so the project filter hides cards and never changes a count. #}
+    <div class="board">
+    {% for column in columns %}
+        {% set cards = board.cardsIn(column) %}
+        <section class="col" id="col-{{ column.value|lower|replace({' ': '-'}) }}" aria-label="{{ column.value }}">
+            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: board.countOf(column), needs: column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') and cards is not empty}, with_context = false) }}</div>
+            <div class="col-cards">
+            {% for review in cards %}
+                {{ include('dashboard/_board_card.html.twig', {review: review}, with_context = false) }}
+            {% else %}
+                {{ include('dashboard/components/column_empty.html.twig', {}, with_context = false) }}
+            {% endfor %}
+            </div>
+        </section>
+    {% endfor %}
+    </div>
+</section>
+{% endblock %}
