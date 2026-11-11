@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use Intakt\Core\Watcher\Contract\WatchTick;
 use Symfony\Component\Scheduler\Attribute\AsSchedule;
 use Symfony\Component\Scheduler\RecurringMessage;
 use Symfony\Component\Scheduler\Schedule;
@@ -13,7 +14,7 @@ use Symfony\Component\Scheduler\ScheduleProviderInterface;
 #[AsSchedule('watcher')]
 final readonly class WatcherSchedule implements ScheduleProviderInterface
 {
-    public const string INTERVAL = '1 minute';
+    public const string INTERVAL = WatchTick::INTERVAL;
 
     public function __construct(private WatchedProjects $projects)
     {

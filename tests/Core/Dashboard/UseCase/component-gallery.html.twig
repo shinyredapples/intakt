@@ -73,6 +73,12 @@
     {{ include(c ~ 'filter_chip.html.twig', {label: '14 days', pressed: true}) }}
     {{ include(c ~ 'filter_chip.html.twig', {label: '8 weeks'}) }}
 
+    <h2>Search</h2>
+    <div class="palette static"><div class="results">
+        {{ include(c ~ 'search_group.html.twig', {id: 'gallery-search', icon: 'pr', label: 'Reviews', results: [{label: 'Round round-1', detail: 'alpha, judged', href: '#', selected: true}, {label: 'Switch light or dark theme', detail: 'All projects', action: constant('Intakt\\Core\\Dashboard\\Domain\\SearchAction::SwitchTheme')}]}) }}
+        {{ include(c ~ 'search_none.html.twig', {query: 'zebra', suggestion: 'Try a page such as Reviews or Projects.', recovery: constant('Intakt\\Core\\Dashboard\\Domain\\SearchAction::ClearSearch')}) }}
+    </div></div>
+
     <h2>Empty and error</h2>
     {{ include(c ~ 'empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building. When it needs a decision, it shows up here and on your phone.'}) }}
     {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
