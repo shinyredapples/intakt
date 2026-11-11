@@ -177,6 +177,84 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertCount(2, $this->checks->asked);
     }
 
+    public function testAPendingHeadIsReadAgainWhileTheForgeHoldsTheListingBack(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+
+        $this->clock->modify('+61 seconds');
+        $this->listing->limitedUntil = $this->clock->now()->modify('+30 minutes');
+        $this->tick();
+
+        self::assertCount(2, $this->checks->asked);
+    }
+
+    public function testAForgePauseOverSeveralTicksCountsNoHeadFailureAndHandsTheHeadOverToNoOne(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $paused = $this->clock->now()->modify('+2 hours');
+        $this->listing->limitedUntil = $paused;
+        $this->checks->pausedUntil = $paused;
+
+        foreach (range(1, 5) as $ignored) {
+            $this->clock->modify('+20 minutes');
+            $this->tick();
+        }
+
+        self::assertSame([LedgerEventKind::HeadPending], $this->ledger->kinds());
+        self::assertSame(0, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z')));
+    }
+
+    public function testAForgePauseOverTwentyTicksAMinuteApartHandsTheHeadOverToNoOne(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $paused = $this->clock->now()->modify('+1 hour');
+        $this->listing->limitedUntil = $paused;
+        $this->checks->pausedUntil = $paused;
+
+        foreach (range(1, 20) as $ignored) {
+            $this->clock->modify('+1 minute');
+            $this->tick();
+        }
+
+        self::assertNotContains(LedgerEventKind::HeadHandedOver, $this->ledger->kinds());
+        self::assertNotContains(LedgerEventKind::HeadFailed, $this->ledger->kinds());
+    }
+
+    public function testAHeadWhoseCiReadAForgePauseRefusedIsReadAgainOnceThePauseHasEndedAndNotBefore(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->clock->modify('+61 seconds');
+        // The listing goes on, because the pause starts between the listing and the CI reads of this tick.
+        $this->checks->pausedUntil = $this->clock->now()->modify('+30 minutes');
+        $this->tick();
+
+        $this->clock->modify('+29 minutes');
+        $this->tick();
+        $readBeforeTheReset = count($this->checks->asked);
+        $this->clock->modify('+61 seconds');
+        $this->checks->pausedUntil = null;
+        $this->tick();
+
+        self::assertSame(1, $readBeforeTheReset);
+        self::assertCount(2, $this->checks->asked);
+        self::assertSame([LedgerEventKind::HeadPending, LedgerEventKind::HeadPending], $this->ledger->kinds());
+    }
+
+    public function testAForgePauseOnTwoHeadsOfOneTickStartsNoFailureBackOff(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::PENDING, '2026-11-02T09:00:00Z'));
+        $this->checks->pausedUntil = $this->clock->now()->modify('+30 minutes');
+
+        $this->tick();
+
+        self::assertSame([], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
+        self::assertSame([], $this->ledger->kinds());
+    }
+
     public function testAPendingHeadIsNotReadAgainBeforeItsReadAgainTime(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
@@ -988,7 +1066,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
         $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $doctrine, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
