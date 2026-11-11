@@ -37,6 +37,8 @@ The project's own checks run again in a **separate, fresh container**, then agai
 
 The checks also scan the project's CI workflows for known security mistakes, such as text from a pull request run as a command or an action not pinned to an exact version. A change that weakens the CI that way fails before any reviewer sees it.
 
+Sometimes a warning is wrong for this project, for example an image that cannot be pinned yet. It may then be silenced on its own line only, and only with the reason written right after it: `# zizmor: ignore[unpinned-images] tag only until digests come`. The same comment without a reason fails the checks, so every exception explains itself to the next reader. There is no settings file that turns a whole kind of warning off.
+
 ## Layer 4: several independent reviewers
 
 - The review panel has **reviewers from different AI companies** when you have accounts with more than one, so one model's blind spot doesn't decide. With a single account it runs one reviewer, and adds a second model of the same company for protected, security-relevant and large changes (planned: not built yet).
