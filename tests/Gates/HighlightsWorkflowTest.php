@@ -59,7 +59,7 @@ final class HighlightsWorkflowTest extends TestCase
         $publish = $this->workflow()['jobs']['publish'];
 
         self::assertSame('github-pages', $publish['environment']['name'] ?? null);
-        self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => strstr($step['uses'] ?? '', '@', true) ?: '', $publish['steps'] ?? []));
+        self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => explode('@', $step['uses'] ?? '')[0], $publish['steps'] ?? []));
     }
 
     /**
