@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirrorCommand;
@@ -26,6 +27,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(UpdateMirrorCommand::class)]
 #[UsesClass(UpdateMirror::class)]
+#[UsesClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
@@ -63,7 +65,7 @@ final class UpdateMirrorCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('../alpha', $this->remote->path);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('is not a project name that can be a folder name', $tester->getDisplay());
+        self::assertStringContainsString('is not a project name that can be a folder name', $this->displayOnOneLine($tester));
     }
 
     public function testTheCommandPrintsTheFailureOfAMissingRemoteAndExitsWithOne(): void
@@ -71,7 +73,7 @@ final class UpdateMirrorCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('alpha', $this->mirrors.'-missing');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('git failed after 3 attempts', $tester->getDisplay());
+        self::assertStringContainsString('git failed after 3 attempts', $this->displayOnOneLine($tester));
     }
 
     public function testTheCommandPrintsAMirrorThatWasNotUpdatedAndExitsWithOne(): void
@@ -82,13 +84,19 @@ final class UpdateMirrorCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('alpha', $this->remote->path);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('was not updated', $tester->getDisplay());
+        self::assertStringContainsString('was not updated', $this->displayOnOneLine($tester));
+    }
+
+    private function displayOnOneLine(CommandTester $tester): string
+    {
+        // The error block wraps at the terminal width, so where it breaks depends on the temporary path's length.
+        return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
     private function whenTheCommandRuns(string $project, string $remote): CommandTester
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $mirror = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $this->mirrors);
+        $mirror = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors));
         $application = new Application();
         $application->addCommand(new UpdateMirrorCommand($mirror));
         $tester = new CommandTester($application->find('intakt:mirror:update'));
