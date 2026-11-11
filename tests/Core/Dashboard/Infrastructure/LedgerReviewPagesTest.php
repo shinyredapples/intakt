@@ -86,6 +86,24 @@ final class LedgerReviewPagesTest extends TestCase
         self::assertSame(2, $this->pagesOn($ledger)->board()->countOf(BoardColumn::InReview));
     }
 
+    public function testRoundsWhoseIdsAreDigitsAreCardsOnTheBoard(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', '42', 1);
+        $ledger->startRound('7', 'alpha');
+
+        self::assertSame(2, $this->pagesOn($ledger)->board()->countOf(BoardColumn::InReview));
+    }
+
+    public function testTheRoundsOfOneChangeWithDigitIdsAreOneCard(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', '42', 1);
+        $ledger->startRoundOf('feat/a', '43', 2);
+
+        self::assertSame(1, $this->pagesOn($ledger)->board()->countOf(BoardColumn::InReview));
+    }
+
     public function testAnEmptyLedgerGivesABoardWithNoCards(): void
     {
         $board = $this->pagesOn(new DashboardLedger())->board();

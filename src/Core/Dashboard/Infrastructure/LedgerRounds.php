@@ -97,14 +97,14 @@ final class LedgerRounds
     /**
      * @return list<Review>
      */
-    // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review.
+    // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review. The ids come from the rounds, not the keys, because PHP turns a key of digits into an integer.
     public function reviews(): array
     {
         $reviews = [];
         $seen = [];
 
-        foreach (array_keys($this->started) as $round) {
-            $review = isset($seen[$round]) ? null : $this->reviewOf($round);
+        foreach ($this->started as $started) {
+            $review = isset($seen[$started->round]) ? null : $this->reviewOf($started->round);
 
             if ($review instanceof Review) {
                 $reviews[] = $review;
