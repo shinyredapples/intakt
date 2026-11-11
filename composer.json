@@ -65,10 +65,10 @@
     "symfony/security-bundle": "^8.1",
     "symfony/semaphore": "^8.1",
     "symfony/serializer": "^8.1",
-    "symfony/stimulus-bundle": "^3.6",
+    "symfony/stimulus-bundle": "^3.7",
     "symfony/twig-bundle": "^8.1",
     "symfony/uid": "^8.1",
-    "symfony/ux-turbo": "^3.6",
+    "symfony/ux-turbo": "^3.7",
     "symfony/validator": "^8.1",
     "symfony/workflow": "^8.1",
     "symfony/yaml": "^8.1"
