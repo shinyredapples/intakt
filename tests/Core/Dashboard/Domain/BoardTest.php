@@ -68,8 +68,8 @@ final class BoardTest extends TestCase
     {
         $board = new Board([
             new Review([$this->round('r1', 'feat/a', 1)]),
-            new Review([$this->round('r2', 'feat/b', 1, 'beta')]),
-            new Review([$this->round('r3', 'feat/c', 1, 'gamma')]),
+            new Review([$this->started(new RoundStart('r2', 'beta', 2), new RoundPlace('feat/b', 1), self::morning())]),
+            new Review([$this->started(new RoundStart('r3', 'gamma', 2), new RoundPlace('feat/c', 1), self::morning())]),
         ]);
 
         self::assertSame(3, $board->countOf(BoardColumn::InReview));
@@ -77,14 +77,14 @@ final class BoardTest extends TestCase
 
     public function testACardCarriesItsProject(): void
     {
-        $board = new Board([new Review([$this->round('r1', 'feat/a', 1, 'beta')])]);
+        $board = new Board([new Review([$this->started(new RoundStart('r1', 'beta', 2), new RoundPlace('feat/a', 1), self::morning())])]);
 
         self::assertSame('beta', $board->cardsIn(BoardColumn::InReview)[0]->project);
     }
 
     public function testACardShowsItsLatestRoundForItsNumberReviewersAndLink(): void
     {
-        $card = new Review([$this->round('r1', 'feat/a', 1), $this->round('r2', 'feat/a', 2, reviewers: 3)]);
+        $card = new Review([$this->round('r1', 'feat/a', 1), $this->started(new RoundStart('r2', 'alpha', 3), new RoundPlace('feat/a', 2), self::morning())]);
 
         self::assertSame(['r2', 2, 3], [$card->latest()->round, $card->latest()->number, $card->latest()->reviewers]);
     }
@@ -92,9 +92,9 @@ final class BoardTest extends TestCase
     public function testCardsInAColumnShowTheNewestLatestRoundFirst(): void
     {
         $board = new Board([
-            new Review([$this->round('r1', 'feat/a', 1, startedAt: '2026-11-01T10:00:00+00:00')]),
-            new Review([$this->round('r2', 'feat/b', 1, startedAt: '2026-11-03T10:00:00+00:00')]),
-            new Review([$this->round('r3', 'feat/c', 1, startedAt: '2026-11-02T10:00:00+00:00')]),
+            new Review([$this->started(new RoundStart('r1', 'alpha', 2), new RoundPlace('feat/a', 1), new DateTimeImmutable('2026-11-01T10:00:00+00:00'))]),
+            new Review([$this->started(new RoundStart('r2', 'alpha', 2), new RoundPlace('feat/b', 1), new DateTimeImmutable('2026-11-03T10:00:00+00:00'))]),
+            new Review([$this->started(new RoundStart('r3', 'alpha', 2), new RoundPlace('feat/c', 1), new DateTimeImmutable('2026-11-02T10:00:00+00:00'))]),
         ]);
 
         self::assertSame(['r2', 'r3', 'r1'], $this->roundsIn($board, BoardColumn::InReview));
@@ -108,8 +108,18 @@ final class BoardTest extends TestCase
         return array_map(static fn (Review $card): string => $card->latest()->round, $board->cardsIn($column));
     }
 
-    private function round(string $round, string $change, int $number, string $project = 'alpha', int $reviewers = 2, string $startedAt = '2026-11-01T10:00:00+00:00'): ReviewedRound
+    private function round(string $round, string $change, int $number): ReviewedRound
     {
-        return new ReviewedRound(new RoundStart($round, $project, $reviewers), new RoundPlace($change, $number), new DateTimeImmutable($startedAt), null);
+        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), self::morning());
+    }
+
+    private function started(RoundStart $start, RoundPlace $place, DateTimeImmutable $startedAt): ReviewedRound
+    {
+        return new ReviewedRound($start, $place, $startedAt, null);
+    }
+
+    private static function morning(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
     }
 }
