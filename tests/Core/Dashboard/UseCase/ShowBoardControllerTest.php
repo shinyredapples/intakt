@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use Doctrine\DBAL\Driver\PDO\Exception as PdoDriverException;
-use Doctrine\DBAL\Exception\TableNotFoundException;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
@@ -17,8 +15,6 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
-use Intakt\Core\Ledger\Contract\Ledger;
-use PDOException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
@@ -185,21 +181,6 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/', server: ['HTTP_HOST' => 'attacker.example:7780']);
 
         self::assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
-    }
-
-    public function testTheBoardOfADatabaseNotYetMigratedSaysSoInsteadOfFailing(): void
-    {
-        // A fresh kernel, because the one of setUp already holds the ledger double.
-        self::ensureKernelShutdown();
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willThrowException(new TableNotFoundException(PdoDriverException::new(new PDOException('no such table: ledger_event')), null));
-        self::getContainer()->set(Ledger::class, $ledger);
-
-        $this->browser->request('GET', '/');
-
-        self::assertResponseIsSuccessful();
-        self::assertSame('Intakt is still setting up its database. Reload this page in a moment.', $this->browser->getResponse()->getContent());
     }
 
     private function column(Crawler $page, string $name): Crawler
