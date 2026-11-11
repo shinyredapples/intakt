@@ -99,7 +99,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         ];
 
         foreach ($streams as $stream) {
-            $target = new Crawler($stream)->filter('turbo-stream[target]')->attr('target');
+            $target = new Crawler($stream)->filter('turbo-stream[action="replace"], turbo-stream[action="append"][target]')->attr('target');
             self::assertNotNull($target);
             self::assertCount(1, $page->filter('#'.$target), $target);
         }
@@ -113,7 +113,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
             .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
 
-        foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
+        foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
             self::assertCount(1, $page->filter('#'.$target), $target);
         }
     }
@@ -175,6 +175,49 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
         self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
+    }
+
+    public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-now-none'));
+    }
+
+    public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowInTheCurrentStateBlock(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']));
+
+        self::assertSame(['round-1-correctness (started after this page loaded): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testAReviewerThePageAlreadyListsKeepsItsOneRowWhenItFinishes(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking'])
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame(['correctness (standard): verdict'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testAStreamForARoundWhoseBlockIsNotOnThePageAddsNoRow(): void
+    {
+        $this->givenARunningRound();
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $page = $this->browser->request('GET', '/reviews/round-2');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame(['No reviewer has started yet.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testOneListenerAuthorizesEveryUnfinishedRoundOfThePage(): void
@@ -271,17 +314,32 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return new Crawler($document);
     }
 
-    // Done by hand on the parsed page, because no browser runs Turbo in the tests.
+    // Done by hand on the parsed page, because no browser runs Turbo in the tests; like Turbo, a stream whose target is absent changes nothing.
     private function replaced(Crawler $page, string $streams): Crawler
     {
         foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
-            $target = $page->filter('#'.$stream->attr('target'))->getNode(0);
-            $replacement = $stream->filter('template')->getNode(0)?->firstChild;
-            self::assertNotNull($target);
-            self::assertNotNull($replacement);
-            $document = $target->ownerDocument;
-            self::assertNotNull($document);
-            $target->parentNode?->replaceChild($document->importNode($replacement, true), $target);
+            $selector = $stream->attr('targets') ?? '#'.$stream->attr('target');
+            foreach ($page->filter($selector)->each(static fn (Crawler $target): Crawler => $target) as $target) {
+                if ('append' === $stream->attr('action')) {
+                    $this->appended($target, $stream->filter('template')->html());
+
+                    continue;
+                }
+
+                $node = $target->getNode(0);
+                self::assertNotNull($node);
+                if ('remove' === $stream->attr('action')) {
+                    $node->parentNode?->removeChild($node);
+
+                    continue;
+                }
+
+                $replacement = $stream->filter('template')->getNode(0)?->firstChild;
+                $document = $node->ownerDocument;
+                self::assertNotNull($replacement);
+                self::assertNotNull($document);
+                $node->parentNode?->replaceChild($document->importNode($replacement, true), $node);
+            }
         }
 
         return $page;
