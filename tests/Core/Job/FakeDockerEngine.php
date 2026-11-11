@@ -33,6 +33,12 @@ final class FakeDockerEngine
     /** @var list<string> */
     private array $waitErrors = [];
 
+    /** @var list<string> */
+    private array $memoryKilledBeforeKill = [];
+
+    /** @var list<string> */
+    private array $unkillable = [];
+
     /** @var array<string, int> */
     private array $waits = [];
 
@@ -83,6 +89,18 @@ final class FakeDockerEngine
     public function answerWaitsWithError(string $job): void
     {
         $this->waitErrors[] = $job;
+    }
+
+    // Memory kills the job in the last pause before its run time ends, so the kill finds it stopped and the engine answers 409.
+    public function memoryKillBeforeTheKill(string $job): void
+    {
+        $this->memoryKilledBeforeKill[] = $job;
+    }
+
+    // The kill is accepted but the container keeps running, so a test plays an engine that never delivers SIGKILL.
+    public function ignoreKills(string $job): void
+    {
+        $this->unkillable[] = $job;
     }
 
     /**
@@ -258,6 +276,16 @@ final class FakeDockerEngine
 
     private function kill(FakeContainer $container): MockResponse
     {
+        if (in_array($container->job, $this->unkillable, true)) {
+            return new MockResponse('', ['http_code' => 204]);
+        }
+
+        if (in_array($container->job, $this->memoryKilledBeforeKill, true)) {
+            [$container->running, $container->memoryKilled, $container->exitCode] = [false, true, 137];
+
+            return $this->json(['message' => sprintf('Container %s is not running', $container->name)], 409);
+        }
+
         $container->running = false;
         $container->exitCode = 137;
 

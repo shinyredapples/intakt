@@ -202,6 +202,33 @@ final class ContainerJobRunnerTest extends TestCase
         self::assertSame([], $this->engine->containerIds());
     }
 
+    public function testAMemoryKillJustBeforeTheRunTimeEndsIsRecordedAsTheJobsCause(): void
+    {
+        $this->engine->hang('build-1');
+        $this->engine->memoryKillBeforeTheKill('build-1');
+
+        $result = $this->whenJobRuns($this->spec('build-1'));
+
+        self::assertEquals(new JobEnd(JobCause::MemoryKilled, 137), $result->end);
+        self::assertSame([['job' => 'build-1', 'cause' => 'oom', 'exit_code' => 137]], $this->ledger->payloads());
+    }
+
+    public function testAContainerThatDoesNotStopAfterTheKillFailsTheRunAndIsRemoved(): void
+    {
+        $this->engine->hang('build-1');
+        $this->engine->ignoreKills('build-1');
+
+        try {
+            $this->whenJobRuns($this->spec('build-1'));
+            self::fail('A container still running after the kill must fail the run.');
+        } catch (DockerEngineFailed $failure) {
+            self::assertSame(DockerEngineFailed::notStoppedAfterKill('c0ffee000001', 10)->getMessage(), $failure->getMessage());
+        }
+
+        self::assertSame([], $this->ledger->kinds());
+        self::assertSame([], $this->engine->containerIds());
+    }
+
     public function testAWaitCutOffBeforeTheRunTimeIsWaitedForAgainAndTheJobIsNotKilled(): void
     {
         $this->engine->cutOffWaits('build-1', 1);
