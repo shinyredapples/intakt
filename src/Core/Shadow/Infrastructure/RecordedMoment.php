@@ -16,7 +16,7 @@ final readonly class RecordedMoment
     {
         $moment = DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
 
-        // A warning means PHP rolled an impossible date such as February 30 over into another day.
+        // Refused on a warning, because PHP rolls an impossible date such as February 30 over into another day.
         if (false === $moment || false !== DateTimeImmutable::getLastErrors()) {
             return null;
         }

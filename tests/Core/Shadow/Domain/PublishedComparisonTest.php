@@ -104,7 +104,7 @@ final class PublishedComparisonTest extends TestCase
     {
         $report = $this->report(
             $this->loop('h1', "[P2] src/A.php:10 guard\n[P1] src/B.php:5 lock\n".self::CHANGES),
-            $this->intakt('h1', "[P2] src/A.php:".(10 + ReviewComparison::LINE_WINDOW).": guard\n[P3] src/C.php:1: name\n".self::CHANGES),
+            $this->intakt('h1', '[P2] src/A.php:'.(10 + ReviewComparison::LINE_WINDOW).": guard\n[P3] src/C.php:1: name\n".self::CHANGES),
         );
 
         $head = $report->heads[0];

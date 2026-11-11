@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Shadow\Domain;
 
-use DateTimeImmutable;
 use Intakt\Core\Shadow\Contract\PullRequestComment;
 
 final readonly class RecordedPullRequest
@@ -42,7 +41,7 @@ final readonly class RecordedPullRequest
             }
         }
 
-        $inWeek = array_filter($lastReviews, static fn (DateTimeImmutable $last): bool => $week->holds($last));
+        $inWeek = array_filter($lastReviews, $week->holds(...));
 
         // Cast back, because PHP turns a head of digits only into an integer key.
         return array_map(strval(...), array_keys($inWeek));
