@@ -49,7 +49,7 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
     {
         $repository = $this->repositories->addressOf($project);
         // Only the listing asks, because the reads of a waiting head's CI are essential and always go on.
-        $this->reserve->admitListing();
+        $this->reserve->admitListing($project);
         $first = $this->read($repository->path().'/pulls', ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => 1], $validator);
         if (self::NOT_MODIFIED === $first['status']) {
             return OpenChangeListing::unchanged();

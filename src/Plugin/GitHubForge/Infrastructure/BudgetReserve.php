@@ -37,22 +37,27 @@ final readonly class BudgetReserve
     /**
      * @throws ForgeRateLimited
      */
-    public function admitListing(): void
+    public function admitListing(string $project): void
     {
         $installationId = $this->tokens->installationId;
         $reading = $this->readings->latest($installationId);
 
         if ($reading instanceof RateLimitReading && $reading->isBelowShare($this->percent)) {
-            $this->takeTheListingOfThisTick($installationId, $reading->resetsAt);
+            $this->takeTheListingOfThisTick(self::slotKey($installationId, $project), $reading->resetsAt);
         }
+    }
+
+    // One slot per project, because each project's tick lists once and a shared slot would leave every project but the first unwatched until the reset.
+    public static function slotKey(string $installationId, string $project): string
+    {
+        return 'github-reserve-listing-'.hash('sha256', strlen($installationId).':'.$installationId.strlen($project).':'.$project);
     }
 
     /**
      * @throws ForgeRateLimited
      */
-    private function takeTheListingOfThisTick(string $installationId, DateTimeImmutable $resetsAt): void
+    private function takeTheListingOfThisTick(string $key, DateTimeImmutable $resetsAt): void
     {
-        $key = 'github-reserve-listing-'.hash('sha256', $installationId);
         $lock = $this->locks->createLock($key);
 
         // Not waited for, because a held lock means another process is taking this tick's listing.
