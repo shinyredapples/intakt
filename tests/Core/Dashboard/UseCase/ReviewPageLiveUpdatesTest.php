@@ -320,29 +320,34 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
             $selector = $stream->attr('targets') ?? '#'.$stream->attr('target');
             foreach ($page->filter($selector)->each(static fn (Crawler $target): Crawler => $target) as $target) {
-                if ('append' === $stream->attr('action')) {
-                    $this->appended($target, $stream->filter('template')->html());
-
-                    continue;
-                }
-
-                $node = $target->getNode(0);
-                self::assertNotNull($node);
-                if ('remove' === $stream->attr('action')) {
-                    $node->parentNode?->removeChild($node);
-
-                    continue;
-                }
-
-                $replacement = $stream->filter('template')->getNode(0)?->firstChild;
-                $document = $node->ownerDocument;
-                self::assertNotNull($replacement);
-                self::assertNotNull($document);
-                $node->parentNode?->replaceChild($document->importNode($replacement, true), $node);
+                $this->applied($stream, $target);
             }
         }
 
         return $page;
+    }
+
+    private function applied(Crawler $stream, Crawler $target): void
+    {
+        if ('append' === $stream->attr('action')) {
+            $this->appended($target, $stream->filter('template')->html());
+
+            return;
+        }
+
+        $node = $target->getNode(0);
+        self::assertNotNull($node);
+        if ('remove' === $stream->attr('action')) {
+            $node->parentNode?->removeChild($node);
+
+            return;
+        }
+
+        $replacement = $stream->filter('template')->getNode(0)?->firstChild;
+        $document = $node->ownerDocument;
+        self::assertNotNull($replacement);
+        self::assertNotNull($document);
+        $node->parentNode?->replaceChild($document->importNode($replacement, true), $node);
     }
 
     /**
