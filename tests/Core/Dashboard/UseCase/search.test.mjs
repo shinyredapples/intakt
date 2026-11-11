@@ -74,9 +74,10 @@ class FakeResults extends FakeNode {
     }
 
     querySelectorAll(selector) {
-        assert.equal(selector, '[role="option"]');
+        const lists = { '[role="option"]': this.options, 'button:not([tabindex="-1"]), a[href]:not([tabindex="-1"])': this.buttons };
+        assert.ok(Object.hasOwn(lists, selector), selector);
 
-        return this.options;
+        return lists[selector];
     }
 }
 
@@ -88,6 +89,7 @@ class FakeKey {
         this.target = target;
         this.ctrlKey = modifiers.ctrlKey ?? false;
         this.metaKey = modifiers.metaKey ?? false;
+        this.shiftKey = modifiers.shiftKey ?? false;
     }
 
     preventDefault() {
@@ -315,6 +317,101 @@ test('an answer that arrives after the search closed is dropped', async () => {
     await net.answer(1, ALPHA);
 
     assert.equal(page.results.innerHTML, RECENT);
+});
+
+test('enter while the answer to new words is on its way opens none of the results before', async () => {
+    const { page } = await openWithRecent();
+    const opened = [];
+    page.results.options.forEach((option) => (option.click = () => opened.push(option)));
+
+    page.type('entirely different words');
+    page.press('Enter');
+
+    assert.deepEqual(opened, []);
+    assert.ok(page.isOpen());
+});
+
+test('enter after opening again opens none of the results of the search before', async () => {
+    const { page } = await openWithRecent();
+    page.press('Escape');
+    const opened = [];
+    page.results.options.forEach((option) => (option.click = () => opened.push(option)));
+
+    page.press('k', { ctrlKey: true });
+    page.press('Enter');
+
+    assert.deepEqual(opened, []);
+});
+
+test('the results before are left unselected and the arrows wait while the new answer is on its way', async () => {
+    const { page } = await openWithRecent();
+
+    page.type('alpha');
+    page.press('ArrowDown');
+
+    assert.equal(page.selected(), undefined);
+    assert.equal(page.field.getAttribute('aria-activedescendant'), null);
+});
+
+test('the new answer is selectable once it arrives', async () => {
+    const { page, net } = await openWithRecent();
+    page.type('alpha');
+    await net.answer(1, ALPHA);
+    const opened = [];
+    page.results.options[0].click = () => opened.push(page.results.options[0]);
+
+    page.press('Enter');
+
+    assert.equal(opened.length, 1);
+});
+
+test('tab and shift tab from the field stay in the search when it is the only stop', async () => {
+    const { page } = await openWithRecent();
+
+    for (const shiftKey of [false, true]) {
+        const tab = page.press('Tab', { shiftKey });
+
+        assert.ok(tab.defaultPrevented, `shift ${shiftKey}`);
+        assert.equal(page.activeElement, page.field);
+    }
+});
+
+test('tab from the field to the clear button is left to the browser', async () => {
+    const { page, net } = await openWithRecent();
+    page.type('zebra');
+    await net.answer(1, NONE);
+
+    const tab = page.press('Tab');
+
+    assert.ok(!tab.defaultPrevented);
+});
+
+test('tab from the clear button goes back to the field', async () => {
+    const { page, net } = await openWithRecent();
+    page.type('zebra');
+    await net.answer(1, NONE);
+
+    const tab = page.press('Tab', {}, page.results.buttons[0]);
+
+    assert.ok(tab.defaultPrevented);
+    assert.equal(page.activeElement, page.field);
+});
+
+test('shift tab from the field goes round to the clear button', async () => {
+    const { page, net } = await openWithRecent();
+    page.type('zebra');
+    await net.answer(1, NONE);
+
+    const tab = page.press('Tab', { shiftKey: true });
+
+    assert.ok(tab.defaultPrevented);
+    assert.equal(page.activeElement, page.results.buttons[0]);
+});
+
+test('tab while the search is closed is left to the page', async () => {
+    const { page } = await openPage();
+
+    assert.ok(!page.press('Tab').defaultPrevented);
 });
 
 test('arrow down selects the next result and arrow up the one before', async () => {

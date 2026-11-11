@@ -2,6 +2,8 @@ const OVERLAY = '#search';
 const FIELD = '#search-q';
 const RESULTS = '#search-results';
 const OPTION = '[role="option"]';
+// The options are reached with the arrows, so only the other controls of the list, such as Clear the search, are Tab stops.
+const STOP = 'button:not([tabindex="-1"]), a[href]:not([tabindex="-1"])';
 const ACTION = '[data-search-action]';
 const RESULT_LINK = '#search-results a[href]';
 const FAILED = '<div class="test-result err" role="alert"><p><strong>Search did not answer.</strong> Type again to try once more; nothing was changed.</p></div>';
@@ -27,6 +29,7 @@ export function offerSearch(page) {
 
 class Search {
     asked = 0;
+    answered = 0;
     selected = 0;
     opener = null;
 
@@ -45,6 +48,10 @@ class Search {
         if (event.key === 'Escape') {
             event.preventDefault();
             this.close();
+            return;
+        }
+        if (event.key === 'Tab') {
+            this.keepFocus(event);
             return;
         }
         // Only in the field, so Enter on the Clear button presses the button.
@@ -133,6 +140,8 @@ class Search {
         const asked = ++this.asked;
         const results = this.results();
         results.setAttribute('aria-busy', 'true');
+        // The results of the words before stay in sight until the answer comes, but Enter must not open one of them.
+        this.show(-1);
         const answer = await this.fetchAnswer();
         // Only the newest question is shown, so a slow answer to an older one never replaces a newer one.
         if (asked !== this.asked) {
@@ -140,6 +149,7 @@ class Search {
         }
         results.removeAttribute('aria-busy');
         results.innerHTML = answer ?? FAILED;
+        this.answered = asked;
         this.show(0);
     }
 
@@ -173,13 +183,30 @@ class Search {
 
     move(step) {
         const count = this.options().length;
-        if (count > 0) {
+        if (this.isAnswered() && count > 0) {
             this.show((this.selected + step + count) % count);
         }
     }
 
     choose() {
-        this.options()[this.selected]?.click();
+        if (this.isAnswered()) {
+            this.options()[this.selected]?.click();
+        }
+    }
+
+    isAnswered() {
+        return this.answered === this.asked;
+    }
+
+    // The shell is inert, so without this Tab from the last stop of the dialog would leave the page for the browser's own controls, where Escape no longer reaches the search.
+    keepFocus(event) {
+        const stops = [this.field(), ...this.results().querySelectorAll(STOP)];
+        const [first, last] = [stops[0], stops.at(-1)];
+        const leaving = event.shiftKey ? event.target === first : event.target === last;
+        if (leaving || !stops.includes(event.target)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+        }
     }
 
     // Everything behind the overlay leaves the reach of the keyboard and of a screen reader while it is open.
