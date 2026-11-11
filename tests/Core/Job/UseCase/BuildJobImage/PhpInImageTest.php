@@ -56,35 +56,26 @@ final class PhpInImageTest extends TestCase
     public function testTwoProbesOfOneImageThatOverlapRunUnderTheirOwnJobIds(): void
     {
         $profile = PhpProfile::fromComposerJson(self::COMPOSER_JSON);
-        $runner = new class($this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}'), $profile, self::IMAGE) implements JobRunner {
-            /** @var array<string, true> */
-            private array $running = [];
-            public ?PhpInImage $images = null;
-
-            public function __construct(private readonly JobResult $result, private readonly PhpProfile $profile, private readonly string $image)
-            {
+        $result = $this->resultWith('{"version": "8.5.12", "extensions": ["intl", "pdo_sqlite"]}');
+        $runner = self::createStub(JobRunner::class);
+        $images = new PhpInImage($runner);
+        $running = [];
+        // The second build's probe starts while the first one's still runs, as a job runner holding each job id's lock sees it.
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$running, $images, $profile, $result): JobResult {
+            if (in_array($spec->id->value, $running, true)) {
+                throw JobRefused::alreadyRunning($spec->id);
             }
 
-            public function run(JobSpec $spec): JobResult
-            {
-                if (isset($this->running[$spec->id->value])) {
-                    throw JobRefused::alreadyRunning($spec->id);
-                }
+            $running[] = $spec->id->value;
 
-                $this->running[$spec->id->value] = true;
-
-                if (1 === count($this->running)) {
-                    $this->images?->verify('intakt-job/other:main', $this->image, $this->profile);
-                }
-
-                unset($this->running[$spec->id->value]);
-
-                return $this->result;
+            if (1 === count($running)) {
+                $images->verify('intakt-job/other:main', self::IMAGE, $profile);
             }
-        };
-        $runner->images = new PhpInImage($runner);
 
-        self::assertSame('8.5.12', $runner->images->verify('intakt-job/demo:main', self::IMAGE, $profile));
+            return $result;
+        });
+
+        self::assertSame('8.5.12', $images->verify('intakt-job/demo:main', self::IMAGE, $profile));
     }
 
     public function testAnotherPhpIsRefusedWithBothVersions(): void
