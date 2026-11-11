@@ -687,5 +687,6 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
 - The shadow week (after T43) runs while M7 is built.
-- M7: T45 and T46 after T44; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
+- M6: T45 and T46 after T44, alongside T37 to T43.
+- M7: T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
 - M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 after T69; T74 last.
