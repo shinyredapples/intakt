@@ -111,8 +111,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
             .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]);
 
-        foreach (new Crawler($streams)->filter('turbo-stream') as $stream) {
-            $target = $stream->getAttribute('target');
+        foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
             self::assertCount(1, $page->filter('#'.$target), $target);
         }
     }
@@ -244,12 +243,12 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return new Crawler($document);
     }
 
-    // Done by hand on the parsed page, as Turbo replaces each stream's target with its template's element.
+    // Done by hand on the parsed page, because no browser runs Turbo in the tests.
     private function replaced(Crawler $page, string $streams): Crawler
     {
-        foreach (new Crawler($streams)->filter('turbo-stream') as $stream) {
-            $target = $page->filter('#'.$stream->getAttribute('target'))->getNode(0);
-            $replacement = new Crawler($stream)->filter('template')->getNode(0)?->firstChild;
+        foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
+            $target = $page->filter('#'.$stream->attr('target'))->getNode(0);
+            $replacement = $stream->filter('template')->getNode(0)?->firstChild;
             self::assertNotNull($target);
             self::assertNotNull($replacement);
             $document = $target->ownerDocument;
