@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\Domain;
+
+final readonly class Board
+{
+    /** @var list<Review> */
+    private array $cards;
+
+    /**
+     * @param list<Review> $reviews
+     */
+    public function __construct(array $reviews)
+    {
+        usort($reviews, static fn (Review $one, Review $other): int => $other->latest()->startedAt <=> $one->latest()->startedAt);
+        $this->cards = $reviews;
+    }
+
+    /**
+     * @return list<Review>
+     */
+    public function cardsIn(BoardColumn $column): array
+    {
+        return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
+    }
+
+    // Every card of every project, so a later cap on the cards shown never lowers the count.
+    public function countOf(BoardColumn $column): int
+    {
+        return count($this->cardsIn($column));
+    }
+}

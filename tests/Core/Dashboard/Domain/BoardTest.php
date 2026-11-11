@@ -1,0 +1,115 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Dashboard\Domain;
+
+use DateTimeImmutable;
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Dashboard\Domain\Board;
+use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\RoundPlace;
+use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(Board::class)]
+#[CoversClass(BoardColumn::class)]
+#[CoversClass(Review::class)]
+#[UsesClass(ReviewedRound::class)]
+#[UsesClass(RoundPlace::class)]
+#[UsesClass(RoundStart::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(TokenFigures::class)]
+final class BoardTest extends TestCase
+{
+    public function testTheBoardHasTheNineColumnsOfTheDesignInTheirOrder(): void
+    {
+        $names = array_map(static fn (BoardColumn $column): string => $column->value, BoardColumn::cases());
+
+        self::assertSame(['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'In review', 'Merging', 'Done'], $names);
+    }
+
+    public function testAReviewWhoseLatestRoundRunsIsACardInInReview(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);
+
+        self::assertSame(['r1'], $this->roundsIn($board, BoardColumn::InReview));
+    }
+
+    public function testAReviewWhoseLatestRoundIsJudgedIsACardInDone(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([])])]);
+
+        self::assertSame(['r1'], $this->roundsIn($board, BoardColumn::Done));
+    }
+
+    public function testAReviewWithAJudgedRoundAndANewRunningOneIsInInReviewOnly(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([]), $this->round('r2', 'feat/a', 2)])]);
+
+        self::assertSame([['r2'], []], [$this->roundsIn($board, BoardColumn::InReview), $this->roundsIn($board, BoardColumn::Done)]);
+    }
+
+    public function testEveryColumnWithoutATaskSourceHoldsNothing(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([])])]);
+
+        $others = array_filter(BoardColumn::cases(), static fn (BoardColumn $column): bool => !in_array($column, [BoardColumn::InReview, BoardColumn::Done], true));
+
+        self::assertSame(array_fill(0, 7, 0), array_values(array_map($board->countOf(...), $others)));
+    }
+
+    public function testAColumnCountsEveryCardOfEveryProject(): void
+    {
+        $board = new Board([
+            new Review([$this->round('r1', 'feat/a', 1)]),
+            new Review([$this->round('r2', 'feat/b', 1, 'beta')]),
+            new Review([$this->round('r3', 'feat/c', 1, 'gamma')]),
+        ]);
+
+        self::assertSame(3, $board->countOf(BoardColumn::InReview));
+    }
+
+    public function testACardCarriesItsProject(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1, 'beta')])]);
+
+        self::assertSame('beta', $board->cardsIn(BoardColumn::InReview)[0]->project);
+    }
+
+    public function testACardShowsItsLatestRoundForItsNumberReviewersAndLink(): void
+    {
+        $card = new Review([$this->round('r1', 'feat/a', 1), $this->round('r2', 'feat/a', 2, reviewers: 3)]);
+
+        self::assertSame(['r2', 2, 3], [$card->latest()->round, $card->latest()->number, $card->latest()->reviewers]);
+    }
+
+    public function testCardsInAColumnShowTheNewestLatestRoundFirst(): void
+    {
+        $board = new Board([
+            new Review([$this->round('r1', 'feat/a', 1, startedAt: '2026-11-01T10:00:00+00:00')]),
+            new Review([$this->round('r2', 'feat/b', 1, startedAt: '2026-11-03T10:00:00+00:00')]),
+            new Review([$this->round('r3', 'feat/c', 1, startedAt: '2026-11-02T10:00:00+00:00')]),
+        ]);
+
+        self::assertSame(['r2', 'r3', 'r1'], $this->roundsIn($board, BoardColumn::InReview));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function roundsIn(Board $board, BoardColumn $column): array
+    {
+        return array_map(static fn (Review $card): string => $card->latest()->round, $board->cardsIn($column));
+    }
+
+    private function round(string $round, string $change, int $number, string $project = 'alpha', int $reviewers = 2, string $startedAt = '2026-11-01T10:00:00+00:00'): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart($round, $project, $reviewers), new RoundPlace($change, $number), new DateTimeImmutable($startedAt), null);
+    }
+}

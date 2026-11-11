@@ -94,6 +94,27 @@ final class LedgerRounds
         return new Review(array_map($this->completed(...), $rounds));
     }
 
+    /**
+     * @return list<Review>
+     */
+    // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review.
+    public function reviews(): array
+    {
+        $reviews = [];
+        $seen = [];
+
+        foreach (array_keys($this->started) as $round) {
+            $review = isset($seen[$round]) ? null : $this->reviewOf($round);
+
+            if ($review instanceof Review) {
+                $reviews[] = $review;
+                $seen += array_fill_keys(array_map(static fn (ReviewedRound $member): string => $member->round, $review->rounds), true);
+            }
+        }
+
+        return $reviews;
+    }
+
     private function addUsage(RecordedEvent $recorded): void
     {
         $usage = $this->payloads->usageOf($recorded);
