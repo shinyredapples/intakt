@@ -42,6 +42,14 @@ The owner cuts a release by hand for a milestone version, or when the timer is o
 3. Push the tag: `git push origin v0.2.0`.
 4. On the [releases page](https://github.com/shinyredapples/intakt/releases) create a release from that tag, choose "Generate release notes", tick "Set as a pre-release" (for every version before `v1.0.0`), and publish.
 
+## The container image
+
+Every pushed release tag publishes the app image to GitHub's container registry: the `image` job of `.github/workflows/release-image.yml` checks the tag out apart (in `release/`), builds the image from it, runs `docker/smoke-test.sh` on it, and pushes `ghcr.io/shinyredapples/intakt:<version>` (the tag without its `v`, for example `0.1.0`). A failed smoke test pushes nothing. The smoke test is the workflow's own, so an older tag is checked against today's test; if that test asks for something the old image lacks, the run fails and nothing is pushed.
+
+Then the `latest` job points `:latest` at the highest release tag in version order, as the tags are at that moment, and only once that tag's image is on the registry. A registry it cannot read (an outage, a refused token) fails the job, so it shows red and can be run again, rather than leaving `latest` behind. Its runs go one at a time across all tags, and none of them uses its own tag, so two releases close together can finish in any order and `latest` never moves back. For a tag cut before the workflow existed, or after a failed run, publish it by hand: `gh workflow run release-image.yml -f tag=v0.1.0`. The script runs from the workflow's own revision, so this works for a tag whose tree has no release script.
+
+A new package on the registry is private, whatever the repository's visibility. After the first publish, the owner makes it public once in the package's settings (Package settings, Danger Zone, Change visibility); while it is private, pulling needs a GitHub token with `read:packages` (`docker login ghcr.io`).
+
 ## Release notes
 
 `v0.1.0` has hand-written notes. Every later release uses GitHub's generated notes since the previous tag.
