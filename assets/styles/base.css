@@ -15,10 +15,5 @@ a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 3
 code { font-family: var(--f-mono); font-size: var(--t13); }
 :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: var(--s8) var(--s12); border-bottom: 1px solid var(--hairline); }
-th { font-family: var(--f-head); font-weight: 600; }
-
-.state-judged, .flash-success { color: var(--link); }
-.state-running { color: var(--muted); }
+.flash-success { color: var(--link); }
 .flash-error { color: var(--red); }

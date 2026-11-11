@@ -1,0 +1,5 @@
+{#- A round's state as a chip: a check once judged, a green live dot while it runs. The state- class names it for checks of the page. -#}
+{%- set judged = state.name == 'Judged' -%}
+{{ include('dashboard/components/chip.html.twig', judged
+    ? {icon: 'check', label: state.value|capitalize, on_page: true, extra: 'state-judged'}
+    : {dot: 'ok', label: state.value|capitalize, on_page: true, extra: 'state-running'}, with_context = false) }}
