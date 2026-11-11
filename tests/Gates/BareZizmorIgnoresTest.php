@@ -49,6 +49,22 @@ final class BareZizmorIgnoresTest extends SandboxTestCase
         );
     }
 
+    public function testTheNextLineOfAWorkflowWithCarriageReturnLineEndingsIsNotTheReasonOfABareIgnore(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('.github/workflows/t.yml', "name: t\ron: pull_request\rpermissions: {}\rjobs:\r  t:\r    runs-on: ubuntu-latest\r    steps:\r      - ".self::TAGGED_CHECKOUT." # zizmor: ignore[unpinned-uses,artipacked]\r      - run: echo hello\r");
+
+        self::assertStringContainsString('t.yml:8 zizmor ignore without a reason', $sandbox->check('--only=workflows')->findingsOf('workflows'));
+    }
+
+    public function testTheNextLineOfAWorkflowWithWindowsLineEndingsIsNotTheReasonOfABareIgnore(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('.github/workflows/t.yml', "name: t\r\non: pull_request\r\npermissions: {}\r\njobs:\r\n  t:\r\n    runs-on: ubuntu-latest\r\n    steps:\r\n      - ".self::TAGGED_CHECKOUT." # zizmor: ignore[unpinned-uses,artipacked]\r\n      - run: echo hello\r\n");
+
+        self::assertStringContainsString('t.yml:8 zizmor ignore without a reason', $sandbox->check('--only=workflows')->findingsOf('workflows'));
+    }
+
     public function testAnUnreadableYamlFileFailsTheGate(): void
     {
         $this->skipWhenPermissionsAreIgnored();
