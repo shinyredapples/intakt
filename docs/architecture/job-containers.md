@@ -1,13 +1,14 @@
 # Job containers
 
-`Core/Job` runs each job (a build, a check, a review) in a fresh container through the Docker Engine API (plan task T44, part 1 of 3). No lane starts a job through it yet: the build, check and review jobs that call it arrive with their own tasks. The egress allowlist with a per-job proxy is part 2; the start check, the reduced mode and `differences-from-the-existing-loop.md` are part 3.
+`Core/Job` runs each job (a build, a check, a review) in a fresh container through the Docker Engine API (plan task T44, parts 1 and 2 of 3). No lane starts a job through it yet: the build, check and review jobs that call it arrive with their own tasks. Part 2 added the egress allowlist with a per-job proxy ([Egress](#egress)); the start check, the reduced mode and `differences-from-the-existing-loop.md` are part 3.
 
 ## Surface
 
 - `Contract/JobRunner::run(JobSpec): JobResult`, implemented by `Infrastructure/ContainerJobRunner`.
-- `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path) and `JobLimits` (memory in bytes, CPUs, run time in seconds). It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
+- `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path), `JobLimits` (memory in bytes, CPUs, run time in seconds) and a `JobEgress`. It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
+- `JobEgress`: `JobEgress::none()` (no network at all, for check and probe jobs) or `JobEgress::to(list<string>)`, the exact host names the job may reach (each kept once). No lane passes an allowlist yet; the build and review jobs that name their vendor's API and the package registries arrive with their own tasks.
 - `JobResult`: a `JobEnd` (the `JobCause` and the exit code) and the `JobOutput` (the files the job left in its output directory, by name).
-- Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work` or `/output` (after `..` is resolved), for a job id that is already running, and for an image that declares volumes. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read. `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read, for an output of more than 1000 entries, and for an output of more than 16 MiB in total (`JobOutputDirectories::MAX_FILES`, `MAX_BYTES`). `JobEventNotRecorded` when the ledger refuses the job's end.
+- Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work` or `/output` (after `..` is resolved), for an empty allowlist, for an allowlisted host that is not a lowercase host name of at most 253 characters with labels of 1 to 63 of `a-z`, `0-9`, `-` (not starting or ending with `-`) and a top-level domain of 2 to 63 letters (so no address, wildcard, leading or trailing dot, port, space or line break), for a job id that is already running, and for an image that declares volumes. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read (a proxy log whose frames do not add up included). `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read, for an output of more than 1000 entries, and for an output of more than 16 MiB in total (`JobOutputDirectories::MAX_FILES`, `MAX_BYTES`). `JobEventNotRecorded` when the ledger refuses the job's end.
 
 ## The container
 
@@ -17,13 +18,13 @@
 |---|---|---|
 | `ReadonlyRootfs` | `true` | nothing outside the work area and the output directory can be written |
 | `Tmpfs` | `/work` (`rw,nosuid,nodev`) | the work area, gone with the container |
-| `Env` | `HOME=/work`, `TMPDIR=/work`, `INTAKT_JOB_ID=<id>` only | a wiped home and own caches per job, no credential |
+| `Env` | `HOME=/work`, `TMPDIR=/work`, `INTAKT_JOB_ID=<id>` only, and with an allowlist `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, `https_proxy` set to `http://egress-proxy:3128` | a wiped home and own caches per job, no credential |
 | `WorkingDir` | `/work` | |
 | `Mounts` | each input as a read-only bind, then the job's own output directory as the only writable bind at `/output` | |
 | `User` | the orchestrator's uid and gid | the job can write its output directory, which only that user can read, and never runs as root |
 | `Memory`, `MemorySwap` | the job's limit, both equal | a runaway job is killed at its own limit instead of swapping |
 | `NanoCpus` | CPUs times 10^9, rounded; `JobLimits` refuses a value that is not finite, rounds to less than 1 or does not fit a PHP integer | 0 would turn the engine's CPU limit off |
-| `NetworkMode`, `NetworkDisabled` | `none`, `true` | no network until part 2 adds the per-job proxy |
+| `NetworkMode`, `NetworkDisabled` | `none`, `true` for `JobEgress::none()`; with an allowlist the job's own internal network `intakt-job-<id>`, `false` | no network at all, or one whose only way out is the job's proxy |
 | `CapDrop`, `SecurityOpt` | `ALL`, `no-new-privileges` | |
 | `Labels` | `intakt.job=<id>` | finds the job's containers after a crash |
 
@@ -38,7 +39,9 @@ flowchart TD
   sweep --> prepare[Create var/jobs/id, mode 0700]
   prepare --> inspect[Inspect the image]
   inspect -->|declares volumes| volumes[JobRefused: image volumes]
-  inspect --> create[Create and start the container]
+  inspect -->|allowlist| open[Create the internal network, create and start the proxy]
+  open --> create
+  inspect -->|none| create[Create and start the container]
   create --> wait[Wait for exit, at most the run time left]
   wait --> state[Read the state: OOMKilled, ExitCode]
   state -->|still running, time left| pause[Pause one second]
@@ -47,8 +50,11 @@ flowchart TD
   state --> remove[Remove the container]
   kill -->|stopped: cause oom or timed_out| remove
   kill -->|still running| failed[Remove the container, DockerEngineFailed, no job_ended]
-  failed --> clean
-  remove --> record[Ledger: job_ended]
+  failed --> failclose[Allowlist only: remove the proxy and the network]
+  failclose --> clean
+  remove --> refusals[Allowlist only: read the proxy's log, ledger: job_egress_refused]
+  refusals --> close[Allowlist only: remove the proxy and the network]
+  close --> record[Ledger: job_ended]
   record --> read[Read the output files]
   read --> clean[Remove the output directory, release the lock]
 ```
@@ -60,16 +66,35 @@ flowchart TD
 - The output is read with bounds checked before anything is allocated, because the job's memory limit does not cover what it writes to the host bind mount and the orchestrator holds the output in memory: the entries are counted as they are listed and refused past 1000, and each file's size is added before it is read and the output refused once the total exceeds 16 MiB. A link in the output directory is refused rather than followed, because the job wrote it and could point it at a file of the orchestrator.
 - Before an output directory is removed (after the run, or by the sweep), every folder under it that is not a link is set to mode 0700, because a job can leave a folder without any permission, which would otherwise stop its own cleanup and every later sweep. Links are never touched: `chmod` would follow one to the file it points at.
 
+## Egress
+
+A job with `JobEgress::none()` (a check or probe job) gets `NetworkMode` `none` and no proxy. A job with an allowlist gets two things of its own, both labeled `intakt.job=<id>` (`Infrastructure/EgressProxy::open()`):
+
+- **An internal network** `intakt-job-<id>` (`POST /networks/create` with `Internal: true`), which the engine gives no route out, and which no other job is on.
+- **A proxy container** `intakt-egress-<id>` from the image in the container parameter `JobServices::EGRESS_PROXY_IMAGE` (`intakt-egress-proxy`, built from `docker/egress-proxy/` on the engine's host: Debian's Squid, run as its `proxy` user), on the engine's default `bridge` network and on the job's network under the alias `egress-proxy` (`NetworkingConfig.EndpointsConfig`, two networks at create, which needs Engine API 1.44). It runs with a read-only root, a tmpfs at `/run/squid`, 256 MiB of memory without swap, no capabilities and `no-new-privileges`. It is started before the job's container.
+
+The proxy is the job's only way out. `Infrastructure/EgressProxyDefinition::squidConfigOf()` writes its whole Squid config, which reaches the container in `INTAKT_EGRESS_SQUID_CONF`; `docker/egress-proxy/entrypoint.sh` writes it to `/run/squid/squid.conf` and runs `squid -N`. The config allows exactly one thing, a `CONNECT` to port 443 of a host on the allowlist (`dstdomain -n`, so an address in a request is never looked up to match a name), and ends with `http_access deny all`: a plain HTTP request, another port, an address or any other host is refused with 403. The image holds no allowlist of its own.
+
+Only refused requests are logged (`access_log none` for the allowed tunnels, then Squid's native format on standard output). After the job's container is removed, `EgressProxy::recordRefusals()` reads the proxy's last 1000 log lines (`GET /containers/<name>/logs?stdout=true&tail=1000`, the engine's 8-byte frame headers removed by `EngineAnswer::demultiplexed()`), and `Infrastructure/EgressLog` picks the `TCP_DENIED` lines, for example:
+
+```
+1762855200.123      0 192.0.2.3 TCP_DENIED/403 3924 CONNECT outside.example:443 - HIER_NONE/- text/html
+```
+
+Each distinct refusal (method and target, a target of printable ASCII, cut to 255 bytes) becomes one `job_egress_refused` event (`job`, `method`, `target`) before `job_ended`, at most 20 per job (`EgressLog::MAX_REFUSALS`). Then the proxy and the network are removed by name (`DELETE /containers/intakt-egress-<id>?force=true&v=true`, `DELETE /networks/intakt-job-<id>`, 404 accepted), also when the run failed, so a run that failed half-way through creating them leaves nothing behind.
+
+A container on an internal network gets no DNS answers for outside names from Docker Engine 25.0.5 on (the fix for CVE-2024-29018); an older engine forwards them, so a job could send data out in DNS queries. The proxy image and entrypoint have not yet run against a real engine; they are first checked live when jobs run on a host with a Docker daemon.
+
 ## After a crash
 
 Each run holds a lock named after its job (`intakt-job-<id>`, Symfony Lock on the shared `FlockStore`, without expiry) from before its container is created until it is removed. A file lock ends with its process, so a job whose lock is free has no living orchestrator process.
 
-`Infrastructure/OrphanedJobs::removeAll()` lists the containers labeled `intakt.job` (`GET /containers/json` with a label filter), tries each job's lock without waiting, and for each free lock removes the container and its output directory and records `job_container_removed` (`job`, `container`). It then removes every `var/jobs/<id>` directory whose lock is free. A busy lock is skipped: that job is still running. A label that is not a valid job id is ignored, since Intakt did not write it.
+`Infrastructure/OrphanedJobs::removeAll()` lists the containers labeled `intakt.job` (`GET /containers/json` with a label filter), tries each job's lock without waiting, and for each free lock removes the container and its output directory and records `job_container_removed` (`job`, `container`); a job's proxy carries the same label and goes the same way. It then lists the networks labeled `intakt.job` (`GET /networks` with a label filter) and removes each one whose lock is free, recording `job_network_removed` (`job`, `network`), after the containers, because the engine removes no network a container still uses. Last, it removes every `var/jobs/<id>` directory whose lock is free. A busy lock is skipped: that job is still running. A label that is not a valid job id is ignored, since Intakt did not write it.
 
-Every run calls it before it starts its own container, so the next job cleans up after a crash. The run passes its own job id (`removeAll(JobId)`): since it holds that job's lock and has not created its container yet, every container labeled with that id is a crashed run's and is removed without the lock (`job_container_removed` as well); otherwise the engine would refuse the name `intakt-job-<id>` with 409 Conflict and a retry of that job would fail. `php bin/console intakt:job:sweep` runs it on demand and lists what it removed.
+Every run calls it before it starts its own container, so the next job cleans up after a crash. The run passes its own job id (`removeAll(JobId)`): since it holds that job's lock and has not created its container yet, every container and network labeled with that id is a crashed run's and is removed without the lock (`job_container_removed` and `job_network_removed` as well); otherwise the engine would refuse the names `intakt-job-<id>` and `intakt-egress-<id>` with 409 Conflict and a retry of that job would fail. `php bin/console intakt:job:sweep` runs it on demand and lists the containers it removed (the networks it removed are in the ledger only).
 
 ## The engine client
 
 `Infrastructure/DockerEngine` talks to the Engine API version 1.44 (Docker Engine 25 or later) over the Unix socket in the container parameter `JobServices::DOCKER_SOCKET` (`/var/run/docker.sock`, set in `config/services.yaml`), through Symfony HttpClient with `bindto` set to the socket, which the curl client uses as its Unix socket. A missing socket fails at once with its path, because the curl client would otherwise read `bindto` as a network interface. The orchestrator runs Docker inside its own container, so the paths it mounts are paths the engine sees.
 
-Tests run against `tests/Core/Job/FakeDockerEngine.php`, a `MockHttpClient` callback that answers the same calls (the image inspection included) and plays a job by writing into the output directory the create request mounts, because the build sandbox has no Docker daemon. No test has run against a live engine yet.
+Tests run against `tests/Core/Job/FakeDockerEngine.php`, a `MockHttpClient` callback that answers the same calls (the image inspection, the networks and the framed proxy log included) and plays a job by writing into the output directory the create request mounts, because the build sandbox has no Docker daemon. No test has run against a live engine yet. `tests/Core/Job/EgressProxyTest.php` checks the proxy's Squid config and reads refusals from lines in Squid's native log format.
