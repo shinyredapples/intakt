@@ -26,7 +26,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(UpdateMirror::class)]
-#[UsesClass(Mirrors::class)]
+#[CoversClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
 #[UsesClass(NetworkGitFailed::class)]
