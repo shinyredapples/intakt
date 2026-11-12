@@ -23,6 +23,11 @@ final readonly class WorkflowFiles
     /** @return list<WorkflowFile> */
     public function in(string $checkout): array
     {
+        foreach ([dirname(self::FOLDER), self::FOLDER] as $folder) {
+            if (is_link($checkout.'/'.$folder)) {
+                return [new WorkflowFile($folder, null)];
+            }
+        }
         $folder = $checkout.'/'.self::FOLDER;
         if (!is_dir($folder)) {
             return [];
@@ -32,9 +37,13 @@ final readonly class WorkflowFiles
         return array_map($this->read(...), iterator_to_array($entries, false));
     }
 
+    // A link can lead outside the checkout, so a linked entry (like a linked folder above) is passed on unread.
     private function read(SplFileInfo $entry): WorkflowFile
     {
         $path = self::FOLDER.'/'.$entry->getRelativePathname();
+        if ($entry->isLink()) {
+            return new WorkflowFile($path, null);
+        }
         try {
             return new WorkflowFile($path, $this->filesystem->readFile($entry->getPathname()));
         } catch (IOException) {

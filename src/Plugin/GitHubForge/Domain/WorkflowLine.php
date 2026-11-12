@@ -6,7 +6,7 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 final readonly class WorkflowLine
 {
-    // Script text has neither a node nor a reason, since GitHub evaluates only its expressions.
+    // Script text, a comment and a blank line have neither a node nor a reason: only their expressions are checked, since a quote left open above may make a comment part of a value.
     private function __construct(
         public int $number,
         public string $text,
@@ -20,7 +20,7 @@ final readonly class WorkflowLine
         return new self($number, $text, $node, null);
     }
 
-    public static function scriptText(int $number, string $text): self
+    public static function textOnly(int $number, string $text): self
     {
         return new self($number, $text, null, null);
     }

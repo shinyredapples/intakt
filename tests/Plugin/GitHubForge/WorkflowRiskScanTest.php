@@ -204,6 +204,8 @@ final class WorkflowRiskScanTest extends TestCase
         yield 'an escaped letter in a double-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: \"\${{ sec\\u0072ets.DEPLOY_KEY }}\"\n", 7];
         yield 'an escaped letter in a double-quoted list item' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: [\"self-hoste\\u0064\"]\n", 5];
         yield 'a doubled quote in a single-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: '\${{ format(''}}'', secrets.DEPLOY_KEY) }}'\n", 7];
+        yield 'a single-quoted value that ends in a doubled quote' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: 'a''\n        #\${{ secrets.DEPLOY_KEY }}'\n", 7];
+        yield 'a single-quoted value of only quotes' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: '''\n", 7];
         yield 'invalid UTF-8' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-\xC3\x28latest\n", 0];
     }
 
@@ -211,6 +213,16 @@ final class WorkflowRiskScanTest extends TestCase
     public function testAFormTheScanDoesNotReadAsks(string $workflow, int $line): void
     {
         self::assertContains($line.' unreadable', $this->findings($workflow));
+    }
+
+    public function testASecretOnALineThatLooksLikeACommentIsFound(): void
+    {
+        self::assertSame(['7 unreadable', '8 secret'], $this->findings("on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: 'a''\n        #\${{ secrets.DEPLOY_KEY }}'\n"));
+    }
+
+    public function testABlockScalarOfAListItemStartsRightAfterTheDash(): void
+    {
+        self::assertSame(['10 secret'], $this->findings("on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    container:\n      image: alpine\n      volumes:\n        - |\n         # \${{ secrets.DEPLOY_KEY }}\n"));
     }
 
     public function testADocumentMarkerBeforeTheWorkflowIsRead(): void

@@ -67,12 +67,10 @@ final readonly class WorkflowValue
         return strlen($value) > 1 && str_ends_with($value, $first) && !$this->holdsEscape($value, $first);
     }
 
-    // YAML decodes these escapes before GitHub reads the value, so the raw text the scan checks is not what runs.
+    // YAML decodes a backslash before GitHub reads the value, and a quote inside single quotes is an escape or the real end ('a'' runs on), so the raw text is not what runs.
     private function holdsEscape(string $quoted, string $quote): bool
     {
-        $inner = substr($quoted, 1, -1);
-
-        return '"' === $quote ? str_contains($inner, '\\') : str_contains($inner, "''");
+        return str_contains(substr($quoted, 1, -1), '"' === $quote ? '\\' : "'");
     }
 
     // Split at every comma, because a comma inside a quoted item then leaves two unclosed quotes, which the scan refuses.

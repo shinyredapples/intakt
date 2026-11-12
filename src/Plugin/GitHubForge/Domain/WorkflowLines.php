@@ -30,21 +30,21 @@ final class WorkflowLines
             $lines[] = $this->line($index + 1, str_ends_with($text, "\r") ? substr($text, 0, -1) : $text);
         }
 
-        return array_values(array_filter($lines));
+        return $lines;
     }
 
-    private function line(int $number, string $text): ?WorkflowLine
+    private function line(int $number, string $text): WorkflowLine
     {
         if (1 === preg_match(self::OTHER_LINE_BREAK, $text)) {
             return WorkflowLine::unreadable($number, $text, 'a line break other than a newline');
         }
         if ($this->isBlockContent($text)) {
-            return WorkflowLine::scriptText($number, $text);
+            return WorkflowLine::textOnly($number, $text);
         }
         $indent = $this->indentOf($text);
         $content = rtrim($this->withoutComment(substr($text, $indent)), " \t");
         if ('' === $content || ('---' === $content && 0 === $indent && !$this->started)) {
-            return null;
+            return WorkflowLine::textOnly($number, $text);
         }
         $this->started = true;
         if ("\t" === $content[0]) {
@@ -66,11 +66,12 @@ final class WorkflowLines
         return WorkflowLine::node($number, $text, $node);
     }
 
+    // A keyless item is as deep as its dash, as in YAML, so its block scalar may start one column after the dash.
     private function node(int $indent, string $content): ?WorkflowNode
     {
-        $isItem = false;
+        $dashColumn = null;
         while (1 === preg_match(self::ITEM, $content, $dash)) {
-            $isItem = true;
+            $dashColumn = $indent;
             $indent += strlen($dash[0]);
             $content = substr($content, strlen($dash[0]));
         }
@@ -78,7 +79,7 @@ final class WorkflowLines
             return new WorkflowNode($indent, $match['key'], new WorkflowValue(trim($match['value'] ?? '')));
         }
 
-        return $isItem && '' !== $content ? new WorkflowNode($indent, null, new WorkflowValue($content)) : null;
+        return null !== $dashColumn && '' !== $content ? new WorkflowNode($dashColumn, null, new WorkflowValue($content)) : null;
     }
 
     // The same rule as YAML's (deeper than the key, and at least as deep as the first text line), because a line the scan skips as script text must be script text to GitHub too.

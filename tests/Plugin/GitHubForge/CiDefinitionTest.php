@@ -6,12 +6,15 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\GitHubForge\Domain\CiDefinition;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFile;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowValue;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(CiDefinition::class)]
 #[UsesClass(WorkflowFile::class)]
+#[UsesClass(WorkflowValue::class)]
 final class CiDefinitionTest extends TestCase
 {
     private const string WORKFLOW = "jobs:\n  t:\n    steps:\n      - run: ./scripts/test.sh --all\n      - run: docker run image sh /workspace/tools/lint\n";
@@ -48,6 +51,53 @@ final class CiDefinitionTest extends TestCase
         $workflow = "defaults:\n  run:\n    working-directory: \${{ github.workspace }}/scripts\njobs:\n  t:\n    steps:\n      - run: ./test.sh\n";
 
         self::assertSame(['scripts/test.sh', 'tools/test.sh'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'tools/test.sh', 'scripts/old-test.sh']));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function parentRelativeRuns(): iterable
+    {
+        yield 'a parent step' => ["jobs:\n  t:\n    steps:\n      - run: ../test.sh\n        working-directory: scripts/ci\n"];
+        yield 'a dot then a parent step' => ["jobs:\n  t:\n    steps:\n      - run: ./../test.sh\n        working-directory: scripts/ci\n"];
+        yield 'the directory under defaults' => ["defaults:\n  run:\n    working-directory: scripts/ci\njobs:\n  t:\n    steps:\n      - run: ../test.sh\n"];
+        yield 'a parent step inside a script' => ["jobs:\n  t:\n    steps:\n      - run: cd .. && ./test.sh\n        working-directory: scripts/ci\n"];
+        yield 'a parent directory' => ["jobs:\n  t:\n    steps:\n      - run: ./test.sh\n        working-directory: scripts/ci/..\n"];
+    }
+
+    #[DataProvider('parentRelativeRuns')]
+    public function testAScriptRunThroughAParentPathIsACiChange(string $workflow): void
+    {
+        self::assertSame(['scripts/test.sh'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'src/App.php']));
+    }
+
+    public function testAWorkingDirectoryEndingInADotComponentIsACiChangeInAnyFolder(): void
+    {
+        $workflow = "jobs:\n  t:\n    steps:\n      - run: ./test.sh\n        working-directory: scripts/.\n";
+
+        self::assertSame(['scripts/test.sh', 'tools/test.sh'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'tools/test.sh', 'src/App.php']));
+    }
+
+    public function testAQuotedWorkingDirectoryIsReadAsAPlainOne(): void
+    {
+        $workflow = "jobs:\n  t:\n    steps:\n      - run: ./test.sh\n        working-directory: './scripts'\n";
+
+        self::assertSame(['scripts/test.sh'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'tools/test.sh']));
+    }
+
+    public function testEveryFileUnderALocalActionsFolderIsACiChange(): void
+    {
+        $workflow = "jobs:\n  t:\n    steps:\n      - uses: ./tools/build\n      - uses: 'actions/checkout@v4'\n";
+
+        self::assertSame(['tools/build/action.yml', 'tools/build/lib/run.sh'], $this->ciPathsOf($workflow, ['tools/build/action.yml', 'tools/build/lib/run.sh', 'tools/builder/action.yml', 'tools/build.sh', 'checkout/action.yml']));
+    }
+
+    public function testAQuotedLocalActionCountsLikeAPlainOne(): void
+    {
+        self::assertSame(['tools/build/action.yml'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - uses: \"./tools/build\"\n", ['tools/build/action.yml', 'src/App.php']));
+    }
+
+    public function testALocalActionAtTheRootMakesEveryPathACiChange(): void
+    {
+        self::assertSame(['src/App.php'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - uses: ./\n", ['src/App.php']));
     }
 
     public function testEveryChangedPathIsACiChangeWhenAWorkflowCannotBeRead(): void
