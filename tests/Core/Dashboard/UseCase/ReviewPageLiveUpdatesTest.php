@@ -257,6 +257,18 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $page->filter('#round-round-1-live #reviewer-round-1-correctness-text'));
     }
 
+    public function testAToolCallAndTextPushedToThePageAppearInTheLiveLogBesideTheTimeline(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file'])
+            .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']));
+
+        self::assertSame(['read_file'], $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-activity li')->each(static fn (Crawler $call): string => $call->text()));
+        self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
+    }
+
     // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.
     public function testThePageRendersFullyWhileTheHubIsStopped(): void
     {
@@ -307,7 +319,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $document = $node->ownerDocument;
         self::assertNotNull($document);
 
-        foreach (new Crawler('<div>'.$template.'</div>')->filter('body > div > *') as $child) {
+        // Every child node, text included, because a streamed text is a bare text node.
+        $wrapper = new Crawler('<div>'.$template.'</div>')->filter('body > div')->getNode(0);
+        self::assertNotNull($wrapper);
+        foreach ($wrapper->childNodes as $child) {
             $node->appendChild($document->importNode($child, true));
         }
 

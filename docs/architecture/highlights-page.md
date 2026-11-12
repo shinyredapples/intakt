@@ -9,4 +9,4 @@
 - `publish` runs no checkout and no repository code: its one step, `actions/deploy-pages`, deploys that artifact to the `github-pages` environment. Only it holds the `pages` write permission and the `id-token` permission.
 - A failed run leaves the previous page. Runs are serialized (`concurrency` group `highlights`).
 
-The owner sets the repository's Pages source to "GitHub Actions" once; until then `publish` fails. `tests/Gates/HighlightsWorkflowTest.php` pins the triggers, permissions, guard and `publish` job. Links from `README.md`, the Symfony guide and the page's preamble are a separate change.
+The owner sets the repository's Pages source to "GitHub Actions" once; until then `publish` fails. `tests/Gates/HighlightsWorkflowTest.php` pins the triggers, permissions, guard and `publish` job. `README.md` (Documentation), `docs/guide/symfony-in-intakt.md` and the preamble in `docs/highlights.d/layout.md`, which the page itself carries, link to that address.

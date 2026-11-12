@@ -44,3 +44,8 @@ updates:
         dependency-type: development
       production:
         dependency-type: production
+    ignore:
+      # rector 2.8.4 deletes a conditional assignment that has side effects under the configured sets (review of #1285,
+      # 2026-11-11): skip that release only, so the next one is reviewed again
+      - dependency-name: rector/rector
+        versions: ['2.8.4']

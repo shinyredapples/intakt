@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
@@ -16,11 +15,8 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Budget\Contract\BudgetServices;
-use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
-use Intakt\Core\Budget\Contract\ShadowStartGuard;
-use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\Usage;
@@ -274,45 +270,14 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(StartDecision::Start, $guard->decide(new Account(Provider::Anthropic, 'default'), 0));
     }
 
-    public function testTheShadowCeilingsDefaultToSeventyPercentAndTheOwnerLowersOneWindow(): void
+    public function testAShadowCeilingsSectionStopsTheBoot(): void
     {
-        file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+        file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\n");
 
-        self::assertEqualsCanonicalizing(['five-hour' => 70.0, 'weekly' => 50.0], $this->bootedContainer()->getParameter(BudgetServices::SHADOW_CEILINGS));
-    }
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/Unrecognized option "shadow_ceilings" under "intakt\.budget"/');
 
-    public function testTheShadowGuardOfTheContainerHoldsAProviderWhileTheOwnerPausedTheInstall(): void
-    {
-        $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get('test.intakt.shadow_start_guard');
-        self::assertInstanceOf(ShadowStartGuard::class, $guard);
-        $this->pauseTheInstall();
-
-        self::assertSame(StartDecision::Paused, $guard->decide(Provider::Anthropic));
-    }
-
-    public function testTheShadowGuardOfTheContainerStartsAProviderWhileNothingHoldsIt(): void
-    {
-        $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get('test.intakt.shadow_start_guard');
-        self::assertInstanceOf(ShadowStartGuard::class, $guard);
-        $this->emptyDatabase();
-
-        self::assertSame(StartDecision::Start, $guard->decide(Provider::Anthropic));
-    }
-
-    public function testTheShadowGuardOfTheContainerHoldsAProviderAtTheShadowCeilingWhereTheStartGuardStarts(): void
-    {
-        $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get('test.intakt.shadow_start_guard');
-        self::assertInstanceOf(ShadowStartGuard::class, $guard);
-        $this->emptyDatabase();
-        $start = self::getContainer()->get('test.intakt.start_guard');
-        self::assertInstanceOf(StartGuard::class, $start);
-
-        $this->measureBothWindowsAt(75.0);
-
-        self::assertSame([StartDecision::AtCeiling, StartDecision::Start], [$guard->decide(Provider::Anthropic), $start->decide(new Account(Provider::Anthropic, 'default'), 0)]);
+        $this->bootedContainer();
     }
 
     public function testTheCodexProbeOfTheContainerUsesTheOwnersCodexSection(): void
@@ -415,14 +380,6 @@ final class ProjectTiersTest extends KernelTestCase
 
         self::assertInstanceOf(AccountFailoverPlatform::class, $platform);
         self::assertSame($model, $platform->getModelCatalog()->getModel($model)->getName());
-    }
-
-    private function pauseTheInstall(): void
-    {
-        $this->emptyDatabase();
-        $holds = self::getContainer()->get(Holds::class);
-        self::assertInstanceOf(Holds::class, $holds);
-        $holds->hold(SharedHold::Pause, new DateTimeImmutable('2999-01-01T00:00:00Z'));
     }
 
     private function bootedStartGuard(): StartGuard

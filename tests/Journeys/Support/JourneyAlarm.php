@@ -18,10 +18,8 @@ final readonly class JourneyAlarm
     ) {
     }
 
-    public function raise(string $output, ?Uri $link): string
+    public function raise(JourneyRun $run, ?Uri $link): string
     {
-        $run = JourneyRun::fromOutput($output);
-
         if (!$run->isRed()) {
             return 'no journey failed: nothing filed';
         }
