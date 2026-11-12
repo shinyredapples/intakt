@@ -44,7 +44,7 @@ final readonly class ChangedFile
         return $this->isRenamed() && $this->path() === $path;
     }
 
-    // A path the diff adds, or moves or copies a file onto, did not exist at the base.
+    // An added file and the new path of a rename or a copy, because those are the only entries whose path did not exist at the base.
     public function isNewAt(string $path): bool
     {
         return $this->path() === $path && ($this->isAdded() || 2 === count($this->paths));
@@ -68,7 +68,7 @@ final readonly class ChangedFile
         return (string) array_first($this->paths);
     }
 
-    // The status field and the paths, as "--raw -z" lays an entry out.
+    // One more than the paths, because "--raw -z" prints the status field before them.
     public function fieldCount(): int
     {
         return 1 + count($this->paths);

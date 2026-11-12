@@ -62,13 +62,13 @@ final readonly class LostContentCheck
     }
 
     /**
-     * @return list<list<ChangedFile>> the renames of each commit, the head's first
+     * @return list<list<ChangedFile>>
      *
      * @throws HandBackNotChecked
      */
     private function renamesOfEachCommit(string $repository, string $base, string $head): array
     {
-        // Commit by commit, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch; with each commit's hash, because a path is followed back through one commit's moves at a time.
+        // Commit by commit, the head's first, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch; with each commit's hash, because a path is followed back through one commit's moves at a time.
         $fields = explode("\0", $this->git->exactOutput($repository, ['log', '--raw', '-z', '-M', '--no-abbrev', '--topo-order', '--format=%H', $base.'..'.$head, '--']));
         $commits = [];
         $renames = [];
@@ -77,7 +77,7 @@ final readonly class LostContentCheck
         while ($index < count($fields)) {
             $file = $this->entryAt($fields, $index);
 
-            // A field that is no entry is a commit's hash, and the entries after it are that commit's.
+            // A field that is no entry starts a commit, because git prints the hash before the commit's entries.
             if (!$file instanceof ChangedFile) {
                 $commits[] = $renames;
                 $renames = [];
@@ -99,12 +99,11 @@ final readonly class LostContentCheck
     }
 
     /**
-     * @param list<string>            $fields
-     * @param non-negative-int $index
+     * @param list<string> $fields
      */
     private function entryAt(array $fields, int $index): ?ChangedFile
     {
-        // Without the line break "log -z" puts before a commit's first entry.
+        // Trimmed, because "log -z" puts a line break before a commit's first entry.
         $field = ltrim($fields[$index] ?? '', "\n");
 
         if (!str_starts_with($field, ':')) {
