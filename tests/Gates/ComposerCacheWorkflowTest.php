@@ -34,6 +34,16 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
         ], $restore['with'] ?? null);
     }
 
+    public function testThePersistenceJobRestoresTheCheckJobsCacheAndNeverSavesIt(): void
+    {
+        $restore = $this->step("Restore Composer's cache", 'persistence');
+
+        self::assertSame('actions/cache/restore', strstr($restore['uses'] ?? '', '@', true));
+        self::assertSame($this->step("Restore Composer's cache")['with'] ?? null, $restore['with'] ?? null);
+        self::assertSame([], array_values(array_filter($this->steps('persistence'), static fn (array $step): bool => str_starts_with($step['uses'] ?? '', 'actions/cache@') || str_starts_with($step['uses'] ?? '', 'actions/cache/save@'))), 'The persistence job must restore only; the check job of a push to main saves.');
+        self::assertSame('${{ runner.temp }}/composer-cache', $this->step('Run the persistence group on each database image', 'persistence')['env']['COMPOSER_CACHE'] ?? null);
+    }
+
     public function testOnlyAPushToMainSavesComposersCache(): void
     {
         $save = $this->step("Save Composer's cache");
@@ -48,7 +58,7 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
     {
         $lines = array_filter(explode("\n", (string) file_get_contents(self::WORKFLOW)), static fn (string $line): bool => str_contains($line, 'actions/cache'));
 
-        self::assertCount(2, $lines);
+        self::assertCount(3, $lines);
         foreach ($lines as $line) {
             self::assertMatchesRegularExpression(self::PINNED_CACHE_ACTION, $line);
         }
@@ -106,24 +116,24 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
     }
 
     /**
-     * @return array{uses?: string, if?: string, run?: string, with?: array<string, string>}
+     * @return array{uses?: string, if?: string, run?: string, with?: array<string, string>, env?: array<string, string>}
      */
-    private function step(string $name): array
+    private function step(string $name, string $job = 'check'): array
     {
-        $step = array_find($this->steps(), static fn (array $step): bool => $name === ($step['name'] ?? null));
-        self::assertIsArray($step, 'The check job of ci.yml has no step named '.$name.'.');
+        $step = array_find($this->steps($job), static fn (array $step): bool => $name === ($step['name'] ?? null));
+        self::assertIsArray($step, 'The '.$job.' job of ci.yml has no step named '.$name.'.');
 
         return $step;
     }
 
     /**
-     * @return list<array{name?: string, uses?: string, if?: string, run?: string, with?: array<string, string>}>
+     * @return list<array{name?: string, uses?: string, if?: string, run?: string, with?: array<string, string>, env?: array<string, string>}>
      */
-    private function steps(): array
+    private function steps(string $job = 'check'): array
     {
-        /** @var array{jobs: array{check: array{steps: list<array{name?: string, uses?: string, if?: string, run?: string, with?: array<string, string>}>}}} $workflow */
+        /** @var array{jobs: array<string, array{steps: list<array{name?: string, uses?: string, if?: string, run?: string, with?: array<string, string>, env?: array<string, string>}>}>} $workflow */
         $workflow = Yaml::parseFile(self::WORKFLOW);
 
-        return $workflow['jobs']['check']['steps'];
+        return $workflow['jobs'][$job]['steps'];
     }
 }
