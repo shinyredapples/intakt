@@ -30,6 +30,7 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
+      # Dispatch from main only: this action comes from the dispatching commit, while the checkout above is main.
       - name: Build or restore the CI image
         uses: $/.github/actions/ci-image
       - name: Run the journeys
