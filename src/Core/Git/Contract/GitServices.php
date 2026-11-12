@@ -8,4 +8,6 @@ namespace Intakt\Core\Git\Contract;
 final readonly class GitServices
 {
     public const string MIRRORS_DIRECTORY = 'intakt.git.mirrors_directory';
+
+    public const string PROTECTED_PATHS = 'intakt.git.protected_paths';
 }
